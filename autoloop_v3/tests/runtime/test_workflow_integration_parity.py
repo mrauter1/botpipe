@@ -180,12 +180,13 @@ def test_legacy_latest_run_status_reads_generic_runtime_success_run(tmp_path: Pa
         ]
     )
 
-    run_workflow(
+    result = run_workflow(
         REPO_ROOT / "Ralph_loop.py",
         provider=provider,
         options=RunnerOptions(root=tmp_path, task_id="status-task", request_text="Do it"),
     )
     _task_dir, run_dir = _task_and_run_dirs(tmp_path, "status-task")
+    assert result.state.goal_met is True
     assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "success"
 
 

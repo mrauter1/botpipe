@@ -4,7 +4,7 @@
 
 - `autoloop_v3.workflow`: canonical authoring surface, validation, compilation, engine, provider/store protocols.
 - `autoloop_v3.runtime`: generic filesystem runtime for task/run workspaces, request snapshots, events, checkpoints, prompt resolution, and session persistence.
-- `autoloop_v3.workflows`: workflow-owned helpers and parity harnesses. `run_autoloop_v1()` lives here because legacy Autoloop behavior is workflow policy, not runtime-core architecture.
+- `autoloop_v3.workflows`: workflow-owned parity and conventions modules. `run_autoloop_v1()` lives here because legacy Autoloop behavior is workflow policy, not runtime-core architecture.
 
 There is no compatibility layer. The root `workflow/` package is only a strict re-export of the canonical surface.
 
@@ -54,6 +54,16 @@ session = ctx.get_session(step.session)
 
 There is no `SessionLifecycle`, no automatic opening, and no computed session identity.
 
+## Execution Observation
+
+The core exposes one minimal observer seam through `workflow.observers`:
+
+- provider-turn events after producer, verifier, and llm calls
+- step-completed events after every step
+- terminal events for success, pause, fail, and fatal exceptions
+
+The observer surface is output-only. It does not alter engine semantics. `run_autoloop_v1(...)` uses this seam to rebuild raw logs, phase events, clarification persistence, and legacy status mapping without provider wrappers or engine subclasses.
+
 ## Running Workflows
 
 Generic runtime:
@@ -87,6 +97,8 @@ The harness preserves legacy-oriented raw logs, decisions, and session filenames
 - `.autoloop/tasks/{task_id}/runs/{run_id}/raw_phase_log.md`
 - `.autoloop/tasks/{task_id}/runs/{run_id}/sessions/plan.json`
 - `.autoloop/tasks/{task_id}/runs/{run_id}/sessions/phases/{phase}.json`
+
+The exact legacy session filenames live in `autoloop_v3.workflows.autoloop_v1_conventions`. Raw-log, clarification-ledger, and status policies live in `autoloop_v3.workflows.autoloop_v1_parity`.
 
 ## Configuration
 

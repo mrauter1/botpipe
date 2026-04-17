@@ -40,8 +40,9 @@ The repo-root `workflow/` package is a strict re-export only. It does not normal
 2. `workflow.validation` validates the declared workflow definition at class-definition time.
 3. `workflow.compiler` compiles the workflow into immutable steps, routes, artifacts, and middleware.
 4. `workflow.engine` runs deterministically against explicit `Context`, resolved artifacts, provider calls, sessions, and checkpoints.
-5. `runtime.events` appends `events.jsonl`.
-6. Workflow-owned harnesses may add extra policy-specific side effects, such as Autoloop-v1 raw logs or decisions ledgers.
+5. `workflow.observers` receives provider-turn, step-completed, and terminal facts through one minimal output-only seam.
+6. `runtime.events` appends `events.jsonl`.
+7. Workflow-owned harnesses may interpret the observer stream to add policy-specific side effects, such as Autoloop-v1 raw logs or decisions ledgers.
 
 ## Session Model
 
@@ -75,6 +76,7 @@ The generic runtime does not own:
 - clarification ledgers
 - raw phase logs
 - workflow-specific git policy
+- workspace plugin systems or phase hooks
 
 ## Configuration
 
@@ -88,15 +90,20 @@ Configuration is not used to encode workflow topology, phase plans, raw-log poli
 
 ## Autoloop-v1 Parity
 
-`autoloop_v1.py` remains a strict workflow, but its legacy-equivalent operational behavior is provided by `autoloop_v3.workflows.autoloop_v1_support`:
+`autoloop_v1.py` remains a strict workflow. It owns its phase-plan parsing and explicit phase artifact templates directly.
 
-- phase-plan parsing fallback
-- legacy phase artifact paths under `implement/phases/{phase}` and `test/phases/{phase}`
-- `sessions/plan.json`
-- `sessions/phases/{phase}.json`
-- task/run `raw_phase_log.md`
-- task `decisions.txt`
-- clarification note persistence in the active session file
-- question / blocked / failed event-status mapping
+Its legacy-equivalent operational behavior is split across two workflow-owned modules:
+
+- `autoloop_v3.workflows.autoloop_v1_conventions`
+  - exact `phase_dir_key(...)`
+  - `sessions/plan.json`
+  - `sessions/phases/{phase}.json`
+- `autoloop_v3.workflows.autoloop_v1_parity`
+  - thin `run_autoloop_v1(...)` composition root
+  - task/run `raw_phase_log.md`
+  - task `decisions.txt`
+  - clarification note persistence in the active session file
+  - question / blocked / failed event-status mapping
+  - phase-started and phase-completed event synthesis from generic observer events
 
 This keeps the engine and runtime generic while preserving Autoloop-v1 behavior where it actually belongs: next to the workflow that needs it.

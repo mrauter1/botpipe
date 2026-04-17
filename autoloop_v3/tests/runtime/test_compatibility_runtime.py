@@ -232,20 +232,38 @@ def test_runtime_store_write_helper_mirrors_codex_session_id_into_thread_id(tmp_
     assert loaded_payload["metadata"]["provider_metadata"] == {"source": "runtime"}
 
 
-def test_autoloop_v1_support_delegates_session_payload_writes_to_runtime_store_helpers():
+def test_autoloop_v1_source_inlines_phase_parsing_and_explicit_artifact_templates():
+    source = (REPO_ROOT / "autoloop_v1.py").read_text(encoding="utf-8")
+
+    assert "def parse_phase_ids(" in source
+    assert "phase_artifact_template" not in source
+    assert "autoloop_v1_support" not in source
+    assert 'Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/criteria.md")' in source
+    assert 'Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/implementation_notes.md")' in source
+    assert 'Artifact("{task_folder}/test/phases/{state.phase.dir_key}/criteria.md")' in source
+    assert 'Artifact("{task_folder}/test/phases/{state.phase.dir_key}/test_strategy.md")' in source
+
+
+def test_autoloop_v1_parity_modules_delegate_session_payload_writes_to_runtime_store_helpers():
     runtime_store_source = (REPO_ROOT / "autoloop_v3" / "runtime" / "stores" / "filesystem.py").read_text(
         encoding="utf-8"
     )
-    support_source = (REPO_ROOT / "autoloop_v3" / "workflows" / "autoloop_v1_support.py").read_text(
-        encoding="utf-8"
-    )
+    parity_path = REPO_ROOT / "autoloop_v3" / "workflows" / "autoloop_v1_parity.py"
+    conventions_path = REPO_ROOT / "autoloop_v3" / "workflows" / "autoloop_v1_conventions.py"
+    parity_source = parity_path.read_text(encoding="utf-8")
+    conventions_source = conventions_path.read_text(encoding="utf-8")
+    workflows_init = (REPO_ROOT / "autoloop_v3" / "workflows" / "__init__.py").read_text(encoding="utf-8")
 
     assert "def write_session_payload(" in runtime_store_source
     assert "def ensure_session_payload_placeholder(" in runtime_store_source
-    assert "ensure_session_payload_placeholder(plan_session_file)" in support_source
-    assert "set_pending_session_note(session_file, note)" in support_source
-    assert "def _ensure_session_placeholder" not in support_source
-    assert "def _write_session_payload" not in support_source
+    assert not (REPO_ROOT / "autoloop_v3" / "workflows" / "autoloop_v1_support.py").exists()
+    assert "ensure_session_payload_placeholder(plan_session_file)" in parity_source
+    assert "set_pending_session_note(session_file, note)" in parity_source
+    assert "ExecutionObserver" in parity_source
+    assert "class _AutoloopV1LoggingProvider" not in parity_source
+    assert "class _AutoloopV1Engine" not in parity_source
+    assert "def autoloop_v1_session_path(" in conventions_source
+    assert "from .autoloop_v1_parity import run_autoloop_v1" in workflows_init
 
 
 def test_filesystem_session_store_supports_custom_path_resolver(tmp_path: Path):

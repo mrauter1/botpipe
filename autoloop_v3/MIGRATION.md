@@ -68,13 +68,18 @@ class NewWorkflow(Workflow):
 
 ## Autoloop-v1
 
-`autoloop_v1.py` is now a strict workflow. Run legacy-equivalent executions through `autoloop_v3.workflows.run_autoloop_v1(...)`. The workflow-specific behavior lives in `autoloop_v3.workflows.autoloop_v1_support`:
+`autoloop_v1.py` is now a strict workflow. Run legacy-equivalent executions through `autoloop_v3.workflows.run_autoloop_v1(...)`.
+
+What stays in the workflow file itself:
 
 - phase-plan parsing
-- legacy phase artifact paths
-- `plan.json` and `sessions/phases/{phase}.json`
-- raw-phase-log and decisions persistence
-- clarification note persistence
-- question / blocked / failed status mapping
+- explicit phase artifact templates such as `Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/criteria.md")`
+
+What stays workflow-owned beside the workflow:
+
+- `autoloop_v3.workflows.autoloop_v1_conventions` owns exact legacy `plan.json` and `sessions/phases/{phase}.json` naming
+- `autoloop_v3.workflows.autoloop_v1_parity` owns raw-phase-log and decisions persistence
+- `autoloop_v3.workflows.autoloop_v1_parity` owns clarification note persistence and question / blocked / failed status mapping
+- `workflow.observers` supplies the minimal generic execution observer seam used by the parity harness
 
 That code is workflow-owned on purpose. The generic runtime remains unaware of phases, plan/implement/test policy, and Autoloop-specific artifact names.

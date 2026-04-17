@@ -18,4 +18,6 @@ What still remains intentionally compatible:
 - runtime config discovery from both `autoloop.*` and legacy `superloop.*` filenames
 - `events.jsonl` `run_finished.status` values readable by legacy helpers such as `latest_run_status(...)`
 
-Autoloop-v1 parity is preserved through workflow-owned code in `autoloop_v3.workflows.autoloop_v1_support`, not through hidden runtime or compiler behavior.
+Autoloop-v1 parity is preserved through workflow-owned code in `autoloop_v3.workflows.autoloop_v1_conventions` and `autoloop_v3.workflows.autoloop_v1_parity`, not through hidden runtime or compiler behavior.
+
+The generic observer seam in `workflow.observers` is not a compatibility layer. It is the only reusable execution-observation mechanism, and it carries generic facts only.

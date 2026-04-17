@@ -753,3 +753,99 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d78-5391-7e73-8da9-05274897e5a7
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9d78-5391-7e73-8da9-05274897e5a7
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d78-5391-7e73-8da9-05274897e5a7
+---
+I’m implementing the `autoloop-v1-parity-split` phase in `/home/rauter/autoloop_v3`. First I’m reading the phase artifacts, current support-layer code, engine/runtime seams, and the two workflows so I can write the required architecture decision record before changing code.
+
+I’ve confirmed the phase scope artifacts and the shared plan. Next I’m mapping the current implementation seams: the existing support module, observer-enabled engine/runtime changes already landed, workflow source, and the parity test surface that will need to survive the split.
+
+The remaining mixed layer is still intact. I’m reading the rest of that module and the parity tests now so I can split along the actual behavioral seams instead of guessing.
+
+I have enough context to lock the implementation plan. The work naturally splits into four pieces, and I’m keeping the blast radius tied to the active phase plus the required workflow/docs/tests updates.
+
+1. Replace the mixed support layer with two workflow-owned modules:
+- `autoloop_v3/workflows/autoloop_v1_conventions.py` for exact legacy path/dir-key conventions shared by the strict workflow and parity harness.
+- `autoloop_v3/workflows/autoloop_v1_parity.py` for the thin composition root, workspace augmentation, observer-driven parity logging, clarification persistence, and legacy status mapping.
+
+2. Migrate the strict workflows:
+- Inline `parse_phase_ids` and explicit `Artifact(...)` templates in `autoloop_v1.py`.
+- Fix `Ralph_loop.py` structure and ensure every success path leaves `goal_met=True`.
+
+3. Rewire parity behavior onto the observer seam:
+- Delete the provider wrapper and engine subclass.
+- Use observer events plus workflow-owned state to reproduce raw phase logs, `step_executed` / `phase_started` / `phase_completed`, clarification ledger writes, legacy session filenames, and blocked/question/failed mapping.
+
+4. Prove and document the final shape:
+- Update parity/runtime/workflow/contract tests to forbid the deleted support module and assert the new ownership boundaries.
+- Refresh the required docs and phase notes, then run the relevant test matrix before closing.
+
+The core/runtime seams are already in decent shape. I’m checking the remaining store helpers and runtime exports now so the parity split can reuse them instead of recreating any persistence logic.
+
+I’m starting the code changes now. The first edit set creates the new parity/conventions modules, rewires `run_autoloop_v1(...)` onto observers, migrates `autoloop_v1.py`, and deletes the old support module in the same slice so there’s no compatibility bridge left behind.
+
+The support module is gone and the split is in place. I’m reading the new parity module and running targeted tests next to catch any mechanical issues before I touch the docs and remaining test expectations.
+
+I’m updating the tests now. This pass locks the deleted support-layer shape, proves the strict workflow source changed the right way, and extends the existing Ralph success-path test to cover the direct `goal_met` exit.
+
+The code path is stable under the parity and engine suites. I’m switching to the documentation and baseline-source surfaces now because they still refer to the deleted support module and the old ownership story.
+
+I’m editing the required docs now. The updates are narrow: replace the deleted module references, document the observer seam explicitly, and state which concerns intentionally stayed Autoloop-specific instead of being generalized.
+
+The edited docs and source-shape tests are green. I’m running the full `autoloop_v3/tests` suite now, then I’ll update the implementation notes and decision ledger with the non-obvious choices from this turn.
+
+The repo-wide test run is still in flight. While it finishes, I’m updating the phase notes and this turn’s decision block so the next phase inherits the actual final wiring instead of the deleted support-layer model.
+
+The repo-wide test run is clean: `259 passed`. I’m doing one final sweep for deleted-symbol references and then I’ll summarize the final architecture shape, moved-vs-kept ownership, and parity results.
+
+I’ve got one housekeeping pass left: test execution touched tracked `__pycache__` artifacts. I’m checking whether they’re versioned and, if they are, I’ll restore only those generated bytecode files so the final diff stays limited to the architecture changes.
+
+**Tree**
+- Relevant final tree:
+- [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py)
+- [Ralph_loop.py](/home/rauter/autoloop_v3/Ralph_loop.py)
+- [autoloop_v3/workflows/__init__.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/__init__.py)
+- [autoloop_v3/workflows/autoloop_v1_conventions.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_conventions.py)
+- [autoloop_v3/workflows/autoloop_v1_parity.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_parity.py)
+- `autoloop_v3/workflows/autoloop_v1_support.py` deleted
+- Updated docs: [README.md](/home/rauter/autoloop_v3/autoloop_v3/README.md), [MIGRATION.md](/home/rauter/autoloop_v3/autoloop_v3/MIGRATION.md), [architecture.md](/home/rauter/autoloop_v3/autoloop_v3/docs/architecture.md), [authoring.md](/home/rauter/autoloop_v3/autoloop_v3/docs/authoring.md), [compatibility.md](/home/rauter/autoloop_v3/autoloop_v3/docs/compatibility.md), [parity-matrix.md](/home/rauter/autoloop_v3/autoloop_v3/docs/parity-matrix.md), [risk-register.md](/home/rauter/autoloop_v3/autoloop_v3/docs/risk-register.md)
+- Updated tests: [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py), [test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py)
+
+**Architecture**
+- Book choice implemented: one strict engine/core, one generic runtime, one workflow-owned Autoloop parity layer. The old mixed support mini-runtime is gone.
+- `run_autoloop_v1(...)` is now a thin composition root in [autoloop_v1_parity.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_parity.py): it wires generic runtime pieces, the generic observer seam, legacy session-path conventions, workspace augmentation, and parity-only policies.
+- [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py) now inlines `parse_phase_ids(...)` and uses explicit `Artifact(...)` templates. `phase_artifact_template` is gone.
+- [Ralph_loop.py](/home/rauter/autoloop_v3/Ralph_loop.py) is strict again, and both success paths now leave `goal_met=True`.
+- Why this is closer to the Book Architecture: the explanation got shorter. The engine emits generic execution facts; the runtime owns filesystem persistence; the workflow layer alone interprets Autoloop-v1 meaning. No wrapper, subclass, bridge, or disguised mini-runtime remains.
+- Moved to general helpers:
+- the typed execution observer seam in `workflow.observers` / `workflow.engine`
+- session payload write and placeholder helpers in `runtime.stores.filesystem`
+- Kept strictly Autoloop-specific:
+- exact `phase_dir_key(...)`
+- legacy `sessions/plan.json` and `sessions/phases/{phase}.json`
+- workspace augmentation
+- raw `raw_phase_log.md` append format
+- `decisions.txt` clarification ledger schema
+- blocked/question/failed status mapping
+- cycle/attempt tracking policy
+- phase-started / phase-completed interpretation
+- `parse_phase_ids(...)` workflow semantics
+
+**Validation**
+- New execution observer shape: output-only, zero semantic influence, three event families only: provider-turn, step-completed, terminal. The parity observer consumes those facts to rebuild raw logs, `step_executed`, `phase_started`, `phase_completed`, clarification persistence, and legacy status mapping.
+- Parity vs legacy `autoloop/`: preserved `plan.json`, `sessions/phases/{phase}.json`, raw phase logs, decisions persistence, clarification resume behavior, and blocked/question/failed status mapping; parity no longer depends on `_AutoloopV1LoggingProvider` or `_AutoloopV1Engine`.
+- Tests:
+- `pytest -q autoloop_v3/tests` -> `77 passed`
+- `pytest -q` -> `259 passed`
+- Remaining risk: resume-time cycle/attempt recovery now derives from persisted raw-log history plus checkpoint context instead of session metadata. That path is covered by parity tests, but manual external edits to raw logs would now be the main way to make those counters drift.
