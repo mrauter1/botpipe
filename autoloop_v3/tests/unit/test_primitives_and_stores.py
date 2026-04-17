@@ -4,6 +4,9 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+import autoloop_v3.workflow as strict_workflow
+import autoloop_v3.workflow.primitives as strict_primitives
+import workflow as root_workflow
 import workflow.primitives as root_primitives
 from autoloop_v3.workflow.artifacts import ArtifactHandle, ResolvedArtifacts, resolve_artifact_template
 from autoloop_v3.workflow.context import Context
@@ -38,7 +41,10 @@ def test_event_and_outcome():
 def test_root_workflow_shim_reexports_strict_surface_only():
     assert RootWorkflow is StrictWorkflow
     assert RootSession is StrictSession
+    assert not hasattr(root_workflow, "SessionLifecycle")
+    assert not hasattr(strict_workflow, "SessionLifecycle")
     assert not hasattr(root_primitives, "Verdict")
+    assert not hasattr(strict_primitives, "Verdict")
 
 
 def test_artifact_template_resolution_supports_dot_notation_and_missing_keys(tmp_path: Path):

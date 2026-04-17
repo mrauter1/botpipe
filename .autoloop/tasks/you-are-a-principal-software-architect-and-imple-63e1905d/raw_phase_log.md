@@ -315,3 +315,63 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+I’m treating this as a phase-local test refinement pass, not a fresh implementation pass. First I’m checking the current test coverage and the phase artifacts so I can add only the missing no-compat assertions and then record the coverage map cleanly.
+
+The current test set already covers the main behavior changes, so I’m adding only one tighter no-compat assertion: the strict surfaces themselves must not re-export the removed symbols. That gives this phase a cleaner regression tripwire without broadening scope.
+
+I’ve added the last regression tripwire. I’m rerunning the scoped no-compat suite now so the strategy and feedback reflect actual results, not assumed coverage.
+
+Scope considered
+
+Phase-local `book-architecture-core` test coverage only. I focused on the changed strict-core behavior, adjacent no-compat invariants, and the required phase artifacts, without broadening into later runtime/parity refactors.
+
+What I analyzed
+
+- The active phase contract, `decisions.txt`, and the current strict-core implementation/test changes.
+- Existing no-compat coverage in `autoloop_v3/tests/unit`, `autoloop_v3/tests/contract`, and the focused loader/runtime tests.
+- The phase-local artifacts `test_strategy.md` and `feedback.md`.
+
+What I changed
+
+- Extended [autoloop_v3/tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_primitives_and_stores.py) so the strict import-surface proof now asserts:
+  - `workflow` does not export `SessionLifecycle`
+  - `autoloop_v3.workflow` does not export `SessionLifecycle`
+  - neither primitives surface exports `Verdict`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/test/phases/book-architecture-core/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, stabilization notes, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/test/phases/book-architecture-core/feedback.md).
+- Appended one test decision to `decisions.txt` under this turn’s header.
+
+Key findings / decisions
+
+- The remaining useful regression tripwire for this phase was export-surface strictness; I added that without widening scope.
+- The targeted no-compat slice passed:
+  - `root_workflow_shim_reexports_strict_surface_only`
+  - `validation_rejects_missing_entry`
+  - `validation_rejects_on_verdict_alias_without_matching_step`
+  - `validation_rejects_legacy_pair_handler_arity`
+  - `validation_rejects_static_on_start_signature`
+  - `missing_session_binding_fails_instead_of_auto_opening`
+  - `loader_does_not_inject_canonical_symbols`
+
+Open issues / next step
+
+- No phase-local test blocker remains.
+- Broader runtime-parity and documentation rewrites are still intentionally deferred to later phases by contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
