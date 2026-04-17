@@ -22,6 +22,7 @@ from autoloop_v3.runtime.events import append_clarification, parse_decisions_hea
 from autoloop_v3.runtime.loader import load_compiled_workflow, load_workflow_class
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow
 from autoloop_v3.runtime.stores import FilesystemCheckpointStore, FilesystemSessionStore
+from autoloop_v3.runtime.stores.filesystem import load_session_payload
 from autoloop_v3.runtime.workspace import (
     PHASE_MODE_SINGLE,
     PhasePlanCriterion,
@@ -95,6 +96,51 @@ def test_filesystem_session_store_uses_compatibility_paths_and_loads_legacy_thre
     assert loaded is not None
     assert loaded.session_id == "thread-123"
     assert loaded.metadata["provider"] == "codex"
+
+
+def test_filesystem_session_store_sparse_writes_preserve_existing_legacy_metadata(tmp_path: Path):
+    run_dir = tmp_path / "run"
+    session_file = run_dir / "sessions" / "plan.json"
+    session_file.parent.mkdir(parents=True)
+    session_file.write_text(
+        json.dumps(
+            {
+                "mode": "persistent",
+                "thread_id": "thread-123",
+                "provider_metadata": {"source": "legacy"},
+                "pending_clarification_note": "Question:\nShip this?\n\nAnswer:\nYes",
+                "created_at": "2026-04-17T00:00:00+00:00",
+                "last_used_at": "2026-04-17T00:05:00+00:00",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    restored_store = FilesystemSessionStore(run_dir)
+    restored_store.restore(
+        SessionSnapshot(
+            bindings=(SessionBinding(ref_name="plan_session", scope=None, session_id="thread-456"),),
+            active_scopes={"plan_session": None},
+        )
+    )
+    restored_payload = load_session_payload(session_file, "persistent", "codex")
+
+    assert restored_payload["session_id"] == "thread-456"
+    assert restored_payload["metadata"]["provider_metadata"] == {"source": "legacy"}
+    assert restored_payload["metadata"]["pending_clarification_note"] == "Question:\nShip this?\n\nAnswer:\nYes"
+    assert restored_payload["metadata"]["created_at"] == "2026-04-17T00:00:00+00:00"
+    assert restored_payload["metadata"]["last_used_at"] == "2026-04-17T00:05:00+00:00"
+
+    upsert_store = FilesystemSessionStore(run_dir)
+    upsert_store.upsert(SessionBinding(ref_name="plan_session", scope=None, session_id="thread-789"))
+    upsert_payload = load_session_payload(session_file, "persistent", "codex")
+
+    assert upsert_payload["session_id"] == "thread-789"
+    assert upsert_payload["metadata"]["provider_metadata"] == {"source": "legacy"}
+    assert upsert_payload["metadata"]["pending_clarification_note"] == "Question:\nShip this?\n\nAnswer:\nYes"
+    assert upsert_payload["metadata"]["created_at"] == "2026-04-17T00:00:00+00:00"
+    assert upsert_payload["metadata"]["last_used_at"] == "2026-04-17T00:05:00+00:00"
 
 
 def test_filesystem_checkpoint_store_round_trip(tmp_path: Path):
