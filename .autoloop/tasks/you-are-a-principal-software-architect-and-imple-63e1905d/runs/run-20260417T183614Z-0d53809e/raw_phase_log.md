@@ -913,3 +913,97 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+I’m reviewing the phase-local parity changes and current test coverage first, then I’ll add any missing regression tests and update the test strategy and feedback artifacts to match the actual coverage.
+
+The parity suite already covers most of the changed surface. I’m tightening two high-risk edges now: lifecycle event ordering on success and the absence of premature `phase_completed` emission on blocked runs, then I’ll capture that map in the phase strategy file.
+
+The suite is green after the extra assertions. I’m writing the explicit coverage map now and appending the non-obvious testing decision about lifecycle ordering so later turns don’t loosen that parity contract accidentally.
+
+Scope considered
+- Phase-local test coverage for `workflow-migration-parity`, focused on the Autoloop-v1 parity harness changes, the parity integration test file, and the required test-phase artifacts.
+
+What I analyzed
+- `autoloop_v3/tests/runtime/test_workflow_integration_parity.py`
+- The latest Autoloop-v1 parity decisions in `decisions.txt`
+- The active test-phase artifacts `test_strategy.md` and `feedback.md`
+
+What I changed
+- Tightened `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` with two additional parity assertions:
+- success-path ordering now proves `phase_started` happens before the phase’s `implement` step and `phase_completed` happens after the phase’s `test` step
+- blocked-path coverage now proves a blocked run emits `phase_started` for the active phase but does not emit a premature `phase_completed`
+- Expanded `test_strategy.md` into an explicit behavior-to-test coverage map, including preserved invariants, edge cases, failure paths, stabilization notes, and known gaps.
+- Appended a concise test-addition summary to the test-phase `feedback.md`.
+- Appended one non-obvious test decision to the current turn block in `decisions.txt`.
+
+Key findings / decisions
+- The highest-risk remaining regression surface was event ordering, not basic presence, because downstream Autoloop readers reconstruct phase history from `events.jsonl`.
+- The blocked-path assertion is important because it prevents future regressions where a failed or paused phase is accidentally marked completed.
+- Validation passed:
+- `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q` -> `8 passed`
+- `pytest autoloop_v3/tests -q` -> `64 passed`
+
+Open issues / next step
+- No blocking test gaps remain for this phase scope.
+- Known non-blocking gap: there is still no dedicated regression test for providers that rotate session IDs between turns, because no in-repo provider behaves that way today.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+I’m auditing the added parity assertions and the test-phase artifacts first, then I’ll mark the criteria and append only the findings that materially affect regression protection.
+
+The changed coverage is doing the right work: it exercises the event-order contract the implementation now relies on, and it stays deterministic. I don’t see a material gap that warrants a blocking audit finding, so I’m updating the audit artifacts accordingly.
+
+Scope considered
+- Phase-local audit of the `workflow-migration-parity` test additions, focused on `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` and the active test-phase artifacts.
+
+What I analyzed
+- The new success-path ordering assertions for `phase_started` / `phase_completed`.
+- The blocked-path assertion that prevents premature `phase_completed` emission.
+- The updated `test_strategy.md` coverage map and the latest parity-related decisions in `decisions.txt`.
+
+What I reviewed
+- Ran `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q` -> `8 passed`.
+- Ran `pytest autoloop_v3/tests -q` -> `64 passed`.
+- Updated `criteria.md` to mark all audit criteria satisfied.
+- Appended an audit note to `feedback.md` recording that there are no blocking findings.
+
+Key findings / decisions
+- No blocking audit findings.
+- The added assertions materially improve regression detection for the exact behavior that changed: phase-history reconstruction from `events.jsonl`.
+- The suite remains deterministic: scripted provider, temp directories, and explicit event/raw-log assertions with no timing or network dependence.
+
+Open issues / next step
+- No blocking issues remain in phase scope.
+- The only noted gap is already recorded in `test_strategy.md`: there is no dedicated regression test for provider-issued session replacement because no in-repo provider behaves that way today.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

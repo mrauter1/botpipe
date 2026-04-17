@@ -963,3 +963,47 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+I’m auditing the added parity assertions and the test-phase artifacts first, then I’ll mark the criteria and append only the findings that materially affect regression protection.
+
+The changed coverage is doing the right work: it exercises the event-order contract the implementation now relies on, and it stays deterministic. I don’t see a material gap that warrants a blocking audit finding, so I’m updating the audit artifacts accordingly.
+
+Scope considered
+- Phase-local audit of the `workflow-migration-parity` test additions, focused on `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` and the active test-phase artifacts.
+
+What I analyzed
+- The new success-path ordering assertions for `phase_started` / `phase_completed`.
+- The blocked-path assertion that prevents premature `phase_completed` emission.
+- The updated `test_strategy.md` coverage map and the latest parity-related decisions in `decisions.txt`.
+
+What I reviewed
+- Ran `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q` -> `8 passed`.
+- Ran `pytest autoloop_v3/tests -q` -> `64 passed`.
+- Updated `criteria.md` to mark all audit criteria satisfied.
+- Appended an audit note to `feedback.md` recording that there are no blocking findings.
+
+Key findings / decisions
+- No blocking audit findings.
+- The added assertions materially improve regression detection for the exact behavior that changed: phase-history reconstruction from `events.jsonl`.
+- The suite remains deterministic: scripted provider, temp directories, and explicit event/raw-log assertions with no timing or network dependence.
+
+Open issues / next step
+- No blocking issues remain in phase scope.
+- The only noted gap is already recorded in `test_strategy.md`: there is no dedicated regression test for provider-issued session replacement because no in-repo provider behaves that way today.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -9,3 +9,5 @@
 
 - Added phase-local parity assertions in `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` for phase lifecycle ordering on success and absence of premature `phase_completed` emission on blocked runs.
 - Validation run: `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q` (`8 passed`) and `pytest autoloop_v3/tests -q` (`64 passed`).
+
+- Cycle 1 audit: no blocking findings. The added assertions materially improve regression protection for Autoloop-v1 event-log parity while keeping the suite deterministic and phase-local.
