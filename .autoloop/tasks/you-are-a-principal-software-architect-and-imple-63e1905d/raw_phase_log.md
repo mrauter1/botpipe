@@ -1099,3 +1099,59 @@ Open issues / next step
 - Validation: `pytest -q` -> `248 passed in 21.88s`
 - No tracked open issues in this phase
 - Non-scope untracked/generated files in the workspace, including `codebase.md` artifacts, were intentionally left untouched
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+---
+I’m reviewing the proof-suite-and-docs phase diff against the phase contract and the shared decisions ledger, then I’ll update the phase criteria and feedback with any findings before closing the loop.
+
+The quick doc test is green. I’m checking the current worktree state directly now; the prior diff command came back empty, so I want to confirm whether these phase changes are still uncommitted in the verifier workspace before I mark criteria.
+
+The docs themselves are in the expected final shape. I’m doing one more verification pass with the full suite so the review isn’t just relying on the implementer’s notes.
+
+The full suite is running cleanly so far. I’m waiting for the final result, then I’ll either clear the phase or record findings if anything breaks late.
+
+The suite is past the heavy middle section without failures. I don’t see a correctness or parity regression in this phase so far; I’m waiting for the run to finish before I write the review artifacts.
+
+I’ve got enough to close review: docs satisfy the phase contract, the doc gate covers the new ADR shape, and the full suite passes again in the verifier pass. I’m updating the criteria and feedback now.
+
+Scope considered
+- Phase-local `proof-suite-and-docs` artifacts, the shared decisions ledger, and the current tracked docs/test surface
+- Relevant runtime/parity expectations only as needed to verify acceptance criteria and regression safety
+- Excluded unrelated untracked workspace files from review scope
+
+What I analyzed
+- Current contents of `README.md`, `MIGRATION.md`, `docs/architecture.md`, `docs/adr/*.md`, and `tests/test_architecture_baseline_docs.py`
+- The phase implementation notes and the latest shared decisions entries
+- Verifier reruns of `pytest autoloop_v3/tests/test_architecture_baseline_docs.py -q` and full `pytest -q`
+
+What I reviewed
+- AC-1 doc coverage for strict public API, explicit sessions, compat removal, runtime/workflow boundary, configuration, and parity meaning
+- AC-2 proof coverage for no-compat behavior, strict workflow execution, toy-workflow runtime agnosticism, and Autoloop-v1 parity expectations
+- AC-3 regression risk and hidden-shim risk after the ADR/archive cleanup and doc-gating changes
+- Updated `.autoloop/.../criteria.md` and `.autoloop/.../feedback.md`
+
+Key findings / decisions
+- No blocking or non-blocking implementation issues found in phase scope
+- The ADR archive now reads as final-form summaries instead of stale competing architecture records, which matches the phase objective
+- The doc gate now protects the ADR archive and generic config documentation in addition to the main docs
+- Full verifier suite passed: `248 passed in 22.04s`
+
+Open issues / next step
+- No open review issues for this phase
+- Feedback file records `IMP-000` as a no-findings review note
+- Criteria are fully checked and the phase is review-complete
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
