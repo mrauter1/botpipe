@@ -10,3 +10,6 @@ Runtime parity scope includes legacy config discovery, CLI behavior, and persist
 Phase 1 freezes a split architecture: `autoloop_v3.workflow` is the strict spec core, `autoloop_v3.runtime` owns workspace and provider integration, and any repo-root `workflow` package stays a re-export shim only.
 `Ralph_loop.py` fails with `NameError: Verdict is not defined` once a stub `workflow` module is available, so `runtime.loader` must inject or postpone legacy annotation resolution before compatibility normalization.
 Checkpoint persistence will use a typed snapshot plus append-only events; events stay required for legacy observability and resume parity, but they are not the sole source of engine state.
+<autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="architecture-and-adr-baseline" pair="test" turn_seq="1" run_id="run-20260417T151141Z-5a8eefb2" ts="2026-04-17T15:33:42.957785+00:00" />
+Phase 1 test coverage is documentation-level only: pytest guards the ADR inventory and completeness plus the frozen parity, compatibility, and public-surface commitments, because no runtime code landed in this phase.
+The architecture-doc regression tests intentionally assert concrete legacy-behavior markers and required exported symbols rather than exact prose blocks, to stay deterministic while still catching scope loss.

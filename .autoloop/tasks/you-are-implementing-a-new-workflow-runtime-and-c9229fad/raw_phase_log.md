@@ -302,3 +302,61 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c0b-0879-7132-9725-46cea3548b90
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9c0b-0879-7132-9725-46cea3548b90
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c0b-0879-7132-9725-46cea3548b90
+---
+I’m scoping the phase-local test work around the architecture artifacts: I’ll verify what was produced, add deterministic doc-level regression tests for the ADR and parity baseline, then update the phase test strategy and feedback artifacts.
+
+I have the right test slice: doc-level regression tests for the new `autoloop_v3` architecture artifacts, not runtime behavior that has not been implemented yet. I’m adding those tests now, then I’ll record the coverage map and run them.
+
+The tests are in place. I’m running the new file directly with `pytest` now and will tighten anything that fails before I close the phase.
+
+One doc-marker assertion was too literal. I’m relaxing that check to the actual compatibility language already frozen in the docs, then I’ll rerun the file.
+
+The doc-level regression suite now passes. I’m recording the executed command in the phase feedback and then I’ll close out with the phase summary.
+
+Scope considered
+
+- Phase-local test work for the architecture baseline only.
+- The authored `autoloop_v3/docs` artifacts, the current shared decisions, and the phase test artifacts under `.autoloop/tasks/.../test/phases/architecture-and-adr-baseline/`.
+- No runtime or provider behavior beyond what was documented in this phase.
+
+What I analyzed
+
+- The new architecture docs and ADR inventory under `autoloop_v3/docs/`.
+- The existing repository test layout to pick the narrowest deterministic place for phase-appropriate coverage.
+- The current phase strategy and feedback artifacts plus the latest decisions block for this turn.
+
+What I changed
+
+- Added [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py) to lock the architecture-doc deliverables.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/architecture-and-adr-baseline/test_strategy.md) with a behavior-to-test coverage map, invariants, flake controls, and known gaps.
+- Updated [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/architecture-and-adr-baseline/feedback.md) with the added coverage and the executed validation command.
+- Appended this turn’s non-obvious test constraints to `.autoloop/.../decisions.txt` under the current test-author header.
+
+Key findings / decisions
+
+- The right regression target for this phase is the documentation contract itself, because no executable `autoloop_v3` runtime code exists yet.
+- The new tests assert:
+  - exact ADR inventory
+  - exactly three candidates and all mandated evaluation fields in every ADR
+  - frozen public authoring surface markers
+  - concrete legacy parity and compatibility markers
+  - risk-register coverage for loader, resume, and phase scoping
+- Validation passed: `pytest -q autoloop_v3/tests/test_architecture_baseline_docs.py` with `6 passed`.
+
+Open issues / next step
+
+- Runtime, provider, and end-to-end parity tests are still deferred until the core implementation lands.
+- The next test phase should expand from doc-level guards into unit, contract, filesystem, and parity coverage for the actual engine and runtime modules.
