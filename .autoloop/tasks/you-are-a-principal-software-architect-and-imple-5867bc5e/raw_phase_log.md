@@ -1426,3 +1426,58 @@ Open issues / next step
 
 - No blocking test gap remains for this phase.
 - The coverage delta for this phase is now documented and enforced at the doc-baseline layer.
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+---
+I’m auditing the docs-and-full-verification test slice against the active phase contract, the shared decisions, the actual repo test delta, and the executed test results before I touch the auditor-owned artifacts.
+
+The focused suite is already green. I’m waiting for the full package sweep to finish so the auditor artifacts reflect the same evidence the producer claimed.
+
+No blocking coverage gap surfaced. I’m marking the auditor checklist complete and appending a single non-blocking audit note that records the verified coverage and suite results for this phase.
+
+I’ve updated the auditor-owned artifacts. I’m doing a final readback now so the completion state, the audit note, and the executed test evidence are aligned before I close the phase.
+
+Scope considered
+
+- Phase-local audit scope for `docs-and-full-verification`.
+- The changed docs-phase test surface, the active test artifacts, the shared decisions ledger, and the executed focused/full test runs.
+
+What I analyzed
+
+- [autoloop_v3/tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py)
+- Focused execution-proof suites: `contract/test_engine_contracts.py`, `runtime/test_compatibility_runtime.py`, and `runtime/test_workflow_integration_parity.py`
+- The producer-owned [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/docs-and-full-verification/test_strategy.md) and the shared decisions for this phase
+
+What I reviewed
+
+- The docs-baseline test now freezes the exact workflow-owned parity module references and the no-compatibility-layer / no-workspace-hook wording.
+- The broader regression surface still relies on the existing deterministic contract/runtime/parity suites, which matches the shared decision to avoid duplicative runtime tests in this phase.
+- Executed evidence:
+  - focused suite: `55 passed`
+  - full suite: `78 passed`
+
+Key findings / decisions
+
+- No blocking findings.
+- Added `TST-001` as a non-blocking audit note in [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/docs-and-full-verification/feedback.md).
+- Updated all auditor checklist boxes to checked in [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/docs-and-full-verification/criteria.md).
+
+Open issues / next step
+
+- No blocking coverage or reliability issue remains for this phase.
+- The test phase can close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
