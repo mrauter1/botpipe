@@ -1339,3 +1339,99 @@ No blocking issues remain in this phase-local review scope. Residual warnings co
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+I’m auditing the current parity tests against the latest runtime changes, especially the rejected-resume guard and legacy artifact/session behavior. I’ll identify any remaining coverage gaps first, then update tests and the phase-local test artifacts only where they materially strengthen regression protection.
+
+There’s one likely gap left from the implementation notes: metadata-preserving session writes. The parity tests cover clarification notes after resume, but I want to confirm we also have a direct regression test for “restore/open does not clobber existing session metadata” rather than only observing it indirectly.
+
+There isn’t a direct test for the session-metadata merge invariant yet. I’m adding one now, but I’m keeping it narrow: the assertion will be “sparse restore data does not wipe legacy note/timestamps/provider metadata,” which is the specific regression the implementation claimed to fix.
+
+I’m making three scoped edits: one direct regression test for metadata-preserving session writes, one explicit behavior-to-coverage map in `test_strategy.md`, and one concise summary entry in the phase test feedback file.
+
+The new test is in place. I’m running the touched runtime tests first, then the full `autoloop_v3/tests` set so the strategy and feedback reflect actual validation, not just intended coverage.
+
+The new test failed for a straightforward reason: it used `load_session_payload()` without importing it. I’m fixing that import and rerunning the touched and full suites so the final state is green.
+
+Import is fixed. I’m rerunning the same validation now to make sure the added regression test is actually stable and doesn’t hide a real behavior mismatch.
+
+The touched compatibility tests are green. I’m polling the full-suite run to capture the final result and warnings state before I close out the phase artifacts.
+
+The new regression test passes, and the full suite is now `58 passed`. I’m doing a final readback of the touched test artifacts so the close-out reflects the exact coverage map and feedback text on disk.
+
+Scope considered
+
+Phase `workflow-integration-and-parity` only: regression coverage for the latest runtime parity changes, especially rejected legacy resume safety and compatibility-preserving session persistence.
+
+What I analyzed
+
+I reviewed the existing parity tests in `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` and `autoloop_v3/tests/runtime/test_compatibility_runtime.py`, the runtime session-store behavior in `autoloop_v3/runtime/stores/filesystem.py`, and the phase-local `test_strategy.md` / `feedback.md`. The main uncovered claim was metadata-preserving sparse session writes.
+
+What I changed
+
+I added `test_filesystem_session_store_sparse_writes_preserve_existing_legacy_metadata` to [autoloop_v3/tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py), covering both `restore()` and `upsert()` with fixed legacy payloads so the test stays deterministic. I expanded [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/workflow-integration-and-parity/test_strategy.md) into an explicit behavior-to-coverage map and appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/workflow-integration-and-parity/feedback.md).
+
+Key findings / decisions
+
+The direct gap was not resume rejection anymore; it was the lack of a focused regression test proving sparse session writes do not clobber legacy `provider_metadata`, clarification notes, or timestamps. The new test encodes that narrower invariant rather than assuming deep-merge behavior for every nested metadata field. Validation passed with `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py` (`14 passed`) and `pytest -q autoloop_v3/tests` (`58 passed, 7 warnings`).
+
+Open issues / next step
+
+No blocking test gaps remain in this phase-local scope. The only residual noise is the existing non-blocking Pydantic deprecation warnings from unchanged `Ralph_loop.py`.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+I’m auditing the phase-local test additions and the broader parity suite for coverage quality, regression detection, and flake risk. I’ll verify the new session-metadata regression test against the runtime behavior, then update the test audit artifacts based on whether any material coverage gaps remain.
+
+The new test itself is sensible, but I want one pass against the actual session-store implementation and the full suite result before I decide whether the coverage is complete enough to clear the phase.
+
+The audit sweep is clean: the new test matches the actual merge behavior, the broader parity coverage still aligns with the shared decisions, and the suite stays deterministic. I’m updating the phase-local audit artifacts now with a complete result and a short audit note.
+
+The audit artifacts are updated. I’m reading them back once so the final status and promise match the files on disk exactly.
+
+Scope considered
+
+Phase-local audit of `workflow-integration-and-parity`, focused on the added session-metadata regression test, the existing end-to-end parity tests for `autoloop_v1.py` and `Ralph_loop.py`, and the corresponding test-phase artifacts under `.autoloop/tasks/.../test/phases/workflow-integration-and-parity/`.
+
+What I analyzed
+
+I reviewed the updated parity and compatibility tests, the session-store implementation they exercise, the shared decisions ledger, and the phase-local `test_strategy.md` and `feedback.md`. I also reran the relevant suites to confirm the coverage claims match actual passing behavior.
+
+What I reviewed
+
+I verified that the new `test_filesystem_session_store_sparse_writes_preserve_existing_legacy_metadata` is aligned with the runtime’s real invariant: sparse `restore()` and `upsert()` preserve legacy metadata instead of clobbering it. I ran `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py autoloop_v3/tests`, which passed with `21 passed` and only the existing non-blocking Pydantic deprecation warnings from unchanged `Ralph_loop.py`. I updated `criteria.md` so all boxes are checked and appended `TST-001` to `feedback.md`.
+
+Key findings / decisions
+
+No blocking audit findings. The phase-local test strategy now maps all required parity behaviors to concrete tests, and the added regression coverage materially improves protection around persisted session metadata without introducing flaky assumptions.
+
+Open issues / next step
+
+No blocking issues remain in this audit scope. Residual warnings are unchanged legacy-workflow deprecations and do not block completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
