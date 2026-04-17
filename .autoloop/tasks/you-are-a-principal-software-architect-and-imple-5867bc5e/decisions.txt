@@ -1,0 +1,6 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260417T211550Z-e779d000" ts="2026-04-17T21:15:50.978219+00:00" />
+Freeze the final architecture around one generic engine observer seam, store-owned session serialization, and workflow-owned Autoloop-v1 parity interpretation; do not add any other hook family, mini-runtime, or workspace plugin system.
+Inline `parse_phase_ids` into `autoloop_v1.py`; keep exact `phase_dir_key` behavior and legacy Autoloop session-path rules in a tiny workflow-owned conventions module shared with the parity harness.
+Track cycle and attempt in parity observer state during a run; on resume, recover the pending clarification cycle/attempt from persisted raw-log and checkpoint context instead of provider session metadata.
+Treat `autoloop_v1_support.py` as deletion scope and replace it with narrower parity and conventions modules while preserving `run_autoloop_v1(...)` as the only supported workflow-owned entrypoint.
+Fix `Ralph_loop.py` as part of this architecture change because it already fails strict validation (`on_execute` is not class-bound) and the direct `plan_action -> goal_met -> SUCCESS` path must set `goal_met=True`.
