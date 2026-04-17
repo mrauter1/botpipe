@@ -8,3 +8,7 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added one parity integration test covering unsafe phase ids so the suite now locks the exact legacy `_pid-...` dir/session naming across both workflow artifact paths and `sessions/phases/{phase}.json`.
+
+## Audit Result
+
+- No blocking or non-blocking audit findings in scope. The added parity test closes the exact legacy phase-dir encoding gap and remains deterministic under replay.
