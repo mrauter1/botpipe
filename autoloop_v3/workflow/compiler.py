@@ -8,6 +8,7 @@ from typing import Any, Callable
 from pydantic import BaseModel
 
 from .artifacts import CompiledArtifact
+from .compat import normalize_workflow
 from .context import Context
 from .errors import RoutingError, WorkflowCompilationError
 from .primitives import Event, FAIL, GLOBAL, Outcome, PAUSE, SUCCESS
@@ -80,13 +81,14 @@ class CompiledWorkflow:
 def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
     """Compile a validated workflow class."""
 
-    cached = getattr(workflow_cls, "__compiled_workflow__", None)
+    normalized = normalize_workflow(workflow_cls)
+    cached = getattr(normalized, "__compiled_workflow__", None)
     if isinstance(cached, CompiledWorkflow):
         return cached
-    definition = get_workflow_definition(workflow_cls)
+    definition = get_workflow_definition(normalized)
     inventory = collect_artifact_inventory(definition)
     compiled = CompiledWorkflow(
-        workflow_cls=workflow_cls,
+        workflow_cls=normalized,
         workflow_name=definition.workflow_name,
         state_cls=definition.state_cls,
         entry_step_name=definition.entry.name,
@@ -102,6 +104,7 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         has_start_hook=has_start_hook(definition),
         middleware=_compile_middleware(definition),
     )
+    normalized.__compiled_workflow__ = compiled
     workflow_cls.__compiled_workflow__ = compiled
     return compiled
 

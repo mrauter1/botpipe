@@ -16,6 +16,7 @@ class Workflow(metaclass=WorkflowMeta):
     """Workflow authoring base class."""
 
     __workflow_abstract__ = True
+    __strict_workflow__ = True
 
 
 __all__ = [

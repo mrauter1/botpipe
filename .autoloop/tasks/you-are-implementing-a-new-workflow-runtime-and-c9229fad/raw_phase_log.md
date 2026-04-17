@@ -766,3 +766,88 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+---
+I’m starting with the active phase scope: compatibility normalization, legacy-safe workflow loading, and the filesystem runtime. First I’ll inspect the existing `autoloop_v3` core, the phase artifacts, and the legacy workflow files that must load unchanged.
+
+I’ve loaded the phase plan and scope. Next I’m mapping the current code: strict core modules, runtime stubs if any, and the legacy workflow files whose import quirks drive the compatibility boundary.
+
+The core is present and phase 2 stopped exactly where expected: no runtime, no loader, and only a stub compatibility layer. I’m reading the engine contracts, legacy workflows, and the old runtime oracle together so the runtime additions match actual workspace behavior instead of the docs alone.
+
+I have the core/legacy gap now: the strict engine is fine, but nothing yet loads `workflow` imports, nothing reads or writes persisted `.autoloop` runtime state, and `Ralph_loop.py` still needs import-time annotation shimming. I’m checking the worktree and then I’ll map the minimum code surface needed to land phase-complete runtime pieces without bleeding into the final parity phase.
+
+The parity oracle confirms the exact persisted shapes I need: session JSON fields, phase session paths, config discovery precedence, and append-only raw/event/decisions artifacts. I’m pulling those concrete helpers now and then I’ll start patching the runtime modules and the import shim in one pass.
+
+Plan for this phase:
+1. Add the legacy import surface and normalization boundary so `autoloop_v1.py` and `Ralph_loop.py` can load without source edits, including entry inference and annotation-safe loading.
+2. Implement the filesystem runtime: workspace/run scaffolding, JSON checkpoint/session stores, raw/events/decisions writers, prompt loading, config discovery, and phase/session path policy.
+3. Add a runnable harness and targeted tests that prove legacy loading, persisted-state compatibility, and `.autoloop` artifact layout.
+
+I’m moving to edits now, starting with the compatibility boundary and the root `workflow` shim because the runtime loader depends on them.
+
+I’m editing the compatibility boundary first. This patch will do three things together because they depend on each other: make `compile_workflow()` normalize legacy workflow classes, add a permissive repo-root `workflow` shim for unchanged imports, and add the legacy-safe module loader that injects missing annotation names before execution.
+
+The compatibility pieces are in place. I’m smoke-checking them before I build the filesystem runtime around them, because if legacy loading is still wrong every later runtime test will fail noisily for the wrong reason.
+
+I’m moving into the filesystem runtime now. This patch lays down the concrete runtime substrate: workspace/run path policy, JSON stores with legacy session-file compatibility, prompt resolution, append-only logs, config discovery, and a thin runner/CLI entrypoint that uses the new engine without editing the legacy workflow sources.
+
+The runtime substrate is written. I’m running import and smoke checks now before I add tests, because there are enough new modules here that I’d rather catch structural issues immediately than debug them through failing pytest fixtures.
+
+I’ve got the runtime importable. The next patch is tests only: legacy-load acceptance, session/checkpoint persistence, config discovery, append-only logs, and one real `autoloop_v1` runner smoke so the phase isn’t “implemented” only on paper.
+
+The targeted coverage is in place. I’m running the new runtime tests first, then the full `autoloop_v3/tests` suite if they’re clean, so I can isolate any regression to this phase rather than the existing strict-core surface.
+
+The failure is a real compatibility gap, not a bad test: legacy handlers that use Pydantic `copy(update=...)` can leave nested models as raw dicts. I’m patching the executor to revalidate returned state objects against the workflow’s declared state model, which keeps the strict core semantics intact while normalizing this legacy drift in one place.
+
+The remaining failure is prompt resolution, not execution. I pointed the runtime at the workspace root for legacy templates, but `autoloop_v1.py` lives outside that root in this test, so I’m correcting the search roots to follow the workflow file’s own repository when resolving `templates/...` paths.
+
+The phase implementation is functionally complete: compatibility loading, filesystem runtime, and passing runtime tests. I’m doing the final housekeeping now: clean the temporary scratch task I created while smoke-checking, capture the changed surface, and write the required decision and implementation notes so later phases don’t drift.
+
+I’m writing the phase ledger now. I’m recording only the non-obvious constraints that would cause drift later: the permissive `workflow` shim versus strict compilation boundary, the compatibility session-file path policy, and the state revalidation needed for legacy Pydantic update semantics.
+
+Scope considered
+
+- Active phase `compatibility-and-filesystem-runtime` only.
+- Legacy workflow loading and normalization, repo-root `workflow` shim, filesystem runtime, config discovery, session/checkpoint persistence, raw/event/decisions logging, and runner/CLI harness.
+- Regression check against existing strict-core tests and the target legacy workflows `autoloop_v1.py` and `Ralph_loop.py`.
+
+What I analyzed
+
+- The strict core in `autoloop_v3/workflow/*`.
+- Legacy workflow surfaces in `autoloop_v1.py` and `Ralph_loop.py`.
+- The parity oracle in `autoloop/src/autoloop/main.py`, especially session JSON shape, `.autoloop` layout, config discovery, phase/session paths, and decisions/raw/event logging.
+- Phase artifacts: `plan.md`, current phase scope, prior implementation notes, and `decisions.txt`.
+
+What I changed
+
+- Implemented compatibility normalization in [autoloop_v3/workflow/compat.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/compat.py:1) and wired it into [autoloop_v3/workflow/compiler.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/compiler.py:1).
+- Added a permissive repo-root compatibility shim in [workflow/__init__.py](/home/rauter/autoloop_v3/workflow/__init__.py:1) and [workflow/primitives.py](/home/rauter/autoloop_v3/workflow/primitives.py:1) so unchanged workspace workflows import cleanly.
+- Added a legacy-safe loader in [autoloop_v3/runtime/loader.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/loader.py:1) that injects missing annotation globals before module execution; `Ralph_loop.py` now loads and compiles without source edits.
+- Added the filesystem runtime under [autoloop_v3/runtime/](/home/rauter/autoloop_v3/autoloop_v3/runtime): workspace/run scaffolding, prompt resolution, raw/events/decisions logging, config discovery, runner/CLI, and filesystem session/checkpoint stores.
+- Hardened handler state returns in [autoloop_v3/workflow/engine.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/engine.py:1) by revalidating returned state models, which fixes legacy Pydantic `copy(update=...)` nested-dict drift.
+- Added runtime acceptance coverage in [autoloop_v3/tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py:1).
+- Updated the authoritative notes in [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/compatibility-and-filesystem-runtime/implementation_notes.md:1) and appended non-obvious decisions to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt:1).
+
+Key findings / decisions
+
+- The root `workflow` package cannot be strict-validating if legacy modules are to load unchanged; strict validation now happens only after normalization.
+- Session-file compatibility is isolated in the filesystem store, with explicit aliases for `plan_session` and `phase_session` and legacy `thread_id` fallback.
+- `autoloop_v1.py` now executes through the new runtime with deterministic fake providers and writes the expected `.autoloop` task/run/session/log artifacts.
+- Validation: `pytest -q autoloop_v3/tests` passed with `44 passed`.
+
+Open issues / next step
+
+- Full end-to-end Ralph Loop execution and final parity goldens remain for the later parity phase.
+- External real-provider subprocess adapters are still deferred; the new runner currently executes with injected `LLMProvider` implementations or a provider-factory hook.

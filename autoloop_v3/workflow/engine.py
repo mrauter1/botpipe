@@ -198,18 +198,27 @@ class Engine:
             raw_output, outcome = self._run_pair_step(step, context, artifacts, session)
             event = self._apply_outcome(step, context, artifacts, state, outcome)
             destination = self.compiled.route(step.name, event.tag if event is not None else outcome.tag)
-            next_state = state if event is not None else self._apply_outcome_handler(step, state, outcome, artifacts)
+            next_state = (
+                state
+                if event is not None
+                else self._normalize_state(state, self._apply_outcome_handler(step, state, outcome, artifacts))
+            )
             return next_state, destination, event or Event(outcome.tag, reason=outcome.reason, question=outcome.question), outcome
         if step.kind == "llm":
             outcome = self._run_llm_step(step, context, artifacts, session)
             event = self._apply_outcome(step, context, artifacts, state, outcome)
             destination = self.compiled.route(step.name, event.tag if event is not None else outcome.tag)
-            next_state = state if event is not None else self._apply_outcome_handler(step, state, outcome, artifacts)
+            next_state = (
+                state
+                if event is not None
+                else self._normalize_state(state, self._apply_outcome_handler(step, state, outcome, artifacts))
+            )
             return next_state, destination, event or Event(outcome.tag, reason=outcome.reason, question=outcome.question), outcome
         if step.kind == "system":
             if step.system_handler is None:
                 raise WorkflowExecutionError(f"system step {step.name!r} has no compiled handler")
             next_state, event = step.system_handler(state, context)
+            next_state = self._normalize_state(state, next_state)
             destination = self.compiled.route(step.name, event.tag)
             return next_state, destination, event, None
         raise WorkflowExecutionError(f"unsupported step kind {step.kind!r}")
@@ -360,3 +369,13 @@ class Engine:
         )
         self.checkpoint_store.save(checkpoint)
         return checkpoint
+
+    def _normalize_state(self, current_state: BaseModel, next_state: BaseModel) -> BaseModel:
+        expected_cls = type(current_state)
+        if not isinstance(next_state, BaseModel):
+            raise WorkflowExecutionError(
+                f"handler returned {type(next_state)!r}; expected a pydantic model compatible with {expected_cls.__name__}"
+            )
+        if isinstance(next_state, expected_cls):
+            return expected_cls.model_validate(next_state.model_dump(mode="python", warnings=False))
+        return expected_cls.model_validate(next_state.model_dump(mode="python", warnings=False))
