@@ -198,3 +198,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=decision-freeze-and-observer-core,runtime-session-store-ownership,autoloop-v1-parity-split,strict-workflow-cleanup,docs-and-full-verification
+explicit=True
+current_phase_index=0
