@@ -493,3 +493,59 @@ Open issues / next step
 
 - The next phase should add the isolated compatibility layer and repo-root `workflow` shim, then land the filesystem/runtime harness and parity tests against the workspace workflows.
 - Validation performed: `pytest -q autoloop_v3/tests` passed with `30 passed`, and a direct import smoke check for `autoloop_v3.workflow` succeeded.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+I’m reviewing the new strict-core implementation and its tests against the phase contract and the shared decisions. I’ll inspect the new `autoloop_v3/workflow` modules, run the phase test slice if needed, and then update the phase criteria and feedback with any blocking issues.
+
+I’ve got one concrete contract bug already: a pure v1.1 workflow cannot safely define a step named `start`, because the engine will treat `on_start` as the lifecycle hook instead of just the step handler. I’m checking for a second issue around resume/step-state bookkeeping before I write the review artifacts.
+
+I’m reproducing the reserved-hook-name collision directly so the review note is anchored to an observed failure mode, not just a code reading inference.
+
+I’ve narrowed the review to a real blocker in the strict core rather than a test gap. I’m pulling exact line references now and then I’ll update the verifier artifacts with the finding and keep the criteria unchecked.
+
+I’ve written the blocking finding to the phase feedback. I’m doing a final sanity read of the verifier artifacts, then I’ll close out with `INCOMPLETE` because the strict core still accepts valid step names that it cannot execute correctly.
+
+Scope considered
+
+- Phase-local review of the new strict core under `autoloop_v3/workflow` and its phase tests.
+- `.autoloop` verifier artifacts for `strict-core-engine`, plus the shared decisions that freeze the phase boundary.
+
+What I analyzed
+
+- The new validator, compiler, engine, step, artifact, context, and in-memory store/provider modules.
+- The strict-core tests under `autoloop_v3/tests`.
+- The accepted phase scope and the shared decisions for reserved compatibility/runtime deferments.
+
+What I reviewed
+
+- Definition-time validation against the required failure modes.
+- Deterministic execution, routing, pause/resume, and answer-injection behavior.
+- Hook and handler lookup paths for collisions between lifecycle hooks, middleware hooks, and step handlers.
+- Phase verifier artifacts: `criteria.md` and `feedback.md`.
+
+Key findings / decisions
+
+- `IMP-001` blocking: the strict core currently accepts pure v1.1 workflows with step names that collide with reserved hook names, but executes them incorrectly.
+- I reproduced the failure: a step named `start` crashes before first-step execution because `Engine.run()` invokes `on_start` as a lifecycle hook, and steps named `outcome` or `verdict` are double-bound as both step handlers and middleware.
+- Because of that blocker, the phase criteria remain unchecked and the review result is `INCOMPLETE`.
+
+Open issues / next step
+
+- Fix reserved hook-name handling centrally in validation/compiler/engine, then add regression tests for steps named `start`, `outcome`, and `verdict`.
+- After that, rerun `pytest -q autoloop_v3/tests` and update the verifier artifacts again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
