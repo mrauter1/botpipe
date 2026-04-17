@@ -180,3 +180,12 @@ The plan artifacts are now consistent with the request, the shared decisions led
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=architecture-and-adr-baseline,strict-core-engine,compatibility-and-filesystem-runtime,workflow-integration-and-parity,docs-hardening-and-final-proof
+explicit=True
+current_phase_index=0
