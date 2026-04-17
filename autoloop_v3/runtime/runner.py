@@ -25,6 +25,7 @@ from .prompts import FilesystemPromptRegistry
 from .stores.filesystem import FilesystemCheckpointStore, FilesystemSessionStore
 from .workspace import (
     PLAN_DECISIONS_PHASE_ID,
+    RunWorkspace,
     TaskWorkspace,
     create_run,
     ensure_workspace,
@@ -71,17 +72,8 @@ def run_workflow(
     provider: LLMProvider,
     options: RunnerOptions,
 ) -> RunResult:
-    workspace = _ensure_task_workspace(options)
-    run = (
-        open_existing_run(workspace, options.run_id or "")
-        if options.resume
-        else create_run(
-            workspace,
-            run_id=options.run_id,
-            request_text=options.request_text or task_request_text(workspace.task_meta_file, workspace.legacy_context_file),
-        )
-    )
     _validate_runtime_options(options)
+    workspace, run = _prepare_workspaces(options)
 
     compiled = load_compiled_workflow(workflow_target, class_name=options.class_name)
     session_store = FilesystemSessionStore(run.run_dir)
@@ -108,7 +100,6 @@ def run_workflow(
     resume_clarification: tuple[str, str | None, str, Path | None] | None = None
     try:
         if options.resume:
-            _validate_resume_state(run, checkpoint_store)
             checkpoint = checkpoint_store.load()
             if options.answer and checkpoint is not None and checkpoint.pending_question:
                 phase_id = checkpoint.session_bindings.active_scopes.get("phase_session") or PLAN_DECISIONS_PHASE_ID
@@ -210,6 +201,33 @@ def _ensure_task_workspace(options: RunnerOptions) -> TaskWorkspace:
     )
 
 
+def _prepare_workspaces(options: RunnerOptions) -> tuple[TaskWorkspace, RunWorkspace]:
+    if not options.resume:
+        workspace = _ensure_task_workspace(options)
+        run = create_run(
+            workspace,
+            run_id=options.run_id,
+            request_text=options.request_text or task_request_text(workspace.task_meta_file, workspace.legacy_context_file),
+        )
+        return workspace, run
+
+    root = options.root.resolve()
+    state_dir = options.state_dir
+    if state_dir is None:
+        state_dir = resolve_resume_state_root(root, task_id=options.task_id, run_id=options.run_id)
+    run_id = options.run_id or ""
+    run_dir = state_dir / "tasks" / options.task_id / "runs" / run_id
+    _validate_resume_state(run_dir)
+    workspace = ensure_workspace(
+        root,
+        options.task_id,
+        product_intent=options.request_text,
+        intent_mode=options.intent_mode,
+        state_dir=state_dir,
+    )
+    return workspace, open_existing_run(workspace, run_id)
+
+
 def _validate_runtime_options(options: RunnerOptions) -> None:
     unsupported: list[str] = []
     if options.pairs is not None and options.pairs != DEFAULT_PAIRS:
@@ -235,12 +253,17 @@ def _validate_runtime_options(options: RunnerOptions) -> None:
         )
 
 
-def _validate_resume_state(run: Any, checkpoint_store: FilesystemCheckpointStore) -> None:
-    checkpoint = checkpoint_store.load()
-    if checkpoint is not None:
+def _validate_resume_state(run_dir: Path) -> None:
+    if not run_dir.is_dir():
+        raise FileNotFoundError(f"run {run_dir.name!r} does not exist under {run_dir.parent}")
+    checkpoint_file = run_dir / "checkpoint.json"
+    if checkpoint_file.exists():
         return
-    has_session_files = any(run.sessions_dir.glob("*.json")) or any(run.phase_sessions_dir.glob("*.json"))
-    has_event_history = run.events_file.exists() and run.events_file.stat().st_size > 0
+    sessions_dir = run_dir / "sessions"
+    phase_sessions_dir = sessions_dir / "phases"
+    events_file = run_dir / "events.jsonl"
+    has_session_files = any(sessions_dir.glob("*.json")) or any(phase_sessions_dir.glob("*.json"))
+    has_event_history = events_file.exists() and events_file.stat().st_size > 0
     if has_session_files or has_event_history:
         raise WorkflowExecutionError(
             "resume requested for a run without autoloop_v3 checkpoint.json. "

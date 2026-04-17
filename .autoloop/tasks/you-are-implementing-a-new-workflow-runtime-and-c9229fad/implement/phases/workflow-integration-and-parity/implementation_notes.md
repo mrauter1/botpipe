@@ -29,6 +29,7 @@
 
 - Plan milestone 4: added end-to-end `AutoloopV1` and `Ralph_loop` parity coverage, including explicit multi-phase execution, implicit fallback, scoped artifacts, scoped sessions, and pause/resume answer injection.
 - Plan milestone 4: added legacy comparison assertions for `latest_run_status`, `discover_config_file`, `resolve_resume_state_root`, `parse_decisions_headers`, `extract_clarifications`, and session-file compatibility fields.
+- Plan milestone 4: added negative resume-path regression coverage proving unsupported legacy session/event-only resumes do not mutate `events.jsonl` or scaffold task/run files before the compatibility gate rejects them.
 - Plan milestone 5 hardening subset: tightened runner/event/session persistence behavior to satisfy the new parity tests without widening the core engine boundary.
 
 ## Assumptions
@@ -39,7 +40,7 @@
 ## Preserved Invariants
 
 - Strict core execution and compatibility normalization boundaries remain unchanged; all new behavior stays in `autoloop_v3.runtime` and filesystem persistence.
-- Resume without a v3 checkpoint is still rejected; this phase only improves persisted-artifact parity for valid v3 runs.
+- Resume without a v3 checkpoint is still rejected; this phase only improves persisted-artifact parity for valid v3 runs and makes the rejection path non-mutating.
 - Legacy workflow source files were not edited.
 
 ## Intended Behavior Changes
@@ -47,6 +48,7 @@
 - Resume-time answers now write a legacy-compatible clarification record to raw logs, reuse the original decisions turn/qa sequence, and persist the full `Question/Answer` note to the active session file.
 - Session restore and provider binding writes now preserve existing session metadata instead of overwriting it with sparse checkpoint/provider payloads.
 - `run_finished` events now include legacy-compatible `status` values and are emitted on fatal exceptions as well as normal completion.
+- Unsupported resume targets are now compatibility-gated before `ensure_workspace()`, `open_existing_run()`, or any event emission, so rejected legacy runs remain byte-for-byte unchanged on disk.
 
 ## Known Non-Changes
 
@@ -62,6 +64,7 @@
 
 - `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py`
 - `pytest -q autoloop_v3/tests`
+- Manual repro of `.superloop/tasks/.../runs/...` unsupported resume confirms `events.jsonl` and missing task/run scaffolding files remain unchanged after the targeted compatibility error.
 
 ## Deduplication / Centralization
 

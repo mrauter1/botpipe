@@ -311,6 +311,7 @@ def test_runner_resume_without_checkpoint_but_with_legacy_state_fails_with_targe
         encoding="utf-8",
     )
     run.events_file.write_text(json.dumps({"seq": 1, "event_type": "run_started"}) + "\n", encoding="utf-8")
+    original_events = run.events_file.read_text(encoding="utf-8")
 
     with pytest.raises(  # targeted compatibility gate, not the generic missing-checkpoint failure
         Exception,
@@ -321,6 +322,38 @@ def test_runner_resume_without_checkpoint_but_with_legacy_state_fails_with_targe
             provider=ScriptedLLMProvider(),
             options=RunnerOptions(root=tmp_path, task_id="task-1", run_id="run-1", resume=True),
         )
+    assert run.events_file.read_text(encoding="utf-8") == original_events
+
+
+def test_runner_rejects_legacy_resume_without_scaffolding_workspace_or_run_files(tmp_path: Path):
+    import pytest
+
+    legacy_task = tmp_path / ".superloop" / "tasks" / "legacy-task"
+    legacy_run = legacy_task / "runs" / "legacy-run"
+    legacy_run.mkdir(parents=True)
+    sessions_dir = legacy_run / "sessions"
+    sessions_dir.mkdir()
+    (sessions_dir / "plan.json").write_text(
+        json.dumps({"mode": "persistent", "thread_id": "thread-123"}) + "\n",
+        encoding="utf-8",
+    )
+    events_file = legacy_run / "events.jsonl"
+    events_file.write_text(json.dumps({"seq": 1, "event_type": "run_started"}) + "\n", encoding="utf-8")
+
+    with pytest.raises(Exception, match="without autoloop_v3 checkpoint.json"):
+        run_workflow(
+            REPO_ROOT / "autoloop_v1.py",
+            provider=ScriptedLLMProvider(),
+            options=RunnerOptions(root=tmp_path, task_id="legacy-task", run_id="legacy-run", resume=True),
+        )
+
+    assert not (legacy_task / "task.json").exists()
+    assert not (legacy_task / "request.md").exists()
+    assert not (legacy_task / "raw_phase_log.md").exists()
+    assert not (legacy_task / "decisions.txt").exists()
+    assert not (legacy_run / "request.md").exists()
+    assert not (legacy_run / "raw_phase_log.md").exists()
+    assert events_file.read_text(encoding="utf-8") == json.dumps({"seq": 1, "event_type": "run_started"}) + "\n"
 
 
 def test_cli_main_threads_runtime_options_into_runner_options(monkeypatch, tmp_path: Path):
