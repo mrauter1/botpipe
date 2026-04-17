@@ -1,0 +1,3 @@
+{"ts": "2026-04-17T18:36:15.008254+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 1, "event_type": "run_started", "workspace": "/home/rauter/autoloop_v3", "pairs": ["plan", "implement", "test"], "max_iterations": 15, "use_git": true, "task_id": "you-are-a-principal-software-architect-and-imple-63e1905d", "task_root": ".autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d"}
+{"ts": "2026-04-17T18:36:15.012332+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 2, "event_type": "pair_started", "pair": "plan", "phase_id": null}
+{"ts": "2026-04-17T18:36:15.012578+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 3, "event_type": "cycle_started", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
