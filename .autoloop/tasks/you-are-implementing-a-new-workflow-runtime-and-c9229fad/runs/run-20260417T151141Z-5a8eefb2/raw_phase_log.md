@@ -189,3 +189,116 @@ phase_mode=single
 phase_ids=architecture-and-adr-baseline,strict-core-engine,compatibility-and-filesystem-runtime,workflow-integration-and-parity,docs-hardening-and-final-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c0b-0879-7132-9725-46cea3548b90
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9c0b-0879-7132-9725-46cea3548b90
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c0b-0879-7132-9725-46cea3548b90
+---
+I’m scoping the phase artifacts and the legacy workflow/runtime surfaces first, then I’ll lock the architecture docs and ADR set for the new `autoloop_v3` baseline.
+
+I have the target surfaces. Next I’m reading the active phase contract files plus the legacy workflow/runtime code paths that define parity.
+
+The legacy workflows already confirm the main compatibility drift points: `Verdict`, `on_verdict`, produced-artifact attribute access, scoped sessions, legacy handler arities, and a loader problem for `Ralph_loop.py`. I’m pulling the legacy runtime functions and tests that define the workspace and resume behavior we need to preserve.
+
+I’ve got the main legacy parity anchors from the old runtime tests. Now I’m checking the current `autoloop_v3` tree and the exact import failure mode of `Ralph_loop.py` so the docs and ADRs are grounded in real behavior.
+
+I’ve got enough context to freeze the design. I’m creating the new `autoloop_v3/docs` baseline now: one architecture set plus the full required ADR suite, grounded in the actual legacy behaviors we have to preserve.
+
+The ADR set is in place. I’m doing a quick consistency pass now and checking the next real blocker after the missing shim: whether `Ralph_loop.py` fails on its undeclared annotations once a `workflow` module exists.
+
+The docs are consistent, and the loader risk is confirmed: with a stub `workflow` module in place, `Ralph_loop.py` still fails at import time with `NameError: Verdict is not defined`. I’m recording that and the frozen boundaries in the phase notes and shared decisions ledger now.
+
+I’m in the last verification pass now: checking the authored doc set, the ADR inventory, and the phase-note updates before I close the phase out.
+
+Scope considered
+
+- Phase-scoped architecture baseline only, per the active contract.
+- Legacy parity sources: `autoloop_v1.py`, `Ralph_loop.py`, `autoloop/src/autoloop/main.py`, and the legacy observability and phase-local tests.
+- Active artifacts and shared ledger under `.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/...`.
+
+What I analyzed
+
+- `autoloop_v1.py` for the target authoring surface: `Verdict`, `on_verdict`, produced-artifact attribute access, scoped sessions, and phase-local artifacts.
+- `Ralph_loop.py` for compatibility drift: `SessionLifecycle.ON_START`, legacy handler arities, Pydantic v1-style `copy(update=...)`, and undeclared `Verdict` or `Event` annotations.
+- `autoloop/main.py` plus `test_phase_local_behavior.py` and `test_autoloop_observability.py` for workspace layout, request snapshots, logs, decisions ledger, phase scoping, config discovery, and resume semantics.
+
+What I changed
+
+- Authored the architecture baseline at [architecture.md](/home/rauter/autoloop_v3/autoloop_v3/docs/architecture.md), [parity-matrix.md](/home/rauter/autoloop_v3/autoloop_v3/docs/parity-matrix.md), [compatibility.md](/home/rauter/autoloop_v3/autoloop_v3/docs/compatibility.md), [authoring.md](/home/rauter/autoloop_v3/autoloop_v3/docs/authoring.md), and [risk-register.md](/home/rauter/autoloop_v3/autoloop_v3/docs/risk-register.md).
+- Added the full ADR suite under [/home/rauter/autoloop_v3/autoloop_v3/docs/adr](/home/rauter/autoloop_v3/autoloop_v3/docs/adr), covering all 14 required decision topics with exactly three candidates and the mandated evaluation fields.
+- Updated the phase notes at [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/architecture-and-adr-baseline/implementation_notes.md) and appended this turn’s frozen decisions to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt).
+
+Key findings / decisions
+
+- The frozen shape is a split architecture: strict core in `autoloop_v3.workflow`, workspace and provider integration in `autoloop_v3.runtime`, and a repo-root `workflow` shim limited to re-exports.
+- `Ralph_loop.py` is a real loader blocker. After stubbing a `workflow` module, it still fails import with `NameError: Verdict is not defined`, so compatibility must start in `runtime.loader`, before strict compilation.
+- Checkpointing is frozen as typed snapshot plus append-only events, with events retained for parity and observability rather than as the sole engine state store.
+- Validation performed: confirmed 14 ADR files exist, and each contains exactly 3 candidate sections plus all required evaluation fields.
+
+Open issues / next step
+
+- No production engine or runtime code was added in this phase by design.
+- Next step is to implement the strict core modules, then the compat loader and adapters against the frozen docs and ADRs.
+- I did not run `pytest` in this phase; validation here was documentation completeness and import-behavior verification.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c0b-0879-7132-9725-46cea3548b90
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9c0b-0879-7132-9725-46cea3548b90
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c0b-0879-7132-9725-46cea3548b90
+---
+I’m auditing the phase-local architecture deliverables now: the authored ADR set, parity and compatibility docs, and the reviewer-owned criteria and feedback artifacts.
+
+I don’t have a blocking defect in the phase output. I’m marking the reviewer criteria complete and recording a no-findings review note in the phase feedback artifact.
+
+I’ve updated the reviewer-owned artifacts. I’m doing a final readback of the criteria and feedback files, then I’ll close with the canonical loop-control block.
+
+Scope considered
+
+- Phase-local review of the architecture baseline deliverables only.
+- Reviewer-owned artifacts under `.autoloop/tasks/.../implement/phases/architecture-and-adr-baseline/`.
+- Request-relevant legacy sources used to verify intent coverage: `autoloop_v1.py`, `Ralph_loop.py`, `autoloop/src/autoloop/main.py`, and the legacy phase or observability tests.
+
+What I analyzed
+
+- The authored docs under `autoloop_v3/docs/`, especially `architecture.md`, `parity-matrix.md`, `compatibility.md`, `authoring.md`, and `risk-register.md`.
+- The full ADR set under `autoloop_v3/docs/adr/`.
+- The current phase notes and the shared decisions ledger for conformance with already-frozen constraints.
+
+What I reviewed
+
+- Verified that all required ADR topics are present.
+- Verified that each ADR contains exactly three candidate sections and includes the mandated evaluation fields.
+- Verified that the docs capture the concrete legacy behaviors and compatibility constraints required by P1-AC2.
+- Updated `criteria.md` to all checked and appended the review result to `feedback.md`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The phase output satisfies the architecture-baseline acceptance criteria as written.
+
+Open issues / next step
+
+- No review blocker remains for this phase.
+- Next step is the implementation phase for the strict core, compatibility loader, runtime stores, and harness described by the frozen docs and ADRs.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
