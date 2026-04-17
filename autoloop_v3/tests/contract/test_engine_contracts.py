@@ -12,13 +12,12 @@ from autoloop_v3.workflow import (
     LLMStep,
     PairStep,
     Session,
-    SessionLifecycle,
     SystemStep,
     SUCCESS,
     Workflow,
 )
 from autoloop_v3.workflow.compiler import compile_workflow
-from autoloop_v3.workflow.errors import MissingArtifactError
+from autoloop_v3.workflow.errors import MissingArtifactError, WorkflowExecutionError
 from autoloop_v3.workflow.primitives import Event, Outcome
 from autoloop_v3.workflow.providers.fake import ScriptedLLMProvider
 from autoloop_v3.workflow.stores import InMemoryCheckpointStore, InMemorySessionStore
@@ -53,6 +52,9 @@ def test_pair_step_contract_logs_raw_output_and_updates_state(tmp_path: Path):
         finish = SystemStep(name="finish")
         entry = pair
         transitions = {pair: {"pair_ok": finish}, finish: {"done": SUCCESS}}
+
+        def on_start(self, ctx):
+            ctx.open_session(self.main)
 
         @staticmethod
         def on_pair(state: State, outcome: Outcome, artifacts):
@@ -109,7 +111,7 @@ def test_llm_step_contract_logs_outcome_raw_output_and_uses_global_route(tmp_pat
         }
 
         @staticmethod
-        def on_ask(state: State, outcome: Outcome):
+        def on_ask(state: State, outcome: Outcome, artifacts):
             return state.model_copy(update={"tag_seen": outcome.tag})
 
     task_folder, run_folder = _workspace(tmp_path)
@@ -170,23 +172,24 @@ def test_system_step_contract_bypasses_middleware(tmp_path: Path):
     assert result.state.completed is True
 
 
-def test_on_start_and_session_lifecycle_open_sessions_before_execution(tmp_path: Path):
+def test_on_start_opens_sessions_before_execution(tmp_path: Path):
     class StartSessionWorkflow(Workflow):
         class State(BaseModel):
             session_id: str = ""
             auxiliary: str = ""
 
-        main = Session(lifecycle=SessionLifecycle.ON_START)
+        main = Session()
         auxiliary_slot = Session()
         ask = LLMStep(name="ask", producer="ask.md", session=main)
         entry = ask
         transitions = {ask: {"done": SUCCESS}}
 
         def on_start(self, ctx):
+            ctx.open_session(self.main)
             ctx.open_session(self.auxiliary_slot)
 
         @staticmethod
-        def on_ask(state: State, outcome: Outcome):
+        def on_ask(state: State, outcome: Outcome, artifacts):
             return state.model_copy(update={"session_id": outcome.payload["session_id"]})
 
     task_folder, run_folder = _workspace(tmp_path)
@@ -218,6 +221,44 @@ def test_on_start_and_session_lifecycle_open_sessions_before_execution(tmp_path:
     assert snapshot.active_scopes == {"main": None, "auxiliary_slot": None}
 
 
+def test_missing_session_binding_fails_instead_of_auto_opening(tmp_path: Path):
+    class MissingSessionWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        main = Session()
+        ask = LLMStep(name="ask", producer="ask.md", session=main)
+        entry = ask
+        transitions = {ask: {"done": SUCCESS}}
+
+        @staticmethod
+        def on_ask(state: State, outcome: Outcome, artifacts):
+            return state
+
+    task_folder, run_folder = _workspace(tmp_path)
+    checkpoint_store = InMemoryCheckpointStore()
+    session_store = InMemorySessionStore()
+    engine = Engine(
+        MissingSessionWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
+        session_store=session_store,
+        checkpoint_store=checkpoint_store,
+    )
+
+    with pytest.raises(WorkflowExecutionError, match="session slot 'main'"):
+        engine.run(
+            task_id="task-1",
+            run_id="run-1",
+            task_folder=task_folder,
+            run_folder=run_folder,
+        )
+
+    checkpoint = checkpoint_store.load()
+    assert checkpoint is not None
+    assert checkpoint.stage == "ask"
+    assert checkpoint.session_bindings.active_scopes == {}
+
+
 def test_middleware_pause_skips_handler_and_resume_injects_answer_once(tmp_path: Path):
     class PauseWorkflow(Workflow):
         class State(BaseModel):
@@ -231,7 +272,7 @@ def test_middleware_pause_skips_handler_and_resume_injects_answer_once(tmp_path:
         transitions = {ask: {"answered": finish, "question": "PAUSE"}, finish: {"done": SUCCESS}}
 
         @staticmethod
-        def on_ask(state: State, outcome: Outcome):
+        def on_ask(state: State, outcome: Outcome, artifacts):
             return state.model_copy(
                 update={
                     "handler_calls": state.handler_calls + 1,
@@ -309,7 +350,7 @@ def test_handler_exception_saves_failure_checkpoint(tmp_path: Path):
         transitions = {ask: {"done": SUCCESS}}
 
         @staticmethod
-        def on_ask(state: State, outcome: Outcome):
+        def on_ask(state: State, outcome: Outcome, artifacts):
             raise RuntimeError("boom")
 
     task_folder, run_folder = _workspace(tmp_path)
@@ -345,7 +386,7 @@ def test_missing_required_artifact_raises_and_checkpoints(tmp_path: Path):
         transitions = {ask: {"done": SUCCESS}}
 
         @staticmethod
-        def on_ask(state: State, outcome: Outcome):
+        def on_ask(state: State, outcome: Outcome, artifacts):
             return state
 
     task_folder, run_folder = _workspace(tmp_path)
@@ -396,7 +437,7 @@ def test_phase_scoped_sessions_follow_active_scope_switches(tmp_path: Path):
             return state, Event("phase-a")
 
         @staticmethod
-        def on_use_a(state: State, outcome: Outcome):
+        def on_use_a(state: State, outcome: Outcome, artifacts):
             return state.model_copy(update={"seen": [*state.seen, outcome.payload["session_id"]]})
 
         @staticmethod
@@ -405,7 +446,7 @@ def test_phase_scoped_sessions_follow_active_scope_switches(tmp_path: Path):
             return state, Event("phase-b")
 
         @staticmethod
-        def on_use_b(state: State, outcome: Outcome):
+        def on_use_b(state: State, outcome: Outcome, artifacts):
             return state.model_copy(update={"seen": [*state.seen, outcome.payload["session_id"]]})
 
         @staticmethod
@@ -457,7 +498,7 @@ def test_compiled_workflow_is_deterministic():
         transitions = {ask: {"done": SUCCESS}}
 
         @staticmethod
-        def on_ask(state: State, outcome: Outcome):
+        def on_ask(state: State, outcome: Outcome, artifacts):
             return state
 
     first = compile_workflow(DeterministicWorkflow)
@@ -476,7 +517,7 @@ def test_step_named_start_executes_without_being_treated_as_lifecycle_hook(tmp_p
         transitions = {start: {"done": SUCCESS}}
 
         @staticmethod
-        def on_start(state: State, outcome: Outcome):
+        def on_start(state: State, outcome: Outcome, artifacts):
             return state.model_copy(update={"handler_calls": state.handler_calls + 1})
 
     task_folder, run_folder = _workspace(tmp_path)
@@ -508,7 +549,7 @@ def test_step_named_outcome_executes_without_being_treated_as_global_middleware(
         transitions = {outcome: {"done": SUCCESS}}
 
         @staticmethod
-        def on_outcome(state: State, outcome: Outcome):
+        def on_outcome(state: State, outcome: Outcome, artifacts):
             return state.model_copy(update={"handler_calls": state.handler_calls + 1})
 
     task_folder, run_folder = _workspace(tmp_path)
@@ -540,7 +581,7 @@ def test_step_named_verdict_executes_without_being_treated_as_global_middleware(
         transitions = {verdict: {"done": SUCCESS}}
 
         @staticmethod
-        def on_verdict(state: State, outcome: Outcome):
+        def on_verdict(state: State, outcome: Outcome, artifacts):
             return state.model_copy(update={"handler_calls": state.handler_calls + 1})
 
     task_folder, run_folder = _workspace(tmp_path)

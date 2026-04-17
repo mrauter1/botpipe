@@ -1,4 +1,4 @@
-"""Compatibility import surface for workspace workflows."""
+"""Strict import surface for workspace workflows."""
 
 from __future__ import annotations
 
@@ -14,11 +14,10 @@ from autoloop_v3.workflow import (
     Prompt,
     SUCCESS,
     Session,
-    SessionLifecycle,
     SystemStep,
+    Workflow,
     compile_workflow,
 )
-from autoloop_v3.workflow.compat import LegacyWorkflow as Workflow
 
 __all__ = [
     "Artifact",
@@ -32,7 +31,6 @@ __all__ = [
     "Prompt",
     "SUCCESS",
     "Session",
-    "SessionLifecycle",
     "SystemStep",
     "Workflow",
     "compile_workflow",

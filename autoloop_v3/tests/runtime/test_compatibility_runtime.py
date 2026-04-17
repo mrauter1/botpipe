@@ -21,7 +21,7 @@ from autoloop_v3.runtime.config import (
     resolve_runtime_config,
 )
 from autoloop_v3.runtime.events import append_clarification, parse_decisions_headers
-from autoloop_v3.runtime.loader import load_compiled_workflow, load_workflow_class
+from autoloop_v3.runtime.loader import load_compiled_workflow, load_workflow_class, load_workflow_module
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow
 from autoloop_v3.runtime.stores import FilesystemCheckpointStore, FilesystemSessionStore
 from autoloop_v3.runtime.stores.filesystem import load_session_payload
@@ -165,6 +165,35 @@ def test_autoloop_v1_imports_through_root_workflow_shim_and_legacy_loader_handle
     compiled_ralph = compile_workflow(ralph_cls)
     assert compiled_ralph.entry_step_name == "understand"
     assert sorted(compiled_ralph.steps) == ["execute", "plan_action", "reflect", "understand"]
+
+
+def test_loader_does_not_inject_canonical_symbols(tmp_path: Path):
+    workflow_file = tmp_path / "needs_imports.py"
+    workflow_file.write_text(
+        """
+from pydantic import BaseModel
+
+from workflow import LLMStep, SUCCESS, Workflow
+
+
+class NeedsImports(Workflow):
+    class State(BaseModel):
+        pass
+
+    ask = LLMStep(name="ask", producer="ask.md")
+    entry = ask
+    transitions = {ask: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_ask(state: State, outcome: Outcome, artifacts):
+        return state
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with __import__("pytest").raises(NameError, match="Outcome"):
+        load_workflow_module(workflow_file)
 
 
 def test_filesystem_session_store_uses_compatibility_paths_and_loads_legacy_thread_id(tmp_path: Path):

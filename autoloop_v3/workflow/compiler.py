@@ -8,19 +8,18 @@ from typing import Any, Callable
 from pydantic import BaseModel
 
 from .artifacts import CompiledArtifact
-from .compat import normalize_workflow
 from .context import Context
 from .errors import RoutingError, WorkflowCompilationError
 from .primitives import Event, FAIL, GLOBAL, Outcome, PAUSE, SUCCESS
 from .prompts import PromptSpec
-from .steps import LLMStep, PairStep, SessionLifecycle, Step, SystemStep
+from .steps import LLMStep, PairStep, Step, SystemStep
 from .validation import (
     ArtifactInventoryRecord,
     WorkflowDefinition,
     collect_artifact_inventory,
     get_workflow_definition,
     has_start_hook,
-    middleware_handler_name,
+    outcome_middleware_name,
 )
 
 OutcomeHandler = Callable[[BaseModel, Outcome, Any], BaseModel]
@@ -57,7 +56,6 @@ class CompiledWorkflow:
     routes: dict[str, dict[str, str]]
     global_routes: dict[str, str]
     artifacts: dict[str, CompiledArtifact]
-    start_sessions: tuple[str, ...]
     has_start_hook: bool
     middleware: MiddlewareHandler | None = None
 
@@ -81,14 +79,13 @@ class CompiledWorkflow:
 def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
     """Compile a validated workflow class."""
 
-    normalized = normalize_workflow(workflow_cls)
-    cached = getattr(normalized, "__compiled_workflow__", None)
+    cached = getattr(workflow_cls, "__compiled_workflow__", None)
     if isinstance(cached, CompiledWorkflow):
         return cached
-    definition = get_workflow_definition(normalized)
+    definition = get_workflow_definition(workflow_cls)
     inventory = collect_artifact_inventory(definition)
     compiled = CompiledWorkflow(
-        workflow_cls=normalized,
+        workflow_cls=workflow_cls,
         workflow_name=definition.workflow_name,
         state_cls=definition.state_cls,
         entry_step_name=definition.entry.name,
@@ -96,15 +93,9 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         routes=_compile_routes(definition),
         global_routes=_compile_global_routes(definition),
         artifacts=_compile_artifacts(inventory),
-        start_sessions=tuple(
-            name
-            for name, session in definition.sessions_by_name.items()
-            if session.lifecycle == SessionLifecycle.ON_START
-        ),
         has_start_hook=has_start_hook(definition),
         middleware=_compile_middleware(definition),
     )
-    normalized.__compiled_workflow__ = compiled
     workflow_cls.__compiled_workflow__ = compiled
     return compiled
 
@@ -168,28 +159,26 @@ def _compile_outcome_handler(workflow_cls: type[Any], step_name: str) -> Outcome
     raw_handler = getattr(workflow_cls, f"on_{step_name}", None)
     if raw_handler is None:
         return None
-    arity = _callable_arity(raw_handler)
-    if arity == 3:
-        return raw_handler
-    if arity == 2:
-        return lambda state, outcome, artifacts: raw_handler(state, outcome)
-    raise WorkflowCompilationError(f"invalid outcome handler arity for step {step_name!r}")
+    if _callable_arity(raw_handler) != 3:
+        raise WorkflowCompilationError(
+            f"handler for step {step_name!r} must accept exactly 3 positional arguments"
+        )
+    return raw_handler
 
 
 def _compile_system_handler(workflow_cls: type[Any], step_name: str) -> SystemHandler:
     raw_handler = getattr(workflow_cls, f"on_{step_name}", None)
     if raw_handler is None:
         raise WorkflowCompilationError(f"system step {step_name!r} is missing a handler")
-    arity = _callable_arity(raw_handler)
-    if arity == 2:
-        return raw_handler
-    if arity == 1:
-        return lambda state, context: raw_handler(state)
-    raise WorkflowCompilationError(f"invalid system handler arity for step {step_name!r}")
+    if _callable_arity(raw_handler) != 2:
+        raise WorkflowCompilationError(
+            f"handler for system step {step_name!r} must accept exactly 2 positional arguments"
+        )
+    return raw_handler
 
 
 def _compile_middleware(definition: WorkflowDefinition) -> MiddlewareHandler | None:
-    handler_name = middleware_handler_name(definition)
+    handler_name = outcome_middleware_name(definition)
     if handler_name is None:
         return None
     raw = getattr(definition.workflow_cls, handler_name, None)

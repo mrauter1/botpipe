@@ -8,7 +8,7 @@ from .context import Context
 from .engine import Engine
 from .primitives import FAIL, GLOBAL, PAUSE, SUCCESS
 from .prompts import Prompt
-from .steps import LLMStep, PairStep, Session, SessionLifecycle, SystemStep
+from .steps import LLMStep, PairStep, Session, SystemStep
 from .validation import WorkflowMeta
 
 
@@ -31,7 +31,6 @@ __all__ = [
     "Prompt",
     "SUCCESS",
     "Session",
-    "SessionLifecycle",
     "SystemStep",
     "Workflow",
     "compile_workflow",

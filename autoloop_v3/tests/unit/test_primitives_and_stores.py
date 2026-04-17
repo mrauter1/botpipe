@@ -4,9 +4,12 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+import workflow.primitives as root_primitives
 from autoloop_v3.workflow.artifacts import ArtifactHandle, ResolvedArtifacts, resolve_artifact_template
 from autoloop_v3.workflow.context import Context
-from autoloop_v3.workflow.primitives import Checkpoint, Event, Outcome, Verdict
+from autoloop_v3.workflow import Session as StrictSession
+from autoloop_v3.workflow import Workflow as StrictWorkflow
+from autoloop_v3.workflow.primitives import Checkpoint, Event, Outcome
 from autoloop_v3.workflow.prompts import Prompt, PromptRegistry
 from autoloop_v3.workflow.stores import (
     InMemoryCheckpointStore,
@@ -14,6 +17,8 @@ from autoloop_v3.workflow.stores import (
     SessionBinding,
     SessionSnapshot,
 )
+from workflow import Session as RootSession
+from workflow import Workflow as RootWorkflow
 
 
 class _PhaseState(BaseModel):
@@ -24,11 +29,16 @@ class _State(BaseModel):
     phase: _PhaseState = _PhaseState()
 
 
-def test_event_outcome_and_verdict_alias():
+def test_event_and_outcome():
     outcome = Outcome(raw_output="raw", tag="ok", payload={"x": 1})
-    assert Verdict is Outcome
     assert Event(tag="ok").tag == "ok"
     assert outcome.payload == {"x": 1}
+
+
+def test_root_workflow_shim_reexports_strict_surface_only():
+    assert RootWorkflow is StrictWorkflow
+    assert RootSession is StrictSession
+    assert not hasattr(root_primitives, "Verdict")
 
 
 def test_artifact_template_resolution_supports_dot_notation_and_missing_keys(tmp_path: Path):

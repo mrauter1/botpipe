@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from enum import Enum
 from itertools import count
 from typing import TYPE_CHECKING, Mapping, Sequence
 
@@ -16,21 +15,13 @@ _STEP_COUNTER = count()
 _SESSION_COUNTER = count()
 
 
-class SessionLifecycle(str, Enum):
-    """Session opening policy."""
-
-    ON_DEMAND = "on_demand"
-    ON_START = "on_start"
-
-
 class Session:
     """Session slot marker."""
 
-    __slots__ = ("name", "lifecycle", "_order")
+    __slots__ = ("name", "_order")
 
-    def __init__(self, lifecycle: SessionLifecycle = SessionLifecycle.ON_DEMAND) -> None:
+    def __init__(self) -> None:
         self.name: str | None = None
-        self.lifecycle = lifecycle
         self._order = next(_SESSION_COUNTER)
 
     def bind_name(self, name: str) -> None:
@@ -40,7 +31,7 @@ class Session:
             raise ValueError(f"session already named {self.name!r}; cannot rename to {name!r}")
 
     def __repr__(self) -> str:
-        return f"Session(name={self.name!r}, lifecycle={self.lifecycle.value!r})"
+        return f"Session(name={self.name!r})"
 
 
 class Step:

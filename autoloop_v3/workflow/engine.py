@@ -87,8 +87,6 @@ class Engine:
                 session_store=self.session_store,
                 answer=None,
             )
-            for session_name in self.compiled.start_sessions:
-                context.open_session(session_name)
             if self.compiled.has_start_hook:
                 workflow_instance.on_start(context)
             state = context.state
@@ -317,7 +315,9 @@ class Engine:
             return None
         binding = context.get_session(step.session_name)
         if binding is None:
-            binding = context.open_session(step.session_name)
+            raise WorkflowExecutionError(
+                f"session slot {step.session_name!r} is required by step {step.name!r} but was never opened"
+            )
         return binding
 
     def _persist_session(self, binding: SessionBinding | None) -> None:

@@ -34,7 +34,6 @@ class Outcome:
     payload: dict[str, Any] = field(default_factory=dict)
 
 
-Verdict = Outcome
 Checkpoint = CheckpointPayload
 
 from .artifacts import ResolvedArtifacts  # noqa: E402
@@ -48,5 +47,4 @@ __all__ = [
     "PAUSE",
     "ResolvedArtifacts",
     "SUCCESS",
-    "Verdict",
 ]

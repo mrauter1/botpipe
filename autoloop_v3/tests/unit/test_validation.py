@@ -118,11 +118,11 @@ def test_validation_rejects_future_required_artifacts():
             transitions = {first: {"next": second}, second: {"done": SUCCESS}}
 
             @staticmethod
-            def on_first(state, outcome):
+            def on_first(state, outcome, artifacts):
                 return state
 
             @staticmethod
-            def on_second(state, outcome):
+            def on_second(state, outcome, artifacts):
                 return state
 
 
@@ -138,7 +138,7 @@ def test_validation_rejects_undeclared_session_refs():
             transitions = {ask: {"done": SUCCESS}}
 
             @staticmethod
-            def on_ask(state, outcome):
+            def on_ask(state, outcome, artifacts):
                 return state
 
 
@@ -153,7 +153,7 @@ def test_validation_accepts_workflow_level_inputs_without_prior_producer():
         transitions = {ask: {"done": SUCCESS}}
 
         @staticmethod
-        def on_ask(state, outcome):
+        def on_ask(state, outcome, artifacts):
             return state
 
     assert ValidInputWorkflow.__workflow_definition__.entry.name == "ask"
@@ -169,7 +169,7 @@ def test_step_named_start_claims_on_start_as_step_handler_not_lifecycle_hook():
         transitions = {start: {"done": SUCCESS}}
 
         @staticmethod
-        def on_start(state, outcome):
+        def on_start(state, outcome, artifacts):
             return state
 
     compiled = compile_workflow(StartNamedWorkflow)
@@ -188,7 +188,7 @@ def test_step_named_outcome_claims_on_outcome_as_step_handler_not_middleware():
         transitions = {outcome: {"done": SUCCESS}}
 
         @staticmethod
-        def on_outcome(state, outcome):
+        def on_outcome(state, outcome, artifacts):
             return state
 
     compiled = compile_workflow(OutcomeNamedWorkflow)
@@ -197,7 +197,7 @@ def test_step_named_outcome_claims_on_outcome_as_step_handler_not_middleware():
     assert compiled.steps["outcome"].outcome_handler is not None
 
 
-def test_step_named_verdict_claims_on_verdict_as_step_handler_not_middleware():
+def test_step_named_verdict_uses_normal_step_handler_name():
     class VerdictNamedWorkflow(Workflow):
         class State(BaseModel):
             pass
@@ -207,7 +207,7 @@ def test_step_named_verdict_claims_on_verdict_as_step_handler_not_middleware():
         transitions = {verdict: {"done": SUCCESS}}
 
         @staticmethod
-        def on_verdict(state, outcome):
+        def on_verdict(state, outcome, artifacts):
             return state
 
     compiled = compile_workflow(VerdictNamedWorkflow)
@@ -216,10 +216,30 @@ def test_step_named_verdict_claims_on_verdict_as_step_handler_not_middleware():
     assert compiled.steps["verdict"].outcome_handler is not None
 
 
-def test_validation_rejects_conflicting_active_middleware_hooks():
-    with pytest.raises(WorkflowValidationError, match="define only one of on_outcome or on_verdict"):
+def test_validation_rejects_on_verdict_alias_without_matching_step():
+    with pytest.raises(WorkflowValidationError, match="orphan handler"):
 
-        class ConflictingMiddlewareWorkflow(Workflow):
+        class VerdictAliasWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = LLMStep(name="ask", producer="ask.md")
+            entry = ask
+            transitions = {ask: {"done": SUCCESS}}
+
+            @staticmethod
+            def on_ask(state, outcome, artifacts):
+                return state
+
+            @staticmethod
+            def on_verdict(state, outcome):
+                return None
+
+
+def test_validation_rejects_legacy_pair_handler_arity():
+    with pytest.raises(WorkflowValidationError, match="must accept 3 positional arguments"):
+
+        class LegacyPairHandlerWorkflow(Workflow):
             class State(BaseModel):
                 pass
 
@@ -231,10 +251,38 @@ def test_validation_rejects_conflicting_active_middleware_hooks():
             def on_ask(state, outcome):
                 return state
 
-            @staticmethod
-            def on_outcome(state, outcome):
-                return None
+
+def test_validation_rejects_legacy_system_handler_arity():
+    with pytest.raises(WorkflowValidationError, match="must accept 2 positional arguments"):
+
+        class LegacySystemHandlerWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            begin = SystemStep(name="begin")
+            entry = begin
+            transitions = {begin: {"done": SUCCESS}}
 
             @staticmethod
-            def on_verdict(state, outcome):
+            def on_begin(state):
+                return state, Event("done")
+
+
+def test_validation_rejects_static_on_start_signature():
+    with pytest.raises(WorkflowValidationError, match="on_start"):
+
+        class StaticStartHookWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            ask = LLMStep(name="ask", producer="ask.md")
+            entry = ask
+            transitions = {ask: {"done": SUCCESS}}
+
+            @staticmethod
+            def on_ask(state, outcome, artifacts):
+                return state
+
+            @staticmethod
+            def on_start(ctx):
                 return None

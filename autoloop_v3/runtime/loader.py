@@ -1,4 +1,4 @@
-"""Legacy-safe workflow loading helpers."""
+"""Workflow loading helpers."""
 
 from __future__ import annotations
 
@@ -10,22 +10,18 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from ..workflow.compat import legacy_annotation_globals
 from ..workflow.compiler import CompiledWorkflow, compile_workflow
 from ..workflow.steps import Step
 
 
 def load_workflow_module(target: str | Path, *, module_name: str | None = None) -> ModuleType:
-    """Load a workflow module with compatibility globals pre-injected."""
+    """Load a workflow module without mutating its globals."""
 
     spec, resolved_name = _resolve_spec(target, module_name=module_name)
     if spec.loader is None:
         raise ImportError(f"workflow target {target!r} does not have a usable loader")
 
     module = importlib.util.module_from_spec(spec)
-    for name, value in legacy_annotation_globals().items():
-        module.__dict__.setdefault(name, value)
-
     sys.modules[resolved_name] = module
     try:
         spec.loader.exec_module(module)

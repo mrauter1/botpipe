@@ -147,26 +147,14 @@ def has_start_hook(definition: WorkflowDefinition) -> bool:
     return getattr(definition.workflow_cls, "on_start", None) is not None
 
 
-def middleware_handler_name(definition: WorkflowDefinition) -> str | None:
-    """Return the active global middleware hook name, if any."""
+def outcome_middleware_name(definition: WorkflowDefinition) -> str | None:
+    """Return the active global outcome middleware hook name, if any."""
 
-    has_outcome_middleware = "outcome" not in definition.steps_by_name and getattr(
-        definition.workflow_cls,
-        "on_outcome",
-        None,
-    ) is not None
-    has_verdict_middleware = "verdict" not in definition.steps_by_name and getattr(
-        definition.workflow_cls,
-        "on_verdict",
-        None,
-    ) is not None
-    if has_outcome_middleware and has_verdict_middleware:
-        raise WorkflowValidationError("define only one of on_outcome or on_verdict")
-    if has_outcome_middleware:
-        return "on_outcome"
-    if has_verdict_middleware:
-        return "on_verdict"
-    return None
+    if "outcome" in definition.steps_by_name:
+        return None
+    if getattr(definition.workflow_cls, "on_outcome", None) is None:
+        return None
+    return "on_outcome"
 
 
 def collect_artifact_inventory(definition: WorkflowDefinition) -> dict[str, ArtifactInventoryRecord]:
@@ -270,10 +258,10 @@ def _validate_handlers(definition: WorkflowDefinition) -> None:
         if isinstance(step, SystemStep) and raw_handler is None:
             raise WorkflowValidationError(f"system step {step.name!r} is missing handler {handler_name!r}")
         if raw_handler is not None:
-            expected = {1, 2} if isinstance(step, SystemStep) else {2, 3}
+            expected = {2} if isinstance(step, SystemStep) else {3}
             _validate_callable_arity(handler_name, raw_handler, expected)
 
-    active_middleware = middleware_handler_name(definition)
+    active_middleware = outcome_middleware_name(definition)
     raw_middleware = getattr(definition.workflow_cls, active_middleware, None) if active_middleware else None
     if raw_middleware is not None:
         _validate_callable_arity(active_middleware, raw_middleware, {2})
@@ -281,7 +269,7 @@ def _validate_handlers(definition: WorkflowDefinition) -> None:
     if has_start_hook(definition):
         raw_start = getattr(definition.workflow_cls, "on_start", None)
         if raw_start is not None:
-            _validate_callable_arity("on_start", raw_start, {1, 2})
+            _validate_callable_arity("on_start", raw_start, {2})
 
     reserved_handler_names: set[str] = set()
     if has_start_hook(definition):
