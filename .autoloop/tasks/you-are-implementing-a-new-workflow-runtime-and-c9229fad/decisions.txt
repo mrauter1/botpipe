@@ -6,3 +6,7 @@ Parity proof is blocking until tests cover `.autoloop` workspace layout, phase-s
 Phase 1 is not complete unless the actual ADR files are authored under `autoloop_v3/docs/adr/`; a backlog or topic list alone is insufficient.
 Compatibility planning must include a legacy-safe workflow loading path for workspace modules whose annotations fail before normal import-time normalization, with source edits treated as fallback-only and explicitly justified.
 Runtime parity scope includes legacy config discovery, CLI behavior, and persisted session or resume-state loading and migration, not just the new engine internals.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="architecture-and-adr-baseline" pair="implement" turn_seq="1" run_id="run-20260417T151141Z-5a8eefb2" ts="2026-04-17T15:24:21.678290+00:00" />
+Phase 1 freezes a split architecture: `autoloop_v3.workflow` is the strict spec core, `autoloop_v3.runtime` owns workspace and provider integration, and any repo-root `workflow` package stays a re-export shim only.
+`Ralph_loop.py` fails with `NameError: Verdict is not defined` once a stub `workflow` module is available, so `runtime.loader` must inject or postpone legacy annotation resolution before compatibility normalization.
+Checkpoint persistence will use a typed snapshot plus append-only events; events stay required for legacy observability and resume parity, but they are not the sole source of engine state.
