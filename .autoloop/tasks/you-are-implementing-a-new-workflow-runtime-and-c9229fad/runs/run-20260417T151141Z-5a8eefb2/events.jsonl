@@ -33,3 +33,6 @@
 {"ts": "2026-04-17T16:08:01.764442+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 33, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "strict-core-engine", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-17T16:08:01.765163+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 34, "event_type": "pair_started", "pair": "test", "phase_id": "strict-core-engine"}
 {"ts": "2026-04-17T16:08:01.765252+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 35, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strict-core-engine"}
+{"ts": "2026-04-17T16:10:01.236737+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-core-engine"}
+{"ts": "2026-04-17T16:11:07.277427+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-core-engine"}
+{"ts": "2026-04-17T16:11:07.289286+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strict-core-engine"}

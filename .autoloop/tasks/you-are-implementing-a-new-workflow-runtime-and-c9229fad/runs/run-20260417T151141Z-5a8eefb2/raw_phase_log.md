@@ -658,3 +658,111 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+I’m auditing the strict-core test surface now. First I’ll compare the current contract and unit tests against the phase scope and the reviewer’s recent hook-collision fix, then I’ll add or tighten tests only where there’s a real regression gap.
+
+The current runtime contract tests already cover execution of the reserved-name fix, but the definition-time side is still thin. I’m checking the validator tests now for missing assertions around hook precedence and middleware conflict behavior before I edit anything.
+
+I found a real gap worth closing: the execution tests cover reserved hook-name collisions, but there was no definition-time or compile-surface test pinning the new precedence rules or the preserved “only one active middleware hook” invariant. I’m adding those now, then I’ll refresh the phase test strategy and feedback.
+
+The new tests are in place. I’m running the strict-core suite now and checking the updated strategy and feedback files for completeness before I close this turn.
+
+Scope considered
+
+- Phase-local strict-core test work only: `autoloop_v3/tests` plus the phase artifacts under `.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/strict-core-engine/`.
+- I kept workspace compatibility, filesystem runtime, and CLI coverage out of scope per the phase contract.
+
+What I analyzed
+
+- Existing strict-core unit and contract tests, especially [test_validation.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_validation.py:1) and [test_engine_contracts.py](/home/rauter/autoloop_v3/autoloop_v3/tests/contract/test_engine_contracts.py:1).
+- The recent reserved hook-name fix in `validation.py`, `compiler.py`, and `engine.py`.
+- The empty phase artifacts [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/strict-core-engine/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/strict-core-engine/feedback.md:1).
+
+What I changed
+
+- Added unit coverage in [test_validation.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_validation.py:1) for:
+  - step `start` owning `on_start` as a step handler, not a lifecycle hook,
+  - step `outcome` owning `on_outcome` as a step handler, not middleware,
+  - step `verdict` owning `on_verdict` as a step handler, not middleware,
+  - definition-time rejection when both active middleware hooks are present without a suppressing name collision.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/strict-core-engine/test_strategy.md:1) with the behavior-to-test map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise summary of the added coverage to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/strict-core-engine/feedback.md:1).
+
+Key findings / decisions
+
+- The execution-side regression tests already covered the reserved-name runtime bug, but the validation/compile boundary needed direct tests to keep that precedence rule from drifting.
+- I kept the new tests deterministic by using class-local workflow definitions, `tmp_path`, the scripted fake provider, and in-memory stores only.
+- Validation performed: `pytest -q autoloop_v3/tests` passed with `37 passed`.
+
+Open issues / next step
+
+- No additional phase-scope test gaps stood out after this pass.
+- The next step is the test-auditor review of the updated phase artifacts and the expanded strict-core suite.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+I’m auditing the strict-core test additions now. I’ll verify the new reserved-hook regression coverage, compare it to the phase scope and shared decisions, then I’ll update the test audit artifacts based on whether any real gaps remain.
+
+The suite is green. I’m doing a focused read of the new validation tests against the compiler/engine behavior and the shared decisions so I can decide whether any real regression gap remains or whether the audit should close cleanly.
+
+The added tests line up with the fixed behavior and the phase boundary, and I’m not seeing a material regression gap in the touched surface. I’m updating the audit artifacts now to mark the phase complete from the test-auditor side and record that this pass found no blocking issues.
+
+The audit artifacts are updated. I’m doing a quick readback so the final result matches a `COMPLETE` audit exactly and doesn’t leave any unchecked criteria behind.
+
+Scope considered
+
+- Phase-local test audit for `strict-core-engine` only.
+- The touched test surface in `autoloop_v3/tests`, plus the active audit artifacts under `.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/strict-core-engine/`.
+
+What I analyzed
+
+- The new validation coverage in [test_validation.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_validation.py:1).
+- The existing runtime regression coverage in [test_engine_contracts.py](/home/rauter/autoloop_v3/autoloop_v3/tests/contract/test_engine_contracts.py:450).
+- The phase strategy and feedback artifacts in [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/strict-core-engine/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/strict-core-engine/feedback.md:1).
+- Shared decisions relevant to strict-core scope and reserved hook-name precedence.
+
+What I reviewed
+
+- Whether the new tests actually pin the changed reserved-hook behavior at both compile and runtime layers.
+- Whether failure-path and edge-case coverage matches the phase acceptance criteria.
+- Whether the suite remains deterministic and phase-scoped.
+- Full validation run: `pytest -q autoloop_v3/tests`, which passed with `37 passed in 0.21s`.
+
+Key findings / decisions
+
+- No blocking or non-blocking findings in this audit pass.
+- The new unit tests close the compile-boundary regression gap for `start`, `outcome`, and `verdict`, while the contract tests keep the runtime path covered.
+- The updated strategy accurately documents behavior coverage, preserved invariants, stabilization approach, and intentional phase-local gaps.
+
+Open issues / next step
+
+- No open issues remain for this phase audit.
+- The strict-core-engine test phase is complete from the auditor side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
