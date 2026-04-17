@@ -16,15 +16,15 @@
       "docs-hardening-and-final-proof"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "docs-hardening-and-final-proof"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "architecture-and-adr-baseline": "completed",
     "strict-core-engine": "completed",
     "compatibility-and-filesystem-runtime": "completed",
     "workflow-integration-and-parity": "completed",
-    "docs-hardening-and-final-proof": "in_progress"
+    "docs-hardening-and-final-proof": "completed"
   },
   "phase_history": [
     {
@@ -84,6 +84,13 @@
       "run_id": "run-20260417T151141Z-5a8eefb2",
       "status": "in_progress",
       "ts": "2026-04-17T17:07:04.226387+00:00"
+    },
+    {
+      "phase_id": "docs-hardening-and-final-proof",
+      "run_id": "run-20260417T151141Z-5a8eefb2",
+      "status": "completed",
+      "ts": "2026-04-17T17:19:33.607623+00:00",
+      "pair": "test"
     }
   ]
 }
