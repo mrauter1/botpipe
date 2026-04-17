@@ -641,3 +641,171 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+I’m treating this as the phase-scoped implementation for workflow migration and Autoloop_v1 parity. First I’m reading the authoritative phase artifacts, shared decisions, and the current `autoloop_v3`/legacy runtime surfaces to pin down what still needs to move out of the core before I edit anything.
+
+The phase artifacts confirm this turn is about the strict workflow rewrites and Autoloop_v1 parity harness, not another core-runtime refactor. I’m checking the current worktree and the existing migrated surfaces next so I can isolate what remains in scope and avoid trampling unrelated edits.
+
+The worktree already has phase-progress from earlier turns, and the remaining risk is now concentrated in the repo-root workflows and parity runtime/tests. I’m reading the strict surfaces, migrated workflows, and parity tests side by side to see what still depends on Autoloop-specific runtime behavior.
+
+The repo-root workflows are already mostly strict. The remaining gap is whether parity behavior now lives in workflow-owned helpers/harnesses or is still being approximated by generic runtime defaults, so I’m reading the loader, engine/context, and the current parity tests around workspace/session/log semantics.
+
+The core is strict now, but the shipped parity coverage is still thin and the doc baseline is obviously stale. I’m tracing where legacy-equivalent workspace/log/session behavior currently lives so I can decide whether to add a workflow-owned harness or tighten the tests around the existing runtime plus local helpers.
+
+I’ve confirmed the generic runtime no longer owns Autoloop-specific files, which means parity now needs to be asserted either through workflow-owned helpers or explicit non-goals. I’m reading the legacy helper surfaces that matter for this phase: workspace/session path policy, event status semantics, and clarification/raw-log persistence.
+
+The code already reflects most of the strict-core decisions, so I’m at the point where running the current `autoloop_v3` suite will give the fastest signal on the remaining migration/parity holes. After that I’ll patch the failing runtime/workflow/docs surfaces together instead of guessing.
+
+The suite is green only because it’s still proving the generic runtime, not the legacy-equivalent Autoloop_v1 harness the request requires. I’m designing that harness now around the existing strict engine, with custom workspace/session-path policy and explicit clarification/raw-log side effects owned by Autoloop_v1 code instead of the runtime core.
+
+Plan for this turn:
+
+1. Add workflow-owned `autoloop_v1` support code for phase-plan parsing, legacy session-path policy, raw-log/decisions/clarification persistence, and a small parity runner built on the strict engine.
+2. Rewrite `autoloop_v1.py` to consume those helpers, keeping the workflow surface strict and explicit.
+3. Expand parity tests to prove legacy-equivalent workspace files, explicit session-opening moments, checkpoint/resume behavior, and question/blocked/failed flows through the Autoloop_v1 harness.
+4. Replace stale architecture/doc tests, add the missing `README.md` and `MIGRATION.md`, and update phase notes/decisions.
+5. Run the focused and full test suites, then tighten anything that still leaks old assumptions.
+
+I’ve pinned the concrete deltas now. The next edits are to extract Autoloop_v1’s phase/path/session policy out of `autoloop_v1.py`, add a workflow-owned parity runner that writes legacy raw logs/decisions/session filenames, and then retarget the parity tests to those exact behaviors.
+
+I’ve started the harness extraction. Now I’m wiring the tests to the real acceptance targets: legacy artifact paths, `plan.json`/`phases/{phase}.json`, raw-log structure, clarification persistence, and explicit phase-session sharing.
+
+The parity harness and tests are landing cleanly. I’ve got the workflow/runtime side stable enough to widen back out to the full `autoloop_v3` suite, then I’ll replace the stale documentation baselines that are still describing the old compat architecture.
+
+The code path is green. The remaining gap against the request is documentation: `README.md`/`MIGRATION.md` are missing, and the current doc baseline still describes the removed compat world. I’m rewriting those checks and the top-level docs now so the shipped documentation matches the strict runtime we actually have.
+
+I’m replacing the doc baseline instead of patching around it. The new docs will describe the shipped strict surface, the explicit-session model, the Autoloop_v1 workflow-owned harness, and the exact migration/removal story for the deleted compat features.
+
+The `autoloop_v3` suite is now aligned with the strict architecture and the new parity harness. I’m doing one final widen-out with the repository-level test run before I lock notes and decisions, so the closeout reflects the actual repo state rather than just the package slice.
+
+The repo-wide run surfaced at least one failure outside the `autoloop_v3` slice. I’m pulling the full traceback now and will either fix the regression if it’s caused by these changes or keep it called out as a pre-existing unrelated failure if it isn’t in scope.
+
+The only remaining repo-wide failure is outside the workflow migration surface: an installer test that is environment-sensitive because it inherits whatever `codex` binary happens to live next to the system `python3`. I’m making that test harness deterministic so the repo-wide validation signal reflects the code, not the host machine.
+
+One more repo-wide failure showed up after the installer harness fix. I’m pulling that traceback now; if it’s another deterministic-test issue from the same helper change, I’ll resolve it before I finalize.
+
+The code and repo-wide validation are both green now. I’m finishing the bookkeeping: recording the non-obvious parity decisions, writing the phase implementation notes with the scoped justification for the installer-test stabilization, and then I’ll capture the final tree/status for the closeout.
+
+**Final Tree**
+```text
+autoloop_v3/
+  ARCHITECTURE_DECISIONS.md
+  README.md
+  MIGRATION.md
+  docs/
+    architecture.md
+    authoring.md
+    compatibility.md
+    parity-matrix.md
+    risk-register.md
+  runtime/
+    cli.py
+    config.py
+    events.py
+    loader.py
+    prompts.py
+    runner.py
+    workspace.py
+    stores/filesystem.py
+  workflow/
+    __init__.py
+    artifacts.py
+    compiler.py
+    context.py
+    engine.py
+    errors.py
+    primitives.py
+    prompts.py
+    steps.py
+    validation.py
+    providers/
+    stores/
+  workflows/
+    __init__.py
+    autoloop_v1_support.py
+  tests/
+    test_architecture_baseline_docs.py
+    runtime/test_workflow_integration_parity.py
+
+autoloop_v1.py
+Ralph_loop.py
+workflow/
+  __init__.py
+  primitives.py
+
+autoloop/tests/test_installer.py
+```
+
+**Summary**
+`autoloop_v3` now closes the remaining migration/parity gap with a workflow-owned Autoloop-v1 harness in [autoloop_v3/workflows/autoloop_v1_support.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_support.py:1). That harness preserves legacy-important behavior without polluting the generic runtime: `raw_phase_log.md`, `decisions.txt`, `sessions/plan.json`, `sessions/phases/{phase}.json`, clarification-note persistence, and blocked/failed status mapping all live there. The strict workflow in [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py:1) now uses helper-owned phase parsing/path policy and writes phase artifacts back to legacy pair-owned directories.
+
+Compat stays removed. There is no `workflow.compat`, no `Verdict`, no `on_verdict`, no `SessionLifecycle`, no loader symbol injection, no legacy handler adaptation, and no auto-opened sessions. The repo-root [workflow/__init__.py](/home/rauter/autoloop_v3/workflow/__init__.py:1) remains a strict re-export only. The explicit session model is unchanged: `plan_session` opens in `on_start`, `phase_session` opens in `activate_next_phase`, and implement/test share that binding only because the slot is not rebound between them.
+
+`Ralph_loop.py` was already on the strict surface, so it stayed unchanged and is still proved via the generic runtime. Documentation was rewritten to match the shipped architecture in [autoloop_v3/README.md](/home/rauter/autoloop_v3/autoloop_v3/README.md:1), [autoloop_v3/MIGRATION.md](/home/rauter/autoloop_v3/autoloop_v3/MIGRATION.md:1), and the `docs/` set. I also stabilized one unrelated but repo-wide failing installer test by making its PATH shims deterministic in [autoloop/tests/test_installer.py](/home/rauter/autoloop_v3/autoloop/tests/test_installer.py:1), so validation reflects code rather than host-machine binaries.
+
+**Parity / Validation**
+Autoloop-v1 parity is now covered in [autoloop_v3/tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:1): strict generic-runtime execution, legacy session filenames, raw logs, decisions/clarifications, checkpoint/resume, and question/blocked/failed status behavior are all exercised. Doc baselines now freeze the strict surface in [autoloop_v3/tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+
+Validation run:
+- `pytest autoloop_v3/tests -q` -> `64 passed`
+- `pytest -q` -> `246 passed`
+
+Remaining risk is intentional boundary, not a known defect: if you need legacy-equivalent Autoloop-v1 operational behavior, use `run_autoloop_v1(...)`; the generic runtime remains deliberately workflow-agnostic.
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+Reviewing the phase-scoped migration/parity changes now. I’m reading the authoritative phase artifacts, the shared decisions, and the request-relevant diffs first, then I’ll verify whether the implementation actually satisfies the phase acceptance criteria before I mark criteria or write findings.
+
+I’ve identified a likely event-log parity gap in the harness. I’m reproducing it directly now so the feedback points to a concrete failure mode instead of just a theoretical concern.
+
+I’ve reproduced a concrete blocking parity failure in the harness: multi-phase `events.jsonl` currently stamps every `step_executed` entry with the final phase id, and it never emits phase lifecycle events at all. I’m grabbing exact line references now and then I’ll write the phase feedback/criteria with that finding.
+
+I’ve got one concrete blocking issue and one smaller parity/observability follow-up. I’m writing those into the phase feedback now and marking criteria accordingly: the architecture placement is good, but AC-3 is not fully satisfied until the event log is corrected.
+
+Scope considered
+- Phase-local verifier audit of the `workflow-migration-parity` implementation, limited to request-relevant migration/parity behavior and the active `.autoloop` review artifacts.
+
+What I analyzed
+- The migrated Autoloop-v1 harness in `autoloop_v3/workflows/autoloop_v1_support.py`.
+- The active phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, plus the shared `decisions.txt` ledger.
+- A concrete `run_autoloop_v1()` reproduction on a synthetic multi-phase run to inspect emitted events and raw-log metadata.
+
+What I reviewed
+- Updated `criteria.md` to leave blocking parity criteria unchecked.
+- Appended `IMP-001` as `blocking` and `IMP-002` as `non-blocking` to `feedback.md`.
+- Ran `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` and got `12 passed`.
+
+Key findings / decisions
+- `IMP-001` `blocking`: `autoloop_v1_support.py` emits `step_executed` only after the run completes and derives `phase_id` from the final state for every historical step. In a multi-phase run, earlier steps are mis-tagged with the last phase, and the harness still emits no `phase_started` / `phase_completed` events. That breaks AC-3 parity for event-log behavior.
+- `IMP-002` `non-blocking`: raw-log helper entries hardcode `cycle=1` and `attempt=1`, so blocked/question/clarification records become inaccurate once a pair loops within the same phase.
+
+Open issues / next step
+- The implementer needs to move Autoloop-v1 event emission to execution time with per-step phase attribution and add the missing phase lifecycle events in the workflow-owned harness. After that, rerun the parity suite and recheck the raw-log metadata behavior.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
