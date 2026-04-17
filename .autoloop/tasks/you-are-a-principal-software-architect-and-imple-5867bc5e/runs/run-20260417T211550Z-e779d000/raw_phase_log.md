@@ -317,3 +317,103 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9d5a-5adc-7611-98be-245338005b8b
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+I’m treating this as the phase-scoped test pass for `decision-freeze-and-observer-core`. First I’m reading the test artifact files and the current engine contract coverage so I can decide whether any additional repository tests are still needed before I document the coverage map.
+
+The existing contract file already contains the new observer-path assertions, including failure paths and mutation resistance. I’m checking the remainder of that test file now for any uncovered edge that’s still worth adding in-phase; if not, I’ll keep repository churn at zero and document the coverage explicitly in the test artifacts.
+
+The repository test coverage already hits the changed engine behavior from the implementation slice, so I’m avoiding duplicate assertions. I’m recording that coverage map and the deterministic validation approach in the test artifacts now, plus a note in the shared ledger about why I didn’t add redundant repo test code.
+
+The phase artifacts are updated. I’m doing one final readback of the strategy and feedback files now so the summary I return matches exactly what was recorded for the auditor.
+
+Scope considered
+- Phase-local scope only: `decision-freeze-and-observer-core`.
+- Focused on the changed observer-core behavior, the already-updated contract tests, and the required test-phase artifacts.
+
+What I analyzed
+- `autoloop_v3/tests/contract/test_engine_contracts.py`
+- `autoloop_v3/workflow/engine.py`
+- `autoloop_v3/workflow/observers.py`
+- The shared decisions ledger and the active `test_strategy.md` / `feedback.md` artifacts
+
+What I changed
+- Updated `.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/decision-freeze-and-observer-core/test_strategy.md` with an explicit AC-to-test coverage map, edge cases, flake controls, and known gaps.
+- Updated `.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/decision-freeze-and-observer-core/feedback.md` with the test-phase summary and validation result.
+- Appended a concise shared-ledger note in `.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/decisions.txt` explaining why I did not add duplicate repo assertions in this phase.
+- Re-ran `pytest autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` and confirmed `40 passed`.
+
+Key findings / decisions
+- The repository already contains the needed observer-core coverage in the contract and baseline-doc tests, so additional repo test edits would have duplicated signal rather than increased protection.
+- Current coverage already exercises happy path, pause/fail/fatal terminals, preserved strict-engine invariants, and observer non-interference with deterministic scripted providers and in-memory stores.
+
+Open issues / next step
+- No phase-local test blocker remains.
+- Later phases still need new tests for parity harness rewiring, store-helper migration, and repo-root workflow cleanup when those code changes land.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9d5a-5adc-7611-98be-245338005b8b
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+I’m auditing the phase-local test coverage against the active contract and the shared decisions ledger. First I’m reading the test criteria, current strategy/feedback artifacts, and the observer-core tests so I can confirm whether any changed-behavior or preserved-invariant coverage is still missing.
+
+I’m probing one remaining risk now: whether the test suite actually locks the “no Autoloop-specific imports or branching in the core” requirement, rather than only checking it manually. If that coverage is absent, it may be the only material gap in an otherwise solid phase test set.
+
+I found two material coverage gaps: the repo tests don’t actually lock the “no Autoloop-specific core branching/imports” rule, and they don’t pin the parity-critical observer payload fields the shared decisions require. I’m recording those as blocking audit findings and marking the criteria accordingly.
+
+The audit artifacts are updated with the blocking gaps. I’m doing a final readback of `criteria.md` and `feedback.md` so the close-out summary matches the recorded audit state exactly.
+
+Scope considered
+- Phase-local scope only: `decision-freeze-and-observer-core`.
+- Audited the observer-core test coverage, the test strategy artifact, the feedback artifact, and the shared decisions relevant to the new observer payload contract.
+
+What I analyzed
+- `autoloop_v3/tests/contract/test_engine_contracts.py`
+- `autoloop_v3/workflow/engine.py`
+- `autoloop_v3/workflow/observers.py`
+- `.autoloop/.../test_strategy.md`, `.autoloop/.../feedback.md`, and `.autoloop/.../decisions.txt`
+
+What I reviewed
+- Re-ran `pytest autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` and confirmed `40 passed`.
+- Checked whether the repo tests actually lock AC-2, not just exercise generic behavior.
+- Checked whether the observer tests pin the payload fields the shared decisions say later parity rewiring depends on.
+
+Key findings / decisions
+- Recorded two blocking audit findings in the phase feedback artifact.
+- `TST-001`: the repo tests do not enforce the explicit “no Autoloop-specific imports or workflow-specific branches in the core” requirement.
+- `TST-002`: the observer tests do not lock the parity-critical payload contract from `decisions.txt`, so a future refactor could drop required fields while the suite stays green.
+- Updated the audit criteria to leave `Coverage Quality` and `Regression Protection` unchecked.
+
+Open issues / next step
+- Add a source-level contract test for engine/observer purity.
+- Expand the observer tests to assert the required identifier, session-binding, metadata, and cloned state/terminal payload fields.
+- After those gaps are closed, rerun the targeted suite and revisit the audit criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
