@@ -111,6 +111,49 @@ def factory(*, config, args):
     )
 
 
+def _write_cli_smoke_ralph_provider_module(path: Path) -> None:
+    path.write_text(
+        """
+from __future__ import annotations
+
+from autoloop_v3.workflow.primitives import Outcome
+from autoloop_v3.workflow.providers.fake import ScriptedLLMProvider
+
+
+def factory(*, config, args):
+    return ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.scratchpad.write_text("understanding\\n"),
+                Outcome(raw_output="u raw\\n", tag="understood"),
+            )[1],
+            Outcome(
+                raw_output="plan raw\\n",
+                tag="action_planned",
+                payload={"type": "shell", "command": "echo hi"},
+            ),
+            lambda request: (
+                request.artifacts.scratchpad.write_text("reflection\\n"),
+                Outcome(raw_output="reflect raw\\n", tag="goal_met"),
+            )[1],
+        ]
+    )
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _cli_smoke_env(tmp_path: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    pythonpath_entries = [str(tmp_path), str(REPO_ROOT)]
+    if env.get("PYTHONPATH"):
+        pythonpath_entries.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_entries)
+    env["XDG_CONFIG_HOME"] = str(tmp_path / "xdg-config")
+    return env
+
+
 def test_autoloop_v1_imports_through_root_workflow_shim_and_legacy_loader_handles_ralph():
     sys.modules.pop("autoloop_v1", None)
     imported = importlib.import_module("autoloop_v1")
@@ -606,13 +649,6 @@ def test_cli_module_smoke_executes_autoloop_v1_end_to_end(tmp_path: Path):
     provider_module = tmp_path / "smoke_provider.py"
     _write_cli_smoke_provider_module(provider_module)
 
-    env = os.environ.copy()
-    pythonpath_entries = [str(tmp_path), str(REPO_ROOT)]
-    if env.get("PYTHONPATH"):
-        pythonpath_entries.append(env["PYTHONPATH"])
-    env["PYTHONPATH"] = os.pathsep.join(pythonpath_entries)
-    env["XDG_CONFIG_HOME"] = str(tmp_path / "xdg-config")
-
     completed = subprocess.run(
         [
             sys.executable,
@@ -629,7 +665,7 @@ def test_cli_module_smoke_executes_autoloop_v1_end_to_end(tmp_path: Path):
             "Ship it",
         ],
         cwd=REPO_ROOT,
-        env=env,
+        env=_cli_smoke_env(tmp_path),
         capture_output=True,
         text=True,
         check=False,
@@ -650,6 +686,45 @@ def test_cli_module_smoke_executes_autoloop_v1_end_to_end(tmp_path: Path):
     )
     assert (run_dir / "request.md").read_text(encoding="utf-8") == "Ship it\n"
     assert (run_dir / "sessions" / "plan.json").exists()
+    assert events[0]["event_type"] == "run_started"
+    assert events[-1]["event_type"] == "run_finished"
+    assert events[-1]["status"] == "success"
+
+
+def test_cli_module_smoke_executes_ralph_loop_end_to_end(tmp_path: Path):
+    provider_module = tmp_path / "smoke_provider_ralph.py"
+    _write_cli_smoke_ralph_provider_module(provider_module)
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "autoloop_v3.runtime.cli",
+            str(REPO_ROOT / "Ralph_loop.py"),
+            "--task-id",
+            "ralph-task",
+            "--provider-factory",
+            "smoke_provider_ralph:factory",
+            "--root",
+            str(tmp_path),
+            "--request-text",
+            "Do it",
+        ],
+        cwd=REPO_ROOT,
+        env=_cli_smoke_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "ralph-task"
+    run_dir = next((task_dir / "runs").iterdir())
+    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line]
+
+    assert (task_dir / "action_log.md").read_text(encoding="utf-8") == "u raw\nplan raw\nreflect raw\n"
+    assert (run_dir / "sessions" / "main_session.json").exists()
     assert events[0]["event_type"] == "run_started"
     assert events[-1]["event_type"] == "run_finished"
     assert events[-1]["status"] == "success"
