@@ -68,3 +68,7 @@
 {"ts": "2026-04-17T17:06:03.419397+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 68, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-integration-and-parity"}
 {"ts": "2026-04-17T17:07:04.179070+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 69, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-integration-and-parity"}
 {"ts": "2026-04-17T17:07:04.185103+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 70, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-integration-and-parity"}
+{"ts": "2026-04-17T17:07:04.225586+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 71, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-integration-and-parity", "phase_mode": "single"}
+{"ts": "2026-04-17T17:07:04.226701+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 72, "event_type": "phase_started", "phase_id": "docs-hardening-and-final-proof", "phase_mode": "single"}
+{"ts": "2026-04-17T17:07:04.227221+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 73, "event_type": "pair_started", "pair": "implement", "phase_id": "docs-hardening-and-final-proof"}
+{"ts": "2026-04-17T17:07:04.227274+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 74, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "docs-hardening-and-final-proof"}
