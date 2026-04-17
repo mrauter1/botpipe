@@ -1217,3 +1217,154 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+---
+I’m treating this as the docs-and-full-verification phase: I’ll inspect the active phase artifacts, current code/docs/test state, and the existing architectural changes before touching files.
+
+The earlier phases already rewired the engine and split the parity layer. I’m checking the remaining gap surface now: docs, doc-contract tests, parity coverage, and whether any stale support-layer references remain.
+
+The repo layout is narrower than the phase text assumes: the documentation files live under `autoloop_v3/`, not at repository root. I’m reconciling the actual tree against the requested doc targets before editing.
+
+I’ve confirmed the docs live under `autoloop_v3/` and already reflect much of the split. Next I’m checking the deeper doc/test contracts and then I’ll run the focused test matrix to find the remaining mismatches instead of guessing.
+
+The focused contracts are already green. I’m broadening to the full `autoloop_v3/tests` matrix now, then I’ll record the verification and any non-obvious decisions in the phase artifacts.
+
+The code and doc contracts are already green. I’m making only artifact-level edits now: I’ll record the verification results and the non-obvious final decision for this phase, rather than perturbing working product files that already satisfy the requested shape.
+
+I’m tightening the user-facing docs slightly rather than rewriting them: one short pass to state the Book Architecture explicitly, make the no-compat/no-workspace-hook boundary unambiguous, and leave the already-green code untouched.
+
+I’ve made a minimal documentation pass. Now I’m updating the phase artifacts to capture what changed, what was verified, and the one non-obvious scope decision for this phase.
+
+I’ve only touched docs and phase artifacts, so I’m rerunning the full package test suite to verify that the documentation-baseline contracts still pass unchanged.
+
+I’ve finished the phase work. I’m collecting a compact final tree and verification details so the close-out can report the final shape rather than a file-by-file changelog.
+
+Scope considered
+
+Key final tree:
+```text
+autoloop_v3/
+  README.md
+  MIGRATION.md
+  ARCHITECTURE_DECISIONS.md
+  docs/
+    architecture.md
+    authoring.md
+    compatibility.md
+    parity-matrix.md
+    risk-register.md
+  workflow/
+    engine.py
+    observers.py
+  runtime/
+    stores/
+      filesystem.py
+  workflows/
+    __init__.py
+    autoloop_v1_conventions.py
+    autoloop_v1_parity.py
+  tests/
+    test_architecture_baseline_docs.py
+    contract/test_engine_contracts.py
+    runtime/test_compatibility_runtime.py
+    runtime/test_workflow_integration_parity.py
+autoloop_v1.py
+Ralph_loop.py
+```
+
+What I analyzed
+
+- The shipped docs under `autoloop_v3/`, not repo-root placeholders, are the authoritative documentation surface.
+- The architectural end state already existed in code: strict engine/core, generic runtime, workflow-owned Autoloop-v1 parity, observer seam, store-owned session serialization, strict repo-root workflows.
+- The proof surface already covered the required boundaries: engine purity, optional pair/llm handlers, required system handlers, explicit sessions, observer payloads, runtime store ownership, parity behavior, and toy-workflow neutrality.
+
+What I changed
+
+- Clarified [autoloop_v3/README.md](/home/rauter/autoloop_v3/autoloop_v3/README.md), [autoloop_v3/docs/architecture.md](/home/rauter/autoloop_v3/autoloop_v3/docs/architecture.md), and [autoloop_v3/docs/compatibility.md](/home/rauter/autoloop_v3/autoloop_v3/docs/compatibility.md) to state the Book Architecture explicitly and make the no-compat-layer / no-workspace-hook boundary unambiguous.
+- Recorded the phase result in [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/implement/phases/docs-and-full-verification/implementation_notes.md) and appended the non-obvious scope decision to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/decisions.txt).
+- No product-code changes were needed in this phase; the code shape from the prior implementation slices already matched the requested final architecture.
+
+Key findings / decisions
+
+- Final design summary: one strict core (`workflow`), one generic runtime (`runtime`), one workflow-owned parity layer (`workflows`). That is why this is closer to the Book Architecture: the explanation is now short and complete.
+- Moved to general helpers: the minimal execution observer seam in `workflow.observers`, and session payload write/placeholder ownership in `runtime/stores/filesystem.py`.
+- Kept strictly Autoloop-specific: `parse_phase_ids` in `autoloop_v1.py`; exact `phase_dir_key` and legacy session filenames in `autoloop_v1_conventions.py`; workspace augmentation, raw phase logs, decisions ledger, clarification persistence, cycle/attempt tracking, and terminal status mapping in `autoloop_v1_parity.py`.
+- New execution observer: optional zero-or-more observers, output-only, three event families only: provider-turn, step-completed, terminal. It carries generic execution facts and does not alter semantics.
+- Why other shapes lost: provider wrappers and engine subclasses were more mechanism than meaning; generic workspace hooks would have generalized one workflow’s policy into framework surface; keeping `autoloop_v1_support.py` would have preserved a disguised mini-runtime.
+- Parity result vs legacy `autoloop/`: preserved raw phase logs, decisions ledger behavior, legacy `sessions/plan.json` and `sessions/phases/{phase}.json` naming, blocked/question/failed mapping, and `latest_run_status(...)` compatibility without any provider wrapper or engine subclass.
+- Test result: `pytest -q autoloop_v3/tests` passed, `78 passed in 0.69s`.
+
+Open issues / next step
+
+- No functional open issue was found in the verified surface.
+- Minor residual risk: the non-authoritative snapshot file `autoloop_v3/codebase.md` still contains stale references, but shipped docs, code, and tests do not rely on it.
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+---
+I’m reviewing the docs-and-full-verification phase artifacts against the actual diffs, the shared decisions ledger, and the phase acceptance criteria before I mark criteria or append findings.
+
+I’ve confirmed the requested test matrix passes. I’m now checking whether the phase artifacts accurately describe the actual changed scope, then I’ll update the verifier checklist and feedback based on that evidence.
+
+The final state looks clean. I’m doing one last targeted search for the explicit acceptance-criterion regressions before I write the reviewer artifacts: wrapper/subclass references in shipped docs, and any accidental generic workspace-hook language.
+
+No blocking issues surfaced in the final state. I’m marking the verifier checklist complete and appending a single non-blocking review note so the phase log records that the acceptance criteria were rechecked against the actual docs and full test matrix.
+
+I’ve updated the verifier-owned artifacts. I’m doing a short readback now to ensure the checklist and feedback reflect a complete review with no blocking issues before I close the turn.
+
+Scope considered
+
+- Active phase `docs-and-full-verification` only.
+- Authoritative request snapshot, raw phase log, shared decisions ledger, shipped `autoloop_v3` docs/tests, and the verifier-owned phase artifacts.
+
+What I analyzed
+
+- Final doc surface against AC-1: `autoloop_v3/README.md`, `autoloop_v3/MIGRATION.md`, `autoloop_v3/docs/architecture.md`, `authoring.md`, `compatibility.md`, `parity-matrix.md`, `risk-register.md`, and `ARCHITECTURE_DECISIONS.md`.
+- Final proof surface against AC-2 and AC-3: `autoloop_v3/tests/test_architecture_baseline_docs.py`, `contract/test_engine_contracts.py`, `runtime/test_compatibility_runtime.py`, and `runtime/test_workflow_integration_parity.py`.
+- Shared decisions to confirm no compatibility-layer or workspace-hook drift was reintroduced.
+
+What I reviewed
+
+- The shipped docs describe the strict public surface, explicit session model, minimal observer seam, workflow-owned Autoloop-v1 parity ownership, and the no-compat / no-workspace-hook boundary.
+- `ARCHITECTURE_DECISIONS.md` contains the required 17 decision sections with 3 candidates, selected decision, Book rationale, and losing rationale.
+- `pytest -q autoloop_v3/tests` passes: `78 passed in 0.67s`.
+- The verifier artifacts now reflect the review outcome:
+  - [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/implement/phases/docs-and-full-verification/criteria.md)
+  - [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/implement/phases/docs-and-full-verification/feedback.md)
+
+Key findings / decisions
+
+- No blocking findings.
+- `IMP-001` was appended as a non-blocking verification note recording that the final docs/test surface satisfies the phase acceptance criteria.
+- All criteria checkboxes are now marked complete.
+
+Open issues / next step
+
+- No blocking issue remains for this phase.
+- The phase can close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
