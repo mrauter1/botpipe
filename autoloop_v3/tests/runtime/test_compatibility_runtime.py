@@ -273,6 +273,54 @@ def test_resolve_runtime_config_merges_global_local_and_cli(monkeypatch, tmp_pat
         discover_config_file(workspace_root)
 
 
+def test_runner_rejects_non_default_compatibility_options_instead_of_ignoring_them(tmp_path: Path):
+    import pytest
+
+    provider = ScriptedLLMProvider()
+    with pytest.raises(
+        ConfigError,
+        match="does not support --pairs, --max-iterations, --phase-id, --phase-mode, --full-auto-answers, --no-git, --track-autoloop-artifacts",
+    ):
+        run_workflow(
+            REPO_ROOT / "autoloop_v1.py",
+            provider=provider,
+            options=RunnerOptions(
+                root=tmp_path,
+                task_id="task-1",
+                request_text="Ship it",
+                pairs="plan",
+                max_iterations=3,
+                phase_mode="up-to",
+                phase_id="phase-a",
+                full_auto_answers=True,
+                no_git=True,
+                track_autoloop_artifacts=False,
+            ),
+        )
+
+
+def test_runner_resume_without_checkpoint_but_with_legacy_state_fails_with_targeted_message(tmp_path: Path):
+    import pytest
+
+    workspace = ensure_workspace(tmp_path, "task-1", "Initial request")
+    run = create_run(workspace, run_id="run-1", request_text="Initial request")
+    (run.sessions_dir / "plan.json").write_text(
+        json.dumps({"mode": "persistent", "thread_id": "thread-123"}) + "\n",
+        encoding="utf-8",
+    )
+    run.events_file.write_text(json.dumps({"seq": 1, "event_type": "run_started"}) + "\n", encoding="utf-8")
+
+    with pytest.raises(  # targeted compatibility gate, not the generic missing-checkpoint failure
+        Exception,
+        match="without autoloop_v3 checkpoint.json",
+    ):
+        run_workflow(
+            REPO_ROOT / "autoloop_v1.py",
+            provider=ScriptedLLMProvider(),
+            options=RunnerOptions(root=tmp_path, task_id="task-1", run_id="run-1", resume=True),
+        )
+
+
 def test_runner_executes_autoloop_v1_and_writes_runtime_artifacts(tmp_path: Path):
     provider = ScriptedLLMProvider(
         producer_turns=[

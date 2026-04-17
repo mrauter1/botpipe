@@ -7,8 +7,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from ..workflow.errors import WorkflowExecutionError
 from ..workflow.engine import Engine, RunResult
 from ..workflow.providers.protocols import LLMProvider
+from .config import (
+    ConfigError,
+    DEFAULT_FULL_AUTO_ANSWERS,
+    DEFAULT_MAX_ITERATIONS,
+    DEFAULT_NO_GIT,
+    DEFAULT_PAIRS,
+    DEFAULT_PHASE_MODE,
+    DEFAULT_TRACK_AUTOLOOP_ARTIFACTS,
+)
 from .events import EventLogger, append_decisions_runtime_block
 from .loader import load_compiled_workflow
 from .prompts import FilesystemPromptRegistry
@@ -35,6 +45,13 @@ class RunnerOptions:
     class_name: str | None = None
     state_dir: Path | None = None
     intent_mode: str = "replace"
+    pairs: str | None = None
+    max_iterations: int | None = None
+    phase_mode: str | None = None
+    phase_id: str | None = None
+    full_auto_answers: bool | None = None
+    no_git: bool | None = None
+    track_autoloop_artifacts: bool | None = None
 
 
 def load_provider_factory(spec: str) -> Callable[..., LLMProvider]:
@@ -64,6 +81,7 @@ def run_workflow(
             request_text=options.request_text or task_request_text(workspace.task_meta_file, workspace.legacy_context_file),
         )
     )
+    _validate_runtime_options(options)
 
     compiled = load_compiled_workflow(workflow_target, class_name=options.class_name)
     session_store = FilesystemSessionStore(run.run_dir)
@@ -88,6 +106,7 @@ def run_workflow(
     )
 
     if options.resume:
+        _validate_resume_state(run, checkpoint_store)
         logger.emit("run_resumed", workflow=compiled.workflow_name, task_id=workspace.task_id)
         if options.answer:
             checkpoint = checkpoint_store.load()
@@ -155,3 +174,42 @@ def _ensure_task_workspace(options: RunnerOptions) -> TaskWorkspace:
         intent_mode=options.intent_mode,
         state_dir=state_dir,
     )
+
+
+def _validate_runtime_options(options: RunnerOptions) -> None:
+    unsupported: list[str] = []
+    if options.pairs is not None and options.pairs != DEFAULT_PAIRS:
+        unsupported.append("--pairs")
+    if options.max_iterations is not None and options.max_iterations != DEFAULT_MAX_ITERATIONS:
+        unsupported.append("--max-iterations")
+    if options.phase_id is not None:
+        unsupported.append("--phase-id")
+    if options.phase_mode is not None and options.phase_mode != DEFAULT_PHASE_MODE:
+        unsupported.append("--phase-mode")
+    if options.full_auto_answers not in (None, DEFAULT_FULL_AUTO_ANSWERS):
+        unsupported.append("--full-auto-answers")
+    if options.no_git not in (None, DEFAULT_NO_GIT):
+        unsupported.append("--no-git")
+    if options.track_autoloop_artifacts not in (None, DEFAULT_TRACK_AUTOLOOP_ARTIFACTS):
+        unsupported.append("--track-autoloop-artifacts")
+
+    if unsupported:
+        joined = ", ".join(unsupported)
+        raise ConfigError(
+            f"The generic autoloop_v3 workflow runner does not support {joined}. "
+            "Use default values only, or run the legacy autoloop harness for pair/phase-oriented execution."
+        )
+
+
+def _validate_resume_state(run: Any, checkpoint_store: FilesystemCheckpointStore) -> None:
+    checkpoint = checkpoint_store.load()
+    if checkpoint is not None:
+        return
+    has_session_files = any(run.sessions_dir.glob("*.json")) or any(run.phase_sessions_dir.glob("*.json"))
+    has_event_history = run.events_file.exists() and run.events_file.stat().st_size > 0
+    if has_session_files or has_event_history:
+        raise WorkflowExecutionError(
+            "resume requested for a run without autoloop_v3 checkpoint.json. "
+            "This run only has legacy session/event state, which the generic v3 runner does not reconstruct into "
+            "engine checkpoints. Resume it with the legacy autoloop runtime or start a new autoloop_v3 run."
+        )

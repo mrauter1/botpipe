@@ -909,3 +909,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+---
+I’m addressing the two blocking review findings only: the runner currently accepts phase/runtime compatibility flags without honoring them, and resume only works with the new checkpoint file. I’ll trace those two paths through the runtime, implement the missing behavior centrally in the runner/workspace layer, and then rerun the runtime and full `autoloop_v3` test suites.
+
+I’ve settled the scope of the fix. I’m not going to fake support for old autoloop-specific loop flags in the generic v3 runner; instead I’m threading those options into `RunnerOptions` and rejecting any non-default values explicitly so they stop being silent no-ops. In parallel, I’m adding a targeted legacy-resume preflight so old run artifacts fail with a compatibility message instead of the generic missing-checkpoint error.
+
+I’ve patched the compatibility boundary in the runner rather than scattering checks: the harness now carries the old runtime option fields explicitly and rejects any non-default ones instead of ignoring them, and resume now distinguishes “new v3 checkpoint missing” from “legacy run state exists but can’t be reconstructed by this generic runner.” I’m tightening the CLI error path next and then running the runtime/full test suites again.
+
+The reviewer’s two blockers are fixed in code and covered by tests. I’m updating the implementation notes and the shared decisions ledger now so later phases don’t accidentally reintroduce silent CLI no-ops or generic “missing checkpoint” resume failures.
+
+Scope considered
+
+- Active phase `compatibility-and-filesystem-runtime` only.
+- Reviewed blocking feedback in [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/compatibility-and-filesystem-runtime/feedback.md:1): ignored runtime flags and missing legacy-resume compatibility handling.
+- Touched only the runtime/CLI/test surface plus the required phase notes and shared decisions ledger.
+
+What I analyzed
+
+- The new runner/CLI flow in [autoloop_v3/runtime/runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py:1) and [cli.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/cli.py:1).
+- Existing workspace resume/orchestration behavior in `autoloop/src/autoloop/main.py`, especially `load_resume_checkpoint()` and phase-selection handling.
+- The current runtime tests and the feedback requirements for explicit validation vs silent no-op behavior.
+
+What I changed
+
+- Extended `RunnerOptions` to carry the compatibility/runtime option fields that were previously being dropped.
+- Added centralized runtime-option validation in [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py:1) so non-default autoloop-specific loop flags now fail fast instead of being silently ignored.
+- Added a targeted legacy-resume compatibility gate in [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py:1): runs with legacy session/event state but no `checkpoint.json` now raise an explicit migration error instead of the generic missing-checkpoint failure.
+- Added `--phase-id` to the CLI surface and wired resolved runtime options through the CLI into `RunnerOptions`; CLI now converts `ConfigError` into a parser error and exits cleanly on `WorkflowExecutionError`.
+- Expanded runtime coverage in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py:1) for the two reviewer findings.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/compatibility-and-filesystem-runtime/implementation_notes.md:1) and appended the new compatibility decisions to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt:1).
+
+Key findings / decisions
+
+- I did not fake support for old autoloop pair/phase orchestration flags in the generic v3 runner. The safe fix here is explicit validation, not more silent no-ops.
+- I did not attempt generic reconstruction of strict workflow state from legacy event/session artifacts; that would be unsafe and workflow-specific. The fix is an explicit migration boundary with a targeted message.
+- Validation: `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py` and `pytest -q autoloop_v3/tests` both pass; full suite result is `46 passed`.
+
+Open issues / next step
+
+- The generic v3 runner still does not implement old autoloop pair/phase execution semantics; it now rejects those non-default options explicitly.
+- Full Ralph end-to-end execution and final parity goldens remain deferred to the later parity phase.
+- No additional blockers remain from the current reviewer feedback.

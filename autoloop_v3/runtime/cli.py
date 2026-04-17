@@ -5,7 +5,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .config import resolve_runtime_config
+from ..workflow.errors import WorkflowExecutionError
+from .config import ConfigError, resolve_runtime_config
 from .runner import RunnerOptions, load_provider_factory, run_workflow
 
 
@@ -25,6 +26,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pairs", help="Compatibility runtime pair selection.")
     parser.add_argument("--max-iterations", type=int, help="Compatibility runtime iteration cap.")
     parser.add_argument("--phase-mode", help="Compatibility runtime phase selection mode.")
+    parser.add_argument("--phase-id", help="Compatibility runtime phase target.")
     parser.add_argument("--intent-mode", help="Compatibility runtime intent merge mode.")
     parser.add_argument("--full-auto-answers", dest="full_auto_answers", action="store_true")
     parser.add_argument("--no-full-auto-answers", dest="full_auto_answers", action="store_false")
@@ -39,23 +41,35 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
-    config = resolve_runtime_config(args.root, args)
-    provider_factory = load_provider_factory(args.provider_factory)
-    provider = provider_factory(config=config, args=args)
-    run_workflow(
-        args.workflow,
-        provider=provider,
-        options=RunnerOptions(
-            root=args.root,
-            task_id=args.task_id,
-            run_id=args.run_id,
-            request_text=args.request_text,
-            resume=args.resume,
-            answer=args.answer,
-            class_name=args.class_name,
-            intent_mode=config.runtime.intent_mode,
-        ),
-    )
+    try:
+        config = resolve_runtime_config(args.root, args)
+        provider_factory = load_provider_factory(args.provider_factory)
+        provider = provider_factory(config=config, args=args)
+        run_workflow(
+            args.workflow,
+            provider=provider,
+            options=RunnerOptions(
+                root=args.root,
+                task_id=args.task_id,
+                run_id=args.run_id,
+                request_text=args.request_text,
+                resume=args.resume,
+                answer=args.answer,
+                class_name=args.class_name,
+                intent_mode=config.runtime.intent_mode,
+                pairs=config.runtime.pairs,
+                max_iterations=config.runtime.max_iterations,
+                phase_mode=config.runtime.phase_mode,
+                phase_id=args.phase_id,
+                full_auto_answers=config.runtime.full_auto_answers,
+                no_git=config.runtime.no_git,
+                track_autoloop_artifacts=config.runtime.track_autoloop_artifacts,
+            ),
+        )
+    except ConfigError as exc:
+        parser.error(str(exc))
+    except WorkflowExecutionError as exc:
+        parser.exit(2, f"{exc}\n")
     return 0
 
 
