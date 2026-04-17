@@ -16,14 +16,14 @@
       "docs-hardening-and-final-proof"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "compatibility-and-filesystem-runtime"
+    "current_phase_index": 3,
+    "current_phase_id": "workflow-integration-and-parity"
   },
   "phase_status": {
     "architecture-and-adr-baseline": "completed",
     "strict-core-engine": "completed",
-    "compatibility-and-filesystem-runtime": "in_progress",
-    "workflow-integration-and-parity": "planned",
+    "compatibility-and-filesystem-runtime": "completed",
+    "workflow-integration-and-parity": "in_progress",
     "docs-hardening-and-final-proof": "planned"
   },
   "phase_history": [
@@ -58,6 +58,19 @@
       "run_id": "run-20260417T151141Z-5a8eefb2",
       "status": "in_progress",
       "ts": "2026-04-17T16:11:07.333417+00:00"
+    },
+    {
+      "phase_id": "compatibility-and-filesystem-runtime",
+      "run_id": "run-20260417T151141Z-5a8eefb2",
+      "status": "completed",
+      "ts": "2026-04-17T16:43:21.696780+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "workflow-integration-and-parity",
+      "run_id": "run-20260417T151141Z-5a8eefb2",
+      "status": "in_progress",
+      "ts": "2026-04-17T16:43:21.697668+00:00"
     }
   ]
 }
