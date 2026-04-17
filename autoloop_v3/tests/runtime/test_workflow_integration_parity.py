@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow
+from autoloop_v3.runtime.stores.filesystem import load_session_payload
 from autoloop_v3.workflow.primitives import Outcome
 from autoloop_v3.workflow.providers.fake import ScriptedLLMProvider
+from autoloop_v3.workflows import run_autoloop_v1
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -89,10 +91,10 @@ def test_autoloop_v1_runs_with_generic_runtime_and_explicit_prompt_paths(tmp_pat
     )
     assert result.state.phase.id == "phase-b"
     assert (task_dir / "plan" / "phase_plan.yaml").exists()
-    assert (task_dir / "phases" / "phase-a" / "implement" / "implementation_notes.md").read_text(encoding="utf-8") == (
+    assert (task_dir / "implement" / "phases" / "phase-a" / "implementation_notes.md").read_text(encoding="utf-8") == (
         "phase-a implementation notes\n"
     )
-    assert (task_dir / "phases" / "phase-b" / "test" / "test_strategy.md").read_text(encoding="utf-8") == (
+    assert (task_dir / "test" / "phases" / "phase-b" / "test_strategy.md").read_text(encoding="utf-8") == (
         "phase-b test strategy\n"
     )
     assert (run_dir / "sessions" / "plan_session.json").exists()
@@ -185,3 +187,266 @@ def test_legacy_latest_run_status_reads_generic_runtime_success_run(tmp_path: Pa
     )
     _task_dir, run_dir = _task_and_run_dirs(tmp_path, "status-task")
     assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "success"
+
+
+def test_autoloop_v1_parity_harness_preserves_legacy_workspace_logs_and_sessions(tmp_path: Path):
+    session_ids: list[tuple[str, str]] = []
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: (
+                request.artifacts.phase_plan.write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "task_id": request.context.task_id,
+                            "request_snapshot_ref": "request.md",
+                            "phases": [{"phase_id": "phase-a"}, {"phase_id": "phase-b"}],
+                        }
+                    )
+                ),
+                "plan raw\n",
+            )[1],
+            lambda request: (
+                request.artifacts.impl_notes.write_text("phase-a implementation notes\n"),
+                "implement phase-a raw\n",
+            )[1],
+            lambda request: (
+                request.artifacts.test_strat.write_text("phase-a test strategy\n"),
+                "test phase-a raw\n",
+            )[1],
+            lambda request: (
+                request.artifacts.impl_notes.write_text("phase-b implementation notes\n"),
+                "implement phase-b raw\n",
+            )[1],
+            lambda request: (
+                request.artifacts.test_strat.write_text("phase-b test strategy\n"),
+                "test phase-b raw\n",
+            )[1],
+        ],
+        verifier_turns=[
+            lambda request: (session_ids.append(("plan", request.session.session_id)), Outcome(raw_output="plan ok\n", tag="plan_ready"))[1],
+            lambda request: (
+                session_ids.append(("implement-a", request.session.session_id)),
+                Outcome(raw_output="implement phase-a ok\n", tag="implemented"),
+            )[1],
+            lambda request: (
+                session_ids.append(("test-a", request.session.session_id)),
+                Outcome(raw_output="test phase-a ok\n", tag="phase_passed"),
+            )[1],
+            lambda request: (
+                session_ids.append(("implement-b", request.session.session_id)),
+                Outcome(raw_output="implement phase-b ok\n", tag="implemented"),
+            )[1],
+            lambda request: (
+                session_ids.append(("test-b", request.session.session_id)),
+                Outcome(raw_output="test phase-b ok\n", tag="phase_passed"),
+            )[1],
+        ],
+    )
+
+    result = run_autoloop_v1(
+        REPO_ROOT / "autoloop_v1.py",
+        provider=provider,
+        options=RunnerOptions(root=tmp_path, task_id="parity-task", request_text="Ship it"),
+    )
+
+    task_dir, run_dir = _task_and_run_dirs(tmp_path, "parity-task")
+    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    run_raw = (run_dir / "raw_phase_log.md").read_text(encoding="utf-8")
+    task_raw = (task_dir / "raw_phase_log.md").read_text(encoding="utf-8")
+
+    assert result.terminal == "SUCCESS"
+    assert (task_dir / "decisions.txt").exists()
+    assert (task_dir / "raw_phase_log.md").exists()
+    assert (run_dir / "raw_phase_log.md").exists()
+    assert (run_dir / "sessions" / "plan.json").exists()
+    assert (run_dir / "sessions" / "phases" / "phase-a.json").exists()
+    assert (run_dir / "sessions" / "phases" / "phase-b.json").exists()
+    assert (task_dir / "implement" / "phases" / "phase-a" / "implementation_notes.md").read_text(encoding="utf-8") == (
+        "phase-a implementation notes\n"
+    )
+    assert (task_dir / "test" / "phases" / "phase-b" / "test_strategy.md").read_text(encoding="utf-8") == (
+        "phase-b test strategy\n"
+    )
+    assert "entry=phase_output | pair=plan | phase=producer" in run_raw
+    assert "entry=phase_output | pair=implement | phase=verifier" in run_raw
+    assert "entry=phase_output | pair=test | phase=verifier" in task_raw
+    assert events[0]["event_type"] == "run_started"
+    assert events[-1]["event_type"] == "run_finished"
+    assert events[-1]["status"] == "success"
+    assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "success"
+
+    observed = dict(session_ids)
+    assert observed["plan"].startswith("plan_session:global:")
+    assert observed["implement-a"] == observed["test-a"]
+    assert observed["implement-b"] == observed["test-b"]
+    assert observed["implement-a"] != observed["implement-b"]
+
+
+def test_autoloop_v1_parity_harness_persists_clarifications_and_resumes(tmp_path: Path):
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: (
+                request.artifacts.phase_plan.write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "task_id": request.context.task_id,
+                            "request_snapshot_ref": "request.md",
+                            "phases": [{"phase_id": "phase-a"}],
+                        }
+                    )
+                ),
+                "plan raw\n",
+            )[1],
+            lambda request: (
+                request.artifacts.phase_plan.write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "task_id": request.context.task_id,
+                            "request_snapshot_ref": "request.md",
+                            "phases": [{"phase_id": "phase-a"}],
+                        }
+                    )
+                ),
+                "plan raw retry\n",
+            )[1],
+            lambda request: (
+                request.artifacts.impl_notes.write_text("phase-a implementation notes\n"),
+                "implement phase-a raw\n",
+            )[1],
+            lambda request: (
+                request.artifacts.test_strat.write_text("phase-a test strategy\n"),
+                "test phase-a raw\n",
+            )[1],
+        ],
+        verifier_turns=[
+            Outcome(raw_output="Need clarification\n", tag="question", question="Need confirmation?"),
+            Outcome(raw_output="plan ok\n", tag="plan_ready"),
+            Outcome(raw_output="implement ok\n", tag="implemented"),
+            Outcome(raw_output="test ok\n", tag="phase_passed"),
+        ],
+    )
+
+    paused = run_autoloop_v1(
+        REPO_ROOT / "autoloop_v1.py",
+        provider=provider,
+        options=RunnerOptions(root=tmp_path, task_id="clarify-task", request_text="Ship it"),
+    )
+
+    task_dir, run_dir = _task_and_run_dirs(tmp_path, "clarify-task")
+    paused_events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line]
+
+    assert paused.terminal == "PAUSE"
+    assert paused.checkpoint is not None
+    assert paused.checkpoint.pending_question == "Need confirmation?"
+    assert any(event["event_type"] == "question" for event in paused_events)
+    assert paused_events[-1]["status"] == "paused"
+
+    resumed = run_autoloop_v1(
+        REPO_ROOT / "autoloop_v1.py",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="clarify-task",
+            run_id=run_dir.name,
+            resume=True,
+            answer="Proceed",
+        ),
+    )
+
+    decisions_text = (task_dir / "decisions.txt").read_text(encoding="utf-8")
+    run_raw = (run_dir / "raw_phase_log.md").read_text(encoding="utf-8")
+    plan_payload = load_session_payload(run_dir / "sessions" / "plan.json", "persistent", "codex")
+    resumed_events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line]
+
+    assert resumed.terminal == "SUCCESS"
+    assert not (run_dir / "checkpoint.json").exists()
+    assert 'entry="questions"' in decisions_text
+    assert 'entry="answers"' in decisions_text
+    assert "Need confirmation?" in decisions_text
+    assert "Proceed" in decisions_text
+    assert "entry=clarification" in run_raw
+    assert "Question:\nNeed confirmation?\n\nAnswer:\nProceed" in run_raw
+    assert plan_payload["metadata"]["pending_clarification_note"] == "Question:\nNeed confirmation?\n\nAnswer:\nProceed"
+    assert resumed_events[-1]["status"] == "success"
+    assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "success"
+
+
+def test_autoloop_v1_parity_harness_maps_blocked_pause_to_legacy_status(tmp_path: Path):
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: (
+                request.artifacts.phase_plan.write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "task_id": request.context.task_id,
+                            "request_snapshot_ref": "request.md",
+                            "phases": [{"phase_id": "phase-a"}],
+                        }
+                    )
+                ),
+                "plan raw\n",
+            )[1]
+        ],
+        verifier_turns=[Outcome(raw_output="Blocked on dependency\n", tag="blocked", reason="waiting on dependency")],
+    )
+
+    result = run_autoloop_v1(
+        REPO_ROOT / "autoloop_v1.py",
+        provider=provider,
+        options=RunnerOptions(root=tmp_path, task_id="blocked-task", request_text="Ship it"),
+    )
+
+    _task_dir, run_dir = _task_and_run_dirs(tmp_path, "blocked-task")
+    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    run_raw = (run_dir / "raw_phase_log.md").read_text(encoding="utf-8")
+
+    assert result.terminal == "PAUSE"
+    assert result.last_event is not None and result.last_event.tag == "blocked"
+    assert (run_dir / "checkpoint.json").exists()
+    assert any(event["event_type"] == "blocked" for event in events)
+    assert events[-1]["status"] == "blocked"
+    assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "blocked"
+    assert "entry=blocked" in run_raw
+
+
+def test_autoloop_v1_parity_harness_maps_failed_terminal_to_legacy_status(tmp_path: Path):
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: (
+                request.artifacts.phase_plan.write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "task_id": request.context.task_id,
+                            "request_snapshot_ref": "request.md",
+                            "phases": [{"phase_id": "phase-a"}],
+                        }
+                    )
+                ),
+                "plan raw\n",
+            )[1]
+        ],
+        verifier_turns=[Outcome(raw_output="Plan failed\n", tag="failed", reason="verification failed")],
+    )
+
+    result = run_autoloop_v1(
+        REPO_ROOT / "autoloop_v1.py",
+        provider=provider,
+        options=RunnerOptions(root=tmp_path, task_id="failed-task", request_text="Ship it"),
+    )
+
+    _task_dir, run_dir = _task_and_run_dirs(tmp_path, "failed-task")
+    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line]
+    run_raw = (run_dir / "raw_phase_log.md").read_text(encoding="utf-8")
+
+    assert result.terminal == "FAIL"
+    assert result.last_event is not None and result.last_event.tag == "failed"
+    assert (run_dir / "checkpoint.json").exists()
+    assert any(event["event_type"] == "failed" for event in events)
+    assert events[-1]["status"] == "failed"
+    assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "failed"
+    assert "entry=failed" in run_raw
