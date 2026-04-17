@@ -543,3 +543,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9cd3-6089-7451-95a1-4fec56a8e74a
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9cd3-6089-7451-95a1-4fec56a8e74a
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9cd3-6089-7451-95a1-4fec56a8e74a
+---
+I’m reviewing the phase-local test surface against the implemented runtime boundary change so I can fill any remaining regression gaps before updating the test-phase artifacts. I’ll inspect the changed runtime tests, look for untested edge/failure paths introduced by the new generic session/store behavior, then add only phase-relevant coverage.
+
+The existing test surface already covers the main happy paths and most failure paths. The two phase-relevant gaps I still see are the new session-path-resolver hook and the nested scoped-session resume gate, so I’m adding deterministic tests for those instead of broadening into unrelated parity behavior.
+
+The new edge-path tests are green. I’m recording the exact behavior-to-test map, the test-phase feedback summary, and the one non-obvious regression guard in the shared ledger so later parity work doesn’t drop the path-resolver or nested-session resume coverage.
+
+Scope considered
+
+- Phase-local `generic-runtime-boundary` test scope only: changed runtime tests, the toy workflow proof, the new generic session/store behavior, and the phase test artifacts under `.autoloop/tasks/.../test/phases/generic-runtime-boundary/`.
+
+What I analyzed
+
+- The updated runtime test surface in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py) and [test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py).
+- The changed runtime behavior in [filesystem.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/filesystem.py) and [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py), plus the shared decisions for this phase.
+
+What I changed
+
+- Added a deterministic regression test for the new `FilesystemSessionStore.path_resolver` hook so later Autoloop-v1 parity work can remap session filenames without reintroducing runtime-core branching.
+- Added an edge/failure-path test proving resume is rejected when only nested scoped session files exist and no checkpoint is present.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/test/phases/generic-runtime-boundary/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/test/phases/generic-runtime-boundary/feedback.md), and the current test-author block in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/decisions.txt).
+
+Key findings / decisions
+
+- The existing phase-local tests already covered the core happy paths; the missing regression guards were the custom session-path hook and the nested scoped-session resume gate.
+- Validation passed:
+  `pytest autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q`
+  `pytest autoloop_v3/tests -q`
+- Current full test result: `63 passed`.
+
+Open issues / next step
+
+- Detailed Autoloop-v1 decisions/raw-log/clarification parity remains intentionally deferred to the later workflow-owned parity-harness phase.
+- No additional phase-local test gaps were identified after the new edge-path coverage was added.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

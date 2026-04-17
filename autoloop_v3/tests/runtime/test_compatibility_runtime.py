@@ -150,6 +150,28 @@ def test_filesystem_session_store_uses_generic_paths_and_loads_legacy_thread_id(
     assert loaded.metadata["provider"] == "codex"
 
 
+def test_filesystem_session_store_supports_custom_path_resolver(tmp_path: Path):
+    run_dir = tmp_path / "run"
+
+    def resolver(base_dir: Path, ref_name: str, scope: str | None) -> Path:
+        if scope is None:
+            return base_dir / "custom-sessions" / f"{ref_name}.json"
+        return base_dir / "custom-sessions" / scope_key(scope) / f"{ref_name}.json"
+
+    store = FilesystemSessionStore(run_dir, path_resolver=resolver)
+    binding = store.open("phase_session", scope="Phase One")
+    expected_path = run_dir / "custom-sessions" / scope_key("Phase One") / "phase_session.json"
+
+    assert expected_path.exists()
+    assert store.path_for("phase_session", "Phase One") == expected_path
+
+    reloaded = FilesystemSessionStore(run_dir, path_resolver=resolver)
+    loaded = reloaded.get("phase_session", scope="Phase One")
+
+    assert loaded is not None
+    assert loaded.session_id == binding.session_id
+
+
 def test_filesystem_session_store_sparse_writes_preserve_existing_metadata(tmp_path: Path):
     run_dir = tmp_path / "run"
     session_file = run_dir / "sessions" / "main.json"
@@ -320,6 +342,24 @@ def test_runner_resume_without_checkpoint_but_with_persisted_state_fails_with_ta
         )
 
     assert run.events_file.read_text(encoding="utf-8") == original_events
+
+
+def test_runner_resume_without_checkpoint_rejects_scoped_session_files(tmp_path: Path):
+    workspace = ensure_workspace(tmp_path, "task-1", "Initial request")
+    run = create_run(workspace, run_id="run-1", request_text="Initial request")
+    scoped_session = run.sessions_dir / "scopes" / "phase-a" / "phase_session.json"
+    scoped_session.parent.mkdir(parents=True)
+    scoped_session.write_text(
+        json.dumps({"mode": "persistent", "thread_id": "thread-456"}) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(Exception, match="without autoloop_v3 checkpoint.json"):
+        run_workflow(
+            TOY_WORKFLOW,
+            provider=ScriptedLLMProvider(),
+            options=RunnerOptions(root=tmp_path, task_id="task-1", run_id="run-1", resume=True),
+        )
 
 
 def test_cli_main_threads_generic_runtime_options_into_runner_options(monkeypatch, tmp_path: Path):
