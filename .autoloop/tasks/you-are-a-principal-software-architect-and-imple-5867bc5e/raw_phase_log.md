@@ -903,3 +903,66 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d78-5391-7e73-8da9-05274897e5a7
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9d78-5391-7e73-8da9-05274897e5a7
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d78-5391-7e73-8da9-05274897e5a7
+---
+I’m validating the `autoloop-v1-parity-split` test surface now. First I’m reading the phase test artifacts and the changed runtime/parity tests to see whether any material behavior from the contract is still unproven before I add or refine coverage.
+
+I’m checking the remaining acceptance edges now. The main question is whether the current repo tests already freeze the “no mini-runtime / no workspace-hook / thin composition root” shape strongly enough, or whether this phase still needs one more source-level contract test.
+
+The main uncovered regression I see is the exact legacy `phase_dir_key(...)` behavior for unsafe phase IDs. The current parity tests only cover safe IDs like `phase-a`, so a future change could silently break `_pid-...` encoding without failing the suite. I’m adding one deterministic test around that exact behavior plus its parity session/artifact paths, then I’ll update the phase test strategy and feedback.
+
+I’m making one focused addition: an integration test that uses an unsafe phase ID and proves the exact legacy `_pid-...` encoding is preserved across both artifact directories and parity session filenames. That’s the main remaining regression gap for this slice.
+
+I’m editing the parity test file and the phase-local test artifacts now. The repo change is limited to one new regression test for unsafe phase IDs; the rest is the required strategy/feedback bookkeeping for this phase.
+
+I’ve added the unsafe-phase-id regression test and updated the phase-local strategy/feedback artifacts. I’m running the parity file and then the full `autoloop_v3/tests` suite to make sure the new expectation is consistent with the current implementation.
+
+Scope considered
+
+- Phase-local test work for `autoloop-v1-parity-split`, focused on changed parity behavior, strict workflow migration, and preserved runtime neutrality.
+- Repo changes limited to `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` plus the phase-local `test_strategy.md`, `feedback.md`, and one appended decision note.
+
+What I analyzed
+
+- The active phase contract, shared decisions, current parity/runtime/contract tests, and the new `autoloop_v1_conventions.py` / `autoloop_v1_parity.py` split.
+- Coverage gaps against the contract, especially exact legacy `phase_dir_key(...)` behavior for unsafe phase IDs.
+
+What I changed
+
+- Added one deterministic parity integration test in [test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py) that uses an unsafe phase ID and proves:
+- exact `_pid-...` phase-dir encoding
+- encoded workflow artifact directories
+- encoded legacy `sessions/phases/{phase}.json` naming
+- raw phase ID preservation in phase events
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/autoloop-v1-parity-split/test_strategy.md) with a behavior-to-test coverage map.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/autoloop-v1-parity-split/feedback.md).
+- Appended one test-phase decision under the latest runtime-created header in `decisions.txt`.
+
+Key findings / decisions
+
+- The existing suite already covered the observer-driven parity harness, clarification resume path, blocked/failed mapping, strict workflow migration, and `Ralph_loop.py` success-path correctness.
+- The main remaining regression gap was unsafe phase-ID encoding; that is now locked with an integration test rather than a source-only helper test, so both artifact and session-path behavior are proved together.
+- Validation passed:
+- `pytest -q autoloop_v3/tests/runtime/test_workflow_integration_parity.py` -> `9 passed`
+- `pytest -q autoloop_v3/tests` -> `78 passed`
+
+Open issues / next step
+
+- No open test-author issues in scope.
+- Known gap documented in `test_strategy.md`: resume-time cycle/attempt recovery is still covered through parity outputs rather than a direct unit test of the private raw-log parser helper.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

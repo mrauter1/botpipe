@@ -312,6 +312,65 @@ def test_autoloop_v1_parity_harness_preserves_legacy_workspace_logs_and_sessions
     assert observed["implement-a"] != observed["implement-b"]
 
 
+def test_autoloop_v1_parity_harness_preserves_exact_legacy_phase_dir_encoding_for_unsafe_phase_ids(tmp_path: Path):
+    unsafe_phase_id = "Phase / One"
+    expected_dir_key = "_pid-5068617365202f204f6e65"
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: (
+                request.artifacts.phase_plan.write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "task_id": request.context.task_id,
+                            "request_snapshot_ref": "request.md",
+                            "phases": [{"phase_id": unsafe_phase_id}],
+                        }
+                    )
+                ),
+                "plan raw\n",
+            )[1],
+            lambda request: (
+                request.artifacts.impl_notes.write_text("unsafe phase implementation notes\n"),
+                "implement raw\n",
+            )[1],
+            lambda request: (
+                request.artifacts.test_strat.write_text("unsafe phase test strategy\n"),
+                "test raw\n",
+            )[1],
+        ],
+        verifier_turns=[
+            Outcome(raw_output="plan ok\n", tag="plan_ready"),
+            Outcome(raw_output="implemented\n", tag="implemented"),
+            Outcome(raw_output="phase passed\n", tag="phase_passed"),
+        ],
+    )
+
+    result = run_autoloop_v1(
+        REPO_ROOT / "autoloop_v1.py",
+        provider=provider,
+        options=RunnerOptions(root=tmp_path, task_id="unsafe-phase-task", request_text="Ship it"),
+    )
+
+    task_dir, run_dir = _task_and_run_dirs(tmp_path, "unsafe-phase-task")
+    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line]
+
+    assert result.terminal == "SUCCESS"
+    assert result.state.phase.id == unsafe_phase_id
+    assert result.state.phase.dir_key == expected_dir_key
+    assert (task_dir / "implement" / "phases" / expected_dir_key / "implementation_notes.md").read_text(
+        encoding="utf-8"
+    ) == "unsafe phase implementation notes\n"
+    assert (task_dir / "test" / "phases" / expected_dir_key / "test_strategy.md").read_text(encoding="utf-8") == (
+        "unsafe phase test strategy\n"
+    )
+    assert (run_dir / "sessions" / "phases" / f"{expected_dir_key}.json").exists()
+    assert not (run_dir / "sessions" / "scopes").exists()
+    assert [event["phase_id"] for event in events if event["event_type"] == "phase_started"] == [unsafe_phase_id]
+    assert [event["phase_id"] for event in events if event["event_type"] == "phase_completed"] == [unsafe_phase_id]
+    assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "success"
+
+
 def test_autoloop_v1_parity_harness_persists_clarifications_and_resumes(tmp_path: Path):
     provider = ScriptedLLMProvider(
         producer_turns=[
