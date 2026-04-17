@@ -867,3 +867,49 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+I’m reviewing the new harness changes against the reviewer concerns and the persisted-session path now, then I’ll update the phase artifacts based on whether the fix closes both findings without introducing a new coupling or edge-case regression.
+
+The focused parity suite is clean. I’m doing one wider validation pass myself before clearing the criteria, so the review doesn’t rely only on the implementer’s reported test run.
+
+The fix holds under the wider suite as well. I’m just checking the reviewer artifacts one last time, then I’ll close this pass if they accurately reflect the resolved findings.
+
+Scope considered
+- Phase-local re-review of the `workflow-migration-parity` follow-up changes, focused on `autoloop_v3/workflows/autoloop_v1_support.py`, the updated parity tests, and the active `.autoloop` review artifacts.
+
+What I analyzed
+- The workflow-owned Autoloop-v1 harness changes for event-time `step_executed` / `phase_started` / `phase_completed` emission.
+- The new session-backed cycle tracking used by terminal notices and resume clarifications.
+- The parity test expansions covering multi-phase event IDs and multi-cycle blocked/question/clarification behavior.
+
+What I reviewed
+- Reran `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q` -> `8 passed`.
+- Reran `pytest autoloop_v3/tests -q` -> `64 passed`.
+- Reran `pytest -q` -> `246 passed`.
+- Updated `criteria.md` to mark all review criteria satisfied.
+- Appended a cycle-2 resolution note to `feedback.md` stating that `IMP-001` and `IMP-002` are resolved and that there are no new findings in scope.
+
+Key findings / decisions
+- No remaining blocking findings.
+- The fix stays inside workflow-owned code, which preserves the generic runtime boundary required by the phase.
+- The added engine subclass and session `provider_metadata` usage are narrowly scoped and justified by the parity requirement; they do not reintroduce generic compatibility hooks.
+
+Open issues / next step
+- No open issues from this review pass. The phase-local implementation is acceptable as revised.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

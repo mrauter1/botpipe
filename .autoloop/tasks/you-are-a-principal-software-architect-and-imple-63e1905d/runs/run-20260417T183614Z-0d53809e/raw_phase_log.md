@@ -809,3 +809,107 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+I’m reviewing the blocking parity findings against the Autoloop-v1 harness first, then I’ll patch the workflow-owned code and rerun the targeted parity tests before touching the phase notes.
+
+I’ve confirmed the verifier’s reproduction point in the harness: phase attribution is happening after the engine returns, so I’m tracing the smallest place to capture per-step metadata during execution instead of adding runtime hooks.
+
+The generic engine stays untouched. I’m evaluating a workflow-owned compiled-step wrapping approach so the parity harness can log step and phase events at the moment each step actually runs, including `activate_next_phase`, without reintroducing core hooks.
+
+I’ve got the main fix direction: a tiny Autoloop-v1-specific engine subclass can observe each step at execution time and emit exact per-step/phase events without touching the generic engine. I’m also checking whether the same harness can carry cycle metadata across resume cleanly enough to close the raw-log mismatch instead of deferring it.
+
+I found a clean persistence path for the cycle fix: session files already preserve `provider_metadata`, so the harness can stash per-step cycle counters there and recover them on resume without changing checkpoint or runtime formats. Now I’m patching the harness and expanding parity assertions around event ordering and cycle attribution.
+
+I have the fix scoped to two workflow-owned files: the Autoloop-v1 harness and its parity tests. I’m editing those now, then I’ll update the phase notes and shared decisions with just the non-obvious parts of the solution.
+
+The parity harness patch is behaving as intended in the focused integration suite. I’m widening validation now to the full `autoloop_v3/tests` set so I can catch any regression from the workflow-owned engine observer or session metadata changes.
+
+I’m letting the repo-wide suite finish because the prior turn had one out-of-phase test stabilization; this checks that the new parity fix didn’t upset anything adjacent outside `autoloop_v3/tests`.
+
+Scope considered
+- Phase-local follow-up on `workflow-migration-parity`, limited to the reviewer findings in `feedback.md`, the Autoloop-v1 workflow-owned harness, parity tests, and the required `.autoloop` notes/decision artifacts.
+
+What I analyzed
+- `autoloop_v3/workflows/autoloop_v1_support.py` for the post-run `step_executed` reconstruction bug and the hardcoded raw-log cycle metadata.
+- `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` for the missing assertions around phase-aware events and multi-cycle raw-log behavior.
+- The active `feedback.md`, `implementation_notes.md`, `plan.md`, and the current turn header in `decisions.txt`.
+
+What I changed
+- Updated `autoloop_v3/workflows/autoloop_v1_support.py` to use a workflow-owned `_AutoloopV1Engine` subclass that emits `step_executed`, `phase_started`, and `phase_completed` at actual step execution time, with per-step phase IDs.
+- Reworked the Autoloop-v1 logging provider to persist per-step cycle/attempt metadata in session `provider_metadata`, and reused that metadata for terminal raw-log entries and resume clarifications instead of hardcoding `cycle=1`.
+- Expanded `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` to assert multi-phase event IDs, `phase_started` / `phase_completed`, blocked-cycle attribution, and clarification-cycle attribution across resume.
+- Updated `implementation_notes.md` and appended the non-obvious harness decisions to the current turn block in `decisions.txt`.
+
+Key findings / decisions
+- The fix stays entirely in workflow-owned code. The generic engine, runtime contracts, checkpoint schema, and session-store interfaces remain unchanged.
+- Session `provider_metadata` was the narrowest persistence point for cycle reuse across resume, so there was no need to widen checkpoint payloads or add runtime hooks.
+- Validation passed:
+- `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q` -> `8 passed`
+- `pytest autoloop_v3/tests -q` -> `64 passed`
+- `pytest -q` -> `246 passed`
+
+Open issues / next step
+- No open implementation issues remain in phase scope. This is ready for verifier rerun.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+I’m reviewing the new harness changes against the reviewer concerns and the persisted-session path now, then I’ll update the phase artifacts based on whether the fix closes both findings without introducing a new coupling or edge-case regression.
+
+The focused parity suite is clean. I’m doing one wider validation pass myself before clearing the criteria, so the review doesn’t rely only on the implementer’s reported test run.
+
+The fix holds under the wider suite as well. I’m just checking the reviewer artifacts one last time, then I’ll close this pass if they accurately reflect the resolved findings.
+
+Scope considered
+- Phase-local re-review of the `workflow-migration-parity` follow-up changes, focused on `autoloop_v3/workflows/autoloop_v1_support.py`, the updated parity tests, and the active `.autoloop` review artifacts.
+
+What I analyzed
+- The workflow-owned Autoloop-v1 harness changes for event-time `step_executed` / `phase_started` / `phase_completed` emission.
+- The new session-backed cycle tracking used by terminal notices and resume clarifications.
+- The parity test expansions covering multi-phase event IDs and multi-cycle blocked/question/clarification behavior.
+
+What I reviewed
+- Reran `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q` -> `8 passed`.
+- Reran `pytest autoloop_v3/tests -q` -> `64 passed`.
+- Reran `pytest -q` -> `246 passed`.
+- Updated `criteria.md` to mark all review criteria satisfied.
+- Appended a cycle-2 resolution note to `feedback.md` stating that `IMP-001` and `IMP-002` are resolved and that there are no new findings in scope.
+
+Key findings / decisions
+- No remaining blocking findings.
+- The fix stays inside workflow-owned code, which preserves the generic runtime boundary required by the phase.
+- The added engine subclass and session `provider_metadata` usage are narrowly scoped and justified by the parity requirement; they do not reintroduce generic compatibility hooks.
+
+Open issues / next step
+- No open issues from this review pass. The phase-local implementation is acceptable as revised.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
