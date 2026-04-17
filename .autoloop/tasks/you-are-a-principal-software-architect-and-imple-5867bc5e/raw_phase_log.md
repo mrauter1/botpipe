@@ -478,3 +478,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9d5a-5adc-7611-98be-245338005b8b
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+I’m auditing the revised observer-core tests against the two prior blockers, then I’ll update the test-phase criteria and feedback based on that result.
+
+The targeted suite is still green after the new assertions. I’m marking the audit criteria complete and appending a no-findings round to the phase feedback.
+
+The audit artifacts are updated. I’m doing one quick readback of the criteria and feedback so the phase closes with an accurate record.
+
+Scope considered
+- Phase-local test audit for `decision-freeze-and-observer-core`.
+- Reviewed the revised observer-core repo tests and the corresponding phase audit artifacts only.
+
+What I analyzed
+- [autoloop_v3/tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3/autoloop_v3/tests/contract/test_engine_contracts.py)
+- [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/decision-freeze-and-observer-core/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/decision-freeze-and-observer-core/feedback.md)
+- The phase-relevant entries in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/decisions.txt)
+
+What I reviewed
+- Re-ran `pytest autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` and confirmed `41 passed in 0.17s`.
+- Verified `test_observer_core_modules_remain_autoloop_agnostic` now locks the AC-2 purity requirement directly.
+- Verified the observer tests now assert the parity-critical payload contract: identifiers, cloned state snapshots, request/response session bindings, metadata echo, checkpoint payloads, and terminal exception fields.
+- Updated [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/decision-freeze-and-observer-core/criteria.md) so all boxes are checked.
+- Appended an `Audit Round 2` closure entry to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/decision-freeze-and-observer-core/feedback.md).
+
+Key findings / decisions
+- No blocking or non-blocking findings remain.
+- `TST-001` and `TST-002` are closed by the new source-level purity guard and the expanded payload assertions.
+- The phase audit now supports `COMPLETE`.
+
+Open issues / next step
+- No phase-local audit blocker remains.
+- Later phases should add their own test/audit coverage when parity harness rewiring, store-helper migration, and workflow cleanup land.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

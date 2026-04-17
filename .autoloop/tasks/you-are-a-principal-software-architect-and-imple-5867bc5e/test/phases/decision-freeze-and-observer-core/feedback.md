@@ -23,3 +23,7 @@
 - Added `test_observer_core_modules_remain_autoloop_agnostic` to lock the no-Autoloop-imports / no-workflow-specific-branching requirement in the core observer seam.
 - Expanded the success and pause/fail/fatal observer contract tests to assert workflow/run identifiers, request/response session payloads, metadata echo, cloned state snapshots, checkpoint contents, and terminal payload fields.
 - Re-ran `pytest autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` and got `41 passed`.
+
+## Audit Round 2
+
+- No blocking or non-blocking findings. `TST-001` and `TST-002` are closed by the new source-level purity guard and the expanded observer payload assertions, and the targeted validation suite remains green at `41 passed`.
