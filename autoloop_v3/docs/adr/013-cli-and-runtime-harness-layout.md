@@ -17,7 +17,7 @@
 
 ## Candidate B
 
-- Description: split the runtime into `loader.py`, `config.py`, `workspace.py`, `logging.py`, `runner.py`, and a thin `cli.py`.
+- Description: split the runtime into `loader.py`, `config.py`, `workspace.py`, `events.py`, `prompts.py`, `stores/filesystem.py`, `runner.py`, and a thin `cli.py`.
 - correctness: strong because each operational concern has one owner.
 - compatibility: strong because the runner can preserve old CLI behavior while calling the new engine.
 - simplicity: strong because the CLI is only argument parsing and dispatch.

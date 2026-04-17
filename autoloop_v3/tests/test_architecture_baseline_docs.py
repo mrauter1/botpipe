@@ -123,3 +123,17 @@ def test_docs_capture_phase_local_and_resume_risk_inventory() -> None:
     assert "Resume semantics" in parity
     assert "Session scope collisions across phases" in risks
     assert "Loader cannot import `Ralph_loop.py` as-is" in risks
+
+
+def test_docs_match_shipped_runtime_module_layout_and_boundaries() -> None:
+    architecture = _read_doc("architecture.md")
+    compatibility = _read_doc("compatibility.md")
+    parity = _read_doc("parity-matrix.md")
+    authoring = _read_doc("authoring.md")
+    corpus = "\n".join((architecture, compatibility, parity, authoring))
+
+    for marker in ("events.py", "prompts.py", "filesystem.py", "provider factory", "checkpoint.json"):
+        assert marker in corpus
+
+    for stale_marker in ("runtime.logging", "`runtime.providers`", "logging.py"):
+        assert stale_marker not in corpus

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
+import subprocess
 import sys
 from argparse import Namespace
 from pathlib import Path
@@ -59,6 +61,54 @@ def _install_fake_yaml(monkeypatch, module):
             return json.dumps(payload, indent=2) + "\n"
 
     monkeypatch.setattr(module, "yaml", FakeYaml)
+
+
+def _write_cli_smoke_provider_module(path: Path) -> None:
+    path.write_text(
+        """
+from __future__ import annotations
+
+import json
+
+from autoloop_v3.workflow.primitives import Outcome
+from autoloop_v3.workflow.providers.fake import ScriptedLLMProvider
+
+
+def factory(*, config, args):
+    return ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: (
+                request.artifacts.phase_plan.write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "task_id": request.context.task_id,
+                            "request_snapshot_ref": "request.md",
+                            "phases": [{"phase_id": "phase-a"}],
+                        }
+                    )
+                ),
+                "plan raw\\n",
+            )[1],
+            lambda request: (
+                request.artifacts.impl_notes.write_text("implementation notes\\n"),
+                "implement raw\\n",
+            )[1],
+            lambda request: (
+                request.artifacts.test_strat.write_text("test strategy\\n"),
+                "test raw\\n",
+            )[1],
+        ],
+        verifier_turns=[
+            Outcome(raw_output="plan ok\\n", tag="plan_ready"),
+            Outcome(raw_output="implement ok\\n", tag="implemented"),
+            Outcome(raw_output="test ok\\n", tag="phase_passed"),
+        ],
+    )
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def test_autoloop_v1_imports_through_root_workflow_shim_and_legacy_loader_handles_ralph():
@@ -550,6 +600,59 @@ def test_cli_main_turns_workflow_execution_errors_into_clean_exit(monkeypatch, c
     assert excinfo.value.code == 2
     assert captured.err == "cannot resume\n"
     assert "usage:" not in captured.err
+
+
+def test_cli_module_smoke_executes_autoloop_v1_end_to_end(tmp_path: Path):
+    provider_module = tmp_path / "smoke_provider.py"
+    _write_cli_smoke_provider_module(provider_module)
+
+    env = os.environ.copy()
+    pythonpath_entries = [str(tmp_path), str(REPO_ROOT)]
+    if env.get("PYTHONPATH"):
+        pythonpath_entries.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(pythonpath_entries)
+    env["XDG_CONFIG_HOME"] = str(tmp_path / "xdg-config")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "autoloop_v3.runtime.cli",
+            str(REPO_ROOT / "autoloop_v1.py"),
+            "--task-id",
+            "task-1",
+            "--provider-factory",
+            "smoke_provider:factory",
+            "--root",
+            str(tmp_path),
+            "--request-text",
+            "Ship it",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "task-1"
+    run_dir = next((task_dir / "runs").iterdir())
+    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text(encoding="utf-8").splitlines() if line]
+
+    assert (task_dir / "plan" / "phase_plan.yaml").exists()
+    assert (task_dir / "phases" / "phase-a" / "implement" / "implementation_notes.md").read_text(encoding="utf-8") == (
+        "implementation notes\n"
+    )
+    assert (task_dir / "phases" / "phase-a" / "test" / "test_strategy.md").read_text(encoding="utf-8") == (
+        "test strategy\n"
+    )
+    assert (run_dir / "request.md").read_text(encoding="utf-8") == "Ship it\n"
+    assert (run_dir / "sessions" / "plan.json").exists()
+    assert events[0]["event_type"] == "run_started"
+    assert events[-1]["event_type"] == "run_finished"
+    assert events[-1]["status"] == "success"
 
 
 def test_runner_executes_autoloop_v1_and_writes_runtime_artifacts(tmp_path: Path):

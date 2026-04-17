@@ -2,20 +2,20 @@
 
 ## Goal
 
-The core engine stays spec-clean. All legacy and workspace drift is isolated to loading and normalization so existing workflows can run without contaminating the strict runtime model.
+Keep the engine spec-clean while allowing the existing workspace workflows and persisted runtime data to execute without invasive source edits.
 
 ## Boundary Placement
 
 - `runtime.loader` handles import-time compatibility.
 - `workflow.compat` handles authoring-surface compatibility.
-- `runtime.providers` handles loop-control and provider-wire compatibility.
-- `runtime.stores.filesystem` handles persisted session or checkpoint compatibility.
+- `runtime.stores.filesystem` handles persisted session and checkpoint compatibility.
+- `runtime.runner.load_provider_factory` delegates provider-wire behavior to injected provider modules instead of hardcoding provider-specific logic into the package.
 
 ## Loader Compatibility
 
-- Load workflow modules through a namespace that prebinds `Event`, `Outcome`, `Verdict`, `ResolvedArtifacts`, `SessionLifecycle`, and other workflow-surface names used in annotations.
-- Use postponed evaluation or namespace injection so `Ralph_loop.py` can load even though it annotates with `Verdict` and `Event` without importing them.
-- Treat source rewriting as a last-resort fallback. The default path is load-time compatibility with no mutation of user workflow files.
+- Workflow modules load through a namespace that prebinds `Event`, `Outcome`, `Verdict`, `ResolvedArtifacts`, `SessionLifecycle`, and related authoring symbols used in annotations.
+- This allows `Ralph_loop.py` to load even though it annotates with `Verdict` and `Event` without importing them.
+- The default strategy is namespace injection, not source rewriting.
 
 ## Authoring Compatibility
 
@@ -29,28 +29,42 @@ The core engine stays spec-clean. All legacy and workspace drift is isolated to 
 - System handlers accept:
   - `(state, ctx)`
   - `(state)` for legacy workflows such as `Ralph_loop.py`
-- `SessionLifecycle.ON_START` becomes a normalized session-opening policy.
-- Step-produced artifacts remain addressable as attributes on the step object and on `ResolvedArtifacts`.
-- Pydantic v1 `copy(update=...)` behavior is tolerated during compatibility execution, while strict v3 docs promote `model_copy(update=...)`.
+- `SessionLifecycle.ON_START` normalizes to runtime session-opening policy.
+- Produced artifacts remain addressable as attributes on the step object and on `ResolvedArtifacts`.
+- Legacy Pydantic `copy(update=...)` usage is tolerated during compatibility execution, while strict v3 authoring uses `model_copy(update=...)`.
 
 ## Persisted State Compatibility
 
-- Session files remain JSON and preserve `session_id` plus legacy `thread_id` fields.
-- Checkpoint persistence keeps the strict `Checkpoint` model while readers tolerate legacy session-file fields and missing metadata.
-- Resume logic preserves pending question and answer semantics even when resuming runs created before the new engine exists.
+- Session files stay JSON and preserve `session_id` plus legacy `thread_id` fields.
+- Existing provider metadata, clarification notes, and timestamps are merged forward during sparse writes.
+- Checkpoints use the strict `Checkpoint` schema while tolerating legacy session payload shapes on load.
 
-## Runtime Behavior That Stays Outside The Core
+## Runtime Compatibility Scope
 
-- `.autoloop` workspace path rules
-- request snapshot creation
-- decisions header sequence allocation
-- raw log formatting
-- events JSONL recorder
-- config discovery from `autoloop.yaml`, `autoloop.config`, and legacy names
-- provider-specific loop-control parsing and retry policy
+The runtime preserves the compatibility surface that target workflows actually need:
+
+- `.autoloop` workspace layout
+- request snapshots
+- task and run raw logs
+- append-only decisions headers and clarification entries
+- events JSONL lifecycle logs
+- phase-local artifact directories
+- phase-scoped sessions
+- prompt-path resolution against the workspace and legacy template roots
+- config discovery from `autoloop.yaml`, `autoloop.config`, and legacy config filenames
+
+## Explicit Operational Limits
+
+These limits are intentional and tested so the generic runner fails clearly instead of drifting silently:
+
+- `autoloop_v3.runtime.cli` resumes only runs that already have `checkpoint.json`.
+- Resuming legacy runs that only contain session files or events stays a legacy-runtime responsibility.
+- Non-default pair, phase, git, and full-auto runtime flags are rejected by the generic runner.
+- Provider-specific loop-control parsing and retry policy stay in the injected provider factory or the legacy runtime.
 
 ## Non-Goals
 
 - No compatibility conditionals spread through `engine.py`, `compiler.py`, or `validation.py`.
-- No in-place edits to `autoloop/`, `autoloop_v1.py`, or `Ralph_loop.py` unless a future blocker cannot be solved by the loader or compat boundary and is explicitly justified.
-- No new workflow examples should be authored against legacy aliases unless a parity test requires them.
+- No in-place edits to `autoloop/`, `autoloop_v1.py`, or `Ralph_loop.py`.
+- No hidden provider adapters inside `autoloop_v3.runtime`; provider wiring is explicit at the runner boundary.
+- No new workflow examples should default to legacy aliases unless a parity test requires them.
