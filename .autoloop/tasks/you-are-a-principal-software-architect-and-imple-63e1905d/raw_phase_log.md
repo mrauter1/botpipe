@@ -764,3 +764,48 @@ Validation run:
 - `pytest -q` -> `246 passed`
 
 Remaining risk is intentional boundary, not a known defect: if you need legacy-equivalent Autoloop-v1 operational behavior, use `run_autoloop_v1(...)`; the generic runtime remains deliberately workflow-agnostic.
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ce7-b247-77b3-8a7f-957ca68e3888
+---
+Reviewing the phase-scoped migration/parity changes now. I’m reading the authoritative phase artifacts, the shared decisions, and the request-relevant diffs first, then I’ll verify whether the implementation actually satisfies the phase acceptance criteria before I mark criteria or write findings.
+
+I’ve identified a likely event-log parity gap in the harness. I’m reproducing it directly now so the feedback points to a concrete failure mode instead of just a theoretical concern.
+
+I’ve reproduced a concrete blocking parity failure in the harness: multi-phase `events.jsonl` currently stamps every `step_executed` entry with the final phase id, and it never emits phase lifecycle events at all. I’m grabbing exact line references now and then I’ll write the phase feedback/criteria with that finding.
+
+I’ve got one concrete blocking issue and one smaller parity/observability follow-up. I’m writing those into the phase feedback now and marking criteria accordingly: the architecture placement is good, but AC-3 is not fully satisfied until the event log is corrected.
+
+Scope considered
+- Phase-local verifier audit of the `workflow-migration-parity` implementation, limited to request-relevant migration/parity behavior and the active `.autoloop` review artifacts.
+
+What I analyzed
+- The migrated Autoloop-v1 harness in `autoloop_v3/workflows/autoloop_v1_support.py`.
+- The active phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, plus the shared `decisions.txt` ledger.
+- A concrete `run_autoloop_v1()` reproduction on a synthetic multi-phase run to inspect emitted events and raw-log metadata.
+
+What I reviewed
+- Updated `criteria.md` to leave blocking parity criteria unchecked.
+- Appended `IMP-001` as `blocking` and `IMP-002` as `non-blocking` to `feedback.md`.
+- Ran `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` and got `12 passed`.
+
+Key findings / decisions
+- `IMP-001` `blocking`: `autoloop_v1_support.py` emits `step_executed` only after the run completes and derives `phase_id` from the final state for every historical step. In a multi-phase run, earlier steps are mis-tagged with the last phase, and the harness still emits no `phase_started` / `phase_completed` events. That breaks AC-3 parity for event-log behavior.
+- `IMP-002` `non-blocking`: raw-log helper entries hardcode `cycle=1` and `attempt=1`, so blocked/question/clarification records become inaccurate once a pair loops within the same phase.
+
+Open issues / next step
+- The implementer needs to move Autoloop-v1 event emission to execution time with per-step phase attribution and add the missing phase lifecycle events in the workflow-owned harness. After that, rerun the parity suite and recheck the raw-log metadata behavior.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
