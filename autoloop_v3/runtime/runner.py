@@ -19,7 +19,7 @@ from .config import (
     DEFAULT_PHASE_MODE,
     DEFAULT_TRACK_AUTOLOOP_ARTIFACTS,
 )
-from .events import EventLogger, append_decisions_runtime_block
+from .events import EventLogger, append_decisions_runtime_block, append_resume_clarification
 from .loader import load_compiled_workflow
 from .prompts import FilesystemPromptRegistry
 from .stores.filesystem import FilesystemCheckpointStore, FilesystemSessionStore
@@ -104,62 +104,96 @@ def run_workflow(
         checkpoint_store=checkpoint_store,
         prompt_registry=prompt_registry,
     )
-
-    if options.resume:
-        _validate_resume_state(run, checkpoint_store)
-        logger.emit("run_resumed", workflow=compiled.workflow_name, task_id=workspace.task_id)
-        if options.answer:
+    logger.emit("run_resumed" if options.resume else "run_started", workflow=compiled.workflow_name, task_id=workspace.task_id)
+    resume_clarification: tuple[str, str | None, str, Path | None] | None = None
+    try:
+        if options.resume:
+            _validate_resume_state(run, checkpoint_store)
             checkpoint = checkpoint_store.load()
-            if checkpoint is not None and checkpoint.pending_question:
+            if options.answer and checkpoint is not None and checkpoint.pending_question:
                 phase_id = checkpoint.session_bindings.active_scopes.get("phase_session") or PLAN_DECISIONS_PHASE_ID
-                append_decisions_runtime_block(
-                    workspace.decisions_file,
-                    pair=checkpoint.stage,
-                    phase_id=phase_id,
-                    run_id=run.run_id,
-                    entry="answers",
-                    body=options.answer,
-                    source="runtime-runner",
+                resume_clarification = (
+                    checkpoint.stage,
+                    phase_id,
+                    checkpoint.pending_question,
+                    _paused_session_file(run, session_store, compiled, checkpoint),
                 )
-        result = engine.resume(
-            task_id=workspace.task_id,
-            run_id=run.run_id,
-            task_folder=workspace.task_dir,
-            run_folder=run.run_dir,
-            answer=options.answer,
-        )
-    else:
-        logger.emit("run_started", workflow=compiled.workflow_name, task_id=workspace.task_id)
-        result = engine.run(
-            task_id=workspace.task_id,
-            run_id=run.run_id,
-            task_folder=workspace.task_dir,
-            run_folder=run.run_dir,
-        )
+            result = engine.resume(
+                task_id=workspace.task_id,
+                run_id=run.run_id,
+                task_folder=workspace.task_dir,
+                run_folder=run.run_dir,
+                answer=options.answer,
+            )
+        else:
+            result = engine.run(
+                task_id=workspace.task_id,
+                run_id=run.run_id,
+                task_folder=workspace.task_dir,
+                run_folder=run.run_dir,
+            )
 
-    for step_name in result.history:
-        logger.emit("step_executed", workflow=compiled.workflow_name, step_name=step_name)
+        if resume_clarification is not None and options.answer is not None:
+            pair, phase_id, question, session_file = resume_clarification
+            append_resume_clarification(
+                run.raw_phase_log,
+                workspace.raw_phase_log,
+                workspace.decisions_file,
+                session_file,
+                pair=pair,
+                phase_id=phase_id,
+                question=question,
+                answer=options.answer,
+                run_id=run.run_id,
+            )
 
-    phase_scope = session_store.snapshot().active_scopes.get("phase_session")
-    if result.terminal == "PAUSE" and result.last_event is not None and result.last_event.question:
-        append_decisions_runtime_block(
-            workspace.decisions_file,
-            pair=result.history[-1] if result.history else compiled.entry_step_name,
-            phase_id=phase_scope or PLAN_DECISIONS_PHASE_ID,
-            run_id=run.run_id,
-            entry="questions",
-            body=result.last_event.question,
-            source="runtime-runner",
+        for step_name in result.history:
+            logger.emit("step_executed", workflow=compiled.workflow_name, step_name=step_name)
+
+        phase_scope = session_store.snapshot().active_scopes.get("phase_session")
+        if result.terminal == "PAUSE" and result.last_event is not None and result.last_event.question:
+            append_decisions_runtime_block(
+                workspace.decisions_file,
+                pair=result.history[-1] if result.history else compiled.entry_step_name,
+                phase_id=phase_scope or PLAN_DECISIONS_PHASE_ID,
+                run_id=run.run_id,
+                entry="questions",
+                body=result.last_event.question,
+                source="runtime-runner",
+            )
+
+        logger.emit(
+            "run_finished",
+            workflow=compiled.workflow_name,
+            terminal=result.terminal,
+            status=_legacy_status(result.terminal),
+            last_step=result.history[-1] if result.history else None,
+            phase_id=phase_scope,
         )
-
-    logger.emit(
-        "run_finished",
-        workflow=compiled.workflow_name,
-        terminal=result.terminal,
-        last_step=result.history[-1] if result.history else None,
-        phase_id=phase_scope,
-    )
-    return result
+        return result
+    except Exception as exc:
+        if resume_clarification is not None and options.answer is not None:
+            pair, phase_id, question, session_file = resume_clarification
+            append_resume_clarification(
+                run.raw_phase_log,
+                workspace.raw_phase_log,
+                workspace.decisions_file,
+                session_file,
+                pair=pair,
+                phase_id=phase_id,
+                question=question,
+                answer=options.answer,
+                run_id=run.run_id,
+            )
+        logger.emit(
+            "run_finished",
+            workflow=compiled.workflow_name,
+            status="fatal_error",
+            error_type=type(exc).__name__,
+            error=str(exc),
+            phase_id=session_store.snapshot().active_scopes.get("phase_session"),
+        )
+        raise
 
 
 def _ensure_task_workspace(options: RunnerOptions) -> TaskWorkspace:
@@ -213,3 +247,26 @@ def _validate_resume_state(run: Any, checkpoint_store: FilesystemCheckpointStore
             "This run only has legacy session/event state, which the generic v3 runner does not reconstruct into "
             "engine checkpoints. Resume it with the legacy autoloop runtime or start a new autoloop_v3 run."
         )
+
+
+def _paused_session_file(
+    run: Any,
+    session_store: FilesystemSessionStore,
+    compiled: Any,
+    checkpoint: Any,
+) -> Path | None:
+    step = compiled.steps.get(checkpoint.stage)
+    if step is None or step.session_name is None:
+        return None
+    scope = checkpoint.session_bindings.active_scopes.get(step.session_name)
+    return session_store.path_for(step.session_name, scope)
+
+
+def _legacy_status(terminal: str) -> str:
+    if terminal == "SUCCESS":
+        return "success"
+    if terminal == "PAUSE":
+        return "paused"
+    if terminal == "FAIL":
+        return "failed"
+    return terminal.lower()

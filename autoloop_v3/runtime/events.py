@@ -206,7 +206,7 @@ def append_clarification(
     run_raw_phase_log: Path,
     task_raw_phase_log: Path,
     decisions_path: Path,
-    session_file: Path,
+    session_file: Path | None,
     *,
     pair: str,
     phase_id: str | None,
@@ -219,7 +219,8 @@ def append_clarification(
     source: str = "human",
 ) -> None:
     phase_marker = phase_id or PLAN_DECISIONS_PHASE_ID
-    clarification_body = f"Question:\n{question}\n\nAnswer:\n{answer}\n"
+    note = f"Question:\n{question}\n\nAnswer:\n{answer}"
+    clarification_body = f"{note}\n"
     for raw_log in (task_raw_phase_log, run_raw_phase_log):
         append_runtime_raw_log(
             raw_log,
@@ -253,7 +254,73 @@ def append_clarification(
         qa_seq=qa_seq,
         source=source,
     )
-    set_pending_session_note(session_file, answer)
+    if session_file is not None:
+        set_pending_session_note(session_file, note)
+
+
+def append_resume_clarification(
+    run_raw_phase_log: Path,
+    task_raw_phase_log: Path,
+    decisions_path: Path,
+    session_file: Path | None,
+    *,
+    pair: str,
+    phase_id: str | None,
+    question: str,
+    answer: str,
+    run_id: str,
+    source: str = "runtime-runner",
+) -> None:
+    phase_marker = phase_id or PLAN_DECISIONS_PHASE_ID
+    turn_seq, qa_seq = _latest_question_turn(
+        decisions_path,
+        pair=pair,
+        phase_id=phase_marker,
+        run_id=run_id,
+    )
+    if turn_seq is None or qa_seq is None:
+        append_clarification(
+            run_raw_phase_log,
+            task_raw_phase_log,
+            decisions_path,
+            session_file,
+            pair=pair,
+            phase_id=phase_marker,
+            phase="resume",
+            cycle=1,
+            attempt=1,
+            question=question,
+            answer=answer,
+            run_id=run_id,
+            source=source,
+        )
+        return
+
+    note = f"Question:\n{question}\n\nAnswer:\n{answer}"
+    clarification_body = f"{note}\n"
+    for raw_log in (task_raw_phase_log, run_raw_phase_log):
+        append_runtime_raw_log(
+            raw_log,
+            run_id,
+            "clarification",
+            clarification_body,
+            pair=pair,
+            phase="resume",
+            source=source,
+        )
+    append_decisions_runtime_block(
+        decisions_path,
+        pair=pair,
+        phase_id=phase_marker,
+        run_id=run_id,
+        entry="answers",
+        body=answer,
+        turn_seq=turn_seq,
+        qa_seq=qa_seq,
+        source=source,
+    )
+    if session_file is not None:
+        set_pending_session_note(session_file, note)
 
 
 def extract_clarifications(run_raw_phase_log: Path) -> list[tuple[str, str]]:
@@ -289,6 +356,29 @@ def prior_phase_status_lines(events_file: Path, selected_phase_ids: tuple[str, .
         if event.get("event_type") in {"phase_started", "phase_completed", "phase_blocked", "phase_deferred"}:
             lines.append(f"{phase_id}: {event.get('event_type')}")
     return lines
+
+
+def _latest_question_turn(
+    decisions_path: Path,
+    *,
+    pair: str,
+    phase_id: str,
+    run_id: str,
+) -> tuple[int | None, int | None]:
+    if not decisions_path.exists():
+        return None, None
+    blocks = parse_decisions_headers(decisions_path.read_text(encoding="utf-8"))
+    for block in reversed(blocks):
+        attrs = block.attrs
+        if (
+            attrs.get("run_id") != run_id
+            or attrs.get("pair") != pair
+            or attrs.get("phase_id") != phase_id
+            or attrs.get("entry") != "questions"
+        ):
+            continue
+        return _parse_int(attrs.get("turn_seq")), _parse_int(attrs.get("qa_seq"))
+    return None, None
 
 
 def _append_decisions_text(decisions_path: Path, chunk: str) -> None:
@@ -359,3 +449,12 @@ def _latest_sequence(events_file: Path) -> int:
         if isinstance(seq, int):
             last_sequence = max(last_sequence, seq)
     return last_sequence
+
+
+def _parse_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        return None

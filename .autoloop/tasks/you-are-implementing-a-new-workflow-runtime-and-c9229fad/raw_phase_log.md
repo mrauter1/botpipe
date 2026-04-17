@@ -1141,3 +1141,62 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+I’m treating this as the phase that proves end-to-end workflow compatibility and parity on top of the already-built core/runtime. First I’m reading the active phase artifacts, plan, and current `autoloop_v3` test/runtime surface so I can target the missing integration coverage instead of widening scope blindly.
+
+The phase artifacts are still blank, so I’m now inspecting the shipped runtime, workflow loader, and current tests to find the exact parity gaps. I also need the target workflow files and the legacy oracle paths side by side before touching anything.
+
+I’ve confirmed the core/runtime and ADRs already exist; this phase is about filling parity coverage and likely a few runner gaps rather than building from scratch. Next I’m reading the current integration tests and runner behavior in detail, then I’ll patch the missing compatibility assertions and any defects those tests expose.
+
+The current suite passes, but it’s still light on the actual parity proof this phase requires. I’m drilling into the remaining runtime tests now because I need to replace “smoke coverage” with explicit end-to-end assertions for the legacy workflows, resume path, and legacy artifact/session behavior.
+
+I’ve found a real parity gap while exercising the paused-path manually: the runner records runtime questions, but resume-time answers only append to `decisions.txt`; they do not yet flow through the full clarification machinery that also updates raw logs and the active session note like the legacy runtime does. I’m confirming the old behavior now and then I’ll patch the runner plus add end-to-end tests around that path.
+
+I’ve confirmed two concrete parity defects worth fixing in code, not just in tests: resume-time answers were not producing legacy-style clarification artifacts, and `run_finished` events were missing the legacy `status` field plus fatal-error emission on exceptions. I’m patching those now, then I’ll add the end-to-end parity suite around both workflows and the legacy helper comparisons.
+
+I’ve finished the runtime-side patching. I’m adding the actual parity suite now: explicit multi-phase `AutoloopV1`, implicit fallback, pause/resume clarification artifacts, `Ralph_loop` execution, and a small set of direct comparisons against the legacy helpers so this phase proves behavior instead of inferring it.
+
+The resume-path inspection exposed one more subtlety before I run the suite: restoring checkpoint bindings would overwrite any on-disk session metadata, which would erase the clarification note I just added. I’m fixing the session store to merge persisted metadata on write so legacy note/provider fields survive restore and provider updates.
+
+The code changes are in. I’m running the new runtime/integration slice first so I can catch any parity regressions locally before I fan out to the full `autoloop_v3` suite.
+
+The failing test turned up an artifact-format interaction rather than a logic bug: because step raw output is still appended as plain text, a clarification block written before resume gets its body “extended” by later raw output. I’m moving the resume-clarification write to after resumed execution so the raw log stays parseable without widening the logging format change in this phase.
+
+The targeted parity slice is green. I’m running the full `autoloop_v3` test suite now to make sure the new compatibility behavior didn’t regress the strict-core or filesystem-runtime phases.
+
+The code and parity suite are green. I’m updating the phase artifacts now so the next loop has the exact scope, files, invariants, and non-obvious compatibility decisions that came out of this turn.
+
+I’m recording the two non-obvious outcomes from this turn in the shared ledger and phase notes: clarification answers now preserve legacy turn pairing/raw-log/session-note behavior, and session restore now merges on-disk metadata so those notes survive checkpoint restore and provider updates.
+
+Scope considered
+
+Phase `workflow-integration-and-parity` only: end-to-end execution and parity proof for `autoloop_v1.py` and `Ralph_loop.py`, plus the runtime persistence/logging gaps those scenarios exposed.
+
+What I analyzed
+
+I traced the current `autoloop_v3` runner, events, filesystem session store, target workflows, and existing runtime tests, then exercised paused/resumed runs manually against `AutoloopV1` and `RalphLoop`. I also compared key v3 behavior against legacy helpers from `autoloop.main` for decisions parsing, clarification extraction, config discovery, resume-root resolution, session loading, and `latest_run_status`.
+
+What I changed
+
+I patched [events.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/events.py), [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py), and [filesystem.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/filesystem.py) so resume-time answers now produce legacy-compatible clarification artifacts, preserve full `Question/Answer` session notes, keep question/answer turn pairing in `decisions.txt`, and emit legacy-compatible `run_finished.status` values including `fatal_error` on exceptions. I added parity coverage in [test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py) and updated [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py), then recorded the turn in [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/workflow-integration-and-parity/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt).
+
+Key findings / decisions
+
+`AutoloopV1` now has explicit multi-phase, implicit fallback, scoped artifact/session, pause/resume, and legacy helper parity coverage. `RalphLoop` now has end-to-end compatibility coverage for `Verdict`, `SessionLifecycle.ON_START`, legacy handler arity, and legacy Pydantic `copy(update=...)` patterns. Session persistence needed metadata merging on write; otherwise checkpoint restore would erase clarification notes and other legacy fields.
+
+Open issues / next step
+
+`pytest -q autoloop_v3/tests` passes: `56 passed`. The only residual issue is non-blocking deprecation warnings from unchanged legacy `Ralph_loop.py` using Pydantic `copy()`. The generic v3 runner still does not reconstruct legacy event/session-only runs into v3 checkpoints, which remains intentionally compatibility-gated rather than silently approximated.

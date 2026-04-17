@@ -97,8 +97,16 @@ class FilesystemSessionStore:
 
     def _write_binding(self, binding: SessionBinding) -> None:
         path = self.path_for(binding.ref_name, binding.scope)
+        existing = load_session_payload(path, self.default_mode, self.default_provider)
+        merged_metadata = dict(existing["metadata"])
+        merged_metadata.update(binding.metadata)
         payload = _session_payload_from_binding(
-            binding,
+            SessionBinding(
+                ref_name=binding.ref_name,
+                scope=binding.scope,
+                session_id=binding.session_id,
+                metadata=merged_metadata,
+            ),
             default_mode=self.default_mode,
             default_provider=self.default_provider,
         )

@@ -206,7 +206,7 @@ def test_append_clarification_updates_raw_logs_decisions_and_session_note(tmp_pa
     assert [block.attrs["entry"] for block in blocks] == ["questions", "answers"]
     assert blocks[0].body == "Ship this change?\n"
     assert blocks[1].body == "Yes, ship it.\n"
-    assert session_payload["pending_clarification_note"] == "Yes, ship it."
+    assert session_payload["pending_clarification_note"] == "Question:\nShip this change?\n\nAnswer:\nYes, ship it."
     assert "Question:\nShip this change?" in run_raw.read_text(encoding="utf-8")
     assert "Answer:\nYes, ship it." in task_raw.read_text(encoding="utf-8")
 
