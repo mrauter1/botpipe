@@ -6,3 +6,5 @@
 - Phase Directory Key: proof-suite-and-docs
 - Phase Title: Proof Suite And Final Docs
 - Scope: phase-local authoritative verifier artifact
+
+- TST-001 | Added a doc-gating assertion that forbids candidate-matrix/selected-option ADR text from returning to `docs/adr/`, then reran `pytest autoloop_v3/tests/test_architecture_baseline_docs.py -q` and full `pytest -q` (`249 passed`).

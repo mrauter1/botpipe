@@ -6,3 +6,29 @@
 - Phase Directory Key: proof-suite-and-docs
 - Phase Title: Proof Suite And Final Docs
 - Scope: phase-local producer artifact
+- Behaviors covered:
+  - required final docs exist and remain the shipped documentation surface
+  - `ARCHITECTURE_DECISIONS.md` keeps the full three-candidate comparison record
+  - `docs/adr/` stays final-form summary-only, points back to the authoritative record, and does not reintroduce removed authoring surface
+  - README/architecture/authoring docs continue to describe the strict public API, explicit session model, config boundary, and parity markers
+  - full repository suite still covers engine contracts, runtime neutrality, strict workflow execution, and Autoloop-v1 parity flows
+- Preserved invariants checked:
+  - no hidden compatibility authoring surface returns through docs or tests
+  - generic runtime configuration remains documented as `max_steps` / `intent_mode`, not workflow policy
+  - ADR archive does not compete with `ARCHITECTURE_DECISIONS.md` as a second source of architecture truth
+- Edge cases:
+  - accidental addition or removal of ADR files
+  - accidental copy-back of old candidate/selected-option ADR text
+  - reintroduction of removed legacy authoring names into the ADR archive
+- Failure paths:
+  - missing required docs
+  - stale ADR archive structure or stale compatibility-era wording
+  - repository-wide regression detected by full `pytest -q`
+- Flake risks / stabilization:
+  - none added; tests are filesystem-only and deterministic
+  - verification reruns use local docs plus the existing deterministic suite
+- Validation performed:
+  - `pytest autoloop_v3/tests/test_architecture_baseline_docs.py -q` -> `7 passed`
+  - `pytest -q` -> `249 passed`
+- Known gaps:
+  - untracked/generated `codebase.md` workspace artifacts remain outside tracked-repo gating by design

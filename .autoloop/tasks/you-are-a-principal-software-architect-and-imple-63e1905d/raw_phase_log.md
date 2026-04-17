@@ -1155,3 +1155,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+---
+I’m treating this as the test-proof follow-up for the docs phase: check whether the current gating fully captures the ADR cleanup, add any missing regression assertions in the repository tests, then update the phase test strategy and feedback with the final coverage map.
+
+The current doc gate is good, but it still allows a future edit to paste the old per-ADR candidate matrices back in alongside the new summaries. I’m adding one more targeted assertion so `ARCHITECTURE_DECISIONS.md` stays the only place that carries the three-way comparison record.
+
+I’ve made the additional doc-gating assertion. Next I’m running the docs test and the full suite again so the phase evidence reflects the stronger regression guard, then I’ll write the strategy/feedback artifacts.
+
+The new doc gate passes locally. The full suite is running again now; once that finishes I’ll record the behavior-to-test map and the concise audit note in the phase artifacts.
+
+The full suite is green with the stronger guard in place. I’m writing the phase test strategy, feedback note, and one shared decision entry so later turns know the ADR archive is intentionally gated as summary-only.
+
+Scope considered
+- Phase-local `proof-suite-and-docs` test scope
+- Changed doc-gating behavior in `autoloop_v3/tests/test_architecture_baseline_docs.py`
+- Shared decisions plus the active phase test artifacts
+- Full-suite regression check to confirm the added guard did not disturb runtime/parity coverage
+
+What I analyzed
+- Current doc-baseline tests and the new ADR-summary documentation shape
+- The latest shared decisions for this phase, especially the intent to keep `ARCHITECTURE_DECISIONS.md` as the sole comparison record
+- Existing proof coverage for strict surface, runtime agnosticism, and Autoloop-v1 parity
+
+What I changed
+- Added a new assertion in `autoloop_v3/tests/test_architecture_baseline_docs.py` that rejects any return of per-ADR candidate matrices or selected-option sections in `docs/adr/`
+- Updated `.autoloop/.../test/phases/proof-suite-and-docs/test_strategy.md` with the behavior-to-test coverage map, edge cases, failure paths, validation, and known gap
+- Appended a concise `TST-001` entry to `.autoloop/.../test/phases/proof-suite-and-docs/feedback.md`
+- Appended one shared decision under the latest runtime-created header in `decisions.txt`
+
+Key findings / decisions
+- The existing doc gate already covered the new ADR archive shape; the added test closes the remaining regression hole where old candidate-matrix ADR text could have been pasted back in alongside the summaries
+- The ADR archive is now explicitly treated as summary-only, while `ARCHITECTURE_DECISIONS.md` remains the sole authoritative three-candidate decision record
+- Validation passed locally:
+  - `pytest autoloop_v3/tests/test_architecture_baseline_docs.py -q` -> `7 passed`
+  - `pytest -q` -> `249 passed`
+
+Open issues / next step
+- No open blocking issues in phase scope
+- Known gap remains unchanged: untracked/generated `codebase.md` workspace artifacts are intentionally outside tracked-repo gating for this phase

@@ -81,6 +81,19 @@ def test_adr_archive_does_not_reintroduce_removed_authoring_surface() -> None:
         assert forbidden not in corpus
 
 
+def test_adr_archive_remains_summary_only_instead_of_duplicating_candidate_matrices() -> None:
+    for path in sorted(ADR_ROOT.glob("*.md")):
+        text = _read(path)
+        for forbidden in (
+            "## Candidate ",
+            "### Candidate ",
+            "## Selected Option",
+            "## Why The Selected Option",
+            "Book choice:",
+        ):
+            assert forbidden not in text
+
+
 def test_docs_freeze_the_strict_public_surface() -> None:
     public_surface_docs = "\n".join(
         (
