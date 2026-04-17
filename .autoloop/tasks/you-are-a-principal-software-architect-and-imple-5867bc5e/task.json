@@ -16,13 +16,13 @@
       "docs-and-full-verification"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "runtime-session-store-ownership"
+    "current_phase_index": 2,
+    "current_phase_id": "autoloop-v1-parity-split"
   },
   "phase_status": {
     "decision-freeze-and-observer-core": "completed",
-    "runtime-session-store-ownership": "in_progress",
-    "autoloop-v1-parity-split": "planned",
+    "runtime-session-store-ownership": "completed",
+    "autoloop-v1-parity-split": "in_progress",
     "strict-workflow-cleanup": "planned",
     "docs-and-full-verification": "planned"
   },
@@ -45,6 +45,19 @@
       "run_id": "run-20260417T211550Z-e779d000",
       "status": "in_progress",
       "ts": "2026-04-17T21:53:51.831545+00:00"
+    },
+    {
+      "phase_id": "runtime-session-store-ownership",
+      "run_id": "run-20260417T211550Z-e779d000",
+      "status": "completed",
+      "ts": "2026-04-17T22:03:21.504439+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "autoloop-v1-parity-split",
+      "run_id": "run-20260417T211550Z-e779d000",
+      "status": "in_progress",
+      "ts": "2026-04-17T22:03:21.509334+00:00"
     }
   ]
 }
