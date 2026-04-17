@@ -360,3 +360,55 @@ Open issues / next step
 
 - Runtime, provider, and end-to-end parity tests are still deferred until the core implementation lands.
 - The next test phase should expand from doc-level guards into unit, contract, filesystem, and parity coverage for the actual engine and runtime modules.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c0b-0879-7132-9725-46cea3548b90
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9c0b-0879-7132-9725-46cea3548b90
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c0b-0879-7132-9725-46cea3548b90
+---
+I’m auditing the phase-local test output now: the new architecture-doc regression test, the test strategy coverage map, and the auditor-owned criteria and feedback artifacts.
+
+I don’t have a blocking or non-blocking audit defect here. The tests match the phase output, they’re deterministic, and they lock the required doc and ADR contract rather than silently normalizing scope loss.
+
+I’ve updated the auditor-owned artifacts. I’m doing one final readback of the criteria and feedback files, then I’ll close with the canonical loop-control block.
+
+Scope considered
+
+- Phase-local audit of the architecture-baseline test output only.
+- The new doc-contract regression test at `autoloop_v3/tests/test_architecture_baseline_docs.py`.
+- The phase test artifacts under `.autoloop/tasks/.../test/phases/architecture-and-adr-baseline/` and the shared decisions ledger.
+
+What I analyzed
+
+- The new test file and its assertions against the architecture docs and ADR set.
+- The phase test strategy for claimed coverage, flake controls, and known gaps.
+- The relevant decisions entries to confirm the test scope matches the documented phase constraints.
+
+What I reviewed
+
+- Re-ran `pytest -q autoloop_v3/tests/test_architecture_baseline_docs.py` and confirmed `6 passed`.
+- Verified the tests cover the exact ADR inventory, the required three-candidate and evaluation-field contract, the frozen public surface markers, the required legacy parity markers, and the documented loader or resume risk inventory.
+- Updated `criteria.md` to all checked and appended the audit result to `feedback.md`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The test level is appropriate for this phase: deterministic documentation-contract checks for the authored architecture artifacts, without pretending runtime behavior exists yet.
+
+Open issues / next step
+
+- No audit blocker remains for this phase.
+- Later phases should extend coverage from doc-contract tests into runtime, store, compatibility, and parity execution tests once the actual `autoloop_v3` implementation lands.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
