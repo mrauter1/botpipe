@@ -59,3 +59,6 @@
 {"ts": "2026-04-17T22:24:54.416096+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 59, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "strict-workflow-cleanup", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-17T22:24:54.417218+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 60, "event_type": "pair_started", "pair": "test", "phase_id": "strict-workflow-cleanup"}
 {"ts": "2026-04-17T22:24:54.417427+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 61, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strict-workflow-cleanup"}
+{"ts": "2026-04-17T22:26:36.748168+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 62, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-workflow-cleanup"}
+{"ts": "2026-04-17T22:27:37.797103+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 63, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-workflow-cleanup"}
+{"ts": "2026-04-17T22:27:37.809566+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 64, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strict-workflow-cleanup"}
