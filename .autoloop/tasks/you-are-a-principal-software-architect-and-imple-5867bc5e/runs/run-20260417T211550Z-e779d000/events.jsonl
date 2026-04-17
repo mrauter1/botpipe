@@ -4,3 +4,6 @@
 {"ts": "2026-04-17T21:24:30.049215+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-17T21:26:42.733644+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-17T21:26:44.775414+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 6, "event_type": "cycle_started", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-17T21:29:12.939833+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 7, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-04-17T21:30:37.255427+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 8, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-04-17T21:30:37.272454+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 9, "event_type": "pair_completed", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
