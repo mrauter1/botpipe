@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+import re
+from collections.abc import Callable
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,11 +14,23 @@ from pydantic import BaseModel
 
 from ...workflow.stores.memory import InMemorySessionStore
 from ...workflow.stores.protocols import CheckpointPayload, SessionBinding, SessionSnapshot
-from ..workspace import phase_dir_key, phase_session_path, plan_session_path
+
+
+SessionPathResolver = Callable[[Path, str, str | None], Path]
+SAFE_SCOPE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+def scope_key(scope: str) -> str:
+    normalized = scope.strip()
+    if not normalized:
+        raise ValueError("scope must be a non-empty string")
+    if SAFE_SCOPE_RE.fullmatch(normalized):
+        return normalized
+    return f"_scope-{normalized.encode('utf-8').hex()}"
 
 
 class FilesystemSessionStore:
-    """Session store with compatibility-aware JSON files on disk."""
+    """Session store backed by one JSON file per binding."""
 
     def __init__(
         self,
@@ -25,12 +38,13 @@ class FilesystemSessionStore:
         *,
         default_mode: str = "persistent",
         default_provider: str = "codex",
+        path_resolver: SessionPathResolver | None = None,
     ) -> None:
         self.run_dir = run_dir
         self.default_mode = default_mode
         self.default_provider = default_provider
+        self.path_resolver = path_resolver
         self._memory = InMemorySessionStore()
-        self._touched_paths: set[Path] = set()
 
     def open(self, ref_name: str, scope: str | None = None) -> SessionBinding:
         self._load_binding_if_present(ref_name, scope)
@@ -57,17 +71,15 @@ class FilesystemSessionStore:
 
     def path_for(self, ref_name: str, scope: str | None = None) -> Path:
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        if ref_name == "plan_session" and scope is None:
-            return plan_session_path(self.run_dir)
-        if ref_name == "phase_session" and scope is not None:
-            return phase_session_path(self.run_dir, scope)
-        if scope is not None:
-            key = phase_dir_key(scope)
-            return self.run_dir / "sessions" / "phases" / f"{key}--{ref_name}.json"
-        return self.run_dir / "sessions" / f"{ref_name}.json"
+        if self.path_resolver is not None:
+            return self.path_resolver(self.run_dir, ref_name, scope)
+        sessions_dir = self.run_dir / "sessions"
+        if scope is None:
+            return sessions_dir / f"{ref_name}.json"
+        return sessions_dir / "scopes" / scope_key(scope) / f"{ref_name}.json"
 
     def _load_binding_if_present(self, ref_name: str, scope: str | None) -> None:
-        candidate_scopes = []
+        candidate_scopes: list[str | None] = []
         if scope is not None:
             candidate_scopes.append(scope)
         else:
@@ -92,7 +104,6 @@ class FilesystemSessionStore:
                 metadata=dict(payload["metadata"]),
             )
             self._memory.upsert(binding, activate=candidate_scope is not None or scope is None)
-            self._touched_paths.add(path)
             return
 
     def _write_binding(self, binding: SessionBinding) -> None:
@@ -112,7 +123,6 @@ class FilesystemSessionStore:
         )
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-        self._touched_paths.add(path)
 
 
 class FilesystemCheckpointStore:
@@ -164,9 +174,7 @@ class FilesystemCheckpointStore:
             pending_question=payload.get("pending_question")
             if isinstance(payload.get("pending_question"), str)
             else None,
-            pending_answer=payload.get("pending_answer")
-            if isinstance(payload.get("pending_answer"), str)
-            else None,
+            pending_answer=payload.get("pending_answer") if isinstance(payload.get("pending_answer"), str) else None,
         )
 
     def clear(self) -> None:

@@ -431,3 +431,70 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9cd3-6089-7451-95a1-4fec56a8e74a
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9cd3-6089-7451-95a1-4fec56a8e74a
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9cd3-6089-7451-95a1-4fec56a8e74a
+---
+I’m starting with the phase-scoped artifacts and the current `autoloop_v3` runtime so I can isolate the generic runtime boundary changes before editing. After that I’ll trace the active runtime/session code paths, identify the phase-specific leakage, and implement the scoped refactor with tests.
+
+I’ve confirmed the active phase is narrower than the overall task: this turn is specifically about stripping Autoloop concepts out of the generic runtime while preserving generic request/checkpoint/session behavior. Next I’m reading the runtime modules and the current runtime tests side by side so I can replace the phase-specific assumptions with a generic runner and prove it with a toy workflow.
+
+The current leakage is concentrated in three places: `runtime.workspace`, `runtime.runner`, and `runtime.stores.filesystem`. I’m now tracing the core engine/session contracts and the doc tests so the runtime refactor stays aligned with the already-strict workflow core instead of reintroducing another policy layer.
+
+I’ve got the refactor shape now: generic runtime workspace only manages task/run/request/checkpoint/session artifacts, the session store gets a generic default path model, and the runner stops interpreting phase or slot names. I’m reading the rest of `runtime/config.py` before editing so the CLI/config surface changes stay coherent instead of leaving dead compatibility branches behind.
+
+I’ve finished the comparison work for the runtime surface. I’m editing the config, workspace, runner, and filesystem store together so the new generic contracts land consistently in one pass rather than leaving half-migrated interfaces behind.
+
+The runtime core edits are in place. I’m making the minimal workflow-side adjustment now so prompt lookup stays generic: `autoloop_v1.py` needs explicit prompt paths instead of relying on the runtime’s old Autoloop-specific search-root hack.
+
+The runtime boundary refactor is materially in place now: the generic workspace no longer scaffolds phases or raw-ledger files, the session store defaults to generic slot/scope paths, and the runner/CLI only carry generic execution options. I’m running the targeted runtime suite next to catch interface mismatches before I update the phase notes and decision ledger.
+
+The first test run surfaced two mismatches, both narrow: one expectation used escaped newlines instead of real ones, and the Ralph integration test was still asserting the pre-existing action log without the explicit system-step append. I’m fixing those expectations and rerunning the targeted suite.
+
+The targeted runtime suite is clean, and the full `autoloop_v3/tests` suite is also passing after the boundary refactor. I’m doing a final review of the diff and then I’ll update the phase implementation notes and the current turn’s shared decisions block.
+
+The code changes are where I want them; the only noisy artifacts left are tracked `.pyc` files updated by the test run. I’m restoring those generated binaries so the final diff stays limited to source, tests, and the phase artifacts.
+
+I’m on the repo artifacts now. I’m recording the non-obvious decisions in the shared ledger and writing the phase notes with the exact scope, invariants, and validation so later phases don’t accidentally reintroduce the runtime leakage we just removed.
+
+Scope considered
+
+- Phase-local `generic-runtime-boundary` only: generic runtime modules, runtime tests, the toy workflow proof fixture, and the minimal `autoloop_v1.py` prompt-path fix needed to remove the runtime prompt-root hack.
+- I did not pull workflow-owned Autoloop-v1 parity concerns back into the runtime core.
+
+What I analyzed
+
+- [autoloop_v3/runtime/workspace.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/workspace.py), [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py), [config.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/config.py), [events.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/events.py), and [stores/filesystem.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/filesystem.py) for phase/pair/session-name leakage.
+- Runtime-facing tests in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py) and [test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py).
+- Workflow prompt ownership in [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py) and legacy event-status compatibility via `autoloop.main.latest_run_status(...)`.
+
+What I changed
+
+- Stripped the generic runtime down to task/run workspace setup, request snapshots, events, checkpoints, sessions, prompt resolution, and workflow execution. `runtime.workspace` no longer owns phase plans, phase selection, raw logs, decisions, or plan/implement/test scaffolding.
+- Reduced runner/config/CLI to workflow-agnostic controls only. The generic surface now carries `intent_mode` and `max_steps`; pair/phase/git/full-auto options are gone.
+- Reworked `FilesystemSessionStore` to use generic default paths: unscoped bindings go to `sessions/{slot}.json`, scoped bindings go to `sessions/scopes/{scope_key}/{slot}.json`. I also left a local path-resolver hook for a later workflow-owned parity harness.
+- Simplified `runtime.events` to generic JSONL event logging only.
+- Added the unrelated toy workflow fixture [toy_runtime_workflow.py](/home/rauter/autoloop_v3/autoloop_v3/tests/fixtures/toy_runtime_workflow.py) and updated runtime tests to prove the generic runner has no knowledge of phases or `plan/implement/test`.
+- Updated [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py) to use explicit prompt paths so prompt resolution is generic instead of depending on a runtime-specific Autoloop template root.
+
+Key findings / decisions
+
+- The biggest boundary leaks were in `runtime.workspace`, `runtime.runner`, `runtime.events`, and `runtime.stores.filesystem`; removing them was mostly deletion, not replacement.
+- The clean session persistence model is generic slot/scope file mapping with an optional workflow-owned resolver for legacy naming later, instead of any `plan_session` / `phase_session` branching in core runtime code.
+- The generic runner can still execute `autoloop_v1.py` and `Ralph_loop.py`, but detailed Autoloop-v1 clarification/ledger/session-filename parity should move to the later workflow-owned harness phase, not back into `autoloop_v3.runtime`.
+- Validation passed: `pytest autoloop_v3/tests`
+
+Open issues / next step
+
+- The next phase should reintroduce the remaining Autoloop-v1 parity behaviors as workflow-owned helpers or a workflow-owned harness: decisions/raw-log clarification persistence and any legacy session filename preservation still required for final parity.
+- I recorded the non-obvious boundary decisions in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/decisions.txt) and the phase summary in [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/implement/phases/generic-runtime-boundary/implementation_notes.md).

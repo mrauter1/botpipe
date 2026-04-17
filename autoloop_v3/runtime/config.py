@@ -1,4 +1,4 @@
-"""Runtime config discovery with legacy filename compatibility."""
+"""Generic runtime config discovery."""
 
 from __future__ import annotations
 
@@ -21,13 +21,9 @@ DEFAULT_PROVIDER_NAME = "codex"
 SUPPORTED_PROVIDER_NAMES = frozenset({"codex", "claude"})
 DEFAULT_CLAUDE_PERMISSION_STRATEGY = "inherit"
 SUPPORTED_CLAUDE_PERMISSION_STRATEGIES = frozenset({"inherit", "allow_core_tools", "bypass"})
-DEFAULT_PAIRS = "plan,implement,test"
-DEFAULT_MAX_ITERATIONS = 15
-DEFAULT_PHASE_MODE = "single"
+DEFAULT_MAX_STEPS = 100
 DEFAULT_INTENT_MODE = "preserve"
-DEFAULT_FULL_AUTO_ANSWERS = False
-DEFAULT_NO_GIT = False
-DEFAULT_TRACK_AUTOLOOP_ARTIFACTS = True
+SUPPORTED_INTENT_MODES = frozenset({"append", "preserve", "replace"})
 
 
 class ConfigError(ValueError):
@@ -56,13 +52,8 @@ class ProviderConfig:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
-    pairs: str = DEFAULT_PAIRS
-    max_iterations: int = DEFAULT_MAX_ITERATIONS
-    phase_mode: str = DEFAULT_PHASE_MODE
+    max_steps: int = DEFAULT_MAX_STEPS
     intent_mode: str = DEFAULT_INTENT_MODE
-    full_auto_answers: bool = DEFAULT_FULL_AUTO_ANSWERS
-    no_git: bool = DEFAULT_NO_GIT
-    track_autoloop_artifacts: bool = DEFAULT_TRACK_AUTOLOOP_ARTIFACTS
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,13 +84,8 @@ class ProviderConfigOverride:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeConfigOverride:
-    pairs: str | None = None
-    max_iterations: int | None = None
-    phase_mode: str | None = None
+    max_steps: int | None = None
     intent_mode: str | None = None
-    full_auto_answers: bool | None = None
-    no_git: bool | None = None
-    track_autoloop_artifacts: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,13 +138,8 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
         "runtime",
         runtime_payload,
         {
-            "pairs",
-            "max_iterations",
-            "phase_mode",
+            "max_steps",
             "intent_mode",
-            "full_auto_answers",
-            "no_git",
-            "track_autoloop_artifacts",
         },
     )
 
@@ -188,17 +169,8 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
         ),
     )
     runtime = RuntimeConfigOverride(
-        pairs=_optional_string(runtime_payload.get("pairs"), "runtime.pairs", source),
-        max_iterations=_optional_int(runtime_payload.get("max_iterations"), "runtime.max_iterations", source),
-        phase_mode=_optional_string(runtime_payload.get("phase_mode"), "runtime.phase_mode", source),
-        intent_mode=_optional_string(runtime_payload.get("intent_mode"), "runtime.intent_mode", source),
-        full_auto_answers=_optional_bool(runtime_payload.get("full_auto_answers"), "runtime.full_auto_answers", source),
-        no_git=_optional_bool(runtime_payload.get("no_git"), "runtime.no_git", source),
-        track_autoloop_artifacts=_optional_bool(
-            runtime_payload.get("track_autoloop_artifacts"),
-            "runtime.track_autoloop_artifacts",
-            source,
-        ),
+        max_steps=_optional_positive_int(runtime_payload.get("max_steps"), "runtime.max_steps", source),
+        intent_mode=_optional_intent_mode(runtime_payload.get("intent_mode"), "runtime.intent_mode", source),
     )
     return RuntimeConfigLayer(provider=provider, runtime=runtime)
 
@@ -270,58 +242,29 @@ def _merge_runtime_config(
     *layers: RuntimeConfigOverride,
     args: argparse.Namespace,
 ) -> RuntimeConfig:
-    pairs = DEFAULT_PAIRS
-    max_iterations = DEFAULT_MAX_ITERATIONS
-    phase_mode = DEFAULT_PHASE_MODE
+    max_steps = DEFAULT_MAX_STEPS
     intent_mode = DEFAULT_INTENT_MODE
-    full_auto_answers = DEFAULT_FULL_AUTO_ANSWERS
-    no_git = DEFAULT_NO_GIT
-    track_autoloop_artifacts = DEFAULT_TRACK_AUTOLOOP_ARTIFACTS
 
     for layer in layers:
-        if layer.pairs is not None:
-            pairs = layer.pairs
-        if layer.max_iterations is not None:
-            max_iterations = layer.max_iterations
-        if layer.phase_mode is not None:
-            phase_mode = layer.phase_mode
+        if layer.max_steps is not None:
+            max_steps = layer.max_steps
         if layer.intent_mode is not None:
             intent_mode = layer.intent_mode
-        if layer.full_auto_answers is not None:
-            full_auto_answers = layer.full_auto_answers
-        if layer.no_git is not None:
-            no_git = layer.no_git
-        if layer.track_autoloop_artifacts is not None:
-            track_autoloop_artifacts = layer.track_autoloop_artifacts
 
-    for attr in ("pairs", "max_iterations", "phase_mode", "intent_mode", "full_auto_answers", "no_git", "track_autoloop_artifacts"):
-        value = getattr(args, attr, None)
-        if value is None:
-            continue
-        if attr == "pairs":
-            pairs = value
-        elif attr == "max_iterations":
-            max_iterations = value
-        elif attr == "phase_mode":
-            phase_mode = value
-        elif attr == "intent_mode":
-            intent_mode = value
-        elif attr == "full_auto_answers":
-            full_auto_answers = value
-        elif attr == "no_git":
-            no_git = value
-        elif attr == "track_autoloop_artifacts":
-            track_autoloop_artifacts = value
+    cli_max_steps = getattr(args, "max_steps", None)
+    cli_intent_mode = getattr(args, "intent_mode", None)
+    if cli_max_steps is not None:
+        if isinstance(cli_max_steps, bool) or not isinstance(cli_max_steps, int) or cli_max_steps <= 0:
+            raise ConfigError("CLI runtime max_steps must be a positive integer when provided.")
+        max_steps = cli_max_steps
+    if cli_intent_mode is not None:
+        if not isinstance(cli_intent_mode, str) or cli_intent_mode not in SUPPORTED_INTENT_MODES:
+            raise ConfigError(
+                f"CLI runtime intent_mode must be one of: {', '.join(sorted(SUPPORTED_INTENT_MODES))}."
+            )
+        intent_mode = cli_intent_mode
 
-    return RuntimeConfig(
-        pairs=pairs,
-        max_iterations=max_iterations,
-        phase_mode=phase_mode,
-        intent_mode=intent_mode,
-        full_auto_answers=full_auto_answers,
-        no_git=no_git,
-        track_autoloop_artifacts=track_autoloop_artifacts,
-    )
+    return RuntimeConfig(max_steps=max_steps, intent_mode=intent_mode)
 
 
 def _reject_unknown_keys(source: Path, label: str, payload: dict[str, Any], allowed: set[str]) -> None:
@@ -338,19 +281,11 @@ def _optional_string(raw_value: object, label: str, source: Path) -> str | None:
     return raw_value.strip()
 
 
-def _optional_int(raw_value: object, label: str, source: Path) -> int | None:
+def _optional_positive_int(raw_value: object, label: str, source: Path) -> int | None:
     if raw_value is None:
         return None
-    if isinstance(raw_value, bool) or not isinstance(raw_value, int):
-        raise ConfigError(f"{source}: {label} must be an integer when provided.")
-    return raw_value
-
-
-def _optional_bool(raw_value: object, label: str, source: Path) -> bool | None:
-    if raw_value is None:
-        return None
-    if not isinstance(raw_value, bool):
-        raise ConfigError(f"{source}: {label} must be a boolean when provided.")
+    if isinstance(raw_value, bool) or not isinstance(raw_value, int) or raw_value <= 0:
+        raise ConfigError(f"{source}: {label} must be a positive integer when provided.")
     return raw_value
 
 
@@ -371,4 +306,13 @@ def _optional_permission_strategy(raw_value: object, label: str, source: Path) -
         raise ConfigError(
             f"{source}: {label} must be one of: {', '.join(sorted(SUPPORTED_CLAUDE_PERMISSION_STRATEGIES))}."
         )
+    return value
+
+
+def _optional_intent_mode(raw_value: object, label: str, source: Path) -> str | None:
+    value = _optional_string(raw_value, label, source)
+    if value is None:
+        return None
+    if value not in SUPPORTED_INTENT_MODES:
+        raise ConfigError(f"{source}: {label} must be one of: {', '.join(sorted(SUPPORTED_INTENT_MODES))}.")
     return value
