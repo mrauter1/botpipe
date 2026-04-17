@@ -12,12 +12,15 @@
 - AC-1 architectural record shape
   - Coverage: `autoloop_v3/tests/test_architecture_baseline_docs.py`
   - Checks: 17 decision sections, 3 candidates per section, required decision rationale markers
+- AC-2 core purity guard
+  - Coverage: `test_observer_core_modules_remain_autoloop_agnostic`
+  - Checks: `workflow/engine.py` and `workflow/observers.py` stay free of Autoloop/parity import paths and known workflow-specific branch markers
 - AC-2 observer seam happy path
   - Coverage: `test_execution_observers_receive_provider_step_and_success_terminal_events`
-  - Checks: zero-or-more observer support, provider-turn events for producer/verifier/llm, step-completion emission, success terminal emission, no Autoloop-specific engine leakage
+  - Checks: zero-or-more observer support, provider-turn events for producer/verifier/llm, step-completion emission, success terminal emission, workflow/run identifiers, cloned state snapshots, request/response session bindings, and metadata payloads
 - AC-2 observer seam edge and failure paths
   - Coverage: `test_execution_observers_receive_pause_fail_and_fatal_terminal_events`
-  - Checks: pause/fail/fatal terminal events, checkpoint presence on pause/fail/fatal, fatal exception metadata
+  - Checks: pause/fail/fatal terminal events, checkpoint presence on pause/fail/fatal, workflow/run identifiers, state snapshots, and terminal exception payloads
 - AC-2 observer non-interference
   - Coverage: `test_observers_do_not_alter_execution_semantics`
   - Checks: copied state/outcome/session payloads, swallowed observer exceptions, no mutation of engine result or stored session metadata

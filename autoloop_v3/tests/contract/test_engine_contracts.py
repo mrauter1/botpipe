@@ -21,9 +21,11 @@ from autoloop_v3.workflow.errors import MissingArtifactError, WorkflowExecutionE
 from autoloop_v3.workflow.observers import ProviderTurnEvent, StepCompletedEvent, TerminalEvent
 from autoloop_v3.workflow.primitives import Event, Outcome
 from autoloop_v3.workflow.providers.fake import ScriptedLLMProvider
-from autoloop_v3.workflow.providers.models import OutcomeResponse
+from autoloop_v3.workflow.providers.models import OutcomeResponse, ProducerResponse
 from autoloop_v3.workflow.stores import InMemoryCheckpointStore, InMemorySessionStore
 from autoloop_v3.workflow.stores.protocols import SessionBinding
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _workspace(tmp_path: Path) -> tuple[Path, Path]:
@@ -40,6 +42,25 @@ class RecordingObserver:
 
     def record(self, event: object) -> None:
         self.events.append(event)
+
+
+def test_observer_core_modules_remain_autoloop_agnostic():
+    engine_text = (PACKAGE_ROOT / "workflow" / "engine.py").read_text(encoding="utf-8")
+    observer_text = (PACKAGE_ROOT / "workflow" / "observers.py").read_text(encoding="utf-8")
+    corpus = f"{engine_text}\n{observer_text}"
+
+    for forbidden in (
+        "autoloop_v1",
+        "run_autoloop_v1",
+        "autoloop_v1_support",
+        "autoloop_v1_parity",
+        "autoloop_v1_conventions",
+        "activate_next_phase",
+        "phase_selected",
+        "phase_started",
+        "phase_completed",
+    ):
+        assert forbidden not in corpus
 
 
 def test_pair_step_contract_logs_raw_output_and_updates_state(tmp_path: Path):
@@ -230,9 +251,42 @@ def test_execution_observers_receive_provider_step_and_success_terminal_events(t
     engine = Engine(
         ObservedWorkflow,
         provider=ScriptedLLMProvider(
-            producer_turns=["producer raw"],
-            verifier_turns=[Outcome(raw_output="verified", tag="pair_ok")],
-            llm_turns=[Outcome(raw_output="llm raw", tag="llm_ok")],
+            producer_turns=[
+                lambda request: ProducerResponse(
+                    raw_output="producer raw",
+                    session=SessionBinding(
+                        ref_name=request.session.ref_name,
+                        scope=request.session.scope,
+                        session_id=request.session.session_id,
+                        metadata={"source": "producer-response"},
+                    ),
+                    metadata={"turn": "producer"},
+                )
+            ],
+            verifier_turns=[
+                lambda request: OutcomeResponse(
+                    outcome=Outcome(raw_output="verified", tag="pair_ok"),
+                    session=SessionBinding(
+                        ref_name=request.session.ref_name,
+                        scope=request.session.scope,
+                        session_id=request.session.session_id,
+                        metadata={"source": "verifier-response"},
+                    ),
+                    metadata={"turn": "verifier"},
+                )
+            ],
+            llm_turns=[
+                lambda request: OutcomeResponse(
+                    outcome=Outcome(raw_output="llm raw", tag="llm_ok"),
+                    session=SessionBinding(
+                        ref_name=request.session.ref_name,
+                        scope=request.session.scope,
+                        session_id=request.session.session_id,
+                        metadata={"source": "llm-response"},
+                    ),
+                    metadata={"turn": "llm"},
+                )
+            ],
         ),
         session_store=InMemorySessionStore(),
         checkpoint_store=InMemoryCheckpointStore(),
@@ -267,6 +321,37 @@ def test_execution_observers_receive_provider_step_and_success_terminal_events(t
     assert provider_events[0].prompt_path == "pair/producer.md"
     assert provider_events[1].outcome is not None and provider_events[1].outcome.tag == "pair_ok"
     assert provider_events[2].raw_output == "llm raw"
+    assert provider_events[0].workflow_name == "ObservedWorkflow"
+    assert provider_events[0].task_id == "task-1"
+    assert provider_events[0].run_id == "run-1"
+    assert provider_events[0].state.pair_tag == ""
+    assert provider_events[0].request_session is not None and provider_events[0].request_session.ref_name == "main"
+    assert provider_events[0].response_session is not None
+    assert provider_events[0].response_session.metadata == {"source": "producer-response"}
+    assert provider_events[0].metadata == {"turn": "producer"}
+    assert provider_events[1].request_session is not None
+    assert provider_events[1].request_session.metadata == {"source": "producer-response"}
+    assert provider_events[1].response_session is not None
+    assert provider_events[1].response_session.metadata == {"source": "verifier-response"}
+    assert provider_events[1].metadata == {"turn": "verifier"}
+    assert provider_events[2].request_session is not None
+    assert provider_events[2].request_session.metadata == {"source": "verifier-response"}
+    assert provider_events[2].response_session is not None
+    assert provider_events[2].response_session.metadata == {"source": "llm-response"}
+    assert provider_events[2].metadata == {"turn": "llm"}
+    assert step_events[0].workflow_name == "ObservedWorkflow"
+    assert step_events[0].task_id == "task-1"
+    assert step_events[0].run_id == "run-1"
+    assert step_events[0].state_before.pair_tag == ""
+    assert step_events[0].state_after.pair_tag == "pair_ok"
+    assert step_events[1].state_before.pair_tag == "pair_ok"
+    assert step_events[1].state_after.llm_tag == "llm_ok"
+    assert step_events[2].state_after.llm_tag == "llm_ok"
+    assert terminal_events[0].workflow_name == "ObservedWorkflow"
+    assert terminal_events[0].task_id == "task-1"
+    assert terminal_events[0].run_id == "run-1"
+    assert terminal_events[0].state is not None
+    assert terminal_events[0].state.llm_tag == "llm_ok"
     assert len(first.events) == len(second.events)
     assert [type(event) for event in first.events] == [type(event) for event in second.events]
 
@@ -583,18 +668,39 @@ def test_execution_observers_receive_pause_fail_and_fatal_terminal_events(tmp_pa
     assert paused.terminal == "PAUSE"
     assert len(pause_terminal) == 1
     assert pause_terminal[0].terminal_kind == "pause"
+    assert pause_terminal[0].workflow_name == "PauseWorkflow"
+    assert pause_terminal[0].task_id == "task-1"
+    assert pause_terminal[0].run_id == "run-1"
     assert pause_terminal[0].checkpoint is not None
+    assert pause_terminal[0].checkpoint.stage == "ask"
+    assert pause_terminal[0].checkpoint.pending_question == "What value?"
+    assert pause_terminal[0].state is not None
     assert pause_terminal[0].last_event is not None and pause_terminal[0].last_event.question == "What value?"
+    assert pause_terminal[0].exception_type is None
+    assert pause_terminal[0].exception_message is None
 
     assert failed.terminal == "FAIL"
     assert len(fail_terminal) == 1
     assert fail_terminal[0].terminal_kind == "fail"
+    assert fail_terminal[0].workflow_name == "FailWorkflow"
+    assert fail_terminal[0].task_id == "task-2"
+    assert fail_terminal[0].run_id == "run-2"
     assert fail_terminal[0].checkpoint is not None
+    assert fail_terminal[0].checkpoint.stage == "ask"
+    assert fail_terminal[0].state is not None
     assert fail_terminal[0].last_event is not None and fail_terminal[0].last_event.tag == "failed"
+    assert fail_terminal[0].exception_type is None
+    assert fail_terminal[0].exception_message is None
 
     assert len(fatal_terminal) == 1
     assert fatal_terminal[0].terminal_kind == "fatal"
+    assert fatal_terminal[0].workflow_name == "FatalWorkflow"
+    assert fatal_terminal[0].task_id == "task-3"
+    assert fatal_terminal[0].run_id == "run-3"
     assert fatal_terminal[0].checkpoint is not None
+    assert fatal_terminal[0].checkpoint.stage == "ask"
+    assert fatal_terminal[0].state is not None
+    assert fatal_terminal[0].history == ("ask",)
     assert fatal_terminal[0].exception_type == "RuntimeError"
     assert fatal_terminal[0].exception_message == "boom"
     assert fatal_checkpoint_store.load() is not None
