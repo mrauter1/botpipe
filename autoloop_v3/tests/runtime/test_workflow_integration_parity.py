@@ -185,8 +185,16 @@ def test_legacy_latest_run_status_reads_generic_runtime_success_run(tmp_path: Pa
         provider=provider,
         options=RunnerOptions(root=tmp_path, task_id="status-task", request_text="Do it"),
     )
-    _task_dir, run_dir = _task_and_run_dirs(tmp_path, "status-task")
+    task_dir, run_dir = _task_and_run_dirs(tmp_path, "status-task")
+    assert result.history == ("understand", "plan_action")
     assert result.state.goal_met is True
+    assert result.state.iteration == 0
+    assert result.state.action.result == ""
+    assert (task_dir / "action_log.md").read_text(encoding="utf-8") == "u raw\nplan raw\n"
+    assert [call.prompt_path for call in provider.calls if call.kind == "llm"] == [
+        "ralph/understand.md",
+        "ralph/plan_action.md",
+    ]
     assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "success"
 
 

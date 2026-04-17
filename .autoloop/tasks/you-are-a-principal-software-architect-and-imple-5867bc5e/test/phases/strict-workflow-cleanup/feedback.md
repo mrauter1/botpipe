@@ -6,3 +6,5 @@
 - Phase Directory Key: strict-workflow-cleanup
 - Phase Title: Restore Repo-Root Workflow Clarity
 - Scope: phase-local authoritative verifier artifact
+
+- Strengthened `test_legacy_latest_run_status_reads_generic_runtime_success_run` to prove the direct `plan_action -> goal_met -> SUCCESS` path short-circuits cleanly: history stops at `plan_action`, `iteration` stays `0`, no execute result is recorded, and only the `understand`/`plan_action` prompts are used. Re-ran the strict workflow slice: `30 passed`.
