@@ -100,3 +100,32 @@ The planner should revise `plan.md` to explicitly add `git policy placement` to 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019d9cba-b641-7303-82b4-cdd860fa6ee3
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019d9cba-b641-7303-82b4-cdd860fa6ee3
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9cba-b641-7303-82b4-cdd860fa6ee3
+---
+I’m addressing the verifier findings from the last cycle. I’ll re-read the active plan, feedback, and decisions state first, then I’ll patch the plan so the missing required decision coverage and parity-proof gaps are explicit and machine-visible.
+
+I’ve isolated the missing coverage. I’m patching the plan now to make `git policy placement` explicit, to add parity requirements for `events.jsonl`, checkpoints, and `question`/`blocked`/`failed` flows, and to resolve the session-path direction toward the smallest workflow-owned hook.
+
+The fixes are written. I’m validating the updated sections now to make sure the plan explicitly closes the verifier gaps and the YAML/decisions artifacts remain well-formed.
+
+Updated [plan.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/plan/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-63e1905d/decisions.txt).
+
+The plan now explicitly:
+- requires `git policy placement` in `ARCHITECTURE_DECISIONS.md`
+- places retained git / `track_autoloop_artifacts` behavior in the `autoloop_v1`-owned layer, not the generic runtime
+- adds explicit parity coverage for `events.jsonl`, checkpoint save/load/clear lifecycle, and `question` / `blocked` / `failed` behavior
+- resolves session-path handling toward the smallest workflow-owned local adapter instead of a new runtime-wide framework
+
+Verification: `phase_plan.yaml` still parses successfully with 4 ordered phases. No product-code implementation or full test-suite execution was performed on this planning turn.

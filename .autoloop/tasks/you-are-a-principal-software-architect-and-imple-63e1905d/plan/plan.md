@@ -75,6 +75,12 @@ The generic runtime must not own or branch on:
 - `plan_session` / `phase_session` slot-name conventions
 - Autoloop-specific CLI/config flags
 
+Git/commit policy:
+
+- the generic runtime must not own git init, change-detection, commit, or `track_autoloop_artifacts` policy
+- if legacy-equivalent git behavior remains necessary for `autoloop_v1`, it belongs in the `autoloop_v1` harness or workflow-owned helpers, optionally using small generic git utilities that stay policy-free
+- `ARCHITECTURE_DECISIONS.md` must include `git policy placement` explicitly and record how retained git behavior is validated or intentionally removed
+
 ### 3. Workflow-Owned Parity Layer For `autoloop_v1`
 
 Anything required only for `autoloop_v1` moves out of the runtime core into workflow-owned modules inside `autoloop_v3/`:
@@ -117,7 +123,7 @@ This is not a new compatibility layer. It is the workflow implementation and its
   - `binding = ctx.get_session(step.session)`
   - if `binding is None`, raise `WorkflowExecutionError` naming the slot
 - `runtime/runner.py` exposes only generic workflow-run options; move pair/phase/git tracking policy to the `autoloop_v1` harness or delete if unnecessary.
-- `runtime/stores/filesystem.py` becomes generic by default; any Autoloop-v1-specific session path mapping must live outside the core runtime or be injected through a narrow path-policy seam.
+- `runtime/stores/filesystem.py` stays generic on its default mapping; Autoloop-v1-specific session path mapping should use the smallest workflow-owned local adapter/hook needed to preserve `plan.json` and `phases/{phase}.json`, not a new runtime-wide path-policy framework unless a second workflow proves the need.
 
 ## Implementation Phases
 
@@ -146,6 +152,7 @@ Milestones:
    - provider/store protocols
    - runtime harness split
    - config policy
+   - git policy placement
    - observability/event model
    - parity strategy
    - migration strategy
@@ -193,16 +200,19 @@ Milestones:
 3. `autoloop_v1` harness preserves:
    - `.autoloop/tasks/{task_id}/runs/{run_id}`
    - request snapshots
-   - decisions/raw log conventions
-   - clarification persistence
-   - session persistence files
-   - pause/resume behavior
+   - `events.jsonl` semantics and `latest_run_status`-relevant status fields
+   - checkpoint persistence / load / clear behavior
+   - `question` / `blocked` / `failed` behavior
+    - decisions/raw log conventions
+    - clarification persistence
+    - session persistence files
+    - pause/resume behavior
 4. Implement/test share the active phase session only because `activate_next_phase` rebinds the slot and nothing else does.
 
 Regression controls:
 
 - compare helper outputs directly against `autoloop.main` helper behavior where possible
-- preserve legacy-compatible file contents and session-note behavior through parity tests
+- preserve legacy-compatible file contents, event-status behavior, checkpoint lifecycle, and session-note behavior through parity tests
 
 ### Phase 4: Proof Suite And Final Docs
 
@@ -225,7 +235,7 @@ Milestones:
 Regression controls:
 
 - verify docs/tests assert absence of compat features
-- keep at least one golden-path `autoloop_v1` parity run and one unrelated toy workflow run
+- keep at least one golden-path `autoloop_v1` parity run, one blocked/question/failure parity path, and one unrelated toy workflow run
 
 ## Validation Matrix
 
@@ -267,6 +277,9 @@ Regression controls:
 - `.autoloop/tasks/{task_id}/runs/{run_id}` layout
 - key task/run artifacts
 - request snapshot behavior
+- `events.jsonl` behavior, including legacy-compatible terminal/status interpretation
+- checkpoint save/load/clear behavior
+- `question` / `blocked` / `failed` behavior
 - raw log behavior
 - decisions / clarification behavior
 - session persistence payloads and file paths
@@ -293,6 +306,7 @@ The only preserved compatibility target is behavioral parity for strict `autoloo
 | Engine still auto-opens sessions after compat removal | Would silently preserve forbidden computed/implicit session behavior | Remove auto-open path early and add contract tests before migrating parity harness | Missing unopened slot raises a clear runtime error |
 | Autoloop-specific code leaks back into runtime during parity work | Violates the main architecture requirement | Treat any reference to phases, pair names, or Autoloop artifact names in `runtime/` as a blocker unless clearly generic | Grep of `runtime/` shows no Autoloop-specific domain terms beyond generic task/run naming |
 | Session file naming changes break legacy parity | `autoloop_v1` resume/clarification behavior depends on stable files | Keep naming policy in workflow-owned harness and compare with legacy helper outputs | `plan.json` / `phases/{phase}.json` parity tests pass |
+| Event or checkpoint semantics drift during runtime split | `latest_run_status`, resume flow, and pause/failure handling depend on stable persisted behavior | Add explicit parity tests for `events.jsonl`, checkpoint save/load/clear, and `question` / `blocked` / `failed` flows before closing parity work | Event/status and checkpoint lifecycle assertions match legacy expectations |
 | Prompt lookup regresses after removing runtime hacks | `autoloop_v1` depends on legacy template files | Make prompt paths explicit in workflows or workflow-owned helpers | Prompt-path tests no longer depend on injected roots |
 | Current docs/tests resist the target design | They currently assert the old compat architecture | Rewrite gate tests alongside the code instead of preserving stale docs | New docs assert strict surfaces and absence of compat |
 

@@ -3,3 +3,7 @@ Final target is a strict `autoloop_v3.workflow` core plus a workflow-owned `auto
 Session bindings become explicit-only: the engine must look up declared slots and fail clearly when a step's session was never opened; it may not auto-open, infer, or derive bindings from workflow state.
 `autoloop_v3.runtime` must stop owning phases, pair/phase CLI flags, phase-plan parsing, Autoloop artifact conventions, and slot-name-specific session paths; those move to `autoloop_v1`-owned helpers if still required for parity.
 If the repo-root `workflow/` package remains, it is only a strict re-export of the canonical surface and must not behave as a compatibility shim.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260417T183614Z-0d53809e" ts="2026-04-17T18:44:49.662837+00:00" />
+Git init/change-detection/commit policy and `track_autoloop_artifacts` are not part of the generic runtime; if retained for parity they belong in the `autoloop_v1` harness or workflow-owned helpers, using only policy-free generic git utilities.
+Parity proof must explicitly cover `events.jsonl` semantics/status fields, checkpoint save/load/clear lifecycle, and `question` / `blocked` / `failed` behavior; pause/resume coverage alone is insufficient.
+Autoloop-v1 session path preservation should use the smallest workflow-owned local adapter/hook needed to keep `plan.json` and `phases/{phase}.json`; do not add a new runtime-wide path-policy framework unless a second workflow proves the need.

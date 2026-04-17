@@ -16,7 +16,7 @@ phases:
     dependencies: []
     acceptance_criteria:
       - id: AC-1
-        text: ARCHITECTURE_DECISIONS.md exists and covers all material decisions named in the request with 3 candidates each.
+        text: ARCHITECTURE_DECISIONS.md exists and covers all material decisions named in the request with 3 candidates each, including explicit git policy placement.
       - id: AC-2
         text: workflow.compat, Verdict, on_verdict, SessionLifecycle, handler arity adaptation, and inferred-entry fallback are removed from the strict core.
       - id: AC-3
@@ -80,7 +80,7 @@ phases:
       - id: AC-2
         text: Autoloop_v1 explicit session opening moments and phase-session sharing are proven by tests.
       - id: AC-3
-        text: Legacy workspace outputs, clarification behavior, session files, and overall run behavior are matched for Autoloop_v1.
+        text: Legacy workspace outputs, events.jsonl behavior, checkpoint lifecycle, question/blocked/failed behavior, clarification behavior, session files, and overall run behavior are matched for Autoloop_v1.
     deliverables:
       - migrated autoloop_v1.py and Ralph_loop.py
       - autoloop_v1-owned helper or harness modules
@@ -108,7 +108,7 @@ phases:
       - id: AC-1
         text: Required final docs exist and describe the strict public API, explicit session model, compat removal, workflow/runtime boundary, configuration, and parity meaning.
       - id: AC-2
-        text: Tests prove engine contracts, no-compat behavior, strict workflow execution, toy-workflow runtime agnosticism, and legacy parity for Autoloop_v1.
+        text: Tests prove engine contracts, no-compat behavior, strict workflow execution, toy-workflow runtime agnosticism, and legacy parity for Autoloop_v1 including event-log, checkpoint, and question/blocked/failed flows.
       - id: AC-3
         text: The final suite passes without retaining any hidden compatibility shims.
     deliverables:
