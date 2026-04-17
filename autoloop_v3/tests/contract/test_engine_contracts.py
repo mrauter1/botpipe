@@ -18,9 +18,12 @@ from autoloop_v3.workflow import (
 )
 from autoloop_v3.workflow.compiler import compile_workflow
 from autoloop_v3.workflow.errors import MissingArtifactError, WorkflowExecutionError
+from autoloop_v3.workflow.observers import ProviderTurnEvent, StepCompletedEvent, TerminalEvent
 from autoloop_v3.workflow.primitives import Event, Outcome
 from autoloop_v3.workflow.providers.fake import ScriptedLLMProvider
+from autoloop_v3.workflow.providers.models import OutcomeResponse
 from autoloop_v3.workflow.stores import InMemoryCheckpointStore, InMemorySessionStore
+from autoloop_v3.workflow.stores.protocols import SessionBinding
 
 
 def _workspace(tmp_path: Path) -> tuple[Path, Path]:
@@ -29,6 +32,14 @@ def _workspace(tmp_path: Path) -> tuple[Path, Path]:
     task_folder.mkdir()
     run_folder.mkdir()
     return task_folder, run_folder
+
+
+class RecordingObserver:
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
+    def record(self, event: object) -> None:
+        self.events.append(event)
 
 
 def test_pair_step_contract_logs_raw_output_and_updates_state(tmp_path: Path):
@@ -96,6 +107,52 @@ def test_pair_step_contract_logs_raw_output_and_updates_state(tmp_path: Path):
     assert result.history == ("pair", "finish")
 
 
+def test_pair_and_llm_handlers_remain_optional(tmp_path: Path):
+    class OptionalHandlerWorkflow(Workflow):
+        class State(BaseModel):
+            finished: bool = False
+
+        main = Session()
+        request = Artifact("{task_folder}/request.txt")
+        pair = PairStep(name="pair", producer="pair/producer.md", verifier="pair/verifier.md", requires=[request], session=main)
+        ask = LLMStep(name="ask", producer="ask.md", session=main)
+        finish = SystemStep(name="finish")
+        entry = pair
+        transitions = {pair: {"pair_ok": ask}, ask: {"done": finish}, finish: {"complete": SUCCESS}}
+
+        def on_start(self, ctx):
+            ctx.open_session(self.main)
+
+        @staticmethod
+        def on_finish(state: State, ctx):
+            return state.model_copy(update={"finished": True}), Event("complete")
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (task_folder / "request.txt").write_text("request", encoding="utf-8")
+
+    engine = Engine(
+        OptionalHandlerWorkflow,
+        provider=ScriptedLLMProvider(
+            producer_turns=["producer raw"],
+            verifier_turns=[Outcome(raw_output="verified", tag="pair_ok")],
+            llm_turns=[Outcome(raw_output="done", tag="done")],
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+    )
+
+    assert result.terminal == SUCCESS
+    assert result.state.finished is True
+    assert result.history == ("pair", "ask", "finish")
+
+
 def test_llm_step_contract_logs_outcome_raw_output_and_uses_global_route(tmp_path: Path):
     class LLMWorkflow(Workflow):
         class State(BaseModel):
@@ -134,6 +191,84 @@ def test_llm_step_contract_logs_outcome_raw_output_and_uses_global_route(tmp_pat
     assert result.terminal == "FAIL"
     assert result.state.tag_seen == "failed"
     assert (run_folder / "llm.log").read_text(encoding="utf-8") == "bad\n"
+
+
+def test_execution_observers_receive_provider_step_and_success_terminal_events(tmp_path: Path):
+    class ObservedWorkflow(Workflow):
+        class State(BaseModel):
+            pair_tag: str = ""
+            llm_tag: str = ""
+
+        main = Session()
+        request = Artifact("{task_folder}/request.txt")
+        pair = PairStep(name="pair", producer="pair/producer.md", verifier="pair/verifier.md", requires=[request], session=main)
+        ask = LLMStep(name="ask", producer="ask.md", session=main)
+        finish = SystemStep(name="finish")
+        entry = pair
+        transitions = {pair: {"pair_ok": ask}, ask: {"llm_ok": finish}, finish: {"done": SUCCESS}}
+
+        def on_start(self, ctx):
+            ctx.open_session(self.main)
+
+        @staticmethod
+        def on_pair(state: State, outcome: Outcome, artifacts):
+            return state.model_copy(update={"pair_tag": outcome.tag})
+
+        @staticmethod
+        def on_ask(state: State, outcome: Outcome, artifacts):
+            return state.model_copy(update={"llm_tag": outcome.tag})
+
+        @staticmethod
+        def on_finish(state: State, ctx):
+            return state, Event("done")
+
+    task_folder, run_folder = _workspace(tmp_path)
+    (task_folder / "request.txt").write_text("request", encoding="utf-8")
+
+    first = RecordingObserver()
+    second = RecordingObserver()
+    engine = Engine(
+        ObservedWorkflow,
+        provider=ScriptedLLMProvider(
+            producer_turns=["producer raw"],
+            verifier_turns=[Outcome(raw_output="verified", tag="pair_ok")],
+            llm_turns=[Outcome(raw_output="llm raw", tag="llm_ok")],
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+        observers=(first, second),
+    )
+
+    result = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+    )
+
+    provider_events = [event for event in first.events if isinstance(event, ProviderTurnEvent)]
+    step_events = [event for event in first.events if isinstance(event, StepCompletedEvent)]
+    terminal_events = [event for event in first.events if isinstance(event, TerminalEvent)]
+
+    assert result.terminal == SUCCESS
+    assert [(event.category, event.turn_kind, event.step_name) for event in provider_events] == [
+        ("provider_turn", "producer", "pair"),
+        ("provider_turn", "verifier", "pair"),
+        ("provider_turn", "llm", "ask"),
+    ]
+    assert [(event.category, event.step_name, event.destination) for event in step_events] == [
+        ("step_completed", "pair", "ask"),
+        ("step_completed", "ask", "finish"),
+        ("step_completed", "finish", SUCCESS),
+    ]
+    assert len(terminal_events) == 1
+    assert terminal_events[0].terminal_kind == "success"
+    assert terminal_events[0].history == ("pair", "ask", "finish")
+    assert provider_events[0].prompt_path == "pair/producer.md"
+    assert provider_events[1].outcome is not None and provider_events[1].outcome.tag == "pair_ok"
+    assert provider_events[2].raw_output == "llm raw"
+    assert len(first.events) == len(second.events)
+    assert [type(event) for event in first.events] == [type(event) for event in second.events]
 
 
 def test_system_step_contract_bypasses_middleware(tmp_path: Path):
@@ -375,6 +510,96 @@ def test_handler_exception_saves_failure_checkpoint(tmp_path: Path):
     assert checkpoint.stage == "ask"
 
 
+def test_execution_observers_receive_pause_fail_and_fatal_terminal_events(tmp_path: Path):
+    class PauseWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = LLMStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {ask: {"question": "PAUSE"}}
+
+        @staticmethod
+        def on_outcome(state: State, outcome: Outcome):
+            return Event("question", question=outcome.question)
+
+    class FailWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = LLMStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {ask: {"failed": "FAIL"}}
+
+    class FatalWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        ask = LLMStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {ask: {"done": SUCCESS}}
+
+        @staticmethod
+        def on_ask(state: State, outcome: Outcome, artifacts):
+            raise RuntimeError("boom")
+
+    task_folder, run_folder = _workspace(tmp_path)
+
+    pause_observer = RecordingObserver()
+    paused = Engine(
+        PauseWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="Need answer", tag="question", question="What value?")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+        observers=(pause_observer,),
+    ).run(task_id="task-1", run_id="run-1", task_folder=task_folder, run_folder=run_folder)
+
+    fail_observer = RecordingObserver()
+    failed = Engine(
+        FailWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="bad", tag="failed")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+        observers=(fail_observer,),
+    ).run(task_id="task-2", run_id="run-2", task_folder=task_folder, run_folder=run_folder)
+
+    fatal_observer = RecordingObserver()
+    fatal_checkpoint_store = InMemoryCheckpointStore()
+    engine = Engine(
+        FatalWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=fatal_checkpoint_store,
+        observers=(fatal_observer,),
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        engine.run(task_id="task-3", run_id="run-3", task_folder=task_folder, run_folder=run_folder)
+
+    pause_terminal = [event for event in pause_observer.events if isinstance(event, TerminalEvent)]
+    fail_terminal = [event for event in fail_observer.events if isinstance(event, TerminalEvent)]
+    fatal_terminal = [event for event in fatal_observer.events if isinstance(event, TerminalEvent)]
+
+    assert paused.terminal == "PAUSE"
+    assert len(pause_terminal) == 1
+    assert pause_terminal[0].terminal_kind == "pause"
+    assert pause_terminal[0].checkpoint is not None
+    assert pause_terminal[0].last_event is not None and pause_terminal[0].last_event.question == "What value?"
+
+    assert failed.terminal == "FAIL"
+    assert len(fail_terminal) == 1
+    assert fail_terminal[0].terminal_kind == "fail"
+    assert fail_terminal[0].checkpoint is not None
+    assert fail_terminal[0].last_event is not None and fail_terminal[0].last_event.tag == "failed"
+
+    assert len(fatal_terminal) == 1
+    assert fatal_terminal[0].terminal_kind == "fatal"
+    assert fatal_terminal[0].checkpoint is not None
+    assert fatal_terminal[0].exception_type == "RuntimeError"
+    assert fatal_terminal[0].exception_message == "boom"
+    assert fatal_checkpoint_store.load() is not None
+
+
 def test_missing_required_artifact_raises_and_checkpoints(tmp_path: Path):
     class MissingInputWorkflow(Workflow):
         class State(BaseModel):
@@ -409,6 +634,75 @@ def test_missing_required_artifact_raises_and_checkpoints(tmp_path: Path):
     checkpoint = checkpoint_store.load()
     assert checkpoint is not None
     assert checkpoint.stage == "ask"
+
+
+def test_observers_do_not_alter_execution_semantics(tmp_path: Path):
+    class ObserverIsolationWorkflow(Workflow):
+        class State(BaseModel):
+            seen: str = ""
+
+        main = Session()
+        ask = LLMStep(name="ask", producer="ask.md", session=main)
+        entry = ask
+        transitions = {ask: {"done": SUCCESS}}
+
+        def on_start(self, ctx):
+            ctx.open_session(self.main)
+
+        @staticmethod
+        def on_ask(state: State, outcome: Outcome, artifacts):
+            return state.model_copy(update={"seen": outcome.payload["tag_seen"]})
+
+    class MutatingObserver:
+        def record(self, event: object) -> None:
+            if isinstance(event, ProviderTurnEvent):
+                event.state.seen = "observer"
+                if event.outcome is not None:
+                    event.outcome.payload["tag_seen"] = "observer"
+                if event.response_session is not None:
+                    event.response_session.metadata["note"] = "observer"
+                event.metadata["phase"] = "observer"
+            if isinstance(event, StepCompletedEvent):
+                event.state_before.seen = "observer"
+                event.state_after.seen = "observer"
+            if isinstance(event, TerminalEvent) and event.state is not None:
+                event.state.seen = "observer"
+            raise RuntimeError("observer boom")
+
+    task_folder, run_folder = _workspace(tmp_path)
+    session_store = InMemorySessionStore()
+    engine = Engine(
+        ObserverIsolationWorkflow,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: OutcomeResponse(
+                    outcome=Outcome(raw_output="ok", tag="done", payload={"tag_seen": "done"}),
+                    session=SessionBinding(
+                        ref_name=request.session.ref_name,
+                        scope=request.session.scope,
+                        session_id=request.session.session_id,
+                        metadata={"note": "original"},
+                    ),
+                    metadata={"phase": "llm"},
+                )
+            ]
+        ),
+        session_store=session_store,
+        checkpoint_store=InMemoryCheckpointStore(),
+        observers=(MutatingObserver(),),
+    )
+
+    result = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+    )
+
+    snapshot = session_store.snapshot()
+    assert result.terminal == SUCCESS
+    assert result.state.seen == "done"
+    assert snapshot.bindings[0].metadata == {"note": "original"}
 
 
 def test_phase_scoped_sessions_follow_active_scope_switches(tmp_path: Path):

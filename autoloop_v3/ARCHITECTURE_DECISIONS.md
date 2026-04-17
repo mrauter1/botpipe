@@ -1,8 +1,15 @@
 # Architecture Decisions
 
-This record freezes the target architecture for the final `autoloop_v3` framework. It is written against the current `autoloop_v3` codebase, the repo-root workflows, the current docs and tests, and the legacy `autoloop/` runtime used as the Autoloop-v1 parity oracle.
+This record freezes the final Book Architecture target for `autoloop_v3`.
 
-The evaluation dimensions are the same for every decision:
+The system is organized around one strict core, one generic runtime, and one workflow-owned parity layer:
+
+- `autoloop_v3.workflow` is the canonical engine and authoring surface.
+- `autoloop_v3.runtime` is the generic filesystem runtime for tasks, runs, prompts, checkpoints, events, and session persistence.
+- `autoloop_v3.workflows` owns Autoloop-v1 parity policy and nothing more.
+- Repo-root workflows such as `autoloop_v1.py` and `Ralph_loop.py` stay strict workflows written against canonical primitives.
+
+Every decision below is evaluated against the same dimensions:
 
 - correctness
 - simplicity
@@ -12,574 +19,291 @@ The evaluation dimensions are the same for every decision:
 - migration risk
 - parity impact
 
-## 1. Package / Module Layout
+## 1. Final Package / Module Layout
 
-### Candidate A: Keep the current split and retain `workflow.compat`
-- correctness: medium; correctness depends on normalization staying aligned with strict execution.
-- simplicity: low; the compatibility seam duplicates meaning across loader, validation, compiler, and docs.
-- extensibility: low; new features must decide whether they belong to strict code, compat code, or both.
-- observability: medium; behavior is inspectable, but the source of a behavior is hard to localize.
-- testability: medium; compat behavior requires parallel proof paths.
-- migration risk: low; least disruptive to the current tree.
-- parity impact: high; parity is easy in the short term because drift stays tolerated.
+### Candidate A: Keep the current broad split, including the mixed Autoloop-v1 support layer
+- correctness: medium; the system still works, but ownership remains ambiguous. simplicity: low; one file still mixes workflow semantics, parity policy, infrastructure, and observation. extensibility: low; every new concern risks landing in the same mixed layer. observability: medium; behavior exists, but not at a clean boundary. testability: medium; tests must cross layers to prove one concern. migration risk: low. parity impact: high.
 
-### Candidate B: Keep `autoloop_v3.workflow` as the strict core, keep `autoloop_v3.runtime` generic, and move Autoloop-v1 parity behavior into workflow-owned modules
-- correctness: high; the engine only executes canonical definitions, while parity behavior lives next to the workflow that needs it.
-- simplicity: high; each layer has one job.
-- extensibility: high; new workflows reuse the core without inheriting Autoloop-v1 policy.
-- observability: high; side effects are owned either by the generic runtime or by the workflow harness.
-- testability: high; engine, runtime, and workflow-owned parity helpers can be tested separately.
-- migration risk: medium; requires moving behavior instead of merely deleting it.
-- parity impact: high; parity stays possible without corrupting the core.
+### Candidate B: Keep `workflow` strict, keep `runtime` generic, move Autoloop-v1 parity into a small workflow-owned slice, and keep repo-root workflows strict
+- correctness: high; each concern has one owner. simplicity: high; the architecture is short to explain. extensibility: high; new workflows reuse the core without inheriting Autoloop-v1 policy. observability: high; generic facts come from the engine, parity interpretation comes from the parity layer. testability: high; engine, runtime, workflows, and parity can be proved independently. migration risk: medium. parity impact: high.
 
-### Candidate C: Collapse runtime and workflow-specific behavior into a single Autoloop-first package
-- correctness: medium; fewer boundaries, but runtime becomes domain-aware.
-- simplicity: medium at first, low over time; one package is easy to start but hard to keep generic.
-- extensibility: low; every new workflow inherits Autoloop-v1 structure.
-- observability: medium; everything is colocated, but concerns are mixed.
-- testability: medium; end-to-end tests dominate.
-- migration risk: medium.
-- parity impact: high for Autoloop-v1, low for every other workflow.
+### Candidate C: Collapse runtime and parity into one Autoloop-first package
+- correctness: medium; fewer files, but the runtime stops being workflow-agnostic. simplicity: medium at first, low later; the explanation gets shorter only by mixing concerns. extensibility: low; every future workflow pays the Autoloop tax. observability: medium; everything is nearby, but nothing is cleanly separated. testability: medium; end-to-end tests dominate. migration risk: medium. parity impact: high for Autoloop-v1, low for everything else.
 
 Decision: Candidate B.
 
-Book choice: the clean shape is a strict engine plus a generic runtime plus workflow-owned parity helpers. It is the shortest explanation that still preserves Autoloop-v1.
+Book choice: one strict core, one generic runtime, and one workflow-owned parity layer is the shortest explanation that preserves both reuse and legacy parity.
 
-Why the others lost: Candidate A preserves too much duplicated meaning. Candidate C gives up the workflow-agnostic runtime requirement.
+Why the others lost: Candidate A keeps the impurity in place. Candidate C solves proximity by violating the workflow-agnostic runtime requirement.
 
-## 2. Canonical Public API Surface
+## 2. Final Ownership Boundary For Autoloop-v1 Support Code
 
-### Candidate A: Keep the existing surface, including `Verdict`, `SessionLifecycle`, and loader-assisted authoring
-- correctness: medium; the public surface advertises contracts the strict core should not honor.
-- simplicity: low; extra names imply extra semantics.
-- extensibility: low; future workflows can keep depending on drift.
-- observability: medium.
-- testability: medium; alias paths need duplicate tests.
-- migration risk: low.
-- parity impact: high.
+### Candidate A: Let the support layer keep owning whatever Autoloop-v1 currently needs, including reusable infrastructure
+- correctness: medium; behavior survives, but ownership stays blurry. simplicity: low; the support layer remains a disguised mini-runtime. extensibility: low; reusable code and parity policy keep drifting together. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-### Candidate B: Publish a minimal strict surface: `Workflow`, `Context`, `Session`, `Artifact`, `Prompt`, `PairStep`, `LLMStep`, `SystemStep`, `Event`, `Outcome`, `SUCCESS`, `PAUSE`, `FAIL`, `GLOBAL`, `Checkpoint`, and `ResolvedArtifacts`
-- correctness: high; the public surface matches the real engine contract.
-- simplicity: high; one meaning per name.
-- extensibility: high; new helpers can be built outside the core.
-- observability: high; there is no hidden alias path.
-- testability: high; one contract per concept.
-- migration risk: medium; workflows must import the actual names they use.
-- parity impact: medium; parity must come from migrated workflows, not aliases.
+### Candidate B: Limit Autoloop-v1 support ownership to workflow semantics, parity policy, and workflow-owned interpretation of generic execution facts
+- correctness: high; reusable infrastructure moves out, while workflow-specific policy stays local. simplicity: high; the boundary is easy to state and defend. extensibility: high; reusable helpers can graduate cleanly. observability: high; the parity layer interprets, it does not impersonate the runtime. testability: high. migration risk: medium. parity impact: high.
 
-### Candidate C: Shrink the public surface further by hiding `Context`, `Checkpoint`, and `ResolvedArtifacts`
-- correctness: medium; runtime hooks still need explicit side-effect access.
-- simplicity: medium; smaller API, but it forces informal escape hatches.
-- extensibility: medium.
-- observability: low; hidden helper access moves into ad hoc utilities.
-- testability: medium.
-- migration risk: medium.
-- parity impact: low; Autoloop-v1 needs explicit runtime context.
+### Candidate C: Push most support behavior down into the runtime so only minimal workflow code remains
+- correctness: medium; parity works, but the runtime becomes domain-aware. simplicity: low; generic code acquires workflow semantics. extensibility: low; runtime evolution becomes coupled to one workflow. observability: medium. testability: medium. migration risk: medium. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: the minimal stable surface is the canonical primitives plus the explicit runtime context. It is small without being evasive.
+Book choice: the Autoloop-v1 layer should own only Autoloop-v1 meaning and policy. Infrastructure belongs elsewhere.
 
-Why the others lost: Candidate A leaves compatibility drift in the public contract. Candidate C hides concepts that workflows genuinely need.
+Why the others lost: Candidate A preserves the mixed layer. Candidate C leaks workflow policy into the generic runtime.
 
-## 3. Compatibility Removal Strategy
+## 3. Whether `autoloop_v1_support.py` Survives, Is Split, Or Is Deleted
 
-### Candidate A: Preserve compatibility behind a renamed module or hidden compiler branch
-- correctness: low; hidden compatibility is still compatibility.
-- simplicity: low.
-- extensibility: low.
-- observability: low; users cannot tell why malformed workflows still work.
-- testability: low; absence is impossible to prove.
-- migration risk: low.
-- parity impact: high.
+### Candidate A: Keep `autoloop_v1_support.py` and clean it up in place
+- correctness: medium; refactoring helps, but the file still advertises the wrong shape. simplicity: low; a mixed file remains a magnet for new concerns. extensibility: low. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-### Candidate B: Delete `workflow.compat`, delete alias-based middleware and arity adaptation, delete entry inference, and make workflows compile only when already canonical
-- correctness: high.
-- simplicity: high.
-- extensibility: high; the core only grows along canonical lines.
-- observability: high; any drift is now a validation error.
-- testability: high; no-compat invariants are directly provable.
-- migration risk: medium.
-- parity impact: medium; parity shifts into workflow migration work.
+### Candidate B: Delete `autoloop_v1_support.py` and replace it with narrower modules such as `autoloop_v1_parity.py` and `autoloop_v1_conventions.py`
+- correctness: high; names and boundaries align with real ownership. simplicity: high; each module has one reason to change. extensibility: high; new parity policy and tiny shared conventions evolve separately. observability: high. testability: high. migration risk: medium because imports must move together. parity impact: high.
 
-### Candidate C: Keep compatibility only in the loader by rewriting modules before import
-- correctness: medium; the drift moves earlier but still exists.
-- simplicity: low; import-time rewriting is more magical than normalization.
-- extensibility: low.
-- observability: low.
-- testability: medium.
-- migration risk: medium.
-- parity impact: high.
+### Candidate C: Keep the file as a compatibility shell that re-exports new modules
+- correctness: medium; behavior is fine, but the obsolete shape survives. simplicity: low; deletion is delayed under another name. extensibility: medium. observability: low; callers cannot tell which surface is authoritative. testability: medium. migration risk: low. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: deletion is the only architecture that actually removes compat. Anything else is a disguised compatibility layer.
+Book choice: the old file should disappear entirely once the workflow and harness have migrated off it.
 
-Why the others lost: Candidate A violates the request directly. Candidate C is even more hidden than the current design.
+Why the others lost: Candidate A keeps the wrong center of gravity. Candidate C is a compatibility layer in disguise.
 
-## 4. Workflow Migration Strategy
+## 4. Execution Observation Design
 
-### Candidate A: Let workflows stay mostly unchanged and rely on framework tolerance
-- correctness: low; framework tolerance becomes architecture.
-- simplicity: low.
-- extensibility: low.
-- observability: medium.
-- testability: low.
-- migration risk: low in the short term.
-- parity impact: high.
+### Candidate A: Keep observation inside an Autoloop-v1 provider wrapper plus engine subclass
+- correctness: medium; it works today, but observation is welded to one workflow. simplicity: low; two bespoke seams are needed to observe one execution. extensibility: low; every new observer concern must choose a wrapper or subclass. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-### Candidate B: Rewrite each in-scope workflow to the canonical surface and keep workflow-specific policy inside workflow-owned helpers
-- correctness: high.
-- simplicity: high; workflow code becomes readable without hidden framework rules.
-- extensibility: high; new workflows copy the strict pattern, not a shim.
-- observability: high.
-- testability: high; workflow behavior is visible in workflow code.
-- migration risk: medium.
-- parity impact: high.
+### Candidate B: Add one minimal typed observer seam to the engine with three event categories: provider-turn, step-completion, and terminal
+- correctness: high; the engine emits generic facts and nothing more. simplicity: high; there is one seam, one observer interface, and three crisp payload families. extensibility: high; multiple observers can consume the same facts without changing engine semantics. observability: high; parity, generic logging, and future diagnostics can all derive from the same stream. testability: high. migration risk: medium. parity impact: high.
 
-### Candidate C: Generate canonical wrappers around non-canonical workflows
-- correctness: medium.
-- simplicity: medium at first, low once wrappers diverge from sources.
-- extensibility: medium.
-- observability: low; actual behavior lives in generated glue.
-- testability: medium.
-- migration risk: medium.
-- parity impact: high.
+### Candidate C: Add a large hook/plugin system with pre-step, post-step, pre-provider, post-provider, checkpoint, and workspace hooks
+- correctness: medium; flexible, but much easier to misuse. simplicity: low; the abstraction is larger than the problem. extensibility: medium; everything is possible, but nothing is constrained. observability: high. testability: medium; hook ordering and interaction explode the matrix. migration risk: medium. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: the cleanest architecture is to make the workflows real workflows. Anything else preserves authoring drift as a system feature.
+Book choice: one minimal observer seam is the exact reusable concept here. It is enough for parity and small enough to keep the engine strict.
 
-Why the others lost: Candidate A keeps the core permissive. Candidate C replaces explicit migration with another layer of machinery.
+Why the others lost: Candidate A is bespoke and workflow-owned. Candidate C over-generalizes a single cross-cutting concern into a hook framework.
 
-## 5. Session Model
+## 5. Provider Wrapper Removal Strategy
 
-### Candidate A: Compute session identity from workflow state or step-time templates
-- correctness: low; session identity becomes an implicit derivation rule.
-- simplicity: low.
-- extensibility: medium; flexible, but too magical.
-- observability: low; sharing is discovered indirectly.
-- testability: low; identity bugs are timing-dependent.
-- migration risk: medium.
-- parity impact: medium; can emulate legacy, but opaquely.
+### Candidate A: Keep the provider wrapper until the very end because it already preserves parity
+- correctness: medium; parity stays intact, but the architecture stays impure. simplicity: low; the wrapper remains a second policy surface around providers. extensibility: low. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-### Candidate B: Declare session slots, open them explicitly with `ctx.open_session(...)`, and look them up directly with `ctx.get_session(...)`
-- correctness: high; session lifetime is explicit.
-- simplicity: high; the engine does lookup, not inference.
-- extensibility: high; rebinding is obvious and generic.
-- observability: high; topology plus open points show sharing.
-- testability: high; missing-open and rebinding behavior are deterministic.
-- migration risk: medium.
-- parity impact: high; plan and phase sessions map directly to Autoloop-v1 behavior.
+### Candidate B: Delete the wrapper and rebuild every needed side effect from generic observer events inside the parity harness
+- correctness: high; observation moves to the right layer. simplicity: high; providers return provider results, observers interpret execution facts. extensibility: high; additional parity logging does not require provider surgery. observability: high. testability: high. migration risk: medium. parity impact: high.
 
-### Candidate C: Use runtime-managed automatic slot opening with optional overrides
-- correctness: medium; safer than full derivation, but still implicit.
-- simplicity: medium.
-- extensibility: medium.
-- observability: medium.
-- testability: medium.
-- migration risk: low.
-- parity impact: high.
+### Candidate C: Replace the wrapper with a generic provider-decorator stack in the core
+- correctness: medium; reusable in theory, but the current need is smaller and cleaner. simplicity: low; a new abstraction appears where a single observer seam already solves the problem. extensibility: medium. observability: high. testability: medium. migration risk: medium. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: “sessions are created, not computed” is the crisp model. It explains sharing, rebinding, and missing-session failures in one sentence.
+Book choice: provider wrappers disappear entirely; parity logging becomes workflow-owned interpretation of generic observer events.
 
-Why the others lost: Candidate A hides identity. Candidate C hides lifecycle.
+Why the others lost: Candidate A leaves the impurity alive. Candidate C adds a second generic abstraction when one already suffices.
 
-## 6. Artifact Registry And Resolution
+## 6. Engine Subclass Removal Strategy
 
-### Candidate A: Keep ad hoc artifact paths on steps and let handlers resolve files manually
-- correctness: medium; works, but no global inventory.
-- simplicity: medium at first, low in larger workflows.
-- extensibility: low.
-- observability: low; it is hard to know what artifacts exist.
-- testability: medium.
-- migration risk: low.
-- parity impact: medium.
+### Candidate A: Keep an Autoloop-v1 engine subclass for step logging and phase event synthesis
+- correctness: medium; behavior works, but the core is no longer the only engine. simplicity: low; the architecture now has a canonical engine and a real engine. extensibility: low. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-### Candidate B: Compile a workflow-wide artifact registry from workflow-level and step-level declarations, then resolve path templates generically at runtime
-- correctness: high.
-- simplicity: high; one artifact model for all steps.
-- extensibility: high; reusable without workflow leakage.
-- observability: high; the registry is inspectable.
-- testability: high; resolution and dependency errors are deterministic.
-- migration risk: medium.
-- parity impact: high; phase-local path templates stay workflow-owned but use the same resolver.
+### Candidate B: Delete the engine subclass and derive all workflow-specific side effects from the generic observer stream in the parity layer
+- correctness: high; the strict engine stays singular. simplicity: high; there is one engine and one observation seam. extensibility: high; new parity behavior composes without subclassing execution. observability: high. testability: high. migration risk: medium. parity impact: high.
 
-### Candidate C: Move artifact management fully into the runtime workspace layer
-- correctness: medium; runtime gains too much workflow knowledge.
-- simplicity: low.
-- extensibility: low.
-- observability: medium.
-- testability: medium.
-- migration risk: medium.
-- parity impact: high for Autoloop-v1, low elsewhere.
+### Candidate C: Replace the subclass with a generic engine extension base class
+- correctness: medium; cleaner than a bespoke subclass, but still a second execution model. simplicity: low; the engine becomes an extension framework. extensibility: medium. observability: medium. testability: medium. migration risk: medium. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: artifacts are part of workflow semantics, so they belong in compilation plus a generic resolver, not in hand-written handlers or a domain-aware runtime.
+Book choice: the strict engine should be the only engine. Observation belongs beside it, not beneath it.
 
-Why the others lost: Candidate A has no crisp contract. Candidate C pollutes the runtime with workflow structure.
+Why the others lost: Candidate A preserves dual-engine architecture. Candidate C generalizes the wrong mechanism instead of deleting it.
 
-## 7. Prompt Model
+## 7. Session Payload Helper Ownership
 
-### Candidate A: Allow arbitrary strings, loader hacks, and path fallbacks
-- correctness: medium; prompts resolve eventually, but with hidden rules.
-- simplicity: low.
-- extensibility: medium.
-- observability: low.
-- testability: medium.
-- migration risk: low.
-- parity impact: high.
+### Candidate A: Leave session payload placeholder creation and payload writing in the Autoloop-v1 parity layer
+- correctness: medium; the behavior works, but the workflow layer serializes runtime infrastructure. simplicity: low; session persistence logic is split across layers. extensibility: medium. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-### Candidate B: Keep a canonical `Prompt` concept and also allow plain string prompt paths as an intentional documented shorthand
-- correctness: high.
-- simplicity: high.
-- extensibility: high; registries can resolve either form cleanly.
-- observability: high; the resolution path is explicit.
-- testability: high.
-- migration risk: low; current strict workflows already fit this.
-- parity impact: high.
+### Candidate B: Move session payload writing and placeholder helpers fully into `runtime.stores.filesystem`
+- correctness: high; the filesystem store owns serialization end to end. simplicity: high; one store reads and writes its own wire format. extensibility: high; future workflows can reuse the helpers without importing parity code. observability: high; session files have one owner. testability: high. migration risk: medium. parity impact: high.
 
-### Candidate C: Require `Prompt(...)` objects everywhere
-- correctness: high.
-- simplicity: medium; explicit but noisy.
-- extensibility: high.
-- observability: high.
-- testability: high.
-- migration risk: medium.
-- parity impact: medium.
+### Candidate C: Split ownership so the store reads while the parity layer writes
+- correctness: low; the serialization contract becomes bilateral. simplicity: low. extensibility: low. observability: low. testability: low. migration risk: medium. parity impact: medium.
 
 Decision: Candidate B.
 
-Book choice: prompt paths should be explicit, but the syntax does not need ceremony. A documented string shorthand keeps the surface small.
+Book choice: the filesystem session store owns filesystem session serialization. Nothing else should write that JSON directly.
 
-Why the others lost: Candidate A depends on hidden resolution. Candidate C adds syntax without architectural gain.
+Why the others lost: Candidate A keeps infrastructure in the workflow layer. Candidate C creates an incoherent read/write split.
 
-## 8. Workflow Compilation And Validation Model
+## 8. `phase_artifact_template` Removal
 
-### Candidate A: Validate loosely and normalize at compile time
-- correctness: medium.
-- simplicity: low; compilation has to interpret malformed authoring.
-- extensibility: low.
-- observability: low.
-- testability: medium.
-- migration risk: low.
-- parity impact: high.
+### Candidate A: Keep `phase_artifact_template` because it reduces duplication
+- correctness: medium; it works, but it hides plain workflow DSL behind a helper. simplicity: low; another indirection survives for a problem the DSL already solves. extensibility: low. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-### Candidate B: Validate strictly at definition time, compile only canonical definitions, and require exact handler signatures
-- correctness: high.
-- simplicity: high.
-- extensibility: high.
-- observability: high; errors occur at the boundary.
-- testability: high.
-- migration risk: medium.
-- parity impact: medium; migrated workflows must be explicit.
+### Candidate B: Delete `phase_artifact_template` and write explicit `Artifact(...)` templates directly in `autoloop_v1.py`
+- correctness: high; the workflow owns its own artifact paths explicitly. simplicity: high; the final workflow is easier to read than the helper. extensibility: high; artifact intent stays in workflow code. observability: high. testability: high. migration risk: medium because source text changes. parity impact: high.
 
-### Candidate C: Move most validation to runtime execution
-- correctness: low; errors arrive too late.
-- simplicity: medium in code, low in system behavior.
-- extensibility: low.
-- observability: low.
-- testability: low.
-- migration risk: medium.
-- parity impact: medium.
+### Candidate C: Replace it with a new helper under another name
+- correctness: medium; behavior stays the same, but the indirection remains. simplicity: low. extensibility: medium. observability: low. testability: medium. migration risk: low. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: definition-time rejection of malformed workflows is the shortest path to deterministic behavior.
+Book choice: the DSL already expresses phase artifact paths directly. The helper adds no architecture.
 
-Why the others lost: Candidate A preserves drift. Candidate C turns authoring errors into runtime failures.
+Why the others lost: Candidate A keeps needless indirection. Candidate C renames the same mistake.
 
-## 9. Checkpoint Model
+## 9. Final Placement Of `parse_phase_ids`
 
-### Candidate A: Keep checkpointing as event reconstruction only
-- correctness: medium; event logs are valuable but indirect.
-- simplicity: medium.
-- extensibility: medium.
-- observability: high for history, low for exact resume state.
-- testability: medium.
-- migration risk: low.
-- parity impact: high because legacy does this.
+### Candidate A: Promote `parse_phase_ids` into the core or runtime as a generic helper
+- correctness: low; it interprets Autoloop-v1 phase-plan meaning, not generic engine semantics. simplicity: low. extensibility: low; the core inherits workflow policy. observability: medium. testability: medium. migration risk: medium. parity impact: high.
 
-### Candidate B: Use a typed checkpoint snapshot containing stage, state, session bindings, pending question, and pending answer
-- correctness: high.
-- simplicity: high.
-- extensibility: high.
-- observability: high; resume state is explicit.
-- testability: high.
-- migration risk: medium.
-- parity impact: high; parity tests can compare snapshot side effects and event logs separately.
+### Candidate B: Keep `parse_phase_ids` workflow-owned, inline in `autoloop_v1.py` unless the parity harness also needs it, in which case use a tiny workflow-owned helper
+- correctness: high; the semantic rule stays next to the workflow that defines it. simplicity: high; no new framework helper is introduced. extensibility: high; other workflows are free to define different parsing. observability: high. testability: high. migration risk: low. parity impact: high.
 
-### Candidate C: Checkpoint only opaque runtime blobs from the provider layer
-- correctness: low; workflow semantics become provider-coupled.
-- simplicity: medium.
-- extensibility: low.
-- observability: low.
-- testability: low.
-- migration risk: medium.
-- parity impact: low.
+### Candidate C: Put `parse_phase_ids` in `autoloop_v1_conventions.py` by default even if only the workflow uses it
+- correctness: high; still workflow-owned. simplicity: medium; acceptable if shared, unnecessary if not. extensibility: high. observability: high. testability: high. migration risk: low. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: a typed checkpoint is the smallest object that fully explains pause and resume.
+Book choice: `parse_phase_ids` belongs to workflow semantics. It should live in the workflow file unless sharing is real, not speculative.
 
-Why the others lost: Candidate A is not enough for generic deterministic resume. Candidate C gives ownership of workflow state to the wrong layer.
+Why the others lost: Candidate A promotes workflow meaning into the framework. Candidate C is harmless but less compressed when no sharing exists.
 
-## 10. Provider / Store Protocol Design
+## 10. Final Placement Of Exact `phase_dir_key`
 
-### Candidate A: Keep rich provider and store interfaces with Autoloop-specific helpers built in
-- correctness: medium.
-- simplicity: low.
-- extensibility: medium.
-- observability: medium.
-- testability: medium.
-- migration risk: low.
-- parity impact: high.
+### Candidate A: Promote the exact `_pid-...` encoding into the framework as a universal phase rule
+- correctness: low; the exact string format is legacy parity policy, not framework law. simplicity: low. extensibility: low; every workflow inherits one legacy encoding. observability: medium. testability: medium. migration risk: medium. parity impact: high.
 
-### Candidate B: Keep tiny typed protocols: provider requests and responses, session store, checkpoint store, prompt registry
-- correctness: high.
-- simplicity: high.
-- extensibility: high.
-- observability: high; adapter boundaries are explicit.
-- testability: high; fakes are trivial.
-- migration risk: medium.
-- parity impact: high; filesystem implementations can still preserve required payload shapes.
+### Candidate B: Keep exact `phase_dir_key` behavior workflow-owned in a tiny conventions module shared by the strict workflow and the parity harness
+- correctness: high; the exact encoding stays where it is needed and nowhere else. simplicity: high; one tiny shared helper is enough. extensibility: high; other workflows can ignore it or define their own neutral helpers. observability: high. testability: high. migration risk: low. parity impact: high.
 
-### Candidate C: Hide adapters behind one monolithic runtime service object
-- correctness: medium.
-- simplicity: medium at first, low as behavior grows.
-- extensibility: low.
-- observability: low.
-- testability: low.
-- migration risk: medium.
-- parity impact: medium.
+### Candidate C: Duplicate the exact logic in both `autoloop_v1.py` and the parity harness
+- correctness: medium; duplication invites drift. simplicity: medium at first, low later. extensibility: low. observability: medium. testability: medium. migration risk: medium. parity impact: medium.
 
 Decision: Candidate B.
 
-Book choice: small protocols give the engine a crisp dependency set and keep adapters replaceable.
+Book choice: the exact encoding should stay workflow-owned, but duplication is worse than one tiny shared conventions helper.
 
-Why the others lost: Candidate A leaks policy into protocols. Candidate C creates a god object.
+Why the others lost: Candidate A over-generalizes legacy parity. Candidate C sacrifices coherence for purity theater.
 
-## 11. Runtime Harness Design
+## 11. Workspace Augmentation Ownership
 
-### Candidate A: Keep the current runtime as a mixed generic-and-Autoloop orchestration layer
-- correctness: medium.
-- simplicity: low.
-- extensibility: low.
-- observability: medium.
-- testability: medium.
-- migration risk: low.
-- parity impact: high.
+### Candidate A: Introduce a generic workspace hook/plugin system in the runtime
+- correctness: medium; it could work, but it solves only one known workflow need by changing the whole runtime. simplicity: low. extensibility: medium. observability: medium. testability: medium; hook ordering becomes a new concern. migration risk: medium. parity impact: high.
 
-### Candidate B: Reduce `autoloop_v3.runtime` to a generic filesystem harness and move Autoloop-v1-specific workspace and orchestration rules into workflow-owned helpers
-- correctness: high.
-- simplicity: high.
-- extensibility: high.
-- observability: high.
-- testability: high.
-- migration risk: medium.
-- parity impact: high.
+### Candidate B: Keep workspace creation generic in `runtime.workspace` and perform Autoloop-v1 augmentation explicitly inside the parity harness
+- correctness: high; the runtime stays workflow-agnostic. simplicity: high; augmentation is an explicit call sequence, not a framework extension point. extensibility: high; new workflows can choose their own setup logic without burdening the runtime. observability: high. testability: high. migration risk: low. parity impact: high.
 
-### Candidate C: Remove the runtime harness entirely and force each workflow to own all filesystem concerns
-- correctness: medium.
-- simplicity: medium for one workflow, low for many.
-- extensibility: low; common concerns duplicate immediately.
-- observability: medium.
-- testability: medium.
-- migration risk: high.
-- parity impact: medium.
+### Candidate C: Add Autoloop-specific flags to `runtime.workspace`
+- correctness: medium; parity works, but the runtime learns one workflow's layout. simplicity: low; flags are a disguised compatibility layer. extensibility: low. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: the runtime should own only generic run mechanics, not workflow topology or policy.
+Book choice: only one workflow needs augmentation, so augmentation should stay explicit and workflow-owned.
 
-Why the others lost: Candidate A keeps leakage. Candidate C abandons reusable infrastructure too aggressively.
+Why the others lost: Candidate A over-abstracts. Candidate C leaks workflow policy into the runtime.
 
-## 12. Configuration Design
+## 12. Cycle / Attempt Tracking Ownership
 
-### Candidate A: Encode workflow policy as runtime config flags
-- correctness: medium.
-- simplicity: low; config becomes a hidden orchestration language.
-- extensibility: low.
-- observability: low.
-- testability: medium.
-- migration risk: low.
-- parity impact: high.
+### Candidate A: Promote cycle and attempt counters into engine semantics
+- correctness: low; these counters are not generic workflow facts. simplicity: low; the engine learns parity-specific operational policy. extensibility: low. observability: medium. testability: medium. migration risk: medium. parity impact: high.
 
-### Candidate B: Keep configuration only for generic policy and adapter wiring, and keep workflow-specific behavior in workflow code
-- correctness: high.
-- simplicity: high.
-- extensibility: high.
-- observability: high.
-- testability: high.
-- migration risk: medium.
-- parity impact: high.
+### Candidate B: Track cycle and attempt in parity observer state during a run and reconstruct them on resume from checkpoint/raw-log context
+- correctness: high; the counters stay local to the parity policy that needs them. simplicity: high; the engine emits facts, the parity layer interprets them. extensibility: high; other workflows can ignore the concept entirely. observability: high. testability: high. migration risk: medium. parity impact: high.
 
-### Candidate C: Remove nearly all configuration and hardcode policy in runtime defaults
-- correctness: medium.
-- simplicity: medium.
-- extensibility: low.
-- observability: medium.
-- testability: medium.
-- migration risk: medium.
-- parity impact: low.
+### Candidate C: Hide cycle and attempt in provider session metadata as the default mechanism
+- correctness: medium; it works, but operational policy gets buried in provider persistence. simplicity: medium. extensibility: medium. observability: low; counters become indirect metadata. testability: medium. migration risk: low. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: configuration should tune generic policy, not smuggle workflow semantics into the runtime.
+Book choice: cycle and attempt are workflow-owned observer state, not engine state and not provider protocol.
 
-Why the others lost: Candidate A turns the runtime into a policy engine. Candidate C overcorrects and removes useful generic knobs.
+Why the others lost: Candidate A pollutes the core. Candidate C hides parity semantics inside session metadata.
 
-## 13. Git Policy Placement
+## 13. Clarification Ledger Ownership
 
-### Candidate A: Keep git init, tracking, and artifact-commit policy in the generic runtime
-- correctness: medium; it works for Autoloop-v1 but couples the runtime to one workflow’s operational model.
-- simplicity: low.
-- extensibility: low.
-- observability: medium.
-- testability: medium.
-- migration risk: low.
-- parity impact: high.
+### Candidate A: Generalize the decisions/clarification ledger schema into the runtime
+- correctness: low; the exact schema and header format are legacy Autoloop-v1 policy. simplicity: low. extensibility: low. observability: medium. testability: medium. migration risk: medium. parity impact: high.
 
-### Candidate B: Keep generic git utilities reusable, but keep git policy and `track_autoloop_artifacts` in the Autoloop-v1 harness if parity still requires them
-- correctness: high.
-- simplicity: high.
-- extensibility: high; other workflows opt in explicitly.
-- observability: high; policy is visible where it is used.
-- testability: high.
-- migration risk: medium.
-- parity impact: high.
+### Candidate B: Keep clarification ledger writes fully inside the Autoloop-v1 parity module
+- correctness: high; exact headers, field names, and append rules stay local to the policy that owns them. simplicity: high. extensibility: high; the runtime remains neutral. observability: high; parity files are written by the parity layer only. testability: high. migration risk: low. parity impact: high.
 
-### Candidate C: Remove git support entirely from the final system
-- correctness: medium.
-- simplicity: high.
-- extensibility: medium.
-- observability: medium.
-- testability: high.
-- migration risk: medium.
-- parity impact: low; legacy behavior would regress.
+### Candidate C: Move only ledger formatting into a generic docs utility package
+- correctness: medium; better than runtime promotion, but still unnecessary generalization. simplicity: medium. extensibility: medium. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: git is policy, not architecture. The framework may offer tools, but only the workflow harness should decide when to use them.
+Book choice: the clarification ledger is a legacy operational artifact, so it stays strictly Autoloop-v1-specific.
 
-Why the others lost: Candidate A violates the runtime boundary. Candidate C drops important parity behavior too early.
+Why the others lost: Candidate A promotes legacy schema into framework law. Candidate C still generalizes a one-workflow artifact without a second user.
 
-## 14. Observability / Event Model
+## 14. Raw Phase Log Ownership
 
-### Candidate A: Let each workflow invent its own event log shape
-- correctness: medium.
-- simplicity: medium.
-- extensibility: low; cross-workflow tooling becomes hard.
-- observability: medium for one workflow, low for the framework.
-- testability: medium.
-- migration risk: low.
-- parity impact: medium.
+### Candidate A: Add a generic raw-phase-log abstraction to the runtime or engine
+- correctness: low; raw phase logs are not generic engine primitives. simplicity: low; the core learns one workflow's artifact format. extensibility: low. observability: medium. testability: medium. migration risk: medium. parity impact: high.
 
-### Candidate B: Keep a generic append-only runtime event log and let workflow-owned helpers add workflow-specific raw logs and ledgers without teaching the engine about them
-- correctness: high.
-- simplicity: high.
-- extensibility: high.
-- observability: high.
-- testability: high.
-- migration risk: medium.
-- parity impact: high; `events.jsonl`, raw logs, and decisions can still be preserved.
+### Candidate B: Keep raw phase log emission in the Autoloop-v1 parity layer, driven by generic provider-turn and terminal observer events
+- correctness: high; exact legacy formatting remains workflow-owned while observation becomes generic. simplicity: high; one observer stream feeds one parity logger. extensibility: high; other workflows can build different logs or none at all. observability: high. testability: high. migration risk: medium. parity impact: high.
 
-### Candidate C: Move all observability into the engine as first-class structured events
-- correctness: medium.
-- simplicity: low.
-- extensibility: medium.
-- observability: high.
-- testability: medium.
-- migration risk: high.
-- parity impact: medium.
+### Candidate C: Keep raw phase log writing inside a provider wrapper
+- correctness: medium; parity works, but observation remains bolted to providers. simplicity: low. extensibility: low. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: the engine should expose deterministic execution results, while the runtime and workflow harness own append-only operational logs.
+Book choice: generic observer facts plus workflow-owned raw-log formatting is the clean split.
 
-Why the others lost: Candidate A gives up shared observability. Candidate C puts too much filesystem policy into the engine.
+Why the others lost: Candidate A makes the core domain-aware. Candidate C keeps the wrapper mechanism that the observer seam is meant to delete.
 
-## 15. Parity-Testing Strategy
+## 15. Terminal Status Mapping Ownership
 
-### Candidate A: Treat unit and contract tests as enough and trust architecture for parity
-- correctness: low.
-- simplicity: high.
-- extensibility: medium.
-- observability: low.
-- testability: medium.
-- migration risk: high.
-- parity impact: low.
+### Candidate A: Move legacy status mapping into the engine
+- correctness: low; values such as `blocked` are workflow-owned operational policy. simplicity: low. extensibility: low. observability: medium. testability: medium. migration risk: medium. parity impact: high.
 
-### Candidate B: Use a layered proof suite: strict unit tests, engine-contract tests, workflow execution tests, and explicit legacy parity tests against `autoloop/`
-- correctness: high.
-- simplicity: medium.
-- extensibility: high.
-- observability: high.
-- testability: high.
-- migration risk: medium.
-- parity impact: high.
+### Candidate B: Keep terminal status mapping local to the Autoloop-v1 parity layer, derived from engine terminal events and workflow outcomes
+- correctness: high; the engine reports generic terminal facts while parity maps them to legacy vocabulary. simplicity: high. extensibility: high; other workflows can map differently or not at all. observability: high. testability: high. migration risk: low. parity impact: high.
 
-### Candidate C: Use only end-to-end parity tests against the legacy runtime
-- correctness: medium; broad but hard to localize.
-- simplicity: medium.
-- extensibility: low.
-- observability: low.
-- testability: low; failures are expensive to diagnose.
-- migration risk: medium.
-- parity impact: high.
+### Candidate C: Put status mapping in the generic runtime event logger
+- correctness: medium; better than engine promotion, but still leaks one workflow's operational policy into the shared runtime. simplicity: medium. extensibility: low. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
 Decision: Candidate B.
 
-Book choice: parity must be proven at the edges, but strict contracts must be proven locally. The layered suite is the shortest route to confidence.
+Book choice: terminal mapping belongs where the legacy vocabulary belongs: the Autoloop-v1 parity layer.
 
-Why the others lost: Candidate A does not prove parity. Candidate C proves too little about the new architecture itself.
+Why the others lost: Candidate A pollutes the core. Candidate C pollutes the runtime.
 
-## 16. Migration Strategy From Current `autoloop_v3`
+## 16. Final Shape Of `run_autoloop_v1(...)`
 
-### Candidate A: Ship incremental compatibility-preserving patches until the architecture converges
-- correctness: medium.
-- simplicity: low; mixed states last too long.
-- extensibility: low.
-- observability: low; it is hard to know which rules are final.
-- testability: medium.
-- migration risk: low per patch, high overall because drift persists.
-- parity impact: high.
+### Candidate A: Let `run_autoloop_v1(...)` remain a second runtime with custom execution logic
+- correctness: medium; parity survives, but architecture duplicates the runtime. simplicity: low; there are now two places to explain workspace, execution, resume, and logging. extensibility: low. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-### Candidate B: Freeze the target architecture in one decision record, remove strict-core compatibility behavior first, then reduce the runtime, then finish workflow-owned parity helpers
-- correctness: high.
-- simplicity: high.
-- extensibility: high.
-- observability: high.
-- testability: high.
-- migration risk: medium; the sequence is deliberate, not improvised.
-- parity impact: high.
+### Candidate B: Keep `run_autoloop_v1(...)` as a thin composition root that wires generic runtime pieces, the generic observer seam, session-path conventions, workspace augmentation, and parity-only policies
+- correctness: high; it assembles parts without re-implementing them. simplicity: high; the entrypoint is composition, not machinery. extensibility: high; parity changes stay local and generic pieces stay generic. observability: high. testability: high. migration risk: medium. parity impact: high.
 
-### Candidate C: Rewrite the whole package from scratch in a new namespace and migrate later
-- correctness: medium.
-- simplicity: medium conceptually, low operationally.
-- extensibility: high.
-- observability: medium.
-- testability: medium.
-- migration risk: high.
-- parity impact: medium.
+### Candidate C: Delete `run_autoloop_v1(...)` and force callers to reconstruct parity wiring manually
+- correctness: medium; possible, but too easy to mis-wire. simplicity: medium in code, low in usage. extensibility: medium. observability: medium. testability: medium. migration risk: high. parity impact: medium.
 
 Decision: Candidate B.
 
-Book choice: the right migration is staged by architecture boundaries: strict core first, runtime boundary second, workflow parity harness last.
+Book choice: `run_autoloop_v1(...)` should survive only as the explicit composition root for Autoloop-v1 parity.
 
-Why the others lost: Candidate A never cleanly exits the mixed state. Candidate C throws away too much working structure and slows parity proof.
+Why the others lost: Candidate A keeps a mini-runtime. Candidate C removes the one workflow-owned place where parity wiring should live.
 
-## Final Shape
+## 17. Test Strategy Proving The Final Shape
 
-The final architecture is:
+### Candidate A: Rely mostly on end-to-end parity tests
+- correctness: medium; parity is covered, but architectural regressions local to the core are harder to isolate. simplicity: medium. extensibility: low; every change requires expensive broad tests. observability: medium. testability: medium. migration risk: low. parity impact: high.
 
-- a strict `autoloop_v3.workflow` core with no compatibility layer
-- a generic `autoloop_v3.runtime` harness
-- canonical workflows that explicitly import and use the public API
-- workflow-owned parity helpers for Autoloop-v1 behavior that does not generalize
-- explicit session creation and direct session lookup
-- typed checkpoints and small replaceable provider/store protocols
-- parity proved by layered tests, not by hidden compatibility machinery
+### Candidate B: Use a layered strategy: engine observer contracts, runtime store ownership tests, strict workflow tests, Autoloop parity tests, and no-over-abstraction neutrality tests
+- correctness: high; each boundary is proved directly. simplicity: high; the test layout mirrors the architecture. extensibility: high; new behavior slots into the right layer. observability: high; failures point to the correct owner. testability: high. migration risk: medium. parity impact: high.
+
+### Candidate C: Rely mostly on doc-baseline and source-shape tests
+- correctness: low; structure matters, but behavior can still drift. simplicity: high at first, low later because missing behavioral proof invites regressions. extensibility: medium. observability: low. testability: medium. migration risk: low. parity impact: medium.
+
+Decision: Candidate B.
+
+Book choice: the final architecture should be proved at the same boundaries where it is explained.
+
+Why the others lost: Candidate A under-tests the core shape. Candidate C freezes text more strongly than behavior.

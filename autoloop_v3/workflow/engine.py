@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,9 +14,10 @@ from .artifacts import ArtifactHandle, ResolvedArtifacts, resolve_artifact_templ
 from .compiler import CompiledStep, CompiledWorkflow, compile_workflow
 from .context import Context
 from .errors import MissingArtifactError, ProviderExecutionError, WorkflowExecutionError
+from .observers import ExecutionObserver, ProviderTurnEvent, StepCompletedEvent, TerminalEvent
 from .primitives import Checkpoint, Event, FAIL, Outcome, PAUSE, SUCCESS
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt
-from .providers.models import LLMRequest, VerifierRequest, ProducerRequest
+from .providers.models import LLMRequest, ProducerRequest, VerifierRequest
 from .providers.protocols import LLMProvider
 from .stores.protocols import CheckpointStore, SessionBinding, SessionSnapshot, SessionStore
 
@@ -42,12 +45,14 @@ class Engine:
         session_store: SessionStore,
         checkpoint_store: CheckpointStore,
         prompt_registry: PromptRegistry | None = None,
+        observers: Sequence[ExecutionObserver] = (),
     ) -> None:
         self.compiled = workflow if isinstance(workflow, CompiledWorkflow) else compile_workflow(workflow)
         self.provider = provider
         self.session_store = session_store
         self.checkpoint_store = checkpoint_store
         self.prompt_registry = prompt_registry
+        self.observers = tuple(observers)
 
     def run(
         self,
@@ -63,104 +68,200 @@ class Engine:
     ) -> RunResult:
         workflow_instance = self.compiled.workflow_cls()
         history: list[str] = []
-        current_step_name: str
-        state: BaseModel
-        current_answer: str | None
-
-        if resume:
-            checkpoint = self.checkpoint_store.load()
-            if checkpoint is None:
-                raise WorkflowExecutionError("resume requested but no checkpoint is available")
-            self.session_store.restore(checkpoint.session_bindings)
-            state = checkpoint.state
-            current_step_name = checkpoint.stage
-            current_answer = answer if answer is not None else checkpoint.pending_answer
-        else:
-            self.session_store.restore(SessionSnapshot(bindings=(), active_scopes={}))
-            state = initial_state if initial_state is not None else self.compiled.new_state()
-            context = Context(
-                task_id=task_id,
-                run_id=run_id,
-                task_folder=task_folder,
-                run_folder=run_folder,
-                state=state,
-                session_store=self.session_store,
-                answer=None,
-            )
-            if self.compiled.has_start_hook:
-                workflow_instance.on_start(context)
-            state = context.state
-            current_step_name = self.compiled.entry_step_name
-            current_answer = None
+        current_step_name: str | None = None
+        state: BaseModel | None = None
+        current_answer: str | None = None
+        checkpoint: Checkpoint | None = None
+        fatal_event_emitted = False
 
         last_event: Event | None = None
         last_outcome: Outcome | None = None
-        for _ in range(max_steps):
-            context = Context(
-                task_id=task_id,
-                run_id=run_id,
-                task_folder=task_folder,
-                run_folder=run_folder,
-                state=state,
-                session_store=self.session_store,
-                answer=current_answer,
-            )
-            step = self.compiled.steps[current_step_name]
-            history.append(step.name)
-            try:
-                state, destination, last_event, last_outcome = self._execute_step(step, context, state)
-            except Exception:
-                self._save_checkpoint(
-                    stage=current_step_name,
+        try:
+            if resume:
+                checkpoint = self.checkpoint_store.load()
+                if checkpoint is None:
+                    raise WorkflowExecutionError("resume requested but no checkpoint is available")
+                self.session_store.restore(checkpoint.session_bindings)
+                state = checkpoint.state
+                current_step_name = checkpoint.stage
+                current_answer = answer if answer is not None else checkpoint.pending_answer
+            else:
+                self.session_store.restore(SessionSnapshot(bindings=(), active_scopes={}))
+                state = initial_state if initial_state is not None else self.compiled.new_state()
+                context = Context(
+                    task_id=task_id,
+                    run_id=run_id,
+                    task_folder=task_folder,
+                    run_folder=run_folder,
                     state=state,
-                    pending_question=None,
-                    pending_answer=current_answer,
+                    session_store=self.session_store,
+                    answer=None,
                 )
-                raise
+                if self.compiled.has_start_hook:
+                    workflow_instance.on_start(context)
+                state = context.state
+                current_step_name = self.compiled.entry_step_name
+                current_answer = None
 
-            current_answer = None
-            if destination == SUCCESS:
-                self.checkpoint_store.clear()
-                return RunResult(
-                    terminal=SUCCESS,
+            for _ in range(max_steps):
+                assert state is not None
+                assert current_step_name is not None
+                context = Context(
+                    task_id=task_id,
+                    run_id=run_id,
+                    task_folder=task_folder,
+                    run_folder=run_folder,
                     state=state,
-                    history=tuple(history),
-                    checkpoint=None,
-                    last_event=last_event,
-                    last_outcome=last_outcome,
+                    session_store=self.session_store,
+                    answer=current_answer,
                 )
-            if destination == PAUSE:
-                checkpoint = self._save_checkpoint(
-                    stage=current_step_name,
-                    state=state,
-                    pending_question=last_event.question if last_event is not None else None,
-                    pending_answer=None,
+                step = self.compiled.steps[current_step_name]
+                history.append(step.name)
+                state_before = self._clone_state(state)
+                try:
+                    state, destination, last_event, last_outcome = self._execute_step(step, context, state)
+                except Exception as exc:
+                    checkpoint = self._save_checkpoint(
+                        stage=current_step_name,
+                        state=state,
+                        pending_question=None,
+                        pending_answer=current_answer,
+                    )
+                    fatal_event_emitted = True
+                    self._record_terminal_event(
+                        TerminalEvent(
+                            workflow_name=self.compiled.workflow_name,
+                            task_id=task_id,
+                            run_id=run_id,
+                            terminal_kind="fatal",
+                            state=self._clone_state(state),
+                            history=tuple(history),
+                            last_event=self._clone_event(last_event),
+                            last_outcome=self._clone_outcome(last_outcome),
+                            checkpoint=self._clone_checkpoint(checkpoint),
+                            exception_type=type(exc).__name__,
+                            exception_message=str(exc),
+                        )
+                    )
+                    raise
+
+                self._record_step_completed_event(
+                    StepCompletedEvent(
+                        workflow_name=self.compiled.workflow_name,
+                        task_id=task_id,
+                        run_id=run_id,
+                        step_name=step.name,
+                        step_kind=step.kind,
+                        state_before=state_before,
+                        state_after=self._clone_state(state),
+                        event=self._clone_event(last_event),
+                        outcome=self._clone_outcome(last_outcome),
+                        destination=destination,
+                    )
                 )
-                return RunResult(
-                    terminal=PAUSE,
-                    state=state,
-                    history=tuple(history),
-                    checkpoint=checkpoint,
-                    last_event=last_event,
-                    last_outcome=last_outcome,
+
+                current_answer = None
+                if destination == SUCCESS:
+                    self.checkpoint_store.clear()
+                    result = RunResult(
+                        terminal=SUCCESS,
+                        state=state,
+                        history=tuple(history),
+                        checkpoint=None,
+                        last_event=last_event,
+                        last_outcome=last_outcome,
+                    )
+                    self._record_terminal_event(
+                        TerminalEvent(
+                            workflow_name=self.compiled.workflow_name,
+                            task_id=task_id,
+                            run_id=run_id,
+                            terminal_kind="success",
+                            state=self._clone_state(state),
+                            history=tuple(history),
+                            last_event=self._clone_event(last_event),
+                            last_outcome=self._clone_outcome(last_outcome),
+                        )
+                    )
+                    return result
+                if destination == PAUSE:
+                    checkpoint = self._save_checkpoint(
+                        stage=current_step_name,
+                        state=state,
+                        pending_question=last_event.question if last_event is not None else None,
+                        pending_answer=None,
+                    )
+                    result = RunResult(
+                        terminal=PAUSE,
+                        state=state,
+                        history=tuple(history),
+                        checkpoint=checkpoint,
+                        last_event=last_event,
+                        last_outcome=last_outcome,
+                    )
+                    self._record_terminal_event(
+                        TerminalEvent(
+                            workflow_name=self.compiled.workflow_name,
+                            task_id=task_id,
+                            run_id=run_id,
+                            terminal_kind="pause",
+                            state=self._clone_state(state),
+                            history=tuple(history),
+                            last_event=self._clone_event(last_event),
+                            last_outcome=self._clone_outcome(last_outcome),
+                            checkpoint=self._clone_checkpoint(checkpoint),
+                        )
+                    )
+                    return result
+                if destination == FAIL:
+                    checkpoint = self._save_checkpoint(
+                        stage=current_step_name,
+                        state=state,
+                        pending_question=last_event.question if last_event is not None else None,
+                        pending_answer=None,
+                    )
+                    result = RunResult(
+                        terminal=FAIL,
+                        state=state,
+                        history=tuple(history),
+                        checkpoint=checkpoint,
+                        last_event=last_event,
+                        last_outcome=last_outcome,
+                    )
+                    self._record_terminal_event(
+                        TerminalEvent(
+                            workflow_name=self.compiled.workflow_name,
+                            task_id=task_id,
+                            run_id=run_id,
+                            terminal_kind="fail",
+                            state=self._clone_state(state),
+                            history=tuple(history),
+                            last_event=self._clone_event(last_event),
+                            last_outcome=self._clone_outcome(last_outcome),
+                            checkpoint=self._clone_checkpoint(checkpoint),
+                        )
+                    )
+                    return result
+                current_step_name = destination
+            raise WorkflowExecutionError(f"workflow exceeded max_steps={max_steps}")
+        except Exception as exc:
+            if not fatal_event_emitted:
+                self._record_terminal_event(
+                    TerminalEvent(
+                        workflow_name=self.compiled.workflow_name,
+                        task_id=task_id,
+                        run_id=run_id,
+                        terminal_kind="fatal",
+                        state=self._clone_state(state),
+                        history=tuple(history),
+                        last_event=self._clone_event(last_event),
+                        last_outcome=self._clone_outcome(last_outcome),
+                        checkpoint=self._clone_checkpoint(checkpoint),
+                        exception_type=type(exc).__name__,
+                        exception_message=str(exc),
+                    )
                 )
-            if destination == FAIL:
-                checkpoint = self._save_checkpoint(
-                    stage=current_step_name,
-                    state=state,
-                    pending_question=last_event.question if last_event is not None else None,
-                    pending_answer=None,
-                )
-                return RunResult(
-                    terminal=FAIL,
-                    state=state,
-                    history=tuple(history),
-                    checkpoint=checkpoint,
-                    last_event=last_event,
-                    last_outcome=last_outcome,
-                )
-            current_step_name = destination
-        raise WorkflowExecutionError(f"workflow exceeded max_steps={max_steps}")
+            raise
 
     def resume(
         self,
@@ -239,9 +340,26 @@ class Engine:
             )
         )
         self._persist_session(producer_response.session)
+        self._record_provider_turn_event(
+            ProviderTurnEvent(
+                workflow_name=self.compiled.workflow_name,
+                task_id=context.task_id,
+                run_id=context.run_id,
+                step_name=step.name,
+                step_kind=step.kind,
+                turn_kind="producer",
+                state=self._clone_state(context.state),
+                prompt_path=producer_prompt.path,
+                request_session=self._clone_binding(session),
+                response_session=self._clone_binding(producer_response.session),
+                raw_output=producer_response.raw_output,
+                metadata=deepcopy(producer_response.metadata),
+            )
+        )
         self._append_logs(step, artifacts, producer_response.raw_output)
 
         verifier_prompt = self._resolve_prompt(step.verifier_prompt)
+        verifier_session = self._select_session(step, context)
         verifier_response = self.provider.run_verifier(
             VerifierRequest(
                 step_name=step.name,
@@ -249,11 +367,28 @@ class Engine:
                 raw_output=producer_response.raw_output,
                 context=context,
                 artifacts=artifacts,
-                session=self._select_session(step, context),
+                session=verifier_session,
             )
         )
         self._persist_session(verifier_response.session)
         self._validate_outcome(verifier_response.outcome)
+        self._record_provider_turn_event(
+            ProviderTurnEvent(
+                workflow_name=self.compiled.workflow_name,
+                task_id=context.task_id,
+                run_id=context.run_id,
+                step_name=step.name,
+                step_kind=step.kind,
+                turn_kind="verifier",
+                state=self._clone_state(context.state),
+                prompt_path=verifier_prompt.path,
+                request_session=self._clone_binding(verifier_session),
+                response_session=self._clone_binding(verifier_response.session),
+                raw_output=verifier_response.outcome.raw_output,
+                outcome=self._clone_outcome(verifier_response.outcome),
+                metadata=deepcopy(verifier_response.metadata),
+            )
+        )
         return producer_response.raw_output, verifier_response.outcome
 
     def _run_llm_step(
@@ -275,6 +410,23 @@ class Engine:
         )
         self._persist_session(response.session)
         self._validate_outcome(response.outcome)
+        self._record_provider_turn_event(
+            ProviderTurnEvent(
+                workflow_name=self.compiled.workflow_name,
+                task_id=context.task_id,
+                run_id=context.run_id,
+                step_name=step.name,
+                step_kind=step.kind,
+                turn_kind="llm",
+                state=self._clone_state(context.state),
+                prompt_path=prompt.path,
+                request_session=self._clone_binding(session),
+                response_session=self._clone_binding(response.session),
+                raw_output=response.outcome.raw_output,
+                outcome=self._clone_outcome(response.outcome),
+                metadata=deepcopy(response.metadata),
+            )
+        )
         self._append_logs(step, artifacts, response.outcome.raw_output)
         return response.outcome
 
@@ -323,6 +475,22 @@ class Engine:
     def _persist_session(self, binding: SessionBinding | None) -> None:
         if binding is not None:
             self.session_store.upsert(binding)
+
+    def _record_provider_turn_event(self, event: ProviderTurnEvent) -> None:
+        self._record_observer_event(event)
+
+    def _record_step_completed_event(self, event: StepCompletedEvent) -> None:
+        self._record_observer_event(event)
+
+    def _record_terminal_event(self, event: TerminalEvent) -> None:
+        self._record_observer_event(event)
+
+    def _record_observer_event(self, event: ProviderTurnEvent | StepCompletedEvent | TerminalEvent) -> None:
+        for observer in self.observers:
+            try:
+                observer.record(event)
+            except Exception:
+                continue
 
     def _append_logs(self, step: CompiledStep, artifacts: ResolvedArtifacts, content: str) -> None:
         for name in step.log_artifacts:
@@ -379,3 +547,50 @@ class Engine:
         if isinstance(next_state, expected_cls):
             return expected_cls.model_validate(next_state.model_dump(mode="python", warnings=False))
         return expected_cls.model_validate(next_state.model_dump(mode="python", warnings=False))
+
+    def _clone_binding(self, binding: SessionBinding | None) -> SessionBinding | None:
+        if binding is None:
+            return None
+        return SessionBinding(
+            ref_name=binding.ref_name,
+            scope=binding.scope,
+            session_id=binding.session_id,
+            metadata=deepcopy(binding.metadata),
+        )
+
+    def _clone_checkpoint(self, checkpoint: Checkpoint | None) -> Checkpoint | None:
+        if checkpoint is None:
+            return None
+        return Checkpoint(
+            stage=checkpoint.stage,
+            state=self._clone_state(checkpoint.state),
+            session_bindings=SessionSnapshot(
+                bindings=tuple(self._clone_binding(binding) for binding in checkpoint.session_bindings.bindings),
+                active_scopes=deepcopy(checkpoint.session_bindings.active_scopes),
+            ),
+            pending_question=checkpoint.pending_question,
+            pending_answer=checkpoint.pending_answer,
+        )
+
+    def _clone_event(self, event: Event | None) -> Event | None:
+        if event is None:
+            return None
+        return Event(tag=event.tag, reason=event.reason, question=event.question)
+
+    def _clone_outcome(self, outcome: Outcome | None) -> Outcome | None:
+        if outcome is None:
+            return None
+        return Outcome(
+            raw_output=outcome.raw_output,
+            tag=outcome.tag,
+            reason=outcome.reason,
+            clarification=outcome.clarification,
+            question=outcome.question,
+            payload=deepcopy(outcome.payload),
+        )
+
+    def _clone_state(self, state: BaseModel | None) -> BaseModel | None:
+        if state is None:
+            return None
+        state_cls = type(state)
+        return state_cls.model_validate(deepcopy(state.model_dump(mode="python", warnings=False)))

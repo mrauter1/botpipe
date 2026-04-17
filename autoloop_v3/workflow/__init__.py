@@ -6,6 +6,7 @@ from .artifacts import Artifact
 from .compiler import compile_workflow
 from .context import Context
 from .engine import Engine
+from .observers import ExecutionEvent, ExecutionObserver, ProviderTurnEvent, StepCompletedEvent, TerminalEvent
 from .primitives import FAIL, GLOBAL, PAUSE, SUCCESS
 from .prompts import Prompt
 from .steps import LLMStep, PairStep, Session, SystemStep
@@ -23,15 +24,20 @@ __all__ = [
     "Artifact",
     "Context",
     "Engine",
+    "ExecutionEvent",
+    "ExecutionObserver",
     "FAIL",
     "GLOBAL",
     "LLMStep",
     "PAUSE",
     "PairStep",
     "Prompt",
+    "ProviderTurnEvent",
     "SUCCESS",
     "Session",
+    "StepCompletedEvent",
     "SystemStep",
+    "TerminalEvent",
     "Workflow",
     "compile_workflow",
 ]
