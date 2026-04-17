@@ -18,3 +18,8 @@
   `validation_rejects_static_on_start_signature`
   `missing_session_binding_fails_instead_of_auto_opening`
   `loader_does_not_inject_canonical_symbols`
+
+## Audit Result
+
+- No blocking or non-blocking audit findings.
+- Coverage matches the phase contract: removed compat exports, removed inferred-entry behavior, removed `on_verdict` middleware behavior, strict handler-signature failures, explicit-session failure behavior, and loader no-injection behavior are all exercised by deterministic tests.

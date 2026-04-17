@@ -375,3 +375,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+I’m auditing the phase-local test work against the active criteria. First I’m reading the test artifacts, the shared decisions, and the exact repo tests they claim to cover so I can decide whether there are any coverage gaps or flaky-risk issues.
+
+The targeted slice is solid: coverage matches the phase contract, the assertions align with the shared decisions, and the execution path is deterministic. I’m updating the audit artifacts now and then I’ll close this phase as complete.
+
+Scope considered
+
+Phase-local test audit for `book-architecture-core` only. I limited audit scope to the updated test artifact files, the shared decisions ledger, and the specific repo tests covering the strict-core no-compat changes.
+
+What I analyzed
+
+- The active phase contract and acceptance criteria.
+- `test_strategy.md`, `feedback.md`, and `decisions.txt`.
+- The concrete tests the strategy referenced, especially the strict-surface, validation, contract, and loader checks.
+- The targeted pytest slice for the new no-compat assertions.
+
+What I reviewed
+
+- Coverage of the changed behaviors:
+  - removed `SessionLifecycle` / `Verdict` exports
+  - removed inferred-entry fallback
+  - removed `on_verdict` middleware behavior
+  - strict handler-signature enforcement
+  - explicit session-opening failure behavior
+  - loader no-injection behavior
+- Failure-path and edge-case depth for validation, runtime execution, and import-time failure.
+- Flake risk and stabilization approach.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated `criteria.md` to checked and appended the clean audit result to `feedback.md`.
+- The targeted audit slice passed: 7 selected tests, 7 passed.
+
+Open issues / next step
+
+- No phase-local test audit blocker remains.
+- Later phases still need the broader runtime/parity coverage that is intentionally out of scope here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

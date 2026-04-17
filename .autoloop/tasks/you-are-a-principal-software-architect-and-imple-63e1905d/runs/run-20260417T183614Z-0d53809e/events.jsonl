@@ -17,3 +17,6 @@
 {"ts": "2026-04-17T19:00:49.569819+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 17, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "book-architecture-core", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-17T19:00:49.570996+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 18, "event_type": "pair_started", "pair": "test", "phase_id": "book-architecture-core"}
 {"ts": "2026-04-17T19:00:49.571077+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 19, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "book-architecture-core"}
+{"ts": "2026-04-17T19:02:30.171049+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "book-architecture-core"}
+{"ts": "2026-04-17T19:03:11.339269+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "book-architecture-core"}
+{"ts": "2026-04-17T19:03:11.354774+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "book-architecture-core"}
