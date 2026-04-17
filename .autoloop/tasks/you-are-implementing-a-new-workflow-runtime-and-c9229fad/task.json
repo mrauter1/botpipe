@@ -16,12 +16,12 @@
       "docs-hardening-and-final-proof"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "architecture-and-adr-baseline"
+    "current_phase_index": 1,
+    "current_phase_id": "strict-core-engine"
   },
   "phase_status": {
-    "architecture-and-adr-baseline": "in_progress",
-    "strict-core-engine": "planned",
+    "architecture-and-adr-baseline": "completed",
+    "strict-core-engine": "in_progress",
     "compatibility-and-filesystem-runtime": "planned",
     "workflow-integration-and-parity": "planned",
     "docs-hardening-and-final-proof": "planned"
@@ -32,6 +32,19 @@
       "run_id": "run-20260417T151141Z-5a8eefb2",
       "status": "in_progress",
       "ts": "2026-04-17T15:24:21.630542+00:00"
+    },
+    {
+      "phase_id": "architecture-and-adr-baseline",
+      "run_id": "run-20260417T151141Z-5a8eefb2",
+      "status": "completed",
+      "ts": "2026-04-17T15:36:41.019865+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "strict-core-engine",
+      "run_id": "run-20260417T151141Z-5a8eefb2",
+      "status": "in_progress",
+      "ts": "2026-04-17T15:36:41.023039+00:00"
     }
   ]
 }
