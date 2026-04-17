@@ -600,3 +600,61 @@ Open issues / next step
 
 - The strict-core phase is complete from the implementation side for this reviewer finding. The next step is a fresh verifier pass to clear `IMP-001`.
 - Validation performed: `pytest -q autoloop_v3/tests` with `33 passed`.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+I’m reviewing the reserved-hook-name fix and the new regression coverage against the same strict-core phase boundary. I’ll verify the targeted behavior, rerun the phase tests, and then update the phase criteria and feedback accordingly.
+
+I’m re-checking the strict-core review fix now: first I’ll verify the current phase artifacts and rerun the phase test suite, then I’ll update the reviewer-owned files if the blocker is actually resolved.
+
+The phase tests are green. I’m reading the centralized hook-selection path now to confirm the fix actually matches the reviewer’s minimal fix direction and doesn’t create a new collision elsewhere.
+
+The centralized fix is coherent: validation, compilation, and execution all use the same active-hook decision now. I’m checking the specific regression tests for `start`/`outcome`/`verdict`, then I’ll update the verifier artifacts.
+
+I’ve verified the blocker is fixed and I don’t see a new regression on the touched path. I’m updating the reviewer-owned artifacts now: all phase criteria will be checked, and the feedback log will record that `IMP-001` was verified resolved with no remaining findings in this pass.
+
+The verifier artifacts are updated. I’m doing one quick readback to make sure the criteria and feedback now match a `COMPLETE` outcome exactly.
+
+Scope considered
+
+- Phase-local verifier review for `strict-core-engine`.
+- The touched strict-core surfaces in `autoloop_v3/workflow` and `autoloop_v3/tests`, plus the reviewer-owned phase artifacts under `.autoloop/tasks/.../strict-core-engine/`.
+
+What I analyzed
+
+- The centralized hook-selection path in `autoloop_v3/workflow/validation.py`, `compiler.py`, and `engine.py`.
+- The regression coverage added in `autoloop_v3/tests/contract/test_engine_contracts.py`.
+- The shared decisions and implementation notes relevant to the reserved hook-name fix.
+
+What I reviewed
+
+- Whether `start`, `outcome`, and `verdict` step names still collide with lifecycle or middleware dispatch.
+- Whether the fix was centralized rather than scattered through execution paths.
+- Phase validation status via `pytest -q autoloop_v3/tests`, which passed with `33 passed in 0.23s`.
+- The reviewer artifacts, now updated in [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/strict-core-engine/criteria.md:1) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/strict-core-engine/feedback.md:1).
+
+Key findings / decisions
+
+- `IMP-001` is resolved. Validation, compilation, and execution now share the same active-hook precedence, so reserved hook names are not double-purposed.
+- The added regression tests for steps named `start`, `outcome`, and `verdict` close the original failure mode.
+- No remaining blocking or non-blocking findings were identified in this review pass.
+
+Open issues / next step
+
+- No open issues remain for this phase review.
+- The strict-core-engine phase is complete from the verifier side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
