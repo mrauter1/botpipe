@@ -14,3 +14,10 @@ Added in this turn:
   - `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py::test_cli_module_smoke_executes_autoloop_v1_end_to_end autoloop_v3/tests/runtime/test_compatibility_runtime.py::test_cli_module_smoke_executes_ralph_loop_end_to_end`
   - `pytest -q autoloop_v3/tests/test_architecture_baseline_docs.py autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py`
   - `pytest -q autoloop_v3/tests`
+
+No blocking or non-blocking audit findings in reviewed scope.
+
+Audit validation checked:
+- Both target workflows now have published-CLI smoke coverage.
+- The new smoke helpers explicitly control environment inputs to reduce flake risk.
+- Targeted audit run passed: `16 passed, 7 warnings`.

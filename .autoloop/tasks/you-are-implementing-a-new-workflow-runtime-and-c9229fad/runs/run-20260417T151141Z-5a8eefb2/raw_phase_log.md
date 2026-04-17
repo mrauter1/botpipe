@@ -1567,3 +1567,120 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c69-1118-7613-b010-8b59ef362e4c
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9c69-1118-7613-b010-8b59ef362e4c
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c69-1118-7613-b010-8b59ef362e4c
+---
+I’m treating this as a focused hardening pass on the new doc/smoke coverage: inspect the phase test artifacts, audit the current runtime smoke tests, then add only the extra regression coverage that materially improves final proof for the target workflows.
+
+I found one meaningful remaining gap for this phase’s proof: the CLI smoke path only covers `autoloop_v1.py`, while the acceptance scope names both target workflows. I’m adding a second deterministic smoke test for `Ralph_loop.py` and keeping the environment isolated from user config so the proof stays stable.
+
+The new coverage is in. I’m running the two CLI smoke tests plus the broader runtime/doc slices they sit next to, so I can update the phase strategy with actual observed results instead of planned intent.
+
+The focused slice is clean. I’m doing one final full-suite pass so the phase artifact can claim end-to-end proof against the current tree, not only against the narrowed smoke subset.
+
+I’ve got the final validation numbers. I’m recording the non-obvious test decisions now: why the second CLI smoke exists, and how the smoke environment is stabilized so future runs don’t depend on machine-local config.
+
+The test work is done; I’m checking the worktree for any generated `.pyc` churn from pytest before I close, so the test-phase diff stays intentional and source-only.
+
+Pytest touched one tracked cache file. I’m restoring that generated artifact to the committed state so only the intended test source and phase artifacts remain in the diff.
+
+Scope considered
+
+- Phase-local test work for `docs-hardening-and-final-proof`.
+- Changed runtime smoke coverage in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+- Phase artifacts [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/docs-hardening-and-final-proof/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/docs-hardening-and-final-proof/feedback.md), and the shared [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt).
+
+What I analyzed
+
+- The phase objective and acceptance criteria, especially P5-AC2.
+- Existing CLI smoke coverage versus the user requirement to run both `autoloop_v1.py` and `Ralph_loop.py`.
+- Current runtime parity tests and the latest shared decisions for the generic runner boundary.
+
+What I changed
+
+- Added `test_cli_module_smoke_executes_ralph_loop_end_to_end` in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+- Added deterministic helpers for the CLI smoke environment and the Ralph-specific temporary provider module.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/docs-hardening-and-final-proof/test_strategy.md) with an explicit behavior-to-test coverage map.
+- Appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/docs-hardening-and-final-proof/feedback.md).
+- Appended two test-scope decisions under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- The implementer’s new CLI smoke test covered `autoloop_v1.py`, but final proof was stronger with a matching CLI smoke for `Ralph_loop.py` because both workflows are named acceptance targets.
+- Smoke execution is stabilized by isolating `XDG_CONFIG_HOME` and prepending a temporary `PYTHONPATH`, preventing user-local config or installed modules from affecting the result.
+- Validation results:
+  - `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py::test_cli_module_smoke_executes_autoloop_v1_end_to_end autoloop_v3/tests/runtime/test_compatibility_runtime.py::test_cli_module_smoke_executes_ralph_loop_end_to_end` -> `2 passed`
+  - `pytest -q autoloop_v3/tests/test_architecture_baseline_docs.py autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py` -> `30 passed, 7 warnings`
+  - `pytest -q autoloop_v3/tests` -> `61 passed, 7 warnings`
+
+Open issues / next step
+
+- No blocking gaps remain in this phase scope.
+- The only remaining noise is the expected legacy Pydantic deprecation warnings from `Ralph_loop.py`; I did not encode those warnings as new expectations or normalize them away.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c69-1118-7613-b010-8b59ef362e4c
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9c69-1118-7613-b010-8b59ef362e4c
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c69-1118-7613-b010-8b59ef362e4c
+---
+I’m auditing the final test-phase changes against the phase criteria, starting from the new CLI smoke coverage and the updated test strategy rather than broad repo churn.
+
+The audit surface looks good so far. I’m waiting on the targeted pytest run now to confirm the new dual-workflow CLI smoke tests remain stable when combined with the parity/docs slices.
+
+The audit is clean. I’m updating the test-phase audit artifacts now: all criteria will be checked, and the feedback file will explicitly record that there were no blocking or non-blocking findings after targeted validation.
+
+Scope considered
+
+- Phase-local audit for `docs-hardening-and-final-proof`.
+- New and adjacent test coverage in `autoloop_v3/tests/runtime/test_compatibility_runtime.py`, plus the phase artifacts `test_strategy.md`, `feedback.md`, and `criteria.md`.
+- Shared decisions relevant to the final smoke-proof boundary.
+
+What I analyzed
+
+- The updated test strategy and the latest decisions requiring final proof for both target workflows.
+- The new CLI smoke helpers and the added `Ralph_loop.py` CLI smoke test.
+- The targeted pytest slice covering docs regression, CLI smoke, and workflow parity behavior.
+
+What I reviewed
+
+- `autoloop_v3/tests/runtime/test_compatibility_runtime.py`
+- `.autoloop/.../test/phases/docs-hardening-and-final-proof/test_strategy.md`
+- `.autoloop/.../test/phases/docs-hardening-and-final-proof/feedback.md`
+- Validation run:
+  - `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py::test_cli_module_smoke_executes_autoloop_v1_end_to_end autoloop_v3/tests/runtime/test_compatibility_runtime.py::test_cli_module_smoke_executes_ralph_loop_end_to_end autoloop_v3/tests/test_architecture_baseline_docs.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py`
+  - Result: `16 passed, 7 warnings`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings in reviewed scope.
+- Criteria were updated to all checked.
+- Feedback was updated to record a clean audit and the validation performed.
+
+Open issues / next step
+
+- No audit blockers remain for this phase.
+- The only remaining warnings are expected legacy Pydantic deprecations from `Ralph_loop.py`; they were observed but are not introduced by this test change.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
