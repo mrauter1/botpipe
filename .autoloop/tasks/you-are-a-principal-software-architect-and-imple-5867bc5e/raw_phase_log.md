@@ -1368,3 +1368,61 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d8e-8c7d-7e83-ae88-dfd84b24f41d
+---
+I’m treating this as a final proof-surface pass. First I’m checking the active test artifacts and the current doc-baseline/runtime/parity suites so I can decide whether this phase needs a repo test patch or just an explicit coverage map.
+
+The existing suites already cover most of this phase, but the doc-baseline test is still too loose around the final module layout and the no-workspace-hook boundary. I’m tightening that one test instead of adding more runtime duplication.
+
+I’ve made the smallest repo test change that strengthens this phase: the doc baseline now freezes the exact workflow-owned parity module names plus the no-compat / no-workspace-hook wording. Next I’m recording that coverage choice and the phase test strategy.
+
+I’ve updated the test baseline and the phase artifacts. I’m running the focused docs/contract/runtime/parity suite first, then the full package test sweep, to confirm the stricter doc assertions are stable.
+
+Scope considered
+
+- Phase-local test scope for `docs-and-full-verification`.
+- The shipped docs surface, the existing doc-baseline/runtime/parity suites, and the active test artifacts under `.autoloop/tasks/.../test/phases/docs-and-full-verification/`.
+
+What I analyzed
+
+- `autoloop_v3/tests/test_architecture_baseline_docs.py`
+- `autoloop_v3/tests/contract/test_engine_contracts.py`
+- `autoloop_v3/tests/runtime/test_compatibility_runtime.py`
+- `autoloop_v3/tests/runtime/test_workflow_integration_parity.py`
+- Shared decisions for this phase, especially the package-root docs boundary and the “verification over churn” direction.
+
+What I changed
+
+- Tightened [autoloop_v3/tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py) to freeze:
+  - `workflow.observers`
+  - `autoloop_v3.workflows.autoloop_v1_conventions`
+  - `autoloop_v3.workflows.autoloop_v1_parity`
+  - `compatibility layer`
+  - `workspace-hook`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/docs-and-full-verification/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, failure-path coverage, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/docs-and-full-verification/feedback.md).
+- Appended the non-obvious test decision to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/decisions.txt).
+
+Key findings / decisions
+
+- The smallest high-signal test addition for this phase was tightening the doc-baseline test, not adding more runtime/parity duplication.
+- Focused suite result: `55 passed in 0.70s`.
+- Full suite result: `78 passed in 0.71s`.
+- Flake risk remains low because this phase uses source-text assertions plus the existing deterministic scripted-provider/tempdir suites.
+
+Open issues / next step
+
+- No blocking test gap remains for this phase.
+- The coverage delta for this phase is now documented and enforced at the doc-baseline layer.
