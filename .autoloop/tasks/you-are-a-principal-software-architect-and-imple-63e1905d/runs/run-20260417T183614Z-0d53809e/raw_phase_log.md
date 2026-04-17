@@ -186,3 +186,132 @@ phase_mode=single
 phase_ids=book-architecture-core,generic-runtime-boundary,workflow-migration-parity,proof-suite-and-docs
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+I’m treating this as a phase-scoped implementation pass on the strict workflow core. First I’m reading the current `autoloop_v3` core, the legacy oracle in `autoloop/`, and the active phase artifacts so I can pin down exactly where compat behavior still exists before I edit anything.
+
+The current plan already matches the phase contract: this pass is limited to freezing the decision record, deleting strict-core compatibility behavior, and proving missing session bindings fail instead of auto-opening. I’m now reading the workflow core, loader, and existing tests to identify the exact compat branches that must disappear without dragging runtime-parity refactors into this phase.
+
+I’ve confirmed the strict-core compat debt is concentrated where expected: `workflow.compat`, validation/compiler handler adaptation, `SessionLifecycle`, loader symbol injection, and engine auto-opening of missing step sessions. Next I’m reading the remaining authoring primitives and the existing unit/contract tests so I can make one coherent strict-core edit instead of piecemeal breakage.
+
+The remaining blast radius is bigger than just `workflow/`: the repo-root `workflow` shim, loader, and several tests/docs currently codify compatibility behavior. I’m checking the strict workflows next so I can remove loader injection and the root compat base without accidentally breaking files that are already close to canonical.
+
+I have enough of the current strict core to start shaping the change, but the decision record also needs grounded parity and policy choices. I’m doing one pass over the existing docs and the legacy Autoloop runtime surfaces now so the written architecture decisions are tied to the actual oracle instead of guesses.
+
+I’ve got the exact edit set now. I’m changing the strict core in one pass: remove `compat.py`, strip `Verdict`/`on_verdict`/`SessionLifecycle` and handler adaptation from validation and compilation, stop the engine from auto-opening sessions, and turn the repo-root `workflow` package and loader into plain strict surfaces with no hidden injections.
+
+The core code path is refactored; I’m writing the required decision record now. It covers every material decision named in the request with three explicit options each, but it stays anchored to this repo’s actual starting point and the legacy parity surface I just reviewed instead of turning into abstract ADR filler.
+
+The edit set is in. I’m running focused proofs now: strict unit coverage, engine-contract coverage, and a small runtime-loader slice that exercises the root `workflow` shim and proves the loader no longer injects authoring symbols.
+
+One contract test surfaced exactly the new rule: the old pair-step test was implicitly depending on the engine auto-opening its session. I’m tightening the test to open that session in `on_start`, which is the intended canonical pattern now.
+
+The strict-core proof is green. I’m finishing the bookkeeping now: writing the phase implementation notes, recording the non-obvious decisions in the shared ledger, and then I’ll do one final status check on the touched files before summarizing.
+
+Scope considered
+
+Phase-local `book-architecture-core` only. I kept scope to the strict workflow core, the repo-root `workflow` shim, the runtime loader, the required decision record, and the no-compat proof tests. I did not start the later runtime-core reduction or Autoloop-v1 parity-harness relocation work.
+
+What I analyzed
+
+- Current strict-core code in [autoloop_v3/workflow/compiler.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/compiler.py), [validation.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/validation.py), [engine.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/engine.py), [steps.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/steps.py), [primitives.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/primitives.py), and the deleted `workflow.compat`.
+- Loader and root import surface in [autoloop_v3/runtime/loader.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/loader.py) and [workflow/__init__.py](/home/rauter/autoloop_v3/workflow/__init__.py).
+- Current strict workflows in [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py) and [Ralph_loop.py](/home/rauter/autoloop_v3/Ralph_loop.py).
+- Legacy parity oracle snippets in `autoloop/src/autoloop/main.py` for session payloads, phase session paths, clarification persistence, and resume/event semantics.
+- Existing docs/tests that still encoded compat behavior.
+
+What I changed
+
+- Wrote the required decision record at [autoloop_v3/ARCHITECTURE_DECISIONS.md](/home/rauter/autoloop_v3/autoloop_v3/ARCHITECTURE_DECISIONS.md) with all material decisions and 3 candidates each.
+- Deleted `autoloop_v3/workflow/compat.py`.
+- Removed `Verdict`, `SessionLifecycle`, `normalize_workflow`, loader symbol injection, inferred session opening, and legacy handler-arity adaptation from the strict core.
+- Made the repo-root [workflow/__init__.py](/home/rauter/autoloop_v3/workflow/__init__.py) a strict re-export instead of a legacy base-class shim.
+- Tightened validation/compilation so:
+  - `on_outcome` is the only global middleware hook.
+  - `on_verdict` is no longer a compat alias.
+  - Pair/LLM handlers must be exactly `(state, outcome, artifacts)` when present.
+  - System handlers must be exactly `(state, ctx)`.
+  - `on_start` must be exactly `(self, ctx)`.
+- Changed [engine.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/engine.py) so missing session bindings fail clearly instead of auto-opening.
+- Updated unit, contract, and focused loader tests to prove the new invariants.
+
+Key findings / decisions
+
+- The clean boundary is now explicit: canonical workflows or validation failure. There is no hidden normalization path left in compiler, engine, loader, or the root `workflow` package.
+- Sessions are now strictly explicit in the core: workflows must call `ctx.open_session(...)`; the engine only does lookup and raises if a slot was never opened.
+- `on_outcome` remains the sole middleware concept. `on_verdict` now only works if a workflow literally has a step named `verdict`; otherwise it is an orphan handler error.
+- Focused validation passed:
+  - `pytest autoloop_v3/tests/unit/test_primitives_and_stores.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/contract/test_engine_contracts.py`
+  - `pytest autoloop_v3/tests/runtime/test_compatibility_runtime.py -k 'autoloop_v1_imports_through_root_workflow_shim_and_legacy_loader_handles_ralph or loader_does_not_inject_canonical_symbols'`
+  - Result: 36 unit/contract tests passed, plus 2 focused runtime-loader tests passed.
+
+Open issues / next step
+
+- The next phase still needs the runtime-core reduction: phase-plan and Autoloop-specific runtime behavior are still outside this phase’s scope.
+- Docs such as `architecture.md`, `compatibility.md`, and parity docs still describe the old compat architecture and should be rewritten in the later documentation/parity phases.
+- I did not run the full repository test suite in this phase; I ran the scoped proofs for the strict-core acceptance criteria.
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+I’m reviewing the phase-local implementation against the active acceptance criteria. First I’m reading the phase artifacts, the shared decisions ledger, and the actual code diffs so I can decide whether the criteria can be checked off or whether there are blocking gaps.
+
+The tracked diff is thinner than the working-set summary because several top-level files are currently untracked in this workspace. I’m checking status and then opening the changed source files directly so the review is based on actual content, not only on git metadata.
+
+I’ve confirmed the core code paths. Now I’m doing the acceptance pass on the decision record and the updated proofs: candidate counts, required topics, and whether the new tests actually cover the no-compat invariants the phase promised.
+
+I’ve finished the acceptance pass. I’m updating the phase artifacts now: checking the criteria, recording that there are no review findings for this phase, and then I’ll close with a `COMPLETE` loop-control block.
+
+Scope considered
+
+Phase-local review for `book-architecture-core` only. I limited review to the requested strict-core files, the repo-root `workflow` shim, the loader change, the required decision record, the updated proofs, and the phase-local artifacts.
+
+What I analyzed
+
+- Shared intent and constraints in `request.md`, the active phase contract, `implementation_notes.md`, and `decisions.txt`.
+- Strict-core source in `autoloop_v3/workflow/*`, `autoloop_v3/runtime/loader.py`, and `workflow/__init__.py`.
+- The new decision record in `autoloop_v3/ARCHITECTURE_DECISIONS.md`.
+- Updated unit, contract, and focused runtime-loader tests.
+
+What I reviewed
+
+- AC-1: confirmed `autoloop_v3/ARCHITECTURE_DECISIONS.md` exists, covers the required material decision topics, and contains 48 candidate sections.
+- AC-2: confirmed `workflow.compat` is deleted and the strict core no longer carries `Verdict`, `SessionLifecycle`, `on_verdict` middleware behavior, handler-arity adaptation, or inferred session opening.
+- AC-3: confirmed the updated proofs include explicit missing-session-binding failure coverage instead of auto-open behavior, and reran the focused proof slice successfully.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated `criteria.md` to checked and recorded the clean review result in `feedback.md`.
+
+Open issues / next step
+
+- No phase-local blockers remain.
+- The next turn can proceed to the later runtime/workflow migration phases outside this phase’s scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

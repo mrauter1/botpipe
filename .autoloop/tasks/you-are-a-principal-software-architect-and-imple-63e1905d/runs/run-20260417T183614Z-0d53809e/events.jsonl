@@ -11,3 +11,6 @@
 {"ts": "2026-04-17T18:47:49.752864+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 11, "event_type": "phase_started", "phase_id": "book-architecture-core", "phase_mode": "single"}
 {"ts": "2026-04-17T18:47:49.753311+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "book-architecture-core"}
 {"ts": "2026-04-17T18:47:49.753364+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "book-architecture-core"}
+{"ts": "2026-04-17T18:58:41.617708+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "book-architecture-core"}
+{"ts": "2026-04-17T19:00:49.522763+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "book-architecture-core"}
+{"ts": "2026-04-17T19:00:49.529689+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 16, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "book-architecture-core"}

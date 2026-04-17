@@ -262,3 +262,56 @@ Open issues / next step
 - The next phase still needs the runtime-core reduction: phase-plan and Autoloop-specific runtime behavior are still outside this phase’s scope.
 - Docs such as `architecture.md`, `compatibility.md`, and parity docs still describe the old compat architecture and should be rewritten in the later documentation/parity phases.
 - I did not run the full repository test suite in this phase; I ran the scoped proofs for the strict-core acceptance criteria.
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9cc5-5044-7b82-898f-ff057ad9f76d
+---
+I’m reviewing the phase-local implementation against the active acceptance criteria. First I’m reading the phase artifacts, the shared decisions ledger, and the actual code diffs so I can decide whether the criteria can be checked off or whether there are blocking gaps.
+
+The tracked diff is thinner than the working-set summary because several top-level files are currently untracked in this workspace. I’m checking status and then opening the changed source files directly so the review is based on actual content, not only on git metadata.
+
+I’ve confirmed the core code paths. Now I’m doing the acceptance pass on the decision record and the updated proofs: candidate counts, required topics, and whether the new tests actually cover the no-compat invariants the phase promised.
+
+I’ve finished the acceptance pass. I’m updating the phase artifacts now: checking the criteria, recording that there are no review findings for this phase, and then I’ll close with a `COMPLETE` loop-control block.
+
+Scope considered
+
+Phase-local review for `book-architecture-core` only. I limited review to the requested strict-core files, the repo-root `workflow` shim, the loader change, the required decision record, the updated proofs, and the phase-local artifacts.
+
+What I analyzed
+
+- Shared intent and constraints in `request.md`, the active phase contract, `implementation_notes.md`, and `decisions.txt`.
+- Strict-core source in `autoloop_v3/workflow/*`, `autoloop_v3/runtime/loader.py`, and `workflow/__init__.py`.
+- The new decision record in `autoloop_v3/ARCHITECTURE_DECISIONS.md`.
+- Updated unit, contract, and focused runtime-loader tests.
+
+What I reviewed
+
+- AC-1: confirmed `autoloop_v3/ARCHITECTURE_DECISIONS.md` exists, covers the required material decision topics, and contains 48 candidate sections.
+- AC-2: confirmed `workflow.compat` is deleted and the strict core no longer carries `Verdict`, `SessionLifecycle`, `on_verdict` middleware behavior, handler-arity adaptation, or inferred session opening.
+- AC-3: confirmed the updated proofs include explicit missing-session-binding failure coverage instead of auto-open behavior, and reran the focused proof slice successfully.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated `criteria.md` to checked and recorded the clean review result in `feedback.md`.
+
+Open issues / next step
+
+- No phase-local blockers remain.
+- The next turn can proceed to the later runtime/workflow migration phases outside this phase’s scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
