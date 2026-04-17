@@ -1,5 +1,7 @@
 # Architecture
 
+The final shape aims at the Book Architecture for this codebase: one strict core, one generic runtime, and one workflow-owned parity layer.
+
 ## Shape
 
 The shipped architecture has three sharp boundaries:
@@ -8,7 +10,7 @@ The shipped architecture has three sharp boundaries:
 - `autoloop_v3.runtime`: workflow-agnostic filesystem runtime for `.autoloop/tasks/{task_id}/runs/{run_id}`, request snapshots, events, checkpoints, prompt resolution, and generic session persistence.
 - `autoloop_v3.workflows`: workflow-owned helpers and harnesses. `autoloop_v1` parity lives here, not in the runtime core.
 
-The repo-root `workflow/` package is a strict re-export only. It does not normalize workflows, inject names, or map to a legacy base class.
+There is no compatibility layer and no generic workspace-hook system. The repo-root `workflow/` package is a strict re-export only. It does not normalize workflows, inject names, or map to a legacy base class.
 
 ## Canonical Surface
 
@@ -43,6 +45,8 @@ The repo-root `workflow/` package is a strict re-export only. It does not normal
 5. `workflow.observers` receives provider-turn, step-completed, and terminal facts through one minimal output-only seam.
 6. `runtime.events` appends `events.jsonl`.
 7. Workflow-owned harnesses may interpret the observer stream to add policy-specific side effects, such as Autoloop-v1 raw logs or decisions ledgers.
+
+The architecture is closer to the Book Architecture precisely because the explanation is short and complete: the core emits generic execution facts, the runtime persists generic filesystem state, and the parity layer alone interprets legacy Autoloop-v1 meaning.
 
 ## Session Model
 

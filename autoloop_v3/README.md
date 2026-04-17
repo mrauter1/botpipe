@@ -6,7 +6,9 @@
 - `autoloop_v3.runtime`: generic filesystem runtime for task/run workspaces, request snapshots, events, checkpoints, prompt resolution, and session persistence.
 - `autoloop_v3.workflows`: workflow-owned parity and conventions modules. `run_autoloop_v1()` lives here because legacy Autoloop behavior is workflow policy, not runtime-core architecture.
 
-There is no compatibility layer. The root `workflow/` package is only a strict re-export of the canonical surface.
+This is the Book Architecture target for the system: one strict core, one generic runtime, and one workflow-owned parity layer.
+
+There is no compatibility layer. There is also no generic workspace-hook or plugin system. The root `workflow/` package is only a strict re-export of the canonical surface.
 
 ## Public Surface
 
