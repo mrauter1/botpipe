@@ -6,3 +6,16 @@
 - Phase Directory Key: strict-workflow-cleanup
 - Phase Title: Restore Repo-Root Workflow Clarity
 - Scope: phase-local producer artifact
+- Files changed: `.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/decisions.txt`; `.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/implement/phases/strict-workflow-cleanup/implementation_notes.md`
+- Symbols touched: none in product code; validated existing `AutoloopV1`, `RalphLoop`, strict loader, and parity/runtime tests
+- Checklist mapping: milestone 4 `Restore Strict Workflow Clarity` validated via existing workflow compile/run tests; milestone 5 regression validation run across `autoloop_v3/tests`
+- Assumptions: prior phase changes under `autoloop_v1.py`, `Ralph_loop.py`, and `autoloop_v3/workflows/*` are the authoritative implementation for this run
+- Preserved invariants: repo-root workflows remain strict; `autoloop_v1.py` keeps explicit `Artifact(...)` templates and inline `parse_phase_ids`; deleted support module stays absent; `RalphLoop` preserves `goal_met=True` on direct and reflected success paths
+- Intended behavior changes: none this turn; this slice confirmed the already-landed behavior instead of altering it
+- Known non-changes: no runtime/core/workflow source edits; no duplicate workflow tests added because the current suite already covers the phase acceptance criteria
+- Expected side effects: none beyond phase-artifact bookkeeping
+- Validation performed:
+  - `pytest autoloop_v3/tests/runtime/test_compatibility_runtime.py -q` -> `21 passed`
+  - `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q` -> `9 passed`
+  - `pytest autoloop_v3/tests -q` -> `78 passed`
+- Deduplication / centralization decisions: preserved the existing workflow strictness coverage instead of adding redundant tests, because the current suite already proves compile, run, explicit artifact templates, deleted support-module absence, and `goal_met` correctness across both success paths
