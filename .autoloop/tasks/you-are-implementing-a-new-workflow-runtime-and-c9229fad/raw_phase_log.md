@@ -412,3 +412,84 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+I’m starting with the phase artifacts, plan, and current `autoloop_v3` tree so I can map the strict-core-engine scope to the existing implementation and avoid pulling unrelated workspace changes into scope.
+
+I’ve confirmed phase 1 only landed the ADRs and docs. Next I’m reading the target workflows and the legacy engine interfaces so the strict core matches the authored workflow surface instead of inventing a parallel API.
+
+The authored workflows confirm the core surface: workflow-level artifacts, owner-step artifact attribute access, scoped sessions, middleware interception, and both strict and drifting handler signatures. I’m moving into the legacy tests and repo config now to pin down expected types, packaging, and test tooling before I start writing modules.
+
+I have enough context to lock the implementation approach. I’m going to build the strict core around an immutable compiled workflow graph, centralized artifact and handler adaptation tables, and deterministic in-memory stores so the phase stays pure-core and fully testable.
+
+Plan:
+1. Read the ADRs that freeze compiler, validation, artifact, and handler policies, then map them to concrete module boundaries.
+2. Implement `autoloop_v3.workflow` core modules plus in-memory protocol/store/provider support.
+3. Add a thin repo-root `workflow` re-export shim only if the tests or imports need it for this phase.
+4. Write exhaustive unit and contract tests for execution, routing, artifact resolution, checkpointing, pause/resume, answer injection, and definition-time validation.
+5. Run the focused pytest slice, fix failures, then update `implementation_notes.md` and the turn’s decision block.
+
+I’ve finished the analysis pass. I’m creating the new `autoloop_v3.workflow` package now: strict primitives, authoring types, compiler, validator, engine, and in-memory provider/store doubles, with the compatibility-heavy loader and filesystem runtime still deferred to later phases.
+
+I’m in the core implementation pass now. The main design wrinkle was scoped sessions: steps don’t carry a scope, so the session store now tracks the active scope per session slot, letting a system handler bind `scope="phase-a"` once and later steps reuse that binding deterministically.
+
+I’m adding the contract tests now. They’re centered on the actual guarantees the phase owns: compile-time validation, routing and middleware semantics, pause/resume with answer injection, required-artifact failure behavior, and scoped session reuse across steps.
+
+The first code pass is in place. I’m fixing the places where the strict registry rules and the real authoring surface interact most tightly: reused artifact objects across workflow-level declarations and step log lists, and any other definition-time assumptions the tests expose.
+
+The strict core and first-pass tests are in place. I’m running the focused `autoloop_v3` pytest slice now to shake out validation/engine edge cases before I touch the phase notes or decision ledger.
+
+Pytest exposed an environment issue rather than a core logic problem: the repo root wasn’t on `sys.path` during collection. I’ve added a local `autoloop_v3/tests/conftest.py` bootstrap and I’m rerunning the suite.
+
+The failures are coming from class-definition discovery rather than execution semantics. `entry = pair` and similar aliases were being treated as duplicate declarations, so I’m making the validator identity-aware: real duplicates still fail, but aliases to the same declared step/session/artifact won’t.
+
+The contract suite is green. I’m doing one last import smoke check and then I’ll update the phase notes and decision ledger with the concrete scope, invariants, and validation that landed in this turn.
+
+I’m writing the phase artifact notes now. I’m also recording the non-obvious decisions from this turn in the existing decision block so later phases don’t drift on the scoped-session model or the strict-core boundary.
+
+I found generated `__pycache__` artifacts in the new package and test tree from the validation run. I’m removing those generated files so the phase diff stays source-only.
+
+Pytest recreated `__pycache__` files during the last verification pass. I’ve already got the green run result I need, so I’m removing the generated bytecode one last time and leaving the source diff clean.
+
+I caught one unrelated tracked bytecode file that my cleanup removed. I’m regenerating just that tracked artifact and leaving the rest of the generated cache files out of the diff.
+
+Scope considered
+
+- Phase `strict-core-engine` only: new strict core under `autoloop_v3/workflow`, deterministic in-memory doubles, and contract tests.
+- Explicitly deferred by phase scope: repo-root `workflow` shim, legacy loader/normalization for workspace drift, filesystem runtime, CLI, and parity execution of `autoloop_v1.py` / `Ralph_loop.py`.
+
+What I analyzed
+
+- The phase plan, ADRs, phase notes, and shared decisions.
+- `autoloop_v1.py`, `Ralph_loop.py`, and legacy `autoloop` tests to pin down the authoring surface and the scoped-session requirement.
+- The strict-core acceptance criteria and the runtime boundary frozen in `autoloop_v3/docs`.
+
+What I changed
+
+- Implemented the strict workflow package in [autoloop_v3/workflow/__init__.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/__init__.py:1) plus the new core modules for primitives, prompts, artifacts, steps, context, validation, compilation, execution, provider protocols, and in-memory stores.
+- Added deterministic provider/store doubles in [autoloop_v3/workflow/providers/fake.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/providers/fake.py:1) and [autoloop_v3/workflow/stores/memory.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/stores/memory.py:1).
+- Added unit and contract coverage under [autoloop_v3/tests/unit/test_validation.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_validation.py:1), [autoloop_v3/tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_primitives_and_stores.py:1), and [autoloop_v3/tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3/autoloop_v3/tests/contract/test_engine_contracts.py:1).
+- Updated the phase artifact and shared decision log in [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/strict-core-engine/implementation_notes.md:1) and [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt:1).
+
+Key findings / decisions
+
+- Scoped sessions need an active-scope table per session slot. A step only names the slot, so `ctx.open_session(ref, scope=...)` now sets the binding later reused by steps declaring that slot.
+- Definition discovery must be identity-aware. `entry = pair` and similar aliases are valid references, not duplicate declarations.
+- The strict core now supports definition-time validation, compiled routing with `GLOBAL` fallback, checkpoint save/load, pause/resume with one-shot answer injection, required-artifact enforcement, and best-effort failure checkpointing.
+
+Open issues / next step
+
+- The next phase should add the isolated compatibility layer and repo-root `workflow` shim, then land the filesystem/runtime harness and parity tests against the workspace workflows.
+- Validation performed: `pytest -q autoloop_v3/tests` passed with `30 passed`, and a direct import smoke check for `autoloop_v3.workflow` succeeded.

@@ -13,3 +13,7 @@ Checkpoint persistence will use a typed snapshot plus append-only events; events
 <autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="architecture-and-adr-baseline" pair="test" turn_seq="1" run_id="run-20260417T151141Z-5a8eefb2" ts="2026-04-17T15:33:42.957785+00:00" />
 Phase 1 test coverage is documentation-level only: pytest guards the ADR inventory and completeness plus the frozen parity, compatibility, and public-surface commitments, because no runtime code landed in this phase.
 The architecture-doc regression tests intentionally assert concrete legacy-behavior markers and required exported symbols rather than exact prose blocks, to stay deterministic while still catching scope loss.
+<autoloop-decisions-header version="1" block_seq="5" owner="implementer" phase_id="strict-core-engine" pair="implement" turn_seq="1" run_id="run-20260417T151141Z-5a8eefb2" ts="2026-04-17T15:36:41.056102+00:00" />
+Strict-core session semantics now include an active-scope table per session slot, so `ctx.open_session(ref, scope=...)` selects the binding later reused by steps that declare the same `Session`.
+Definition discovery treats `entry = some_step` and similar aliases as identity-preserving references instead of duplicate declarations; only distinct objects with colliding names fail validation.
+The strict-core phase deliberately stops at direct `autoloop_v3.workflow` imports; the repo-root `workflow` shim and loader-based legacy normalization remain deferred to the compatibility/runtime phase.
