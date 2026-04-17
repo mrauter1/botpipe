@@ -8,7 +8,7 @@ phases:
     status: planned
     in_scope:
       - Build a feature-parity inventory from autoloop_v1.py, Ralph_loop.py, and the legacy autoloop runtime.
-      - Author the required ADR set with exactly three candidates and the mandated evaluation fields for each material design decision.
+      - Author the required ADR files under autoloop_v3/docs/adr with exactly three candidates and the mandated evaluation fields for each material design decision.
       - Freeze the module layout, public interfaces, compat boundary, and regression-risk inventory in docs.
     out_of_scope:
       - Production provider execution logic
@@ -16,12 +16,12 @@ phases:
     dependencies: []
     acceptance_criteria:
       - id: P1-AC1
-        text: All required ADR topics are enumerated and scheduled before core implementation choices are finalized.
+        text: Authored ADR files exist for each required decision topic and each ADR contains exactly three candidates plus the mandated evaluation fields.
       - id: P1-AC2
         text: The plan captures the concrete legacy behaviors that the new runtime must preserve.
     deliverables:
       - Implementation-ready architecture plan
-      - ADR backlog and decision topics
+      - ADR files under autoloop_v3/docs/adr covering the required decision set
       - Compatibility and risk inventory
     risks:
       - Missing a legacy behavior here will cause downstream rework or silent parity gaps.
@@ -61,7 +61,9 @@ phases:
     status: planned
     in_scope:
       - Implement compat normalization for Verdict aliases, on_verdict, handler arity drift, SessionLifecycle, and related workflow-surface drift.
-      - Implement filesystem stores, workspace/task/run scaffolding, phase selection persistence, scoped sessions, raw/event/decisions logging, and prompt loading.
+      - Implement the workflow loading path for legacy modules that are not safely importable as-is, with Ralph_loop.py as an explicit target.
+      - Implement filesystem stores, workspace/task/run scaffolding, phase selection persistence, scoped sessions, raw/event/decisions logging, prompt loading, config discovery, and CLI/runtime-option compatibility.
+      - Implement persisted-state compatibility for current session/run data and migration-safe checkpoint or session loading where the legacy runtime already supports backward compatibility.
       - Add the runtime harness and any thin workflow import shim needed to run existing workflows unchanged.
     out_of_scope:
       - Final parity goldens
@@ -70,16 +72,20 @@ phases:
       - strict-core-engine
     acceptance_criteria:
       - id: P3-AC1
-        text: autoloop_v1.py and Ralph_loop.py import and compile through the compatibility layer without source edits.
+        text: autoloop_v1.py compiles through the compatibility layer and Ralph_loop.py loads through the legacy-safe workflow loader before strict compilation, without requiring source edits in the normal path.
       - id: P3-AC2
         text: The runtime writes the expected .autoloop workspace layout, session files, logs, and decisions artifacts.
+      - id: P3-AC3
+        text: Config discovery, CLI compatibility, and persisted session or resume-state loading are explicitly implemented or adapted with validation and rollback notes.
     deliverables:
       - autoloop_v3/runtime modules
+      - Legacy-safe workflow loader and config compatibility layer
       - Compatibility adapters and workflow shim
       - Filesystem runtime tests
     risks:
       - A fat root-level shim would dilute the new implementation root and invite drift.
       - Session or artifact path mismatches would break resume and scoped phase execution.
+      - Config or persisted-state drift would silently break operator workflows if not tested during rollout.
     rollback:
       - Back out compatibility/runtime code without altering the strict core if the boundary is violated.
   - phase_id: workflow-integration-and-parity
@@ -89,7 +95,7 @@ phases:
     in_scope:
       - Run autoloop_v1.py and Ralph_loop.py end-to-end with deterministic fake providers.
       - Add golden tests for task/run layout, phase activation, implicit and explicit phase handling, scoped artifacts, scoped sessions, clarifications, and resume.
-      - Add parity comparisons against critical legacy raw logs, events, decisions ledger, and session persistence behavior.
+      - Add parity comparisons against critical legacy raw logs, events, decisions ledger, session persistence behavior, config discovery, CLI compatibility, and resume-state loading.
     out_of_scope:
       - New workflows outside the required target set
     dependencies:
@@ -101,6 +107,8 @@ phases:
         text: Golden and integration tests prove Ralph_loop.py executes with the required compatibility shims.
       - id: P4-AC3
         text: Critical legacy workspace artifacts and resume behaviors are covered by parity assertions.
+      - id: P4-AC4
+        text: Critical config discovery, CLI, and persisted-state compatibility scenarios are covered by parity assertions.
     deliverables:
       - Golden fixtures and parity helpers
       - End-to-end workflow integration tests

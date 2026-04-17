@@ -11,6 +11,7 @@
 
 - `autoloop_v1.py` already expresses the target orchestration shape and depends on a `workflow` authoring package, `workflow.primitives`, step-produced artifact attribute access such as `plan.phase_plan`, `Verdict`, `ResolvedArtifacts`, `on_verdict`, scoped sessions, and phase-local artifacts.
 - `Ralph_loop.py` adds real compatibility drift that must be handled outside the strict core: `SessionLifecycle.ON_START`, legacy `Verdict` naming, handler arity drift (`on_execute(state)` instead of `(state, ctx)`), and Pydantic `copy(update=...)` usage.
+- `Ralph_loop.py` also uses `Verdict` and `Event` in annotations without importing them, so a normal Python import can fail before compatibility normalization runs. The plan must therefore include a legacy-safe workflow loading path, not just post-import adaptation.
 - `autoloop/src/autoloop/main.py` is the parity oracle for workspace/task/run layout, phase-plan scaffold and validation, implicit single-phase fallback, plan/phase session file layout, raw logs, events log, decisions/clarification ledger, loop-control retry behavior, phase-local scoping, resume bookkeeping, and provider-neutral session persistence.
 
 ## Target Implementation Shape
@@ -28,8 +29,10 @@
   - `providers/`: provider protocol plus outcome/parser adapters.
   - `stores/`: protocol definitions and in-memory test doubles.
 - `autoloop_v3/runtime/`
+  - `loader.py`: legacy-safe workflow module loader that can postpone or normalize problematic annotations before strict workflow compilation.
+  - `config.py`: configuration discovery, CLI compatibility, and runtime option resolution for the new harness.
   - `workspace.py`: `.autoloop` path policy, task/run scaffolding, phase selection persistence, phase dir key rules.
-  - `stores/`: filesystem `CheckpointStore`, `SessionStore`, and artifact access.
+  - `stores/`: filesystem `CheckpointStore`, `SessionStore`, artifact access, and legacy session/checkpoint readers where migration compatibility is required.
   - `providers/`: provider adapters and loop-control compatibility interpreters needed by workspace workflows.
   - `events.py` or equivalent: append-only raw/event/decisions writers.
   - `runner.py` and `cli.py`: runnable harness for workflow modules/classes.
@@ -55,7 +58,18 @@
   - provider interface must support raw producer turns, outcome-producing verifier/LLM turns, and provider-neutral session ids
   - checkpoint/session/artifact stores must be swappable with deterministic in-memory fakes and filesystem defaults
 
-## Required ADR Backlog
+## Compatibility And Migration Notes
+
+- Workflow loading:
+  - Legacy workspace workflows must be loadable even when direct Python import would fail before normalization. The default plan is a loader-based compatibility path that postpones or neutralizes unresolved annotation names and then hands the module to `compat.py`; source edits are fallback-only and must be explicitly justified in docs/tests.
+- Configuration and CLI:
+  - The runtime plan must preserve or explicitly adapt current operator-facing config discovery and core CLI behavior, including workspace selection, task/run targeting, resume, phase targeting, provider selection, model overrides, and git toggles.
+  - Any intentional narrowing of CLI surface would be a breaking change and is out of scope without explicit user confirmation.
+- Persisted state:
+  - Session and checkpoint stores must load current `.autoloop` runtime data and legacy compatibility fields where the old runtime already supports them, including provider-neutral `session_id`, legacy Codex `thread_id`, and legacy config/state discovery needed for resume parity.
+  - Migration, rollout, validation, and rollback notes for these persisted/public surfaces must be documented alongside the runtime harness.
+
+## Required ADR Set
 
 - Package/module layout
 - Workflow compilation model
@@ -77,7 +91,7 @@
 ### 1. Architecture Baseline And ADRs
 
 - Build the feature-parity inventory and risk list from `autoloop_v1.py`, `Ralph_loop.py`, and legacy `autoloop.main`.
-- Write the required ADR set before core implementation settles material design choices.
+- Write the required ADR files under `autoloop_v3/docs/adr/` before core implementation settles material design choices. Each required decision must have exactly 3 candidates and the mandated evaluation fields.
 - Freeze the package layout, public interfaces, and compat boundary in docs.
 
 ### 2. Strict v1.1 Core
@@ -89,14 +103,16 @@
 ### 3. Compatibility Layer And Filesystem Runtime
 
 - Implement legacy normalization/adapters for `Verdict`, `on_verdict`, handler arities, `SessionLifecycle`, step constructor drift, and any other workflow-local compatibility gaps discovered in the target workflows.
-- Implement filesystem-backed stores, `.autoloop` workspace scaffolding, event/raw/decisions logging, phase selection persistence, scoped sessions, and prompt resolution.
+- Implement the workflow loading path for legacy modules that are not safely importable as-is, with `Ralph_loop.py` as an explicit acceptance target.
+- Implement filesystem-backed stores, `.autoloop` workspace scaffolding, event/raw/decisions logging, phase selection persistence, scoped sessions, prompt resolution, config discovery, and CLI/runtime-option compatibility.
+- Implement persisted-state compatibility for current session/run data and migration-safe checkpoint/session loading where the legacy runtime already supports backward compatibility.
 - Add the runnable harness and any thin import/package shims needed to execute the target workflows without editing them.
 
 ### 4. Workflow Integration And Parity Proof
 
 - Execute `autoloop_v1.py` and `Ralph_loop.py` end-to-end with deterministic fake providers.
 - Add golden tests for task/run layout, phase activation, implicit/explicit phase handling, scoped artifacts/sessions, clarifications, pause/resume, and failure paths.
-- Add parity comparisons against critical legacy `autoloop` behavior for raw logs, events, decisions ledger, session persistence, and workspace paths.
+- Add parity comparisons against critical legacy `autoloop` behavior for raw logs, events, decisions ledger, session persistence, workspace paths, config discovery, CLI compatibility, and resume-state loading.
 
 ### 5. Hardening, Docs, And Final Validation
 
@@ -112,9 +128,11 @@
 - Phase plan behavior: support authored `phase_plan.yaml` plus implicit single-phase fallback when no explicit plan exists.
 - Artifact scoping: task-global for plan artifacts, phase-local for implement/test, with dot-notation template resolution and missing-key-to-empty behavior.
 - Sessions: provider-neutral session ids with scoped bindings; legacy Codex `thread_id` compatibility remains isolated in runtime/session serialization.
+- Workflow loading: legacy modules that are not directly import-safe must still be loadable through the compatibility path before strict compilation.
 - Clarifications and pause/resume: explicit pending question/answer persisted through checkpoints and session bindings.
 - Loop-control behavior: canonical and legacy parsing/retry stays in runtime/provider adapters, not in the clean engine core.
 - Events and raw logs: append-only task-level and run-level logs plus event recorder parity for resumed runs and phase transitions.
+- Configuration and CLI: preserve or explicitly adapt current config discovery, resume, workspace/task/run targeting, phase targeting, provider selection, and git-control surfaces with migration notes.
 
 ## Regression Risks And Controls
 
@@ -124,6 +142,8 @@
   - Control: normalize once in `compat.py`, compile only normalized objects, and add dedicated compatibility tests.
 - Resume semantics diverging from the legacy runtime
   - Control: define an explicit checkpoint schema, keep session/answer persistence deterministic, and compare resumed-path behavior with legacy artifacts/events for critical scenarios.
+- Config/CLI or persisted-state drift
+  - Control: test current config discovery and resume/session loading paths explicitly, document migration/rollback behavior, and keep the old runtime available as the oracle during rollout.
 - Artifact/session path regressions
   - Control: golden path tests for `phase_dir_key`, task/run layout, produced-artifact lookup, scoped session files, and phase-local artifact directories.
 - Logging/ledger regressions
