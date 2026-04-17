@@ -527,3 +527,125 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+---
+Working in the `runtime-session-store-ownership` phase. I’m first reading the phase artifacts, shared decisions, and the current filesystem store/support code so I can move session payload serialization into the runtime store without leaking Autoloop policy into it.
+
+The phase artifacts are narrow: this slice is only about making the filesystem store own payload writes and placeholders while preserving legacy payload compatibility. I’m locating every serializer/helper touchpoint now so I can move exactly that logic and no more.
+
+I found the current leak: `autoloop_v1_support.py` still owns `_ensure_session_placeholder` and `_write_session_payload`, while the filesystem store already owns the read/merge side. I’m reading the exact implementations plus the compatibility tests so the write helpers move without changing the persisted JSON contract.
+
+I’ve isolated the exact write seam: placeholder creation for `plan.json` and persisted clarification-note updates. Next I’m checking the current worktree and store exports so I can patch only the runtime-owned serialization path and leave the broader parity refactor for its later phase.
+
+Plan for this phase:
+1. Move public session-payload write and placeholder helpers into [`autoloop_v3/runtime/stores/filesystem.py`](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/filesystem.py), and refactor existing store writes to use them.
+2. Replace the workflow-owned placeholder/write calls in [`autoloop_v3/workflows/autoloop_v1_support.py`](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_support.py) with runtime-store helpers, keeping path resolution and parity policy unchanged.
+3. Add runtime-store tests that lock helper ownership, placeholder behavior, `thread_id` compatibility, and metadata preservation, then run the focused pytest slice.
+
+I’m editing the runtime store now. The change is surgical: one public write helper, one public placeholder helper, store internals routed through them, and the Autoloop support layer switched over so it no longer owns session-file JSON shape.
+
+I’ve moved the serialization logic. Now I’m locking it with runtime tests that hit the new public helpers directly, so the phase proves the ownership change independently of the larger Autoloop parity harness.
+
+The store changes are in place. The broad runtime file still has a known unrelated failure from `Ralph_loop.py` strict validation, so I’m switching to the phase-relevant pytest slice: the new store-helper tests plus the existing metadata/clarification parity checks that exercise `sessions/plan.json`.
+
+The code path is stable now. I’m recording the phase-local implementation notes and the one non-obvious decision worth preserving: all session JSON writing now flows through one runtime serializer so codex `thread_id` mirroring and sparse metadata behavior stay identical across direct helper calls and store writes.
+
+Scope considered
+
+- Phase-local `runtime-session-store-ownership` only.
+- Runtime session payload serialization in [filesystem.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/filesystem.py), its exports in [__init__.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/__init__.py), the Autoloop-v1 caller surface in [autoloop_v1_support.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_support.py), and runtime compatibility coverage in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+- I also updated the phase artifacts in [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/implement/phases/runtime-session-store-ownership/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/decisions.txt).
+
+What I analyzed
+
+- Where session JSON was still written outside the runtime store.
+- The existing legacy compatibility contract for `thread_id`, sparse metadata, placeholder files, and `sessions/plan.json`.
+- Parity tests that exercise clarification persistence and legacy session filenames.
+
+What I changed
+
+- Added public runtime-owned helpers `write_session_payload(...)` and `ensure_session_payload_placeholder(...)` in [filesystem.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/filesystem.py).
+- Routed `FilesystemSessionStore._write_binding(...)` and `set_pending_session_note(...)` through the same serializer so every write path uses one payload schema.
+- Exported the new helpers from [runtime/stores/__init__.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/__init__.py).
+- Removed workflow-owned session JSON writers from [autoloop_v1_support.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_support.py) and switched it to runtime helpers for placeholders and clarification-note persistence.
+- Added focused tests for generic placeholder creation and direct payload writing, while keeping the existing sparse-metadata and parity tests in place.
+
+Key findings / decisions
+
+- The clean boundary here is: runtime owns session payload shape and writes; the workflow-owned layer only chooses paths and policy.
+- Reusing one serializer across direct helper calls, store writes, and pending-note updates preserves codex `thread_id` mirroring and non-codex legacy `thread_id` preservation without duplicating JSON logic.
+- No workflow-specific path semantics were added to the runtime store.
+
+Open issues / next step
+
+- Focused validation passed: 7 targeted runtime/parity tests passed.
+- A broader run of `autoloop_v3/tests/runtime/test_compatibility_runtime.py` still fails on the pre-existing `Ralph_loop.py` strict-validation issue: `system step 'execute' is missing handler 'on_execute'`. I did not change that in this phase because it is scoped to a later workflow-correctness slice.
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+---
+Reviewing the phase-local store-ownership changes now. I’m checking the touched runtime/store and parity-callsite diffs against the acceptance criteria, then I’ll update the phase criteria and feedback artifacts with any concrete findings.
+
+The phase artifacts are still blank, so I’m reviewing the actual current file contents instead of relying on `git diff`. I’m checking for residual workflow-owned JSON serialization, mismatched helper behavior, and whether the new tests prove the acceptance criteria instead of just touching the helpers.
+
+I’ve confirmed the new helpers exist in the runtime store and the Autoloop support layer now calls them. I’m doing one more pass for residual session-file writes and re-running the focused validation so I can decide whether there are any actual blocking regressions or just phase-complete behavior.
+
+The phase-local audit is clean. I’m marking the criteria complete and recording a no-findings review result in the feedback artifact, with the exact focused validation I used to verify AC-1 through AC-3.
+
+Scope considered
+
+- Phase-local `runtime-session-store-ownership` only.
+- Reviewed current contents of `autoloop_v3/runtime/stores/filesystem.py`, `autoloop_v3/runtime/stores/__init__.py`, `autoloop_v3/workflows/autoloop_v1_support.py`, and `autoloop_v3/tests/runtime/test_compatibility_runtime.py`.
+- Updated only the phase artifacts `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- Whether session payload write and placeholder ownership moved fully into the runtime store.
+- Whether Autoloop-v1 support code still serialized session JSON directly.
+- Whether legacy `thread_id` compatibility, sparse metadata preservation, and generic path semantics remained intact.
+
+What I reviewed
+
+- Focused runtime validation:
+  - `python -m pytest autoloop_v3/tests/runtime/test_compatibility_runtime.py -q -k 'runtime_store or filesystem_session_store_uses_generic_paths_and_loads_legacy_thread_id or filesystem_session_store_supports_custom_path_resolver or filesystem_session_store_sparse_writes_preserve_existing_metadata'`
+  - `python -m pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py -q -k 'autoloop_v1_parity_harness_preserves_legacy_workspace_logs_and_sessions or autoloop_v1_parity_harness_persists_clarifications_and_resumes'`
+- Phase artifacts now reflect the review result:
+  - all criteria boxes checked
+  - feedback updated with a no-findings review outcome and validation notes
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- AC-1, AC-2, and AC-3 are satisfied for this phase-local slice.
+
+Open issues / next step
+
+- No phase-local open issues.
+- Broader workflow cleanup such as the known `Ralph_loop.py` strict-validation problem remains for its own phase and was not treated as a finding here because it is out of scope for `runtime-session-store-ownership`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
