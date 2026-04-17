@@ -7,3 +7,7 @@
 {"ts": "2026-04-17T18:46:46.281547+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 7, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-17T18:47:49.680431+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 8, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-17T18:47:49.692386+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 9, "event_type": "pair_completed", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-17T18:47:49.751533+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 10, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["book-architecture-core", "generic-runtime-boundary", "workflow-migration-parity", "proof-suite-and-docs"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-04-17T18:47:49.752864+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 11, "event_type": "phase_started", "phase_id": "book-architecture-core", "phase_mode": "single"}
+{"ts": "2026-04-17T18:47:49.753311+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "book-architecture-core"}
+{"ts": "2026-04-17T18:47:49.753364+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "book-architecture-core"}

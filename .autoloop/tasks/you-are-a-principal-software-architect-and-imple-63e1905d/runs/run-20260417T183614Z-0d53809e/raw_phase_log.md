@@ -177,3 +177,12 @@ No blocking planning issues remain. The plan is ready to advance to implementati
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=book-architecture-core,generic-runtime-boundary,workflow-migration-parity,proof-suite-and-docs
+explicit=True
+current_phase_index=0
