@@ -1007,3 +1007,95 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+---
+I’m treating this as the proof-suite-and-docs phase: verify the current `autoloop_v3` state, read the active phase artifacts and prior outputs, then close the remaining gaps in docs, tests, and final parity evidence without pulling unrelated files into scope.
+
+I’ve confirmed the earlier phases already landed core/runtime/parity changes; this phase is likely about finishing the proof surface rather than new architecture work. Next I’m checking the current docs, tests, and repo status to see what is still missing or stale.
+
+The main gap signal is documentation drift: the top-level docs look present, but there are still generated/reference docs in `autoloop_v3/codebase.md` and several ADR files that describe the old compatibility architecture. I’m reading the final docs and tests now to decide whether this phase needs only targeted cleanup or broader doc replacement.
+
+The current gating tests cover the new top-level docs, engine contract, toy-runtime proof, and parity runs. The remaining risk is that the doc corpus still contains contradictory ADR/reference material from the old design, so I’m checking those next and will tighten the doc tests so they freeze the final architecture rather than just the top-level pages.
+
+I’ve narrowed the likely work to two areas: removing stale contradictory documentation under `autoloop_v3/docs/adr` and `autoloop_v3/codebase.md`, and tightening doc tests so those files cannot drift back. I’m running the current suite first to confirm whether anything else is already failing before I edit.
+
+The targeted suite is already green. The real issue is documentation consistency: several tracked ADRs still record the pre-refactor architecture as if it were selected, which directly conflicts with the final strict design even though the main docs are correct. I’m going to replace that duplicated stale ADR corpus with a slimmer final-form reference so the docs have one coherent story.
+
+I’m at the edit point now. The concrete changes are: rewrite the tracked ADR archive into final-form summaries that point back to `ARCHITECTURE_DECISIONS.md`, add a small explicit configuration section to the primary docs, and strengthen the doc-baseline tests so this stale-ADR problem cannot recur.
+
+The ADR archive is now converted from duplicated decision matrices into concise final-state summaries, and the doc test now treats that archive as part of the proof surface. I’m validating those edits next, then I’ll update the phase notes and run the full suite.
+
+The new doc gate caught one remaining stale phrase in the rewritten ADR archive. I’m fixing that wording now, then I’ll rerun the docs test and let the full suite finish.
+
+The doc gate is clean now. The full suite is still running and has crossed the halfway mark without failures; I’m waiting on the final result before I update the phase notes and decision ledger.
+
+The code and parity behavior stayed unchanged in this phase; the edits are documentation/proof-surface only. I’m recording that explicitly in the decisions ledger and implementation notes now, including the deliberate choice to leave unrelated untracked generated artifacts alone.
+
+The only unexpected diff now is a generated `__pycache__` artifact from running the suite. I’m checking whether that file is tracked before deciding how to clean it up; I don’t want to disturb user-owned workspace state.
+
+Scope considered
+- Phase-local `proof-suite-and-docs` scope in `/home/rauter/autoloop_v3`
+- Tracked docs/tests plus the active phase artifacts, prior phase outputs, and final validation surface
+- Left unrelated untracked/generated workspace files untouched
+
+What I analyzed
+- Final docs in [README.md](/home/rauter/autoloop_v3/autoloop_v3/README.md), [MIGRATION.md](/home/rauter/autoloop_v3/autoloop_v3/MIGRATION.md), [architecture.md](/home/rauter/autoloop_v3/autoloop_v3/docs/architecture.md), parity/risk notes, and [ARCHITECTURE_DECISIONS.md](/home/rauter/autoloop_v3/autoloop_v3/ARCHITECTURE_DECISIONS.md)
+- The tracked `docs/adr/` archive, which still described compatibility-era selections
+- The proof suite, including engine contracts, runtime neutrality, strict workflow execution, and Autoloop-v1 parity tests
+- Full repository test run after edits
+
+What I changed
+- Rewrote `autoloop_v3/docs/adr/001-014` into final-form summaries that point back to the authoritative `ARCHITECTURE_DECISIONS.md` record instead of duplicating stale candidate matrices
+- Added an explicit generic-configuration section to [README.md](/home/rauter/autoloop_v3/autoloop_v3/README.md) and [architecture.md](/home/rauter/autoloop_v3/autoloop_v3/docs/architecture.md)
+- Strengthened [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py) so docs now gate ADR drift and config-boundary coverage
+- Updated the phase implementation notes and decisions ledger
+
+Final file tree
+```text
+autoloop_v3/
+  ARCHITECTURE_DECISIONS.md
+  MIGRATION.md
+  README.md
+  docs/
+    architecture.md
+    authoring.md
+    compatibility.md
+    parity-matrix.md
+    risk-register.md
+    adr/001-014.md
+  runtime/
+  workflow/
+  workflows/
+  tests/
+    contract/
+    runtime/
+    unit/
+    test_architecture_baseline_docs.py
+autoloop_v1.py
+Ralph_loop.py
+workflow/
+```
+
+Key findings / decisions
+- The code/runtime side was already in the final strict shape; the remaining drift was documentation, not behavior.
+- Compat removal is now documented consistently: no `workflow.compat`, no loader symbol injection, no `on_verdict`, no handler adaptation, no `SessionLifecycle`; legacy-equivalent Autoloop-v1 behavior lives in `autoloop_v3.workflows.autoloop_v1_support`.
+- The session model remains the final explicit design: workflows declare slots, open them with `ctx.open_session(slot, scope=...)`, and the engine only does lookup. `autoloop_v1.py` shares implement/test phase sessions through rebinding of `phase_session`, not computed keys.
+- Workflow migration remains strict: `autoloop_v1.py` and `Ralph_loop.py` run on canonical primitives; Autoloop-v1-specific policy stays out of the generic runtime.
+- Parity result: full suite passed, including Autoloop-v1 success, clarification/resume, blocked, failed, event ordering, checkpoint, request snapshot, raw log, decisions, and legacy status-reader coverage.
+
+Open issues / next step
+- Validation: `pytest -q` -> `248 passed in 21.88s`
+- No tracked open issues in this phase
+- Non-scope untracked/generated files in the workspace, including `codebase.md` artifacts, were intentionally left untouched

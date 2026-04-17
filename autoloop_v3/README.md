@@ -88,6 +88,15 @@ The harness preserves legacy-oriented raw logs, decisions, and session filenames
 - `.autoloop/tasks/{task_id}/runs/{run_id}/sessions/plan.json`
 - `.autoloop/tasks/{task_id}/runs/{run_id}/sessions/phases/{phase}.json`
 
+## Configuration
+
+Generic configuration stays intentionally small:
+
+- provider wiring and settings such as `provider.name`, `provider.codex.model`, `provider.codex.model_effort`, `provider.claude.model`, `provider.claude.effort`, and `provider.claude.permission_strategy`
+- runtime controls such as `max_steps` and `intent_mode`
+
+Legacy discovery of `superloop.*` config filenames remains only as config-file compatibility. It does not restore legacy workflow authoring behavior.
+
 ## Reading Order
 
 - [ARCHITECTURE_DECISIONS.md](ARCHITECTURE_DECISIONS.md)

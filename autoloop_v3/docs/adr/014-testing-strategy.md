@@ -1,50 +1,17 @@
 # ADR 014: Testing Strategy
 
-- Decision name: testing strategy
+Status: Final
 
-## Candidate A
+Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.md)
+Topic: `15. Parity-Testing Strategy`
 
-- Description: focus mostly on end-to-end workflow runs and a few smoke tests.
-- correctness: medium because broad scenarios run, but many invariants are under-specified.
-- compatibility: medium because some parity issues will be caught.
-- simplicity: simple test authoring, but diagnosis is slow.
-- extensibility: weak because every new case needs a large fixture.
-- observability: medium because failures are broad and noisy.
-- testability: weak because unit-level regressions are hard to isolate.
-- failure handling: medium because some edge cases are covered, many are not.
-- performance: weak because the suite becomes slow quickly.
-- migration risk: medium.
+Final decision:
+- The proof suite is layered: unit tests, engine-contract tests, generic-runtime integration tests, and legacy parity tests.
+- No-compat proofs are first-class tests, not documentation claims.
+- A toy workflow with unrelated step names proves runtime agnosticism.
+- Autoloop-v1 parity tests pin workspace layout, events, checkpoints, clarification persistence, blocked/failed flows, and session-sharing behavior.
 
-## Candidate B
-
-- Description: use a test pyramid with unit tests for primitives and stores, contract tests for steps and routing, filesystem integration tests for the runtime, and golden or parity tests for legacy workflows.
-- correctness: strong because invariants and end-to-end behavior are both covered.
-- compatibility: strong because legacy workflows and runtime artifacts get explicit parity coverage.
-- simplicity: strong because each test type has a clear purpose.
-- extensibility: strong because new features slot into the right test layer.
-- observability: strong because failures point to the broken layer.
-- testability: strong because fakes keep most tests deterministic.
-- failure handling: strong because failure paths can be targeted precisely.
-- performance: strong because only a small subset of tests need filesystem or end-to-end execution.
-- migration risk: low.
-
-## Candidate C
-
-- Description: rely mainly on snapshot tests for docs, compiled graphs, and logs.
-- correctness: medium because snapshots catch shape changes, not always semantic bugs.
-- compatibility: medium because outputs can be compared, but behavior gaps may hide.
-- simplicity: medium; snapshots are easy to record but costly to review.
-- extensibility: medium.
-- observability: medium because diffs show changes, not intent.
-- testability: medium because dynamic behavior still needs imperative tests.
-- failure handling: weak because exceptional paths are awkward to encode as snapshots.
-- performance: strong.
-- migration risk: medium because snapshot churn can normalize regressions.
-
-## Selected Option
-
-Candidate B.
-
-## Why The Selected Option Is The Book Architecture Choice
-
-The problem has both strict engine invariants and legacy parity obligations. A layered test strategy is the only approach that keeps the suite fast, diagnostic, and strong enough to prove compatibility without relying on a few oversized end-to-end runs.
+Rejected shape:
+- no parity strategy that relies only on unit coverage
+- no oversized end-to-end suite without focused contract tests
+- no documentation-only proof of strictness or parity

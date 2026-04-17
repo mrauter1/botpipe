@@ -76,6 +76,16 @@ The generic runtime does not own:
 - raw phase logs
 - workflow-specific git policy
 
+## Configuration
+
+The runtime keeps only generic configuration:
+
+- provider selection and provider-specific settings
+- runtime controls such as `max_steps` and `intent_mode`
+- config-file discovery for `autoloop.*` plus legacy `superloop.*` filenames
+
+Configuration is not used to encode workflow topology, phase plans, raw-log policy, or session-opening rules.
+
 ## Autoloop-v1 Parity
 
 `autoloop_v1.py` remains a strict workflow, but its legacy-equivalent operational behavior is provided by `autoloop_v3.workflows.autoloop_v1_support`:
