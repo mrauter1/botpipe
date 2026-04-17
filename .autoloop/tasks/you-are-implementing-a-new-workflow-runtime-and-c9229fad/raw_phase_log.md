@@ -1288,3 +1288,54 @@ Unsupported resume remains explicitly rejected, but it is now rejected before `e
 Open issues / next step
 
 `pytest -q autoloop_v3/tests` passes: `57 passed`. The only residual noise is the existing non-blocking Pydantic deprecation warnings from unchanged `Ralph_loop.py`.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+I’m re-reviewing only the reviewer-blocked resume path and its new regression coverage, plus the neighboring runner/workspace behavior it depends on. First I’m reading the updated feedback and criteria, then I’ll verify the landed runner ordering and the new non-mutation tests before I decide whether the phase can now be marked complete.
+
+Reviewing the phase-local fix for the rejected-resume mutation path and the related tests. I’m checking the updated runner behavior, then I’ll update the reviewer artifacts if the blocking finding is actually resolved.
+
+The gate ordering change is in the right place; I’m re-running the parity-facing tests to confirm there isn’t a second-order regression before I update the review artifacts.
+
+The targeted parity suite is clean. I’m doing one final sweep across the broader `autoloop_v3/tests` set because this phase’s acceptance gate is wider than the two focused files.
+
+The broader suite passes too. I’m checking the phase notes and shared decisions once more, then I’ll close out the reviewer artifacts with the blocker cleared.
+
+I’ve finished the audit sweep. I’m updating the reviewer-owned artifacts now: clearing the resolved blocker in `criteria.md` and appending the verification result in `feedback.md`.
+
+The reviewer artifacts are updated. I’m doing a quick readback so the final status matches what’s on disk exactly.
+
+Scope considered
+
+Phase-local review of `workflow-integration-and-parity`, centered on the rejected-resume compatibility path in `autoloop_v3/runtime/runner.py`, its new regression coverage, and the related reviewer-owned artifacts under `.autoloop/tasks/.../workflow-integration-and-parity/`.
+
+What I analyzed
+
+I re-read the updated runner ordering around `_prepare_workspaces()` and `_validate_resume_state()`, checked the new resume regression tests in `autoloop_v3/tests/runtime/test_compatibility_runtime.py`, reviewed the phase implementation notes, and compared the change against the shared decisions ledger to confirm it stays within the agreed compatibility boundary.
+
+What I reviewed
+
+I re-ran `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py` and `pytest -q autoloop_v3/tests`; both passed, with only the existing non-blocking Pydantic deprecation warnings from unchanged `Ralph_loop.py`. I updated `criteria.md` so all phase checks are marked complete and appended a verification note to `feedback.md` recording that the prior blocker is resolved.
+
+Key findings / decisions
+
+No remaining blocking findings. The previous defect is fixed: unsupported legacy resumes are now rejected before any workspace creation, run opening, or event emission, and the new tests cover both `.autoloop` and `.superloop` persisted-state non-mutation paths.
+
+Open issues / next step
+
+No blocking issues remain in this phase-local review scope. Residual warnings come from legacy `Ralph_loop.py` deprecations and do not block phase completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
