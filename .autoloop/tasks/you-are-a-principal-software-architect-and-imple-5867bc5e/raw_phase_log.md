@@ -649,3 +649,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d6f-a246-7bf1-9c65-0004e6233c50
+---
+Testing the `runtime-session-store-ownership` slice now. I’m checking the current runtime store tests against the phase contract, then I’ll add or refine only the missing coverage and update the phase-local test strategy and feedback artifacts.
+
+The current coverage is close, but I want two tighter guards for this phase: one direct test for codex `thread_id` mirroring on the new public write helper, and one source-level contract test that prevents session JSON writers from creeping back into `autoloop_v1_support.py`.
+
+I’ve added the two missing guards. Now I’m running just the phase-relevant test slice again so the new source-level ownership check and the codex helper behavior are both proven without getting blocked by the unrelated `Ralph_loop.py` failure in the wider file.
+
+The focused slice is green. I’m recording the test-design choice now: use one source-level ownership guard plus direct helper round-trips, instead of trying to prove this phase only through broader end-to-end parity runs.
+
+Scope considered
+
+- Phase-local `runtime-session-store-ownership` only.
+- Touched repo test coverage in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+- Updated phase artifacts [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/runtime-session-store-ownership/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-a-principal-software-architect-and-imple-5867bc5e/test/phases/runtime-session-store-ownership/feedback.md).
+
+What I analyzed
+
+- Existing runtime store tests for helper ownership, legacy `thread_id` loading, sparse metadata preservation, and custom path behavior.
+- Existing parity tests that exercise `sessions/plan.json` clarification persistence.
+- The phase decision ledger to avoid duplicating already-covered broader parity assertions.
+
+What I changed
+
+- Added a direct test for codex `thread_id` mirroring on `write_session_payload(...)`.
+- Added a source-level ownership contract test that prevents `_ensure_session_placeholder` / `_write_session_payload` from reappearing in `autoloop_v1_support.py` and requires delegation to runtime-store helpers.
+- Updated the phase-local test strategy with an explicit AC-to-test coverage map.
+- Appended the phase-local feedback artifact with the new test additions and validation commands.
+- Appended the non-obvious test decisions under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- The current slice needed one more direct helper test and one ownership guard to fully lock AC-1.
+- I deliberately used a source-level contract here instead of broader end-to-end duplication because the parity behavior is already covered elsewhere and this phase is specifically about ownership boundaries.
+
+Open issues / next step
+
+- Focused validation passed:
+  - `autoloop_v3/tests/runtime/test_compatibility_runtime.py` targeted slice: 7 passed
+  - `autoloop_v3/tests/runtime/test_workflow_integration_parity.py` targeted slice: 2 passed
+- The broader `test_compatibility_runtime.py` file still contains the unrelated `Ralph_loop.py` strict-validation failure; I did not normalize that out-of-scope issue in these tests.

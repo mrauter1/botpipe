@@ -209,6 +209,45 @@ def test_runtime_store_write_helper_preserves_sparse_metadata_and_non_codex_thre
     assert loaded_payload["metadata"]["last_used_at"] == "2026-04-17T00:05:00+00:00"
 
 
+def test_runtime_store_write_helper_mirrors_codex_session_id_into_thread_id(tmp_path: Path):
+    session_file = tmp_path / "sessions" / "main.json"
+
+    write_session_payload(
+        session_file,
+        "thread-999",
+        {"provider_metadata": {"source": "runtime"}},
+        default_mode="persistent",
+        default_provider="codex",
+    )
+
+    raw_payload = json.loads(session_file.read_text(encoding="utf-8"))
+    loaded_payload = load_session_payload(session_file, "persistent", "codex")
+
+    assert raw_payload["provider"] == "codex"
+    assert raw_payload["session_id"] == "thread-999"
+    assert raw_payload["thread_id"] == "thread-999"
+    assert loaded_payload["session_id"] == "thread-999"
+    assert loaded_payload["metadata"]["provider"] == "codex"
+    assert loaded_payload["metadata"]["thread_id"] == "thread-999"
+    assert loaded_payload["metadata"]["provider_metadata"] == {"source": "runtime"}
+
+
+def test_autoloop_v1_support_delegates_session_payload_writes_to_runtime_store_helpers():
+    runtime_store_source = (REPO_ROOT / "autoloop_v3" / "runtime" / "stores" / "filesystem.py").read_text(
+        encoding="utf-8"
+    )
+    support_source = (REPO_ROOT / "autoloop_v3" / "workflows" / "autoloop_v1_support.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "def write_session_payload(" in runtime_store_source
+    assert "def ensure_session_payload_placeholder(" in runtime_store_source
+    assert "ensure_session_payload_placeholder(plan_session_file)" in support_source
+    assert "set_pending_session_note(session_file, note)" in support_source
+    assert "def _ensure_session_placeholder" not in support_source
+    assert "def _write_session_payload" not in support_source
+
+
 def test_filesystem_session_store_supports_custom_path_resolver(tmp_path: Path):
     run_dir = tmp_path / "run"
 
