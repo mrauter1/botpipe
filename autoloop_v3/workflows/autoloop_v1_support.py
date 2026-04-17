@@ -16,7 +16,14 @@ from ..runtime.events import EventLogger
 from ..runtime.loader import load_compiled_workflow
 from ..runtime.prompts import FilesystemPromptRegistry
 from ..runtime.runner import RunnerOptions
-from ..runtime.stores.filesystem import FilesystemCheckpointStore, FilesystemSessionStore, load_session_payload, scope_key
+from ..runtime.stores.filesystem import (
+    FilesystemCheckpointStore,
+    FilesystemSessionStore,
+    ensure_session_payload_placeholder,
+    load_session_payload,
+    scope_key,
+    set_pending_session_note,
+)
 from ..runtime.workspace import (
     TaskWorkspace,
     create_run,
@@ -147,7 +154,7 @@ def create_autoloop_v1_run(
     run_raw_log = run.run_dir / "raw_phase_log.md"
     run_raw_log.write_text(f"# Autoloop Raw Phase Log ({run.run_id})\n", encoding="utf-8")
     plan_session_file = autoloop_v1_session_path(run.run_dir, "plan_session", None)
-    _ensure_session_placeholder(plan_session_file)
+    ensure_session_payload_placeholder(plan_session_file)
     return AutoloopV1RunWorkspace(
         workspace=workspace,
         run=run,
@@ -162,7 +169,7 @@ def open_existing_autoloop_v1_run(workspace: AutoloopV1Workspace, run_id: str) -
     if not run_raw_log.exists():
         run_raw_log.write_text(f"# Autoloop Raw Phase Log ({run.run_id})\n", encoding="utf-8")
     plan_session_file = autoloop_v1_session_path(run.run_dir, "plan_session", None)
-    _ensure_session_placeholder(plan_session_file)
+    ensure_session_payload_placeholder(plan_session_file)
     return AutoloopV1RunWorkspace(
         workspace=workspace,
         run=run,
@@ -605,10 +612,7 @@ def _append_clarification(
         qa_seq=qa_seq,
         source=source,
     )
-    payload = load_session_payload(session_file, default_mode="persistent", default_provider="codex")
-    metadata = dict(payload["metadata"])
-    metadata["pending_clarification_note"] = note
-    _write_session_payload(session_file, payload["session_id"], metadata)
+    set_pending_session_note(session_file, note)
     return note
 
 
@@ -853,32 +857,3 @@ def _set_phase_plan_path(task: TaskWorkspace) -> None:
     payload.setdefault("phase_plan_path", str(task.task_root_rel / "plan" / "phase_plan.yaml"))
     task.task_meta_file.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-
-def _ensure_session_placeholder(path: Path) -> None:
-    payload = load_session_payload(path, default_mode="persistent", default_provider="codex")
-    _write_session_payload(path, payload["session_id"], payload["metadata"])
-
-
-def _write_session_payload(path: Path, session_id: str | None, metadata: dict[str, Any]) -> None:
-    provider = metadata.get("provider") if isinstance(metadata.get("provider"), str) else "codex"
-    provider_metadata = metadata.get("provider_metadata")
-    if not isinstance(provider_metadata, dict):
-        provider_metadata = {}
-    payload = {
-        "mode": metadata.get("mode") if isinstance(metadata.get("mode"), str) else "persistent",
-        "provider": provider,
-        "session_id": session_id,
-        "thread_id": session_id if provider == "codex" else metadata.get("thread_id"),
-        "provider_metadata": provider_metadata,
-        "model_override": metadata.get("model_override") if isinstance(metadata.get("model_override"), str) else None,
-        "effort_override": metadata.get("effort_override") if isinstance(metadata.get("effort_override"), str) else None,
-        "pending_clarification_note": metadata.get("pending_clarification_note")
-        if isinstance(metadata.get("pending_clarification_note"), str)
-        else None,
-        "created_at": metadata.get("created_at")
-        if isinstance(metadata.get("created_at"), str)
-        else datetime.now(timezone.utc).isoformat(),
-        "last_used_at": metadata.get("last_used_at") if isinstance(metadata.get("last_used_at"), str) else None,
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

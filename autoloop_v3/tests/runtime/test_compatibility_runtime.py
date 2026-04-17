@@ -23,7 +23,13 @@ from autoloop_v3.runtime.config import (
 )
 from autoloop_v3.runtime.loader import load_workflow_class, load_workflow_module
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow
-from autoloop_v3.runtime.stores import FilesystemCheckpointStore, FilesystemSessionStore, scope_key
+from autoloop_v3.runtime.stores import (
+    FilesystemCheckpointStore,
+    FilesystemSessionStore,
+    ensure_session_payload_placeholder,
+    scope_key,
+    write_session_payload,
+)
 from autoloop_v3.runtime.stores.filesystem import load_session_payload
 from autoloop_v3.runtime.workspace import create_run, ensure_workspace, resolve_resume_state_root
 from autoloop_v3.workflow.compiler import compile_workflow
@@ -148,6 +154,59 @@ def test_filesystem_session_store_uses_generic_paths_and_loads_legacy_thread_id(
     assert loaded is not None
     assert loaded.session_id == "thread-123"
     assert loaded.metadata["provider"] == "codex"
+
+
+def test_runtime_store_placeholder_helper_creates_generic_session_payload(tmp_path: Path):
+    session_file = tmp_path / "arbitrary" / "session.json"
+
+    ensure_session_payload_placeholder(session_file, default_mode="ephemeral", default_provider="claude")
+
+    raw_payload = json.loads(session_file.read_text(encoding="utf-8"))
+    loaded_payload = load_session_payload(session_file, "ephemeral", "claude")
+
+    assert raw_payload["mode"] == "ephemeral"
+    assert raw_payload["provider"] == "claude"
+    assert raw_payload["session_id"] is None
+    assert raw_payload["thread_id"] is None
+    assert loaded_payload["session_id"] is None
+    assert loaded_payload["metadata"]["mode"] == "ephemeral"
+    assert loaded_payload["metadata"]["provider"] == "claude"
+    assert isinstance(loaded_payload["metadata"]["created_at"], str)
+
+
+def test_runtime_store_write_helper_preserves_sparse_metadata_and_non_codex_thread_id(tmp_path: Path):
+    session_file = tmp_path / "sessions" / "assistant.json"
+
+    write_session_payload(
+        session_file,
+        "session-456",
+        {
+            "provider": "claude",
+            "mode": "persistent",
+            "provider_metadata": {"source": "legacy"},
+            "thread_id": "thread-123",
+            "pending_clarification_note": "Question:\nShip this?\n\nAnswer:\nYes",
+            "created_at": "2026-04-17T00:00:00+00:00",
+            "last_used_at": "2026-04-17T00:05:00+00:00",
+        },
+        default_mode="persistent",
+        default_provider="codex",
+    )
+
+    raw_payload = json.loads(session_file.read_text(encoding="utf-8"))
+    loaded_payload = load_session_payload(session_file, "persistent", "codex")
+
+    assert raw_payload["provider"] == "claude"
+    assert raw_payload["session_id"] == "session-456"
+    assert raw_payload["thread_id"] == "thread-123"
+    assert raw_payload["provider_metadata"] == {"source": "legacy"}
+    assert loaded_payload["session_id"] == "session-456"
+    assert loaded_payload["metadata"]["provider"] == "claude"
+    assert loaded_payload["metadata"]["provider_metadata"] == {"source": "legacy"}
+    assert loaded_payload["metadata"]["thread_id"] == "thread-123"
+    assert loaded_payload["metadata"]["pending_clarification_note"] == "Question:\nShip this?\n\nAnswer:\nYes"
+    assert loaded_payload["metadata"]["created_at"] == "2026-04-17T00:00:00+00:00"
+    assert loaded_payload["metadata"]["last_used_at"] == "2026-04-17T00:05:00+00:00"
 
 
 def test_filesystem_session_store_supports_custom_path_resolver(tmp_path: Path):

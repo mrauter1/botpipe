@@ -111,18 +111,13 @@ class FilesystemSessionStore:
         existing = load_session_payload(path, self.default_mode, self.default_provider)
         merged_metadata = dict(existing["metadata"])
         merged_metadata.update(binding.metadata)
-        payload = _session_payload_from_binding(
-            SessionBinding(
-                ref_name=binding.ref_name,
-                scope=binding.scope,
-                session_id=binding.session_id,
-                metadata=merged_metadata,
-            ),
+        write_session_payload(
+            path,
+            binding.session_id,
+            merged_metadata,
             default_mode=self.default_mode,
             default_provider=self.default_provider,
         )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 class FilesystemCheckpointStore:
@@ -234,40 +229,60 @@ def load_session_payload(path: Path, default_mode: str, default_provider: str) -
     }
 
 
+def write_session_payload(
+    path: Path,
+    session_id: str | None,
+    metadata: dict[str, Any],
+    *,
+    default_mode: str = "persistent",
+    default_provider: str = "codex",
+) -> None:
+    payload = _session_payload_from_values(
+        session_id,
+        metadata,
+        default_mode=default_mode,
+        default_provider=default_provider,
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def ensure_session_payload_placeholder(
+    path: Path,
+    *,
+    default_mode: str = "persistent",
+    default_provider: str = "codex",
+) -> None:
+    payload = load_session_payload(path, default_mode=default_mode, default_provider=default_provider)
+    write_session_payload(
+        path,
+        payload["session_id"],
+        dict(payload["metadata"]),
+        default_mode=default_mode,
+        default_provider=default_provider,
+    )
+
+
 def set_pending_session_note(session_file: Path, note: str) -> None:
     payload = load_session_payload(session_file, default_mode="persistent", default_provider="codex")
     metadata = dict(payload["metadata"])
     metadata["pending_clarification_note"] = note
-    payload["metadata"] = metadata
-    session_file.parent.mkdir(parents=True, exist_ok=True)
-    session_file.write_text(
-        json.dumps(
-            {
-                "mode": metadata["mode"],
-                "provider": metadata["provider"],
-                "session_id": payload["session_id"],
-                "thread_id": payload["session_id"] if metadata["provider"] == "codex" else metadata.get("thread_id"),
-                "provider_metadata": metadata["provider_metadata"],
-                "model_override": metadata["model_override"],
-                "effort_override": metadata["effort_override"],
-                "pending_clarification_note": metadata["pending_clarification_note"],
-                "created_at": metadata["created_at"],
-                "last_used_at": metadata["last_used_at"],
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    write_session_payload(
+        session_file,
+        payload["session_id"],
+        metadata,
+        default_mode="persistent",
+        default_provider="codex",
     )
 
-
-def _session_payload_from_binding(
-    binding: SessionBinding,
+def _session_payload_from_values(
+    session_id: str | None,
+    metadata: dict[str, Any],
     *,
     default_mode: str,
     default_provider: str,
 ) -> dict[str, Any]:
-    metadata = dict(binding.metadata)
+    metadata = dict(metadata)
     provider = metadata.get("provider") if isinstance(metadata.get("provider"), str) else default_provider
     provider_metadata = metadata.get("provider_metadata")
     if not isinstance(provider_metadata, dict):
@@ -275,8 +290,8 @@ def _session_payload_from_binding(
     return {
         "mode": metadata.get("mode") if isinstance(metadata.get("mode"), str) else default_mode,
         "provider": provider,
-        "session_id": binding.session_id,
-        "thread_id": binding.session_id if provider == "codex" else metadata.get("thread_id"),
+        "session_id": session_id,
+        "thread_id": session_id if provider == "codex" else metadata.get("thread_id"),
         "provider_metadata": provider_metadata,
         "model_override": metadata.get("model_override") if isinstance(metadata.get("model_override"), str) else None,
         "effort_override": metadata.get("effort_override")
