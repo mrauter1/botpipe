@@ -1435,3 +1435,135 @@ No blocking issues remain in this audit scope. Residual warnings are unchanged l
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c69-1118-7613-b010-8b59ef362e4c
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9c69-1118-7613-b010-8b59ef362e4c
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c69-1118-7613-b010-8b59ef362e4c
+---
+I’m treating this as the final hardening phase: validate the current `autoloop_v3` implementation, read the phase feedback and plan artifacts, then patch only the gaps needed for docs, smoke coverage, and final proof.
+
+The repo already has the core package, ADRs, docs, and tests in place. I’m checking whether this phase still has real gaps in documentation coverage, filesystem integration, or CLI smoke proof before changing anything.
+
+I’ve confirmed the phase is not starting from zero; the docs and parity tests already exist. The next step is to look for mismatches between the documented architecture and the actual shipped runtime, then add the missing proof points around CLI and filesystem behavior.
+
+The core suite passes as-is. What stands out now is documentation drift: the architecture doc still describes modules that are no longer the actual shipped shape, and there isn’t yet a direct smoke test that runs the real CLI against the real runtime.
+
+The main technical gap is now concrete: several docs still describe a planned module split instead of the real one, especially around `runtime.events` versus `runtime.logging` and provider loading. I’m going to tighten those docs and add a true end-to-end CLI smoke test that exercises the live runtime on disk.
+
+I’ve finished the gap analysis. The implementation itself is passing, so the work now is surgical: align the docs with the shipped runtime and add one real CLI smoke path so the final proof is backed by an end-to-end invocation, not only monkeypatched tests.
+
+I’m editing the docs now. The changes are documentation-only at this step: replace plan-era module names with the real runtime shape, document the generic runner’s actual compatibility boundary, and then I’ll add a smoke test that validates that documented path.
+
+I’m adding the proof test now. It will run `python -m autoloop_v3.runtime.cli` against `autoloop_v1.py` with a temporary provider factory module, so the final validation exercises the real entrypoint and the real filesystem runtime together.
+
+The doc patch is in. I’m running focused validation now: the docs regression test and the new CLI smoke path first, then the full `autoloop_v3` suite if those pass.
+
+One docs regression failed because the assertion was stricter than the document formatting, not because the content was wrong. I’m tightening the test to match the rendered module list and rerunning the focused suite.
+
+The focused checks are clean, and the actual CLI entrypoint responds as expected. I’m finishing with a full suite run, then I’ll update the phase notes and decision ledger with the final proof details.
+
+I’m writing the phase artifacts now: one concise implementation note for maintainers and one decision-ledger entry to preserve the non-obvious outcomes of this hardening pass.
+
+The remaining diff includes tracked `.pyc` files touched by pytest. I’m restoring those generated artifacts to the committed state so the patch stays source-only.
+
+I’ve finished the code and doc updates. I’m checking whether this loop expects a non-question loop-control block on completion; if not, I’ll close with the required five-heading summary and validation results only.
+
+Scope considered
+
+- Active phase `docs-hardening-and-final-proof`.
+- `autoloop_v3` docs, CLI/runtime boundary, runtime tests, and the phase artifacts under `.autoloop/.../docs-hardening-and-final-proof/`.
+
+What I analyzed
+
+- Phase criteria, plan, feedback, and the shared decision ledger.
+- Current docs against the shipped runtime shape: `runtime.events`, `runtime.prompts`, filesystem stores, and provider-factory loading.
+- Existing CLI/runtime coverage and the full `autoloop_v3` test suite.
+- Real CLI behavior via `python -m autoloop_v3.runtime.cli --help`.
+
+What I changed
+
+- Updated [architecture.md](/home/rauter/autoloop_v3/autoloop_v3/docs/architecture.md), [compatibility.md](/home/rauter/autoloop_v3/autoloop_v3/docs/compatibility.md), [parity-matrix.md](/home/rauter/autoloop_v3/autoloop_v3/docs/parity-matrix.md), [authoring.md](/home/rauter/autoloop_v3/autoloop_v3/docs/authoring.md), [risk-register.md](/home/rauter/autoloop_v3/autoloop_v3/docs/risk-register.md), and ADR 013 so they describe the shipped runtime rather than the earlier planned layout.
+- Added a docs regression check in [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- Added a real CLI smoke test in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py) that runs `python -m autoloop_v3.runtime.cli` end-to-end against `autoloop_v1.py` with a temporary provider factory module.
+- Updated the phase [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/docs-hardening-and-final-proof/implementation_notes.md) and appended this phase’s decisions to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt).
+
+Key findings / decisions
+
+- The implementation itself was already passing; the real gap in this phase was documentation drift and missing end-to-end CLI proof.
+- The generic v3 runner is intentionally narrower than the legacy pair/phase harness, so I documented and tested that boundary instead of widening behavior speculatively.
+- Validation passed:
+  - `pytest -q autoloop_v3/tests/test_architecture_baseline_docs.py autoloop_v3/tests/runtime/test_compatibility_runtime.py`
+  - `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py::test_cli_module_smoke_executes_autoloop_v1_end_to_end`
+  - `python -m autoloop_v3.runtime.cli --help`
+  - `pytest -q autoloop_v3/tests`
+- Full suite result: `60 passed, 7 warnings`. The warnings are expected legacy Pydantic deprecations from `Ralph_loop.py` using `copy(update=...)`.
+
+Open issues / next step
+
+- No blocking issues remain in this phase scope.
+- Optional future cleanup only: migrate legacy `Ralph_loop.py` state updates to `model_copy(update=...)` if that workflow is ever revised, to remove the current warning-only noise.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c69-1118-7613-b010-8b59ef362e4c
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9c69-1118-7613-b010-8b59ef362e4c
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c69-1118-7613-b010-8b59ef362e4c
+---
+I’m reviewing the phase-local doc and test changes against the active criteria, starting from the actual diff and the validation evidence the implementer recorded.
+
+The review surface is small and focused: docs, one docs-regression test, and one runtime smoke test. I’m reading the final file contents directly now so I can check for overclaims or missed compatibility boundaries instead of only trusting the implementation notes.
+
+The review is converging cleanly. I’m updating the verifier artifacts now: all criteria will be checked, and the feedback file will record that there were no actionable findings in this phase after diff review and targeted revalidation.
+
+Scope considered
+
+- Phase-local review for `docs-hardening-and-final-proof`.
+- Changed docs under `autoloop_v3/docs/`, docs-regression coverage in `autoloop_v3/tests/test_architecture_baseline_docs.py`, and CLI smoke coverage in `autoloop_v3/tests/runtime/test_compatibility_runtime.py`.
+- Phase artifacts `criteria.md`, `feedback.md`, `implementation_notes.md`, and the shared `decisions.txt`.
+
+What I analyzed
+
+- The active phase objective and acceptance criteria.
+- The shared decision ledger entries for the generic runner boundary and final-proof expectations.
+- Final contents of the updated architecture, compatibility, parity, authoring, and risk docs.
+- The new docs-regression assertion and the subprocess CLI smoke test.
+
+What I reviewed
+
+- Targeted review validation:
+  - `pytest -q autoloop_v3/tests/test_architecture_baseline_docs.py autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py`
+- Review outcome:
+  - `29 passed, 7 warnings`
+- Warnings were expected legacy Pydantic deprecations from `Ralph_loop.py`, not introduced by this phase.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings in reviewed scope.
+- `criteria.md` was updated to all checked.
+- `feedback.md` was updated to record a clean review and the validation performed.
+
+Open issues / next step
+
+- No review blockers remain for this phase.
+- Optional future cleanup remains outside this phase: migrate legacy `Ralph_loop.py` `copy(update=...)` calls if warning reduction is desired.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
