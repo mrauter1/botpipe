@@ -69,6 +69,8 @@ phases:
     status: planned
     in_scope:
       - Replace autoloop_v3/workflows/autoloop_v1_support.py with autoloop_v3/workflows/autoloop_v1_conventions.py and autoloop_v3/workflows/autoloop_v1_parity.py.
+      - Migrate autoloop_v1.py in the same slice so it no longer imports parse_phase_ids, phase_artifact_template, or phase_dir_key from the deleted support module.
+      - Remove phase_artifact_template, inline parse_phase_ids, and switch autoloop_v1.py to explicit Artifact(...) templates as part of the same Autoloop-v1 migration.
       - Remove _AutoloopV1LoggingProvider and _AutoloopV1Engine.
       - Keep run_autoloop_v1(...) as a thin composition root over generic runtime pieces, session-path conventions, explicit workspace augmentation, and parity-only observer/state.
       - Keep clarification ledger, raw phase log format, cycle/attempt tracking, and terminal-status mapping strictly workflow-owned.
@@ -83,29 +85,30 @@ phases:
       - id: AC-1
         text: autoloop_v1_support.py, _AutoloopV1LoggingProvider, and _AutoloopV1Engine are gone, with functionality replaced by the new parity modules.
       - id: AC-2
-        text: run_autoloop_v1(...) only wires generic runtime pieces plus parity-only conventions and observer logic; it does not become a second runtime.
+        text: autoloop_v1.py is migrated in the same slice, so deleting autoloop_v1_support.py does not leave any workflow imports behind or require an interim compatibility bridge.
       - id: AC-3
+        text: run_autoloop_v1(...) only wires generic runtime pieces plus parity-only conventions and observer logic; it does not become a second runtime.
+      - id: AC-4
         text: Parity tests still pass for raw logs, decisions persistence, clarification resume behavior, legacy session filenames, and blocked/question/failed status mapping.
     deliverables:
       - autoloop_v3/workflows/autoloop_v1_conventions.py
       - autoloop_v3/workflows/autoloop_v1_parity.py
       - updated autoloop_v3/workflows/__init__.py
+      - repo-root autoloop_v1.py
       - updated Autoloop parity tests
     risks:
       - Cycle/attempt tracking on resume is subtle once session-metadata persistence is removed.
       - Event logger updates can double-emit or mis-order parity events if observer and runner responsibilities overlap.
     rollback:
-      - Revert only the parity-module split if parity assertions regress; keep the new core observer/store ownership intact.
+      - Revert the parity-module split together with the coupled autoloop_v1.py migration if parity assertions regress; do not keep a deleted-support-module import hole.
   - phase_id: strict-workflow-cleanup
     title: Restore Repo-Root Workflow Clarity
-    objective: Make autoloop_v1.py and Ralph_loop.py fully strict, readable, and self-contained with workflow semantics expressed directly in workflow code.
+    objective: Close the remaining repo-root workflow strictness work by fixing Ralph_loop.py and proving both strict workflows load and run without the deleted support layer.
     status: planned
     in_scope:
-      - Remove phase_artifact_template from autoloop_v1.py and replace it with explicit Artifact(...) templates.
-      - Inline parse_phase_ids into autoloop_v1.py.
-      - Keep exact phase_dir_key behavior in the tiny workflow-owned conventions module shared with the parity harness.
       - Fix Ralph_loop.py so strict validation passes and all success paths leave goal_met=True.
-      - Add workflow tests for explicit artifacts, strict compilation, and goal_met correctness.
+      - Add workflow tests proving autoloop_v1.py now uses explicit artifacts and no longer depends on the deleted support module.
+      - Add workflow tests for strict compilation and goal_met correctness across both repo-root workflows.
     out_of_scope:
       - Reintroducing helper wrappers around phase artifact paths.
       - Moving Autoloop-v1 workflow semantics into runtime or engine code.
@@ -113,13 +116,12 @@ phases:
       - autoloop-v1-parity-split
     acceptance_criteria:
       - id: AC-1
-        text: phase_artifact_template is gone and autoloop_v1.py uses explicit artifact templates directly in the workflow definition.
-      - id: AC-2
-        text: parse_phase_ids is workflow-owned and phase_dir_key remains workflow-owned parity policy rather than framework semantics.
-      - id: AC-3
         text: Ralph_loop.py compiles strictly and preserves goal_met=True on direct and reflected success paths.
+      - id: AC-2
+        text: Workflow tests prove phase_artifact_template is gone, autoloop_v1.py uses explicit artifact templates, and the deleted support module is no longer a workflow dependency.
+      - id: AC-3
+        text: Both repo-root workflows compile and run through the strict loader/runtime in the final plan slice.
     deliverables:
-      - repo-root autoloop_v1.py
       - repo-root Ralph_loop.py
       - workflow strictness tests
     risks:
@@ -132,7 +134,7 @@ phases:
     objective: Align the docs and automated proof surface with the final Book Architecture and confirm that parity and generic runtime behavior both still hold.
     status: planned
     in_scope:
-      - Update README.md, MIGRATION.md, docs/architecture.md, docs/authoring.md, docs/parity-matrix.md, docs/risk-register.md, and the final ARCHITECTURE_DECISIONS.md.
+      - Update README.md, MIGRATION.md, docs/architecture.md, docs/authoring.md, docs/compatibility.md, docs/parity-matrix.md, docs/risk-register.md, and the final ARCHITECTURE_DECISIONS.md.
       - Update baseline doc tests to freeze the observer boundary and the new workflow-owned Autoloop-v1 module layout.
       - Run the relevant engine, runtime, workflow, parity, and toy-workflow test suites.
       - Confirm no new generic workspace-hook system or Autoloop-specific engine branching exists.
@@ -146,7 +148,7 @@ phases:
       - strict-workflow-cleanup
     acceptance_criteria:
       - id: AC-1
-        text: Documentation consistently describes the strict public API, explicit session model, minimal execution observer, and workflow-owned Autoloop-v1 parity logic.
+        text: Documentation consistently describes the strict public API, explicit session model, minimal execution observer, workflow-owned Autoloop-v1 parity logic, and the final compatibility-notes module references.
       - id: AC-2
         text: The full relevant test matrix passes, including parity and toy-workflow neutrality checks.
       - id: AC-3

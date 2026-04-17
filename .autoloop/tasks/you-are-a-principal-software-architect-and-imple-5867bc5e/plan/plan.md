@@ -54,6 +54,7 @@ Refine `autoloop_v3` to the final Book Architecture where the engine emits only 
 - Delete `autoloop_v3/workflows/autoloop_v1_support.py` and replace it with two smaller modules:
   - `autoloop_v3/workflows/autoloop_v1_conventions.py` for tiny shared Autoloop-v1 path/policy helpers that are needed by both the strict workflow and the parity harness
   - `autoloop_v3/workflows/autoloop_v1_parity.py` for `run_autoloop_v1(...)`, workspace augmentation, the parity observer, clarification persistence, raw logs, decisions ledger writes, and legacy status mapping
+- Migrate `autoloop_v1.py` off `autoloop_v1_support.py` in the same slice that deletes that module. Do not create an interim bridge or placeholder support module.
 - Keep `parse_phase_ids` in `autoloop_v1.py` because it is workflow semantics, not shared infrastructure.
 - Keep exact `phase_dir_key` behavior in `autoloop_v1_conventions.py` because both the strict workflow and the parity harness need the same legacy encoding.
 - Keep `autoloop_v1_session_path(...)` in the same tiny conventions module for the same reason.
@@ -104,6 +105,8 @@ Refine `autoloop_v3` to the final Book Architecture where the engine emits only 
 ### 3. Split The Autoloop-v1 Parity Layer
 
 - Replace `autoloop_v1_support.py` with a tiny conventions module plus a parity composition-root module.
+- Migrate `autoloop_v1.py` in the same slice so the support module can be deleted without leaving any workflow imports behind.
+- Remove `phase_artifact_template`, inline `parse_phase_ids`, and switch the workflow to explicit artifact templates as part of that same Autoloop-v1 slice.
 - Remove `_AutoloopV1LoggingProvider` and `_AutoloopV1Engine`.
 - Rebuild parity behavior on top of the observer seam:
   - raw phase logs
@@ -113,11 +116,10 @@ Refine `autoloop_v3` to the final Book Architecture where the engine emits only 
   - legacy session filenames
   - explicit workspace augmentation and phase-plan-path seeding
 - Keep `run_autoloop_v1(...)` thin: it should only assemble generic runtime pieces plus parity-only policy.
-- Rollback posture: if parity assertions regress, revert only the parity-module split while preserving the new core observer/store ownership.
+- Rollback posture: if parity assertions regress, revert the parity-module split together with the coupled `autoloop_v1.py` migration; do not reintroduce a placeholder support module.
 
 ### 4. Restore Strict Workflow Clarity
 
-- Update `autoloop_v1.py` to use explicit artifact templates and workflow-owned parsing.
 - Update `Ralph_loop.py` so it compiles strictly and leaves `goal_met=True` on all success paths.
 - Add workflow-level tests proving:
   - `phase_artifact_template` is gone
@@ -128,7 +130,7 @@ Refine `autoloop_v3` to the final Book Architecture where the engine emits only 
 
 ### 5. Docs, Baseline Tests, And Full Verification
 
-- Update `README.md`, `MIGRATION.md`, `docs/architecture.md`, `docs/authoring.md`, `docs/parity-matrix.md`, `docs/risk-register.md`, and the rewritten `ARCHITECTURE_DECISIONS.md`.
+- Update `README.md`, `MIGRATION.md`, `docs/architecture.md`, `docs/authoring.md`, `docs/compatibility.md`, `docs/parity-matrix.md`, `docs/risk-register.md`, and the rewritten `ARCHITECTURE_DECISIONS.md`.
 - Update doc-baseline tests to freeze the final observer boundary and new workflow-owned module names.
 - Run the relevant test matrix:
   - engine/core contracts
@@ -189,6 +191,7 @@ Refine `autoloop_v3` to the final Book Architecture where the engine emits only 
   - direct imports of `autoloop_v3.workflows.autoloop_v1_support` disappear
   - provider wrapper / engine subclass implementation details disappear
   - `phase_artifact_template` disappears
+  - `docs/compatibility.md` must be rewritten to point at the final parity/conventions split
 
 ## Open Risks To Watch During Implementation
 

@@ -4,3 +4,6 @@ Inline `parse_phase_ids` into `autoloop_v1.py`; keep exact `phase_dir_key` behav
 Track cycle and attempt in parity observer state during a run; on resume, recover the pending clarification cycle/attempt from persisted raw-log and checkpoint context instead of provider session metadata.
 Treat `autoloop_v1_support.py` as deletion scope and replace it with narrower parity and conventions modules while preserving `run_autoloop_v1(...)` as the only supported workflow-owned entrypoint.
 Fix `Ralph_loop.py` as part of this architecture change because it already fails strict validation (`on_execute` is not class-bound) and the direct `plan_action -> goal_met -> SUCCESS` path must set `goal_met=True`.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260417T211550Z-e779d000" ts="2026-04-17T21:26:44.806804+00:00" />
+Delete autoloop_v1_support.py only in the same implementation slice that migrates autoloop_v1.py off its imports; do not use a temporary bridge module or placeholder re-export.
+docs/compatibility.md is part of the required documentation update because it currently references autoloop_v1_support and is covered by the baseline doc-test corpus.
