@@ -15,12 +15,12 @@
       "proof-suite-and-docs"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "book-architecture-core"
+    "current_phase_index": 1,
+    "current_phase_id": "generic-runtime-boundary"
   },
   "phase_status": {
-    "book-architecture-core": "in_progress",
-    "generic-runtime-boundary": "planned",
+    "book-architecture-core": "completed",
+    "generic-runtime-boundary": "in_progress",
     "workflow-migration-parity": "planned",
     "proof-suite-and-docs": "planned"
   },
@@ -30,6 +30,19 @@
       "run_id": "run-20260417T183614Z-0d53809e",
       "status": "in_progress",
       "ts": "2026-04-17T18:47:49.752361+00:00"
+    },
+    {
+      "phase_id": "book-architecture-core",
+      "run_id": "run-20260417T183614Z-0d53809e",
+      "status": "completed",
+      "ts": "2026-04-17T19:03:11.404464+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "generic-runtime-boundary",
+      "run_id": "run-20260417T183614Z-0d53809e",
+      "status": "in_progress",
+      "ts": "2026-04-17T19:03:11.406989+00:00"
     }
   ]
 }

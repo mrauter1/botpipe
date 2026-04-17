@@ -20,3 +20,7 @@
 {"ts": "2026-04-17T19:02:30.171049+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "book-architecture-core"}
 {"ts": "2026-04-17T19:03:11.339269+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "book-architecture-core"}
 {"ts": "2026-04-17T19:03:11.354774+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "book-architecture-core"}
+{"ts": "2026-04-17T19:03:11.404819+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "book-architecture-core", "phase_mode": "single"}
+{"ts": "2026-04-17T19:03:11.407454+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 24, "event_type": "phase_started", "phase_id": "generic-runtime-boundary", "phase_mode": "single"}
+{"ts": "2026-04-17T19:03:11.408211+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "generic-runtime-boundary"}
+{"ts": "2026-04-17T19:03:11.408317+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "generic-runtime-boundary"}
