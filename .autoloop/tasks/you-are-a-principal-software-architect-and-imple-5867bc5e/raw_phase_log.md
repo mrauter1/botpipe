@@ -269,3 +269,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9d5a-5adc-7611-98be-245338005b8b
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+I’m reviewing the phase-scoped implementation against the active contract and the shared decisions ledger. First I’m loading the criteria, feedback artifact, notes, and the changed engine/doc/test files so I can validate scope and look for regressions before I mark anything complete.
+
+The artifact files are loaded. `git diff` against the tracked paths is empty in this thread, so I’m verifying the current file contents directly and checking repository status and the relevant tests to make sure I’m reviewing the actual phase result, not a stale diff view.
+
+The main surfaces look coherent: the engine stays generic, the observer types are narrow, and the decision record matches the phase contract. I’m running the phase-relevant validation myself now and checking for any Autoloop-specific leakage into the core before I finalize the criteria.
+
+The independent validation passed and I’m not seeing a contract or architecture miss in the phase scope. I’m marking the criteria complete and writing a no-findings review note into the verifier artifact now.
+
+Scope considered
+- Phase-local scope only: `decision-freeze-and-observer-core`.
+- Reviewed the architectural record rewrite, the new observer surface, engine observer wiring, exported API surface, and the engine contract tests.
+
+What I analyzed
+- Active phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+- Current contents of `autoloop_v3/ARCHITECTURE_DECISIONS.md`, `autoloop_v3/workflow/observers.py`, `autoloop_v3/workflow/engine.py`, `autoloop_v3/workflow/__init__.py`, and `autoloop_v3/tests/contract/test_engine_contracts.py`.
+- Independent validation results and a direct grep check that the core observer seam did not introduce Autoloop-specific imports or branching.
+
+What I reviewed
+- AC-1: confirmed 17 decision sections, each with exactly 3 candidates plus `Decision:`, `Book choice:`, and `Why the others lost:`.
+- AC-2: confirmed `Engine(..., observers=())` accepts zero or more observers and emits provider-turn, step-completion, and terminal events without Autoloop-specific imports.
+- AC-3: confirmed explicit-session lookup, optional Pair/LLM handlers, and required SystemStep handlers remain intact through existing and added tests.
+- Re-ran `pytest autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` and got `40 passed`.
+
+Key findings / decisions
+- No blocking or non-blocking findings.
+- Updated the verifier artifacts: all criteria boxes are checked, and `feedback.md` records a no-findings review outcome.
+
+Open issues / next step
+- No phase-local review blockers remain.
+- Later phases still need to consume this observer seam for parity harness rewiring, store helper migration, and repo-root workflow cleanup, but those were correctly left out of this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

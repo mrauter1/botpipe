@@ -207,3 +207,113 @@ phase_mode=single
 phase_ids=decision-freeze-and-observer-core,runtime-session-store-ownership,autoloop-v1-parity-split,strict-workflow-cleanup,docs-and-full-verification
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9d5a-5adc-7611-98be-245338005b8b
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+I’m treating this as the phase-scoped implementation for `decision-freeze-and-observer-core`. First I’m reading the phase artifacts and the current engine/test shape so I can freeze the architectural record and add the observer seam without drifting outside scope.
+
+I’ve loaded the phase contract and the planner’s target shape. Next I’m inspecting the current `workflow` engine, the existing architectural record, and the engine tests to place the observer seam in the smallest stable boundary.
+
+The current engine is narrow enough that the seam can stay small: all provider turns already converge in `_run_pair_step` / `_run_llm_step`, and terminal handling is centralized in `run()`. I’m checking provider response shapes and existing contract tests now so the observer payloads line up with real execution facts instead of introducing a second model.
+
+I have the boundary pinned now. I’m editing the engine to emit a minimal typed observer stream with copied snapshots, and I’m rewriting the architectural record around the 17 required decisions without touching the later parity/store phases yet.
+
+The first engine pass is in. I’m cleaning the failure-path edge cases now: the main thing is preventing duplicate fatal terminal events while keeping observer delivery best-effort and non-interfering.
+
+I’ve got the observer types and engine wiring in place. I’m extending the contract tests next to prove the three event categories, fatal/pause/fail coverage, optional handler invariants, and that observers can’t mutate or break engine execution.
+
+The contract coverage is in place. I’m running the engine tests now before I rewrite the decision record, so I can correct any event-shape or failure-path issues while the code changes are still local.
+
+The engine side is stable under its contract tests. I’m replacing the architectural record now with the 17 required decisions, and I’m freezing the later-phase moves explicitly instead of leaving them implied.
+
+The observer seam is passing its direct contract tests. I’m running the adjacent doc-baseline and validation suites now to make sure the new public surface and rewritten decision record still line up with the repository’s architectural assertions.
+
+The code and decision record are settled. I’m finishing the phase bookkeeping now by recording the non-obvious observer decisions in the shared ledger and updating the phase implementation notes with exact scope, files, invariants, and validation.
+
+Scope considered
+- Phase-local scope only: `decision-freeze-and-observer-core`.
+- Engine observer seam, architectural record, engine contract tests, and required phase bookkeeping.
+
+What I analyzed
+- `autoloop_v3/workflow/engine.py`, provider response models, existing engine/validation tests, and the current Autoloop-v1 wrapper/subclass observation path.
+- Phase artifacts: `plan.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I changed
+- Rewrote `autoloop_v3/ARCHITECTURE_DECISIONS.md` with the required 17 decisions, 3 candidates each, chosen Book Architecture option, and losing rationale.
+- Added `autoloop_v3/workflow/observers.py` and exported the observer types from `autoloop_v3/workflow/__init__.py`.
+- Wired `Engine(..., observers=())` to emit provider-turn, step-completion, and terminal events.
+- Emitted copied state/outcome/session/checkpoint snapshots and made observer delivery best-effort so observers cannot mutate or fail engine execution semantics.
+- Extended `autoloop_v3/tests/contract/test_engine_contracts.py` for observer delivery, pause/fail/fatal terminals, Pair/LLM optional-handler coverage, and non-interference.
+- Updated the phase implementation notes and shared decisions ledger.
+
+Key findings / decisions
+- The clean seam is one typed observer interface with exactly three event families; no extra hook system was needed.
+- Later parity rewiring can consume the new payloads because the events now carry workflow/run ids, step metadata, current state snapshots, raw output, request/response session bindings, and terminal exception data.
+- Targeted validation passed: `pytest autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` with `40 passed`.
+
+Open issues / next step
+- This phase intentionally did not rewire the Autoloop-v1 parity harness, move filesystem session payload writers, or clean up repo-root workflows.
+- The next phase should replace `_AutoloopV1LoggingProvider` and `_AutoloopV1Engine` with an observer-backed parity layer using the new event payloads.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9d5a-5adc-7611-98be-245338005b8b
+
+
+---
+run_id=run-20260417T211550Z-e779d000 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d5a-5adc-7611-98be-245338005b8b
+---
+I’m reviewing the phase-scoped implementation against the active contract and the shared decisions ledger. First I’m loading the criteria, feedback artifact, notes, and the changed engine/doc/test files so I can validate scope and look for regressions before I mark anything complete.
+
+The artifact files are loaded. `git diff` against the tracked paths is empty in this thread, so I’m verifying the current file contents directly and checking repository status and the relevant tests to make sure I’m reviewing the actual phase result, not a stale diff view.
+
+The main surfaces look coherent: the engine stays generic, the observer types are narrow, and the decision record matches the phase contract. I’m running the phase-relevant validation myself now and checking for any Autoloop-specific leakage into the core before I finalize the criteria.
+
+The independent validation passed and I’m not seeing a contract or architecture miss in the phase scope. I’m marking the criteria complete and writing a no-findings review note into the verifier artifact now.
+
+Scope considered
+- Phase-local scope only: `decision-freeze-and-observer-core`.
+- Reviewed the architectural record rewrite, the new observer surface, engine observer wiring, exported API surface, and the engine contract tests.
+
+What I analyzed
+- Active phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+- Current contents of `autoloop_v3/ARCHITECTURE_DECISIONS.md`, `autoloop_v3/workflow/observers.py`, `autoloop_v3/workflow/engine.py`, `autoloop_v3/workflow/__init__.py`, and `autoloop_v3/tests/contract/test_engine_contracts.py`.
+- Independent validation results and a direct grep check that the core observer seam did not introduce Autoloop-specific imports or branching.
+
+What I reviewed
+- AC-1: confirmed 17 decision sections, each with exactly 3 candidates plus `Decision:`, `Book choice:`, and `Why the others lost:`.
+- AC-2: confirmed `Engine(..., observers=())` accepts zero or more observers and emits provider-turn, step-completion, and terminal events without Autoloop-specific imports.
+- AC-3: confirmed explicit-session lookup, optional Pair/LLM handlers, and required SystemStep handlers remain intact through existing and added tests.
+- Re-ran `pytest autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/test_architecture_baseline_docs.py -q` and got `40 passed`.
+
+Key findings / decisions
+- No blocking or non-blocking findings.
+- Updated the verifier artifacts: all criteria boxes are checked, and `feedback.md` records a no-findings review outcome.
+
+Open issues / next step
+- No phase-local review blockers remain.
+- Later phases still need to consume this observer seam for parity harness rewiring, store helper migration, and repo-root workflow cleanup, but those were correctly left out of this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
