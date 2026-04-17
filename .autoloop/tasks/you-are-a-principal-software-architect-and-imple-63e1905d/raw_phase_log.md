@@ -1206,3 +1206,59 @@ Key findings / decisions
 Open issues / next step
 - No open blocking issues in phase scope
 - Known gap remains unchanged: untracked/generated `codebase.md` workspace artifacts are intentionally outside tracked-repo gating for this phase
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+
+
+---
+run_id=run-20260417T183614Z-0d53809e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9d09-b3a1-7680-b965-6bb34d14dc2e
+---
+I’m auditing the proof-suite-and-docs test changes against the phase contract and the shared decisions ledger, then I’ll update the test-phase criteria and feedback with any coverage findings before closing the phase.
+
+The changed doc gate is coherent with the recorded decisions. I’m doing one more verification pass with the full suite and the phase test strategy so the audit covers both actual execution and the phase-local coverage map before I mark criteria.
+
+The phase test strategy matches what the changed gate is actually covering. The full suite is running now; if it stays green, I don’t see a test-coverage or flake-risk issue in this phase.
+
+The suite is through the middle without failures. I’m waiting for the final result, then I’ll either clear the phase or record any audit findings in the phase artifacts.
+
+The full suite rerun is green. I’m marking the test phase complete in the audit artifacts now; I don’t have any blocking or non-blocking coverage findings to raise beyond a no-findings audit note.
+
+Scope considered
+- Phase-local test audit scope for `proof-suite-and-docs`
+- Changed doc-gating behavior in `autoloop_v3/tests/test_architecture_baseline_docs.py`
+- The phase test strategy, test feedback, and the shared decisions ledger entries relevant to this phase
+- Full-suite verification to confirm the added guard did not weaken or destabilize broader coverage
+
+What I analyzed
+- The updated doc-baseline tests, especially the new ADR-summary-only assertion
+- The phase `test_strategy.md` coverage map and its alignment with the phase contract
+- Shared decisions requiring `ARCHITECTURE_DECISIONS.md` to remain the sole authoritative comparison record
+- Verifier reruns of `pytest autoloop_v3/tests/test_architecture_baseline_docs.py -q` and full `pytest -q`
+
+What I reviewed
+- Coverage quality for the changed documentation behavior
+- Regression protection against stale ADR candidate matrices returning
+- Edge-case and failure-path coverage for missing docs, stale ADR structure, and legacy-surface drift
+- Reliability and flake risk for the changed tests and the recorded phase strategy
+
+Key findings / decisions
+- No blocking or non-blocking audit findings beyond a no-findings audit note
+- The added assertion closes the remaining regression gap for the ADR cleanup by preventing old candidate-matrix/selected-option ADR text from silently returning
+- The phase test strategy accurately reflects the changed coverage and the known out-of-scope gap for untracked/generated workspace artifacts
+- Full verifier suite passed: `249 passed in 22.08s`
+
+Open issues / next step
+- No open audit issues for this phase
+- `.autoloop/.../criteria.md` is fully checked
+- `.autoloop/.../feedback.md` now includes `TST-002` as the audit closeout note
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
