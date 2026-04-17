@@ -287,6 +287,22 @@ def test_autoloop_v1_parity_harness_preserves_legacy_workspace_logs_and_sessions
     ]
     assert [event["phase_id"] for event in events if event["event_type"] == "phase_started"] == ["phase-a", "phase-b"]
     assert [event["phase_id"] for event in events if event["event_type"] == "phase_completed"] == ["phase-a", "phase-b"]
+    phase_a_started = next(event["seq"] for event in events if event["event_type"] == "phase_started" and event["phase_id"] == "phase-a")
+    phase_a_implement = next(
+        event["seq"]
+        for event in events
+        if event["event_type"] == "step_executed" and event.get("phase_id") == "phase-a" and event["step_name"] == "implement"
+    )
+    phase_a_test = next(
+        event["seq"]
+        for event in events
+        if event["event_type"] == "step_executed" and event.get("phase_id") == "phase-a" and event["step_name"] == "test"
+    )
+    phase_a_completed = next(
+        event["seq"] for event in events if event["event_type"] == "phase_completed" and event["phase_id"] == "phase-a"
+    )
+    assert phase_a_started < phase_a_implement
+    assert phase_a_test < phase_a_completed
 
     observed = dict(session_ids)
     assert observed["plan"].startswith("plan_session:global:")
@@ -461,6 +477,8 @@ def test_autoloop_v1_parity_harness_maps_blocked_pause_to_legacy_status(tmp_path
     assert events[-1]["status"] == "blocked"
     assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "blocked"
     assert "entry=blocked | pair=implement | phase=verifier | cycle=2 | attempt=1" in run_raw
+    assert [event["phase_id"] for event in events if event["event_type"] == "phase_started"] == ["phase-a"]
+    assert not any(event["event_type"] == "phase_completed" for event in events)
 
 
 def test_autoloop_v1_parity_harness_maps_failed_terminal_to_legacy_status(tmp_path: Path):
