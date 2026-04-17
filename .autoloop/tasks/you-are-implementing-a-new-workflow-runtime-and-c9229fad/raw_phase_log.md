@@ -851,3 +851,61 @@ Open issues / next step
 
 - Full end-to-end Ralph Loop execution and final parity goldens remain for the later parity phase.
 - External real-provider subprocess adapters are still deferred; the new runner currently executes with injected `LLMProvider` implementations or a provider-factory hook.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+---
+I’m reviewing only the active phase scope: compatibility normalization, legacy-safe loading, and the filesystem runtime. First I’ll inspect the phase criteria and the actual code/test diffs, then I’ll verify whether anything in the new runtime regresses the plan or the decisions ledger.
+
+The diff command is empty because most of this phase landed as new files, so I’m reading the actual runtime modules directly and checking them against the acceptance criteria rather than relying on git’s tracked diff alone. After that I’ll decide whether the criteria boxes can all be checked or whether there are blocking gaps.
+
+I’ve identified one concrete gap already: several “compatibility” CLI/runtime options are accepted but then ignored by the runner, which means the new harness silently narrows behavior while pretending to support it. I’m checking whether resume compatibility has the same problem, because if legacy runs still can’t be resumed without a new `checkpoint.json`, that’s a second blocking gap against the phase contract.
+
+I’ve got two blocking gaps, both tied directly to the phase contract rather than style. I’m updating the reviewer artifacts now: criteria stay unchecked, and feedback will call out the ignored CLI/runtime compatibility options and the lack of legacy resume-state reconstruction for existing runs.
+
+Scope considered
+
+- Active phase `compatibility-and-filesystem-runtime` only.
+- New compatibility/runtime surface in `autoloop_v3/runtime`, the repo-root `workflow` shim, and the strict-core touchpoints in `autoloop_v3/workflow`.
+- Reviewer-owned artifacts under `.autoloop/tasks/.../implement/phases/compatibility-and-filesystem-runtime/`.
+
+What I analyzed
+
+- Phase contract, acceptance criteria, and the shared decisions ledger.
+- The new runtime modules: loader, workspace, config, events, runner, filesystem stores, and CLI.
+- The compatibility changes in `workflow.compat`, `workflow.compiler`, and `workflow.engine`.
+- Targeted behavior probes for resume and CLI/runtime-option handling, plus the new runtime tests.
+
+What I reviewed
+
+- Legacy-load path for `autoloop_v1.py` and `Ralph_loop.py`.
+- Filesystem layout/session/checkpoint persistence shape.
+- CLI/runtime-option compatibility against the phase scope.
+- Resume compatibility against existing run/session state, not just new `checkpoint.json` runs.
+- Reviewer artifacts: updated `feedback.md`; criteria remain unchecked because blocking issues exist.
+
+Key findings / decisions
+
+- `IMP-001` blocking: the new CLI/config surface accepts compatibility options like `--pairs`, `--max-iterations`, and `--phase-mode`, but the runner drops them, so the harness silently ignores requested execution scope and phase-selection behavior.
+- `IMP-002` blocking: resume currently requires the new `checkpoint.json`; existing `.autoloop` / `.superloop` run data is not reconstructed into resume state, so migration-safe resume compatibility is not actually implemented.
+- Because blocking findings remain, the phase cannot be marked complete and the criteria checkboxes cannot be checked.
+
+Open issues / next step
+
+- Thread compatibility runtime options through `RunnerOptions` and runner/workspace execution, including persisted phase selection.
+- Add a legacy resume adapter or an explicit compatibility gate for old run artifacts before claiming resume support.
+- Re-run the runtime and full `autoloop_v3/tests` suites after those fixes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
