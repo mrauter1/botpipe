@@ -29,6 +29,7 @@
 
 - `AutoloopV1`
 - `run_autoloop_v1`
+- `_AutoloopV1Engine`
 - `parse_phase_ids`
 - `phase_dir_key`
 - `phase_artifact_template`
@@ -36,12 +37,15 @@
 - `ensure_autoloop_v1_workspace`
 - `create_autoloop_v1_run`
 - `_AutoloopV1LoggingProvider`
+- `_binding_with_step_progress`
+- `_session_step_counter`
+- `_step_progress_for_state`
 
 ## Checklist Mapping
 
 - AC-1 strict workflow migration: completed for `autoloop_v1.py`; `Ralph_loop.py` remained strict and continued to pass without changes.
 - AC-2 explicit session-opening and phase-session sharing proof: completed via new parity harness tests plus existing engine contract coverage.
-- AC-3 legacy workspace/events/checkpoint/question-blocked-failed/clarification/session parity: completed via `run_autoloop_v1(...)` and expanded runtime parity tests.
+- AC-3 legacy workspace/events/checkpoint/question-blocked-failed/clarification/session parity: completed via `run_autoloop_v1(...)`, event-time phase logging, and expanded runtime parity tests that cover multi-phase event IDs plus cycle-aware blocked/question/clarification logs.
 - Required docs and migration notes: completed with new `README.md`, `MIGRATION.md`, and rewritten strict-surface docs/tests.
 
 ## Assumptions
@@ -60,6 +64,8 @@
 - `autoloop_v1.py` now writes phase artifacts under legacy pair-owned directories: `implement/phases/{phase}` and `test/phases/{phase}`.
 - Autoloop-v1 parity runs now create task/run `raw_phase_log.md`, task `decisions.txt`, `sessions/plan.json`, and `sessions/phases/{phase}.json` through workflow-owned code.
 - Autoloop-v1 parity runs now record `question`, `blocked`, and `failed` statuses in `events.jsonl` using workflow-owned status mapping.
+- Autoloop-v1 parity runs now emit `step_executed`, `phase_started`, and `phase_completed` at step execution time with the active phase id instead of reconstructing them from final state after the run ends.
+- Autoloop-v1 terminal notices and resume clarifications now reuse persisted per-step cycle metadata from session files instead of hardcoding `cycle=1`.
 - Documentation now freezes the strict public surface and records compatibility removal instead of advertising legacy shims.
 
 ## Known Non-Changes
@@ -83,4 +89,5 @@
 ## Deduplication / Centralization
 
 - Phase-plan parsing, legacy artifact path templates, legacy session filename policy, raw-log writes, clarification persistence, and the Autoloop-v1 parity runner were centralized in `autoloop_v3/workflows/autoloop_v1_support.py` instead of being spread through the runtime core.
+- Event-time phase parity and per-step cycle persistence are also centralized in `autoloop_v3/workflows/autoloop_v1_support.py` using a workflow-owned engine subclass plus session `provider_metadata`, rather than adding generic runtime hooks or new checkpoint fields.
 - The out-of-phase edit to `autoloop/tests/test_installer.py` was limited to deterministic test PATH setup discovered during repo-wide validation; no production installer behavior was changed.

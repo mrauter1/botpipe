@@ -275,6 +275,18 @@ def test_autoloop_v1_parity_harness_preserves_legacy_workspace_logs_and_sessions
     assert events[-1]["event_type"] == "run_finished"
     assert events[-1]["status"] == "success"
     assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "success"
+    assert [(event["step_name"], event.get("phase_id")) for event in events if event["event_type"] == "step_executed"] == [
+        ("plan", None),
+        ("activate_next_phase", "phase-a"),
+        ("implement", "phase-a"),
+        ("test", "phase-a"),
+        ("activate_next_phase", "phase-b"),
+        ("implement", "phase-b"),
+        ("test", "phase-b"),
+        ("activate_next_phase", "phase-b"),
+    ]
+    assert [event["phase_id"] for event in events if event["event_type"] == "phase_started"] == ["phase-a", "phase-b"]
+    assert [event["phase_id"] for event in events if event["event_type"] == "phase_completed"] == ["phase-a", "phase-b"]
 
     observed = dict(session_ids)
     assert observed["plan"].startswith("plan_session:global:")
@@ -300,6 +312,10 @@ def test_autoloop_v1_parity_harness_persists_clarifications_and_resumes(tmp_path
                 "plan raw\n",
             )[1],
             lambda request: (
+                request.artifacts.impl_notes.write_text("phase-a initial implementation notes\n"),
+                "implement phase-a raw\n",
+            )[1],
+            lambda request: (
                 request.artifacts.phase_plan.write_text(
                     json.dumps(
                         {
@@ -313,6 +329,19 @@ def test_autoloop_v1_parity_harness_persists_clarifications_and_resumes(tmp_path
                 "plan raw retry\n",
             )[1],
             lambda request: (
+                request.artifacts.phase_plan.write_text(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "task_id": request.context.task_id,
+                            "request_snapshot_ref": "request.md",
+                            "phases": [{"phase_id": "phase-a"}],
+                        }
+                    )
+                ),
+                "plan raw answered\n",
+            )[1],
+            lambda request: (
                 request.artifacts.impl_notes.write_text("phase-a implementation notes\n"),
                 "implement phase-a raw\n",
             )[1],
@@ -322,8 +351,10 @@ def test_autoloop_v1_parity_harness_persists_clarifications_and_resumes(tmp_path
             )[1],
         ],
         verifier_turns=[
-            Outcome(raw_output="Need clarification\n", tag="question", question="Need confirmation?"),
             Outcome(raw_output="plan ok\n", tag="plan_ready"),
+            Outcome(raw_output="Need replanning\n", tag="needs_replan"),
+            Outcome(raw_output="Need clarification\n", tag="question", question="Need confirmation?"),
+            Outcome(raw_output="plan ok after answer\n", tag="plan_ready"),
             Outcome(raw_output="implement ok\n", tag="implemented"),
             Outcome(raw_output="test ok\n", tag="phase_passed"),
         ],
@@ -367,7 +398,9 @@ def test_autoloop_v1_parity_harness_persists_clarifications_and_resumes(tmp_path
     assert 'entry="answers"' in decisions_text
     assert "Need confirmation?" in decisions_text
     assert "Proceed" in decisions_text
+    assert "entry=question | pair=plan | phase=verifier | cycle=2 | attempt=1" in run_raw
     assert "entry=clarification" in run_raw
+    assert "entry=clarification | pair=plan | phase=verifier | cycle=2 | attempt=1 | source=resume" in run_raw
     assert "Question:\nNeed confirmation?\n\nAnswer:\nProceed" in run_raw
     assert plan_payload["metadata"]["pending_clarification_note"] == "Question:\nNeed confirmation?\n\nAnswer:\nProceed"
     assert resumed_events[-1]["status"] == "success"
@@ -389,9 +422,26 @@ def test_autoloop_v1_parity_harness_maps_blocked_pause_to_legacy_status(tmp_path
                     )
                 ),
                 "plan raw\n",
-            )[1]
+            )[1],
+            lambda request: (
+                request.artifacts.impl_notes.write_text("phase-a implementation notes\n"),
+                "implement raw cycle 1\n",
+            )[1],
+            lambda request: (
+                request.artifacts.test_strat.write_text("phase-a test strategy\n"),
+                "test raw cycle 1\n",
+            )[1],
+            lambda request: (
+                request.artifacts.impl_notes.write_text("phase-a rework notes\n"),
+                "implement raw cycle 2\n",
+            )[1],
         ],
-        verifier_turns=[Outcome(raw_output="Blocked on dependency\n", tag="blocked", reason="waiting on dependency")],
+        verifier_turns=[
+            Outcome(raw_output="plan ok\n", tag="plan_ready"),
+            Outcome(raw_output="implemented\n", tag="implemented"),
+            Outcome(raw_output="Need rework\n", tag="needs_rework"),
+            Outcome(raw_output="Blocked on dependency\n", tag="blocked", reason="waiting on dependency"),
+        ],
     )
 
     result = run_autoloop_v1(
@@ -410,7 +460,7 @@ def test_autoloop_v1_parity_harness_maps_blocked_pause_to_legacy_status(tmp_path
     assert any(event["event_type"] == "blocked" for event in events)
     assert events[-1]["status"] == "blocked"
     assert legacy_autoloop.latest_run_status(run_dir / "events.jsonl") == "blocked"
-    assert "entry=blocked" in run_raw
+    assert "entry=blocked | pair=implement | phase=verifier | cycle=2 | attempt=1" in run_raw
 
 
 def test_autoloop_v1_parity_harness_maps_failed_terminal_to_legacy_status(tmp_path: Path):

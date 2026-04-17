@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -26,6 +25,7 @@ from ..runtime.workspace import (
     resolve_resume_state_root,
     task_request_text,
 )
+from ..workflow.compiler import CompiledStep
 from ..workflow.engine import Engine, RunResult
 from ..workflow.errors import WorkflowExecutionError
 from ..workflow.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
@@ -39,6 +39,9 @@ MAX_PHASE_ID_UTF8_BYTES = 96
 DECISIONS_VERSION = 1
 _DECISIONS_HEADER_RE = re.compile(r"<autoloop-decisions-header\b([^>]*)/>")
 _DECISIONS_ATTR_RE = re.compile(r'([a-zA-Z0-9_]+)="([^"]*)"')
+_AUTOLOOP_PROVIDER_METADATA_KEY = "autoloop_v1"
+_AUTOLOOP_CYCLE_KEY = "step_cycles"
+_AUTOLOOP_ATTEMPT_KEY = "step_attempts"
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,12 +187,13 @@ def run_autoloop_v1(
     prompt_registry = FilesystemPromptRegistry(workflow_parent, workspace.task.root, Path.cwd())
     logger = EventLogger(run.run.run_id, run.run.events_file)
     logging_provider = _AutoloopV1LoggingProvider(provider, run)
-    engine = Engine(
+    engine = _AutoloopV1Engine(
         compiled,
         provider=logging_provider,
         session_store=session_store,
         checkpoint_store=checkpoint_store,
         prompt_registry=prompt_registry,
+        logger=logger,
     )
 
     logger.emit(
@@ -217,9 +221,6 @@ def run_autoloop_v1(
                 max_steps=max_steps,
             )
 
-        for step_name in result.history:
-            logger.emit("step_executed", workflow=compiled.workflow_name, step_name=step_name, phase_id=_phase_id(result.state))
-
         if result.last_event is not None and result.last_event.tag in {"question", "blocked", "failed"}:
             logger.emit(
                 result.last_event.tag,
@@ -229,7 +230,7 @@ def run_autoloop_v1(
                 reason=result.last_event.reason or None,
                 question=result.last_event.question,
             )
-            _append_terminal_notice(run, result, logging_provider)
+            _append_terminal_notice(compiled, run, result, logging_provider)
 
         logger.emit(
             "run_finished",
@@ -257,7 +258,6 @@ class _AutoloopV1LoggingProvider:
     def __init__(self, delegate: LLMProvider, run: AutoloopV1RunWorkspace) -> None:
         self._delegate = delegate
         self._run = run
-        self._cycles: dict[tuple[str, str | None], int] = defaultdict(int)
         self._last_phase_name: dict[tuple[str, str | None], str] = {}
 
     def __getattr__(self, name: str) -> Any:
@@ -265,7 +265,9 @@ class _AutoloopV1LoggingProvider:
 
     def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         response = self._delegate.run_producer(request)
-        cycle = self._next_cycle(request.step_name, request.context)
+        session, cycle, attempt = self._advance_step_progress(request.step_name, response.session or request.session)
+        if session is not None:
+            response = replace(response, session=session)
         self._last_phase_name[(request.step_name, _phase_id(request.context.state))] = "producer"
         _append_runtime_raw_log(
             self._run.workspace.task_raw_log,
@@ -275,8 +277,8 @@ class _AutoloopV1LoggingProvider:
             pair=request.step_name,
             phase="producer",
             cycle=cycle,
-            attempt=1,
-            thread_id=_thread_id(response.session),
+            attempt=attempt,
+            thread_id=_thread_id(session),
         )
         _append_runtime_raw_log(
             self._run.run_raw_log,
@@ -286,14 +288,16 @@ class _AutoloopV1LoggingProvider:
             pair=request.step_name,
             phase="producer",
             cycle=cycle,
-            attempt=1,
-            thread_id=_thread_id(response.session),
+            attempt=attempt,
+            thread_id=_thread_id(session),
         )
         return response
 
     def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
         response = self._delegate.run_verifier(request)
-        cycle = self._current_cycle(request.step_name, request.context)
+        session, cycle, attempt = self._current_step_progress(request.step_name, response.session or request.session)
+        if session is not None:
+            response = replace(response, session=session)
         self._last_phase_name[(request.step_name, _phase_id(request.context.state))] = "verifier"
         _append_runtime_raw_log(
             self._run.workspace.task_raw_log,
@@ -303,8 +307,8 @@ class _AutoloopV1LoggingProvider:
             pair=request.step_name,
             phase="verifier",
             cycle=cycle,
-            attempt=1,
-            thread_id=_thread_id(response.session or request.session),
+            attempt=attempt,
+            thread_id=_thread_id(session),
         )
         _append_runtime_raw_log(
             self._run.run_raw_log,
@@ -314,14 +318,16 @@ class _AutoloopV1LoggingProvider:
             pair=request.step_name,
             phase="verifier",
             cycle=cycle,
-            attempt=1,
-            thread_id=_thread_id(response.session or request.session),
+            attempt=attempt,
+            thread_id=_thread_id(session),
         )
         return response
 
     def run_llm(self, request: LLMRequest) -> OutcomeResponse:
         response = self._delegate.run_llm(request)
-        cycle = self._next_cycle(request.step_name, request.context)
+        session, cycle, attempt = self._advance_step_progress(request.step_name, response.session or request.session)
+        if session is not None:
+            response = replace(response, session=session)
         self._last_phase_name[(request.step_name, _phase_id(request.context.state))] = "llm"
         _append_runtime_raw_log(
             self._run.workspace.task_raw_log,
@@ -331,8 +337,8 @@ class _AutoloopV1LoggingProvider:
             pair=request.step_name,
             phase="llm",
             cycle=cycle,
-            attempt=1,
-            thread_id=_thread_id(response.session or request.session),
+            attempt=attempt,
+            thread_id=_thread_id(session),
         )
         _append_runtime_raw_log(
             self._run.run_raw_log,
@@ -342,22 +348,82 @@ class _AutoloopV1LoggingProvider:
             pair=request.step_name,
             phase="llm",
             cycle=cycle,
-            attempt=1,
-            thread_id=_thread_id(response.session or request.session),
+            attempt=attempt,
+            thread_id=_thread_id(session),
         )
         return response
 
     def current_phase_name(self, step_name: str, state: BaseModel) -> str:
         return self._last_phase_name.get((step_name, _phase_id(state)), "runtime")
 
-    def _next_cycle(self, step_name: str, context: Any) -> int:
-        key = (step_name, _phase_id(context.state))
-        self._cycles[key] += 1
-        return self._cycles[key]
+    def _advance_step_progress(
+        self,
+        step_name: str,
+        session: SessionBinding | None,
+    ) -> tuple[SessionBinding | None, int, int]:
+        if session is None:
+            return None, 1, 1
+        cycle = _binding_step_counter(session, step_name, counter=_AUTOLOOP_CYCLE_KEY, default=0) + 1
+        attempt = 1
+        updated = _binding_with_step_progress(session, step_name, cycle=cycle, attempt=attempt)
+        return updated, cycle, attempt
 
-    def _current_cycle(self, step_name: str, context: Any) -> int:
-        key = (step_name, _phase_id(context.state))
-        return self._cycles.get(key, 1)
+    def _current_step_progress(
+        self,
+        step_name: str,
+        session: SessionBinding | None,
+    ) -> tuple[SessionBinding | None, int, int]:
+        if session is None:
+            return None, 1, 1
+        cycle = _binding_step_counter(session, step_name, counter=_AUTOLOOP_CYCLE_KEY, default=1)
+        attempt = _binding_step_counter(session, step_name, counter=_AUTOLOOP_ATTEMPT_KEY, default=1)
+        updated = _binding_with_step_progress(session, step_name, cycle=cycle, attempt=attempt)
+        return updated, cycle, attempt
+
+
+class _AutoloopV1Engine(Engine):
+    """Workflow-owned event emitter for Autoloop-v1 parity."""
+
+    def __init__(self, *args: Any, logger: EventLogger, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._logger = logger
+
+    def _execute_step(
+        self,
+        step: CompiledStep,
+        context: Any,
+        state: BaseModel,
+    ) -> tuple[BaseModel, str, Any, Any]:
+        current_phase_id = _phase_id(state)
+        next_state, destination, event, outcome = super()._execute_step(step, context, state)
+        next_phase_id = _phase_id(next_state)
+
+        step_fields: dict[str, object] = {
+            "workflow": self.compiled.workflow_name,
+            "step_name": step.name,
+        }
+        step_phase_id = _step_phase_id(step.name, current_phase_id, next_phase_id, event)
+        if step_phase_id is not None:
+            step_fields["phase_id"] = step_phase_id
+        self._logger.emit("step_executed", **step_fields)
+
+        if step.name == "activate_next_phase" and event is not None and event.tag == "phase_selected" and next_phase_id is not None:
+            self._logger.emit(
+                "phase_started",
+                workflow=self.compiled.workflow_name,
+                pair="implement",
+                phase_id=next_phase_id,
+            )
+        if step.name == "test" and outcome is not None and outcome.tag == "phase_passed":
+            completed_phase_id = current_phase_id or next_phase_id
+            if completed_phase_id is not None:
+                self._logger.emit(
+                    "phase_completed",
+                    workflow=self.compiled.workflow_name,
+                    pair="test",
+                    phase_id=completed_phase_id,
+                )
+        return next_state, destination, event, outcome
 
 
 def _prepare_autoloop_v1_workspaces(options: RunnerOptions) -> tuple[AutoloopV1Workspace, AutoloopV1RunWorkspace]:
@@ -429,6 +495,7 @@ def _validate_resume_state(run_dir: Path) -> None:
 
 
 def _append_terminal_notice(
+    compiled: Any,
     run: AutoloopV1RunWorkspace,
     result: RunResult,
     logging_provider: _AutoloopV1LoggingProvider,
@@ -440,6 +507,7 @@ def _append_terminal_notice(
     if not body and result.last_outcome is not None:
         body = result.last_outcome.raw_output
     phase_name = logging_provider.current_phase_name(step_name, result.state)
+    cycle, attempt = _step_progress_for_state(compiled, run.run.run_dir, step_name, result.state)
     for raw_log in (run.workspace.task_raw_log, run.run_raw_log):
         _append_runtime_raw_log(
             raw_log,
@@ -448,8 +516,8 @@ def _append_terminal_notice(
             body,
             pair=step_name,
             phase=phase_name,
-            cycle=1,
-            attempt=1,
+            cycle=cycle,
+            attempt=attempt,
         )
 
 
@@ -478,8 +546,8 @@ def _append_resume_clarification(
         pair=checkpoint.stage,
         phase_id=_phase_id(checkpoint.state) or "plan",
         phase="verifier" if step.kind == "pair" else "llm",
-        cycle=1,
-        attempt=1,
+        cycle=_session_step_counter(session_file, checkpoint.stage, counter=_AUTOLOOP_CYCLE_KEY, default=1),
+        attempt=_session_step_counter(session_file, checkpoint.stage, counter=_AUTOLOOP_ATTEMPT_KEY, default=1),
         question=checkpoint.pending_question,
         answer=answer,
         run_id=run.run.run_id,
@@ -663,6 +731,108 @@ def _thread_id(binding: SessionBinding | None) -> str | None:
     if binding is None:
         return None
     return binding.session_id
+
+
+def _binding_step_counter(
+    binding: SessionBinding,
+    step_name: str,
+    *,
+    counter: str,
+    default: int,
+) -> int:
+    provider_metadata = binding.metadata.get("provider_metadata")
+    if not isinstance(provider_metadata, dict):
+        return default
+    autoloop_metadata = provider_metadata.get(_AUTOLOOP_PROVIDER_METADATA_KEY)
+    if not isinstance(autoloop_metadata, dict):
+        return default
+    counters = autoloop_metadata.get(counter)
+    if not isinstance(counters, dict):
+        return default
+    value = counters.get(step_name)
+    return value if isinstance(value, int) and value > 0 else default
+
+
+def _binding_with_step_progress(
+    binding: SessionBinding,
+    step_name: str,
+    *,
+    cycle: int,
+    attempt: int,
+) -> SessionBinding:
+    metadata = dict(binding.metadata)
+    provider_metadata = metadata.get("provider_metadata")
+    if not isinstance(provider_metadata, dict):
+        provider_metadata = {}
+    else:
+        provider_metadata = dict(provider_metadata)
+    autoloop_metadata = provider_metadata.get(_AUTOLOOP_PROVIDER_METADATA_KEY)
+    if not isinstance(autoloop_metadata, dict):
+        autoloop_metadata = {}
+    else:
+        autoloop_metadata = dict(autoloop_metadata)
+    cycles = autoloop_metadata.get(_AUTOLOOP_CYCLE_KEY)
+    if not isinstance(cycles, dict):
+        cycles = {}
+    else:
+        cycles = dict(cycles)
+    attempts = autoloop_metadata.get(_AUTOLOOP_ATTEMPT_KEY)
+    if not isinstance(attempts, dict):
+        attempts = {}
+    else:
+        attempts = dict(attempts)
+    cycles[step_name] = cycle
+    attempts[step_name] = attempt
+    autoloop_metadata[_AUTOLOOP_CYCLE_KEY] = cycles
+    autoloop_metadata[_AUTOLOOP_ATTEMPT_KEY] = attempts
+    provider_metadata[_AUTOLOOP_PROVIDER_METADATA_KEY] = autoloop_metadata
+    metadata["provider_metadata"] = provider_metadata
+    return replace(binding, metadata=metadata)
+
+
+def _session_step_counter(
+    session_file: Path,
+    step_name: str,
+    *,
+    counter: str,
+    default: int,
+) -> int:
+    payload = load_session_payload(session_file, default_mode="persistent", default_provider="codex")
+    binding = SessionBinding(
+        ref_name=session_file.stem,
+        scope=None,
+        session_id=payload["session_id"] or "",
+        metadata=dict(payload["metadata"]),
+    )
+    return _binding_step_counter(binding, step_name, counter=counter, default=default)
+
+
+def _step_phase_id(
+    step_name: str,
+    current_phase_id: str | None,
+    next_phase_id: str | None,
+    event: Any,
+) -> str | None:
+    if step_name == "activate_next_phase" and event is not None and getattr(event, "tag", None) == "phase_selected":
+        return next_phase_id
+    return current_phase_id or next_phase_id
+
+
+def _step_progress_for_state(
+    compiled: Any,
+    run_dir: Path,
+    step_name: str,
+    state: BaseModel,
+) -> tuple[int, int]:
+    step = compiled.steps.get(step_name)
+    if step is None or step.session_name is None:
+        return 1, 1
+    scope = _phase_id(state) if step.session_name == "phase_session" else None
+    session_file = autoloop_v1_session_path(run_dir, step.session_name, scope)
+    return (
+        _session_step_counter(session_file, step_name, counter=_AUTOLOOP_CYCLE_KEY, default=1),
+        _session_step_counter(session_file, step_name, counter=_AUTOLOOP_ATTEMPT_KEY, default=1),
+    )
 
 
 def _phase_id(state: BaseModel | object) -> str | None:
