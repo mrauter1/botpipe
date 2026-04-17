@@ -62,3 +62,7 @@
 {"ts": "2026-04-17T22:26:36.748168+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 62, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-workflow-cleanup"}
 {"ts": "2026-04-17T22:27:37.797103+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 63, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-workflow-cleanup"}
 {"ts": "2026-04-17T22:27:37.809566+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 64, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strict-workflow-cleanup"}
+{"ts": "2026-04-17T22:27:37.849931+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 65, "event_type": "phase_completed", "pair": "test", "phase_id": "strict-workflow-cleanup", "phase_mode": "single"}
+{"ts": "2026-04-17T22:27:37.855293+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 66, "event_type": "phase_started", "phase_id": "docs-and-full-verification", "phase_mode": "single"}
+{"ts": "2026-04-17T22:27:37.856453+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 67, "event_type": "pair_started", "pair": "implement", "phase_id": "docs-and-full-verification"}
+{"ts": "2026-04-17T22:27:37.856608+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 68, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "docs-and-full-verification"}
