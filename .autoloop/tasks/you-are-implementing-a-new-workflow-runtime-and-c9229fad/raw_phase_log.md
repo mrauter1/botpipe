@@ -1028,3 +1028,62 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c35-d82b-7f03-b915-4b4c75e6e2d3
+---
+I’m reviewing the current runtime tests and the phase test artifacts first, then I’ll add only the missing coverage for the compatibility/runtime behaviors this phase changed. After that I’ll update the phase test strategy and feedback with the exact behavior-to-test map.
+
+The existing runtime tests cover the core runner and store behavior, but they don’t yet pin the CLI error-handling and option-plumbing boundary that this phase added. I’m reading that surface now and then I’ll add focused deterministic tests around `cli.main()` instead of broad new fixtures.
+
+I’ve narrowed the missing coverage to the CLI boundary that was added this phase. I’m adding focused tests for option plumbing and clean error conversion, then I’ll update the phase strategy artifact to map those behaviors explicitly.
+
+I’m editing the runtime test file now. The additions are limited to the CLI contract this phase changed: one happy-path plumbing test and two failure-path tests for config and execution errors, plus the phase-local strategy and feedback artifacts.
+
+The new tests are in place. I’m running the runtime compatibility file first and then the full `autoloop_v3/tests` suite to make sure the added CLI coverage didn’t destabilize adjacent behavior.
+
+The targeted runtime file passed with the new CLI coverage. I’m polling the full suite once more for the final exit status, then I’ll close out with the updated scope and validation details.
+
+Scope considered
+
+- Active phase `compatibility-and-filesystem-runtime` only.
+- Changed runtime surface in `autoloop_v3/runtime/cli.py`, `autoloop_v3/runtime/runner.py`, and adjacent compatibility/runtime behavior already covered in [autoloop_v3/tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py:1).
+- Phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/compatibility-and-filesystem-runtime/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/compatibility-and-filesystem-runtime/feedback.md:1).
+
+What I analyzed
+
+- Existing runtime compatibility tests and the new runner/CLI compatibility boundary added in the previous implement cycle.
+- Phase acceptance criteria around legacy workflow loading, filesystem persistence, config discovery, CLI compatibility, and resume-state compatibility.
+- Deterministic test seams for CLI behavior so coverage could be added without introducing environment-sensitive fixtures.
+
+What I changed
+
+- Added three focused runtime tests in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py:1):
+  - CLI happy-path plumbing into `RunnerOptions`.
+  - `ConfigError` conversion into argparse exit behavior.
+  - `WorkflowExecutionError` conversion into a clean CLI exit without usage noise.
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/compatibility-and-filesystem-runtime/test_strategy.md:1) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, stabilization notes, and known gaps.
+- Appended a concise test-additions summary to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/test/phases/compatibility-and-filesystem-runtime/feedback.md:1).
+
+Key findings / decisions
+
+- The missing regression surface for this phase was the CLI contract, not the core runtime path; the new tests pin that boundary directly.
+- Tests intentionally encode the current compatibility decision that the generic `autoloop_v3` runner rejects non-default legacy loop-control flags explicitly instead of silently accepting them.
+- Validation passed:
+  - `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py` -> `12 passed`
+  - `pytest -q autoloop_v3/tests` -> `49 passed`
+
+Open issues / next step
+
+- Final parity goldens and broader legacy-oracle comparisons remain deferred by the phase contract.
+- No additional test gaps were addressed outside this phase scope.

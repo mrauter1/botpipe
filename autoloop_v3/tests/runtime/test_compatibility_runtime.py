@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from autoloop_v3.runtime import cli as cli_module
 from autoloop_v3.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
@@ -37,6 +38,7 @@ from autoloop_v3.runtime.workspace import (
     save_phase_selection,
 )
 from autoloop_v3.workflow.compiler import compile_workflow
+from autoloop_v3.workflow.errors import WorkflowExecutionError
 from autoloop_v3.workflow.primitives import Outcome
 from autoloop_v3.workflow.providers.fake import ScriptedLLMProvider
 from autoloop_v3.workflow.stores.protocols import CheckpointPayload, SessionBinding, SessionSnapshot
@@ -319,6 +321,156 @@ def test_runner_resume_without_checkpoint_but_with_legacy_state_fails_with_targe
             provider=ScriptedLLMProvider(),
             options=RunnerOptions(root=tmp_path, task_id="task-1", run_id="run-1", resume=True),
         )
+
+
+def test_cli_main_threads_runtime_options_into_runner_options(monkeypatch, tmp_path: Path):
+    captured: dict[str, object] = {}
+
+    def fake_resolve_runtime_config(root: Path, args: Namespace):
+        assert root == tmp_path
+        assert args.phase_id == "phase-a"
+        return Namespace(
+            runtime=Namespace(
+                intent_mode="replace",
+                pairs="plan,implement",
+                max_iterations=7,
+                phase_mode="single",
+                full_auto_answers=False,
+                no_git=False,
+                track_autoloop_artifacts=True,
+            )
+        )
+
+    def fake_load_provider_factory(spec: str):
+        assert spec == "fake:factory"
+
+        def factory(*, config: object, args: Namespace):
+            captured["factory_config"] = config
+            captured["factory_args"] = args
+            return object()
+
+        return factory
+
+    def fake_run_workflow(workflow_target: str, *, provider: object, options: RunnerOptions):
+        captured["workflow_target"] = workflow_target
+        captured["provider"] = provider
+        captured["options"] = options
+        return object()
+
+    monkeypatch.setattr(cli_module, "resolve_runtime_config", fake_resolve_runtime_config)
+    monkeypatch.setattr(cli_module, "load_provider_factory", fake_load_provider_factory)
+    monkeypatch.setattr(cli_module, "run_workflow", fake_run_workflow)
+
+    exit_code = cli_module.main(
+        [
+            "autoloop_v1.py",
+            "--task-id",
+            "task-1",
+            "--provider-factory",
+            "fake:factory",
+            "--root",
+            str(tmp_path),
+            "--run-id",
+            "run-1",
+            "--resume",
+            "--answer",
+            "approved",
+            "--request-text",
+            "Ship it",
+            "--class-name",
+            "AutoloopV1",
+            "--phase-id",
+            "phase-a",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["workflow_target"] == "autoloop_v1.py"
+    options = captured["options"]
+    assert isinstance(options, RunnerOptions)
+    assert options.root == tmp_path
+    assert options.task_id == "task-1"
+    assert options.run_id == "run-1"
+    assert options.resume is True
+    assert options.answer == "approved"
+    assert options.request_text == "Ship it"
+    assert options.class_name == "AutoloopV1"
+    assert options.intent_mode == "replace"
+    assert options.pairs == "plan,implement"
+    assert options.max_iterations == 7
+    assert options.phase_mode == "single"
+    assert options.phase_id == "phase-a"
+    assert options.full_auto_answers is False
+    assert options.no_git is False
+    assert options.track_autoloop_artifacts is True
+
+
+def test_cli_main_turns_config_errors_into_parser_exit(monkeypatch, capsys, tmp_path: Path):
+    import pytest
+
+    monkeypatch.setattr(cli_module, "resolve_runtime_config", lambda root, args: (_ for _ in ()).throw(ConfigError("bad config")))
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli_module.main(
+            [
+                "autoloop_v1.py",
+                "--task-id",
+                "task-1",
+                "--provider-factory",
+                "fake:factory",
+                "--root",
+                str(tmp_path),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert excinfo.value.code == 2
+    assert "bad config" in captured.err
+    assert "usage:" in captured.err
+
+
+def test_cli_main_turns_workflow_execution_errors_into_clean_exit(monkeypatch, capsys, tmp_path: Path):
+    import pytest
+
+    monkeypatch.setattr(
+        cli_module,
+        "resolve_runtime_config",
+        lambda root, args: Namespace(
+            runtime=Namespace(
+                intent_mode="preserve",
+                pairs="plan,implement,test",
+                max_iterations=15,
+                phase_mode="single",
+                full_auto_answers=False,
+                no_git=False,
+                track_autoloop_artifacts=True,
+            )
+        ),
+    )
+    monkeypatch.setattr(cli_module, "load_provider_factory", lambda spec: (lambda *, config, args: object()))
+    monkeypatch.setattr(
+        cli_module,
+        "run_workflow",
+        lambda workflow_target, *, provider, options: (_ for _ in ()).throw(WorkflowExecutionError("cannot resume")),
+    )
+
+    with pytest.raises(SystemExit) as excinfo:
+        cli_module.main(
+            [
+                "autoloop_v1.py",
+                "--task-id",
+                "task-1",
+                "--provider-factory",
+                "fake:factory",
+                "--root",
+                str(tmp_path),
+            ]
+        )
+
+    captured = capsys.readouterr()
+    assert excinfo.value.code == 2
+    assert captured.err == "cannot resume\n"
+    assert "usage:" not in captured.err
 
 
 def test_runner_executes_autoloop_v1_and_writes_runtime_artifacts(tmp_path: Path):
