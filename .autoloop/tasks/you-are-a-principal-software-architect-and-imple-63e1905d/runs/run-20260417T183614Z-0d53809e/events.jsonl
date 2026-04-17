@@ -33,3 +33,7 @@
 {"ts": "2026-04-17T19:24:15.679147+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 33, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "generic-runtime-boundary"}
 {"ts": "2026-04-17T19:25:23.037791+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 34, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "generic-runtime-boundary"}
 {"ts": "2026-04-17T19:25:23.045751+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 35, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "generic-runtime-boundary"}
+{"ts": "2026-04-17T19:25:23.089520+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 36, "event_type": "phase_completed", "pair": "test", "phase_id": "generic-runtime-boundary", "phase_mode": "single"}
+{"ts": "2026-04-17T19:25:23.093370+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 37, "event_type": "phase_started", "phase_id": "workflow-migration-parity", "phase_mode": "single"}
+{"ts": "2026-04-17T19:25:23.093895+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 38, "event_type": "pair_started", "pair": "implement", "phase_id": "workflow-migration-parity"}
+{"ts": "2026-04-17T19:25:23.093977+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 39, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "workflow-migration-parity"}
