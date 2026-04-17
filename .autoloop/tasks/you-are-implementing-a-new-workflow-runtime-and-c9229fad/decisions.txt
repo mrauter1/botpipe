@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260417T151141Z-5a8eefb2" ts="2026-04-17T15:11:41.799757+00:00" />
+The real engine and runtime must live under a new package directory `/home/rauter/autoloop_v3/autoloop_v3/`; any repo-root `workflow` package is a thin compatibility export only.
+Compatibility drift from workspace workflows must be normalized in one boundary layer before strict compilation, covering at least `Verdict`, `on_verdict`, `SessionLifecycle`, produced-artifact attribute access, and handler arity differences.
+Parity proof is blocking until tests cover `.autoloop` workspace layout, phase-scoped artifacts and sessions, raw/event/decisions logs, pause/resume with answer injection, and end-to-end execution of both `autoloop_v1.py` and `Ralph_loop.py`.
