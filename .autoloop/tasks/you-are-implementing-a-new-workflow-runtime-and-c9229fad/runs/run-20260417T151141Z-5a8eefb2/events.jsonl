@@ -24,3 +24,6 @@
 {"ts": "2026-04-17T15:36:41.023984+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 24, "event_type": "phase_started", "phase_id": "strict-core-engine", "phase_mode": "single"}
 {"ts": "2026-04-17T15:36:41.025028+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "strict-core-engine"}
 {"ts": "2026-04-17T15:36:41.025177+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "strict-core-engine"}
+{"ts": "2026-04-17T15:58:19.719959+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 27, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-core-engine"}
+{"ts": "2026-04-17T16:01:56.580467+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 28, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-core-engine"}
+{"ts": "2026-04-17T16:01:58.643601+00:00", "run_id": "run-20260417T151141Z-5a8eefb2", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "strict-core-engine"}
