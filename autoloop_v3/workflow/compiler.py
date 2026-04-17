@@ -13,7 +13,14 @@ from .errors import RoutingError, WorkflowCompilationError
 from .primitives import Event, FAIL, GLOBAL, Outcome, PAUSE, SUCCESS
 from .prompts import PromptSpec
 from .steps import LLMStep, PairStep, SessionLifecycle, Step, SystemStep
-from .validation import ArtifactInventoryRecord, WorkflowDefinition, collect_artifact_inventory, get_workflow_definition
+from .validation import (
+    ArtifactInventoryRecord,
+    WorkflowDefinition,
+    collect_artifact_inventory,
+    get_workflow_definition,
+    has_start_hook,
+    middleware_handler_name,
+)
 
 OutcomeHandler = Callable[[BaseModel, Outcome, Any], BaseModel]
 SystemHandler = Callable[[BaseModel, Context], tuple[BaseModel, Event]]
@@ -50,6 +57,7 @@ class CompiledWorkflow:
     global_routes: dict[str, str]
     artifacts: dict[str, CompiledArtifact]
     start_sessions: tuple[str, ...]
+    has_start_hook: bool
     middleware: MiddlewareHandler | None = None
 
     def route(self, step_name: str, tag: str) -> str:
@@ -91,7 +99,8 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
             for name, session in definition.sessions_by_name.items()
             if session.lifecycle == SessionLifecycle.ON_START
         ),
-        middleware=_compile_middleware(workflow_cls),
+        has_start_hook=has_start_hook(definition),
+        middleware=_compile_middleware(definition),
     )
     workflow_cls.__compiled_workflow__ = compiled
     return compiled
@@ -176,10 +185,11 @@ def _compile_system_handler(workflow_cls: type[Any], step_name: str) -> SystemHa
     raise WorkflowCompilationError(f"invalid system handler arity for step {step_name!r}")
 
 
-def _compile_middleware(workflow_cls: type[Any]) -> MiddlewareHandler | None:
-    raw = getattr(workflow_cls, "on_outcome", None)
-    if raw is None:
-        raw = getattr(workflow_cls, "on_verdict", None)
+def _compile_middleware(definition: WorkflowDefinition) -> MiddlewareHandler | None:
+    handler_name = middleware_handler_name(definition)
+    if handler_name is None:
+        return None
+    raw = getattr(definition.workflow_cls, handler_name, None)
     if raw is None:
         return None
     if _callable_arity(raw) != 2:
@@ -231,4 +241,3 @@ def _callable_arity(func: Callable[..., Any]) -> int:
         if parameter.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
     ]
     return len(positional)
-

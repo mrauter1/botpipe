@@ -89,7 +89,7 @@ class Engine:
             )
             for session_name in self.compiled.start_sessions:
                 context.open_session(session_name)
-            if hasattr(workflow_instance, "on_start"):
+            if self.compiled.has_start_hook:
                 workflow_instance.on_start(context)
             state = context.state
             current_step_name = self.compiled.entry_step_name
@@ -360,4 +360,3 @@ class Engine:
         )
         self.checkpoint_store.save(checkpoint)
         return checkpoint
-

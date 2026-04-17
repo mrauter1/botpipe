@@ -549,3 +549,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9c16-5093-7332-9b33-4983fcf8ec38
+---
+The fix is clear now: hook lookup needs explicit precedence rules instead of raw `hasattr`/`getattr`. I’m centralizing that in validation and compilation so `start`, `outcome`, and `verdict` can be used as step names without getting double-bound as lifecycle or middleware hooks.
+
+I found a cleanup error in the validation patch while reading it back. I’m removing that stray arity check now and then I’ll add the reserved-name regression tests before rerunning the phase suite.
+
+The central change and the new regression tests are in. I’m running the phase suite now to catch any fallout in handler validation, middleware selection, or start-hook execution before I update the phase notes.
+
+The tests are green again, including the new regression coverage for `start`, `outcome`, and `verdict` step names. I’m updating the phase notes and decision ledger now so the hook-precedence rule is explicit for later phases.
+
+I’m checking the new-file status before I close out. The source changes are done; I just need to verify whether the bytecode paths are actually tracked or just a side effect of the earlier turn so I don’t create unnecessary cleanup churn.
+
+Scope considered
+
+- Reviewer finding `IMP-001` only, within the `strict-core-engine` phase scope.
+- The touched surfaces were the strict-core hook lookup path in `validation.py`, `compiler.py`, `engine.py`, and the contract tests for reserved step names.
+
+What I analyzed
+
+- The verifier feedback in [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/strict-core-engine/feedback.md:1).
+- The current hook-resolution behavior in [validation.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/validation.py:1), [compiler.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/compiler.py:1), and [engine.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/engine.py:1).
+- The phase tests under [test_engine_contracts.py](/home/rauter/autoloop_v3/autoloop_v3/tests/contract/test_engine_contracts.py:1) to make sure the fix stayed inside strict-core scope.
+
+What I changed
+
+- Centralized hook precedence in `workflow.validation` and `workflow.compiler` so step names `start`, `outcome`, and `verdict` now claim their matching `on_*` symbol as a step handler instead of being double-bound as lifecycle or middleware hooks.
+- Stopped `Engine.run()` from calling `on_start` as a lifecycle hook when the compiled workflow says that hook is inactive because a `start` step owns the symbol.
+- Added regression coverage for workflows with steps named `start`, `outcome`, and `verdict`, and updated the phase notes and decisions ledger with the new precedence rule.
+
+Key findings / decisions
+
+- The fix keeps pure v1.1 workflows executable without introducing a new public API or compatibility shim.
+- The precedence rule is explicit: if a workflow defines a step named `start`, `outcome`, or `verdict`, the matching `on_*` name binds to that step in the strict core.
+- Validation remains centralized; I did not add scattered special cases in the executor.
+
+Open issues / next step
+
+- The strict-core phase is complete from the implementation side for this reviewer finding. The next step is a fresh verifier pass to clear `IMP-001`.
+- Validation performed: `pytest -q autoloop_v3/tests` with `33 passed`.

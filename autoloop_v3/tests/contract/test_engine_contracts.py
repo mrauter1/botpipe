@@ -464,3 +464,99 @@ def test_compiled_workflow_is_deterministic():
     second = compile_workflow(DeterministicWorkflow)
 
     assert first is second
+
+
+def test_step_named_start_executes_without_being_treated_as_lifecycle_hook(tmp_path: Path):
+    class StartNamedWorkflow(Workflow):
+        class State(BaseModel):
+            handler_calls: int = 0
+
+        start = LLMStep(name="start", producer="start.md")
+        entry = start
+        transitions = {start: {"done": SUCCESS}}
+
+        @staticmethod
+        def on_start(state: State, outcome: Outcome):
+            return state.model_copy(update={"handler_calls": state.handler_calls + 1})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    engine = Engine(
+        StartNamedWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+    )
+
+    assert result.terminal == SUCCESS
+    assert result.state.handler_calls == 1
+
+
+def test_step_named_outcome_executes_without_being_treated_as_global_middleware(tmp_path: Path):
+    class OutcomeNamedWorkflow(Workflow):
+        class State(BaseModel):
+            handler_calls: int = 0
+
+        outcome = LLMStep(name="outcome", producer="outcome.md")
+        entry = outcome
+        transitions = {outcome: {"done": SUCCESS}}
+
+        @staticmethod
+        def on_outcome(state: State, outcome: Outcome):
+            return state.model_copy(update={"handler_calls": state.handler_calls + 1})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    engine = Engine(
+        OutcomeNamedWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+    )
+
+    assert result.terminal == SUCCESS
+    assert result.state.handler_calls == 1
+
+
+def test_step_named_verdict_executes_without_being_treated_as_global_middleware(tmp_path: Path):
+    class VerdictNamedWorkflow(Workflow):
+        class State(BaseModel):
+            handler_calls: int = 0
+
+        verdict = LLMStep(name="verdict", producer="verdict.md")
+        entry = verdict
+        transitions = {verdict: {"done": SUCCESS}}
+
+        @staticmethod
+        def on_verdict(state: State, outcome: Outcome):
+            return state.model_copy(update={"handler_calls": state.handler_calls + 1})
+
+    task_folder, run_folder = _workspace(tmp_path)
+    engine = Engine(
+        VerdictNamedWorkflow,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")]),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+
+    result = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+    )
+
+    assert result.terminal == SUCCESS
+    assert result.state.handler_calls == 1

@@ -37,7 +37,7 @@
 
 - Strict authoring surface: `Workflow`, `Artifact`, `PairStep`, `LLMStep`, `SystemStep`, `Session`, `SessionLifecycle`, `Context`, `Prompt`.
 - Core primitives: `Event`, `Outcome`, `Verdict`, `Checkpoint`, `SUCCESS`, `PAUSE`, `FAIL`, `GLOBAL`, `ResolvedArtifacts`.
-- Compiler/runtime internals: `WorkflowMeta`, `WorkflowDefinition`, `CompiledWorkflow`, `CompiledStep`, `Engine`, `RunResult`.
+- Compiler/runtime internals: `WorkflowMeta`, `WorkflowDefinition`, `CompiledWorkflow`, `CompiledStep`, `Engine`, `RunResult`, `has_start_hook()`, `middleware_handler_name()`.
 - Store/provider doubles: `InMemorySessionStore`, `InMemoryCheckpointStore`, `SessionBinding`, `SessionSnapshot`, `ScriptedLLMProvider`.
 
 ## Checklist Mapping
@@ -51,6 +51,7 @@
 
 - Strict-core tests target direct imports from `autoloop_v3.workflow`; the repo-root `workflow` compatibility shim remains a later-phase deliverable because legacy loading is out of scope here.
 - Session scope selection for step execution is represented by an active-scope table in the session store; `ctx.open_session(ref, scope=...)` both creates or reuses a binding and marks that scope active for later steps using the same slot.
+- When a workflow declares a step named `start`, `outcome`, or `verdict`, the matching `on_*` symbol is treated as the step handler first and is not also activated as a lifecycle or middleware hook in the same strict-core workflow definition.
 
 ## Preserved Invariants
 
@@ -62,6 +63,7 @@
 ## Intended Behavior Changes
 
 - Introduced the new strict workflow package under `autoloop_v3/workflow` with definition-time validation and deterministic execution semantics.
+- Fixed hook-selection precedence so pure workflows can safely use step names `start`, `outcome`, and `verdict` without colliding with lifecycle or middleware dispatch.
 - No behavior in the legacy `autoloop/` package was modified.
 
 ## Known Non-Changes
@@ -77,11 +79,12 @@
 
 ## Validation Performed
 
-- `pytest -q autoloop_v3/tests`
+- `pytest -q autoloop_v3/tests` (`33 passed`)
 - `python - <<'PY' ... import autoloop_v3.workflow ... PY`
 
 ## Deduplication And Centralization Decisions
 
 - Centralized definition discovery and validation in `workflow.validation`; the metaclass and explicit `get_workflow_definition()` reuse the same rule set.
 - Centralized handler signature adaptation in `workflow.compiler` so the engine only executes normalized call sites.
+- Centralized reserved hook-name precedence in `workflow.validation` and `workflow.compiler` instead of scattering special cases through the executor.
 - Centralized scoped-session state in `workflow.stores.memory` via `SessionSnapshot.active_scopes` rather than leaking scope logic into state models or steps.

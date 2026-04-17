@@ -139,6 +139,36 @@ def validate_workflow_definition(definition: WorkflowDefinition) -> None:
     _validate_topology(definition)
 
 
+def has_start_hook(definition: WorkflowDefinition) -> bool:
+    """Return whether the lifecycle on_start hook is active."""
+
+    if "start" in definition.steps_by_name:
+        return False
+    return getattr(definition.workflow_cls, "on_start", None) is not None
+
+
+def middleware_handler_name(definition: WorkflowDefinition) -> str | None:
+    """Return the active global middleware hook name, if any."""
+
+    has_outcome_middleware = "outcome" not in definition.steps_by_name and getattr(
+        definition.workflow_cls,
+        "on_outcome",
+        None,
+    ) is not None
+    has_verdict_middleware = "verdict" not in definition.steps_by_name and getattr(
+        definition.workflow_cls,
+        "on_verdict",
+        None,
+    ) is not None
+    if has_outcome_middleware and has_verdict_middleware:
+        raise WorkflowValidationError("define only one of on_outcome or on_verdict")
+    if has_outcome_middleware:
+        return "on_outcome"
+    if has_verdict_middleware:
+        return "on_verdict"
+    return None
+
+
 def collect_artifact_inventory(definition: WorkflowDefinition) -> dict[str, ArtifactInventoryRecord]:
     """Collect artifact registry metadata with canonical names."""
 
@@ -233,8 +263,6 @@ def _validate_sessions(definition: WorkflowDefinition) -> None:
 
 def _validate_handlers(definition: WorkflowDefinition) -> None:
     handler_names = {name for name in definition.workflow_cls.__dict__ if name.startswith("on_")}
-    if "on_outcome" in handler_names and "on_verdict" in handler_names:
-        raise WorkflowValidationError("define only one of on_outcome or on_verdict")
 
     for step in definition.steps:
         handler_name = f"on_{step.name}"
@@ -245,13 +273,24 @@ def _validate_handlers(definition: WorkflowDefinition) -> None:
             expected = {1, 2} if isinstance(step, SystemStep) else {2, 3}
             _validate_callable_arity(handler_name, raw_handler, expected)
 
-    middleware_name = "on_outcome" if hasattr(definition.workflow_cls, "on_outcome") else "on_verdict"
-    raw_middleware = getattr(definition.workflow_cls, middleware_name, None)
+    active_middleware = middleware_handler_name(definition)
+    raw_middleware = getattr(definition.workflow_cls, active_middleware, None) if active_middleware else None
     if raw_middleware is not None:
-        _validate_callable_arity(middleware_name, raw_middleware, {2})
+        _validate_callable_arity(active_middleware, raw_middleware, {2})
+
+    if has_start_hook(definition):
+        raw_start = getattr(definition.workflow_cls, "on_start", None)
+        if raw_start is not None:
+            _validate_callable_arity("on_start", raw_start, {1, 2})
+
+    reserved_handler_names: set[str] = set()
+    if has_start_hook(definition):
+        reserved_handler_names.add("on_start")
+    if active_middleware is not None:
+        reserved_handler_names.add(active_middleware)
 
     for handler_name in handler_names:
-        if handler_name in {"on_start", "on_outcome", "on_verdict"}:
+        if handler_name in reserved_handler_names:
             continue
         step_name = handler_name[3:]
         if step_name not in definition.steps_by_name:
