@@ -1200,3 +1200,48 @@ Key findings / decisions
 Open issues / next step
 
 `pytest -q autoloop_v3/tests` passes: `56 passed`. The only residual issue is non-blocking deprecation warnings from unchanged legacy `Ralph_loop.py` using Pydantic `copy()`. The generic v3 runner still does not reconstruct legacy event/session-only runs into v3 checkpoints, which remains intentionally compatibility-gated rather than silently approximated.
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9c53-5bfa-79e1-a085-b1ffa028ddbe
+---
+I’m reviewing only the phase-local integration/parity work and the request-relevant runtime surface it touched. First I’m reading the active criteria, feedback, phase notes, and the actual diffs so I can decide whether any blocking compatibility or regression risks remain before I mark criteria.
+
+The worktree diff for the runtime files is now clean, so I’m reviewing the current contents as landed rather than an unstaged patch. I’m reading the exact runtime/test symbols that were changed, then I’ll decide whether any compatibility risk is still unproven and update the verifier artifacts accordingly.
+
+I found one persistence-safety scenario that the current tests do not cover: the runner emits `run_resumed` before it validates whether a requested resume is even allowed, which means the “reject legacy session/event-only resumes” path still mutates the legacy run’s `events.jsonl`. I’m reproducing that path directly now to confirm whether it’s a real blocking regression or just theoretical.
+
+I’ve confirmed one blocking regression in the resume-compatibility gate: the runner mutates a rejected legacy run before returning the targeted error. I’m recording that finding now and leaving criteria unchecked where that persistence-safety issue makes the phase not yet acceptable.
+
+Scope considered
+
+Phase-local review of `workflow-integration-and-parity`, focused on the runtime/test surface the implementation notes named: `autoloop_v3/runtime/events.py`, `autoloop_v3/runtime/runner.py`, `autoloop_v3/runtime/stores/filesystem.py`, and the new runtime parity tests. I also checked the active criteria, feedback, implementation notes, and the authoritative decisions ledger.
+
+What I analyzed
+
+I read the landed runtime behavior for clarification logging, resume handling, session persistence, and legacy-status emission. I ran the new parity tests, and I directly reproduced the “resume a legacy session/event-only run” rejection path to verify whether it mutates persisted state.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/workflow-integration-and-parity/criteria.md) and appended one prioritized finding to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/implement/phases/workflow-integration-and-parity/feedback.md). The targeted runtime tests pass, but the reproduced failure path shows a persisted-state mutation that the current tests do not guard.
+
+Key findings / decisions
+
+`IMP-001` is blocking. `autoloop_v3/runtime/runner.py:run_workflow` emits `run_resumed` before `_validate_resume_state()` rejects unsupported legacy resume targets, so a resume that is supposed to fail cleanly still appends `run_resumed` and `run_finished` into the legacy run’s `events.jsonl`. That is a compatibility/data-integrity regression on the exact path the runner claims it will not handle.
+
+Open issues / next step
+
+Fix the resume gate ordering so unsupported legacy resumes are validated before any run-scoped writes occur, and add a regression test asserting `events.jsonl` is unchanged on that failure path. Until that is fixed, this phase should not be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
