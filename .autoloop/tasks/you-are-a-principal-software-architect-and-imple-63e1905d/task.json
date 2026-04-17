@@ -15,14 +15,14 @@
       "proof-suite-and-docs"
     ],
     "explicit": true,
-    "current_phase_index": 3,
-    "current_phase_id": "proof-suite-and-docs"
+    "current_phase_index": 4,
+    "current_phase_id": null
   },
   "phase_status": {
     "book-architecture-core": "completed",
     "generic-runtime-boundary": "completed",
     "workflow-migration-parity": "completed",
-    "proof-suite-and-docs": "in_progress"
+    "proof-suite-and-docs": "completed"
   },
   "phase_history": [
     {
@@ -69,6 +69,13 @@
       "run_id": "run-20260417T183614Z-0d53809e",
       "status": "in_progress",
       "ts": "2026-04-17T20:02:31.615868+00:00"
+    },
+    {
+      "phase_id": "proof-suite-and-docs",
+      "run_id": "run-20260417T183614Z-0d53809e",
+      "status": "completed",
+      "ts": "2026-04-17T20:14:56.646146+00:00",
+      "pair": "test"
     }
   ]
 }
