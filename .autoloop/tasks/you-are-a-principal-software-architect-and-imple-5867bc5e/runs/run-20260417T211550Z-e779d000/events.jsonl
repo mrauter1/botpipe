@@ -75,3 +75,4 @@
 {"ts": "2026-04-17T22:34:58.264341+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 75, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "docs-and-full-verification"}
 {"ts": "2026-04-17T22:35:51.846405+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 76, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "docs-and-full-verification"}
 {"ts": "2026-04-17T22:35:51.858228+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 77, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "docs-and-full-verification"}
+{"ts": "2026-04-17T22:35:51.914753+00:00", "run_id": "run-20260417T211550Z-e779d000", "seq": 78, "event_type": "phase_completed", "pair": "test", "phase_id": "docs-and-full-verification", "phase_mode": "single"}

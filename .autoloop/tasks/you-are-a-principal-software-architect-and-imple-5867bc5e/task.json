@@ -16,15 +16,15 @@
       "docs-and-full-verification"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "docs-and-full-verification"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "decision-freeze-and-observer-core": "completed",
     "runtime-session-store-ownership": "completed",
     "autoloop-v1-parity-split": "completed",
     "strict-workflow-cleanup": "completed",
-    "docs-and-full-verification": "in_progress"
+    "docs-and-full-verification": "completed"
   },
   "phase_history": [
     {
@@ -84,6 +84,13 @@
       "run_id": "run-20260417T211550Z-e779d000",
       "status": "in_progress",
       "ts": "2026-04-17T22:27:37.854539+00:00"
+    },
+    {
+      "phase_id": "docs-and-full-verification",
+      "run_id": "run-20260417T211550Z-e779d000",
+      "status": "completed",
+      "ts": "2026-04-17T22:35:51.914333+00:00",
+      "pair": "test"
     }
   ]
 }
