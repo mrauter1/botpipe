@@ -86,3 +86,97 @@ Revise the plan and `phase_plan.yaml` so phase 1 produces the actual ADR set, ad
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019d9bff-731c-7cc0-b2e3-b7ddab8c4946
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019d9bff-731c-7cc0-b2e3-b7ddab8c4946
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9bff-731c-7cc0-b2e3-b7ddab8c4946
+---
+I’m addressing the verifier’s blocking findings now. First I’m re-reading the current plan bundle and the latest shared-decisions header so I can tighten the plan without drifting scope or touching verifier-owned criteria.
+
+I’ve got the concrete fixes. I’m tightening the plan around three places: phase 1 now has to produce the actual ADR set, phase 3 gets an explicit legacy-safe workflow loading path for Ralph-style modules, and the runtime scope now names config/CLI/persisted-state compatibility instead of leaving those public surfaces implicit.
+
+The blocking gaps are patched in the plan artifacts. I’m doing a final consistency pass now to make sure the new requirements line up across the narrative plan, phase YAML, feedback history, and this turn’s shared decisions block.
+
+Scope considered
+
+The revision covered the authoritative planning bundle only: [plan.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/feedback.md), and the current-turn block in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt). I also re-checked [Ralph_loop.py](/home/rauter/autoloop_v3/Ralph_loop.py) and [autoloop/README.md](/home/rauter/autoloop_v3/autoloop/README.md) for the verifier’s compatibility concerns.
+
+What I analyzed
+
+I validated the three blocking findings against the actual artifacts and code. The key facts were: phase 1’s machine contract only required an ADR backlog, `Ralph_loop.py` can fail before normal compatibility normalization because of unresolved annotation symbols, and the old runtime exposes config, CLI, and persisted-state behavior that the first plan revision had left too implicit.
+
+What I changed
+
+I updated [plan.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/plan.md) so phase 1 now requires the actual ADR files, phase 3 now includes a legacy-safe workflow loader for Ralph-style modules, and the runtime scope now explicitly covers config discovery, CLI compatibility, and persisted-state migration/loading. I updated [phase_plan.yaml](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/phase_plan.yaml) to make those requirements part of the canonical phase contract, appended a concise resolution note to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/feedback.md), and recorded the non-obvious constraints under the latest planner header in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt). I did not edit verifier-owned [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/criteria.md).
+
+Key findings / decisions
+
+Phase 1 is now explicitly blocked on authored ADR files under `autoloop_v3/docs/adr/`, not a topic list.
+
+The plan now treats legacy workflow loading as a first-class compatibility concern, with a loader-based path for modules that are not safe to import directly before normalization.
+
+The runtime compatibility scope now explicitly includes config discovery, CLI behavior, and persisted session/run/checkpoint loading and migration, with validation and rollback notes required.
+
+Open issues / next step
+
+The plan artifacts are aligned with the verifier’s three blocking findings and are ready for re-verification. The next step is the verifier pass on the revised plan bundle.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019d9bff-731c-7cc0-b2e3-b7ddab8c4946
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019d9bff-731c-7cc0-b2e3-b7ddab8c4946
+
+
+---
+run_id=run-20260417T151141Z-5a8eefb2 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9bff-731c-7cc0-b2e3-b7ddab8c4946
+---
+I’m doing the final audit pass on the revised plan bundle now. The main check is whether the earlier blockers are genuinely closed in both the narrative plan and the machine phase contract, not just mentioned in feedback.
+
+The revised plan now closes the earlier blockers in both the narrative and machine-readable contracts. I’m updating the verifier gates to reflect that and appending a closure note to the feedback history.
+
+Scope considered
+
+The verifier pass covered [plan.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/criteria.md), the authoritative [raw_phase_log.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/runs/run-20260417T151141Z-5a8eefb2/raw_phase_log.md), and the shared [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/decisions.txt).
+
+What I analyzed
+
+I re-checked the revised plan against the immutable request, the absence of later clarifications in the raw log, the earlier blocking findings, and the concrete compatibility surfaces called out by the planner. The main verification point was whether the previous blockers were closed in both the narrative plan and the machine-readable phase contract.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/criteria.md) so all five gates are checked. I appended a closure note to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/you-are-implementing-a-new-workflow-runtime-and-c9229fad/plan/feedback.md) stating that `PLAN-001`, `PLAN-002`, and `PLAN-003` are now closed.
+
+Key findings / decisions
+
+No new blocking findings remain.
+
+The revised plan now requires authored ADR files in phase 1, not just a backlog.
+
+The revised plan now explicitly covers a legacy-safe workflow loading path for `Ralph_loop.py`-style import-time annotation failures.
+
+The revised plan now makes config discovery, CLI behavior, and persisted-state compatibility or migration part of the runtime and parity scope.
+
+Open issues / next step
+
+The plan artifacts are now consistent with the request, the shared decisions ledger, and the prior verifier feedback. The next step is implementation against this phase contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
