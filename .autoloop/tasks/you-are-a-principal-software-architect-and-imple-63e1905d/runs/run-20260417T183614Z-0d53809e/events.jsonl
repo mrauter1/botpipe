@@ -49,3 +49,7 @@
 {"ts": "2026-04-17T20:01:33.565307+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 49, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-migration-parity"}
 {"ts": "2026-04-17T20:02:31.564731+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 50, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-migration-parity"}
 {"ts": "2026-04-17T20:02:31.575991+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 51, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-migration-parity"}
+{"ts": "2026-04-17T20:02:31.613185+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 52, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-migration-parity", "phase_mode": "single"}
+{"ts": "2026-04-17T20:02:31.618916+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 53, "event_type": "phase_started", "phase_id": "proof-suite-and-docs", "phase_mode": "single"}
+{"ts": "2026-04-17T20:02:31.619828+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 54, "event_type": "pair_started", "pair": "implement", "phase_id": "proof-suite-and-docs"}
+{"ts": "2026-04-17T20:02:31.620124+00:00", "run_id": "run-20260417T183614Z-0d53809e", "seq": 55, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "proof-suite-and-docs"}
