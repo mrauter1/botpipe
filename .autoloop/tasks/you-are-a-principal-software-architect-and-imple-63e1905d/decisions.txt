@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260417T183614Z-0d53809e" ts="2026-04-17T18:36:15.038888+00:00" />
+Final target is a strict `autoloop_v3.workflow` core plus a workflow-owned `autoloop_v1` parity harness; no normalization or legacy adaptation may remain in compiler, loader, engine, or the root `workflow` package.
+Session bindings become explicit-only: the engine must look up declared slots and fail clearly when a step's session was never opened; it may not auto-open, infer, or derive bindings from workflow state.
+`autoloop_v3.runtime` must stop owning phases, pair/phase CLI flags, phase-plan parsing, Autoloop artifact conventions, and slot-name-specific session paths; those move to `autoloop_v1`-owned helpers if still required for parity.
+If the repo-root `workflow/` package remains, it is only a strict re-export of the canonical surface and must not behave as a compatibility shim.
