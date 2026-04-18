@@ -1,0 +1,6 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260418T021238Z-9ac22268" ts="2026-04-18T02:12:38.587896+00:00" />
+Replace the current observer-based execution seam with `Workflow.extensions` and `workflow/extensions.py`; do not keep observers and extensions alive in parallel.
+Narrow the canonical root authoring surface to the prompt's symbols only; `Engine` and `compile_workflow` may remain internal module imports for runtime/tests but should not stay on the strict root re-export surface.
+Keep exact Autoloop-v1 session filename, raw log, decisions, clarification, status, cycle/attempt, and git policy behavior workflow-owned in `autoloop_v3.workflows.*`; the generic runtime must remain phase-agnostic.
+Preserve persisted session payload compatibility for legacy `thread_id` and existing generic session JSON fields unless a later clarification explicitly authorizes a data-format break.
+Keep any retained compatibility documentation narrow and operational only; it must not reintroduce removed workflow authoring compatibility or present a second execution model.
