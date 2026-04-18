@@ -91,3 +91,4 @@
 {"ts": "2026-04-18T04:14:04.939377+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 91, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "layered-tests-and-parity-proof"}
 {"ts": "2026-04-18T04:15:18.797745+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 92, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "layered-tests-and-parity-proof"}
 {"ts": "2026-04-18T04:15:18.814707+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 93, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "layered-tests-and-parity-proof"}
+{"ts": "2026-04-18T04:15:18.871244+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 94, "event_type": "phase_completed", "pair": "test", "phase_id": "layered-tests-and-parity-proof", "phase_mode": "single"}
