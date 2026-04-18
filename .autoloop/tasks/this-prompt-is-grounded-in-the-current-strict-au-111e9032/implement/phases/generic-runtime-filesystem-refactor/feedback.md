@@ -12,3 +12,8 @@
 
 - `IMP-002` `non-blocking` `autoloop_v3/tests/runtime/test_compatibility_runtime.py`
   The new compatibility test only exercises `superloop.yaml`; the phase deliverable and decisions ledger call out preserving `superloop.*` discovery, which also includes `superloop.config`. The runtime code already supports both filenames, but the reviewable coverage is still partial. Minimal fix: extend the discovery test with a small parametrized case that covers both legacy filenames.
+
+- Re-review cycle 2:
+  `IMP-001` addressed by removing the ambient `Path.cwd()` prompt root and adding an explicit cwd-independence regression test.
+  `IMP-002` addressed by covering both `superloop.yaml` and `superloop.config`.
+  No remaining findings in scope; `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py` passed (`35 passed`).
