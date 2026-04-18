@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from ..extensions.session_paths import extract_session_path_strategy
+from ..workflow.compiler import CompiledWorkflow
 from ..workflow.errors import WorkflowExecutionError
 from ..workflow.engine import Engine, RunResult
 from ..workflow.providers.protocols import LLMProvider
@@ -41,6 +43,19 @@ class RunnerOptions:
     max_steps: int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedRunContext:
+    """Resolved generic runtime context for one run."""
+
+    compiled: CompiledWorkflow
+    task_workspace: TaskWorkspace
+    run_workspace: RunWorkspace
+    session_store: FilesystemSessionStore
+    checkpoint_store: FilesystemCheckpointStore
+    prompt_registry: FilesystemPromptRegistry
+    logger: EventLogger
+
+
 def load_provider_factory(spec: str) -> Callable[..., LLMProvider]:
     module_name, _, attr_name = spec.partition(":")
     if not module_name or not attr_name:
@@ -59,64 +74,77 @@ def run_workflow(
     options: RunnerOptions,
 ) -> RunResult:
     max_steps = _resolve_max_steps(options.max_steps)
-    workspace, run = _prepare_workspaces(options)
-
     compiled = load_compiled_workflow(workflow_target, class_name=options.class_name)
-    session_store = FilesystemSessionStore(run.run_dir)
-    checkpoint_store = FilesystemCheckpointStore(run.checkpoint_file, compiled.state_cls)
-    workflow_parent = Path(inspect.getfile(compiled.workflow_cls)).resolve().parent
-    prompt_registry = FilesystemPromptRegistry(workflow_parent, workspace.root, Path.cwd())
-    logger = EventLogger(run.run_id, run.events_file)
+    prepared = _prepare_run_context(compiled, options)
 
     engine = Engine(
-        compiled,
+        prepared.compiled,
         provider=provider,
-        session_store=session_store,
-        checkpoint_store=checkpoint_store,
-        prompt_registry=prompt_registry,
+        session_store=prepared.session_store,
+        checkpoint_store=prepared.checkpoint_store,
+        prompt_registry=prepared.prompt_registry,
     )
-    logger.emit("run_resumed" if options.resume else "run_started", workflow=compiled.workflow_name, task_id=workspace.task_id)
+    prepared.logger.emit(
+        "run_resumed" if options.resume else "run_started",
+        workflow=prepared.compiled.workflow_name,
+        task_id=prepared.task_workspace.task_id,
+    )
     try:
         if options.resume:
             result = engine.resume(
-                task_id=workspace.task_id,
-                run_id=run.run_id,
-                task_folder=workspace.task_dir,
-                run_folder=run.run_dir,
-                root=workspace.root,
+                task_id=prepared.task_workspace.task_id,
+                run_id=prepared.run_workspace.run_id,
+                task_folder=prepared.task_workspace.task_dir,
+                run_folder=prepared.run_workspace.run_dir,
+                root=prepared.task_workspace.root,
                 answer=options.answer,
                 max_steps=max_steps,
             )
         else:
             result = engine.run(
-                task_id=workspace.task_id,
-                run_id=run.run_id,
-                task_folder=workspace.task_dir,
-                run_folder=run.run_dir,
-                root=workspace.root,
+                task_id=prepared.task_workspace.task_id,
+                run_id=prepared.run_workspace.run_id,
+                task_folder=prepared.task_workspace.task_dir,
+                run_folder=prepared.run_workspace.run_dir,
+                root=prepared.task_workspace.root,
                 max_steps=max_steps,
             )
 
         for step_name in result.history:
-            logger.emit("step_executed", workflow=compiled.workflow_name, step_name=step_name)
+            prepared.logger.emit("step_executed", workflow=prepared.compiled.workflow_name, step_name=step_name)
 
-        logger.emit(
+        prepared.logger.emit(
             "run_finished",
-            workflow=compiled.workflow_name,
+            workflow=prepared.compiled.workflow_name,
             terminal=result.terminal,
             status=_run_status(result.terminal),
             last_step=result.history[-1] if result.history else None,
         )
         return result
     except Exception as exc:
-        logger.emit(
+        prepared.logger.emit(
             "run_finished",
-            workflow=compiled.workflow_name,
+            workflow=prepared.compiled.workflow_name,
             status="fatal_error",
             error_type=type(exc).__name__,
             error=str(exc),
         )
         raise
+
+
+def _prepare_run_context(compiled: CompiledWorkflow, options: RunnerOptions) -> PreparedRunContext:
+    workflow_parent = Path(inspect.getfile(compiled.workflow_cls)).resolve().parent
+    path_strategy = _extract_session_path_strategy(compiled)
+    workspace, run = _prepare_workspaces(options)
+    return PreparedRunContext(
+        compiled=compiled,
+        task_workspace=workspace,
+        run_workspace=run,
+        session_store=FilesystemSessionStore(run.run_dir, path_strategy=path_strategy),
+        checkpoint_store=FilesystemCheckpointStore(run.checkpoint_file, compiled.state_cls),
+        prompt_registry=FilesystemPromptRegistry(workflow_parent, workspace.root, Path.cwd()),
+        logger=EventLogger(run.run_id, run.events_file),
+    )
 
 
 def _ensure_task_workspace(options: RunnerOptions) -> TaskWorkspace:
@@ -166,6 +194,13 @@ def _resolve_max_steps(max_steps: int | None) -> int:
     if max_steps <= 0:
         raise ConfigError("max_steps must be a positive integer.")
     return max_steps
+
+
+def _extract_session_path_strategy(compiled: CompiledWorkflow):
+    try:
+        return extract_session_path_strategy(compiled.extensions)
+    except ValueError as exc:
+        raise WorkflowExecutionError(str(exc)) from exc
 
 
 def _validate_resume_state(run_dir: Path) -> None:

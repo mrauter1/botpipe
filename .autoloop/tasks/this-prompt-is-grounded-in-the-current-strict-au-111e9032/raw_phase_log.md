@@ -650,3 +650,76 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+---
+I’m handling the `generic-runtime-filesystem-refactor` phase. First I’m reading the phase artifacts and the current runtime/kernel code so I can scope the refactor against the accepted criteria and avoid pulling unrelated workflow policy into runtime.
+
+I’ve confirmed the phase artifacts are mostly blank and the runtime phase session file does not exist yet, so the repository state is the real source for this phase. Next I’m reading the runtime, filesystem store, and runtime tests to identify the current workflow-specific leakage and the extension/session-path wiring points.
+
+The runtime is still thin, but it hardcodes session-path behavior into the store constructor and has no clear runner-level extension extraction yet. I’m checking the engine and current runtime tests now so I can refactor the boundary without breaking checkpoint/session semantics or the `superloop.*` config contract.
+
+I have enough context to outline the implementation. I’m going to refactor runtime around a small bound-run object model: resolve the workspace, load the compiled workflow strictly, extract any declared session-path strategy from workflow extensions, construct generic stores/prompt registry/event logger, then centralize run vs resume execution so the runtime stays workflow-agnostic and testable.
+
+Plan:
+1. Inspect the compiled workflow/runtime interfaces for extension metadata and current store protocols.
+2. Refactor `runtime/runner.py` and `runtime/stores/filesystem.py` to support generic session-path strategies, strict resume handling, and explicit run context assembly.
+3. Tighten `runtime/{loader,workspace,events,prompts,config,cli}` only where needed to preserve generic behavior and `autoloop.*` plus `superloop.*` discovery.
+4. Update/add runtime tests for workspace, request snapshot, events, checkpoints, session compatibility, prompt resolution, CLI wiring, and runtime neutrality.
+5. Record the implementation decisions in the phase notes and decision ledger, then run targeted pytest coverage for the touched runtime surfaces.
+
+The compiler already preserves declared extensions, which means the runtime can stay generic by extracting only the one extension capability it needs during run setup instead of learning workflow semantics. I’m reading the Autoloop-v1 parity harness next because its current session-path and logging composition will dictate what compatibility the filesystem store must keep.
+
+I’ve finished the analysis pass. Before editing, I’m running the current runtime-focused pytest subset to capture the exact failures and avoid solving the wrong problem.
+
+The existing runtime tests are green, so this phase is about closing architectural gaps rather than chasing breakage. The remaining gap is that session-path policy is still a raw store callback, not a workflow-declared runtime capability, and the runner setup is flatter than the target design.
+
+I’m at the edit point. The concrete changes are: add the generic `SessionPaths` declaration surface, teach the runner to extract exactly one session-path strategy before engine execution, update the filesystem store to accept strategy objects while preserving the current raw resolver compatibility for the parity harness, and add runtime tests for legacy `superloop.*` discovery plus strategy wiring.
+
+I found one issue in the first edit pass: the runner was still creating the run workspace before validating duplicate `SessionPaths` declarations. I’m tightening that ordering now so invalid workflow declarations fail before any filesystem side effects.
+
+The runner setup is now ordered correctly. I’m running the runtime subset again to catch any integration regressions from the new extension surface and the store constructor change.
+
+The targeted contract/runtime tests are green. I’m running the full suite once before I write the phase notes so the recorded validation matches the final tree.
+
+I’m writing the phase artifacts now. I’m recording the two non-obvious decisions that later turns would otherwise drift on: the runtime now consumes a dedicated workflow-facing `SessionPaths` declaration, and the old raw resolver callback remains only as a temporary compatibility bridge for the parity harness.
+
+The code and the phase artifacts are updated. I’m doing one last diff/status pass so the closeout can accurately summarize the touched surface and anything intentionally left for later phases.
+
+Local test runs updated tracked `__pycache__` artifacts. I’m restoring those generated files to the repository versions so the diff stays source-only.
+
+Scope considered
+- `autoloop_v3/runtime/{runner,stores/filesystem,config,loader,workspace,prompts,cli}`, current runtime/contract tests, and the Autoloop-v1 parity harness/session conventions as read-only dependency context.
+- Phase artifacts: feedback, plan, decision ledger, and the phase [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/generic-runtime-filesystem-refactor/implementation_notes.md:1).
+
+What I analyzed
+- Confirmed the runtime suite was already green, then traced the remaining architecture gap: session-path policy still lived as a raw store callback instead of a workflow-declared capability.
+- Checked compiled workflow extension support, runner setup order, filesystem session compatibility, and the current Autoloop-v1 parity bridge before changing the boundary.
+
+What I changed
+- Added the new optional extension surface in [session_paths.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/session_paths.py:1) and `autoloop_v3/extensions/__init__.py` with `SessionPathStrategy`, `SessionPaths`, and `extract_session_path_strategy(...)`.
+- Refactored [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py:46) around `PreparedRunContext`, so the runner loads the compiled workflow, extracts at most one declared `SessionPaths(...)`, and validates that before creating task/run workspace state.
+- Extended [filesystem.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/stores/filesystem.py:33) with `path_strategy` while preserving `path_resolver` for the current workflow-owned parity harness bridge.
+- Added runtime coverage in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py:435) for legacy `superloop.yaml` discovery, workflow-declared session-path routing, and duplicate `SessionPaths` rejection without filesystem side effects.
+- Updated the phase notes and decision ledger.
+
+Key findings / decisions
+- The runtime stayed workflow-agnostic; only the generic session-path capability needed explicit runner support.
+- `path_resolver` remains temporarily for `run_autoloop_v1(...)`; the long-term direction is workflow-visible `SessionPaths(...)` declarations.
+- Ordering matters: invalid duplicate `SessionPaths` declarations now fail before `.autoloop/tasks/...` is created.
+- Validation performed: `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py` and `pytest -q`. Current suite: `270 passed`.
+
+Open issues / next step
+- `Tracing` and `GitTracking` are still for later phases.
+- `autoloop_v1` has not yet been migrated to declare `SessionPaths(...)` directly in workflow code; the parity harness still owns that compatibility bridge for now.

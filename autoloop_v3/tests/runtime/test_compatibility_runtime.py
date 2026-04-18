@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+from autoloop_v3.extensions import SessionPaths
 from autoloop_v3.runtime import cli as cli_module
 from autoloop_v3.runtime.config import (
     ClaudeProviderConfig,
@@ -431,6 +432,13 @@ def test_resolve_runtime_config_merges_global_local_and_cli(monkeypatch, tmp_pat
         discover_config_file(workspace_root)
 
 
+def test_discover_config_file_preserves_legacy_superloop_names(tmp_path: Path):
+    legacy = tmp_path / "superloop.yaml"
+    legacy.write_text("{}", encoding="utf-8")
+
+    assert discover_config_file(tmp_path) == legacy
+
+
 def test_runner_rejects_non_positive_max_steps(tmp_path: Path):
     with pytest.raises(ConfigError, match="max_steps must be a positive integer"):
         run_workflow(
@@ -631,6 +639,117 @@ def test_runner_executes_toy_workflow_without_phase_scaffolding(tmp_path: Path):
     assert events[0]["event_type"] == "run_started"
     assert events[-1]["event_type"] == "run_finished"
     assert events[-1]["status"] == "success"
+
+
+def test_runner_uses_declared_session_path_strategy_from_workflow_extensions(tmp_path: Path):
+    workflow_file = tmp_path / "custom_session_paths.py"
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic import BaseModel
+
+from autoloop_v3.extensions import SessionPaths
+from workflow import Context, LLMStep, Session, SUCCESS, Workflow
+from workflow.primitives import Outcome
+
+
+class CustomStrategy:
+    def path_for(self, run_dir: Path, ref_name: str, scope: str | None) -> Path:
+        suffix = scope or "global"
+        return run_dir / "custom-sessions" / suffix / f"{ref_name}.json"
+
+
+class CustomSessionPathsWorkflow(Workflow):
+    class State(BaseModel):
+        done: bool = False
+
+    extensions = (SessionPaths(strategy=CustomStrategy()),)
+    main = Session()
+    ask = LLMStep(name="ask", producer="ask.md", session=main)
+    entry = ask
+    transitions = {ask: {"done": SUCCESS}}
+
+    def on_start(self, ctx: Context) -> None:
+        ctx.open_session(self.main, scope="phase-a")
+
+    @staticmethod
+    def on_ask(state: State, outcome: Outcome, artifacts):
+        return state.model_copy(update={"done": True})
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_workflow(
+        workflow_file,
+        provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok\n", tag="done")]),
+        options=RunnerOptions(root=tmp_path, task_id="custom-session-task", request_text="Ship it"),
+    )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "custom-session-task"
+    run_dir = next((task_dir / "runs").iterdir())
+
+    assert result.terminal == "SUCCESS"
+    assert (run_dir / "custom-sessions" / "phase-a" / "main.json").exists()
+    assert not (run_dir / "sessions" / "scopes" / "phase-a" / "main.json").exists()
+
+
+def test_runner_rejects_multiple_declared_session_path_strategies_before_creating_a_run(tmp_path: Path):
+    workflow_file = tmp_path / "invalid_session_paths.py"
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic import BaseModel
+
+from autoloop_v3.extensions import SessionPaths
+from workflow import LLMStep, SUCCESS, Workflow
+from workflow.primitives import Outcome
+
+
+class FirstStrategy:
+    def path_for(self, run_dir: Path, ref_name: str, scope: str | None) -> Path:
+        return run_dir / "one" / f"{ref_name}.json"
+
+
+class SecondStrategy:
+    def path_for(self, run_dir: Path, ref_name: str, scope: str | None) -> Path:
+        return run_dir / "two" / f"{ref_name}.json"
+
+
+class InvalidSessionPathWorkflow(Workflow):
+    class State(BaseModel):
+        pass
+
+    extensions = (
+        SessionPaths(strategy=FirstStrategy()),
+        SessionPaths(strategy=SecondStrategy()),
+    )
+    ask = LLMStep(name="ask", producer="ask.md")
+    entry = ask
+    transitions = {ask: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_ask(state: State, outcome: Outcome, artifacts):
+        return state
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(WorkflowExecutionError, match="multiple SessionPaths"):
+        run_workflow(
+            workflow_file,
+            provider=ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok\n", tag="done")]),
+            options=RunnerOptions(root=tmp_path, task_id="invalid-session-task", request_text="Ship it"),
+        )
+
+    assert not (tmp_path / ".autoloop" / "tasks" / "invalid-session-task").exists()
 
 
 def test_cli_module_smoke_executes_toy_workflow_end_to_end(tmp_path: Path):

@@ -12,6 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from ...extensions.session_paths import SessionPathStrategy
 from ...workflow.stores.memory import InMemorySessionStore
 from ...workflow.stores.protocols import CheckpointPayload, SessionBinding, SessionSnapshot
 
@@ -38,11 +39,13 @@ class FilesystemSessionStore:
         *,
         default_mode: str = "persistent",
         default_provider: str = "codex",
+        path_strategy: SessionPathStrategy | None = None,
         path_resolver: SessionPathResolver | None = None,
     ) -> None:
         self.run_dir = run_dir
         self.default_mode = default_mode
         self.default_provider = default_provider
+        self.path_strategy = path_strategy
         self.path_resolver = path_resolver
         self._memory = InMemorySessionStore()
 
@@ -71,6 +74,8 @@ class FilesystemSessionStore:
 
     def path_for(self, ref_name: str, scope: str | None = None) -> Path:
         self.run_dir.mkdir(parents=True, exist_ok=True)
+        if self.path_strategy is not None:
+            return self.path_strategy.path_for(self.run_dir, ref_name, scope)
         if self.path_resolver is not None:
             return self.path_resolver(self.run_dir, ref_name, scope)
         sessions_dir = self.run_dir / "sessions"
