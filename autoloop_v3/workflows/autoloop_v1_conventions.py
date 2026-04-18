@@ -34,4 +34,11 @@ def autoloop_v1_session_path(run_dir: Path, ref_name: str, scope: str | None) ->
     return sessions_dir / "scopes" / scope_key(scope) / f"{ref_name}.json"
 
 
-__all__ = ["autoloop_v1_session_path", "phase_dir_key"]
+class AutoloopV1SessionPathStrategy:
+    """Workflow-owned session naming policy for Autoloop-v1 parity."""
+
+    def path_for(self, run_dir: Path, ref_name: str, scope: str | None) -> Path:
+        return autoloop_v1_session_path(run_dir, ref_name, scope)
+
+
+__all__ = ["AutoloopV1SessionPathStrategy", "autoloop_v1_session_path", "phase_dir_key"]

@@ -1344,3 +1344,71 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9eb8-0afe-7a01-b6d7-9832c2c507de
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9eb8-0afe-7a01-b6d7-9832c2c507de
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9eb8-0afe-7a01-b6d7-9832c2c507de
+---
+I’m treating this as the workflow-migrations-and-parity-harness phase: migrate `autoloop_v1.py`, `Ralph_loop.py`, and the Autoloop-v1 parity harness onto the new strict/runtime split without widening runtime scope. I’ll read the phase artifacts, current workflow code, and the relevant runtime/kernel surfaces first so I can map the required changes before editing.
+
+The phase feedback artifact is empty, and the injected phase session path does not exist under the run directory, so I’m proceeding from the request, plan, and decisions ledger. Next I’m reading the current workflow/parity code and the new runtime/extension surfaces to identify the exact migration points.
+
+The repo is already dirty with untracked top-level workflow files and reference material, so I’m treating those as in-scope inputs and avoiding unrelated files. I’m now comparing the repo-root workflows, the workflow-owned parity modules, and the runner/extension APIs to see what already migrated and what still depends on old behavior.
+
+I’ve confirmed the workflows themselves are mostly strict already. The remaining work looks concentrated in the parity harness composition, making `autoloop_v1.py` opt into the explicit session-path extension, tightening Ralph’s success-state proof, and updating workflow-focused tests around those boundaries.
+
+I’ve isolated the main architectural drift: `run_autoloop_v1` still assembles a custom runner stack instead of composing through the generic runtime setup, and `autoloop_v1.py` still relies on harness-side session-path wiring rather than declaring it in the workflow. I’m checking the existing git extension and workflow/compiler surfaces now so I can refactor that without reintroducing runtime-specific knowledge.
+
+I’ve finished the migration design and I’m starting edits now. The code changes are limited to four areas: make `autoloop_v1.py` declare its session-path policy, give the parity harness a thinner composition root over generic runtime helpers, add the minimal generic runner helpers that remove duplication, and update workflow/parity tests around those new explicit boundaries.
+
+The core refactor is in place. I’m updating the workflow/parity tests now to lock the new explicit contract: `autoloop_v1.py` declares its own session-path extension, the generic runner respects that declaration, and the parity harness no longer hides session naming inside custom store wiring.
+
+I’m at validation now. I’m running the workflow/parity runtime tests that cover the migrated paths, plus the optional-extension runtime tests because the runner helper refactor touched extension/service setup.
+
+The targeted runtime suite is almost through; the workflow/parity and compatibility tests have cleared so far. I’m waiting on the last optional-extension cases to confirm the runner helper refactor didn’t disturb extension binding.
+
+The migrated code paths are passing. I’m doing one extra safety pass on contract/unit coverage that touches workflow validation and extension wiring, since `autoloop_v1.py` now declares `SessionPaths(...)` directly and the runner exposes shared prep helpers.
+
+The code and tests are green. I’m writing the phase notes and the non-obvious decisions now so later turns inherit the explicit workflow-owned session-path contract and the thinner parity-harness composition.
+
+Scope considered
+
+- Repo-root workflows [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py:1) and [Ralph_loop.py](/home/rauter/autoloop_v3/Ralph_loop.py:1), the workflow-owned Autoloop-v1 modules [autoloop_v1_conventions.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_conventions.py:1) and [autoloop_v1_parity.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_parity.py:272), the generic runner [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py:70), and the workflow/parity runtime tests.
+
+What I analyzed
+
+- The remaining architectural drift was in `run_autoloop_v1(...)`: it still hid Autoloop-v1 session naming in custom store wiring instead of reading explicit workflow declarations.
+- `autoloop_v1.py` was already close to target shape; `Ralph_loop.py` was already on the strict surface and already covered the `goal_met` success-path behavior in tests.
+- The runner already had the right generic pieces, but they were still partially duplicated inside the parity harness.
+
+What I changed
+
+- [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py:18) now declares `SessionPaths(strategy=AutoloopV1SessionPathStrategy())` explicitly, so exact `plan.json` / `sessions/phases/<phase>.json` naming is workflow-owned.
+- [autoloop_v3/workflows/autoloop_v1_conventions.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_conventions.py:37) now exposes `AutoloopV1SessionPathStrategy` on top of the existing exact path function.
+- [autoloop_v3/runtime/runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py:142) now centralizes shared generic setup with `prepare_runtime_services(...)`, `resolve_max_steps(...)`, `resolve_session_path_strategy(...)`, and `validate_resume_state(...)`.
+- [autoloop_v3/workflows/autoloop_v1_parity.py](/home/rauter/autoloop_v3/autoloop_v3/workflows/autoloop_v1_parity.py:272) now composes through those generic runner services, requires the workflow-declared session-path policy, and keeps only parity-owned workspace/logging behavior local.
+- [test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:30) and [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py:236) now lock the explicit session-path contract and the thinner parity-harness composition.
+- I updated the phase notes and decisions ledger for the non-obvious migration choices.
+
+Key findings / decisions
+
+- The cleanest Book-shape move here was to make Autoloop-v1 session filenames explicit in workflow code, not in the parity harness.
+- `run_autoloop_v1(...)` is now thinner: generic runtime service prep is shared, while parity-specific raw logs, decisions, clarification persistence, and status mapping remain workflow-owned.
+- `Ralph_loop.py` did not need a code edit in this turn; the existing runtime tests already prove `goal_met=True` on both success routes.
+- Validation passed:
+  - `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_optional_extensions.py` -> 39 passed
+  - `pytest autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/unit/test_stdlib_and_extensions.py` -> 49 passed
+
+Open issues / next step
+
+- No blocker in this phase.
+- Repo-root [autoloop_v1.py](/home/rauter/autoloop_v3/autoloop_v1.py:1) and [Ralph_loop.py](/home/rauter/autoloop_v3/Ralph_loop.py:1) are still untracked in this checkout; I changed `autoloop_v1.py`, but `Ralph_loop.py` remained unchanged because it was already compliant.

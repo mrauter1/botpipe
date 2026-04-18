@@ -97,9 +97,10 @@ def test_autoloop_v1_runs_with_generic_runtime_and_explicit_prompt_paths(tmp_pat
     assert (task_dir / "test" / "phases" / "phase-b" / "test_strategy.md").read_text(encoding="utf-8") == (
         "phase-b test strategy\n"
     )
-    assert (run_dir / "sessions" / "plan_session.json").exists()
-    assert (run_dir / "sessions" / "scopes" / "phase-a" / "phase_session.json").exists()
-    assert (run_dir / "sessions" / "scopes" / "phase-b" / "phase_session.json").exists()
+    assert (run_dir / "sessions" / "plan.json").exists()
+    assert (run_dir / "sessions" / "phases" / "phase-a.json").exists()
+    assert (run_dir / "sessions" / "phases" / "phase-b.json").exists()
+    assert not (run_dir / "sessions" / "scopes").exists()
     assert events[0]["event_type"] == "run_started"
     assert events[-1]["event_type"] == "run_finished"
     assert events[-1]["status"] == "success"

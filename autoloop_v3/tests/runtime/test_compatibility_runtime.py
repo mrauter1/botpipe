@@ -239,6 +239,7 @@ def test_autoloop_v1_source_inlines_phase_parsing_and_explicit_artifact_template
     assert "def parse_phase_ids(" in source
     assert "phase_artifact_template" not in source
     assert "autoloop_v1_support" not in source
+    assert "SessionPaths(strategy=AutoloopV1SessionPathStrategy())" in source
     assert 'Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/criteria.md")' in source
     assert 'Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/implementation_notes.md")' in source
     assert 'Artifact("{task_folder}/test/phases/{state.phase.dir_key}/criteria.md")' in source
@@ -263,6 +264,10 @@ def test_autoloop_v1_parity_modules_delegate_session_payload_writes_to_runtime_s
     assert "ExecutionObserver" not in parity_source
     assert "class _AutoloopV1LoggingProvider" in parity_source
     assert "class _AutoloopV1Engine" not in parity_source
+    assert "prepare_runtime_services(" in parity_source
+    assert "_require_autoloop_v1_session_path_strategy(compiled)" in parity_source
+    assert "path_resolver=autoloop_v1_session_path" not in parity_source
+    assert "class AutoloopV1SessionPathStrategy" in conventions_source
     assert "def autoloop_v1_session_path(" in conventions_source
     assert "from .autoloop_v1_parity import run_autoloop_v1" in workflows_init
 

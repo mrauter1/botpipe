@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import json
 import re
 from dataclasses import dataclass, field, replace
@@ -12,14 +11,17 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..runtime.config import DEFAULT_MAX_STEPS
 from ..runtime.events import EventLogger
 from ..runtime.loader import load_compiled_workflow
-from ..runtime.prompts import FilesystemPromptRegistry
-from ..runtime.runner import RunnerOptions
+from ..runtime.runner import (
+    RunnerOptions,
+    prepare_runtime_services,
+    resolve_max_steps,
+    resolve_session_path_strategy,
+    validate_resume_state,
+)
 from ..runtime.stores.filesystem import (
     FilesystemCheckpointStore,
-    FilesystemSessionStore,
     ensure_session_payload_placeholder,
     set_pending_session_note,
 )
@@ -273,33 +275,34 @@ def run_autoloop_v1(
     provider: LLMProvider,
     options: RunnerOptions,
 ) -> RunResult:
-    max_steps = _resolve_max_steps(options.max_steps)
-    workspace, run = _prepare_autoloop_v1_workspaces(options)
-
     compiled = load_compiled_workflow(workflow_target, class_name=options.class_name)
-    session_store = FilesystemSessionStore(run.run.run_dir, path_resolver=autoloop_v1_session_path)
-    checkpoint_store = FilesystemCheckpointStore(run.run.checkpoint_file, compiled.state_cls)
-    workflow_parent = Path(inspect.getfile(compiled.workflow_cls)).resolve().parent
-    prompt_registry = FilesystemPromptRegistry(workflow_parent, workspace.task.root, Path.cwd())
-    logger = EventLogger(run.run.run_id, run.run.events_file)
-    parity = _AutoloopV1ParityRuntime(compiled=compiled, logger=logger, run=run)
+    session_path_strategy = _require_autoloop_v1_session_path_strategy(compiled)
+    max_steps = resolve_max_steps(options.max_steps)
+    workspace, run = _prepare_autoloop_v1_workspaces(options)
+    prepared = prepare_runtime_services(
+        compiled,
+        task_workspace=workspace.task,
+        run_workspace=run.run,
+        session_path_strategy=session_path_strategy,
+    )
+    parity = _AutoloopV1ParityRuntime(compiled=prepared.compiled, logger=prepared.logger, run=run)
     wrapped_provider = _AutoloopV1LoggingProvider(provider, parity)
     engine = Engine(
-        replace(compiled, extensions=(*compiled.extensions, _AutoloopV1ParityExtension(parity))),
+        replace(prepared.compiled, extensions=(*prepared.compiled.extensions, _AutoloopV1ParityExtension(parity))),
         provider=wrapped_provider,
-        session_store=session_store,
-        checkpoint_store=checkpoint_store,
-        prompt_registry=prompt_registry,
+        session_store=prepared.session_store,
+        checkpoint_store=prepared.checkpoint_store,
+        prompt_registry=prepared.prompt_registry,
     )
 
-    logger.emit(
+    prepared.logger.emit(
         "run_resumed" if options.resume else "run_started",
-        workflow=compiled.workflow_name,
+        workflow=prepared.compiled.workflow_name,
         task_id=workspace.task.task_id,
     )
     try:
         if options.resume:
-            _append_resume_clarification(compiled, checkpoint_store, run, answer=options.answer)
+            _append_resume_clarification(prepared.compiled, prepared.checkpoint_store, run, answer=options.answer)
             return engine.resume(
                 task_id=workspace.task.task_id,
                 run_id=run.run.run_id,
@@ -318,9 +321,9 @@ def run_autoloop_v1(
             max_steps=max_steps,
         )
     except Exception as exc:
-        logger.emit(
+        prepared.logger.emit(
             "run_finished",
-            workflow=compiled.workflow_name,
+            workflow=prepared.compiled.workflow_name,
             status="fatal_error",
             error_type=type(exc).__name__,
             error=str(exc),
@@ -404,7 +407,7 @@ def _prepare_autoloop_v1_workspaces(options: RunnerOptions) -> tuple[AutoloopV1W
         state_dir = resolve_resume_state_root(root, task_id=options.task_id, run_id=options.run_id)
     run_id = options.run_id or ""
     run_dir = state_dir / "tasks" / options.task_id / "runs" / run_id
-    _validate_resume_state(run_dir)
+    validate_resume_state(run_dir)
     workspace = ensure_autoloop_v1_workspace(
         root,
         options.task_id,
@@ -429,30 +432,13 @@ def _ensure_autoloop_workspace_for_options(options: RunnerOptions) -> AutoloopV1
     )
 
 
-def _resolve_max_steps(max_steps: int | None) -> int:
-    if max_steps is None:
-        return DEFAULT_MAX_STEPS
-    if max_steps <= 0:
-        raise WorkflowExecutionError("max_steps must be a positive integer.")
-    return max_steps
-
-
-def _validate_resume_state(run_dir: Path) -> None:
-    if not run_dir.is_dir():
-        raise FileNotFoundError(f"run {run_dir.name!r} does not exist under {run_dir.parent}")
-    checkpoint_file = run_dir / "checkpoint.json"
-    if checkpoint_file.exists():
-        return
-    sessions_dir = run_dir / "sessions"
-    events_file = run_dir / "events.jsonl"
-    has_session_files = any(sessions_dir.rglob("*.json"))
-    has_event_history = events_file.exists() and events_file.stat().st_size > 0
-    if has_session_files or has_event_history:
+def _require_autoloop_v1_session_path_strategy(compiled: CompiledWorkflow):
+    strategy = resolve_session_path_strategy(compiled)
+    if strategy is None:
         raise WorkflowExecutionError(
-            "resume requested for a run without autoloop_v3 checkpoint.json. "
-            "This run only has persisted session or event state, which the strict engine does not reconstruct "
-            "without a checkpoint. Resume it from a checkpointed run or start a new run."
+            "autoloop_v1 parity harness requires the workflow to declare SessionPaths(...) explicitly"
         )
+    return strategy
 
 
 def _append_resume_clarification(
