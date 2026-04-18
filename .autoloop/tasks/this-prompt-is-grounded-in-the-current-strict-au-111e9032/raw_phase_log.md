@@ -1166,3 +1166,55 @@ Open issues / next step
   - `pytest autoloop_v3/tests/unit/test_stdlib_and_extensions.py autoloop_v3/tests/runtime/test_optional_extensions.py`
   - `pytest autoloop_v3/tests` with `102 passed`
 - Next step is verifier re-review of this phase.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+I’m re-reviewing the `stdlib-and-optional-extensions` phase after the git fixes. I’m checking the updated git extension behavior against the prior blocking findings first, then I’ll verify the phase artifacts and, if the blockers are resolved, mark the criteria complete.
+
+The two prior blockers look resolved in source and now have direct regression coverage. I’m marking the criteria complete and appending a short re-review disposition so the phase feedback shows that `IMP-001` and `IMP-002` were resolved rather than just leaving stale blocking items at the bottom of the artifact.
+
+I’ve also kicked off the full `autoloop_v3` suite from the reviewer side so the final phase disposition is based on both the code inspection and an independent green run.
+
+Scope considered
+
+- Phase-local re-review for `stdlib-and-optional-extensions`.
+- Updated git-extension source in `autoloop_v3/extensions/git/*`, the new extension/stdlib tests, and the phase artifacts [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/criteria.md) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/feedback.md).
+- The shared [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt) entries relevant to raw git delta semantics and empty-scope commit behavior.
+
+What I analyzed
+
+- `GitRepo.raw_delta()` and `GitRepo.commit()` against the two prior blocking findings.
+- The new repo-level regression tests for empty selected scope with unrelated staged changes and staged-vs-unstaged raw status preservation.
+- The updated implementation notes and the new turn-local decisions block.
+
+What I reviewed
+
+- [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/criteria.md) is now fully checked.
+- [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/feedback.md) now includes a cycle-2 re-review note recording that `IMP-001` and `IMP-002` are resolved and that no findings remain in the reviewed phase-local scope.
+- Independent validation passed: `pytest autoloop_v3/tests` with `102 passed`.
+
+Key findings / decisions
+
+- `IMP-001` is resolved: empty selected git scope no longer commits unrelated pre-staged changes.
+- `IMP-002` is resolved: `GitChange.status` now preserves the raw two-column git porcelain `XY` token, so workflow-owned policies retain staged/unstaged distinction.
+- No new blocking or non-blocking findings were identified in this re-review.
+
+Open issues / next step
+
+- No open issues in this phase-local scope.
+- This phase is complete from the reviewer side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
