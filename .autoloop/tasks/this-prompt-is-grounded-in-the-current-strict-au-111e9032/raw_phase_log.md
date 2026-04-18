@@ -1467,3 +1467,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9eb8-0afe-7a01-b6d7-9832c2c507de
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9eb8-0afe-7a01-b6d7-9832c2c507de
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9eb8-0afe-7a01-b6d7-9832c2c507de
+---
+I’m handling the test phase for the workflow-migrations-and-parity-harness scope. I’ll inspect the active test artifacts, the decisions ledger, and the current workflow/parity tests first, then add any missing regression coverage around the explicit session-path declaration and the thinner Autoloop-v1 harness composition.
+
+The existing coverage already locks the happy-path behavior, unsafe phase-id edge case, resume/clarification behavior, and Ralph success routes. The main missing regression guard is the new failure-path contract: `run_autoloop_v1(...)` must reject workflows that omit the explicit `SessionPaths(...)` declaration before creating any runtime state.
+
+I’ve added the missing failure-path regression test. I’m running the workflow/parity runtime slice now to make sure the harness rejects undeclared `SessionPaths(...)` before any workspace creation and that the existing happy-path/parity coverage still holds.
+
+The new regression test passed with the existing parity/runtime coverage. I’m doing a quick readback of the modified test and phase artifacts now so the handoff references the exact behaviors and validation cleanly.
+
+Scope considered
+
+- Phase-local test work for the workflow migration/parity harness changes: [test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:325), the existing compatibility/runtime coverage, and the active test artifacts under [.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/workflow-migrations-and-parity-harness](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/workflow-migrations-and-parity-harness/test_strategy.md).
+
+What I analyzed
+
+- The shared decisions for explicit workflow-owned `SessionPaths(...)`, the migrated Autoloop-v1 harness behavior, and the existing happy-path/parity tests.
+- The remaining regression gap after implementation/review: no direct failure-path test proved `run_autoloop_v1(...)` rejects workflows that omit `SessionPaths(...)` before creating runtime state.
+
+What I changed
+
+- Added a failure-path regression test in [test_workflow_integration_parity.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:325) that:
+  - builds a minimal workflow without `SessionPaths(...)`
+  - asserts `run_autoloop_v1(...)` raises `WorkflowExecutionError`
+  - asserts no `.autoloop/tasks/<task_id>` workspace is created
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/workflow-migrations-and-parity-harness/test_strategy.md) with the behavior-to-test coverage map, preserved invariants, stabilization notes, and known gaps.
+- Appended a concise test-phase summary to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/workflow-migrations-and-parity-harness/feedback.md).
+- Appended the non-obvious test decision to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+Key findings / decisions
+
+- The main missing regression guard was the new harness contract, not additional happy-path coverage.
+- The added test locks the intended failure behavior early enough to prevent silent fallback to generic session naming and partial workspace state.
+- Validation run:
+  - `pytest autoloop_v3/tests/runtime/test_workflow_integration_parity.py autoloop_v3/tests/runtime/test_compatibility_runtime.py -q`
+  - Result: `37 passed`
+
+Open issues / next step
+
+- No blocker in this phase.
+- Git-extension-specific parity coverage remains intentionally out of scope for this workflow-migration test slice.

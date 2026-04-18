@@ -8,6 +8,7 @@ import pytest
 
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow
 from autoloop_v3.runtime.stores.filesystem import load_session_payload
+from autoloop_v3.workflow.errors import WorkflowExecutionError
 from autoloop_v3.workflow.primitives import Outcome
 from autoloop_v3.workflow.providers.fake import ScriptedLLMProvider
 from autoloop_v3.workflows import run_autoloop_v1
@@ -319,6 +320,47 @@ def test_autoloop_v1_parity_harness_preserves_legacy_workspace_logs_and_sessions
     assert observed["implement-a"] == observed["test-a"]
     assert observed["implement-b"] == observed["test-b"]
     assert observed["implement-a"] != observed["implement-b"]
+
+
+def test_autoloop_v1_parity_harness_requires_explicit_session_paths_before_creating_workspace(tmp_path: Path):
+    workflow_file = tmp_path / "missing_session_paths_autoloop.py"
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import LLMStep, SUCCESS, Workflow
+from workflow.primitives import Outcome
+
+
+class MissingSessionPathsAutoloop(Workflow):
+    class State(BaseModel):
+        done: bool = False
+
+    plan = LLMStep(name="plan", producer="ask.md")
+    entry = plan
+    transitions = {plan: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_plan(state: State, outcome: Outcome, artifacts):
+        return state.model_copy(update={"done": True})
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="autoloop_v1 parity harness requires the workflow to declare SessionPaths",
+    ):
+        run_autoloop_v1(
+            workflow_file,
+            provider=ScriptedLLMProvider(),
+            options=RunnerOptions(root=tmp_path, task_id="missing-session-path-task", request_text="Ship it"),
+        )
+
+    assert not (tmp_path / ".autoloop" / "tasks" / "missing-session-path-task").exists()
 
 
 def test_autoloop_v1_parity_harness_preserves_exact_legacy_phase_dir_encoding_for_unsafe_phase_ids(tmp_path: Path):
