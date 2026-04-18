@@ -5,7 +5,6 @@ from __future__ import annotations
 from autoloop_v3.workflow import (
     Artifact,
     Context,
-    Engine,
     FAIL,
     GLOBAL,
     LLMStep,
@@ -16,13 +15,11 @@ from autoloop_v3.workflow import (
     Session,
     SystemStep,
     Workflow,
-    compile_workflow,
 )
 
 __all__ = [
     "Artifact",
     "Context",
-    "Engine",
     "FAIL",
     "GLOBAL",
     "LLMStep",
@@ -33,5 +30,4 @@ __all__ = [
     "Session",
     "SystemStep",
     "Workflow",
-    "compile_workflow",
 ]

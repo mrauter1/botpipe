@@ -83,6 +83,7 @@ def run_workflow(
                 run_id=run.run_id,
                 task_folder=workspace.task_dir,
                 run_folder=run.run_dir,
+                root=workspace.root,
                 answer=options.answer,
                 max_steps=max_steps,
             )
@@ -92,6 +93,7 @@ def run_workflow(
                 run_id=run.run_id,
                 task_folder=workspace.task_dir,
                 run_folder=run.run_dir,
+                root=workspace.root,
                 max_steps=max_steps,
             )
 

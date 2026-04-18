@@ -41,10 +41,16 @@ def test_event_and_outcome():
 def test_root_workflow_shim_reexports_strict_surface_only():
     assert RootWorkflow is StrictWorkflow
     assert RootSession is StrictSession
+    assert not hasattr(root_workflow, "Engine")
+    assert not hasattr(strict_workflow, "Engine")
+    assert not hasattr(root_workflow, "compile_workflow")
+    assert not hasattr(strict_workflow, "compile_workflow")
     assert not hasattr(root_workflow, "SessionLifecycle")
     assert not hasattr(strict_workflow, "SessionLifecycle")
     assert not hasattr(root_primitives, "Verdict")
     assert not hasattr(strict_primitives, "Verdict")
+    assert root_primitives.__all__ == ["Checkpoint", "Event", "Outcome", "ResolvedArtifacts"]
+    assert strict_primitives.__all__ == ["Checkpoint", "Event", "Outcome", "ResolvedArtifacts"]
 
 
 def test_artifact_template_resolution_supports_dot_notation_and_missing_keys(tmp_path: Path):

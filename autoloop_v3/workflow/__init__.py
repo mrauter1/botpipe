@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from .artifacts import Artifact
-from .compiler import compile_workflow
 from .context import Context
-from .engine import Engine
-from .observers import ExecutionEvent, ExecutionObserver, ProviderTurnEvent, StepCompletedEvent, TerminalEvent
 from .primitives import FAIL, GLOBAL, PAUSE, SUCCESS
 from .prompts import Prompt
 from .steps import LLMStep, PairStep, Session, SystemStep
 from .validation import WorkflowMeta
+
+if TYPE_CHECKING:
+    from .extensions import WorkflowExtension
 
 
 class Workflow(metaclass=WorkflowMeta):
@@ -18,26 +20,20 @@ class Workflow(metaclass=WorkflowMeta):
 
     __workflow_abstract__ = True
     __strict_workflow__ = True
+    extensions: tuple["WorkflowExtension", ...] = ()
 
 
 __all__ = [
     "Artifact",
     "Context",
-    "Engine",
-    "ExecutionEvent",
-    "ExecutionObserver",
     "FAIL",
     "GLOBAL",
     "LLMStep",
     "PAUSE",
     "PairStep",
     "Prompt",
-    "ProviderTurnEvent",
     "SUCCESS",
     "Session",
-    "StepCompletedEvent",
     "SystemStep",
-    "TerminalEvent",
     "Workflow",
-    "compile_workflow",
 ]

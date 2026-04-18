@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from autoloop_v3.workflow import Artifact, LLMStep, PairStep, Session, SystemStep, SUCCESS, Workflow
 from autoloop_v3.workflow.compiler import compile_workflow
 from autoloop_v3.workflow.errors import WorkflowValidationError
+from autoloop_v3.workflow.extensions import RunBinding
 from autoloop_v3.workflow.primitives import Event
 
 
@@ -157,6 +158,74 @@ def test_validation_accepts_workflow_level_inputs_without_prior_producer():
             return state
 
     assert ValidInputWorkflow.__workflow_definition__.entry.name == "ask"
+
+
+def test_validation_rejects_non_tuple_extensions():
+    with pytest.raises(WorkflowValidationError, match="extensions"):
+
+        class NonTupleExtensionWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            extensions = []
+            ask = LLMStep(name="ask", producer="ask.md")
+            entry = ask
+            transitions = {ask: {"done": SUCCESS}}
+
+            @staticmethod
+            def on_ask(state, outcome, artifacts):
+                return state
+
+
+def test_validation_rejects_extension_without_bind():
+    with pytest.raises(WorkflowValidationError, match="bind"):
+
+        class MissingBindWorkflow(Workflow):
+            class State(BaseModel):
+                pass
+
+            extensions = (object(),)
+            ask = LLMStep(name="ask", producer="ask.md")
+            entry = ask
+            transitions = {ask: {"done": SUCCESS}}
+
+            @staticmethod
+            def on_ask(state, outcome, artifacts):
+                return state
+
+
+def test_compilation_preserves_declared_extensions():
+    class RecordingExtension:
+        def bind(self, binding: RunBinding):
+            return self
+
+        def before_step(self, event):
+            return None
+
+        def after_step(self, event):
+            return None
+
+        def on_terminal(self, event):
+            return None
+
+    extension = RecordingExtension()
+
+    class ExtensionWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        extensions = (extension,)
+        ask = LLMStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {ask: {"done": SUCCESS}}
+
+        @staticmethod
+        def on_ask(state, outcome, artifacts):
+            return state
+
+    compiled = compile_workflow(ExtensionWorkflow)
+
+    assert compiled.extensions == (extension,)
 
 
 def test_step_named_start_claims_on_start_as_step_handler_not_lifecycle_hook():

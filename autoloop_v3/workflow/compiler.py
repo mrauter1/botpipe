@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from .artifacts import CompiledArtifact
 from .context import Context
+from .extensions import WorkflowExtension
 from .errors import RoutingError, WorkflowCompilationError
 from .primitives import Event, FAIL, GLOBAL, Outcome, PAUSE, SUCCESS
 from .prompts import PromptSpec
@@ -56,6 +57,7 @@ class CompiledWorkflow:
     routes: dict[str, dict[str, str]]
     global_routes: dict[str, str]
     artifacts: dict[str, CompiledArtifact]
+    extensions: tuple[WorkflowExtension, ...]
     has_start_hook: bool
     middleware: MiddlewareHandler | None = None
 
@@ -93,6 +95,7 @@ def compile_workflow(workflow_cls: type[Any]) -> CompiledWorkflow:
         routes=_compile_routes(definition),
         global_routes=_compile_global_routes(definition),
         artifacts=_compile_artifacts(inventory),
+        extensions=definition.extensions,
         has_start_hook=has_start_hook(definition),
         middleware=_compile_middleware(definition),
     )

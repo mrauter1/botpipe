@@ -259,8 +259,8 @@ def test_autoloop_v1_parity_modules_delegate_session_payload_writes_to_runtime_s
     assert not (REPO_ROOT / "autoloop_v3" / "workflows" / "autoloop_v1_support.py").exists()
     assert "ensure_session_payload_placeholder(plan_session_file)" in parity_source
     assert "set_pending_session_note(session_file, note)" in parity_source
-    assert "ExecutionObserver" in parity_source
-    assert "class _AutoloopV1LoggingProvider" not in parity_source
+    assert "ExecutionObserver" not in parity_source
+    assert "class _AutoloopV1LoggingProvider" in parity_source
     assert "class _AutoloopV1Engine" not in parity_source
     assert "def autoloop_v1_session_path(" in conventions_source
     assert "from .autoloop_v1_parity import run_autoloop_v1" in workflows_init

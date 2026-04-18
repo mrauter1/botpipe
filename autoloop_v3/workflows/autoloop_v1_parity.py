@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -35,7 +35,8 @@ from ..runtime.workspace import (
 from ..workflow.compiler import CompiledWorkflow
 from ..workflow.engine import Engine, RunResult
 from ..workflow.errors import WorkflowExecutionError
-from ..workflow.observers import ExecutionEvent, ExecutionObserver, ProviderTurnEvent, StepCompletedEvent, TerminalEvent
+from ..workflow.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
+from ..workflow.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
 from ..workflow.providers.protocols import LLMProvider
 
 from .autoloop_v1_conventions import autoloop_v1_session_path
@@ -61,66 +62,59 @@ class AutoloopV1RunWorkspace:
     plan_session_file: Path
 
 
-class _AutoloopV1ParityObserver(ExecutionObserver):
-    """Observer that rebuilds Autoloop-v1 parity from generic execution facts."""
+@dataclass(slots=True)
+class _AutoloopV1ParityRuntime:
+    """Workflow-owned parity tracker rebuilt from provider turns and bound extensions."""
 
-    def __init__(
+    compiled: CompiledWorkflow
+    logger: EventLogger
+    run: AutoloopV1RunWorkspace
+    step_progress: dict[tuple[str, str, str | None], tuple[int, int]] = field(default_factory=dict)
+    last_turn_kind: dict[tuple[str, str | None], str] = field(default_factory=dict)
+
+    def record_provider_turn(
         self,
         *,
-        compiled: CompiledWorkflow,
-        logger: EventLogger,
-        run: AutoloopV1RunWorkspace,
+        step_name: str,
+        turn_kind: str,
+        run_id: str,
+        state: BaseModel,
+        binding: Any,
+        raw_output: str,
     ) -> None:
-        self._compiled = compiled
-        self._logger = logger
-        self._run = run
-        self._step_progress: dict[tuple[str, str, str | None], tuple[int, int]] = {}
-        self._last_turn_kind: dict[tuple[str, str | None], str] = {}
-
-    def record(self, event: ExecutionEvent) -> None:
-        if isinstance(event, ProviderTurnEvent):
-            self._record_provider_turn(event)
-            return
-        if isinstance(event, StepCompletedEvent):
-            self._record_step_completed(event)
-            return
-        self._record_terminal(event)
-
-    def _record_provider_turn(self, event: ProviderTurnEvent) -> None:
-        binding = event.response_session or event.request_session
-        key = self._progress_key(event.step_name, binding)
-        cycle, attempt = self._advance_progress(key, event.turn_kind)
-        self._last_turn_kind[(event.step_name, _phase_id(event.state))] = event.turn_kind
-        for raw_log in (self._run.workspace.task_raw_log, self._run.run_raw_log):
+        key = self._progress_key(step_name, binding)
+        cycle, attempt = self._advance_progress(key, turn_kind)
+        self.last_turn_kind[(step_name, _phase_id(state))] = turn_kind
+        for raw_log in (self.run.workspace.task_raw_log, self.run.run_raw_log):
             _append_runtime_raw_log(
                 raw_log,
-                event.run_id,
+                run_id,
                 "phase_output",
-                event.raw_output,
-                pair=event.step_name,
-                phase=event.turn_kind,
+                raw_output,
+                pair=step_name,
+                phase=turn_kind,
                 cycle=cycle,
                 attempt=attempt,
                 thread_id=_thread_id(binding),
             )
 
-    def _record_step_completed(self, event: StepCompletedEvent) -> None:
+    def record_step_completed(self, event: StepFinish) -> None:
         current_phase_id = _phase_id(event.state_before)
         next_phase_id = _phase_id(event.state_after)
         step_fields: dict[str, object] = {
-            "workflow": event.workflow_name,
+            "workflow": event.binding.workflow_name,
             "step_name": event.step_name,
         }
         step_phase_id = _step_phase_id(event.step_name, current_phase_id, next_phase_id, event.event)
         if step_phase_id is not None:
             step_fields["phase_id"] = step_phase_id
-        self._logger.emit("step_executed", **step_fields)
+        self.logger.emit("step_executed", **step_fields)
 
         if event.step_name == "activate_next_phase" and event.event is not None and event.event.tag == "phase_selected":
             if next_phase_id is not None:
-                self._logger.emit(
+                self.logger.emit(
                     "phase_started",
-                    workflow=event.workflow_name,
+                    workflow=event.binding.workflow_name,
                     pair="implement",
                     phase_id=next_phase_id,
                 )
@@ -128,60 +122,53 @@ class _AutoloopV1ParityObserver(ExecutionObserver):
         if event.step_name == "test" and event.outcome is not None and event.outcome.tag == "phase_passed":
             completed_phase_id = current_phase_id or next_phase_id
             if completed_phase_id is not None:
-                self._logger.emit(
+                self.logger.emit(
                     "phase_completed",
-                    workflow=event.workflow_name,
+                    workflow=event.binding.workflow_name,
                     pair="test",
                     phase_id=completed_phase_id,
                 )
 
-    def _record_terminal(self, event: TerminalEvent) -> None:
-        step_name = event.history[-1] if event.history else None
+    def record_terminal(self, event: TerminalFinish) -> None:
+        step_name = event.step_name
         phase_id = _phase_id(event.state)
 
-        if step_name is not None and event.last_event is not None and event.last_event.tag in {"question", "blocked", "failed"}:
-            self._logger.emit(
-                event.last_event.tag,
-                workflow=event.workflow_name,
+        if step_name is not None and event.event is not None and event.event.tag in {"question", "blocked", "failed"}:
+            self.logger.emit(
+                event.event.tag,
+                workflow=event.binding.workflow_name,
                 step_name=step_name,
                 phase_id=phase_id,
-                reason=event.last_event.reason or None,
-                question=event.last_event.question,
+                reason=event.event.reason or None,
+                question=event.event.question,
             )
             self._append_terminal_notice(step_name, event)
 
-        if event.terminal_kind == "fatal":
-            self._logger.emit(
-                "run_finished",
-                workflow=event.workflow_name,
-                status="fatal_error",
-                error_type=event.exception_type,
-                error=event.exception_message,
-            )
+        if event.terminal == "fatal":
             return
 
-        self._logger.emit(
+        self.logger.emit(
             "run_finished",
-            workflow=event.workflow_name,
-            terminal=event.terminal_kind.upper(),
+            workflow=event.binding.workflow_name,
+            terminal=event.terminal,
             status=_autoloop_terminal_status(event),
             last_step=step_name,
             phase_id=phase_id,
         )
 
-    def _append_terminal_notice(self, step_name: str, event: TerminalEvent) -> None:
-        if event.last_event is None:
+    def _append_terminal_notice(self, step_name: str, event: TerminalFinish) -> None:
+        if event.event is None:
             return
-        body = event.last_event.question or event.last_event.reason or ""
-        if not body and event.last_outcome is not None:
-            body = event.last_outcome.raw_output
-        phase_name = self._last_turn_kind.get((step_name, _phase_id(event.state)), "runtime")
+        body = event.event.question or event.event.reason or ""
+        if not body and event.outcome is not None:
+            body = event.outcome.raw_output
+        phase_name = self.last_turn_kind.get((step_name, _phase_id(event.state)), "runtime")
         cycle, attempt = self._progress_for_terminal(step_name, event.state)
-        for raw_log in (self._run.workspace.task_raw_log, self._run.run_raw_log):
+        for raw_log in (self.run.workspace.task_raw_log, self.run.run_raw_log):
             _append_runtime_raw_log(
                 raw_log,
-                event.run_id,
-                event.last_event.tag,
+                event.binding.run_id,
+                event.event.tag,
                 body,
                 pair=step_name,
                 phase=phase_name,
@@ -196,20 +183,88 @@ class _AutoloopV1ParityObserver(ExecutionObserver):
         return step_name, binding.ref_name, binding.scope
 
     def _advance_progress(self, key: tuple[str, str, str | None], turn_kind: str) -> tuple[int, int]:
-        current_cycle, current_attempt = self._step_progress.get(key, (0, 1))
+        current_cycle, current_attempt = self.step_progress.get(key, (0, 1))
         if turn_kind in {"producer", "llm"}:
             next_progress = (current_cycle + 1, 1)
         else:
             next_progress = (current_cycle or 1, current_attempt or 1)
-        self._step_progress[key] = next_progress
+        self.step_progress[key] = next_progress
         return next_progress
 
     def _progress_for_terminal(self, step_name: str, state: BaseModel | None) -> tuple[int, int]:
-        step = self._compiled.steps.get(step_name)
+        step = self.compiled.steps.get(step_name)
         if step is None or step.session_name is None:
             return 1, 1
         scope = _phase_id(state) if step.session_name == "phase_session" else None
-        return self._step_progress.get((step_name, step.session_name, scope), (1, 1))
+        return self.step_progress.get((step_name, step.session_name, scope), (1, 1))
+
+
+class _AutoloopV1LoggingProvider:
+    """Workflow-owned provider wrapper for raw parity log reconstruction."""
+
+    def __init__(self, provider: LLMProvider, parity: _AutoloopV1ParityRuntime) -> None:
+        self._provider = provider
+        self._parity = parity
+
+    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
+        response = self._provider.run_producer(request)
+        self._parity.record_provider_turn(
+            step_name=request.step_name,
+            turn_kind="producer",
+            run_id=request.context.run_id,
+            state=request.context.state,
+            binding=response.session or request.session,
+            raw_output=response.raw_output,
+        )
+        return response
+
+    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
+        response = self._provider.run_verifier(request)
+        self._parity.record_provider_turn(
+            step_name=request.step_name,
+            turn_kind="verifier",
+            run_id=request.context.run_id,
+            state=request.context.state,
+            binding=response.session or request.session,
+            raw_output=response.outcome.raw_output,
+        )
+        return response
+
+    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
+        response = self._provider.run_llm(request)
+        self._parity.record_provider_turn(
+            step_name=request.step_name,
+            turn_kind="llm",
+            run_id=request.context.run_id,
+            state=request.context.state,
+            binding=response.session or request.session,
+            raw_output=response.outcome.raw_output,
+        )
+        return response
+
+
+class _AutoloopV1ParityExtension:
+    """Workflow-owned bound extension that rebuilds parity side effects."""
+
+    def __init__(self, parity: _AutoloopV1ParityRuntime) -> None:
+        self._parity = parity
+
+    def bind(self, binding: RunBinding) -> "_BoundAutoloopV1ParityExtension":
+        return _BoundAutoloopV1ParityExtension(self._parity)
+
+
+class _BoundAutoloopV1ParityExtension:
+    def __init__(self, parity: _AutoloopV1ParityRuntime) -> None:
+        self._parity = parity
+
+    def before_step(self, event: StepStart) -> None:
+        return None
+
+    def after_step(self, event: StepFinish) -> None:
+        self._parity.record_step_completed(event)
+
+    def on_terminal(self, event: TerminalFinish) -> None:
+        self._parity.record_terminal(event)
 
 
 def run_autoloop_v1(
@@ -227,14 +282,14 @@ def run_autoloop_v1(
     workflow_parent = Path(inspect.getfile(compiled.workflow_cls)).resolve().parent
     prompt_registry = FilesystemPromptRegistry(workflow_parent, workspace.task.root, Path.cwd())
     logger = EventLogger(run.run.run_id, run.run.events_file)
-    observer = _AutoloopV1ParityObserver(compiled=compiled, logger=logger, run=run)
+    parity = _AutoloopV1ParityRuntime(compiled=compiled, logger=logger, run=run)
+    wrapped_provider = _AutoloopV1LoggingProvider(provider, parity)
     engine = Engine(
-        compiled,
-        provider=provider,
+        replace(compiled, extensions=(*compiled.extensions, _AutoloopV1ParityExtension(parity))),
+        provider=wrapped_provider,
         session_store=session_store,
         checkpoint_store=checkpoint_store,
         prompt_registry=prompt_registry,
-        observers=(observer,),
     )
 
     logger.emit(
@@ -242,23 +297,35 @@ def run_autoloop_v1(
         workflow=compiled.workflow_name,
         task_id=workspace.task.task_id,
     )
-    if options.resume:
-        _append_resume_clarification(compiled, checkpoint_store, run, answer=options.answer)
-        return engine.resume(
+    try:
+        if options.resume:
+            _append_resume_clarification(compiled, checkpoint_store, run, answer=options.answer)
+            return engine.resume(
+                task_id=workspace.task.task_id,
+                run_id=run.run.run_id,
+                task_folder=workspace.task.task_dir,
+                run_folder=run.run.run_dir,
+                root=workspace.task.root,
+                answer=options.answer,
+                max_steps=max_steps,
+            )
+        return engine.run(
             task_id=workspace.task.task_id,
             run_id=run.run.run_id,
             task_folder=workspace.task.task_dir,
             run_folder=run.run.run_dir,
-            answer=options.answer,
+            root=workspace.task.root,
             max_steps=max_steps,
         )
-    return engine.run(
-        task_id=workspace.task.task_id,
-        run_id=run.run.run_id,
-        task_folder=workspace.task.task_dir,
-        run_folder=run.run.run_dir,
-        max_steps=max_steps,
-    )
+    except Exception as exc:
+        logger.emit(
+            "run_finished",
+            workflow=compiled.workflow_name,
+            status="fatal_error",
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        raise
 
 
 def ensure_autoloop_v1_workspace(
@@ -586,12 +653,12 @@ def _format_decisions_header(attrs: dict[str, str | None]) -> str:
     return f"<autoloop-decisions-header {rendered} />"
 
 
-def _autoloop_terminal_status(event: TerminalEvent) -> str:
-    if event.terminal_kind == "success":
+def _autoloop_terminal_status(event: TerminalFinish) -> str:
+    if event.terminal == "SUCCESS":
         return "success"
-    if event.terminal_kind == "fail":
+    if event.terminal == "FAIL":
         return "failed"
-    if event.last_event is not None and event.last_event.tag == "blocked":
+    if event.event is not None and event.event.tag == "blocked":
         return "blocked"
     return "paused"
 

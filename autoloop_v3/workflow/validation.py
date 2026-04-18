@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import BaseModel
 
 from .artifacts import Artifact
+from .extensions import WorkflowExtension
 from .errors import WorkflowValidationError
 from .primitives import FAIL, GLOBAL, PAUSE, SUCCESS
 from .steps import LLMStep, PairStep, Session, Step, SystemStep
@@ -33,6 +34,7 @@ class WorkflowDefinition:
     sessions_by_name: dict[str, Session]
     workflow_artifacts: dict[str, Artifact]
     workflow_log_artifacts: tuple[Artifact, ...]
+    extensions: tuple[WorkflowExtension, ...]
     transitions: dict[Step | str, dict[str, Step | str]]
 
 
@@ -77,6 +79,7 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
     state_cls = getattr(workflow_cls, "State", None)
     entry = getattr(workflow_cls, "entry", None)
     transitions = getattr(workflow_cls, "transitions", None)
+    extensions = getattr(workflow_cls, "extensions", ())
     workflow_name = getattr(workflow_cls, "name", workflow_cls.__name__)
     workflow_artifacts: dict[str, Artifact] = {}
     sessions_by_name: dict[str, Session] = {}
@@ -121,6 +124,7 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
         sessions_by_name=sessions_by_name,
         workflow_artifacts=workflow_artifacts,
         workflow_log_artifacts=workflow_log_artifacts,
+        extensions=extensions,
         transitions=dict(transitions or {}) if isinstance(transitions, dict) else transitions,
     )
 
@@ -132,6 +136,7 @@ def validate_workflow_definition(definition: WorkflowDefinition) -> None:
     _validate_entry(definition)
     _validate_transitions_shape(definition)
     _validate_sessions(definition)
+    _validate_extensions(definition)
     _validate_handlers(definition)
     inventory = collect_artifact_inventory(definition)
     _validate_required_artifacts(definition, inventory)
@@ -246,6 +251,16 @@ def _validate_sessions(definition: WorkflowDefinition) -> None:
         if step.session is not None and id(step.session) not in declared_sessions:
             raise WorkflowValidationError(
                 f"step {step.name!r} references an undeclared session slot"
+            )
+
+
+def _validate_extensions(definition: WorkflowDefinition) -> None:
+    if not isinstance(definition.extensions, tuple):
+        raise WorkflowValidationError("workflow extensions must be declared as a tuple")
+    for extension in definition.extensions:
+        if not callable(getattr(extension, "bind", None)):
+            raise WorkflowValidationError(
+                f"workflow extension {extension!r} must define a callable bind(binding) method"
             )
 
 

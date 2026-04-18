@@ -41,10 +41,6 @@ from .artifacts import ResolvedArtifacts  # noqa: E402
 __all__ = [
     "Checkpoint",
     "Event",
-    "FAIL",
-    "GLOBAL",
     "Outcome",
-    "PAUSE",
     "ResolvedArtifacts",
-    "SUCCESS",
 ]
