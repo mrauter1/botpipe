@@ -6,12 +6,12 @@ Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.m
 Topic: `3. Compatibility Removal Strategy`
 
 Final decision:
-- The workflow core is strict and has no compatibility layer.
-- Workflow modules must import the canonical symbols they actually use.
-- Legacy-equivalent Autoloop-v1 behavior is preserved through migrated workflow code plus workflow-owned harness helpers.
-- Persisted runtime compatibility is limited to targeted data-shape readers such as legacy session payload fields and status consumers.
+- The workflow authoring surface is strict and has no compatibility layer.
+- Removed authoring aliases, injected names, and permissive adaptation paths are not preserved under new names.
+- Retained compatibility is narrow and operational only: persisted runtime data, status readers where parity requires them, and config discovery from legacy `superloop.*` files.
+- Autoloop-v1 parity remains workflow-owned rather than hidden in the runtime core.
 
 Rejected shape:
-- no hidden compatibility boundary in the compiler or loader
-- no authoring drift preserved as a public contract
-- no runtime-core branch that knows workflow-specific legacy behavior
+- no hidden normalization boundary in compiler or loader
+- no authoring alias layer
+- no workflow-specific compatibility policy in the generic runtime

@@ -1,16 +1,42 @@
 # Architecture
 
-The final shape aims at the Book Architecture for this codebase: one strict core, one generic runtime, and one workflow-owned parity layer.
+`autoloop_v3` targets the final Book Architecture for this codebase:
 
-## Shape
+- smallest correct kernel
+- sharp boundaries
+- explicit semantics
+- deterministic behavior
+- optional extensions for orthogonal concerns
+- workflow-owned policy for workflow meaning
 
-The shipped architecture has three sharp boundaries:
+## Package Shape
 
-- `autoloop_v3.workflow`: strict primitives, authoring types, validation, compilation, engine, provider/store protocols.
-- `autoloop_v3.runtime`: workflow-agnostic filesystem runtime for `.autoloop/tasks/{task_id}/runs/{run_id}`, request snapshots, events, checkpoints, prompt resolution, and generic session persistence.
-- `autoloop_v3.workflows`: workflow-owned helpers and harnesses. `autoloop_v1` parity lives here, not in the runtime core.
+```text
+autoloop_v3/
+  workflow/
+  runtime/
+  stdlib/
+  extensions/
+  workflows/
+```
 
-There is no compatibility layer and no generic workspace-hook system. The repo-root `workflow/` package is a strict re-export only. It does not normalize workflows, inject names, or map to a legacy base class.
+Each package has one job:
+
+- `workflow`: strict kernel, canonical authoring surface, validation, compilation, engine, provider/store protocols, and the minimal extension seam.
+- `runtime`: workflow-agnostic filesystem runtime for workspace creation, request snapshots, `events.jsonl`, checkpoints, prompt loading, config, CLI, and generic session persistence.
+- `stdlib`: tiny pure authoring sugar that compiles down to kernel primitives.
+- `extensions`: tiny optional cross-cutting modules such as tracing, session-path strategy, and git tracking.
+- `workflows`: workflow-owned parity helpers and conventions only.
+
+There is no compatibility layer, no hidden normalization boundary, and no generic workspace hook system.
+
+## Placement Rule
+
+Use one placement rule everywhere:
+
+- If a behavior is an invariant almost every workflow needs, make it seamless by default.
+- If it is an orthogonal operational concern whose behavior varies, make it policy-configured.
+- If it changes workflow meaning, topology, or semantic state, keep it explicit in workflow code.
 
 ## Canonical Surface
 
@@ -36,78 +62,89 @@ There is no compatibility layer and no generic workspace-hook system. The repo-r
 - `Checkpoint`
 - `ResolvedArtifacts`
 
+The strict root authoring surface does not include `Engine`, `compile_workflow`, compatibility aliases, or authoring shims.
+
 ## Execution Model
 
+The final execution model is singular:
+
 1. `runtime.loader` imports the workflow module without mutating globals.
-2. `workflow.validation` validates the declared workflow definition at class-definition time.
-3. `workflow.compiler` compiles the workflow into immutable steps, routes, artifacts, and middleware.
-4. `workflow.engine` runs deterministically against explicit `Context`, resolved artifacts, provider calls, sessions, and checkpoints.
-5. `workflow.observers` receives provider-turn, step-completed, and terminal facts through one minimal output-only seam.
-6. `runtime.events` appends `events.jsonl`.
-7. Workflow-owned harnesses may interpret the observer stream to add policy-specific side effects, such as Autoloop-v1 raw logs or decisions ledgers.
+2. `workflow.validation` enforces the strict shape at definition time.
+3. `workflow.compiler` produces an immutable compiled workflow model.
+4. `runtime.runner` creates the generic workspace and binds `Workflow.extensions` for the run.
+5. `workflow.engine` executes deterministically against explicit sessions, resolved artifacts, provider calls, and typed checkpoints.
+6. `runtime.events` appends generic `events.jsonl`.
+7. Workflow-owned parity code or optional extensions may add side effects beside the core artifacts.
 
-The architecture is closer to the Book Architecture precisely because the explanation is short and complete: the core emits generic execution facts, the runtime persists generic filesystem state, and the parity layer alone interprets legacy Autoloop-v1 meaning.
+There is one kernel execution model only. Extensions may observe step boundaries and run side effects, but they may not mutate workflow state, routing, or kernel semantics.
 
-## Session Model
+## Extension Seam
 
-Sessions are not computed. They are created.
+The kernel exposes exactly one extension concept:
 
-- Declare slots as `Session`.
-- Open them explicitly with `ctx.open_session(slot, scope=...)`.
-- Rebinding is visible at the workflow level.
-- Step execution performs direct lookup only.
+- `Workflow.extensions: tuple[WorkflowExtension, ...] = ()`
 
-If a step requires a session that was never opened, execution fails with a runtime error naming the missing slot and step.
+The minimal seam is built around:
+
+- `RunBinding`
+- `StepStart`
+- `StepFinish`
+- `TerminalFinish`
+- `WorkflowExtension`
+- `BoundWorkflowExtension`
+
+This seam exists for optional orthogonal behavior only. It is the place for:
+
+- `Tracing(...)`
+- `SessionPaths(...)`
+- `GitTracking(...)`
+
+It is not an event bus, not a plugin platform, and not a second workflow language.
 
 ## Runtime Boundary
 
 The generic runtime owns only:
 
-- task/run workspace roots
-- immutable request snapshots
-- `events.jsonl`
-- `checkpoint.json`
-- generic session persistence
-- prompt lookup
-- CLI/config for workflow-agnostic controls
+- `.autoloop/tasks/{task_id}/runs/{run_id}`
+- immutable `request.md`
+- generic `events.jsonl`
+- typed checkpoint persistence
+- generic filesystem session persistence
+- prompt resolution
+- generic config and CLI
 
-The generic runtime does not own:
+Generic config stays small and typed. Typical controls include `max_steps`, `intent_mode`, provider settings, and extension config.
+
+The generic runtime must not own:
 
 - phases
-- plan / implement / test orchestration
-- Autoloop-specific artifact names
-- Autoloop-specific session filename rules
-- clarification ledgers
-- raw phase logs
+- plan / implement / test semantics
+- Autoloop-v1 artifact names
+- raw phase log format
+- decisions ledger schema
+- review / rework / replan semantics
 - workflow-specific git policy
-- workspace plugin systems or phase hooks
 
-## Configuration
+## Stdlib Boundary
 
-The runtime keeps only generic configuration:
+`autoloop_v3.stdlib` remains tiny and pure. It may offer:
 
-- provider selection and provider-specific settings
-- runtime controls such as `max_steps` and `intent_mode`
-- config-file discovery for `autoloop.*` plus legacy `superloop.*` filenames
+- `global_routes(...)`
+- `merge_transitions(...)`
+- `pause_on_outcome_tags(...)`
+- `PromptBundle`
+- `PromptPair`
+- `pair_step(...)`
+- `SequenceCursor`
 
-Configuration is not used to encode workflow topology, phase plans, raw-log policy, or session-opening rules.
+It must not introduce base classes, mixins, decorators that rewrite topology, or config-driven workflow behavior.
 
-## Autoloop-v1 Parity
+## Workflow-Owned Parity
 
-`autoloop_v1.py` remains a strict workflow. It owns its phase-plan parsing and explicit phase artifact templates directly.
+Autoloop-v1 parity is preserved without polluting the core:
 
-Its legacy-equivalent operational behavior is split across two workflow-owned modules:
+- `autoloop_v1.py` stays explicit and readable.
+- `autoloop_v3.workflows.autoloop_v1_conventions` owns exact naming such as `sessions/plan.json` and `sessions/phases/{phase}.json`.
+- `autoloop_v3.workflows.autoloop_v1_parity` owns `run_autoloop_v1(...)`, `raw_phase_log.md`, `decisions.txt`, clarification persistence, and question / blocked / failed status mapping.
 
-- `autoloop_v3.workflows.autoloop_v1_conventions`
-  - exact `phase_dir_key(...)`
-  - `sessions/plan.json`
-  - `sessions/phases/{phase}.json`
-- `autoloop_v3.workflows.autoloop_v1_parity`
-  - thin `run_autoloop_v1(...)` composition root
-  - task/run `raw_phase_log.md`
-  - task `decisions.txt`
-  - clarification note persistence in the active session file
-  - question / blocked / failed event-status mapping
-  - phase-started and phase-completed event synthesis from generic observer events
-
-This keeps the engine and runtime generic while preserving Autoloop-v1 behavior where it actually belongs: next to the workflow that needs it.
+That split keeps the runtime generic while preserving exact legacy behavior where it belongs: with the workflow that needs it.

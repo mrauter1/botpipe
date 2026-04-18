@@ -46,7 +46,7 @@ def test_required_docs_exist() -> None:
 def test_architecture_decisions_uses_three_candidates_per_decision() -> None:
     text = _read(PACKAGE_ROOT / "ARCHITECTURE_DECISIONS.md")
     sections = [section for section in text.split("\n## ") if section.strip()]
-    assert len(sections) >= 10
+    assert len(sections) >= 18
     for section in sections[1:]:
         if "### Candidate " not in section:
             continue
@@ -54,6 +54,16 @@ def test_architecture_decisions_uses_three_candidates_per_decision() -> None:
         assert "Decision:" in section
         assert "Book choice:" in section
         assert "Why the others lost:" in section
+        for dimension in (
+            "correctness:",
+            "simplicity:",
+            "extensibility:",
+            "observability:",
+            "testability:",
+            "migration risk:",
+            "parity impact:",
+        ):
+            assert dimension in section
 
 
 def test_adr_archive_is_final_form_and_points_back_to_the_authoritative_record() -> None:
@@ -72,6 +82,7 @@ def test_adr_archive_does_not_reintroduce_removed_authoring_surface() -> None:
     corpus = "\n".join(_read(path) for path in sorted(ADR_ROOT.glob("*.md")))
     for forbidden in (
         "workflow.compat",
+        "workflow.observers",
         "SessionLifecycle",
         "Verdict",
         "on_verdict",
@@ -99,6 +110,7 @@ def test_docs_freeze_the_strict_public_surface() -> None:
         (
             _read(PACKAGE_ROOT / "README.md"),
             _read(DOCS_ROOT / "architecture.md"),
+            _read(DOCS_ROOT / "authoring.md"),
         )
     )
     for symbol in (
@@ -120,12 +132,21 @@ def test_docs_freeze_the_strict_public_surface() -> None:
         "ResolvedArtifacts",
     ):
         assert symbol in public_surface_docs
+
     authoring = _read(DOCS_ROOT / "authoring.md")
-    assert "from workflow.primitives import Event, Outcome, Checkpoint, ResolvedArtifacts" in authoring
+    assert "from workflow.primitives import Checkpoint, Event, Outcome, ResolvedArtifacts" in authoring
+    assert "Workflow.extensions" in public_surface_docs
+    assert "autoloop_v3.stdlib" in public_surface_docs
+    assert "autoloop_v3.extensions" in public_surface_docs
+    for required in ("GitTracking", "SessionPaths", "Tracing"):
+        assert required in public_surface_docs
     for forbidden in (
         "from workflow.primitives import Verdict",
         "SessionLifecycle,",
         "`workflow.compat`",
+        "workflow.observers",
+        "from workflow import Engine",
+        "from workflow import compile_workflow",
     ):
         assert forbidden not in public_surface_docs
 
@@ -153,14 +174,33 @@ def test_docs_capture_migration_boundary_and_parity_contract() -> None:
         "failed",
         "thread_id",
         "workflow-owned",
-        "workflow.observers",
+        "Workflow.extensions",
+        "autoloop_v3.stdlib",
+        "autoloop_v3.extensions",
+        "GitTracking",
+        "SessionPaths",
+        "Tracing",
         "autoloop_v3.workflows.autoloop_v1_conventions",
         "autoloop_v3.workflows.autoloop_v1_parity",
         "compatibility layer",
-        "workspace-hook",
-        "loader-injected authoring symbols",
+        "workspace hook",
         "max_steps",
         "intent_mode",
+        "superloop.*",
     )
     for marker in required_markers:
         assert marker in corpus
+    assert "workflow.observers" not in corpus
+
+
+def test_compatibility_doc_stays_narrow_and_operational() -> None:
+    text = _read(DOCS_ROOT / "compatibility.md")
+    for marker in ("thread_id", "superloop.*", "workflow compatibility layer"):
+        assert marker in text
+    for forbidden in (
+        "workflow.observers",
+        "plugin system",
+        "workspace hook",
+        "second execution model",
+    ):
+        assert forbidden not in text

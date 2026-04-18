@@ -7,11 +7,11 @@ Topic: `5. Session Model`
 
 Final decision:
 - Sessions are declared as slots and opened explicitly with `ctx.open_session(...)`.
-- The engine performs direct lookup with `ctx.get_session(...)` during step execution.
-- Rebinding is visible from workflow topology and session-opening moments.
-- Using an unopened slot is a runtime error that names the missing slot and step.
+- Session sharing and rebinding are visible in workflow code.
+- The engine performs direct lookup only and fails clearly if a required session was never opened.
+- Exact workflow-specific filename conventions remain outside the generic session model.
 
 Rejected shape:
-- no computed session identity from workflow state
-- no lifecycle enum or automatic opening policy
-- no hidden session-sharing rules
+- no computed session identity
+- no lifecycle enum or automatic opening
+- no hidden sharing rules

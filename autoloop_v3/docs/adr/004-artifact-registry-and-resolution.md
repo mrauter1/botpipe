@@ -3,15 +3,15 @@
 Status: Final
 
 Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.md)
-Topic: `6. Artifact Registry And Resolution`
+Topic: `6. Artifact Registry And Required-Artifact Enforcement`
 
 Final decision:
-- Artifact declarations are compiled into one workflow-wide registry.
-- Templates resolve generically from `task_folder`, `run_folder`, and dot-path state access.
-- Steps declare required and produced artifacts explicitly and receive resolved handles.
-- Workflow-specific path conventions stay in workflow code, not in the runtime core.
+- Workflow-declared artifacts compile into one registry with uniqueness and dependency validation.
+- Required-artifact existence is asserted before step execution.
+- Resolved artifact handles are passed into handlers as part of the strict contract.
+- Workflow-specific naming conventions remain in workflow code, not in the generic runtime.
 
 Rejected shape:
-- no ad hoc file-path handling inside step handlers
-- no runtime-owned artifact conventions for individual workflows
-- no hidden artifact lookup rules
+- no ad hoc file-path resolution inside handlers
+- no best-effort required-artifact warnings
+- no runtime-owned artifact conventions for one workflow

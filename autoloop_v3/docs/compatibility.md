@@ -1,4 +1,4 @@
-# Compatibility Notes
+# Operational Compatibility Notes
 
 There is no workflow compatibility layer in `autoloop_v3`.
 
@@ -8,18 +8,17 @@ Removed authoring compatibility:
 - `Verdict`
 - `on_verdict`
 - `SessionLifecycle`
-- loader-injected authoring symbols
+- loader-injected names
 - handler arity adaptation
-- inferred entry fallback
+- inferred entry behavior
+- observer-era public extension plumbing
 
-What still remains intentionally compatible:
+Retained compatibility is narrow and operational only:
 
-- session payloads that only contain legacy `thread_id`
-- runtime config discovery from both `autoloop.*` and legacy `superloop.*` filenames
-- `events.jsonl` `run_finished.status` values readable by legacy helpers such as `latest_run_status(...)`
+- legacy session payload compatibility for `thread_id`
+- legacy-readable status values where parity tests require them
+- config discovery from `autoloop.*` and legacy `superloop.*`
 
-Autoloop-v1 parity is preserved through workflow-owned code in `autoloop_v3.workflows.autoloop_v1_conventions` and `autoloop_v3.workflows.autoloop_v1_parity`, not through hidden runtime or compiler behavior.
+Autoloop-v1 parity remains workflow-owned through `autoloop_v3.workflows.autoloop_v1_conventions` and `autoloop_v3.workflows.autoloop_v1_parity`.
 
-The generic observer seam in `workflow.observers` is not a compatibility layer. It is the only reusable execution-observation mechanism, and it carries generic facts only.
-
-There is also no generic workspace-hook system hiding under another name. Autoloop-v1 workspace augmentation remains explicit workflow-owned parity code because only that workflow needs it.
+This document exists only to name the deliberately retained runtime/data compatibility surface.

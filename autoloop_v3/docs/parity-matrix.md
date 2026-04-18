@@ -2,32 +2,32 @@
 
 | Behavior | Owner | Proof |
 | --- | --- | --- |
-| `.autoloop/tasks/{task_id}` and `.autoloop/tasks/{task_id}/runs/{run_id}` layout | `runtime.workspace` | runtime workspace tests |
+| `.autoloop/tasks/{task_id}` and `.autoloop/tasks/{task_id}/runs/{run_id}` layout | `runtime.workspace` | runtime integration tests |
 | Immutable `runs/{run_id}/request.md` snapshot | `runtime.workspace` | runtime integration tests |
-| Generic `events.jsonl` sequencing and `latest_run_status` compatibility | `runtime.events` | runtime and parity integration tests |
-| Generic provider-turn / step-completed / terminal observation facts | `workflow.observers` + `workflow.engine` | contract tests |
-| Strict compile/load of `autoloop_v1.py` and `Ralph_loop.py` without loader injection | `runtime.loader` + `workflow.validation` | runtime integration tests |
-| Pair/LLM optional handlers and required `SystemStep` handlers | `workflow.engine` + `workflow.validation` | contract and unit tests |
+| Generic append-only `events.jsonl` | `runtime.events` | runtime integration tests |
+| Typed checkpoint persistence and resume | `workflow.primitives` + `runtime.runner` | contract and runtime tests |
+| Deterministic prompt resolution | `runtime.prompts` + `workflow.prompts` | unit and runtime tests |
+| Strict load/compile without loader injection or inferred entry | `runtime.loader` + `workflow.validation` + `workflow.compiler` | runtime integration and strictness tests |
+| Pair/LLM optional handlers and required `SystemStep` handlers | `workflow.engine` + `workflow.validation` | contract tests |
 | Explicit session opening and direct session lookup | `workflow.context` + `workflow.engine` | contract tests |
-| Autoloop-v1 plan session at `sessions/plan.json` | `autoloop_v3.workflows.autoloop_v1_conventions` | parity harness tests |
-| Autoloop-v1 phase sessions at `sessions/phases/{phase}.json` | `autoloop_v3.workflows.autoloop_v1_conventions` | parity harness tests |
-| Autoloop-v1 phase artifact paths under `implement/phases/{phase}` and `test/phases/{phase}` | `autoloop_v1.py` | generic runtime and parity harness tests |
-| Task/run `raw_phase_log.md` append format | `autoloop_v3.workflows.autoloop_v1_parity` | parity harness tests |
-| Task `decisions.txt` clarification persistence | `autoloop_v3.workflows.autoloop_v1_parity` | parity harness tests |
-| Clarification note stored in the active session payload | `autoloop_v3.workflows.autoloop_v1_parity` + `runtime.stores.filesystem` | parity harness tests |
-| `question`, `blocked`, and `failed` status mapping for Autoloop-v1 | `autoloop_v3.workflows.autoloop_v1_parity` | parity harness tests |
-| Phase-started and phase-completed parity events | `autoloop_v3.workflows.autoloop_v1_parity` + `workflow.observers` | parity harness tests |
-| `thread_id` to `session_id` compatibility in session payloads | `runtime.stores.filesystem` | runtime store tests |
-| Resume requires `checkpoint.json`; session-only/event-only resume is rejected by the generic runtime | `runtime.runner` | runtime tests |
-| Runtime remains phase-agnostic for unrelated workflows | `runtime.runner` | toy workflow runtime tests |
+| Workflow-declared extension lifecycle invocation | `workflow.extensions` + `workflow.engine` + `runtime.runner` | contract tests |
+| Autoloop-v1 plan session at `sessions/plan.json` | `autoloop_v3.workflows.autoloop_v1_conventions` + workflow-owned session-path policy | parity tests |
+| Autoloop-v1 phase sessions at `sessions/phases/{phase}.json` | `autoloop_v3.workflows.autoloop_v1_conventions` + workflow-owned session-path policy | parity tests |
+| Task/run `raw_phase_log.md` append behavior | `autoloop_v3.workflows.autoloop_v1_parity` | parity tests |
+| Task `decisions.txt` clarification persistence | `autoloop_v3.workflows.autoloop_v1_parity` | parity tests |
+| Clarification note stored in the active session payload | `autoloop_v3.workflows.autoloop_v1_parity` + `runtime.stores.filesystem` | parity tests |
+| `question`, `blocked`, and `failed` status mapping for Autoloop-v1 | `autoloop_v3.workflows.autoloop_v1_parity` | parity tests |
+| Legacy session payload compatibility for `thread_id` | `runtime.stores.filesystem` | unit and runtime tests |
+| Config discovery from `autoloop.*` and legacy `superloop.*` | `runtime.config` | runtime tests |
+| Runtime neutrality for unrelated workflows | `runtime.runner` | toy workflow runtime tests |
 
 ## Meaning Of Parity
 
 Parity for `autoloop_v1.py` means:
 
 - the strict workflow compiles and runs without shims
-- the workspace keeps legacy-important files such as `raw_phase_log.md`, `decisions.txt`, `plan.json`, and `sessions/phases/{phase}.json`
-- implement and test share the active phase session because the workflow rebinds `phase_session` in `activate_next_phase`
-- clarification answers are persisted in both logs and the active session file
-- blocked and failed runs preserve legacy-relevant `run_finished.status` values
-- request snapshots, checkpoints, and overall successful run behavior remain intact
+- the workspace keeps `raw_phase_log.md`, `decisions.txt`, `plan.json`, and `sessions/phases/{phase}.json`
+- implement and test share the active phase session because the workflow rebinds it explicitly
+- clarification answers persist in both workflow-owned parity artifacts and the active session payload
+- blocked, question, failed, and success flows keep legacy-relevant operational behavior
+- generic runtime artifacts such as `request.md`, `events.jsonl`, and `checkpoint.json` remain intact

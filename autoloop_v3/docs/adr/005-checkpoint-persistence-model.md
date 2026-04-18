@@ -6,12 +6,12 @@ Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.m
 Topic: `9. Checkpoint Model`
 
 Final decision:
-- Checkpoints are typed snapshots containing stage, state, session bindings, pending question, and pending answer.
-- Pause, failure, and resume operate on structured checkpoint data rather than log reconstruction.
-- The runtime event log remains operational history, not the sole source of resume state.
-- Generic resume refuses session-only or event-only recovery when no checkpoint exists.
+- Checkpoints are typed structured snapshots and the canonical resume source.
+- `events.jsonl` remains operational history, not the sole source of resume state.
+- Pause and resume preserve pending question and answer data through checkpoint state.
+- Generic runtime recovery requires a checkpoint instead of reconstructing state from partial artifacts.
 
 Rejected shape:
-- no event-log-only checkpoint model
-- no provider-owned opaque resume blobs
-- no implicit resume from partial persisted state
+- no event-log-only resume model
+- no provider-owned opaque resume blob as the primary contract
+- no implicit recovery from sessions or logs alone

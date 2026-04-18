@@ -1,18 +1,18 @@
 # autoloop_v3
 
-`autoloop_v3` is a strict workflow framework with three layers:
+`autoloop_v3` targets a strict Book Architecture:
 
-- `autoloop_v3.workflow`: canonical authoring surface, validation, compilation, engine, provider/store protocols.
-- `autoloop_v3.runtime`: generic filesystem runtime for task/run workspaces, request snapshots, events, checkpoints, prompt resolution, and session persistence.
-- `autoloop_v3.workflows`: workflow-owned parity and conventions modules. `run_autoloop_v1()` lives here because legacy Autoloop behavior is workflow policy, not runtime-core architecture.
+- `autoloop_v3.workflow` is the strict canonical kernel.
+- `autoloop_v3.runtime` is the workflow-agnostic filesystem runtime.
+- `autoloop_v3.stdlib` is tiny pure authoring sugar.
+- `autoloop_v3.extensions` is a tiny optional extension surface.
+- `autoloop_v3.workflows` owns workflow-specific parity, conventions, and thin composition roots only.
 
-This is the Book Architecture target for the system: one strict core, one generic runtime, and one workflow-owned parity layer.
+There is no compatibility layer, no hidden normalization boundary, and no generic workspace hook or plugin system. Any repo-root `workflow/` shim, if present, is a strict re-export only.
 
-There is no compatibility layer. There is also no generic workspace-hook or plugin system. The root `workflow/` package is only a strict re-export of the canonical surface.
+## Canonical Surface
 
-## Public Surface
-
-Author workflows with:
+Import workflow authorship from `workflow`:
 
 - `Workflow`
 - `Context`
@@ -27,7 +27,7 @@ Author workflows with:
 - `FAIL`
 - `GLOBAL`
 
-From `workflow.primitives` use:
+Import workflow primitives from `workflow.primitives`:
 
 - `Event`
 - `Outcome`
@@ -36,39 +36,38 @@ From `workflow.primitives` use:
 
 `PairStep` and `LLMStep` handlers are optional. `SystemStep` handlers are required.
 
-## Session Model
+## Execution Model
 
-Sessions are declared as slots and opened explicitly:
+The final model is intentionally small:
 
-```python
-class Example(Workflow):
-    main = Session()
+1. The loader imports the workflow module without injecting symbols.
+2. The workflow validates strictly and compiles deterministically.
+3. The runtime creates `.autoloop/tasks/{task_id}/runs/{run_id}` and the immutable `request.md` snapshot.
+4. The runtime binds any `Workflow.extensions` declarations for the run.
+5. The engine executes against explicit sessions, resolved artifacts, typed checkpoints, and deterministic routing.
+6. The runtime appends generic `events.jsonl`.
+7. Workflow-owned parity code may add workflow-specific logs or ledgers beside the generic runtime artifacts.
 
-    def on_start(self, ctx: Context) -> None:
-        ctx.open_session(self.main)
-```
+## Optional Layers
 
-The engine only performs lookup:
+`autoloop_v3.stdlib` is pure authoring sugar only. It stays small:
 
-```python
-session = ctx.get_session(step.session)
-```
+- `control.py`
+- `prompts.py`
+- `steps.py`
+- `state/cursor.py`
 
-There is no `SessionLifecycle`, no automatic opening, and no computed session identity.
+`autoloop_v3.extensions` is explicit opt-in only:
 
-## Execution Observation
+- `Tracing(...)`
+- `SessionPaths(...)`
+- `GitTracking(...)`
 
-The core exposes one minimal observer seam through `workflow.observers`:
-
-- provider-turn events after producer, verifier, and llm calls
-- step-completed events after every step
-- terminal events for success, pause, fail, and fatal exceptions
-
-The observer surface is output-only. It does not alter engine semantics. `run_autoloop_v1(...)` uses this seam to rebuild raw logs, phase events, clarification persistence, and legacy status mapping without provider wrappers or engine subclasses.
+Extensions compose through `Workflow.extensions`. They may perform side effects, but they may not alter workflow state, routing, or kernel semantics.
 
 ## Running Workflows
 
-Generic runtime:
+Generic workflows run through the generic runtime:
 
 ```bash
 python -m autoloop_v3.runtime.cli path/to/workflow.py \
@@ -77,7 +76,7 @@ python -m autoloop_v3.runtime.cli path/to/workflow.py \
   --root /repo
 ```
 
-Autoloop-v1 parity harness:
+Autoloop-v1 legacy-equivalent runs stay workflow-owned:
 
 ```python
 from pathlib import Path
@@ -92,24 +91,35 @@ result = run_autoloop_v1(
 )
 ```
 
-The harness preserves legacy-oriented raw logs, decisions, and session filenames such as:
+That composition root owns the workflow-specific parity surface, including:
 
-- `.autoloop/tasks/{task_id}/raw_phase_log.md`
-- `.autoloop/tasks/{task_id}/decisions.txt`
-- `.autoloop/tasks/{task_id}/runs/{run_id}/raw_phase_log.md`
-- `.autoloop/tasks/{task_id}/runs/{run_id}/sessions/plan.json`
-- `.autoloop/tasks/{task_id}/runs/{run_id}/sessions/phases/{phase}.json`
+- `raw_phase_log.md`
+- `decisions.txt`
+- `sessions/plan.json`
+- `sessions/phases/{phase}.json`
+- question / blocked / failed status mapping
 
-The exact legacy session filenames live in `autoloop_v3.workflows.autoloop_v1_conventions`. Raw-log, clarification-ledger, and status policies live in `autoloop_v3.workflows.autoloop_v1_parity`.
+The exact filename conventions live in `autoloop_v3.workflows.autoloop_v1_conventions`. Raw log, clarification, and status parity live in `autoloop_v3.workflows.autoloop_v1_parity`.
 
 ## Configuration
 
-Generic configuration stays intentionally small:
+Generic configuration stays small and typed:
 
-- provider wiring and settings such as `provider.name`, `provider.codex.model`, `provider.codex.model_effort`, `provider.claude.model`, `provider.claude.effort`, and `provider.claude.permission_strategy`
+- provider wiring and provider settings
 - runtime controls such as `max_steps` and `intent_mode`
+- extension config for optional modules
 
-Legacy discovery of `superloop.*` config filenames remains only as config-file compatibility. It does not restore legacy workflow authoring behavior.
+Config does not encode workflow topology, phase meaning, or commit policy.
+
+## Retained Compatibility
+
+The retained compatibility scope is narrow and operational only:
+
+- legacy session payload compatibility for `thread_id`
+- legacy-readable `latest_run_status` values where parity tests require them
+- config discovery for `autoloop.*` and legacy `superloop.*` files
+
+It does not restore workflow authoring shims, inferred entry behavior, or compatibility aliases.
 
 ## Reading Order
 
@@ -117,4 +127,6 @@ Legacy discovery of `superloop.*` config filenames remains only as config-file c
 - [MIGRATION.md](MIGRATION.md)
 - [docs/architecture.md](docs/architecture.md)
 - [docs/authoring.md](docs/authoring.md)
+- [docs/compatibility.md](docs/compatibility.md)
 - [docs/parity-matrix.md](docs/parity-matrix.md)
+- [docs/risk-register.md](docs/risk-register.md)

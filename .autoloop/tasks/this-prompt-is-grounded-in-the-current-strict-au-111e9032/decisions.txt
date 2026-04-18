@@ -8,3 +8,6 @@ Keep any retained compatibility documentation narrow and operational only; it mu
 Preserve current `superloop.*` config-file discovery as generic runtime compatibility unless a later explicit clarification authorizes removing it.
 Pin the workflow-facing optional extension declarations in the plan and later implementation as `GitTracking(...)`, `SessionPaths(...)`, and `Tracing(...)`, all opting in through `Workflow.extensions`.
 Session-path strategy remains generic even when workflow-facing; exact Autoloop-v1 `plan.json` and `sessions/phases/{phase}.json` naming stays workflow-owned and must not migrate into the reusable session-path extension.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="architecture-contract-freeze" pair="implement" turn_seq="1" run_id="run-20260418T021238Z-9ac22268" ts="2026-04-18T02:28:34.414249+00:00" />
+Keep `docs/compatibility.md` as a narrow retained-operational-compatibility note covering `thread_id`, legacy-readable status consumers, and `superloop.*` config discovery; it must not describe authoring shims or a second execution model.
+Freeze the architecture docs and doc baseline tests against `Workflow.extensions`, tiny `stdlib`, tiny `extensions`, and workflow-owned parity; removed legacy names may be mentioned only in migration/compatibility material, not as active surface documentation.

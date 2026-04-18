@@ -3,15 +3,15 @@
 Status: Final
 
 Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.md)
-Topic: `15. Parity-Testing Strategy`
+Topic: `18. Testing Strategy`
 
 Final decision:
-- The proof suite is layered: unit tests, engine-contract tests, generic-runtime integration tests, and legacy parity tests.
-- No-compat proofs are first-class tests, not documentation claims.
-- A toy workflow with unrelated step names proves runtime agnosticism.
-- Autoloop-v1 parity tests pin workspace layout, events, checkpoints, clarification persistence, blocked/failed flows, and session-sharing behavior.
+- Proof is layered across unit, contract, runtime integration, strictness, workflow, toy-workflow, and parity tests.
+- No-compat claims are enforced by tests instead of documentation alone.
+- The doc baseline freezes the strict kernel, optional extension seam, tiny stdlib, and narrow compatibility scope.
+- Autoloop-v1 parity tests pin the workflow-owned operational artifacts and retained compatibility surface explicitly.
 
 Rejected shape:
-- no parity strategy that relies only on unit coverage
-- no oversized end-to-end suite without focused contract tests
-- no documentation-only proof of strictness or parity
+- no documentation-only proof of architecture
+- no end-to-end-only test strategy
+- no parity strategy that skips focused contract coverage

@@ -3,15 +3,15 @@
 Status: Final
 
 Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.md)
-Topic: checkpointed pause/resume behavior in the strict engine
+Topic: pause/resume behavior in the strict checkpoint model
 
 Final decision:
-- Clarification questions are captured in the checkpoint when execution pauses.
-- Resume answers are injected into the resumed step exactly once through structured checkpoint state.
-- The answer is not a hidden long-lived runtime global that bleeds across later steps.
-- Workflow-owned harnesses may persist extra clarification artifacts when parity requires them.
+- Clarification questions are captured in structured checkpoint state when execution pauses.
+- Resume answers are injected exactly once when the paused step resumes.
+- The generic runtime does not keep a hidden ambient answer channel across later steps.
+- Workflow-owned parity code may persist extra clarification artifacts without redefining engine semantics.
 
 Rejected shape:
 - no answer recovery from raw-log parsing
-- no prompt-only answer injection without structured checkpoint state
-- no workflow-specific clarification persistence in the generic engine
+- no hidden long-lived runtime answer global
+- no workflow-specific clarification persistence inside the generic engine

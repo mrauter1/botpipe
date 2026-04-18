@@ -6,12 +6,12 @@ Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.m
 Topic: strict handler contracts in the final workflow surface
 
 Final decision:
-- `on_start(self, ctx)` is the only lifecycle hook.
-- `on_outcome(state, outcome)` is the only middleware hook.
+- `on_start(self, ctx)` is the lifecycle hook.
+- `on_outcome(state, outcome) -> Event | None` is the middleware hook.
 - Pair and LLM handlers use `(state, outcome, artifacts)` and remain optional.
 - System handlers use `(state, ctx)` and are required.
 
 Rejected shape:
 - no handler arity adaptation
 - no alias middleware path
-- no special-case handler dispatch outside the canonical contracts
+- no hidden dispatch rules beyond the canonical contracts

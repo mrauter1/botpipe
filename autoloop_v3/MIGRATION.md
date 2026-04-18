@@ -1,8 +1,10 @@
-# Migration To The Strict Surface
+# Migration To The Final Strict Surface
 
-This package no longer tolerates legacy workflow drift. Migrate workflows onto the canonical API instead of relying on shims.
+`autoloop_v3` no longer tolerates compatibility-era workflow drift. Migrate workflows onto the canonical API instead of relying on aliases, injected names, or hidden normalization.
 
-## Removed
+## Removed Authoring Compatibility
+
+These are gone:
 
 - `workflow.compat`
 - `Verdict`
@@ -11,24 +13,46 @@ This package no longer tolerates legacy workflow drift. Migrate workflows onto t
 - loader-injected authoring symbols
 - handler arity adaptation
 - inferred entry behavior
-- engine auto-opening of missing sessions
+- hidden normalization of malformed workflow declarations
+- observer-era extension plumbing as an authoring surface
 
 ## Canonical Replacements
 
 - Use `Outcome` instead of `Verdict`.
-- Use `on_outcome(state, outcome) -> Event | None` instead of `on_verdict(...)`.
+- Use `on_outcome(state, outcome) -> Event | None`.
 - Declare `Session()` slots and open them explicitly with `ctx.open_session(...)`.
-- Pair and LLM handlers must accept `(state, outcome, artifacts)`.
-- System handlers must accept `(state, ctx)` and return `(state, event)`.
-- Define `entry` explicitly on every workflow.
-- Import the symbols you use. The loader no longer injects names into workflow modules.
+- Give every workflow an explicit `entry`.
+- Keep `transitions` explicit in Python code.
+- Pair and LLM handlers use `(state, outcome, artifacts)` when present.
+- System handlers use `(state, ctx)` and return `(state, event)`.
+- Declare optional cross-cutting behavior through `Workflow.extensions`.
 
-## Example
+## Canonical Imports
+
+```python
+from workflow import (
+    Artifact,
+    Context,
+    FAIL,
+    GLOBAL,
+    LLMStep,
+    PAUSE,
+    PairStep,
+    Prompt,
+    SUCCESS,
+    Session,
+    SystemStep,
+    Workflow,
+)
+from workflow.primitives import Checkpoint, Event, Outcome, ResolvedArtifacts
+```
+
+## Example Migration
 
 Before:
 
 ```python
-from workflow import Workflow, LLMStep, SessionLifecycle
+from workflow import LLMStep, SessionLifecycle, Workflow
 from workflow.primitives import Verdict
 
 
@@ -49,37 +73,81 @@ After:
 ```python
 from pydantic import BaseModel
 
-from workflow import LLMStep, SUCCESS, Workflow
+from workflow import Context, LLMStep, SUCCESS, Session, Workflow
 from workflow.primitives import Outcome
 
 
 class NewWorkflow(Workflow):
     class State(BaseModel):
-        pass
+        summary: str = ""
 
-    ask = LLMStep(name="ask", producer="ask.md")
+    main = Session()
+    ask = LLMStep(name="ask", producer="prompts/ask.md", session=main)
     entry = ask
     transitions = {ask: {"done": SUCCESS}}
 
+    def on_start(self, ctx: Context) -> None:
+        ctx.open_session(self.main)
+
     @staticmethod
     def on_ask(state: State, outcome: Outcome, artifacts):
-        return state
+        return state.model_copy(update={"summary": outcome.raw_output})
 ```
 
-## Autoloop-v1
+## Extension Migration
 
-`autoloop_v1.py` is now a strict workflow. Run legacy-equivalent executions through `autoloop_v3.workflows.run_autoloop_v1(...)`.
+Cross-cutting behavior now belongs in explicit workflow declarations:
 
-What stays in the workflow file itself:
+```python
+class ExampleWorkflow(Workflow):
+    extensions = (
+        Tracing(config=TracingConfig(enabled=True)),
+        SessionPaths(strategy=MySessionPathStrategy()),
+        GitTracking(policy=MyGitPolicy(), config=GitTrackingConfig(enabled=True)),
+    )
+```
 
+Do not recreate the removed observer model through hidden runtime hooks. If a concern is orthogonal and optional, it belongs in `Workflow.extensions`. If it changes workflow meaning, it belongs in workflow code.
+
+## Autoloop-v1 Placement
+
+`autoloop_v1.py` stays a strict workflow and remains the readable canary.
+
+What stays visible in the workflow file:
+
+- explicit sessions
+- explicit steps and transitions
+- explicit artifact templates
 - phase-plan parsing
-- explicit phase artifact templates such as `Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/criteria.md")`
+- semantic state changes
 
-What stays workflow-owned beside the workflow:
+What stays workflow-owned beside it:
 
-- `autoloop_v3.workflows.autoloop_v1_conventions` owns exact legacy `plan.json` and `sessions/phases/{phase}.json` naming
-- `autoloop_v3.workflows.autoloop_v1_parity` owns raw-phase-log and decisions persistence
-- `autoloop_v3.workflows.autoloop_v1_parity` owns clarification note persistence and question / blocked / failed status mapping
-- `workflow.observers` supplies the minimal generic execution observer seam used by the parity harness
+- `autoloop_v3.workflows.autoloop_v1_conventions`
+  - `phase_dir_key(...)`
+  - `sessions/plan.json`
+  - `sessions/phases/{phase}.json`
+- `autoloop_v3.workflows.autoloop_v1_parity`
+  - `run_autoloop_v1(...)`
+  - `raw_phase_log.md`
+  - `decisions.txt`
+  - clarification persistence
+  - question / blocked / failed status mapping
 
-That code is workflow-owned on purpose. The generic runtime remains unaware of phases, plan/implement/test policy, and Autoloop-specific artifact names.
+What stays generic:
+
+- `.autoloop/tasks/{task_id}/runs/{run_id}`
+- `request.md`
+- `events.jsonl`
+- `checkpoint.json`
+- generic filesystem session persistence
+
+## Retained Operational Compatibility Only
+
+The retained compatibility scope is intentionally narrow:
+
+- session payload compatibility for legacy `thread_id`
+- config discovery from `autoloop.*` and legacy `superloop.*`
+- legacy-readable status values only where parity tests require them
+
+That retained scope is operational only. It must not be used to justify reintroducing authoring shims or hidden alternate execution behavior.

@@ -3,15 +3,15 @@
 Status: Final
 
 Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.md)
-Topic: `11. Runtime Harness Design`, `12. Configuration Design`, and `13. Git Policy Placement`
+Topic: `11. Runtime Harness Design`, `12. Configuration Boundary`, `14. Workflow Extension Seam`, `15. Git Extension Placement`, and `16. Session-Path Strategy Placement`
 
 Final decision:
-- The generic CLI and runtime harness expose only workflow-agnostic controls and provider wiring.
-- Generic configuration is intentionally small: provider selection/settings plus runtime controls such as `max_steps` and `intent_mode`.
-- The runtime owns task/run directories, request snapshots, events, checkpoints, prompt lookup, and generic session persistence.
-- Workflow-specific operational policy, including any Autoloop-v1 parity behavior, lives in workflow-owned helpers.
+- The generic CLI and runtime harness expose only workflow-agnostic controls plus provider wiring.
+- The runner binds workflow-declared extensions through `Workflow.extensions`.
+- Generic configuration stays small and typed, covering runtime/provider policy such as `max_steps`, `intent_mode`, provider settings, and extension config.
+- Git tracking, tracing, and session-path strategy remain explicit opt-in modules rather than runtime-core policy.
 
 Rejected shape:
 - no phase-aware runtime CLI
-- no workflow-specific policy hidden in generic config flags
-- no git or artifact-tracking policy embedded in the generic runtime core
+- no workflow-specific policy hidden in generic config
+- no runtime-owned git enablement or hardcoded session naming rules

@@ -3,15 +3,15 @@
 Status: Final
 
 Authoritative record: [ARCHITECTURE_DECISIONS.md](../../ARCHITECTURE_DECISIONS.md)
-Topic: `10. Provider / Store Protocol Design`
+Topic: `10. Provider And Store Protocols`
 
 Final decision:
-- Providers, prompt registries, session stores, and checkpoint stores expose small typed contracts.
-- The engine depends on those contracts, not on concrete adapter implementations.
-- Filesystem and fake implementations prove replaceability and keep tests small.
-- Workflow policy stays outside provider and store protocols.
+- Providers and stores expose small typed protocols.
+- Filesystem and fake implementations prove the protocols stay generic and replaceable.
+- Workflow policy does not leak into provider or store interfaces.
+- Generic session persistence may retain targeted wire-format compatibility such as legacy `thread_id`.
 
 Rejected shape:
-- no Autoloop-specific helpers in provider/store interfaces
 - no monolithic runtime service object
-- no protocol surface that embeds workflow orchestration policy
+- no Autoloop-specific methods in generic protocols
+- no provider/store surface that encodes workflow semantics

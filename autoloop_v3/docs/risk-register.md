@@ -2,12 +2,12 @@
 
 | Risk | Why it matters | Control |
 | --- | --- | --- |
-| Session scope collisions across phases | Implement and test must share one phase session while different phases stay isolated | Explicit `ctx.open_session(slot, scope=...)` plus session rebinding tests |
-| Prompt path drift in repo-root workflows | Prompt lookup is explicit now; hidden search-root hacks are gone | Prompt registry tests and explicit prompt paths in workflows |
-| Generic runtime accidentally absorbs workflow policy | That would reintroduce Autoloop-specific coupling into the core | Keep parity behavior in `autoloop_v3.workflows.*` and prove toy workflow neutrality |
-| Observer payload drift breaks parity harness interpretation | Autoloop-v1 parity now depends on generic execution facts instead of wrappers/subclasses | Contract tests freeze provider-turn, step-completed, and terminal payloads |
-| Raw-log or decisions format drift for Autoloop-v1 | Those files are authoritative operational history | Dedicated parity harness tests |
-| Resume semantics drift across question / blocked / failed flows | Resume depends on checkpoints, session bindings, and clarification persistence | Contract tests plus Autoloop-v1 resume parity tests |
-| Missing import regressions in repo-root workflows | The loader no longer injects names, so workflow modules must be honest | Strict loader tests |
-| Legacy session payloads with only `thread_id` | Existing files must still be readable | Filesystem session store compatibility tests |
-| Documentation drift toward the removed compat model | The old docs advertised features that no longer exist | Baseline doc tests now freeze the strict public surface and migration notes |
+| Generic runtime absorbs workflow semantics | That would break the workflow-agnostic runtime boundary | Runtime neutrality tests plus workflow-owned parity modules |
+| Extension seam grows into a second execution model | Hidden behavior would undermine the strict kernel | Keep one minimal `Workflow.extensions` seam and contract-test it |
+| Session-path strategy leaks exact Autoloop-v1 naming into reusable extension code | Exact `sessions/plan.json` and `sessions/phases/{phase}.json` must remain workflow-owned | Session-path policy tests plus conventions-module ownership |
+| Git tracking auto-enables or hides commit policy in runtime config | Git must be explicit and workflow-owned | Git extension design and no-global-enable tests |
+| Stdlib grows into a second DSL | Authoring helpers could start hiding topology or semantics | Keep stdlib tiny and document its exact scope |
+| Prompt resolution drifts from deterministic provenance | Hidden prompt lookup makes runs harder to explain and reproduce | Prompt resolution tests and explicit workflow prompt paths |
+| Raw-log or decisions drift breaks Autoloop-v1 operations | Those artifacts are still operationally important for parity | Dedicated parity tests |
+| Retained operational compatibility regresses for `thread_id` or `superloop.*` discovery | Existing persisted data and deployment config still need targeted support | Runtime store and config compatibility tests |
+| Documentation drifts back toward observers or compatibility-era authoring | Future work could accidentally freeze the wrong target again | Baseline doc tests now pin the strict kernel, optional extensions, and narrow compatibility scope |
