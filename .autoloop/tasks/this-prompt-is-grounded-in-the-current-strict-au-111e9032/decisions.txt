@@ -34,3 +34,6 @@ Keep tracing as an explicit run-relative JSONL sidecar written by `Tracing(...)`
 <autoloop-decisions-header version="1" block_seq="11" owner="implementer" phase_id="stdlib-and-optional-extensions" pair="implement" turn_seq="2" run_id="run-20260418T021238Z-9ac22268" ts="2026-04-18T03:43:19.387576+00:00" />
 Preserve `GitChange.status` as the raw two-column git porcelain v1 `XY` token; do not collapse spaces, because workflow-owned git policies need to distinguish staged-only, unstaged-only, and mixed changes.
 Treat `GitRepo.commit(..., pathspecs=())` as an empty selected scope: it may create an explicit empty commit only when `allow_empty=True` and nothing is staged, but it must not commit unrelated pre-staged changes.
+<autoloop-decisions-header version="1" block_seq="12" owner="test_author" phase_id="stdlib-and-optional-extensions" pair="test" turn_seq="1" run_id="run-20260418T021238Z-9ac22268" ts="2026-04-18T03:47:51.931200+00:00" />
+Lock the git empty-scope contract at the repo layer with separate tests for the no-op branch and the explicit `allow_empty=True` empty-commit branch so later runtime refactors cannot blur the distinction.
+Cover extension invisibility at runtime by asserting undeclared workflows still get generic `events.jsonl` but do not create tracing sidecars or automatic git commits inside a repository.

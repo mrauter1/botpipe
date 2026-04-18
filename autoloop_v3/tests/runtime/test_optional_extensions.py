@@ -145,6 +145,67 @@ class GitWorkflow(Workflow):
     assert ".autoloop/tasks/git-task/note.txt" in changed_files
 
 
+def test_extensions_remain_invisible_without_workflow_declarations(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init")
+    _git(repo_root, "config", "user.email", "autoloop@example.com")
+    _git(repo_root, "config", "user.name", "Autoloop Tests")
+
+    workflow_file = repo_root / "plain_workflow.py"
+    prompt_file = repo_root / "ask.md"
+    prompt_file.write_text("plain prompt\n", encoding="utf-8")
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import Artifact, LLMStep, SUCCESS, Workflow
+from workflow.primitives import Outcome
+
+
+class PlainWorkflow(Workflow):
+    class State(BaseModel):
+        note: str = ""
+
+    note = Artifact("{task_folder}/note.txt")
+    ask = LLMStep(name="ask", producer="ask.md", produces={"note": note})
+    entry = ask
+    transitions = {ask: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_ask(state: State, outcome: Outcome, artifacts):
+        return state.model_copy(update={"note": artifacts.note.read_text()})
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    _git(repo_root, "add", "plain_workflow.py", "ask.md")
+    _git(repo_root, "commit", "-m", "baseline")
+
+    result = run_workflow(
+        workflow_file,
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    request.artifacts.note.write_text("plain note\n"),
+                    Outcome(raw_output="ok\n", tag="done"),
+                )[1]
+            ]
+        ),
+        options=RunnerOptions(root=repo_root, task_id="plain-task", request_text="Do it"),
+    )
+
+    task_dir = repo_root / ".autoloop" / "tasks" / "plain-task"
+    run_dir = next((task_dir / "runs").iterdir())
+
+    assert result.terminal == "SUCCESS"
+    assert (run_dir / "events.jsonl").exists()
+    assert not (run_dir / "trace").exists()
+    assert _git(repo_root, "log", "-1", "--pretty=%s").strip() == "baseline"
+
+
 def _git(cwd: Path, *args: str) -> str:
     completed = subprocess.run(
         ["git", "-C", str(cwd), *args],

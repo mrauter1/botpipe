@@ -194,6 +194,26 @@ def test_git_repo_commit_ignores_empty_selected_scope_when_unrelated_changes_are
     assert repo.staged_paths() == ("README.md",)
 
 
+def test_git_repo_commit_allows_explicit_empty_commit_for_empty_selected_scope(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init")
+    _git(repo_root, "config", "user.email", "autoloop@example.com")
+    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    (repo_root / "README.md").write_text("base\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "baseline")
+
+    repo = GitRepo.discover(repo_root)
+    assert repo is not None
+
+    commit_sha = repo.commit(GitCommitPlan(message="empty-tracking-checkpoint", allow_empty=True), pathspecs=())
+
+    assert commit_sha
+    assert _git(repo_root, "log", "-1", "--pretty=%s").strip() == "empty-tracking-checkpoint"
+    assert repo.staged_paths() == ()
+
+
 def test_git_repo_raw_delta_preserves_two_column_git_status_semantics(tmp_path: Path) -> None:
     staged_repo = tmp_path / "staged"
     staged_repo.mkdir()
