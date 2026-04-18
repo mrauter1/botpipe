@@ -204,3 +204,24 @@ def test_compatibility_doc_stays_narrow_and_operational() -> None:
         "second execution model",
     ):
         assert forbidden not in text
+
+
+def test_removed_legacy_names_are_confined_to_migration_and_compatibility_material() -> None:
+    active_surface_paths = [
+        PACKAGE_ROOT / "README.md",
+        DOCS_ROOT / "architecture.md",
+        DOCS_ROOT / "authoring.md",
+        DOCS_ROOT / "parity-matrix.md",
+        DOCS_ROOT / "risk-register.md",
+        *sorted(ADR_ROOT.glob("*.md")),
+    ]
+    for path in active_surface_paths:
+        text = _read(path)
+        for forbidden in (
+            "workflow.compat",
+            "workflow.observers",
+            "SessionLifecycle",
+            "Verdict",
+            "on_verdict",
+        ):
+            assert forbidden not in text, f"{forbidden} leaked into {path.relative_to(PACKAGE_ROOT)}"
