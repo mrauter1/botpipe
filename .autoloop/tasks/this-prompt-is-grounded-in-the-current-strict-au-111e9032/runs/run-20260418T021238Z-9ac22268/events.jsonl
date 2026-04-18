@@ -82,3 +82,6 @@
 {"ts": "2026-04-18T04:07:15.887675+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 82, "event_type": "phase_started", "phase_id": "layered-tests-and-parity-proof", "phase_mode": "single"}
 {"ts": "2026-04-18T04:07:15.888528+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 83, "event_type": "pair_started", "pair": "implement", "phase_id": "layered-tests-and-parity-proof"}
 {"ts": "2026-04-18T04:07:15.888658+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 84, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "layered-tests-and-parity-proof"}
+{"ts": "2026-04-18T04:11:18.808626+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 85, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "layered-tests-and-parity-proof"}
+{"ts": "2026-04-18T04:12:20.836064+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 86, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "layered-tests-and-parity-proof"}
+{"ts": "2026-04-18T04:12:20.847892+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 87, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "layered-tests-and-parity-proof"}

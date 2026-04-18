@@ -1570,3 +1570,113 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+---
+I’m treating this as the test-and-parity proof phase. First I’m reading the phase artifacts, current test layout, and recent workflow/runtime code to identify the remaining gaps before I change anything.
+
+I’ve confirmed the phase artifact doesn’t add extra reviewer deltas, so the remaining work is driven by the test matrix itself. Next I’m checking the existing test coverage against the current code and then I’ll run the suite to expose the concrete regressions instead of guessing.
+
+I have enough context to make this concrete. The plan is: 1) run the full suite and isolate failures by layer, 2) fix the underlying code or outdated assertions, 3) add any missing strictness/parity tests required by the phase contract, 4) rerun the full suite, then update the phase notes and shared decisions with anything non-obvious.
+
+The suite is mostly green so far, which suggests this phase is about the last proof gaps rather than a broken refactor. I’m waiting for the full result and then I’ll compare what passed against the explicit acceptance matrix to see what still isn’t actually proved.
+
+The explicit suite already covers most of the requested matrix, including parity harness cases. I’m now auditing the source tree for residual compatibility leftovers and any claims in the request that are not directly pinned by a test name, so I can decide whether this phase needs new tests or just final verification artifacts.
+
+I’ve started a repo-wide `pytest`, not just the package test subset, to catch anything the phase-local suite might miss. If that stays clean, the remaining work is almost certainly tightening proof coverage or housekeeping rather than debugging failures.
+
+The code is already green. I’m adding a couple of narrow proof tests now for claims that were still implicit rather than directly asserted: no `compat.py` source remains, and the generic runtime modules stay phase-agnostic instead of quietly drifting toward Autoloop-specific semantics.
+
+I’ve chosen a small final diff instead of gratuitous churn: a dedicated strictness layer that pins the two remaining architectural claims that were mostly implicit, plus the required phase notes and shared decision entry. After that I’ll rerun the focused suite and then the full suite again.
+
+I’ve applied the small proof-only diff. Next I’m validating the new strictness layer in isolation, then rerunning the package suite and the repo-wide suite to make sure this didn’t introduce any noisy coupling.
+
+The added strictness layer is clean, and the package suite is still fully green at `107 passed`. I’m waiting on the repo-wide run now; if that stays clean, this phase is done and I’ll close out with the verification summary.
+
+Scope considered
+
+- Phase-local artifacts for `layered-tests-and-parity-proof`, the existing `autoloop_v3` layered test suite, strict/runtime source boundaries, and repo-wide regression validation.
+
+What I analyzed
+
+- Ran `pytest -q autoloop_v3/tests` to confirm the current layered suite status.
+- Ran repo-wide `pytest -q` to catch anything outside the package-local matrix.
+- Audited the remaining strictness gaps against the phase contract, specifically explicit proof that removed compat modules stay gone and that `autoloop_v3.runtime` stays phase-agnostic.
+
+What I changed
+
+- Added [test_no_compat.py](/home/rauter/autoloop_v3/autoloop_v3/tests/strictness/test_no_compat.py) with source-level strictness checks for:
+  - removed `workflow/compat.py` and `workflow/observers.py`
+  - phase-specific Autoloop-v1 semantics not leaking into `autoloop_v3.runtime`
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/layered-tests-and-parity-proof/implementation_notes.md) with scope, checklist mapping, invariants, and validation.
+- Appended the non-obvious test-hardening decision to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+Key findings / decisions
+
+- The refactor was already behaviorally green; this phase did not require production code changes.
+- The only remaining proof gap worth closing was architectural drift detection at the source level, so I added a dedicated strictness layer instead of scattering extra assertions through existing runtime tests.
+- Validation is now clean at all requested levels.
+
+Open issues / next step
+
+- No open issues from this phase.
+- Validation results: `pytest -q autoloop_v3/tests/strictness/test_no_compat.py` -> `2 passed`, `pytest -q autoloop_v3/tests` -> `107 passed`, `pytest -q` -> `289 passed`.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+---
+I’m reviewing the phase-local proof-only diff against the phase contract. First I’m reading the changed artifacts and the new strictness test so I can decide whether the implementation actually closes the remaining proof gaps without introducing review-side drift.
+
+I’ve finished the review pass on the actual changed scope and the new strictness test is aligned with the phase intent. I’m doing one last verification run, then I’ll mark the criteria and record the review result in the phase feedback artifact.
+
+Scope considered
+
+- Phase-local review of the new strictness test, the updated implementation notes, the appended shared decision, and the active phase criteria/feedback artifacts.
+
+What I analyzed
+
+- Read the changed proof-only scope against the phase contract and shared decisions.
+- Rechecked the new source-level strictness assertions for removed compat/observer modules and runtime phase neutrality.
+- Reproduced validation with `pytest -q autoloop_v3/tests/strictness/test_no_compat.py` and `pytest -q autoloop_v3/tests`.
+
+What I reviewed
+
+- [test_no_compat.py](/home/rauter/autoloop_v3/autoloop_v3/tests/strictness/test_no_compat.py)
+- [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/layered-tests-and-parity-proof/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt)
+- Updated [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/layered-tests-and-parity-proof/criteria.md) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/layered-tests-and-parity-proof/feedback.md)
+
+Key findings / decisions
+
+- No blocking findings.
+- The diff stays within the phase scope and usefully closes an implicit proof gap without changing production behavior.
+- Criteria are now fully checked and feedback records a no-findings review result.
+
+Open issues / next step
+
+- No open issues from review. Phase can advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
