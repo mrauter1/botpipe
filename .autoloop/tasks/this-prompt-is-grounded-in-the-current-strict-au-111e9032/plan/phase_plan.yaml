@@ -75,6 +75,7 @@ phases:
       - Keep automatic request snapshots, `events.jsonl`, checkpoints, session persistence, and prompt resolution framework-owned.
       - Provide a generic session-path strategy surface without embedding Autoloop-v1 naming into runtime core.
       - Preserve generic persisted-session compatibility such as `thread_id` handling unless implementation proves a safe migration path is required.
+      - Preserve generic config-file discovery from both `autoloop.*` and legacy `superloop.*` filenames as an explicit runtime compatibility contract.
     out_of_scope:
       - Autoloop-v1 raw log, decisions, clarification, or status policy.
       - Git commit timing/messages or workflow-specific topology semantics.
@@ -87,15 +88,20 @@ phases:
         text: The runner loads workflows strictly, binds declared extensions, persists generic events/checkpoints/sessions, and keeps deterministic prompt resolution intact.
       - id: AC-3
         text: Generic filesystem stores and runtime tests prove persisted session compatibility, checkpoint behavior, and runtime neutrality.
+      - id: AC-4
+        text: Runtime config and CLI refactors explicitly preserve config discovery from both `autoloop.*` and legacy `superloop.*` filenames unless a later user clarification authorizes removal.
     deliverables:
       - Refactored runtime modules and filesystem store implementation.
       - Generic session-path strategy surface.
+      - Explicit config compatibility coverage for `autoloop.*` and `superloop.*` discovery in runtime docs/tests.
       - Runtime integration tests for workspace, request snapshot, checkpoints, events, sessions, prompts, and CLI wiring.
     risks:
       - Runtime refactors may accidentally absorb Autoloop-v1 policy while wiring parity-related needs.
       - Session-path strategy changes may regress existing persisted session files.
+      - Runtime config cleanup may silently drop legacy `superloop.*` discovery without user authorization.
     rollback:
       - Revert runner/store/session-path changes together if runtime neutrality or persisted-session compatibility regresses.
+      - Revert runtime config/CLI discovery changes together if `superloop.*` compatibility regresses.
       - Preserve any existing task/run workspace contents created during tests or local runs.
 
   - phase_id: stdlib-and-optional-extensions
@@ -107,6 +113,7 @@ phases:
       - Add `autoloop_v3/extensions/tracing.py`, `extensions/session_paths.py`, and `extensions/git/*`.
       - Keep git repo mechanics generic, raw delta separate from commit-eligibility filtering, and commit policy workflow-owned via typed policy/config objects.
       - Keep session-path strategy generic and tracing optional, without replacing generic `events.jsonl`.
+      - Implement the workflow-facing declarations `GitTracking(policy=..., config=GitTrackingConfig(...))`, `SessionPaths(strategy=...)`, and `Tracing(config=TracingConfig(...))` as the explicit opt-in surface used through `Workflow.extensions`.
     out_of_scope:
       - Behavioral mixins, base workflow families, decorator DSLs, metaclass magic, or config-driven topology.
       - Auto-enabling git or tracing from runtime config alone.
@@ -120,15 +127,20 @@ phases:
         text: '`extensions` contains only tracing, session-path, and git, and all of them are invisible unless the workflow or harness explicitly opts in.'
       - id: AC-3
         text: Git extension tests prove generic repo mechanics, filtering, and workflow-owned policy separation without changing raw delta semantics.
+      - id: AC-4
+        text: 'The workflow-facing extension APIs are explicit and stable: workflows opt in through `Workflow.extensions` using `GitTracking(...)`, `SessionPaths(...)`, and `Tracing(...)` rather than runner-only hidden wiring.'
     deliverables:
       - New `autoloop_v3/stdlib/*` package.
       - New `autoloop_v3/extensions/*` package with git/session-path/tracing support.
+      - Typed workflow-facing declarations for git tracking, session-path strategy, and tracing.
       - Unit tests covering stdlib helpers and extension helper logic.
     risks:
       - stdlib helpers may drift into a second DSL if they hide topology or semantic transitions.
       - Git/session-path extensions may accidentally encode Autoloop-v1 policy in reusable modules.
+      - Extension wiring may drift into hidden runner-only behavior if the workflow-facing declarations are not pinned.
     rollback:
       - Revert `stdlib` and `extensions` as a slice if the helper surface grows beyond the requested minimal scope.
+      - Revert workflow-facing extension declaration changes together with their binding/tests if hidden parallel opt-in surfaces appear.
       - Keep kernel/runtime changes independent so optional packages can be removed without undoing the strict-core refactor.
 
   - phase_id: workflow-migrations-and-parity-harness
@@ -174,6 +186,7 @@ phases:
       - Replace or rewrite unit, contract, runtime, strictness, workflow, and parity tests to match the final architecture.
       - Add parity proof against `autoloop/` for workspace layout, request snapshot, checkpoints, sessions, logs, decisions, clarification persistence, status mapping, and final run behavior.
       - Run the full suite and fix all regressions discovered during the refactor.
+      - Add regression proof for runtime config discovery compatibility and workflow-facing extension declarations/binding.
     out_of_scope:
       - New features beyond the requested architecture and parity proof.
       - Relaxing failing parity requirements by weakening assertions instead of fixing behavior.

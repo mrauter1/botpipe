@@ -85,6 +85,7 @@ The implementation must remove compatibility-era behavior, preserve Autoloop-v1 
   - generic filesystem session persistence
   - prompt resolution
   - workflow-agnostic config and CLI
+  - generic config-file discovery from both `autoloop.*` and legacy `superloop.*` filenames
 - `autoloop_v3.runtime` must not own:
   - phases
   - plan / implement / test semantics
@@ -94,6 +95,7 @@ The implementation must remove compatibility-era behavior, preserve Autoloop-v1 
   - review/rework/replan semantics
   - workflow-specific git policy
 - Preserve persisted session payload compatibility for legacy `thread_id` and existing generic session fields unless a later clarification explicitly authorizes breaking them.
+- Preserve current legacy config discovery from `superloop.*` filenames as generic runtime compatibility unless a later clarification explicitly authorizes removing it.
 
 ### Optional Packages
 - Add `autoloop_v3.stdlib` with only:
@@ -107,6 +109,23 @@ The implementation must remove compatibility-era behavior, preserve Autoloop-v1 
   - `git/{__init__,declaration,policy,repo,runtime,filters}.py`
 - `stdlib` may import only standard library plus `autoloop_v3.workflow`.
 - `extensions` are optional and invisible by default.
+
+### Workflow-Facing Optional Extension APIs
+- `Workflow.extensions: tuple[WorkflowExtension, ...] = ()` is the sole workflow-level opt-in surface for optional behavior.
+- Git tracking must use a workflow-facing declaration with this exact shape:
+  - `GitTracking(policy=GitPolicy(...), config=GitTrackingConfig(...))`
+  - `GitTrackingConfig(enabled: bool = True, track_task_workspace_artifacts: bool = True)`
+  - `GitPolicy.before_step(event: StepStart) -> Sequence[GitCommitPlan]`
+  - `GitPolicy.after_step(event: StepFinish, delta: GitDelta) -> Sequence[GitCommitPlan]`
+  - `GitPolicy.on_terminal(event: TerminalFinish, delta: GitDelta | None) -> Sequence[GitCommitPlan]`
+- Session-path strategy must also be workflow-facing and explicit:
+  - `SessionPaths(strategy=SessionPathStrategy(...))`
+  - `SessionPathStrategy.path_for(run_dir: Path, ref_name: str, scope: str | None) -> Path`
+  - the runner extracts at most one declared session-path strategy during run setup and applies it to the generic filesystem session store before engine execution begins
+- Tracing must use a small typed workflow-facing declaration:
+  - `Tracing(config=TracingConfig(...))`
+  - `TracingConfig` controls optional tracing side effects only and does not replace generic `events.jsonl`
+- No runner-only hidden extension wiring and no renamed parallel opt-in surface. Workflow declarations are the source of truth for opt-in.
 
 ### Workflow-Owned Parity
 - Keep exact Autoloop-v1 filename/path semantics workflow-owned:
@@ -139,10 +158,12 @@ The implementation must remove compatibility-era behavior, preserve Autoloop-v1 
 - Bind workflow-declared extensions in the runner.
 - Keep generic event history, prompt resolution, checkpoint persistence, session persistence, and request snapshots automatic.
 - Keep session-path handling generic; exact Autoloop-v1 filenames remain outside runtime core.
+- Preserve config discovery from both `autoloop.*` and legacy `superloop.*` filenames as a generic runtime compatibility contract.
 
 ### Milestone 4: Add Tiny `stdlib/` And Optional `extensions/`
 - Implement the minimal authoring helpers only where they compile cleanly to kernel primitives.
 - Add reusable optional extensions for tracing, session-path strategy, and git tracking.
+- Implement the pinned workflow-facing declarations `GitTracking(...)`, `SessionPaths(...)`, and `Tracing(...)` so workflows remain the authoritative opt-in point.
 - Keep git mechanics generic and commit policy workflow-owned.
 - Keep session-path strategy generic and separate from Autoloop-v1 naming.
 
@@ -190,6 +211,7 @@ The canonical machine-readable decomposition lives in `phase_plan.yaml`. The int
 - Compatibility that must remain unless implementation proves otherwise:
   - Autoloop-v1 parity behavior against `autoloop/`
   - session payload compatibility for `thread_id` and existing generic fields
+  - runtime config discovery from both `autoloop.*` and legacy `superloop.*` filenames
   - legacy-readable `run_finished.status` values where parity tests depend on them
   - exact Autoloop-v1 session filename behavior
 - Do not silently broaden compatibility beyond the request. The direction is strict core plus workflow-owned parity, not “compat under another name.”
@@ -199,8 +221,10 @@ The canonical machine-readable decomposition lives in `phase_plan.yaml`. The int
 - Do not carry dual extension systems. Replace `workflow.observers` with `Workflow.extensions` and update tests/docs accordingly.
 - Keep public-surface narrowing explicit and update repo-root strict re-exports together with canonical `autoloop_v3.workflow`.
 - Keep runtime phase-agnostic by forcing every Autoloop-v1-specific behavior into workflow-owned modules or policy objects.
+- Keep runtime config compatibility explicit while refactoring `runtime.config` and `runtime.cli`; do not silently drop `superloop.*` discovery.
 - Preserve the split between raw git delta calculation and commit-eligibility filtering.
 - Keep exact Autoloop-v1 filename policy outside generic session-path machinery.
+- Keep workflow-facing extension names and binding explicit so implementation cannot drift into runner-only or hidden opt-in wiring.
 - Add direct tests for `Ralph_loop.py` success via both `plan_action -> SUCCESS` and `reflect -> SUCCESS`.
 - Add at least one unrelated toy workflow to prove runtime neutrality after the refactor.
 
@@ -230,6 +254,7 @@ The canonical machine-readable decomposition lives in `phase_plan.yaml`. The int
   - session persistence
   - prompt resolution
   - CLI wiring
+  - `autoloop.*` and legacy `superloop.*` config discovery
   - runtime neutrality
 - Strictness / no-compat tests:
   - no compat layer or removed symbols
@@ -238,9 +263,11 @@ The canonical machine-readable decomposition lives in `phase_plan.yaml`. The int
   - no handler adaptation
   - no runtime phase knowledge
   - repo-root `workflow` shim is strict re-export only
+  - no hidden runner-only extension opt-in surface
 - Workflow and parity tests:
   - Autoloop-v1 happy/rework/replan/pause-resume/multi-phase cases
   - Ralph happy path and `goal_met` correctness
+  - workflow-facing `GitTracking(...)`, `SessionPaths(...)`, and `Tracing(...)` declarations bind correctly through `Workflow.extensions`
   - parity against legacy workspace/log/session/status behavior
 
 ## Risk Register
@@ -251,7 +278,9 @@ The canonical machine-readable decomposition lives in `phase_plan.yaml`. The int
 | Runtime absorbs workflow semantics | The request explicitly forbids phase-aware or Autoloop-aware runtime logic | Keep parity/session-path/git meaning in workflow-owned modules and add toy-workflow neutrality tests |
 | Session path generalization leaks Autoloop policy | Exact `plan.json` and `phases/{phase}.json` naming must remain workflow-owned | Keep the generic session-path surface minimal and test Autoloop naming separately through workflow-owned policy |
 | Persisted session payload regression | Existing runs may only have `thread_id` or sparse metadata | Preserve filesystem store read/write compatibility and add regression tests before widening the format |
+| Legacy config discovery regresses during runtime cleanup | Existing repositories or users may still rely on `superloop.*` config filenames | Preserve discovery as explicit runtime compatibility and add config/CLI regression tests |
 | Git extension changes raw delta semantics | The current design requires raw delta and commit eligibility to stay separate | Keep delta collection in `repo.py`, filtering in `filters.py`, and add dedicated tests for both |
+| Workflow-facing extension APIs drift into hidden runner wiring | The request requires workflow-declared optional extensions and a tiny explicit extension surface | Pin `GitTracking(...)`, `SessionPaths(...)`, and `Tracing(...)` in the plan, docs, and tests |
 | Ralph `goal_met` fix covers only one success route | The prompt explicitly requires all success paths to set `goal_met=True` | Add separate tests for `plan_action -> SUCCESS` and `reflect -> SUCCESS` |
 | Parity drift is hidden by new abstractions | This refactor is large enough to accidentally “clean up” required legacy behavior | Keep parity tests against `autoloop/` as gating proof and treat parity failures as blockers |
 
