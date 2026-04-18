@@ -967,3 +967,140 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+I’m handling the `stdlib-and-optional-extensions` phase. First I’m reading the active phase artifacts and the current `autoloop_v3` kernel/runtime surfaces so I can wire the tiny `stdlib` and explicit extensions against the architecture that is already in place.
+
+The current plan and decisions pin this phase pretty tightly: `Workflow.extensions` is already the extension seam, the runner already extracts `SessionPaths`, and this phase needs to add only the tiny authoring helpers plus the explicit `Tracing` and `GitTracking` families on top of that. I’m reading the existing kernel/runtime entry points next so the new APIs stay additive and don’t reintroduce hidden wiring.
+
+I’ve confirmed the extension seam is already live in the engine and the runtime is already prepared for a workflow-declared `SessionPaths` strategy. Next I’m checking the remaining repository references to old observer-era or missing extension surfaces so the new modules and tests land cleanly without leaving dead imports behind.
+
+I have the implementation shape now. I’m moving to edits with three bounded slices: add the tiny `stdlib` package, add explicit `Tracing` and `GitTracking` extension families plus the session-path export cleanup, then add focused unit/runtime coverage so the new surfaces are proved without dragging workflow semantics into runtime core.
+
+I’ve finished the dependency pass. The edits I’m making now are concrete: create `autoloop_v3/stdlib/*`, add `autoloop_v3/extensions/tracing.py` plus `extensions/git/*`, tighten `extensions/__init__.py`, and add focused tests around helper behavior, tracing side effects, and git delta/filter/commit separation.
+
+The new modules are in place. I’m adding proof now: pure-helper tests for `stdlib`, filter/repo tests that separate raw git delta from commit scope, and runtime tests that show `Tracing(...)` and `GitTracking(...)` only activate when the workflow explicitly declares them through `Workflow.extensions`.
+
+The code changes are in. I’m running the repo’s `autoloop_v3` test suite now rather than only the new files, because these exports touch the strict authoring surface and optional runtime integration points.
+
+Two failures surfaced, both in the new extension tests. I’m pulling the exact tracebacks now and will adjust the implementation or the tests based on the real failure mode rather than guessing.
+
+The failure is in raw git delta collection, not in the workflow binding. `git status --porcelain` was collapsing untracked task files to the top-level `.autoloop/` directory, so the task-scope filter saw no eligible file paths. I’m fixing raw delta collection to enumerate untracked files explicitly.
+
+The focused fixes held. I’m waiting for the full suite to finish so I can record validation and then update the phase notes and decisions ledger with only the non-obvious choices from this turn.
+
+The suite is clean. I’m doing the final repository bookkeeping now: capture the exact files/symbols touched, record the few non-obvious decisions that future phases could otherwise drift on, and then I’ll close with the phase summary.
+
+I also picked up generated `__pycache__` noise from the test run. I’m cleaning only those generated artifacts so the phase diff stays limited to intentional source and test changes.
+
+Scope considered
+
+- Active phase `stdlib-and-optional-extensions` only.
+- Kernel/runtime touch points needed for explicit extension wiring: [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py), [extensions.py](/home/rauter/autoloop_v3/autoloop_v3/workflow/extensions.py), [session_paths.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/session_paths.py).
+- Phase bookkeeping updated in [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+What I analyzed
+
+- Existing `Workflow.extensions` binding flow in the engine and the runner’s `SessionPaths(...)` extraction.
+- Current public extension exports and the doc/test expectations for `Tracing(...)`, `SessionPaths(...)`, `GitTracking(...)`, and the tiny `stdlib`.
+- Runtime and contract tests to keep the new surfaces explicit and avoid hidden runtime policy.
+
+What I changed
+
+- Added `autoloop_v3/stdlib`:
+  - [control.py](/home/rauter/autoloop_v3/autoloop_v3/stdlib/control.py)
+  - [prompts.py](/home/rauter/autoloop_v3/autoloop_v3/stdlib/prompts.py)
+  - [steps.py](/home/rauter/autoloop_v3/autoloop_v3/stdlib/steps.py)
+  - [state/cursor.py](/home/rauter/autoloop_v3/autoloop_v3/stdlib/state/cursor.py)
+- Added optional tracing surface in [tracing.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/tracing.py) with strict-by-default failure handling and run-relative JSONL sidecar output.
+- Added optional git surface in [extensions/git](/home/rauter/autoloop_v3/autoloop_v3/extensions/git):
+  - declaration/config in `declaration.py`
+  - workflow-owned policy types in `policy.py`
+  - raw repo mechanics in `repo.py`
+  - delta filtering in `filters.py`
+  - bound extension runtime in `runtime.py`
+- Updated [extensions/__init__.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/__init__.py) to expose `Tracing`, `SessionPaths`, and `GitTracking`.
+- Added proof in:
+  - [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_stdlib_and_extensions.py)
+  - [test_optional_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_optional_extensions.py)
+
+Key findings / decisions
+
+- Git raw delta had to use `git status --porcelain=v1 --untracked-files=all`; otherwise untracked task files collapsed to `.autoloop/` and task-scope filtering missed them.
+- Raw git inspection and commit-scope filtering are now split cleanly: policies see raw `GitDelta`, filtering happens only when executing commit plans.
+- `track_task_workspace_artifacts=True` is implemented as scoping to `binding.task_folder`, which intentionally includes nested run artifacts because runs live under the task workspace.
+- Tracing stays sidecar-only and does not widen or replace generic `events.jsonl`.
+
+Open issues / next step
+
+- No blocking issues in this phase.
+- Validation: `pytest autoloop_v3/tests` passed with `100 passed`.
+- Next step is the workflow migration phase: wire concrete Autoloop-v1 and Ralph usage onto these new stdlib/extension surfaces where appropriate.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+I’m reviewing the `stdlib-and-optional-extensions` phase changes against the phase contract and the recorded decisions. First I’m reading the changed source and the phase artifacts, then I’ll validate the behavior and update only the phase-local reviewer files.
+
+I’ve got the phase artifacts and the stated implementation intent. I’m reading the new `stdlib`, `tracing`, and `git` modules plus their tests now, with special attention to whether they stay optional, whether stdlib crosses the workflow boundary, and whether git tracking can create unintended repo side effects.
+
+I found one suspicious git path: if task-scope filtering produces an empty delta but the repo already has unrelated staged changes, `GitRepo.commit()` may still commit those staged changes because it treats `pathspecs=()` as “commit whatever is staged”. I’m reproducing that directly before I write the finding.
+
+I found a second potential git issue in the raw delta representation itself. The implementation strips the two-column porcelain status to a single collapsed token, which means policies can no longer distinguish staged-only, unstaged-only, and mixed changes. I’m confirming that behavior directly because the phase plan explicitly called out “don’t change raw delta semantics.”
+
+I have two blocking findings and they’re both in the git path, not the stdlib or tracing path. I’m recording them in the phase feedback and leaving the phase incomplete because both issues can commit or classify repo changes incorrectly.
+
+The current tests don’t catch either git issue, so I’m not relying on a green suite here. I verified both behaviors directly: one script shows `commit(..., pathspecs=())` will commit unrelated staged changes, and another shows staged-only and unstaged-only changes both collapse to `status == "M"`.
+
+Scope considered
+
+- Phase-local review for `stdlib-and-optional-extensions`.
+- Changed source under `autoloop_v3/stdlib/*`, `autoloop_v3/extensions/*`, and the new tests.
+- Phase artifacts [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/criteria.md), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/feedback.md), and the shared [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+What I analyzed
+
+- The new stdlib helpers, tracing extension, session-path surface, and git declaration/policy/filter/repo/runtime split.
+- The phase plan and decision entries that require raw git delta semantics to stay separate from commit-eligibility filtering.
+- Direct reproductions of the new git behavior in temporary repos, beyond the passing tests.
+
+What I reviewed
+
+- [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/feedback.md) now contains two blocking findings: `IMP-001` and `IMP-002`.
+- [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/criteria.md) remains with all boxes unchecked because the blocking findings materially affect correctness, safety, and conformance to the phase contract.
+
+Key findings / decisions
+
+- `IMP-001` blocking: [autoloop_v3/extensions/git/repo.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/git/repo.py:50) will commit unrelated staged changes when task-scope filtering produces `pathspecs=()`. That breaks the promised workflow-owned git scope boundary.
+- `IMP-002` blocking: [autoloop_v3/extensions/git/repo.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/git/repo.py:35) collapses Git porcelain `XY` status into stripped tokens like `"M"`, so workflow policies lose staged-vs-unstaged semantics even though the phase plan explicitly requires raw delta semantics to remain intact.
+
+Open issues / next step
+
+- The implementer needs to fix both git issues and add regression coverage for them, then rerun the phase review.
+- The stdlib and tracing additions look structurally aligned; the current blocker is confined to the git extension path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
