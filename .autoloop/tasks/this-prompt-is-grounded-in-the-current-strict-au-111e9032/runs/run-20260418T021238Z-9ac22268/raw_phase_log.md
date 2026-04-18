@@ -176,3 +176,121 @@ phase_mode=single
 phase_ids=architecture-contract-freeze,strict-kernel-extension-seam,generic-runtime-filesystem-refactor,stdlib-and-optional-extensions,workflow-migrations-and-parity-harness,layered-tests-and-parity-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019d9e6b-2316-7420-9590-985904101c64
+---
+provider=codex
+mode=start
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9e6b-2316-7420-9590-985904101c64
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e6b-2316-7420-9590-985904101c64
+---
+I’m treating this as a doc-contract freeze pass for the `architecture-contract-freeze` phase. I’ll read the authoritative phase artifacts, current architecture/docs/tests, and then rewrite only the documentation/test baseline needed to lock the requested strict-kernel/generic-runtime/optional-extensions shape.
+
+I’ve confirmed the phase is narrowly about freezing the architecture contract: docs, ADRs, migration guidance, and doc-focused tests. Next I’m reading the current baseline to identify exactly where observer-era and compat-era language is still being enforced so I can rewrite that contract cleanly instead of patching around it.
+
+The current baseline still hard-codes the old observer seam in the architecture record, architecture docs, parity matrix, and the doc baseline test. I’m now reading the existing docs and ADR summaries in bulk so I can replace that contract in one pass rather than leave partial contradictions behind.
+
+I have enough context to change files. I’m replacing the observer-era and broad-compat wording with the final contract: `workflow` as strict kernel, `runtime` as generic runtime, `stdlib` as tiny authoring sugar, `extensions` as explicit opt-in modules, and a narrow retained-compatibility note only for runtime/data compatibility.
+
+The core docs and baseline test now point at the new contract. I’m rewriting the ADR summaries next so the archive stops pointing back to observers and instead summarizes the final surface: strict kernel, workflow-declared extensions, tiny stdlib, narrow compatibility, and workflow-owned parity.
+
+I’ve finished the rewrite pass. I’m checking the resulting corpus for leftover observer-era wording and then running the doc baseline test slice so I can fix any contract gaps directly instead of leaving mismatched assertions behind.
+
+The failures are all contract-shape issues, not implementation bugs: a few docs still name removed surfaces directly, the compatibility note is broader than intended, and the config markers weren’t present in the shared corpus. I’m tightening those docs and leaving the baseline test strict where it should be strict.
+
+The doc baseline now passes. I’m recording the phase-local notes and shared decisions next so the later implementation phases inherit the intended contract instead of drifting back toward the old observer/compat shape.
+
+I found one generated `.pyc` change from running pytest. I’m restoring that tracked cache artifact to its pre-run state so the phase diff stays limited to the docs, ADR summaries, notes, and the doc baseline test.
+
+Scope considered
+
+- Phase-local doc freeze only: [ARCHITECTURE_DECISIONS.md](/home/rauter/autoloop_v3/autoloop_v3/ARCHITECTURE_DECISIONS.md), [README.md](/home/rauter/autoloop_v3/autoloop_v3/README.md), [MIGRATION.md](/home/rauter/autoloop_v3/autoloop_v3/MIGRATION.md), [docs/architecture.md](/home/rauter/autoloop_v3/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3/autoloop_v3/docs/authoring.md), [docs/compatibility.md](/home/rauter/autoloop_v3/autoloop_v3/docs/compatibility.md), [docs/parity-matrix.md](/home/rauter/autoloop_v3/autoloop_v3/docs/parity-matrix.md), [docs/risk-register.md](/home/rauter/autoloop_v3/autoloop_v3/docs/risk-register.md), all ADR summaries under [docs/adr](/home/rauter/autoloop_v3/autoloop_v3/docs/adr), and [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- I also updated the phase artifact notes in [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/architecture-contract-freeze/implementation_notes.md) and appended phase decisions in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+- Unrelated untracked files at repo root were left untouched.
+
+What I analyzed
+
+- The active phase contract, plan, criteria, feedback, and shared decisions.
+- The current architecture/docs corpus for observer-era and compatibility-era assertions.
+- The doc baseline test to see exactly what the repo was freezing before this phase.
+
+What I changed
+
+- Rewrote the architecture record with 18 candidate-matrix decisions covering package layout, public surface, compat removal, session model, artifacts, prompts, validation/compilation, checkpoints, protocols, runtime boundary, config, stdlib, extension seam, git, session paths, observability, and testing.
+- Rewrote the main docs to target the final contract: strict `workflow`, generic `runtime`, tiny `stdlib`, tiny optional `extensions`, and workflow-owned parity.
+- Rewrote all ADR summaries so they point at the final contract instead of the observer-era model.
+- Kept [docs/compatibility.md](/home/rauter/autoloop_v3/autoloop_v3/docs/compatibility.md) as a narrow operational-compatibility note only.
+- Rebased the doc baseline test to enforce `Workflow.extensions`, `GitTracking` / `SessionPaths` / `Tracing`, tiny `stdlib`, narrow retained compatibility, and the absence of the old observer-era surface from active docs.
+
+Key findings / decisions
+
+- The main drift was architectural documentation, not behavior: the repo was still freezing `workflow.observers` as the extension seam.
+- `docs/compatibility.md` should remain, but only for retained runtime/data compatibility such as `thread_id`, legacy-readable status consumers, and `superloop.*` config discovery.
+- Removed/legacy names are now confined to migration/compatibility material instead of being treated as active surface docs.
+- Validation performed: `pytest autoloop_v3/tests/test_architecture_baseline_docs.py` and it passes.
+
+Open issues / next step
+
+- No phase-local blocker remains.
+- The next implementation phases now need to make the code match the frozen docs: replace the observer seam with `Workflow.extensions`, add `autoloop_v3.stdlib` and `autoloop_v3.extensions`, and then migrate `autoloop_v1.py`, `Ralph_loop.py`, and the parity harness onto that final surface.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9e6b-2316-7420-9590-985904101c64
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9e6b-2316-7420-9590-985904101c64
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e6b-2316-7420-9590-985904101c64
+---
+I’m reviewing the phase-local doc freeze diff against the phase contract and shared decisions. I’ll inspect the changed docs/tests, check the authoritative notes/criteria/feedback state, and rerun the doc baseline so I can decide whether this phase is complete or needs follow-up.
+
+The repository diff plumbing is not giving a useful patch view here, so I’m reviewing the changed files directly against the phase contract and shared decisions. I’m focusing on the architecture record, the public-facing docs, the compatibility note, and the baseline test because those are the acceptance-critical artifacts for this phase.
+
+The changed files are aligned with the phase objective so far. I’m doing one last mechanical pass for forbidden observer-era surface in the rewritten docs/ADRs and rerunning the doc baseline to decide whether there are any findings worth blocking on.
+
+I don’t have a blocking issue to raise from this pass. I’m marking the phase criteria complete and appending a no-findings review note so the artifact trail reflects that the doc freeze passed review and validation.
+
+Scope considered
+
+- Phase-local review of the rewritten doc contract for `architecture-contract-freeze`.
+- Reviewed the changed architecture/docs/test surface plus the authoritative phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and shared `decisions.txt`.
+- Stayed out of non-`.autoloop/tasks/...` writes as required.
+
+What I analyzed
+
+- The phase objective, acceptance criteria, implementation notes, and shared decisions.
+- The rewritten [autoloop_v3/ARCHITECTURE_DECISIONS.md](/home/rauter/autoloop_v3/autoloop_v3/ARCHITECTURE_DECISIONS.md), [README.md](/home/rauter/autoloop_v3/autoloop_v3/README.md), [MIGRATION.md](/home/rauter/autoloop_v3/autoloop_v3/MIGRATION.md), [docs/architecture.md](/home/rauter/autoloop_v3/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3/autoloop_v3/docs/authoring.md), [docs/compatibility.md](/home/rauter/autoloop_v3/autoloop_v3/docs/compatibility.md), [docs/parity-matrix.md](/home/rauter/autoloop_v3/autoloop_v3/docs/parity-matrix.md), [docs/risk-register.md](/home/rauter/autoloop_v3/autoloop_v3/docs/risk-register.md), ADR summaries, and [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- Mechanical checks for forbidden observer-era/compat-era surface in active docs, plus the doc baseline test run.
+
+What I reviewed
+
+- Intent fidelity against AC-1 through AC-3.
+- Conformance to the shared decisions: `Workflow.extensions` as the target seam, narrow retained compatibility, workflow-owned parity, and preserved `superloop.*`/`thread_id` compatibility notes.
+- Validation evidence: `pytest autoloop_v3/tests/test_architecture_baseline_docs.py` passed during review.
+
+Key findings / decisions
+
+- No blocking findings.
+- The doc set now consistently describes `workflow` as the strict kernel, `runtime` as workflow-agnostic, `stdlib` as tiny authoring sugar, and `extensions` as tiny optional modules.
+- `docs/compatibility.md` remains narrow and operational, which matches the recorded decision and phase scope.
+- I updated the phase artifacts accordingly: all criteria boxes checked and `feedback.md` records a no-findings review note.
+
+Open issues / next step
+
+- No phase-local blocker remains.
+- Next phases need to implement the code changes that these rewritten docs/tests now freeze.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
