@@ -33,3 +33,7 @@
 {"ts": "2026-04-18T03:08:20.497323+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 33, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-kernel-extension-seam"}
 {"ts": "2026-04-18T03:09:14.132007+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 34, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strict-kernel-extension-seam"}
 {"ts": "2026-04-18T03:09:14.147754+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 35, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strict-kernel-extension-seam"}
+{"ts": "2026-04-18T03:09:14.187703+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 36, "event_type": "phase_completed", "pair": "test", "phase_id": "strict-kernel-extension-seam", "phase_mode": "single"}
+{"ts": "2026-04-18T03:09:14.191206+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 37, "event_type": "phase_started", "phase_id": "generic-runtime-filesystem-refactor", "phase_mode": "single"}
+{"ts": "2026-04-18T03:09:14.191716+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 38, "event_type": "pair_started", "pair": "implement", "phase_id": "generic-runtime-filesystem-refactor"}
+{"ts": "2026-04-18T03:09:14.191787+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 39, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "generic-runtime-filesystem-refactor"}
