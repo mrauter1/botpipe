@@ -17,16 +17,16 @@
       "layered-tests-and-parity-proof"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "workflow-migrations-and-parity-harness"
+    "current_phase_index": 5,
+    "current_phase_id": "layered-tests-and-parity-proof"
   },
   "phase_status": {
     "architecture-contract-freeze": "completed",
     "strict-kernel-extension-seam": "completed",
     "generic-runtime-filesystem-refactor": "completed",
     "stdlib-and-optional-extensions": "completed",
-    "workflow-migrations-and-parity-harness": "in_progress",
-    "layered-tests-and-parity-proof": "planned"
+    "workflow-migrations-and-parity-harness": "completed",
+    "layered-tests-and-parity-proof": "in_progress"
   },
   "phase_history": [
     {
@@ -86,6 +86,19 @@
       "run_id": "run-20260418T021238Z-9ac22268",
       "status": "in_progress",
       "ts": "2026-04-18T03:52:34.433370+00:00"
+    },
+    {
+      "phase_id": "workflow-migrations-and-parity-harness",
+      "run_id": "run-20260418T021238Z-9ac22268",
+      "status": "completed",
+      "ts": "2026-04-18T04:07:15.881426+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "layered-tests-and-parity-proof",
+      "run_id": "run-20260418T021238Z-9ac22268",
+      "status": "in_progress",
+      "ts": "2026-04-18T04:07:15.886838+00:00"
     }
   ]
 }
