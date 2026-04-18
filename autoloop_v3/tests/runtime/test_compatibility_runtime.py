@@ -759,6 +759,57 @@ class CwdIndependentWorkflow(Workflow):
     assert provider_b.calls[0].prompt_path == str(workflow_prompt)
 
 
+def test_runner_prompt_resolution_uses_workspace_root_as_explicit_fallback(monkeypatch, tmp_path: Path):
+    workflow_home = tmp_path / "workflow-home"
+    workflow_home.mkdir()
+    workflow_file = workflow_home / "workspace_prompt_workflow.py"
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import LLMStep, SUCCESS, Workflow
+from workflow.primitives import Outcome
+
+
+class WorkspacePromptWorkflow(Workflow):
+    class State(BaseModel):
+        pass
+
+    ask = LLMStep(name="ask", producer="shared/ask.md")
+    entry = ask
+    transitions = {ask: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_ask(state: State, outcome: Outcome, artifacts):
+        return state
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runtime_root = tmp_path / "runtime-root"
+    workspace_prompt = runtime_root / "shared" / "ask.md"
+    workspace_prompt.parent.mkdir(parents=True)
+    workspace_prompt.write_text("workspace prompt\n", encoding="utf-8")
+
+    cwd_root = tmp_path / "cwd-root"
+    cwd_prompt = cwd_root / "shared" / "ask.md"
+    cwd_prompt.parent.mkdir(parents=True)
+    cwd_prompt.write_text("cwd prompt\n", encoding="utf-8")
+
+    monkeypatch.chdir(cwd_root)
+    provider = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="done\n", tag="done")])
+    run_workflow(
+        workflow_file,
+        provider=provider,
+        options=RunnerOptions(root=runtime_root, task_id="workspace-prompt-task", request_text="Ship it"),
+    )
+
+    assert provider.calls[0].prompt_path == str(workspace_prompt)
+
+
 def test_runner_rejects_multiple_declared_session_path_strategies_before_creating_a_run(tmp_path: Path):
     workflow_file = tmp_path / "invalid_session_paths.py"
     workflow_file.write_text(

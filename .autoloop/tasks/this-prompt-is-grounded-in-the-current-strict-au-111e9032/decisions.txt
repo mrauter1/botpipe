@@ -25,3 +25,5 @@ Validate duplicate `SessionPaths` declarations before creating task/run workspac
 <autoloop-decisions-header version="1" block_seq="8" owner="implementer" phase_id="generic-runtime-filesystem-refactor" pair="implement" turn_seq="2" run_id="run-20260418T021238Z-9ac22268" ts="2026-04-18T03:19:47.502042+00:00" />
 Treat prompt resolution in the generic runner as a pure function of workflow/module location plus explicit runtime workspace roots; do not include ambient `Path.cwd()` fallback because it makes prompt selection depend on launch directory rather than run state.
 Cover retained legacy config discovery with tests for both `superloop.yaml` and `superloop.config` so the operational compatibility contract stays explicit.
+<autoloop-decisions-header version="1" block_seq="9" owner="test_author" phase_id="generic-runtime-filesystem-refactor" pair="test" turn_seq="1" run_id="run-20260418T021238Z-9ac22268" ts="2026-04-18T03:23:40.947977+00:00" />
+Pin prompt-resolution coverage at the runner boundary: tests should assert workflow-module-relative prompts win first, workspace-root prompts remain the explicit fallback, and ambient cwd prompts are ignored.
