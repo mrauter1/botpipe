@@ -20,3 +20,7 @@
 {"ts": "2026-04-18T02:43:28.778447+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "architecture-contract-freeze"}
 {"ts": "2026-04-18T02:44:30.204486+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "architecture-contract-freeze"}
 {"ts": "2026-04-18T02:44:30.217220+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "architecture-contract-freeze"}
+{"ts": "2026-04-18T02:44:30.261004+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "architecture-contract-freeze", "phase_mode": "single"}
+{"ts": "2026-04-18T02:44:30.265642+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 24, "event_type": "phase_started", "phase_id": "strict-kernel-extension-seam", "phase_mode": "single"}
+{"ts": "2026-04-18T02:44:30.266915+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "strict-kernel-extension-seam"}
+{"ts": "2026-04-18T02:44:30.267029+00:00", "run_id": "run-20260418T021238Z-9ac22268", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "strict-kernel-extension-seam"}

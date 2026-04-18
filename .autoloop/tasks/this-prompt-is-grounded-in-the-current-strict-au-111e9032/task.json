@@ -17,12 +17,12 @@
       "layered-tests-and-parity-proof"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "architecture-contract-freeze"
+    "current_phase_index": 1,
+    "current_phase_id": "strict-kernel-extension-seam"
   },
   "phase_status": {
-    "architecture-contract-freeze": "in_progress",
-    "strict-kernel-extension-seam": "planned",
+    "architecture-contract-freeze": "completed",
+    "strict-kernel-extension-seam": "in_progress",
     "generic-runtime-filesystem-refactor": "planned",
     "stdlib-and-optional-extensions": "planned",
     "workflow-migrations-and-parity-harness": "planned",
@@ -34,6 +34,19 @@
       "run_id": "run-20260418T021238Z-9ac22268",
       "status": "in_progress",
       "ts": "2026-04-18T02:28:34.376374+00:00"
+    },
+    {
+      "phase_id": "architecture-contract-freeze",
+      "run_id": "run-20260418T021238Z-9ac22268",
+      "status": "completed",
+      "ts": "2026-04-18T02:44:30.259975+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "strict-kernel-extension-seam",
+      "run_id": "run-20260418T021238Z-9ac22268",
+      "status": "in_progress",
+      "ts": "2026-04-18T02:44:30.264854+00:00"
     }
   ]
 }
