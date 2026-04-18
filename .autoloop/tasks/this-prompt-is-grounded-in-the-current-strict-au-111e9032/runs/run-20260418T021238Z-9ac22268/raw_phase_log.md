@@ -1218,3 +1218,129 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+I’m handling the test-author phase for `stdlib-and-optional-extensions`. First I’m reading the phase test artifacts and the current repository tests so I can map what is already covered, identify any remaining edge-case gaps, and then update the strategy and feedback alongside any needed test refinement.
+
+I’m validating the existing extension/stdlib test coverage against the phase contract, then I’ll add only the missing regression coverage and update the phase-local test artifacts.
+
+The current coverage already locks the reviewer-reported regressions. I’m checking the remaining git commit branches for an untested edge so the test phase adds something real instead of restating the implementation phase.
+
+I found two phase-relevant gaps worth locking: the `allow_empty=True` empty-scope git branch, and the “extensions are invisible unless declared” runtime behavior. I’m adding those tests and then I’ll update the phase-local strategy and feedback artifacts to match the actual coverage.
+
+The code changes are in. I’m recording the coverage map now so the phase artifacts reflect the actual protections, then I’ll run the focused suite and the full suite to catch any adjacency regressions.
+
+The focused extension suite passed. I’m waiting on the full repository suite to finish so the phase report can include regression confirmation instead of just local success.
+
+The full suite is green. I’m doing one last pass over the touched files and status so the final handoff stays phase-local and exact.
+
+Scope considered
+
+- Phase-local test work for `stdlib-and-optional-extensions`.
+- Changed behavior in [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) and [test_optional_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_optional_extensions.py).
+- Phase artifacts [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/feedback.md), and the current-turn block in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+What I analyzed
+
+- Existing stdlib/extension tests versus AC-1 through AC-4 for this phase.
+- The remaining untested git branch in `GitRepo.commit(..., pathspecs=())` for explicit empty commits with `allow_empty=True`.
+- Runtime proof for “extensions are invisible unless declared,” which was still only indirectly covered.
+
+What I changed
+
+- Added unit coverage in [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) for the explicit empty-commit branch when `pathspecs=()` and `allow_empty=True`.
+- Added runtime coverage in [test_optional_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_optional_extensions.py) proving undeclared workflows still get generic `events.jsonl` but create neither tracing sidecars nor automatic git commits.
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/test_strategy.md) into an explicit behavior-to-test coverage map.
+- Appended a concise test-phase summary to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/feedback.md).
+- Appended two non-obvious test-lock decisions under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+Key findings / decisions
+
+- The git empty-scope contract now has both sides pinned: no-op when unrelated staged changes exist, and explicit empty commit only when `allow_empty=True` with no staged changes.
+- Extension invisibility is now asserted at runtime, not just inferred from positive opt-in tests.
+- Validation passed:
+  - `pytest autoloop_v3/tests/unit/test_stdlib_and_extensions.py autoloop_v3/tests/runtime/test_optional_extensions.py`
+  - `pytest autoloop_v3/tests`
+- Full suite result: `104 passed`.
+
+Open issues / next step
+
+- No open issues in this phase-local test scope.
+- Next step is test-auditor review against the updated strategy, feedback, and green suite.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+I’m auditing the new stdlib/extension test coverage against the phase criteria and the current decisions ledger, then I’ll update the phase-local audit artifacts with either findings or a clean completion record.
+
+I’ve verified the new phase-local tests and the strategy artifact. I’m doing one dependency check around session-path behavior now, because that extension shares the same “explicit opt-in only” contract and I want to confirm it’s already protected at the right boundary before I mark this phase complete.
+
+The remaining concern checked out: session-path opt-in is already protected by the earlier runtime suite, so this phase doesn’t need redundant churn there. I’m marking the criteria complete and recording that the audit found no gaps in the reviewed scope.
+
+The audit artifacts are updated. I’m doing a quick readback of the final phase-local files so the completion record matches exactly what was written.
+
+Scope considered
+
+- Phase-local test audit for `stdlib-and-optional-extensions`.
+- Reviewed the changed test files:
+  - [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_stdlib_and_extensions.py)
+  - [test_optional_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_optional_extensions.py)
+- Reviewed the phase artifacts:
+  - [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/test_strategy.md)
+  - [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/feedback.md)
+  - [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/criteria.md)
+- Cross-checked the relevant tail of [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt) and the earlier session-path runtime coverage in `test_compatibility_runtime.py`.
+
+What I analyzed
+
+- Whether the new tests cover the changed git behavior on both empty-scope branches:
+  - no-op with unrelated staged changes
+  - explicit empty commit only with `allow_empty=True`
+- Whether optional extensions are proven invisible by default at runtime, not just by positive opt-in tests.
+- Whether the tests preserve the phase decisions around raw `GitDelta` semantics, tracing sidecar behavior, and workflow-declared extension APIs.
+- Focused validation run: `pytest autoloop_v3/tests/unit/test_stdlib_and_extensions.py autoloop_v3/tests/runtime/test_optional_extensions.py` passed with `13 passed`.
+
+What I reviewed
+
+- [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/criteria.md) updated to fully checked.
+- [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/stdlib-and-optional-extensions/feedback.md) appended with a Cycle 1 audit note recording no findings.
+- The strategy artifact is aligned with the actual tests and clearly calls out coverage, preserved invariants, edge cases, reliability controls, and known gaps.
+
+Key findings / decisions
+
+- No blocking or non-blocking findings in the reviewed phase-local scope.
+- The new tests materially improve regression protection by locking:
+  - the git empty-scope contract at the repo layer
+  - runtime invisibility of undeclared extensions
+- Session-path opt-in coverage remains adequately protected by the earlier runtime integration suite, so no additional phase-local duplication is needed.
+
+Open issues / next step
+
+- No open audit issues for this phase.
+- This test-audit phase is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
