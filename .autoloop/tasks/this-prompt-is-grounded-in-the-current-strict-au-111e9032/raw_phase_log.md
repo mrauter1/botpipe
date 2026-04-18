@@ -723,3 +723,54 @@ Key findings / decisions
 Open issues / next step
 - `Tracing` and `GitTracking` are still for later phases.
 - `autoloop_v1` has not yet been migrated to declare `SessionPaths(...)` directly in workflow code; the parity harness still owns that compatibility bridge for now.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+---
+I’m reviewing the `generic-runtime-filesystem-refactor` phase against the phase criteria and the recorded implementation notes. First I’m reading the active review artifacts and the changed runtime files to check intent fidelity, regression risk, and whether the new session-path surface actually lands in the final package shape.
+
+The changed runtime files are not showing up in a git diff from this review context, so I’m reading the source directly and checking it against the phase contract and the recorded decisions. After that I’ll run the runtime-focused tests myself to validate the claimed coverage.
+
+The code path that still deserves scrutiny is prompt resolution: the runner continues to include `Path.cwd()` as a search root, which can make prompt selection depend on the invocation directory instead of just workflow and runtime state. I’m running the relevant tests now, then I’ll decide whether that remains a blocking gap against the phase’s deterministic-prompt requirement.
+
+I have one blocking gap and one smaller coverage gap. I’m recording them in the phase feedback now and updating the criteria to reflect that the runtime refactor is not review-complete yet.
+
+The review artifacts are updated. I’m doing one quick readback of `criteria.md` and `feedback.md` so the final status matches the recorded findings exactly.
+
+Scope considered
+- Active phase artifacts in `.autoloop/tasks/.../generic-runtime-filesystem-refactor/`.
+- Request-relevant runtime files: `autoloop_v3/runtime/runner.py`, `autoloop_v3/runtime/stores/filesystem.py`, `autoloop_v3/extensions/session_paths.py`, and runtime tests.
+- Decisions ledger entries for runtime config compatibility and workflow-facing `SessionPaths(...)`.
+
+What I analyzed
+- The phase contract, implementation notes, and shared decisions ledger.
+- Current runner prompt/session setup, filesystem session path handling, and the new `SessionPaths` extension surface.
+- Runtime-focused validation by running `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py` (`33 passed`).
+
+What I reviewed
+- `IMP-001` blocking: `autoloop_v3/runtime/runner.py::_prepare_run_context` still includes `Path.cwd()` in `FilesystemPromptRegistry(...)`, so prompt resolution can vary by invocation directory instead of being deterministic from workflow and runtime state alone.
+- `IMP-002` non-blocking: the new compatibility coverage exercises `superloop.yaml` but not `superloop.config`, so the requested `superloop.*` coverage is still partial.
+- Updated `criteria.md` and appended both findings to `feedback.md`.
+
+Key findings / decisions
+- Blocking: the phase objective explicitly calls for deterministic prompt resolution, and the ambient `Path.cwd()` fallback leaves a concrete unintended-behavior path in the generic runner.
+- Non-blocking: the runtime code still preserves both legacy config filenames, but the test surface does not yet cover the full `superloop.*` contract.
+- Review status is not complete until the prompt-resolution issue is fixed.
+
+Open issues / next step
+- Remove the implicit `Path.cwd()` fallback from the generic runner, or make any extra search root explicit policy, then add a regression test that proves identical prompt resolution across different launch directories.
+- Extend the legacy config discovery test to include `superloop.config`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
