@@ -546,3 +546,107 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9e79-b911-7de1-8480-86b737708354
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9e79-b911-7de1-8480-86b737708354
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e79-b911-7de1-8480-86b737708354
+---
+I’m checking the current test-phase artifacts and the post-implementation test coverage first. If the strict-kernel suite already covers the intended behavior, I’ll only add the missing edge or failure-path tests and then document the coverage map in the phase artifacts.
+
+I’m checking the current kernel test coverage and the phase test artifacts, then I’ll add only the missing regression coverage that’s still justified by this phase.
+
+I’ve confirmed the phase artifacts are still mostly placeholders. I’m reading the existing extension contract tests and the engine’s bound-extension validation to add only the missing failure-path coverage before updating the test strategy.
+
+I found one remaining kernel failure path that wasn’t pinned down: `bind()` can return a malformed bound extension object, and that runtime guard wasn’t under test yet. I’m adding a narrow contract test for that path and then I’ll document the coverage map in the phase artifacts.
+
+The code change is in place. I’m updating the phase test artifacts now, then I’ll run focused pytest coverage for the strict kernel contract file to verify the new failure-path test and the surrounding extension contract suite.
+
+The new failure-path test passed. I’m running the adjacent strict-kernel unit coverage as a quick regression check so the coverage map and the actual verified scope stay aligned.
+
+Scope considered
+
+- The strict-kernel extension seam test scope only: [autoloop_v3/tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3/autoloop_v3/tests/contract/test_engine_contracts.py) plus the phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/strict-kernel-extension-seam/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/strict-kernel-extension-seam/feedback.md).
+
+What I analyzed
+
+- The existing extension lifecycle and validation coverage in `test_engine_contracts.py`, `test_validation.py`, and `test_primitives_and_stores.py`.
+- The engine’s runtime guard for malformed bound extensions in `Engine._validate_bound_extension(...)`.
+- The current phase artifacts and the latest shared decisions block in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+What I changed
+
+- Added a new contract test in [autoloop_v3/tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3/autoloop_v3/tests/contract/test_engine_contracts.py) covering the failure path where `Workflow.extensions[*].bind(...)` returns a malformed bound object missing `on_terminal()`. The test asserts the engine fails before any provider call and before any checkpoint is created.
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/strict-kernel-extension-seam/test_strategy.md) into an explicit AC-1 / AC-2 / AC-3 coverage map, with edge cases, preserved invariants, stabilization notes, and known out-of-scope gaps.
+- Appended a concise summary of the added coverage to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/strict-kernel-extension-seam/feedback.md).
+- Added one shared test decision under the latest turn header in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+Key findings / decisions
+
+- The main remaining gap in this phase was runtime validation of malformed bound extension objects; definition-time validation cannot inspect the object returned by `bind()`, so this needed explicit engine-level regression coverage.
+- The new coverage is deterministic: it uses in-memory stores, scripted providers, and temporary directories only.
+- Validation run results:
+  - `pytest autoloop_v3/tests/contract/test_engine_contracts.py` -> 20 passed
+  - `pytest autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/unit/test_primitives_and_stores.py autoloop_v3/tests/contract/test_engine_contracts.py` -> 46 passed
+
+Open issues / next step
+
+- No blocking issues in this phase-local test scope.
+- Next step is auditor review of the updated test coverage and phase artifacts.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9e79-b911-7de1-8480-86b737708354
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9e79-b911-7de1-8480-86b737708354
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e79-b911-7de1-8480-86b737708354
+---
+I’m auditing the strict-kernel test additions against the phase acceptance criteria and the latest shared decisions, then I’ll update the audit artifacts with either findings or a clean completion result.
+
+The audited suite is clean: the focused strict-kernel tests pass, the added failure-path coverage is aligned with the decisions ledger, and I don’t see a missing regression check that rises to a finding in this phase scope. I’m marking the audit artifacts complete now.
+
+Scope considered
+
+- The phase-local strict-kernel test artifacts and the request-relevant strict-kernel test files: `test_engine_contracts.py`, `test_validation.py`, and `test_primitives_and_stores.py`.
+
+What I analyzed
+
+- The active [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/strict-kernel-extension-seam/criteria.md), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/strict-kernel-extension-seam/feedback.md), [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/strict-kernel-extension-seam/test_strategy.md), and the latest shared decisions in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+- The focused strict-kernel test suite and the newly added malformed-bound-extension failure-path coverage.
+
+What I reviewed
+
+- AC-1 coverage for the narrowed canonical authoring surface and `workflow.primitives` surface.
+- AC-2 coverage for bind-once extension lifecycle behavior, structured hook payloads, snapshot isolation, and terminal notifications.
+- AC-3 coverage for strict validation, deterministic compilation/routing, required `SystemStep` handlers, typed checkpoints, required-artifact assertions, explicit sessions, and pause/resume behavior.
+- Reliability and flake risk: all reviewed coverage uses in-memory stores, scripted providers, and temp directories only.
+- Verification run: `pytest autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/unit/test_primitives_and_stores.py autoloop_v3/tests/contract/test_engine_contracts.py` -> 46 passed.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings requiring follow-up.
+- I marked all audit criteria complete and appended a `TST-000` no-findings audit note to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/strict-kernel-extension-seam/feedback.md).
+
+Open issues / next step
+
+- No open issues in this phase-local audit scope.
+- The test audit for `strict-kernel-extension-seam` can advance as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
