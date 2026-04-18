@@ -47,3 +47,50 @@ Updated [plan.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-ground
 The plan is now an implementation-ready six-phase contract: doc/ADR freeze, strict kernel refactor, generic runtime refactor, tiny `stdlib` plus optional `extensions`, workflow/parity migration, and layered parity proof. It explicitly locks in the non-obvious constraints that matter most for later turns: replace `workflow.observers` with `Workflow.extensions`, narrow the root authoring surface, keep the runtime phase-agnostic, preserve legacy `thread_id` session payload compatibility, and keep exact Autoloop-v1 session/log/git policy workflow-owned.
 
 I also validated that `phase_plan.yaml` parses and that its phase dependencies are ordered correctly.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+---
+I’m verifying the planning artifacts against the immutable request, the raw log, the current decisions ledger, and the generated plan files. I’ll check intent coverage first, then behavioral safety, then whether the phase decomposition and criteria accurately reflect any findings before I update the verifier-owned artifacts.
+
+I found two material gaps. The plan captures the overall architecture direction, but it does not yet lock down one current public config-compatibility boundary or the concrete workflow-facing extension APIs the prompt explicitly calls for, so I’m marking the plan incomplete and recording precise correction directions now.
+
+Scope considered
+- The immutable request snapshot, the raw log for clarification history, the shared decisions ledger, and the generated planning artifacts under `.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/`.
+
+What I analyzed
+- Intent coverage against the requested Book Architecture refactor, including the strict kernel, generic runtime, tiny `stdlib`, tiny `extensions`, workflow-owned parity, Autoloop-v1 parity, and Ralph correctness requirements.
+- Behavioral safety around public-surface changes, config/CLI compatibility, persisted session data, and parity-sensitive workflow behavior.
+- Phase quality in `phase_plan.yaml`, including dependency ordering, scope boundaries, acceptance criteria, and rollback coverage.
+
+What I reviewed
+- [plan.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/plan.md)
+- [phase_plan.yaml](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/phase_plan.yaml)
+- [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/feedback.md)
+- [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/criteria.md)
+- [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt)
+
+Key findings / decisions
+- Marked the plan `INCOMPLETE`.
+- Updated [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/criteria.md): only `Technical Debt` is currently satisfied.
+- Appended two blocking findings to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/feedback.md):
+- `PLAN-001`: the plan does not explicitly preserve or intentionally remove the current `superloop.*` config-file discovery behavior, which is a public config/CLI compatibility surface.
+- `PLAN-002`: the plan does not pin the requested workflow-facing optional extension APIs, especially the concrete git/session-path/tracing declaration surface and its binding through `Workflow.extensions`.
+
+Open issues / next step
+- The producer should revise the plan to make the legacy config discovery decision explicit and to add concrete workflow-facing extension interface definitions plus matching phase acceptance criteria.
+- After those corrections, the plan should be re-verified for full intent fidelity, compatibility coverage, and implementation readiness.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
