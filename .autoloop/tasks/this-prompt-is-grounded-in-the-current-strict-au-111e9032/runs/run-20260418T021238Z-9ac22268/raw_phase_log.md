@@ -294,3 +294,110 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9e6b-2316-7420-9590-985904101c64
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9e6b-2316-7420-9590-985904101c64
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e6b-2316-7420-9590-985904101c64
+---
+I’m validating the doc-freeze phase from the test side. I’ll inspect the active test artifacts, review the rewritten doc baseline coverage against the phase contract, and then tighten the repo test coverage only where the phase needs explicit regression checks.
+
+I’ve identified one useful gap in the current doc baseline: it doesn’t explicitly enforce the shared decision that removed legacy names stay confined to migration/compatibility material. I’m tightening that test now, then I’ll run the focused test slice and record the coverage map in the phase artifacts.
+
+I’m making a single targeted test refinement rather than broadening the suite: the new assertion will fail if removed legacy names leak back into active architecture docs or ADR summaries, while still allowing migration/compatibility material to discuss removals explicitly.
+
+The new check exposed an ambiguity rather than a behavior bug: the full candidate-matrix architecture record still names removed concepts when explaining rejected options. I’m narrowing the test to the public-facing docs and ADR summaries, and I’ll record that interpretation so later turns don’t oscillate on it.
+
+Scope considered
+
+- Phase-local test work for `architecture-contract-freeze`.
+- Reviewed the rewritten doc baseline, the shared decisions ledger, and the active test artifacts: `test_strategy.md` and `feedback.md`.
+- Touched only the repo test file and the allowed `.autoloop/tasks/...` test artifacts.
+
+What I analyzed
+
+- The phase contract and acceptance criteria for the documentation freeze.
+- The current baseline test in [autoloop_v3/tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- The shared decisions around `Workflow.extensions`, narrow retained compatibility, and confinement of removed legacy names.
+
+What I changed
+
+- Added one focused regression test to [autoloop_v3/tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py) so removed legacy names cannot leak back into public-facing docs or ADR summaries.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/architecture-contract-freeze/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, failure paths, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/architecture-contract-freeze/feedback.md).
+- Recorded one non-obvious test decision in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt): the full candidate-matrix `ARCHITECTURE_DECISIONS.md` is treated as the authoritative record, not the public-facing doc surface for legacy-name confinement.
+
+Key findings / decisions
+
+- The existing doc baseline was close, but it did not explicitly enforce the shared rule that removed legacy names stay out of public-facing docs and ADR summaries.
+- The candidate-matrix architecture record still legitimately discusses rejected legacy concepts; the new test excludes that file from the confinement check and documents that choice.
+- Validation passed: `pytest autoloop_v3/tests/test_architecture_baseline_docs.py` now reports 9 passing tests.
+
+Open issues / next step
+
+- No phase-local test blocker remains.
+- Later phases still need implementation-level tests once the code actually migrates from observers to `Workflow.extensions` and adds `stdlib` / `extensions` packages.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9e6b-2316-7420-9590-985904101c64
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019d9e6b-2316-7420-9590-985904101c64
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e6b-2316-7420-9590-985904101c64
+---
+I’m auditing the test-phase output for the doc-freeze phase. I’ll inspect the active test artifacts, review the updated doc-baseline test against the phase contract and shared decisions, and rerun the focused test slice before deciding whether the coverage is complete.
+
+The focused test slice passes and the coverage now matches the phase’s risk profile. I don’t have a blocking audit issue to raise, so I’m updating the phase audit artifacts to reflect a clean pass with no findings.
+
+Scope considered
+
+- Phase-local audit of the test-side output for `architecture-contract-freeze`.
+- Reviewed the active audit artifacts, shared decisions, the updated [autoloop_v3/tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3/autoloop_v3/tests/test_architecture_baseline_docs.py), and reran the focused doc baseline.
+- Kept writes restricted to the allowed test audit artifacts under `.autoloop/tasks/.../test/`.
+
+What I analyzed
+
+- The phase contract and acceptance criteria for the documentation freeze.
+- The shared decisions around `Workflow.extensions`, narrow retained compatibility, and confinement of removed legacy names.
+- The phase-local [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/architecture-contract-freeze/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/architecture-contract-freeze/feedback.md).
+
+What I reviewed
+
+- Coverage quality of the doc baseline for AC-1 through AC-3.
+- Regression protection for reintroduction of observer-era surface, broad root exports, and widened compatibility notes.
+- Reliability and determinism of the focused test slice.
+- Behavioral-intent alignment with the recorded decision that the full candidate-matrix architecture record may discuss rejected legacy concepts while public-facing docs and ADR summaries may not.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- The test baseline now covers the phase’s highest-risk regressions:
+  - extension-based strict surface markers
+  - narrow operational compatibility note
+  - active-surface legacy-name confinement
+  - ADR summary-only structure
+- Validation passed: `pytest autoloop_v3/tests/test_architecture_baseline_docs.py`.
+- I updated the audit artifacts accordingly: all criteria boxes checked and `feedback.md` now records a no-findings audit note.
+
+Open issues / next step
+
+- No phase-local audit blocker remains.
+- Later phases still need implementation-level tests once the code migrates from observers to `Workflow.extensions` and adds the new `stdlib` and `extensions` packages.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
