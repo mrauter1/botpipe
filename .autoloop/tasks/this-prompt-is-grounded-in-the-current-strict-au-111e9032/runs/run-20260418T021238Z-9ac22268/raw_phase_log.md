@@ -94,3 +94,76 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+---
+I’m addressing the verifier’s blocking gaps directly in the planning artifacts: first the current config-compatibility boundary around `superloop.*`, then the concrete workflow-facing optional extension APIs the request expects. After that I’ll revalidate the updated plan, phase criteria, feedback continuity, and this turn’s decisions block.
+
+I’ve pinned the missing decisions. The edits I’m making now will explicitly preserve current `superloop.*` config discovery as a generic runtime compatibility boundary and define the workflow-facing extension APIs the implementation must target, so later turns can’t drift into runner-only or renamed surfaces.
+
+I’ve updated the narrative plan; now I’m tightening the machine-readable phase contract so the same compatibility and interface decisions are explicit in phase scope, acceptance criteria, and rollback rather than living only in prose.
+
+The blocking gaps are patched. I’m doing a final validation pass now to make sure the prose plan, phase contract, feedback continuity, and this turn’s decisions all line up and that `phase_plan.yaml` still parses cleanly after the added interface/config coverage.
+
+One acceptance criterion introduced a YAML parser hazard because of an unquoted colon. I’m fixing that now and re-running the parse check so the phase plan stays machine-valid.
+
+Updated [plan.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+The plan now closes both verifier findings. It explicitly preserves legacy `superloop.*` config discovery as a generic runtime compatibility contract, and it pins the workflow-facing optional extension APIs the implementation must target: `GitTracking(...)`, `SessionPaths(...)`, and `Tracing(...)`, all opted into through `Workflow.extensions`. I also mirrored those decisions into the machine-readable phase contract with scope, acceptance, regression, and rollback coverage.
+
+Validation: `phase_plan.yaml` parses successfully and its dependency ordering still checks out.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9e5c-8fa4-78f2-a514-448f2903f805
+---
+The revised plan now covers the two previously blocking gaps in both prose and phase criteria. I’m marking the criteria accordingly and appending a re-review closure note to the feedback history so the next turn has a clean verification record.
+
+Scope considered
+- The immutable request snapshot, the raw log clarification history, the shared decisions ledger, and the current planning artifacts under `.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/`.
+
+What I analyzed
+- Intent coverage for the strict kernel, generic runtime, tiny `stdlib`, tiny `extensions`, workflow-owned parity, Autoloop-v1 parity, and Ralph correctness requirements.
+- Behavioral safety around public-surface narrowing, runtime config/CLI compatibility, persisted session compatibility, workflow-facing extension opt-in, and parity-sensitive workflow behavior.
+- Phase quality in `phase_plan.yaml`, including dependency ordering, acceptance criteria, and rollback/regression coverage.
+
+What I reviewed
+- [plan.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/plan.md)
+- [phase_plan.yaml](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/phase_plan.yaml)
+- [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/feedback.md)
+- [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/criteria.md)
+- [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt)
+
+Key findings / decisions
+- Marked the plan `COMPLETE`.
+- Updated [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/criteria.md) so all verification criteria are now checked.
+- Appended a closure note to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/plan/feedback.md) confirming the previous blockers are addressed.
+- Re-checked `phase_plan.yaml`; it remains parseable and dependency ordering is valid.
+
+Open issues / next step
+- No blocking findings remain in the planning artifacts.
+- The plan is ready for the next loop phase to use as the implementation contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
