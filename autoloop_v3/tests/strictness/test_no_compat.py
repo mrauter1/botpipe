@@ -16,6 +16,23 @@ def test_removed_compat_source_files_do_not_exist() -> None:
     assert not (PACKAGE_ROOT / "workflow" / "observers.py").exists()
 
 
+def test_workflow_and_runtime_sources_do_not_reintroduce_removed_compat_symbols() -> None:
+    source_roots = (
+        PACKAGE_ROOT / "workflow",
+        PACKAGE_ROOT / "runtime",
+    )
+    corpus = "\n".join(_read(path) for root in source_roots for path in sorted(root.rglob("*.py")))
+
+    for forbidden in (
+        "Verdict",
+        "SessionLifecycle",
+        "on_verdict",
+        "workflow.observers",
+        "workflow.compat",
+    ):
+        assert forbidden not in corpus
+
+
 def test_runtime_modules_remain_phase_agnostic() -> None:
     runtime_sources = "\n".join(_read(path) for path in sorted((PACKAGE_ROOT / "runtime").rglob("*.py")))
 

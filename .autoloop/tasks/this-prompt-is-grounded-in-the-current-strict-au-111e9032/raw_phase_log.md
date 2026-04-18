@@ -1680,3 +1680,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ec5-7e15-7f10-a5a7-bf2e41ba7e8d
+---
+I’m treating this as the test-author closeout for the layered proof phase. First I’m reading the phase-local test artifacts and the current strictness/parity suite so I can update the behavior-to-test map and decide whether any additional repo tests are still needed.
+
+I’ve confirmed the phase artifacts are still mostly skeletal. I’m making one small test refinement now so the strategy can point to a concrete no-compat source-scan in addition to the behavior tests, then I’ll update the phase-local strategy and feedback artifacts and rerun the targeted suite.
+
+I’ve made the minimal test-side update: one additional source-scan assertion plus the required strategy/feedback artifacts. I’m validating the targeted strictness file and the package suite now so the strategy points to reproducible passing commands.
+
+Scope considered
+
+- Phase-local test artifacts for `layered-tests-and-parity-proof`, the current `autoloop_v3` package test matrix, and the new strictness test file [test_no_compat.py](/home/rauter/autoloop_v3/autoloop_v3/tests/strictness/test_no_compat.py).
+
+What I analyzed
+
+- Read the phase-local [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/layered-tests-and-parity-proof/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/layered-tests-and-parity-proof/feedback.md), and shared [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+- Collected the package-local suite to map behavior claims to concrete tests.
+- Verified that removed compat symbols are absent from `autoloop_v3.workflow` and `autoloop_v3.runtime` sources.
+
+What I changed
+
+- Refined [test_no_compat.py](/home/rauter/autoloop_v3/autoloop_v3/tests/strictness/test_no_compat.py) with `test_workflow_and_runtime_sources_do_not_reintroduce_removed_compat_symbols`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/layered-tests-and-parity-proof/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, failure paths, validation commands, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/test/phases/layered-tests-and-parity-proof/feedback.md).
+- Appended one test-side constraint to [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt) under the current turn header.
+
+Key findings / decisions
+
+- Kept the new source scan narrow to `autoloop_v3.workflow` and `autoloop_v3.runtime` to avoid false positives from docs, tests, and repo-root workflow comments.
+- Validation is clean for the updated package-local proof matrix:
+  - `pytest -q autoloop_v3/tests/strictness/test_no_compat.py` -> `3 passed`
+  - `pytest -q autoloop_v3/tests` -> `108 passed`
+
+Open issues / next step
+
+- No open test-author issues for this phase. The phase-local strategy and feedback artifacts are now populated and aligned with the current layered suite.
