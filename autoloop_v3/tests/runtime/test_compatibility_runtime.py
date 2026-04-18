@@ -432,8 +432,9 @@ def test_resolve_runtime_config_merges_global_local_and_cli(monkeypatch, tmp_pat
         discover_config_file(workspace_root)
 
 
-def test_discover_config_file_preserves_legacy_superloop_names(tmp_path: Path):
-    legacy = tmp_path / "superloop.yaml"
+@pytest.mark.parametrize("filename", ["superloop.yaml", "superloop.config"])
+def test_discover_config_file_preserves_legacy_superloop_names(tmp_path: Path, filename: str):
+    legacy = tmp_path / filename
     legacy.write_text("{}", encoding="utf-8")
 
     assert discover_config_file(tmp_path) == legacy
@@ -695,6 +696,67 @@ class CustomSessionPathsWorkflow(Workflow):
     assert result.terminal == "SUCCESS"
     assert (run_dir / "custom-sessions" / "phase-a" / "main.json").exists()
     assert not (run_dir / "sessions" / "scopes" / "phase-a" / "main.json").exists()
+
+
+def test_runner_prompt_resolution_is_independent_of_current_working_directory(monkeypatch, tmp_path: Path):
+    workflow_home = tmp_path / "workflow-home"
+    workflow_home.mkdir()
+    workflow_prompt = workflow_home / "shared" / "ask.md"
+    workflow_prompt.parent.mkdir(parents=True)
+    workflow_prompt.write_text("workflow prompt\n", encoding="utf-8")
+
+    workflow_file = workflow_home / "cwd_independent_workflow.py"
+    workflow_file.write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import LLMStep, SUCCESS, Workflow
+from workflow.primitives import Outcome
+
+
+class CwdIndependentWorkflow(Workflow):
+    class State(BaseModel):
+        pass
+
+    ask = LLMStep(name="ask", producer="shared/ask.md")
+    entry = ask
+    transitions = {ask: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_ask(state: State, outcome: Outcome, artifacts):
+        return state
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    cwd_a = tmp_path / "cwd-a"
+    cwd_b = tmp_path / "cwd-b"
+    for cwd_dir, body in ((cwd_a, "cwd a prompt\n"), (cwd_b, "cwd b prompt\n")):
+        prompt_file = cwd_dir / "shared" / "ask.md"
+        prompt_file.parent.mkdir(parents=True)
+        prompt_file.write_text(body, encoding="utf-8")
+
+    provider_a = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="done\n", tag="done")])
+    monkeypatch.chdir(cwd_a)
+    run_workflow(
+        workflow_file,
+        provider=provider_a,
+        options=RunnerOptions(root=tmp_path / "runtime-a", task_id="cwd-task-a", request_text="Ship it"),
+    )
+
+    provider_b = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="done\n", tag="done")])
+    monkeypatch.chdir(cwd_b)
+    run_workflow(
+        workflow_file,
+        provider=provider_b,
+        options=RunnerOptions(root=tmp_path / "runtime-b", task_id="cwd-task-b", request_text="Ship it"),
+    )
+
+    assert provider_a.calls[0].prompt_path == str(workflow_prompt)
+    assert provider_b.calls[0].prompt_path == str(workflow_prompt)
 
 
 def test_runner_rejects_multiple_declared_session_path_strategies_before_creating_a_run(tmp_path: Path):

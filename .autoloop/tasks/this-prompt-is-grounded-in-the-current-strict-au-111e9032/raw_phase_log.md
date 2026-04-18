@@ -774,3 +774,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9e90-5dae-7311-acc0-e1b03d2c0bc8
+---
+I’m addressing the verifier feedback for `generic-runtime-filesystem-refactor`. First I’m reading the recorded findings and re-checking the runner prompt-resolution path plus the legacy config discovery tests so I can make the smallest safe fix set.
+
+I’ve confirmed the verifier’s two points are the only open items in scope. I’m fixing them directly now: remove the ambient `Path.cwd()` prompt fallback from the runner and add explicit tests for both deterministic prompt resolution across launch directories and both legacy `superloop.*` config filenames.
+
+The fixes are in. I’m re-running the runtime tests first because the changes touch prompt lookup and config discovery, then I’ll run the full suite to catch any regressions from removing the cwd fallback.
+
+The runtime subset is green with the new tests. I’m waiting on the full suite now; if that stays clean I’ll do a final diff pass, update the notes with the new validation result, and close the phase.
+
+The full suite passed. I’m doing a final status check now, and I’ll restore any generated `__pycache__` noise again so the remaining diff stays limited to source and phase artifacts.
+
+The only extra diff noise is generated `__pycache__` files from the test runs. I’m restoring those again so the final working set stays limited to the source edits and phase artifacts.
+
+I’m making one small bookkeeping correction in the phase notes so the artifact accurately lists itself among the files changed. After that the implementation state is final.
+
+Scope considered
+- Reviewer findings `IMP-001` and `IMP-002`, the active phase artifacts, and the request-relevant runtime surfaces in [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py:135) and [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py:435).
+- Unrelated untracked repo-root files remained out of scope.
+
+What I analyzed
+- Verified that the only ambient prompt search root was `Path.cwd()` in the generic runner.
+- Re-checked legacy config discovery coverage to confirm the missing case was `superloop.config`, not the runtime behavior itself.
+
+What I changed
+- Removed the generic runner’s cwd prompt fallback, so prompt resolution now uses only workflow/module-relative and explicit runtime roots in [runner.py](/home/rauter/autoloop_v3/autoloop_v3/runtime/runner.py:135).
+- Extended legacy config discovery coverage to both `superloop.yaml` and `superloop.config`, and added a regression test proving prompt resolution is independent of the current working directory in [test_compatibility_runtime.py](/home/rauter/autoloop_v3/autoloop_v3/tests/runtime/test_compatibility_runtime.py:435).
+- Appended the prompt-resolution constraint under the current decision header in `decisions.txt` and refreshed [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/generic-runtime-filesystem-refactor/implementation_notes.md:1).
+
+Key findings / decisions
+- Prompt lookup is now a function of explicit runtime inputs and workflow-relative roots, not the launch directory.
+- Legacy `superloop.*` coverage is now explicit for both retained filenames.
+- Validation performed: `pytest -q autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py` and `pytest -q`. Current suite result: `272 passed`.
+
+Open issues / next step
+- No remaining producer-side issues in this phase.
+- Next step is verifier re-review so `criteria.md` and `feedback.md` can be cleared against the updated runtime behavior.

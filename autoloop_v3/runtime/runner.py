@@ -142,7 +142,7 @@ def _prepare_run_context(compiled: CompiledWorkflow, options: RunnerOptions) -> 
         run_workspace=run,
         session_store=FilesystemSessionStore(run.run_dir, path_strategy=path_strategy),
         checkpoint_store=FilesystemCheckpointStore(run.checkpoint_file, compiled.state_cls),
-        prompt_registry=FilesystemPromptRegistry(workflow_parent, workspace.root, Path.cwd()),
+        prompt_registry=FilesystemPromptRegistry(workflow_parent, workspace.root),
         logger=EventLogger(run.run_id, run.events_file),
     )
 
