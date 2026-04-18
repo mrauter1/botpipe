@@ -13,6 +13,7 @@ from ...workflow.extensions import StepFinish, StepStart, TerminalFinish
 class GitChange:
     """One raw repository change."""
 
+    # Raw two-column git porcelain v1 XY status.
     status: str
     path: str
     original_path: str | None = None

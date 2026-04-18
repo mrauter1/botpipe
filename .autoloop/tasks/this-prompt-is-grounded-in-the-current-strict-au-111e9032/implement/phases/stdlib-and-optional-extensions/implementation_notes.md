@@ -31,16 +31,20 @@
 - `TracingConfig`
 - `GitTracking`
 - `GitTrackingConfig`
+- `GitChange.status`
 - `GitPolicy`
 - `GitCommitPlan`
 - `GitDelta`
 - `GitRepo`
+- `GitRepo.raw_delta(...)`
+- `GitRepo.commit(...)`
 
 ## Checklist mapping
 - Milestone 4 / AC-1: added the requested tiny `stdlib` modules only, with pure helper behavior that compiles down to strict workflow primitives.
 - Milestone 4 / AC-2: added only the requested optional extension families and kept them workflow-declared and invisible by default through `Workflow.extensions`.
 - Milestone 4 / AC-3: separated raw git repo inspection, delta filtering, and workflow-owned commit policy, then covered that split with unit tests.
 - Milestone 4 / AC-4: added runtime tests that prove `Tracing(...)` and `GitTracking(...)` activate only when explicitly declared on the workflow.
+- Reviewer feedback `IMP-001` / `IMP-002`: fixed empty-selected-scope git commits so they no-op instead of committing unrelated staged changes, and preserved raw two-column git porcelain status semantics in `GitDelta`.
 
 ## Assumptions
 - `track_task_workspace_artifacts=True` scopes git commits to the task workspace root (`binding.task_folder`), which includes nested run artifacts because the generic run directory lives under that root.
@@ -50,11 +54,14 @@
 - `events.jsonl` remains the generic always-on history artifact.
 - `SessionPaths(...)` remains the existing explicit session-path opt-in surface.
 - `stdlib` imports only standard library modules plus `autoloop_v3.workflow` surfaces.
+- Git policies still receive raw repository delta objects before any commit-scope narrowing is applied.
 
 ## Intended behavior changes
 - Workflows can now import and use the tiny stdlib helpers instead of repeating small prompt/control boilerplate.
 - Workflows can now opt into tracing sidecar output with `Tracing(...)`.
 - Workflows can now opt into generic git tracking with workflow-owned commit policy via `GitTracking(...)`.
+- Empty selected git scope is now a safe no-op unless the plan is an explicit empty commit with nothing staged.
+- `GitChange.status` now preserves git porcelain v1 `XY` semantics so policies can distinguish staged-only vs unstaged-only changes.
 
 ## Known non-changes
 - No workflow-specific git policy was added to the reusable git extension.

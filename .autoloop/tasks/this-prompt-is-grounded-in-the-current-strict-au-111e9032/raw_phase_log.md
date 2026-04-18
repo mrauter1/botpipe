@@ -1104,3 +1104,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+I’m addressing the reviewer’s two git findings in this phase. First I’m re-reading the feedback and the current git extension code so I can fix the empty-pathspec commit leak and preserve raw git status semantics without broadening the change beyond the optional extension surface.
+
+The fix is narrow. I’m updating the git extension in two places only: preserve the raw two-column porcelain status in `raw_delta()`, and make empty scoped commits a true no-op unless the plan is an actual empty commit with nothing staged. Then I’ll add direct regression tests for both cases and rerun the full `autoloop_v3` suite.
+
+I found one adjacent regression surface while fixing `IMP-001`: the current `commit()` code path conflates “no selected paths” with “commit whatever is staged”. I’m keeping the fix narrower than that broad behavior question by making empty selected scope a no-op and leaving the stricter out-of-scope staged-change rejection untouched for explicitly selected pathspecs.
+
+I’ve patched the git extension and added direct regression tests at the repo layer for both reviewer findings. I’m running those first, then I’ll rerun the full `autoloop_v3` suite to check for any knock-on effects in the optional extension path.
+
+The git behavior fix itself held; the targeted failure is just a newline mismatch in the new regression test helper. I’m tightening that assertion and rerunning before I move to the full suite.
+
+The targeted fixes passed. I’m waiting on the rest of the suite now, then I’ll update the phase notes and the turn-local decisions block with the two non-obvious git constraints that came out of the reviewer feedback.
+
+I’m at the bookkeeping pass now. I’m recording the two non-obvious git constraints from the fix, then I’ll clean the generated `__pycache__` noise so the phase diff stays limited to the actual source/test changes.
+
+Scope considered
+
+- Active phase `stdlib-and-optional-extensions` only.
+- Reviewer findings in [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/feedback.md), limited to the git extension path.
+- Source/test files touched: [policy.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/git/policy.py), [repo.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/git/repo.py), [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), plus phase notes and decisions.
+
+What I analyzed
+
+- `GitRepo.raw_delta()` status parsing against the phase requirement to preserve raw delta semantics.
+- `GitRepo.commit()` behavior when scoped filtering yields `pathspecs=()`, especially with unrelated staged changes already in the index.
+- Existing unit/runtime git tests to confirm the reviewer’s two failure modes and to place regression coverage at the repo layer.
+
+What I changed
+
+- Preserved raw git porcelain v1 `XY` status in [GitRepo.raw_delta()](/home/rauter/autoloop_v3/autoloop_v3/extensions/git/repo.py:35) by stopping the status-token collapsing.
+- Tightened [GitRepo.commit()](/home/rauter/autoloop_v3/autoloop_v3/extensions/git/repo.py:50) so an empty selected scope no-ops instead of committing unrelated pre-staged changes; explicit empty commits still work only when `allow_empty=True` and nothing is staged.
+- Added repo-level regression tests in [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) for:
+  - empty selected scope with unrelated staged changes
+  - staged-only vs unstaged-only raw status semantics
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/implementation_notes.md) and appended the non-obvious git constraints under the current turn header in [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+Key findings / decisions
+
+- `GitChange.status` now intentionally preserves the raw two-column `XY` token so workflow-owned policies can distinguish staged-only, unstaged-only, and mixed changes.
+- `commit(..., pathspecs=())` is treated as “no selected scope”, not “commit whatever is staged”.
+- I left the stricter out-of-scope staged-change rejection intact for non-empty selected pathspecs; that behavior was not part of the reviewer findings and I did not broaden the change.
+
+Open issues / next step
+
+- No open implementation issues from this review round.
+- Validation passed:
+  - `pytest autoloop_v3/tests/unit/test_stdlib_and_extensions.py autoloop_v3/tests/runtime/test_optional_extensions.py`
+  - `pytest autoloop_v3/tests` with `102 passed`
+- Next step is verifier re-review of this phase.

@@ -171,6 +171,60 @@ def test_git_repo_commit_scope_uses_filtered_delta_without_rewriting_raw_delta(t
     assert {change.path for change in repo.raw_delta().changes} == {"README.md"}
 
 
+def test_git_repo_commit_ignores_empty_selected_scope_when_unrelated_changes_are_pre_staged(tmp_path: Path) -> None:
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    _git(repo_root, "init")
+    _git(repo_root, "config", "user.email", "autoloop@example.com")
+    _git(repo_root, "config", "user.name", "Autoloop Tests")
+    (repo_root / "README.md").write_text("base\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+    _git(repo_root, "commit", "-m", "baseline")
+
+    (repo_root / "README.md").write_text("staged outside scope\n", encoding="utf-8")
+    _git(repo_root, "add", "README.md")
+
+    repo = GitRepo.discover(repo_root)
+    assert repo is not None
+
+    commit_sha = repo.commit(GitCommitPlan(message="should-not-commit"), pathspecs=())
+
+    assert commit_sha is None
+    assert _git(repo_root, "log", "-1", "--pretty=%s").strip() == "baseline"
+    assert repo.staged_paths() == ("README.md",)
+
+
+def test_git_repo_raw_delta_preserves_two_column_git_status_semantics(tmp_path: Path) -> None:
+    staged_repo = tmp_path / "staged"
+    staged_repo.mkdir()
+    _git(staged_repo, "init")
+    _git(staged_repo, "config", "user.email", "autoloop@example.com")
+    _git(staged_repo, "config", "user.name", "Autoloop Tests")
+    staged_file = staged_repo / "file.txt"
+    staged_file.write_text("base\n", encoding="utf-8")
+    _git(staged_repo, "add", "file.txt")
+    _git(staged_repo, "commit", "-m", "baseline")
+    staged_file.write_text("staged\n", encoding="utf-8")
+    _git(staged_repo, "add", "file.txt")
+
+    unstaged_repo = tmp_path / "unstaged"
+    unstaged_repo.mkdir()
+    _git(unstaged_repo, "init")
+    _git(unstaged_repo, "config", "user.email", "autoloop@example.com")
+    _git(unstaged_repo, "config", "user.name", "Autoloop Tests")
+    unstaged_file = unstaged_repo / "file.txt"
+    unstaged_file.write_text("base\n", encoding="utf-8")
+    _git(unstaged_repo, "add", "file.txt")
+    _git(unstaged_repo, "commit", "-m", "baseline")
+    unstaged_file.write_text("unstaged\n", encoding="utf-8")
+
+    staged_delta = GitRepo.discover(staged_repo).raw_delta()
+    unstaged_delta = GitRepo.discover(unstaged_repo).raw_delta()
+
+    assert staged_delta.changes[0].status == "M "
+    assert unstaged_delta.changes[0].status == " M"
+
+
 def _git(cwd: Path, *args: str) -> str:
     completed = subprocess.run(
         ["git", "-C", str(cwd), *args],

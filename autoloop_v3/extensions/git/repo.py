@@ -38,7 +38,7 @@ class GitRepo:
         for line in output.splitlines():
             if not line:
                 continue
-            status = line[:2].replace(" ", "") or line[:2]
+            status = line[:2]
             path_data = line[3:]
             original_path = None
             path = path_data
@@ -48,10 +48,18 @@ class GitRepo:
         return GitDelta(tuple(changes))
 
     def commit(self, plan: GitCommitPlan, *, pathspecs: Sequence[str]) -> str | None:
-        if pathspecs:
-            self._git("add", "--", *pathspecs)
+        selected_paths = tuple(path for path in pathspecs if path)
+        if selected_paths:
+            self._git("add", "--", *selected_paths)
         staged_paths = self.staged_paths()
-        if pathspecs and self._staged_paths_outside_scope(staged_paths, pathspecs):
+        if not selected_paths:
+            if staged_paths:
+                return None
+            if not plan.allow_empty:
+                return None
+            self._git("commit", "--allow-empty", "-m", plan.message)
+            return self.head()
+        if self._staged_paths_outside_scope(staged_paths, selected_paths):
             raise GitRepoError("refusing to commit staged changes outside the selected git tracking scope")
         if not staged_paths and not plan.allow_empty:
             return None
