@@ -494,3 +494,55 @@ Open issues / next step
 
 - No blocker in this phase.
 - The next phase should build the generic runtime/stdlib/extension packages on top of this seam and move workflow-facing optional extensions from harness composition toward explicit workflow declarations where the plan requires it.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9e79-b911-7de1-8480-86b737708354
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9e79-b911-7de1-8480-86b737708354
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9e79-b911-7de1-8480-86b737708354
+---
+I’m reviewing the strict-kernel phase against the active criteria, the shared decisions ledger, and the actual code diffs now. I’ll inspect the changed kernel/runtime/parity files, verify the acceptance criteria, then update the phase `criteria.md` and `feedback.md` with concrete findings only.
+
+The worktree reports the expected source changes, but `git diff` didn’t return content in this shell. I’m reading the changed files directly now to verify the actual end state instead of trusting the patch summary.
+
+The kernel shape looks consistent, and the runtime/parity adapter changes are deliberate. I’m doing one last sweep for prohibited compat symbols and observer-era leakage in live code before I decide whether there are any blocking findings.
+
+The reviewed code satisfies the phase contract as written. I’m marking the criteria complete and recording that there were no blocking or non-blocking findings in the reviewed scope.
+
+Scope considered
+
+- The changed strict-kernel files, the repo-root `workflow` shim, the minimal runner/parity adapter changes justified by observer removal, the shared decisions ledger, and the active phase artifacts.
+
+What I analyzed
+
+- The end-state code in `autoloop_v3/workflow/*`, `workflow/*`, `autoloop_v3/runtime/runner.py`, `autoloop_v3/workflows/autoloop_v1_parity.py`, and the updated contract/unit/runtime tests.
+- The active `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I reviewed
+
+- AC-1: canonical authoring surface narrowing and `workflow.primitives` surface.
+- AC-2: extension declaration, bind-once behavior, lifecycle event shape, and state/routing isolation.
+- AC-3: strict validation/compilation/engine behavior, checkpointing, required-artifact assertions, routing, and resume behavior.
+- Validation evidence: `pytest autoloop_v3/tests/unit/test_primitives_and_stores.py autoloop_v3/tests/unit/test_validation.py autoloop_v3/tests/contract/test_engine_contracts.py autoloop_v3/tests/runtime/test_compatibility_runtime.py autoloop_v3/tests/runtime/test_workflow_integration_parity.py` and `pytest autoloop_v3/tests`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings in reviewed scope.
+- I updated the phase artifacts so `criteria.md` is fully checked and `feedback.md` records that the reviewed diff satisfies AC-1, AC-2, and AC-3.
+
+Open issues / next step
+
+- No open issues for this phase.
+- The phase can advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
