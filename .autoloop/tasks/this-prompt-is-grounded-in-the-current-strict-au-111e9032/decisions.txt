@@ -27,3 +27,7 @@ Treat prompt resolution in the generic runner as a pure function of workflow/mod
 Cover retained legacy config discovery with tests for both `superloop.yaml` and `superloop.config` so the operational compatibility contract stays explicit.
 <autoloop-decisions-header version="1" block_seq="9" owner="test_author" phase_id="generic-runtime-filesystem-refactor" pair="test" turn_seq="1" run_id="run-20260418T021238Z-9ac22268" ts="2026-04-18T03:23:40.947977+00:00" />
 Pin prompt-resolution coverage at the runner boundary: tests should assert workflow-module-relative prompts win first, workspace-root prompts remain the explicit fallback, and ambient cwd prompts are ignored.
+<autoloop-decisions-header version="1" block_seq="10" owner="implementer" phase_id="stdlib-and-optional-extensions" pair="implement" turn_seq="1" run_id="run-20260418T021238Z-9ac22268" ts="2026-04-18T03:26:28.936253+00:00" />
+Keep git raw repository inspection in `autoloop_v3.extensions.git.repo` and commit-scope narrowing in `autoloop_v3.extensions.git.filters`; workflow policies receive the raw `GitDelta`, and filtering happens only when executing commit plans.
+Interpret `GitTrackingConfig(track_task_workspace_artifacts=True)` as scoping commits to `binding.task_folder`, which intentionally includes nested run artifacts because the generic run workspace lives under the task workspace root.
+Keep tracing as an explicit run-relative JSONL sidecar written by `Tracing(...)`; `events.jsonl` remains the always-on generic runtime history and is not replaced or widened by tracing.
