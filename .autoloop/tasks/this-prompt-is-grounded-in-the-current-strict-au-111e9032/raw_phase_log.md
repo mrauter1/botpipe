@@ -1048,3 +1048,59 @@ Open issues / next step
 - No blocking issues in this phase.
 - Validation: `pytest autoloop_v3/tests` passed with `100 passed`.
 - Next step is the workflow migration phase: wire concrete Autoloop-v1 and Ralph usage onto these new stdlib/extension surfaces where appropriate.
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/AutoSac/.venv/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019d9ea0-277c-7d40-8d8f-4cd7a7aae2a8
+---
+I’m reviewing the `stdlib-and-optional-extensions` phase changes against the phase contract and the recorded decisions. First I’m reading the changed source and the phase artifacts, then I’ll validate the behavior and update only the phase-local reviewer files.
+
+I’ve got the phase artifacts and the stated implementation intent. I’m reading the new `stdlib`, `tracing`, and `git` modules plus their tests now, with special attention to whether they stay optional, whether stdlib crosses the workflow boundary, and whether git tracking can create unintended repo side effects.
+
+I found one suspicious git path: if task-scope filtering produces an empty delta but the repo already has unrelated staged changes, `GitRepo.commit()` may still commit those staged changes because it treats `pathspecs=()` as “commit whatever is staged”. I’m reproducing that directly before I write the finding.
+
+I found a second potential git issue in the raw delta representation itself. The implementation strips the two-column porcelain status to a single collapsed token, which means policies can no longer distinguish staged-only, unstaged-only, and mixed changes. I’m confirming that behavior directly because the phase plan explicitly called out “don’t change raw delta semantics.”
+
+I have two blocking findings and they’re both in the git path, not the stdlib or tracing path. I’m recording them in the phase feedback and leaving the phase incomplete because both issues can commit or classify repo changes incorrectly.
+
+The current tests don’t catch either git issue, so I’m not relying on a green suite here. I verified both behaviors directly: one script shows `commit(..., pathspecs=())` will commit unrelated staged changes, and another shows staged-only and unstaged-only changes both collapse to `status == "M"`.
+
+Scope considered
+
+- Phase-local review for `stdlib-and-optional-extensions`.
+- Changed source under `autoloop_v3/stdlib/*`, `autoloop_v3/extensions/*`, and the new tests.
+- Phase artifacts [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/criteria.md), [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/feedback.md), and the shared [decisions.txt](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/decisions.txt).
+
+What I analyzed
+
+- The new stdlib helpers, tracing extension, session-path surface, and git declaration/policy/filter/repo/runtime split.
+- The phase plan and decision entries that require raw git delta semantics to stay separate from commit-eligibility filtering.
+- Direct reproductions of the new git behavior in temporary repos, beyond the passing tests.
+
+What I reviewed
+
+- [feedback.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/feedback.md) now contains two blocking findings: `IMP-001` and `IMP-002`.
+- [criteria.md](/home/rauter/autoloop_v3/.autoloop/tasks/this-prompt-is-grounded-in-the-current-strict-au-111e9032/implement/phases/stdlib-and-optional-extensions/criteria.md) remains with all boxes unchecked because the blocking findings materially affect correctness, safety, and conformance to the phase contract.
+
+Key findings / decisions
+
+- `IMP-001` blocking: [autoloop_v3/extensions/git/repo.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/git/repo.py:50) will commit unrelated staged changes when task-scope filtering produces `pathspecs=()`. That breaks the promised workflow-owned git scope boundary.
+- `IMP-002` blocking: [autoloop_v3/extensions/git/repo.py](/home/rauter/autoloop_v3/autoloop_v3/extensions/git/repo.py:35) collapses Git porcelain `XY` status into stripped tokens like `"M"`, so workflow policies lose staged-vs-unstaged semantics even though the phase plan explicitly requires raw delta semantics to remain intact.
+
+Open issues / next step
+
+- The implementer needs to fix both git issues and add regression coverage for them, then rerun the phase review.
+- The stdlib and tracing additions look structurally aligned; the current blocker is confined to the git extension path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
