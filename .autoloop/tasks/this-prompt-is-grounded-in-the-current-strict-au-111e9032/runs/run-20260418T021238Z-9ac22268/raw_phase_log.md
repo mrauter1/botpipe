@@ -167,3 +167,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260418T021238Z-9ac22268 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=architecture-contract-freeze,strict-kernel-extension-seam,generic-runtime-filesystem-refactor,stdlib-and-optional-extensions,workflow-migrations-and-parity-harness,layered-tests-and-parity-proof
+explicit=True
+current_phase_index=0
