@@ -341,6 +341,54 @@ def test_extensions_receive_isolated_snapshots_and_cannot_mutate_execution_state
     assert result.state.seen == "done"
 
 
+def test_malformed_bound_extension_fails_before_any_step_executes(tmp_path: Path):
+    class BrokenExtension:
+        def bind(self, binding: RunBinding):
+            class Bound:
+                def before_step(self, event: StepStart) -> None:
+                    return None
+
+                def after_step(self, event: StepFinish) -> None:
+                    return None
+
+            return Bound()
+
+    class BrokenWorkflow(Workflow):
+        class State(BaseModel):
+            pass
+
+        extensions = (BrokenExtension(),)
+        ask = LLMStep(name="ask", producer="ask.md")
+        entry = ask
+        transitions = {ask: {"done": SUCCESS}}
+
+        @staticmethod
+        def on_ask(state: State, outcome: Outcome, artifacts):
+            return state
+
+    task_folder, run_folder = _workspace(tmp_path)
+    provider = ScriptedLLMProvider(llm_turns=[Outcome(raw_output="ok", tag="done")])
+    checkpoint_store = InMemoryCheckpointStore()
+    engine = Engine(
+        BrokenWorkflow,
+        provider=provider,
+        session_store=InMemorySessionStore(),
+        checkpoint_store=checkpoint_store,
+    )
+
+    with pytest.raises(WorkflowExecutionError, match=r"without callable on_terminal\(\)"):
+        engine.run(
+            task_id="task-1",
+            run_id="run-1",
+            task_folder=task_folder,
+            run_folder=run_folder,
+            root=tmp_path,
+        )
+
+    assert provider.calls == []
+    assert checkpoint_store.load() is None
+
+
 def test_system_step_contract_bypasses_middleware(tmp_path: Path):
     class SystemWorkflow(Workflow):
         class State(BaseModel):
