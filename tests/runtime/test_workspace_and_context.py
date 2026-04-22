@@ -1,11 +1,29 @@
 from __future__ import annotations
 
+import importlib
 import json
+import sys
 from pathlib import Path
 
+import pytest
+
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.runtime.runner import RunnerOptions, run_workflow
+from autoloop_v3.runtime.runner import RunnerOptions, run_workflow, run_workflow_package
 from autoloop_v3.workflow.primitives import Outcome
+
+
+def _clear_workflow_modules() -> None:
+    importlib.invalidate_caches()
+    for name in list(sys.modules):
+        if name == "workflows" or name.startswith("workflows."):
+            sys.modules.pop(name, None)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_generated_workflow_modules():
+    _clear_workflow_modules()
+    yield
+    _clear_workflow_modules()
 
 
 def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tmp_path: Path) -> None:
@@ -254,6 +272,152 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
 
 
+def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_records_child_metadata(tmp_path: Path) -> None:
+    _write_child_success_workflow_package(tmp_path)
+    _write_parent_class_invoker_workflow_package(tmp_path)
+
+    result = run_workflow_package(
+        "parent_class",
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    request.artifacts.child_dump.write_text(
+                        json.dumps(
+                            {
+                                "answer": request.context.answer,
+                                "workflow_params": request.context.workflow_params,
+                                "session_id": request.session.session_id if request.session is not None else None,
+                            }
+                        ),
+                    ),
+                    Outcome(raw_output="child complete\n", tag="done", payload={"summary": "child complete"}),
+                )[1]
+            ]
+        ),
+        options=RunnerOptions(root=tmp_path, task_id="subworkflow-class-task", request_text="Parent request"),
+    )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-class-task"
+    parent_run_dir = next((task_dir / "wf_parent_class" / "runs").iterdir())
+    child_run_dir = next((task_dir / "wf_child_success" / "runs").iterdir())
+    parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
+    child_payload = json.loads((child_run_dir / "child.json").read_text(encoding="utf-8"))
+    child_parent = json.loads((child_run_dir / "parent.json").read_text(encoding="utf-8"))
+    child_records = [
+        json.loads(line)
+        for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+    assert result.terminal == "SUCCESS"
+    assert parent_payload["child_workflow"] == "child_success"
+    assert parent_payload["child_status"] == "success"
+    assert parent_payload["child_last_event"] == "done"
+    assert parent_payload["child_output_metadata"] == {"summary": "child complete"}
+    assert Path(parent_payload["child_run_folder"]) == child_run_dir
+    assert Path(parent_payload["child_request_file"]) == child_run_dir / "request.md"
+    assert Path(parent_payload["child_artifacts"]["child_dump"]) == child_run_dir / "child.json"
+    assert (child_run_dir / "request.md").read_text(encoding="utf-8") == "Run child from class\n"
+    assert child_payload["answer"] is None
+    assert child_payload["workflow_params"] == {"mode": "strict"}
+    assert (child_run_dir / "sessions" / "main.json").exists()
+    assert child_parent["workflow_name"] == "parent_class"
+    assert child_parent["run_id"] == parent_run_dir.name
+    assert child_records == [
+        {
+            "workflow_name": "child_success",
+            "run_id": child_run_dir.name,
+            "terminal": "SUCCESS",
+            "status": "success",
+            "last_event": {"tag": "done", "reason": "", "question": None},
+            "output_metadata": {"summary": "child complete"},
+            "output_artifacts": {"child_dump": str(child_run_dir / "child.json")},
+            "task_folder": str(task_dir),
+            "workflow_folder": str(task_dir / "wf_child_success"),
+            "run_folder": str(child_run_dir),
+            "package_folder": str(tmp_path / "workflows" / "child_success"),
+            "request_file": str(child_run_dir / "request.md"),
+            "run_meta_file": str(child_run_dir / "run.json"),
+            "events_file": str(child_run_dir / "events.jsonl"),
+            "checkpoint_file": str(child_run_dir / "checkpoint.json"),
+            "sessions_dir": str(child_run_dir / "sessions"),
+            "trace_file": str(child_run_dir / "trace.jsonl"),
+            "raw_dir": str(child_run_dir / "raw"),
+            "parent_file": str(child_run_dir / "parent.json"),
+            "ts": child_records[0]["ts"],
+        }
+    ]
+
+
+def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inheriting_parent_answers(tmp_path: Path) -> None:
+    _write_child_pause_workflow_package(tmp_path)
+    _write_parent_name_invoker_workflow_package(tmp_path)
+
+    paused_parent = run_workflow_package(
+        "parent_name",
+        provider=ScriptedLLMProvider(),
+        options=RunnerOptions(root=tmp_path, task_id="subworkflow-name-task", request_text="Parent request"),
+    )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-name-task"
+    parent_run_dir = next((task_dir / "wf_parent_name" / "runs").iterdir())
+
+    resumed_parent = run_workflow_package(
+        "parent_name",
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    request.artifacts.child_dump.write_text(
+                        json.dumps(
+                            {
+                                "answer": request.context.answer,
+                                "workflow_params": request.context.workflow_params,
+                            }
+                        ),
+                    ),
+                    Outcome(raw_output="Need child answer\n", tag="question", question="Child question?"),
+                )[1]
+            ]
+        ),
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="subworkflow-name-task",
+            run_id=parent_run_dir.name,
+            resume=True,
+            answer="Proceed parent",
+        ),
+    )
+
+    child_run_dir = next((task_dir / "wf_child_pause" / "runs").iterdir())
+    parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
+    child_payload = json.loads((child_run_dir / "child.json").read_text(encoding="utf-8"))
+    child_meta = json.loads((child_run_dir / "run.json").read_text(encoding="utf-8"))
+    child_parent = json.loads((child_run_dir / "parent.json").read_text(encoding="utf-8"))
+    child_records = [
+        json.loads(line)
+        for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+    assert paused_parent.terminal == "PAUSE"
+    assert resumed_parent.terminal == "SUCCESS"
+    assert parent_payload["parent_answer"] == "Proceed parent"
+    assert parent_payload["child_workflow"] == "child_pause"
+    assert parent_payload["child_status"] == "paused"
+    assert parent_payload["child_last_event"] == "question"
+    assert Path(parent_payload["child_checkpoint_file"]) == child_run_dir / "checkpoint.json"
+    assert child_payload["answer"] is None
+    assert child_payload["workflow_params"] == {"mode": "strict"}
+    assert child_meta["status"] == "paused"
+    assert child_meta["pending_question"] == "Child question?"
+    assert (child_run_dir / "checkpoint.json").exists()
+    assert child_parent["workflow_name"] == "parent_name"
+    assert child_parent["run_id"] == parent_run_dir.name
+    assert child_records[0]["workflow_name"] == "child_pause"
+    assert child_records[0]["status"] == "paused"
+    assert child_records[0]["last_event"] == {"tag": "question", "reason": "", "question": "Child question?"}
+
+
 def _write_system_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
     package_dir = root / "workflows" / workflow_name
     package_dir.mkdir(parents=True, exist_ok=True)
@@ -384,3 +548,230 @@ class {class_name}(Workflow):
         encoding="utf-8",
     )
     return package_dir / "workflow.py"
+
+
+def _write_child_success_workflow_package(root: Path) -> None:
+    package_dir = root / "workflows" / "child_success"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        "from .workflow import ChildWorkflow\nfrom .params import Parameters\n__all__ = ['ChildWorkflow', 'Parameters']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text('name = "child_success"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "prompts" / "ask.md").write_text("child prompt\n", encoding="utf-8")
+    (package_dir / "params.py").write_text(
+        """
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "strict"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.py").write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import Artifact, LLMStep, Session, SUCCESS, Workflow
+
+
+class ChildWorkflow(Workflow):
+    name = "child_success"
+
+    class State(BaseModel):
+        note: str = ""
+
+    main = Session()
+    child_dump = Artifact("{run_folder}/child.json")
+    ask = LLMStep(name="ask", producer="prompts/ask.md", session=main, produces={"child_dump": child_dump})
+    entry = ask
+    transitions = {ask: {"done": SUCCESS}}
+
+    def on_start(self, ctx):
+        ctx.open_session(self.main)
+
+    @staticmethod
+    def on_ask(state: State, outcome, artifacts):
+        return state.model_copy(update={"note": outcome.payload.get("summary", "")})
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_parent_class_invoker_workflow_package(root: Path) -> None:
+    package_dir = root / "workflows" / "parent_class"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text("from .workflow import ParentClassWorkflow\n__all__ = ['ParentClassWorkflow']\n", encoding="utf-8")
+    (package_dir / "workflow.toml").write_text('name = "parent_class"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "workflow.py").write_text(
+        """
+from __future__ import annotations
+
+import json
+
+from pydantic import BaseModel
+
+from workflow import Session, SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+from workflows.child_success import ChildWorkflow
+
+
+class ParentClassWorkflow(Workflow):
+    name = "parent_class"
+
+    class State(BaseModel):
+        finished: bool = False
+
+    main = Session()
+    launch = SystemStep(name="launch")
+    entry = launch
+    transitions = {launch: {"done": SUCCESS}}
+
+    def on_start(self, ctx):
+        ctx.open_session(self.main)
+
+    @staticmethod
+    def on_launch(state: State, ctx):
+        result = ctx.invoke_workflow(ChildWorkflow, message="Run child from class", parameters={"mode": "strict"})
+        payload = {
+            "child_workflow": result.workflow_name,
+            "child_run_id": result.run_id,
+            "child_status": result.status,
+            "child_last_event": None if result.last_event is None else result.last_event.tag,
+            "child_output_metadata": result.output_metadata,
+            "child_artifacts": {name: str(path) for name, path in result.output_artifacts.items()},
+            "child_run_folder": str(result.run_folder),
+            "child_request_file": str(result.request_file),
+            "parent_session_id": ctx.get_session("main").session_id,
+        }
+        (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
+        return state.model_copy(update={"finished": True}), Event("done")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_child_pause_workflow_package(root: Path) -> None:
+    package_dir = root / "workflows" / "child_pause"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        "from .workflow import ChildPauseWorkflow\nfrom .params import Parameters\n__all__ = ['ChildPauseWorkflow', 'Parameters']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text('name = "child_pause"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "prompts" / "ask.md").write_text("child pause prompt\n", encoding="utf-8")
+    (package_dir / "params.py").write_text(
+        """
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "strict"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.py").write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import Artifact, LLMStep, Session, Workflow
+from workflow.primitives import Event
+
+
+class ChildPauseWorkflow(Workflow):
+    name = "child_pause"
+
+    class State(BaseModel):
+        note: str = ""
+
+    main = Session()
+    child_dump = Artifact("{run_folder}/child.json")
+    ask = LLMStep(name="ask", producer="prompts/ask.md", session=main, produces={"child_dump": child_dump})
+    entry = ask
+    transitions = {ask: {"question": "PAUSE"}}
+
+    def on_start(self, ctx):
+        ctx.open_session(self.main)
+
+    @staticmethod
+    def on_ask(state: State, outcome, artifacts):
+        return state
+
+    @staticmethod
+    def on_outcome(state: State, outcome):
+        if outcome.tag == "question":
+            return Event("question", question=outcome.question)
+        return None
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_parent_name_invoker_workflow_package(root: Path) -> None:
+    package_dir = root / "workflows" / "parent_name"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text("from .workflow import ParentNameWorkflow\n__all__ = ['ParentNameWorkflow']\n", encoding="utf-8")
+    (package_dir / "workflow.toml").write_text('name = "parent_name"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "workflow.py").write_text(
+        """
+from __future__ import annotations
+
+import json
+
+from pydantic import BaseModel
+
+from workflow import PAUSE, SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+
+
+class ParentNameWorkflow(Workflow):
+    name = "parent_name"
+
+    class State(BaseModel):
+        finished: bool = False
+
+    wait = SystemStep(name="wait")
+    entry = wait
+    transitions = {wait: {"question": PAUSE, "done": SUCCESS}}
+
+    @staticmethod
+    def on_wait(state: State, ctx):
+        if ctx.answer is None:
+            return state, Event("question", question="Parent question?")
+        result = ctx.invoke_workflow("child_pause", message="Run child by name", parameters={"mode": "strict"})
+        payload = {
+            "parent_answer": ctx.answer,
+            "child_workflow": result.workflow_name,
+            "child_run_id": result.run_id,
+            "child_status": result.status,
+            "child_last_event": None if result.last_event is None else result.last_event.tag,
+            "child_checkpoint_file": str(result.checkpoint_file),
+        }
+        (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
+        return state.model_copy(update={"finished": True}), Event("done")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
