@@ -1605,3 +1605,48 @@ Open issues / next step
 - `python3 -m py_compile tests/runtime/test_package_cli.py` passed.
 - `python3 -m pytest tests/runtime/test_package_cli.py -q` could not run here because this environment does not have `pytest` installed.
 - The next step is auditor re-review to close `TST-001`, and then run the focused pytest file in the project’s real test environment.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m re-reviewing the updated CLI tests against the auditor finding and the clarified phase contract. I’ll verify the module-cache isolation fix, then update the audit artifacts to reflect whether any blocking risk remains.
+
+The isolation fixture closes the concrete reliability problem the previous audit flagged. I’m updating the audit artifacts now: mark the criteria true, record `TST-001` as resolved, and leave the environment limitation as a follow-up rather than a blocking issue.
+
+Scope considered
+
+The active test-phase artifacts and the updated package-CLI test module: [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/feedback.md), and [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/test_strategy.md).
+
+What I analyzed
+
+I re-checked the prior blocking reliability finding against the updated test file and the clarified phase contract. The key question was whether the new autouse fixture actually removes the stale-import risk created by stable `workflows.*` module names across multiple temp roots.
+
+What I reviewed
+
+I updated the audit artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/feedback.md)
+
+Key findings / decisions
+
+- `TST-001` is resolved: the autouse fixture now evicts generated `workflows.*` modules and `provider_backend` before and after each test, so loader imports come from the current temp-root fixture instead of cached module state.
+- No blocking audit findings remain.
+- All audit criteria are now checked.
+
+Open issues / next step
+
+The only remaining limitation is environmental, not a coverage blocker: this loop environment still does not have `pytest`, so the focused file could not be executed here. The next practical step is to run [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) in the project’s real test environment.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
