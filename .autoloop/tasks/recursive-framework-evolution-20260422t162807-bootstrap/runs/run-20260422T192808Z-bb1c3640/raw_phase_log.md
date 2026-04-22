@@ -94,3 +94,71 @@ The planner should revise the plan to resolve the manifest-contract contradictio
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+I’m revising the plan against the verifier’s blocking findings now. The fixes are straightforward: remove the unconfirmed manifest narrowing, spell out the missing CLI and `-wf` behaviors, and add an explicit surviving typed config contract with migration and rollback notes.
+
+I’ve got the exact corrections. I’m patching the narrative plan, phase acceptance criteria, and the turn-2 decisions block together so the manifest, CLI, and config contracts all say the same thing.
+
+The revisions are in. I’m re-validating the phase YAML and reviewing the edited sections for internal consistency, especially where the manifest override rule now interacts with import paths and where the new config contract touches CLI/runtime behavior.
+
+I found one internal contradiction during the self-review: the risk register still described manifest names as needing equality with the package directory after I had already restored override semantics. I’m correcting that and tightening the package-path/config wording so the plan no longer fights itself.
+
+The manifest/config contradictions are cleaned up. I’m doing a final consistency pass over the changed sections and re-parsing the phase YAML before I close this producer turn.
+
+Revised the planning artifacts to address the verifier’s blocking findings in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/plan.md:1), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/phase_plan.yaml:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/feedback.md:1), and the turn-2 block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/decisions.txt:6). The plan now restores the request’s manifest-override semantics, keeps aliases as metadata only, makes the missing CLI and `-wf` rules explicit, and defines the surviving typed runtime config contract around canonical `autoloop.yaml` with migration and rollback notes.
+
+`phase_plan.yaml` was re-parsed with `python3` and `yaml.safe_load` after the edits and still loads cleanly with 6 phases.
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+I’m re-auditing the revised plan and phase contract against the same request scope, with extra attention on the verifier-resolved sections: manifest discovery, CLI/`-wf` rules, and the new config contract.
+
+I found one remaining architectural gap: the revised plan still doesn’t restate the request’s explicit “no second DSL / no plugin platform / no event bus / no extra execution model” guardrails. I’m recording that as a blocking finding and adjusting the criteria to match.
+
+The remaining issue is now recorded explicitly. I’m doing a final readback of the criteria and feedback so the blocking status and rationale are aligned before I close this verifier turn as incomplete.
+
+Scope considered
+The authoritative request snapshot, raw-log clarification history, shared decisions ledger, and the planner-owned artifacts `plan.md`, `phase_plan.yaml`, `feedback.md`, and `criteria.md`.
+
+What I analyzed
+I re-checked the previously blocked areas around workflow discovery, CLI/`-wf` behavior, and runtime config, then compared the revised plan against the remaining architectural constraints in the request, especially the manifest contract and extension-seam prohibitions.
+
+What I reviewed
+I reviewed the full narrative plan, the ordered phase contract, the decisions supersession history, the feedback continuity, and the criteria checklist. I also re-parsed `phase_plan.yaml` with `yaml.safe_load` and confirmed required lists remain non-empty.
+
+Key findings / decisions
+`PLAN-001` through `PLAN-003` appear addressed by the latest planner revisions.
+One blocking issue remains: `PLAN-004`.
+`PLAN-004`: the plan still does not preserve the request’s explicit guardrails that `workflow.toml` must stay metadata-only and must not become a second DSL, and that the redesign must not add a plugin platform, generic event bus, arbitrary runtime hooks, or a second execution model.
+`criteria.md` was updated so all five verification checkboxes remain unchecked while that blocker is open.
+
+Open issues / next step
+The planner needs one more revision that adds the missing architectural guardrail section and phase-scope constraints for `workflow.toml` and the extension seam, then the plan can be re-verified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
