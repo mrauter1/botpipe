@@ -14,3 +14,4 @@
 {"ts": "2026-04-22T19:48:18.934336+00:00", "run_id": "run-20260422T192808Z-bb1c3640", "seq": 14, "event_type": "phase_started", "phase_id": "core-kernel-split", "phase_mode": "single"}
 {"ts": "2026-04-22T19:48:18.934921+00:00", "run_id": "run-20260422T192808Z-bb1c3640", "seq": 15, "event_type": "pair_started", "pair": "implement", "phase_id": "core-kernel-split"}
 {"ts": "2026-04-22T19:48:18.934992+00:00", "run_id": "run-20260422T192808Z-bb1c3640", "seq": 16, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "core-kernel-split"}
+{"ts": "2026-04-22T19:58:21.509298+00:00", "run_id": "run-20260422T192808Z-bb1c3640", "seq": 17, "event_type": "run_finished", "status": "interrupted", "exit_code": 130}
