@@ -625,3 +625,85 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+---
+I’m implementing the runtime workspace and context phase: first I’m reading the active phase artifacts and the current runtime/core code paths that own workspace layout, bindings, placeholder resolution, and prompt lookup so I can patch the right seams without pulling unrelated changes into scope.
+
+The phase artifacts are mostly scaffolding, so I’m switching to code inspection now. I’m tracing the current workspace, runner, store, context, and prompt-resolution paths to see what already changed in the earlier foundation phase and where the legacy task-scoped assumptions still sit.
+
+The package root isn’t `autoloop_v3/` in this checkout, so I’m correcting the inspection path before editing. Next I’m reading the actual top-level modules and their tests so the workspace migration lands on the current code rather than on stale assumptions.
+
+I’ve confirmed the legacy assumptions are still concentrated in `runtime/workspace.py`, `runtime/runner.py`, `core/context.py`, `core/extensions.py`, `core/artifacts.py`, and the prompt/store layers. I’m expanding into tracing and git now because the phase contract explicitly requires workflow-scoped paths, and those surfaces tend to break quietly if they’re not updated with the workspace move.
+
+I’ve isolated the blast radius. The next step is the actual refactor: new `TaskWorkspace`/`WorkflowWorkspace`/`RunWorkspace` structures, run metadata persistence, workflow-aware bindings and placeholders, then prompt lookup rooted at the workflow package. After that I’ll rewrite the runtime tests to pin the new layout rather than layering compatibility shims on top.
+
+The runtime refactor has one adjacent dependency outside the Python runtime: `recursive_autoloop/run_recursive_autoloop.sh` still hard-codes the old flat `tasks/<task>/runs/<run>` layout when it inspects latest run status. I’m reading just that narrow section now so I can decide whether it needs a scoped fix in this phase or can safely wait.
+
+I’ve got the refactor plan locked. I’m starting edits in `runtime/workspace.py` and `runtime/runner.py` first because they define the persisted layout and are the source of truth for everything else; the context, binding, prompt, parity, and test changes will follow from those new structures.
+
+I’m now editing the Autoloop-v1 parity harness and the engine-facing bindings. That code sits on the same runtime seams as the generic runner, so it has to move to the new workflow-scoped workspace at the same time or it will keep writing into the old flat layout.
+
+I’ve finished the core path-model edits and I’m pinning them with runtime tests now. These tests are specifically targeting the new task/workflow/run layout, the immutable run snapshot behavior, and package-root prompt resolution so we don’t regress back to the old flat workspace or cwd-based prompt lookup.
+
+The Python runtime is in place, and I’m doing one narrow dependency fix in the recursive driver now: it reads latest run status straight off disk, so it has to follow the new `wf_<workflow>/runs/<run>` layout or it will stop finding resumable runs after this phase lands.
+
+The code changes are in. I’m running targeted tests now against the runtime, unit, and extension surfaces that exercise the new layout and context fields before I touch the phase notes or decisions ledger.
+
+The first validation attempt hit environment issues rather than code issues: this shell only has `python3`, not `python` or a bare `pytest`. I’m rerunning with the correct entrypoints so I can get actual signal on the refactor.
+
+`pytest` is not installed in this environment, so I’m switching to direct `python3` smoke runs of the new and touched test functions. That still exercises the refactor end to end and is the best available validation in this shell.
+
+The environment is missing runtime dependencies too, not just `pytest` (`pydantic` is absent), so execution-level validation is capped here. I’m doing a full diff review and compile-only pass instead, and I’ll call out that dependency gap explicitly in the closeout.
+
+I’ve reviewed the patched files and the Python sources compile cleanly. I’m doing one last shell syntax check on the recursive driver before I write the implementation notes and decisions for this phase.
+
+I’m recording the phase-local decisions and implementation notes now. I’m calling out one intentional partial: `workflow_params` and `ctx.invoke_workflow(...)` are surfaced on the runtime context in this phase, but child-workflow execution semantics themselves are still deferred to the later sub-workflow phase.
+
+Scope considered
+
+- Runtime persistence, context/binding/placeholders, prompt resolution, Autoloop-v1 parity workspace usage, and the recursive driver’s on-disk latest-run/status probe.
+- Main source changes landed in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), and [workflows/autoloop_v1/parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/parity.py).
+
+What I analyzed
+
+- Legacy flat `tasks/<task>/runs/<run>` assumptions in workspace creation, resume lookup, bindings, and prompt lookup.
+- Autoloop-v1 parity’s direct dependency on runtime workspace helpers.
+- Test surfaces that pinned old run paths or lacked coverage for workflow/package-aware context.
+- The recursive shell driver’s latest-run/status lookup, because it would stop finding resumable runs after the layout move.
+
+What I changed
+
+- Introduced task/workflow/run workspace separation with task `messages.jsonl`, task `request.md`, workflow `workflow.json`, and run `run.json` plus immutable run-local `request.md`.
+- Moved runtime run creation/opening to `.autoloop/tasks/<task>/wf_<workflow>/runs/<run-id>/...`.
+- Extended `Context`, `RunBinding`, and artifact placeholders with `workflow_name`, `workflow_folder`, `package_folder`, and surfaced `workflow_params`.
+- Added a runtime-backed `ctx.invoke_workflow(...)` seam that currently acts as a stub for the later child-workflow phase.
+- Changed filesystem prompt resolution to use the workflow package root only for relative prompts.
+- Updated the generic runner and Autoloop-v1 parity harness to pass workflow/package metadata through the engine and persist run/workflow metadata.
+- Added runtime/unit tests for the new layout, immutable request snapshots, placeholder resolution, and package-root prompt lookup in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- Updated the recursive driver’s latest-run probe in [recursive_autoloop/run_recursive_autoloop.sh](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop.sh) to scan `wf_*/runs/run-*`.
+
+Key findings / decisions
+
+- The cleanest phase boundary was to keep task scope creation in `ensure_workspace(...)` and add a separate `ensure_workflow_workspace(...)`, which let parity code keep task-level artifacts like `decisions.txt` and `raw_phase_log.md`.
+- `workflow_params` is now persisted and exposed, but validation/coercion is intentionally deferred to the later CLI/workflow-parameter phase.
+- Git tracking’s default scope was not flipped in this phase; only the runtime path model and dependent status inspection were updated.
+- Validation was limited by the environment: Python sources compile, but execution tests could not run here because both `pytest` and `pydantic` are missing.
+
+Open issues / next step
+
+- Next phase should wire real workflow-parameter validation into the new `workflow_params` field and complete the package-based CLI contract.
+- Child workflow execution semantics behind `ctx.invoke_workflow(...)` are still deferred.
+- Validation performed: `python3 -m compileall core runtime workflows tests`, `python3 -m py_compile ...`, and `bash -n recursive_autoloop/run_recursive_autoloop.sh`.
+- Validation not performed: `pytest`/runtime execution, due missing `pytest` and `pydantic` in this shell.

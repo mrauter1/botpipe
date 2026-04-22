@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import re
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
@@ -41,8 +42,12 @@ try:  # pragma: no branch - supports both `workflows.*` and `autoloop_v3.workflo
     from autoloop_v3.runtime.workspace import (
         RunWorkspace,
         TaskWorkspace,
+        WorkflowWorkspace,
         create_run,
         ensure_workspace,
+        ensure_workflow_workspace,
+        latest_run_id,
+        update_run_metadata,
         open_existing_run,
         resolve_resume_state_root,
         task_request_text,
@@ -71,8 +76,12 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from runtime.workspace import (
         RunWorkspace,
         TaskWorkspace,
+        WorkflowWorkspace,
         create_run,
         ensure_workspace,
+        ensure_workflow_workspace,
+        latest_run_id,
+        update_run_metadata,
         open_existing_run,
         resolve_resume_state_root,
         task_request_text,
@@ -89,6 +98,7 @@ _DECISIONS_ATTR_RE = re.compile(r'([a-zA-Z0-9_]+)="([^"]*)"')
 @dataclass(frozen=True, slots=True)
 class AutoloopV1Workspace:
     task: TaskWorkspace
+    workflow: WorkflowWorkspace
     task_raw_log: Path
     decisions_file: Path
 
@@ -315,10 +325,11 @@ def run_autoloop_v1(
     compiled = load_compiled_workflow(workflow_target, class_name=options.class_name)
     session_path_strategy = _require_autoloop_v1_session_path_strategy(compiled)
     max_steps = resolve_max_steps(options.max_steps)
-    workspace, run = _prepare_autoloop_v1_workspaces(options)
+    workspace, run = _prepare_autoloop_v1_workspaces(compiled, options)
     prepared = prepare_runtime_services(
         compiled,
         task_workspace=workspace.task,
+        workflow_workspace=workspace.workflow,
         run_workspace=run.run,
         session_path_strategy=session_path_strategy,
     )
@@ -337,26 +348,42 @@ def run_autoloop_v1(
         workflow=prepared.compiled.workflow_name,
         task_id=workspace.task.task_id,
     )
+    update_run_metadata(run.run, workflow_params=options.workflow_params or {}, status="running", pending_question=None)
     try:
         if options.resume:
             _append_resume_clarification(prepared.compiled, prepared.checkpoint_store, run, answer=options.answer)
-            return engine.resume(
+            result = engine.resume(
                 task_id=workspace.task.task_id,
                 run_id=run.run.run_id,
                 task_folder=workspace.task.task_dir,
+                workflow_folder=workspace.workflow.workflow_dir,
                 run_folder=run.run.run_dir,
+                package_folder=workspace.workflow.package_dir,
                 root=workspace.task.root,
+                workflow_params=options.workflow_params or {},
                 answer=options.answer,
                 max_steps=max_steps,
             )
-        return engine.run(
-            task_id=workspace.task.task_id,
-            run_id=run.run.run_id,
-            task_folder=workspace.task.task_dir,
-            run_folder=run.run.run_dir,
-            root=workspace.task.root,
-            max_steps=max_steps,
+        else:
+            result = engine.run(
+                task_id=workspace.task.task_id,
+                run_id=run.run.run_id,
+                task_folder=workspace.task.task_dir,
+                workflow_folder=workspace.workflow.workflow_dir,
+                run_folder=run.run.run_dir,
+                package_folder=workspace.workflow.package_dir,
+                root=workspace.task.root,
+                workflow_params=options.workflow_params or {},
+                max_steps=max_steps,
+            )
+        update_run_metadata(
+            run.run,
+            workflow_params=options.workflow_params or {},
+            status=_autoloop_terminal_status_from_result(result),
+            terminal=result.terminal,
+            pending_question=result.last_event.question if result.terminal == "PAUSE" and result.last_event is not None else None,
         )
+        return result
     except Exception as exc:
         prepared.logger.emit(
             "run_finished",
@@ -365,12 +392,20 @@ def run_autoloop_v1(
             error_type=type(exc).__name__,
             error=str(exc),
         )
+        update_run_metadata(
+            run.run,
+            workflow_params=options.workflow_params or {},
+            status="fatal_error",
+            error=str(exc),
+        )
         raise
 
 
 def ensure_autoloop_v1_workspace(
     root: Path,
     task_id: str,
+    workflow_name: str,
+    package_dir: Path,
     product_intent: str | None = None,
     intent_mode: str = "replace",
     *,
@@ -383,6 +418,7 @@ def ensure_autoloop_v1_workspace(
         intent_mode=intent_mode,
         state_dir=state_dir,
     )
+    workflow = ensure_workflow_workspace(task, workflow_name, package_dir=package_dir)
     task_raw_log = task.task_dir / "raw_phase_log.md"
     if not task_raw_log.exists():
         task_raw_log.write_text("# Autoloop Raw Phase Log\n", encoding="utf-8")
@@ -390,7 +426,7 @@ def ensure_autoloop_v1_workspace(
     if not decisions_file.exists():
         decisions_file.write_text("", encoding="utf-8")
     _set_phase_plan_path(task)
-    return AutoloopV1Workspace(task=task, task_raw_log=task_raw_log, decisions_file=decisions_file)
+    return AutoloopV1Workspace(task=task, workflow=workflow, task_raw_log=task_raw_log, decisions_file=decisions_file)
 
 
 def create_autoloop_v1_run(
@@ -399,7 +435,11 @@ def create_autoloop_v1_run(
     run_id: str | None = None,
     request_text: str | None = None,
 ) -> AutoloopV1RunWorkspace:
-    run = create_run(workspace.task, run_id=run_id, request_text=request_text)
+    run = create_run(
+        workspace.workflow,
+        run_id=run_id,
+        request_text=request_text,
+    )
     run_raw_log = run.run_dir / "raw_phase_log.md"
     run_raw_log.write_text(f"# Autoloop Raw Phase Log ({run.run_id})\n", encoding="utf-8")
     plan_session_file = autoloop_v1_session_path(run.run_dir, "plan_session", None)
@@ -413,7 +453,7 @@ def create_autoloop_v1_run(
 
 
 def open_existing_autoloop_v1_run(workspace: AutoloopV1Workspace, run_id: str) -> AutoloopV1RunWorkspace:
-    run = open_existing_run(workspace.task, run_id)
+    run = open_existing_run(workspace.workflow, run_id)
     run_raw_log = run.run_dir / "raw_phase_log.md"
     if not run_raw_log.exists():
         run_raw_log.write_text(f"# Autoloop Raw Phase Log ({run.run_id})\n", encoding="utf-8")
@@ -427,14 +467,16 @@ def open_existing_autoloop_v1_run(workspace: AutoloopV1Workspace, run_id: str) -
     )
 
 
-def _prepare_autoloop_v1_workspaces(options: RunnerOptions) -> tuple[AutoloopV1Workspace, AutoloopV1RunWorkspace]:
+def _prepare_autoloop_v1_workspaces(
+    compiled: CompiledWorkflow,
+    options: RunnerOptions,
+) -> tuple[AutoloopV1Workspace, AutoloopV1RunWorkspace]:
     if not options.resume:
-        workspace = _ensure_autoloop_workspace_for_options(options)
+        workspace = _ensure_autoloop_workspace_for_options(compiled, options)
         run = create_autoloop_v1_run(
             workspace,
             run_id=options.run_id,
-            request_text=options.request_text
-            or task_request_text(workspace.task.task_meta_file, workspace.task.legacy_context_file),
+            request_text=task_request_text(workspace.task.task_request_file),
         )
         return workspace, run
 
@@ -442,20 +484,24 @@ def _prepare_autoloop_v1_workspaces(options: RunnerOptions) -> tuple[AutoloopV1W
     state_dir = options.state_dir
     if state_dir is None:
         state_dir = resolve_resume_state_root(root, task_id=options.task_id, run_id=options.run_id)
-    run_id = options.run_id or ""
-    run_dir = state_dir / "tasks" / options.task_id / "runs" / run_id
-    validate_resume_state(run_dir)
     workspace = ensure_autoloop_v1_workspace(
         root,
         options.task_id,
+        compiled.workflow_name,
+        Path(inspect.getfile(compiled.workflow_cls)).resolve().parent,
         product_intent=options.request_text,
         intent_mode=options.intent_mode,
         state_dir=state_dir,
     )
+    run_id = options.run_id or latest_run_id(workspace.workflow.runs_dir)
+    if run_id is None:
+        raise FileNotFoundError(f"no runs exist under {workspace.workflow.runs_dir}")
+    run_dir = workspace.workflow.runs_dir / run_id
+    validate_resume_state(run_dir)
     return workspace, open_existing_autoloop_v1_run(workspace, run_id)
 
 
-def _ensure_autoloop_workspace_for_options(options: RunnerOptions) -> AutoloopV1Workspace:
+def _ensure_autoloop_workspace_for_options(compiled: CompiledWorkflow, options: RunnerOptions) -> AutoloopV1Workspace:
     root = options.root.resolve()
     state_dir = options.state_dir
     if options.resume and state_dir is None:
@@ -463,6 +509,8 @@ def _ensure_autoloop_workspace_for_options(options: RunnerOptions) -> AutoloopV1
     return ensure_autoloop_v1_workspace(
         root,
         options.task_id,
+        compiled.workflow_name,
+        Path(inspect.getfile(compiled.workflow_cls)).resolve().parent,
         product_intent=options.request_text,
         intent_mode=options.intent_mode,
         state_dir=state_dir,
@@ -683,6 +731,16 @@ def _autoloop_terminal_status(event: TerminalFinish) -> str:
         return "failed"
     if event.event is not None and event.event.tag == "blocked":
         return "blocked"
+    return "paused"
+
+
+def _autoloop_terminal_status_from_result(result: RunResult) -> str:
+    if result.terminal == "SUCCESS":
+        return "success"
+    if result.terminal == "FAIL":
+        if result.last_event is not None and result.last_event.tag == "blocked":
+            return "blocked"
+        return "failed"
     return "paused"
 
 
