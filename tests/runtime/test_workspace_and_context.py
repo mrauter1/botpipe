@@ -175,6 +175,76 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
 
 
+def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_path: Path) -> None:
+    workflow_file = _write_pause_resume_workflow_package(tmp_path, "resume_override_demo", "ResumeOverrideWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "workflow_params": request.context.workflow_params,
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "workflow_params": request.context.workflow_params,
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(
+                    raw_output="Answered",
+                    tag="answered",
+                    payload={"answer": request.context.answer},
+                ),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow(
+        workflow_file,
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-override",
+            request_text="Need workflow parameters",
+            workflow_params={"mode": "strict"},
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-override" / "wf_resume_override_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+
+    resumed = run_workflow(
+        workflow_file,
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-override",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+            workflow_params={"mode": "loose"},
+        ),
+    )
+
+    resumed_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+    resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert paused.terminal == "PAUSE"
+    assert resumed.terminal == "SUCCESS"
+    assert resumed_context["workflow_params"] == {"mode": "strict"}
+    assert resumed_context["answer"] == "42"
+    assert resumed_meta["workflow_params"] == {"mode": "strict"}
+
+
 def _write_system_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
     package_dir = root / "workflows" / workflow_name
     package_dir.mkdir(parents=True, exist_ok=True)
