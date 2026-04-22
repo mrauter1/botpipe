@@ -1509,3 +1509,47 @@ Key findings / decisions
 Open issues / next step
 
 `python3 -m py_compile tests/runtime/test_package_cli.py` passed. I could not execute `pytest` in this loop because the available environment still lacks `pytest` and project runtime dependencies such as `pydantic`, so the next step is to run the updated test file in the project’s real test environment.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m auditing the active test additions against the phase contract now. I’m checking whether the current package-CLI tests cover the risky resolution and multi-run paths materially enough to close the phase without normalizing any unconfirmed behavior.
+
+I found one material test reliability issue before closing the phase. The new tests reuse the same imported `workflows.*` module names across temp roots, but the runtime loader imports by module name through `sys.modules`, so the suite can silently reuse stale modules across tests.
+
+Scope considered
+
+The active test-phase artifacts and the updated package-CLI test module, especially [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/test_strategy.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/criteria.md), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/feedback.md).
+
+What I analyzed
+
+I reviewed the new alias-resolution and multi-run lookup tests against the runtime loader behavior. The key reliability check was whether each temp-root fixture is actually imported fresh, since the loader resolves discovered workflows by module name through `importlib.import_module(...)`.
+
+What I reviewed
+
+I updated the audit artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/feedback.md)
+
+Key findings / decisions
+
+- `TST-001` is `blocking`: the test helper reuses the same `workflows.*` module names across multiple tests and temp roots, but the runtime loader imports by module name without clearing `sys.modules`. That makes the suite order-dependent because later tests can silently exercise stale modules from earlier temp directories instead of the fixture they just created.
+- The new tests themselves are directionally good coverage, but until module-cache isolation is fixed, the regression signal is not reliable enough to close the phase.
+
+Open issues / next step
+
+The next test-author pass should make fixture imports isolated, either by giving each generated workflow package a unique module name per test or by clearing the relevant `workflows` entries from `sys.modules` before CLI calls. After that, the audit can be rerun.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
