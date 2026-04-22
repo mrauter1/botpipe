@@ -707,3 +707,51 @@ Open issues / next step
 - Child workflow execution semantics behind `ctx.invoke_workflow(...)` are still deferred.
 - Validation performed: `python3 -m compileall core runtime workflows tests`, `python3 -m py_compile ...`, and `bash -n recursive_autoloop/run_recursive_autoloop.sh`.
 - Validation not performed: `pytest`/runtime execution, due missing `pytest` and `pydantic` in this shell.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+---
+I’m reviewing the implementation against the active phase contract now. I’m reading the phase criteria and the changed runtime/core files together so I can decide whether the workspace move, request snapshots, placeholders, and prompt-resolution changes are actually correct or whether they left regressions behind.
+
+I’ve narrowed the remaining risk surface to a couple of subtle runtime contracts: direct engine callers that omit `root`, and the new `workflow_params` persistence path on resume. I’m reading the git-discovery helper and the metadata update path now to see whether either of those became a real regression.
+
+I found one material regression and I’m writing it into the verifier artifacts now. It’s in the new `workflow_params` path: the runtime persists the field, but resume/update code currently erases it whenever the caller doesn’t re-supply params, which breaks the requested immutability contract for a run.
+
+Scope considered
+
+- Reviewed the runtime/workspace/context phase diff against the active phase contract, the implementation notes, and the shared decisions ledger.
+- Focused on the changed runtime/core/parity files plus the narrow recursive driver dependency that now reads workflow-scoped runs.
+
+What I analyzed
+
+- The new task/workflow/run workspace model, run/workflow metadata persistence, placeholder/context additions, and package-root prompt resolution path.
+- Resume behavior and any state that must remain stable across a run, especially the newly surfaced `workflow_params` field.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/runtime-workspace-and-context/criteria.md) to keep the phase incomplete.
+- Appended the blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/runtime-workspace-and-context/feedback.md).
+
+Key findings / decisions
+
+- `IMP-001` is blocking: the new `workflow_params` field is persisted on new runs, but both runners overwrite it with `{}` on resume whenever `RunnerOptions.workflow_params` is omitted. That violates the requested “params are immutable for the life of that run” contract and can make resumed workflows observe the wrong parameter state.
+- No other blocker was needed to keep the phase incomplete; this one issue is enough to fail correctness/behavioral-safety for the accepted contract.
+
+Open issues / next step
+
+- Fix `workflow_params` resolution centrally for existing runs: load persisted params from `run.json` when reopening a run, and only write initial params on new-run creation.
+- After that, rerun review on the same phase artifacts; execution-level validation is still constrained by the missing `pytest`/`pydantic` environment noted by implementer.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
