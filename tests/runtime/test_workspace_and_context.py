@@ -446,6 +446,11 @@ def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_c
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-fatal-task"
     parent_run_dir = next((task_dir / "wf_parent_failing" / "runs").iterdir())
     child_run_dir = next((task_dir / "wf_child_failing" / "runs").iterdir())
+    task_messages = [
+        json.loads(line)
+        for line in (task_dir / "messages.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
     child_records = [
         json.loads(line)
         for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
@@ -453,6 +458,8 @@ def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_c
     ]
 
     assert len(child_records) == 1
+    assert (task_dir / "request.md").read_text(encoding="utf-8") == "Parent request\n"
+    assert [entry["message"] for entry in task_messages] == ["Parent request"]
     assert child_records[0]["workflow_name"] == "child_failing"
     assert child_records[0]["run_id"] == child_run_dir.name
     assert child_records[0]["terminal"] == "fatal"

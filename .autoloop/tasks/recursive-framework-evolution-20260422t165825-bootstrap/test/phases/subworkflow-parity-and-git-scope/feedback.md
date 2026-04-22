@@ -6,3 +6,7 @@
 - Phase Directory Key: subworkflow-parity-and-git-scope
 - Phase Title: Subworkflow Parity And Git Scope
 - Scope: phase-local authoritative verifier artifact
+
+- Added failure-path coverage in `tests/runtime/test_workspace_and_context.py` so fatal child invocation now also proves shared task `request.md` and `messages.jsonl` stay unchanged.
+- Refreshed `test_strategy.md` with an explicit AC-to-test map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- Executed coverage: `tests/runtime/test_workspace_and_context.py` (`7 passed`) and the focused phase suite (`48 passed`).
