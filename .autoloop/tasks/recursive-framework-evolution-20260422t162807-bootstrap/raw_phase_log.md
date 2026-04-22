@@ -51,3 +51,46 @@ The artifacts parse and the decision block is scoped correctly. I’m doing one 
 Updated the planner artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/plan.md:1), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/phase_plan.yaml:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/feedback.md:1), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/decisions.txt:1). The plan is now implementation-ready and broken into six ordered phases: core split and shim preservation, workflow package discovery/migration, workspace and message model refactor, package-based CLI with `-wf` validation, subworkflow/parity migration, and git/docs/tests cleanup.
 
 I also locked the non-obvious assumptions that matter later: canonical workflow package name equals directory name, existing top-level workflows must migrate into repo-root packages before raw-target removal, legacy `.autoloop` / `.superloop` state is archival after the redesign, and `workflow/` remains shim-only. `phase_plan.yaml` was re-parsed locally with `python3` and `yaml.safe_load`; it loads cleanly with 6 phases.
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+I’m auditing the planner-owned artifacts against the request snapshot, the raw log, and the shared decisions ledger first, then I’ll update the criteria and feedback based on any intent gaps or risky assumptions I can substantiate.
+
+I’ve isolated a few material gaps: one silent discovery-contract change the request never confirmed, one incomplete CLI/`-wf` contract, and one missing surviving config contract despite planned compatibility removals. I’m recording those as blocking findings and marking the criteria accordingly.
+
+The verifier edits are in. I’m checking the updated criteria and feedback one last time so the blocking findings are precise, stable, and directly traceable to the plan text before I mark the turn incomplete.
+
+Scope considered
+Authoritative request snapshot, raw log clarification history, shared decisions ledger, and the planner-owned artifacts `plan.md`, `phase_plan.yaml`, `feedback.md`, and `criteria.md`.
+
+What I analyzed
+I checked the plan against the requested greenfield redesign contract, especially the workflow manifest/discovery rules, package-based CLI behavior, workflow-parameter rules, workspace/message model, config cleanup language, and explicit compatibility boundaries.
+
+What I reviewed
+I reviewed the narrative plan for intent coverage, the phase decomposition for ordering and acceptance criteria, the feedback history for continuity, the criteria checklist for truthfulness, and the YAML structure of `phase_plan.yaml` with `yaml.safe_load`.
+
+Key findings / decisions
+Three blocking findings were appended to `feedback.md`.
+`PLAN-001`: the plan silently narrows the requested workflow manifest/discovery contract by forcing `workflow.toml.name == directory` and giving aliases CLI lookup behavior.
+`PLAN-002`: the plan omits several explicit CLI and `-wf` behaviors the request requires, including mandatory `--message`, log mode selectors, diagnostic `--run-id` usage, and rejecting `-wf` when no `Parameters` model exists.
+`PLAN-003`: the plan removes legacy config behavior but never defines the surviving typed config contract, despite the request explicitly requiring one.
+`criteria.md` was updated to leave `Intent Fidelity`, `Behavioral Safety`, `Completeness`, and `Feasibility / Compatibility` unchecked; `Technical Debt` remains checked.
+`phase_plan.yaml` parses successfully.
+
+Open issues / next step
+The planner should revise the plan to resolve the manifest-contract contradiction, fully spell out the required CLI and workflow-parameter rules, and add the surviving typed config contract with validation, migration, and rollback notes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
