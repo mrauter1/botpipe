@@ -51,6 +51,7 @@
 ## Reliability Notes
 
 - All CLI tests use temporary repo roots and local workflow packages only.
+- An autouse fixture evicts generated `workflows.*` modules and the throwaway `provider_backend` module from `sys.modules` before and after each test so loader imports always come from the current temp root.
 - Multi-run selection coverage uses sequential paused runs rather than sleeps or manual timestamp mutation.
 - Provider-factory coverage uses a local throwaway module and system-only workflows so no network or model backend is required.
 

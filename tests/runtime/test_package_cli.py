@@ -1,13 +1,32 @@
 from __future__ import annotations
 
+import importlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 from autoloop_v3.runtime import cli
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _evict_generated_modules() -> None:
+    importlib.invalidate_caches()
+    for name in list(sys.modules):
+        if name == "workflows" or name.startswith("workflows.") or name == "provider_backend":
+            sys.modules.pop(name, None)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_generated_workflow_modules():
+    # Each test creates temporary workflow packages under the same module names.
+    _evict_generated_modules()
+    yield
+    _evict_generated_modules()
 
 
 class _UnusedProvider:

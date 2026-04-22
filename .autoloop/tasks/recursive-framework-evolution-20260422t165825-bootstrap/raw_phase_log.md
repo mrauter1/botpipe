@@ -1553,3 +1553,55 @@ The next test-author pass should make fixture imports isolated, either by giving
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m fixing the module-cache flake in the CLI tests directly. The smallest safe change is an autouse fixture in the existing test file that evicts generated `workflows.*` modules between tests so each temp-root fixture is actually what the loader imports.
+
+I’m checking the test helper and the current phase artifacts to patch the module-cache flake without broadening scope. After that I’ll update the test coverage notes and the phase feedback to match the fix.
+
+I’ve confirmed the auditor’s point: the helper rewrites the same `workflows.*` names across temp roots, and the loader’s import path will cache those modules unless the test file evicts them. I’m patching that at the test boundary rather than changing runtime behavior.
+
+I have the exact failure surface now: the tests generate `workflows/...` packages under fresh temp roots, but the loader imports by stable module name. I’m adding an autouse cache-eviction fixture in the test module so every CLI call imports the temp package intended for that test.
+
+The code fix is in place. I’m updating the phase artifacts now to record that the stale-import risk is covered by an autouse module-eviction fixture instead of by changing runtime code.
+
+I’ve finished the scoped edits. I’m doing the same lightweight validation as the earlier test turn now: syntax-check the touched test file and probe whether the environment can execute the focused pytest file.
+
+Scope considered
+
+The active `package-cli-and-params` test phase only: [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt).
+
+What I analyzed
+
+I checked the auditor’s `TST-001` finding against the test helper and the runtime loader behavior. The failure mode is real: the tests recreate the same `workflows.*` module names under different temp roots, while the loader imports by module name and will reuse `sys.modules` unless the test file isolates that cache.
+
+What I changed
+
+- Added an autouse fixture in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) that evicts generated `workflows.*` modules and the local `provider_backend` helper from `sys.modules` before and after each test, with `importlib.invalidate_caches()` included.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/test_strategy.md) to record the new reliability control explicitly.
+- Appended a concise fix note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/feedback.md).
+- Appended the non-obvious cache-isolation decision under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+- I fixed the flake at the test boundary rather than altering runtime import behavior, because this phase is about regression coverage and the auditor’s issue was specifically test isolation.
+- The cache eviction includes `provider_backend` as well as `workflows.*`, since that helper module is also created dynamically under temp roots and should not leak between tests.
+- I did not edit the auditor-owned criteria file.
+
+Open issues / next step
+
+- `python3 -m py_compile tests/runtime/test_package_cli.py` passed.
+- `python3 -m pytest tests/runtime/test_package_cli.py -q` could not run here because this environment does not have `pytest` installed.
+- The next step is auditor re-review to close `TST-001`, and then run the focused pytest file in the project’s real test environment.
