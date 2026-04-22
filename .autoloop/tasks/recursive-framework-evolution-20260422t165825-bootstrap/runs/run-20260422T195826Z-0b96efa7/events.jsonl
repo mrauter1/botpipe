@@ -89,3 +89,7 @@
 {"ts": "2026-04-22T22:49:30.554975+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 89, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "subworkflow-parity-and-git-scope"}
 {"ts": "2026-04-22T22:51:24.679774+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 90, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "subworkflow-parity-and-git-scope"}
 {"ts": "2026-04-22T22:51:24.701731+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 91, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "subworkflow-parity-and-git-scope"}
+{"ts": "2026-04-22T22:51:24.763747+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 92, "event_type": "phase_completed", "pair": "test", "phase_id": "subworkflow-parity-and-git-scope", "phase_mode": "single"}
+{"ts": "2026-04-22T22:51:24.766317+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 93, "event_type": "phase_started", "phase_id": "docs-tests-and-legacy-removal", "phase_mode": "single"}
+{"ts": "2026-04-22T22:51:24.767163+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 94, "event_type": "pair_started", "pair": "implement", "phase_id": "docs-tests-and-legacy-removal"}
+{"ts": "2026-04-22T22:51:24.767265+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 95, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "docs-tests-and-legacy-removal"}
