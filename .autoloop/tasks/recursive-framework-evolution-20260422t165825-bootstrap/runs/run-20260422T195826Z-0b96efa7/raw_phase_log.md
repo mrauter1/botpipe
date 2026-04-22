@@ -1087,3 +1087,126 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m implementing the `package-cli-and-params` phase: replace the raw-target public CLI with the package-based `autoloop` command tree, wire workflow parameter validation, and keep the blast radius limited to the runtime/loader/workspace surfaces this phase depends on.
+
+I’ve got the task contract and prior phase decisions. Next I’m reading the current runtime/loader/workspace/test surfaces to see what the earlier phases already changed and where the public CLI still diverges from this phase contract.
+
+The current checkout is already mid-migration: the live code is at top-level `core/`, `runtime/`, `extensions/`, `stdlib/`, with a large set of tracked deletions under `autoloop_v3/`. I’m switching to the active top-level modules and ignoring unrelated dirty deletions outside this phase scope.
+
+I’ve confirmed the live CLI is still the old single-command/raw-target parser. I’m reading the remaining workspace metadata helpers, config surface, and current tests so I can replace that interface cleanly instead of layering another parser on top.
+
+The main gap is clear now: loader discovery exists, workspace persistence exists, but the public entrypoint still drives the old raw `run_workflow(...)` surface and nothing enforces workflow parameter coercion. I’m mapping the new CLI onto the existing runner/workspace helpers before I start patching.
+
+I don’t see a real provider factory implementation in the repo yet, only the test fake and the old `--provider-factory` escape hatch. I’m checking whether this phase should keep an internal provider seam or whether the CLI tests can safely stub provider creation while the public surface moves to package-based commands.
+
+I’ve confirmed the repo doesn’t yet have a production provider constructor behind the new config model. I’ll keep the provider seam internal and testable while removing the old public `--provider-factory` flag from the package CLI contract, so we don’t bake another legacy interface into this phase.
+
+Plan for this phase:
+1. Add package-oriented runtime helpers: workflow parameter coercion, run discovery/selection, and package-based execution wrappers on top of the existing engine/workspace code.
+2. Rewrite `runtime/cli.py` into the `autoloop` subcommand tree, keeping provider resolution internal and non-public.
+3. Add CLI coverage for `workflows`, `run/resume/answer`, `runs`, `logs`, and `init workflow`, plus parameter validation and run lookup edge cases.
+4. Update this phase’s implementation notes and decisions ledger with any non-obvious behavior choices after validation.
+
+I’ve finished enough analysis to start edits. I’m patching the loader and workspace first so the CLI can rely on one package-resolution path, one workflow-parameter coercion path, and one deterministic run-selection path instead of reimplementing those rules inside argument handlers.
+
+I’m moving the CLI’s run-selection rules into `runtime.workspace` now. That keeps `resume`, `answer`, `runs show`, and `logs` aligned on the same task/workflow/run lookup semantics instead of each command doing its own filesystem walk.
+
+I’m rewriting the CLI entrypoint now. The new surface will be leaf-command based, JSON-structured for deterministic output, and will only touch provider resolution on mutating commands so the read-only and scaffolding commands stay fast and independent.
+
+The runtime plumbing is in place. I’m adding CLI-focused tests now, centered on the contract surfaces this phase owns: discovery/show, `run/resume/answer`, `-wf` validation, deterministic run lookup, logs behavior, and `init workflow` scaffolding.
+
+The command tree and tests are in. I’m running focused validation now against the loader/workspace/CLI surfaces I touched so I can fix contract or regression issues before I write notes and decisions.
+
+`pytest` isn’t on PATH in this environment, so I’m switching to `python -m pytest`. If the interpreter setup is incomplete too, I’ll at least get a syntax/import signal from the same command path the repo would use.
+
+The shell only has `python3`, not `python`. I’m rerunning the same targeted subset with that interpreter so I can get actual failures instead of PATH noise.
+
+`pytest` isn’t installed in this environment, so I’m validating the edited Python files directly with `py_compile` and then running a small CLI smoke script under `python3` to cover the key code paths the new tests exercise.
+
+I’ve got syntax-level validation, but the environment is missing the runtime dependencies needed for a real execution smoke test. I’m tightening one loader edge case before I finish: default-factory workflow parameters should render cleanly in `workflows show` instead of leaking a non-serializable sentinel.
+
+The code changes are in a coherent shape now. I’m doing one last pass over the diff and the phase artifacts so I can record only the non-obvious decisions that matter for later phases, rather than dumping a file-by-file changelog into the notes.
+
+I’ve reached the point where the remaining work is bookkeeping: record the three non-obvious choices this phase introduces, and write concise implementation notes with the validation limits called out explicitly.
+
+`py_compile` dropped a generated bytecode file under `tests/runtime/__pycache__`. I’m removing that now so the phase only leaves intentional source changes behind.
+
+**Scope considered**
+Package CLI cutover for the active phase: package-based `autoloop` commands, workflow-parameter parsing/validation, deterministic run lookup, and CLI scaffolding/tests. I kept the blast radius to [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py), [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), and [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py).
+
+**What I analyzed**
+I read the active phase contract, plan, decisions ledger, current runtime/loader/workspace code, and the existing package-foundation/workspace tests. The main gap was that discovery/workspace migration already existed, but the public CLI was still the old raw-target parser and there was no shared workflow-parameter coercion or shared run-selection logic.
+
+**What I changed**
+I replaced the CLI with the package-based `autoloop` tree: `workflows list/show`, `run`, `resume`, `answer`, `runs list/show`, `logs`, and `init workflow`. Non-log commands now emit deterministic JSON summaries; `logs` prints the selected log stream directly.
+
+I added workflow parameter metadata/validation in the loader, including repeated `-wf` support only for list-like fields and fast failure for unknown/unsupported parameters. I also added package execution helpers in the runner and run-record discovery/selection helpers in workspace so `resume`, `answer`, `runs show`, and `logs` all resolve runs the same way.
+
+**Key findings / decisions**
+The CLI now hides provider construction behind an internal seam or `AUTOLOOP_PROVIDER_FACTORY`; `--provider-factory` is no longer public. I also enforced manifest name vs compiled workflow name consistency so package discovery names, `wf_<workflow>` folders, and `run.json` metadata cannot drift apart silently.
+
+I updated the phase notes and appended the non-obvious decisions to the authoritative decisions ledger.
+
+**Open issues / next step**
+Validation was limited by the environment: `pytest` is not installed, and the available `python3` lacks repo dependencies such as `pydantic`, so I could only run `python3 -m py_compile` on the touched files. The next step is to run the new CLI tests and the related runtime tests in the project’s real Python environment, then update remaining callers/docs that still assume the old CLI surface.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m reviewing the package CLI phase against the request, decisions ledger, and touched runtime files first, then I’ll update the phase criteria and feedback artifacts with any concrete findings.
+
+I’ve verified the main surfaces. I’m checking the package-run path and the new tests now for anything that silently violates the phase contract, especially around provider handling, deterministic run lookup, and whether the new CLI can actually be exercised by existing repo tooling.
+
+I’ve isolated three material regressions: one in parameter serialization, one in provider resolution, and one in the repo’s own CLI caller. I’m recording them in the verifier artifacts now and leaving the criteria unchecked because the phase isn’t safe to mark complete yet.
+
+Scope considered
+
+Active phase artifacts plus the changed CLI/runtime surfaces they depend on: `runtime/cli.py`, `runtime/loader.py`, `runtime/runner.py`, `runtime/workspace.py`, `tests/runtime/test_package_cli.py`, and the repo-owned recursive caller for regression analysis.
+
+What I analyzed
+
+I checked the phase contract, the shared decisions ledger, the new package CLI implementation, workflow-parameter serialization/validation paths, run-selection logic, and the new CLI tests. I also checked repo callers to see whether the CLI cutover preserved operational behavior.
+
+What I reviewed
+
+I updated the verifier artifacts:
+- `.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/package-cli-and-params/criteria.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/package-cli-and-params/feedback.md`
+
+Key findings / decisions
+
+- Blocking: workflow params/defaults are kept in Python mode, so non-JSON-safe typed parameters like `Path`, `Enum`, or `datetime` will break `run.json` persistence and `workflows show`.
+- Blocking: the new public CLI removed the old provider-factory path without replacing it with a repo-backed provider resolver, so `run/resume/answer` are not executable through the public CLI unless callers use a private injection seam or `AUTOLOOP_PROVIDER_FACTORY`.
+- Blocking: the repo’s own recursive driver still calls the removed legacy CLI flags, so the CLI cutover introduces an immediate operational regression for that path.
+
+Open issues / next step
+
+The phase should not be marked complete until the blocking findings in `feedback.md` are addressed and the criteria can be checked honestly. The next implement pass should centralize JSON-safe workflow-param serialization, restore a real public provider-resolution path, and migrate repo-owned CLI callers to the new command tree.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
