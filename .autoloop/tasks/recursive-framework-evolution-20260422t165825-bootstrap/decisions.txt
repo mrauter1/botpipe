@@ -20,3 +20,5 @@ Stale docs/tests that still pin missing legacy top-level workflow files or `run_
 `workflow.toml` is metadata-only discovery and human-facing package information; it must not become a second DSL for topology, prompts, parameters, transitions, or workflow logic.
 The package-based `autoloop` CLI contract includes explicit output, error, and exit semantics; matching command names alone is insufficient.
 `ctx.invoke_workflow(...)` is only for runtime-backed contexts, must be supported from `SystemStep` handlers, and child runs must never inherit parent session bindings or pending answers implicitly.
+<autoloop-decisions-header version="1" block_seq="5" owner="planner" phase_id="task-global" pair="plan" turn_seq="4" run_id="run-20260422T195826Z-0b96efa7" ts="2026-04-22T20:13:26.222729+00:00" />
+`ctx.invoke_workflow(...)` returns a structured child result that includes at least child workflow identity, child run id, terminal status, last event, selected output metadata or references, and the child path references required by callers.

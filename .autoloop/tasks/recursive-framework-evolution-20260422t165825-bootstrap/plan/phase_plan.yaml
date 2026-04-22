@@ -149,6 +149,9 @@ phases:
     workflow package names.
   - Restrict child invocation to runtime-backed contexts, support `SystemStep` handlers,
     and forbid implicit inheritance of parent session bindings or pending answers.
+  - Define the structured child-workflow result returned by `ctx.invoke_workflow(...)`,
+    including child workflow name, child run id, terminal status, last event, selected
+    output metadata or references, and child path references required by callers.
   - Create child run metadata with `children.jsonl` on the parent and `parent.json`
     on the child while keeping child runs outside parent folders.
   - Enrich `StepFinish` with producer and optional verifier raw output for parity
@@ -174,10 +177,16 @@ phases:
   - id: AC-3
     text: Default git tracking scopes commits to `workflow_folder` rather than `task_folder`,
       with tests covering both included and excluded changes.
+  - id: AC-4
+    text: '`ctx.invoke_workflow(...)` returns a stable structured result containing
+      child workflow identity, child run id, terminal status, last event, selected
+      output metadata or references, and child path references required by callers.'
   deliverables:
-  - Engine, context, binding, and event-model updates for child workflow execution.
+  - Engine, context, binding, event-model, and child-result contract updates for child
+    workflow execution.
   - A workflow-local `workflows/autoloop_v1/` package with parity helpers.
-  - Git extension changes and tests for workflow-scoped delta filtering.
+  - Git extension changes and tests for workflow-scoped delta filtering and child-result
+    shape.
   risks:
   - Parity drift can hide until clarification, blocked, or failed routes are exercised.
   - Child runs can leak parent sessions or paths if invocation is not explicit.

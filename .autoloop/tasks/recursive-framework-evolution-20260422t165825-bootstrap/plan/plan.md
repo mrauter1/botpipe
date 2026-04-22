@@ -93,6 +93,7 @@
 - `ctx.invoke_workflow(...)` is available only on runtime-backed `Context` objects and must be supported from `SystemStep` handlers.
 - Child workflows run under the same `task_id` but receive their own `workflow_name`, `workflow_folder`, `run_id`, run-local request snapshot, checkpoint, sessions, trace, and event log.
 - Child invocation must never implicitly inherit parent session bindings, pending answers, or nested folder placement; every child run starts with its own run-local session state unless workflow code explicitly opens or passes new state through artifacts.
+- `ctx.invoke_workflow(...)` returns a structured child-workflow result that includes at least child workflow name, child run id, terminal status, last event, selected output metadata or references, and child run path references needed by callers.
 - Parent-child linkage is metadata only:
   - parent run writes `children.jsonl`
   - child run writes `parent.json`
@@ -118,7 +119,7 @@
    - Replace the raw-target CLI with the package-based `autoloop` command tree.
    - Add deterministic run lookup and validated `-wf` parsing/persistence.
 4. Sub-workflows, parity migration, and git scope
-   - Add `ctx.invoke_workflow(...)`, child run metadata, `StepFinish` raw-output enrichment, Autoloop-v1 package migration, and workflow-scoped git tracking.
+   - Add `ctx.invoke_workflow(...)`, its structured child result contract, child run metadata, `StepFinish` raw-output enrichment, Autoloop-v1 package migration, and workflow-scoped git tracking.
 5. Docs, tests, and legacy removal
    - Rewrite docs and tests to the new contract and remove compatibility-only code paths that no longer serve the redesign.
 
@@ -139,6 +140,7 @@
   - new placeholder resolution
   - class-based and name-based sub-workflow invocation
   - runtime-backed `ctx.invoke_workflow(...)`, `SystemStep` support, and no implicit child session inheritance
+  - structured child-workflow result contract from `ctx.invoke_workflow(...)`
   - parent-child linkage metadata
   - workflow-folder git tracking
   - run-local tracing
@@ -184,7 +186,7 @@
   - Control: separate parser paths, persist resolved params in `run.json`, and reject unknown params before execution.
 - Sub-workflow persistence bugs
   - Risk: child runs inherit parent sessions implicitly, reuse pending answers, or land in nested folders.
-  - Control: explicit child run creation API, runtime-backed/SystemStep invocation rules, dedicated session-isolation tests, and no nested run directories.
+  - Control: explicit child run creation API, runtime-backed/SystemStep invocation rules, a stable child-result contract, dedicated session-isolation tests, and no nested run directories.
 - Autoloop-v1 parity loss
   - Risk: raw logs, session naming, clarification persistence, or status mapping drift during package migration.
   - Control: migrate parity after `StepFinish` enrichment and preserve package-local parity tests as a release gate.

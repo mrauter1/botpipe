@@ -257,3 +257,30 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=plan | phase=producer | cycle=3 | attempt=1 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+I’m fixing the remaining verifier gap now. First I’m reading the latest decision header and the current sub-workflow sections so I can add the explicit `ctx.invoke_workflow(...)` result contract without disturbing the rest of the plan.
+
+The remaining change is narrow: define what a caller gets back from `ctx.invoke_workflow(...)`. I’m adding that explicit result contract to the narrative plan, the phase acceptance criteria, and the decision log now.
+
+The sub-workflow result contract is in place. I’m validating the YAML and checking the updated sub-workflow section now so the verifier gets a clean pass target.
+
+The new content is correct, but the YAML validator caught one syntax issue: the `AC-4` text starts with a backtick, which plain YAML scalars don’t allow. I’m quoting that field and re-running validation.
+
+The YAML quote fix is applied. I’m rerunning the parse and a quick spot-check so the verifier sees a clean machine-readable phase plan this time.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt) to add the missing `ctx.invoke_workflow(...)` return contract.
+
+The plan now explicitly requires a structured child-workflow result with child identity, run id, terminal status, last event, selected output metadata or references, and child path references. That contract is reflected in the narrative plan, the validation list, the sub-workflow phase scope, acceptance criteria, deliverables, and the shared decisions log. `phase_plan.yaml` was re-validated successfully with `python3` and `yaml.safe_load`.
