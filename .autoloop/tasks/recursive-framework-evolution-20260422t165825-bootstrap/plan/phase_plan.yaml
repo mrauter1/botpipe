@@ -1,4 +1,220 @@
 version: 1
 task_id: recursive-framework-evolution-20260422t165825-bootstrap
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/runs/run-20260422T195826Z-0b96efa7/request.md
-phases: []
+phases:
+- phase_id: workflow-package-foundation
+  title: Workflow Package Foundation
+  objective: Turn repo-root workflows into the canonical package namespace and add
+    strict manifest-based discovery and export enforcement.
+  status: planned
+  in_scope:
+  - Convert `workflows/` from framework-owned helper modules into actual workflow
+    packages with `__init__.py`, `workflow.py`, `workflow.toml`, `prompts/`, and `assets/`.
+  - Add discovery helpers that scan `<root>/workflows/*/workflow.toml`, resolve canonical
+    names and aliases, and locate the main workflow class.
+  - Support workflow resolution by package name for CLI entry and by imported workflow
+    class for composition.
+  - Keep the root `workflow` shim strict and aligned to the requested authoring surface
+    only.
+  out_of_scope:
+  - Public CLI subcommand cutover.
+  - Task -> workflow -> runs workspace migration.
+  - Full Autoloop-v1 parity migration.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Workflow discovery resolves packages from repo-root `workflows/` using `workflow.toml`
+      metadata without relying on public raw file/module targets.
+  - id: AC-2
+    text: Each workflow package `__init__.py` re-exports its main workflow class and
+      optional `Parameters`, and tests pin that contract.
+  - id: AC-3
+    text: The root `workflow` shim remains a strict authoring surface and docs/tests
+      stop treating internal modules as the public contract.
+  deliverables:
+  - Discovery and loader updates for package-name and imported-class workflow resolution.
+  - Canonical workflow package scaffolding, including an `autoloop_v1` package shell.
+  - Tests covering manifest discovery, alias resolution, and `__init__.py` export
+    enforcement.
+  risks:
+  - Alias collisions or package/export drift can make discovery ambiguous.
+  - Leaving any public raw-target entry path reachable would undermine the greenfield
+    CLI contract.
+  rollback:
+  - Revert the discovery/package conversion commit as a unit if package loading or
+    imports become unstable.
+  - Avoid partial shims that preserve both framework-owned helpers and package-based
+    discovery at the same time.
+- phase_id: runtime-workspace-and-context
+  title: Runtime Workspace And Context
+  objective: Move runtime persistence to task -> workflow -> runs and add the new
+    context, binding, placeholder, and prompt-resolution model.
+  status: planned
+  in_scope:
+  - Refactor workspace creation and resume logic around task scope, workflow scope,
+    and run scope.
+  - Add task-level `messages.jsonl`, workflow-level metadata, and run-level immutable
+    request snapshots plus `run.json`.
+  - Extend `Context`, `RunBinding`, and artifact placeholder resolution with workflow-aware
+    fields.
+  - Resolve relative prompts and bundled assets from the workflow package root rather
+    than cwd.
+  - Update runtime stores, tracing, and status inspection to use workflow-scoped paths.
+  out_of_scope:
+  - Public CLI command tree redesign.
+  - Child workflow execution semantics.
+  dependencies:
+  - workflow-package-foundation
+  acceptance_criteria:
+  - id: AC-1
+    text: New runs create `.autoloop/tasks/<task-id>/wf_<workflow>/runs/<run-id>/...`
+      and keep shared task files outside run scope.
+  - id: AC-2
+    text: Task `messages.jsonl`, task `request.md`, and immutable run `request.md`
+      snapshots are created and updated according to the message-first contract.
+  - id: AC-3
+    text: Context, binding, placeholders, and prompt resolution expose `workflow_name`,
+      `workflow_folder`, `package_folder`, and package-root prompt lookup.
+  deliverables:
+  - Workspace, runner, store, context, binding, artifact, and prompt-registry updates.
+  - Run metadata and workflow metadata persistence in the new layout.
+  - Tests for workspace creation, snapshots, placeholders, tracing locality, and prompt
+    resolution.
+  risks:
+  - Resume selection can read the wrong run if workflow scope is not centralized.
+  - Prompt resolution can silently regress if any cwd fallback remains.
+  rollback:
+  - Revert the workspace migration commit if run selection or checkpoint restoration
+    becomes inconsistent.
+  - Do not leave mixed flat-run and workflow-scoped layouts active in the same branch
+    state.
+- phase_id: package-cli-and-params
+  title: Package CLI And Parameters
+  objective: Replace the raw-target CLI with the package-based `autoloop` command
+    tree and add workflow-specific parameter parsing and validation.
+  status: planned
+  in_scope:
+  - Implement `autoloop workflows list/show`, `run`, `resume`, `answer`, `runs list/show`,
+    `logs`, and `init workflow`.
+  - Remove public raw workflow file/module/class targeting, `--class-name`, `--request-text`,
+    and public intent terminology.
+  - Add repeatable ordered `-wf <name> <value>` parsing, workflow-level validation,
+    coercion, and persistence.
+  - Implement deterministic workflow resolution by canonical name then alias and command-specific
+    run lookup when `--run-id` is omitted.
+  out_of_scope:
+  - Child workflow invocation.
+  - Autoloop-v1 parity relocation details.
+  dependencies:
+  - workflow-package-foundation
+  - runtime-workspace-and-context
+  acceptance_criteria:
+  - id: AC-1
+    text: The public CLI exposes only the requested package-based `autoloop` commands
+      and no public raw execution surface remains.
+  - id: AC-2
+    text: '`run` requires `--message`, `answer` requires `--answer`, and `resume`
+      or diagnostics never create new runs.'
+  - id: AC-3
+    text: '`-wf` values are validated through workflow `Parameters`, stored in run
+      metadata, and rejected when unknown or unsupported.'
+  deliverables:
+  - A rewritten `runtime/cli.py` and supporting runner/orchestration updates.
+  - Parameter model loading and validation logic tied to workflow packages.
+  - CLI tests for command routing, error behavior, run selection, and `init workflow`
+    scaffolding.
+  risks:
+  - Ambiguous run lookup or alias resolution can produce surprising CLI behavior.
+  - Supporting both old and new CLI surfaces in parallel would create drift and technical
+    debt.
+  rollback:
+  - Revert the CLI cutover commit as a whole if the new command tree fails acceptance
+    tests.
+  - Do not add compatibility aliases for raw-target execution paths.
+- phase_id: subworkflow-parity-and-git-scope
+  title: Subworkflow Parity And Git Scope
+  objective: Add first-class child workflow execution, migrate Autoloop-v1 into a
+    workflow package, and narrow git tracking to workflow scope.
+  status: planned
+  in_scope:
+  - Implement `Context.invoke_workflow(...)` for both imported workflow classes and
+    workflow package names.
+  - Create child run metadata with `children.jsonl` on the parent and `parent.json`
+    on the child while keeping child runs outside parent folders.
+  - Enrich `StepFinish` with producer and optional verifier raw output for parity
+    reconstruction.
+  - Move Autoloop-v1 parity code into `workflows/autoloop_v1/` and remove framework-owned
+    parity helpers and the custom harness path.
+  - Change default git tracking from task scope to workflow scope and rename helper
+    logic accordingly.
+  out_of_scope:
+  - Final doc rewrite and broad stale-test cleanup outside the parity and git surfaces
+    touched here.
+  dependencies:
+  - package-cli-and-params
+  acceptance_criteria:
+  - id: AC-1
+    text: Child workflows can be invoked by imported class or workflow name and receive
+      their own workflow/run scope, checkpoints, sessions, and logs under the same
+      task.
+  - id: AC-2
+    text: Autoloop-v1 runs through the general runtime only and still preserves package-local
+      raw logs, session naming, clarification persistence, and status mapping.
+  - id: AC-3
+    text: Default git tracking scopes commits to `workflow_folder` rather than `task_folder`,
+      with tests covering both included and excluded changes.
+  deliverables:
+  - Engine, context, binding, and event-model updates for child workflow execution.
+  - A workflow-local `workflows/autoloop_v1/` package with parity helpers.
+  - Git extension changes and tests for workflow-scoped delta filtering.
+  risks:
+  - Parity drift can hide until clarification, blocked, or failed routes are exercised.
+  - Child runs can leak parent sessions or paths if invocation is not explicit.
+  rollback:
+  - Revert the subworkflow/parity migration commit if parity acceptance tests fail.
+  - Do not preserve the custom harness alongside the new runtime path after cutover.
+- phase_id: docs-tests-and-legacy-removal
+  title: Docs Tests And Legacy Removal
+  objective: Rewrite documentation and tests to the new contract and delete remaining
+    compatibility-only code that no longer serves the redesign.
+  status: planned
+  in_scope:
+  - Rewrite docs to describe `core`, root `workflow`, repo-root `workflows/`, package-based
+    `autoloop`, message-first execution, task -> workflow -> runs, and workflow composition.
+  - Replace stale tests that pin missing legacy top-level workflow files, `run_autoloop_v1(...)`,
+    task-scoped git behavior, raw-target CLI usage, or compatibility-only config/layout
+    behavior.
+  - Remove compatibility-only code paths for old config discovery, layout probing,
+    status strings, payload handling, and public raw execution that survived earlier
+    phases.
+  - Add final strictness tests proving legacy public surfaces are absent.
+  out_of_scope:
+  - Future UX enhancements beyond the requested command surface and architecture.
+  dependencies:
+  - subworkflow-parity-and-git-scope
+  acceptance_criteria:
+  - id: AC-1
+    text: Docs no longer describe legacy raw-target CLI, framework-owned parity helpers,
+      retained backward compatibility, or the flat task/run layout.
+  - id: AC-2
+    text: Tests cover the requested discovery, workspace, CLI, parameter, prompt,
+      subworkflow, parity, git, tracing, and strict-shim behaviors.
+  - id: AC-3
+    text: Remaining compatibility-only code paths are removed unless they are justified
+      independently by the new architecture.
+  deliverables:
+  - Updated docs, ADR touch-ups where needed, and a rewritten test suite aligned to
+    the greenfield contract.
+  - Cleanup patches removing leftover legacy runtime/config/status behavior.
+  - Strictness tests that fail if raw-target public interfaces or framework-owned
+    parity helpers reappear.
+  risks:
+  - Stale docs or tests can quietly reintroduce compatibility expectations the redesign
+    explicitly rejects.
+  - Overeager cleanup can delete behavior that the new architecture still needs if
+    tests are incomplete.
+  rollback:
+  - Revert cleanup selectively only when the restored behavior is required by the
+    new tests, not by legacy preference.
+  - Keep docs and tests synchronized with code in the same commit series to avoid
+    drift.

@@ -104,3 +104,32 @@ There doesn’t appear to be a packaging file in the root, so I’m checking the
 I’ve confirmed the implemented CLI module is still described as an `autoloop_v3` runtime, and the recursive driver in this repo invokes `autoloop` directly. I’m checking whether any task-level clarification overrode that before I answer.
 
 YES
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=2 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=2 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+The CLI-name ambiguity is resolved: `autoloop` is authoritative. I’m writing the plan artifacts now with phases anchored to the actual remaining gaps in this checkout, not the aspirational end state alone.
+
+I’m checking the latest planner decision block before writing, so the new explicit clarifications land under the correct turn header and don’t overwrite earlier history.
+
+I’ve got the plan structure and the exact phase boundaries. I’m updating `plan.md`, the machine-readable `phase_plan.yaml`, the feedback note, and the decision log in one pass, then I’ll parse the YAML locally before finishing.
+
+The artifacts are written. I’m validating the YAML and doing a quick sanity read now; if the patch left any structural issue, I’ll correct it before closing the turn.
+
+The YAML parse step exposed one structural issue from the initial patch: the file still had the seeded empty `phases: []` line above the authored `phases:` block. I’m removing that duplicate key and re-running validation with `python3`.
+
+The duplicate key is fixed. I’m doing the final YAML parse now and then I’ll close out with the artifact summary.
+
+Updated the planning artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt). The plan is now implementation-ready and anchored to the actual repo state: partial `core/` + `workflow/` migration already exists, while runtime/workspace/loader/git/docs/tests still carry the legacy contract.
+
+The phase plan now has five ordered phases: workflow package foundation, runtime workspace/context migration, package CLI plus `-wf` parameters, sub-workflows plus Autoloop-v1 parity and git scope, then docs/tests/legacy removal. It also records the clarified decision that `autoloop` is the canonical public CLI name and treats stale legacy tests/docs as rewrite scope rather than compatibility requirements. `phase_plan.yaml` was validated locally with `python3` and `yaml.safe_load`.

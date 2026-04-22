@@ -12,3 +12,7 @@ There doesn’t appear to be a packaging file in the root, so I’m checking the
 I’ve confirmed the implemented CLI module is still described as an `autoloop_v3` runtime, and the recursive driver in this repo invokes `autoloop` directly. I’m checking whether any task-level clarification overrode that before I answer.
 
 YES
+<autoloop-decisions-header version="1" block_seq="3" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260422T195826Z-0b96efa7" ts="2026-04-22T20:01:45.577322+00:00" />
+`autoloop` is the canonical public CLI executable; `flowpath` in the appended standalone CLI contract is illustrative text only.
+Plan from the current partially migrated repository state (`core/` and the root `workflow/` shim already exist) and focus implementation on the remaining runtime, workspace, loader, parity, docs, and test gaps.
+Stale docs/tests that still pin missing legacy top-level workflow files or `run_autoloop_v1(...)` are rewrite targets, not compatibility requirements.
