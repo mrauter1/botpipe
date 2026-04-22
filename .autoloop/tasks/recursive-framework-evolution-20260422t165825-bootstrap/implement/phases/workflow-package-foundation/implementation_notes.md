@@ -35,6 +35,8 @@
 - `resolve_workflow_reference`
 - `load_workflow_package_class`
 - `load_compiled_workflow_package`
+- `_import_discovered_module`
+- `_repo_root_on_syspath`
 - `WorkflowPackage`
 - `ResolvedWorkflow`
 - `WorkflowManifestError`
@@ -70,6 +72,7 @@
 ## Intended behavior changes
 
 - Workflow discovery now has a strict manifest-based package contract rooted at `<root>/workflows/*/workflow.toml`.
+- Discovered package loading now uses the explicit repo root instead of depending on the current working directory or pre-populated top-level `workflows` imports.
 - Repo-root `workflows/` no longer re-exports a helper runner from its package root.
 - `workflows/autoloop_v1/` is now a real workflow package with direct-import support.
 
@@ -82,6 +85,7 @@
 ## Expected side effects
 
 - Future CLI/runtime phases can resolve workflows by canonical name, alias, or imported workflow class without adding new manifest DSL fields.
+- Package-name workflow resolution now works from neutral working directories as long as the caller supplies the repo root.
 - Tests and docs now pin the package authoring/discovery contract instead of missing legacy files.
 
 ## Deduplication / centralization
@@ -93,5 +97,6 @@
 
 - `python3 -m compileall workflow workflows runtime core tests`
 - `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_CEILING_DIRECTORIES && PYTHONPATH="$(dirname "$PWD"):$PWD" /tmp/autoloop-phase1-venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_integration_parity.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py`
+- `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_CEILING_DIRECTORIES && PYTHONPATH="/home/rauter/autoloop_v3_bkp" /tmp/autoloop-phase1-venv/bin/python - <<'PY' ... resolve_workflow_reference(root, "autoloop_v1") ... PY`
 - `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_CEILING_DIRECTORIES && PYTHONPATH="$(dirname "$PWD"):$PWD" /tmp/autoloop-phase1-venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_engine_contracts.py tests/runtime/test_optional_extensions.py`
 - `unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_CEILING_DIRECTORIES && PYTHONPATH="$(dirname "$PWD"):$PWD" /tmp/autoloop-phase1-venv/bin/python -m pytest -q`
