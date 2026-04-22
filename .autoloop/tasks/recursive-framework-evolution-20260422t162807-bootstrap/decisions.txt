@@ -8,3 +8,7 @@ Superseding the prior turn's equality rule: workflow.toml name may override the 
 Aliases remain workflow discovery metadata for list/show output only; they are not execution targets unless a later explicit clarification says otherwise.
 autoloop run requires --message, runs show/logs treat --run-id as diagnostic or advanced, logs must expose mutually exclusive --events/--trace/--raw selectors, and any -wf usage is rejected when the workflow package has no Parameters model.
 The surviving typed runtime config contract is a canonical autoloop.yaml file at repo root and user config dir only; autoloop.config and all superloop.* names are intentionally removed and migrate by manual rewrite/rename rather than compatibility loading.
+<autoloop-decisions-header version="1" block_seq="3" owner="planner" phase_id="task-global" pair="plan" turn_seq="3" run_id="run-20260422T192808Z-bb1c3640" ts="2026-04-22T19:45:07.946545+00:00" />
+workflow.toml is frozen as discovery metadata only; topology, transitions, session behavior, prompts, domain semantics, and workflow logic remain in Python code and may not move into a manifest DSL.
+The redesign keeps the current minimal extension seam and may not introduce a plugin platform, generic event bus, arbitrary runtime hooks, or a second execution model.
+Child workflow invocation, Autoloop-v1 parity, tracing, and similar side effects must stay on the same general runtime path rather than using workflow-specific harnesses or alternate execution stacks.

@@ -29,6 +29,12 @@
 - Child workflow invocation is metadata-linked rather than folder-nested and never inherits parent sessions implicitly.
 - Git tracking defaults to workflow scope, not task scope.
 
+## Architectural Guardrails
+
+- `workflow.toml` remains metadata only. It may carry discovery fields such as `name`, `title`, `description`, and `aliases`, but it must not define topology, transitions, session behavior, prompts, domain semantics, or workflow logic.
+- The redesign keeps the current minimal extension seam. It must not introduce a plugin platform, generic event bus, arbitrary runtime hooks, or a second execution model.
+- Sub-workflow invocation, Autoloop-v1 parity, tracing, and other side effects must run through the same general runtime path rather than through workflow-specific harnesses or alternate execution stacks.
+
 ## Implementation Phases
 
 ### 1. Core Package Split And Strict Shim
@@ -48,6 +54,7 @@
 - Introduce manifest discovery in `runtime/loader.py` by scanning `<root>/workflows/*/workflow.toml`.
 - Enforce the package contract: required files exist, `__init__.py` re-exports the main workflow class, optional `Parameters` export is discoverable, manifest `name` may override the discovered workflow key, and aliases remain metadata rather than extra execution targets.
 - Resolve manifest overrides through the discovery map back to the scanned package directory; do not create alias/shim packages to manufacture new import paths.
+- Keep `workflow.toml` metadata-only; topology, prompts, session behavior, and workflow logic remain in Python code rather than shifting into the manifest.
 - Update prompt resolution to search package root first and never fall back to cwd-relative behavior.
 - Regression control: direct imports such as `from workflows.autoloop_v1 import AutoloopV1` and `from workflows.ralph_loop import RalphLoop` must be part of the test suite.
 
@@ -101,6 +108,7 @@
 - child workflow uses the same `task_id` but its own `wf_<workflow>/runs/<run-id>`
 - Enrich `StepFinish` with `producer_raw_output` and `verifier_raw_output` so workflow-package-owned parity code can rebuild raw logs without a special provider wrapper.
 - Migrate Autoloop-v1 into `workflows/autoloop_v1/` with package-local `parity.py` and `conventions.py`; delete framework-owned `autoloop_v3.workflows.autoloop_v1_*` and `run_autoloop_v1(...)`.
+- Keep child invocation and parity inside the single general runtime path; do not introduce plugin buses, arbitrary hooks, or alternate execution harnesses to support them.
 - Regression control: add integration coverage for class-based and name-based child invocation, parent/child metadata, and Autoloop-v1 parity artifacts (`sessions/plan.json`, `sessions/phases/*.json`, `raw_phase_log.md`, `decisions.txt`, question/blocked/failed mapping).
 
 ### 6. Workflow-Scoped Git, Documentation Rewrite, And Legacy Cleanup

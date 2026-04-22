@@ -50,11 +50,14 @@ phases:
     and validate the package contract.
   - Honor manifest name overrides through the discovery map without adding import-path
     shim packages, and keep aliases as metadata only.
+  - Keep workflow.toml metadata-only so topology, prompts, session behavior, and workflow
+    logic stay in Python modules rather than shifting into the manifest.
   - Resolve package-local prompts and assets from the workflow package root rather
     than cwd.
   out_of_scope:
   - Task/workflow/run workspace layout migration.
   - Package-based CLI commands.
+  - Manifest-driven topology, session, prompt, or workflow-logic DSLs.
   dependencies:
   - core-kernel-split
   acceptance_criteria:
@@ -68,6 +71,9 @@ phases:
   - id: AC-3
     text: Relative prompt resolution prefers the workflow package root and never falls
       back to cwd.
+  - id: AC-4
+    text: workflow.toml remains limited to discovery metadata and does not become
+      a second DSL for topology, prompts, session behavior, or workflow logic.
   deliverables:
   - workflow package tree under repo-root workflows/
   - Manifest-driven discovery APIs
@@ -179,6 +185,8 @@ phases:
     and delete run_autoloop_v1.
   out_of_scope:
   - Repository-wide docs rewrite and final cleanup sweep.
+  - Plugin platforms, generic event buses, arbitrary runtime hooks, or a second execution
+    model.
   dependencies:
   - package-cli-and-params
   acceptance_criteria:
@@ -191,6 +199,10 @@ phases:
   - id: AC-3
     text: Autoloop-v1 parity artifacts and status mappings are reproduced through
       the general runtime only, with no framework-owned parity harness remaining.
+  - id: AC-4
+    text: Child invocation and parity land inside the same general runtime path without
+      adding a plugin platform, generic event bus, arbitrary runtime hooks, or another
+      execution model.
   deliverables:
   - Runtime workflow invoker and invocation result contract
   - Parent/child run metadata support

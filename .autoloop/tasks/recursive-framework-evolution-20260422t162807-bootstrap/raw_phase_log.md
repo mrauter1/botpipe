@@ -162,3 +162,26 @@ The planner needs one more revision that adds the missing architectural guardrai
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=session_turn | pair=plan | phase=producer | cycle=3 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+I’m closing the remaining verifier gap now by adding the explicit negative guardrails the request calls for. This is a narrow revision: preserve `workflow.toml` as metadata-only and pin the extension seam against plugins, generic hooks, event buses, and second execution models.
+
+I’m adding the missing guardrails in the smallest possible way: one explicit architectural section in the narrative plan, matching out-of-scope boundaries in the manifest and subworkflow phases, and a turn-3 decision block that freezes the same constraints for later turns.
+
+The missing guardrails are now embedded in both the narrative plan and the phase boundaries. I’m re-validating the YAML and reading the changed sections back once so the producer turn ends with internally consistent artifacts only.
+
+Updated the planning artifacts again in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/plan.md:1), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/phase_plan.yaml:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/feedback.md:1), and the turn-3 block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/decisions.txt:11). The revision adds an explicit architectural guardrail section, freezes `workflow.toml` as metadata-only, and marks plugin platforms, generic event buses, arbitrary hooks, and second execution models as out of scope in the relevant phases.
+
+`phase_plan.yaml` was re-parsed with `python3` and `yaml.safe_load` after the edits and still loads cleanly with 6 phases.
