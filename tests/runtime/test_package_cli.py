@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from autoloop_v3.runtime import cli
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class _UnusedProvider:
@@ -155,7 +159,7 @@ def test_cli_help_exposes_package_commands_only() -> None:
     for required in ("workflows", "run", "resume", "answer", "runs", "logs", "init"):
         assert required in help_text
 
-    for forbidden in ("--class-name", "--request-text", "--resume", "provider-factory", " exec "):
+    for forbidden in ("--class-name", "--request-text", "--resume", " exec "):
         assert forbidden not in help_text
 
 
@@ -193,6 +197,129 @@ class Parameters(BaseModel):
         {"default": "strict", "name": "mode", "repeated": False, "required": False, "type": "str"},
         {"default": [], "name": "reviewers", "repeated": True, "required": False, "type": "list[str]"},
     ]
+
+
+def test_cli_serializes_typed_workflow_parameters_as_json_safe_values(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    requested_at = datetime(2026, 4, 22, 12, 30, tzinfo=timezone.utc)
+    _write_workflow_package(
+        tmp_path,
+        "typed_review",
+        workflow_name="typed_review",
+        class_name="TypedReviewWorkflow",
+        export_parameters=True,
+        parameters_source=f"""
+from datetime import datetime
+from enum import Enum
+from pathlib import Path
+
+from pydantic import BaseModel
+
+
+class ReviewMode(str, Enum):
+    strict = "strict"
+
+
+class Parameters(BaseModel):
+    output_dir: Path = Path("reports")
+    requested_at: datetime = datetime.fromisoformat("{requested_at.isoformat()}")
+    mode: ReviewMode = ReviewMode.strict
+""".strip(),
+    )
+
+    show_exit = cli.main(["workflows", "show", "typed_review", "--root", str(tmp_path)])
+    show_payload = json.loads(capsys.readouterr().out)
+
+    assert show_exit == 0
+    assert show_payload["parameters"] == [
+        {"default": "reports", "name": "output_dir", "repeated": False, "required": False, "type": "Path"},
+        {
+            "default": requested_at.isoformat(),
+            "name": "requested_at",
+            "repeated": False,
+            "required": False,
+            "type": "datetime",
+        },
+        {"default": "strict", "name": "mode", "repeated": False, "required": False, "type": "ReviewMode"},
+    ]
+
+    run_exit = cli.main(
+        [
+            "run",
+            "typed_review",
+            "task-json",
+            "--root",
+            str(tmp_path),
+            "--message",
+            "Serialize defaults",
+        ],
+        provider_factory=_provider_factory,
+    )
+    run_payload = json.loads(capsys.readouterr().out)
+
+    assert run_exit == 0
+    run_dir = tmp_path / ".autoloop" / "tasks" / "task-json" / "wf_typed_review" / "runs" / run_payload["run_id"]
+    run_metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_metadata["workflow_params"] == {
+        "mode": "strict",
+        "output_dir": "reports",
+        "requested_at": requested_at.isoformat(),
+    }
+
+
+def test_cli_mutating_commands_accept_public_provider_factory_flag(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "public_provider",
+        workflow_name="public_provider",
+        class_name="PublicProviderWorkflow",
+    )
+    provider_module = tmp_path / "provider_backend.py"
+    provider_module.write_text(
+        """
+class _Provider:
+    def run_producer(self, request):
+        raise AssertionError(f"producer should not run for system-only workflow: {request!r}")
+
+    def run_verifier(self, request):
+        raise AssertionError(f"verifier should not run for system-only workflow: {request!r}")
+
+    def run_llm(self, request):
+        raise AssertionError(f"llm should not run for system-only workflow: {request!r}")
+
+
+def build(**_):
+    return _Provider()
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    exit_code = cli.main(
+        [
+            "run",
+            "public_provider",
+            "task-public-provider",
+            "--root",
+            str(tmp_path),
+            "--message",
+            "Run with a public provider factory",
+            "--provider-factory",
+            "provider_backend:build",
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["workflow"] == "public_provider"
+    assert payload["status"] == "success"
 
 
 def test_cli_run_resume_answer_and_diagnostics_follow_package_contract(
@@ -398,3 +525,16 @@ def test_cli_init_workflow_scaffolds_package_and_rejects_duplicates(
 
     assert duplicate_exit == cli.EXIT_USAGE_ERROR
     assert "already exists" in duplicate.err
+
+
+def test_recursive_wrapper_targets_the_package_cli_contract() -> None:
+    script = (REPO_ROOT / "recursive_autoloop" / "run_recursive_autoloop.sh").read_text(encoding="utf-8")
+
+    start_section = script.split("run_autoloop_start() {", 1)[1].split("run_autoloop_resume()", 1)[0]
+    resume_section = script.split("run_autoloop_resume() {", 1)[1].split("run_framework_prd_bootstrap()", 1)[0]
+
+    assert 'run \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE"' in start_section
+    assert "--intent" not in start_section
+    assert "--task-id" not in start_section
+    assert "resume \\\n    \"$AUTOLOOP_WORKFLOW_NAME\" \\\n    \"$task_id\" \\\n    --root \"$WORKSPACE\"" in resume_section
+    assert "--resume" not in resume_section
