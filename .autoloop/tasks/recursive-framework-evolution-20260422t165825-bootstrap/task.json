@@ -16,13 +16,13 @@
       "docs-tests-and-legacy-removal"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "runtime-workspace-and-context"
+    "current_phase_index": 2,
+    "current_phase_id": "package-cli-and-params"
   },
   "phase_status": {
     "workflow-package-foundation": "completed",
-    "runtime-workspace-and-context": "in_progress",
-    "package-cli-and-params": "planned",
+    "runtime-workspace-and-context": "completed",
+    "package-cli-and-params": "in_progress",
     "subworkflow-parity-and-git-scope": "planned",
     "docs-tests-and-legacy-removal": "planned"
   },
@@ -45,6 +45,19 @@
       "run_id": "run-20260422T195826Z-0b96efa7",
       "status": "in_progress",
       "ts": "2026-04-22T20:41:11.216513+00:00"
+    },
+    {
+      "phase_id": "runtime-workspace-and-context",
+      "run_id": "run-20260422T195826Z-0b96efa7",
+      "status": "completed",
+      "ts": "2026-04-22T21:17:55.562903+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "package-cli-and-params",
+      "run_id": "run-20260422T195826Z-0b96efa7",
+      "status": "in_progress",
+      "ts": "2026-04-22T21:17:55.570877+00:00"
     }
   ]
 }
