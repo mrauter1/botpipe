@@ -1,0 +1,4 @@
+name = "autoloop_v1"
+title = "Autoloop v1"
+description = "Workflow package shell reserved for the Autoloop-v1 migration."
+aliases = ["autoloop-v1"]

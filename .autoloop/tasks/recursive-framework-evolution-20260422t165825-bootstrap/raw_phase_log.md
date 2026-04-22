@@ -343,3 +343,76 @@ phase_mode=single
 phase_ids=workflow-package-foundation,runtime-workspace-and-context,package-cli-and-params,subworkflow-parity-and-git-scope,docs-tests-and-legacy-removal
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+I’m implementing the `workflow-package-foundation` phase: first I’m reading the phase artifacts and the current loader/workflow layout to pin scope, then I’ll patch discovery/export enforcement and add the package scaffolding/tests that fit this phase only.
+
+The repo is smaller than the request implies: there is no `autoloop_v3/` package yet, and `workflows/` is still a helper-module namespace. I’m reading the actual implementation and phase notes now so the patch matches the current baseline instead of the aspirational plan.
+
+I have the phase contract and plan context. Next I’m reading the loader, the strict `workflow` shim, and the existing `workflows/` package/tests to find the narrowest patch that gets manifest discovery and export enforcement in place without dragging later runtime changes into this phase.
+
+The current tests are still pinned to legacy parity helpers and even missing docs files. I’m broadening the read just enough to see what the existing package/discovery surface is and which tests need replacement in this phase versus later runtime/CLI phases.
+
+Plan:
+1. Replace the top-level `workflows/` helper surface with real package scaffolding, including `workflows/autoloop_v1/` and metadata-only `workflow.toml`.
+2. Add package discovery and resolution helpers in `runtime/loader.py` for manifest scanning, alias lookup, package-class loading, and strict `__init__.py` export enforcement, while keeping the old raw loader path internal for now.
+3. Rewrite the stale phase tests around docs and workflows so they pin the new package contract instead of missing legacy files, then add minimal docs/notes updates and run the relevant test set.
+
+I’m moving into edits next.
+
+I’m editing three areas now: the `workflows/` namespace itself, `runtime/loader.py`, and the stale docs/tests that still pin the old helper-module shape. I’m also relocating the existing Autoloop-v1 parity helpers under the new `workflows/autoloop_v1/` package so the repo-root namespace stops acting like a framework-owned module bucket.
+
+I’ve got the namespace and loader patch in. I’m replacing the stale parity/compat docs tests now with phase-specific coverage: manifest discovery, alias rules, `__init__.py` re-export enforcement, direct `workflows.<pkg>` imports, and the strict `workflow` shim surface.
+
+The code changes are in place. I’m running compile and pytest now to catch loader/package contract regressions, then I’ll patch any fallout and update the phase notes/decision ledger.
+
+`pytest` isn’t on PATH in this environment, but `python3 -m pytest` is available. I’m rerunning the suite that way and will fix whatever breaks rather than narrowing the scope prematurely.
+
+The environment has Python but no `pytest` installation and no project venv/runner. I’m switching to direct Python smoke checks for the new loader/package surface so I still validate behavior instead of stopping at static compilation.
+
+The smoke scripts failed on import-path setup, not on the code: running from the repo root needs both the repo root and its parent on `PYTHONPATH` to exercise `autoloop_v3` and direct `workflows` imports together. I’m rerunning with that explicit path setup.
+
+Static compilation succeeded, but the base Python image is missing both `pydantic` and `pytest`, so none of the runtime code can import cleanly yet. I’m using an isolated temp venv for validation rather than mutating the repo or relying on the system interpreter.
+
+One test exposed an import-cache edge case after the temp-package tests deliberately clear `workflows.*` modules. I’m fixing the test to re-import the repo package inside the test with an explicit repo-root path instead of relying on collection-time module state.
+
+The new phase tests pass. I’m checking a broader regression slice now; there are failures, so I’m reading those before deciding whether they’re pre-existing path assumptions or fallout from this patch.
+
+The broader failures are environmental, not from this phase: `git -C <tmp repo>` is acting on the current checkout because the shell inherits Git environment variables. I’m rerunning that regression slice with those Git env vars cleared so the result reflects the code rather than the harness.
+
+I’ve validated the whole suite now: `74` tests pass when run in an isolated venv with inherited Git env vars cleared. I’m finishing the phase artifacts next so later turns have the loader/package decisions and validation context in the repo, not just in this chat.
+
+Scope considered
+- Phase-local `workflow-package-foundation` only: repo-root `workflows/`, loader/discovery, strict `workflow` shim docs/tests, and the requested `autoloop_v1` package shell.
+- I left CLI cutover, workspace migration, sub-workflow runtime wiring, and full Autoloop-v1 parity runtime behavior for later phases.
+
+What I analyzed
+- Current loader/runtime surface, the strict root shim, existing `workflows/` helper modules, and the phase artifacts/plan.
+- Stale tests/docs that still pinned missing legacy files or treated helper modules as the public contract.
+
+What I changed
+- Added manifest-based package discovery, alias resolution, metadata-only `workflow.toml` validation, and strict package export enforcement in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py:19), then re-exported that surface from [runtime/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/__init__.py:1).
+- Converted [workflows/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/__init__.py:1) into an empty namespace and created the real package shell at [workflows/autoloop_v1/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/workflow.py:1) with `workflow.toml`, prompts/assets, plus moved the existing parity/conventions modules under `workflows/autoloop_v1/`.
+- Replaced the stale docs/tests with phase-accurate coverage in [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md:1), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:1), [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:1), [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:1), [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:1), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+
+Key findings / decisions
+- The raw path/module loader remains as an internal fallback for now; package discovery now exists alongside it so later CLI/runtime phases can cut over cleanly.
+- `workflow.toml` is now enforced as metadata-only; execution-semantics fields fail discovery instead of becoming a second DSL.
+- Validation required an isolated temp venv because the base environment lacked `pytest` and `pydantic`; git-based tests also required clearing inherited Git env vars from the shell.
+
+Open issues / next step
+- Next phase should switch runtime/CLI entry to the new package resolver and then migrate task/workflow/run workspace layout and message semantics.
+- Full Autoloop-v1 runtime/parity wiring is still deferred; this phase only established its package-local home and shell.
+- Validation completed: `python3 -m compileall workflow workflows runtime core tests` and full pytest suite in the isolated venv passed: `74 passed`.
