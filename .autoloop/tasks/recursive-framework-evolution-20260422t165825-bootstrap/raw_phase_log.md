@@ -1372,3 +1372,44 @@ The remaining ambiguity is coming from an implement-phase review note, not from 
 NO.
 
 Safest explicit assumption: do not treat those wrapper-only controls as required in this phase. The approved greenfield contract specifies the package CLI surface and `-wf` only for declared workflow parameters, and the current repo has no implemented or consumed equivalent in `runtime/cli.py`, `runtime/loader.py`, `tests/runtime/test_package_cli.py`, or `workflows/autoloop_v1/workflow.py`.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=2 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=2 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+The clarification closes the remaining blocker without a code change: those wrapper-only `--pairs` / `--full-auto-answers` controls are not required behavior for this phase. I’m updating the phase notes and the shared decision ledger so the next review pass doesn’t re-open that inferred requirement.
+
+I’ve only updated the turn-owned artifacts to capture the clarification. I’m checking the resulting notes and decision tail now so the next verifier pass has the explicit authority trail it needs.
+
+A newer runtime-created decisions header was added after the clarification entry landed. I’m appending the same clarification under that latest header now so the shared ledger stays aligned with the runtime’s turn structure.
+
+Scope considered
+
+The remaining open item from the phase review: whether wrapper-local `--pairs` / `--full-auto-answers` behavior had to be preserved as part of the package CLI cutover. I limited this turn to the authoritative clarification, [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/package-cli-and-params/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt).
+
+What I analyzed
+
+I applied the explicit clarification immediately. It confirms those wrapper-only controls are not required behavior for this phase because they are not part of the approved package CLI contract and the repo has no runtime consumer for them.
+
+What I changed
+
+I did not change repo code this turn. I updated the turn-owned artifacts to capture the clarified constraint:
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/package-cli-and-params/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt)
+
+Key findings / decisions
+
+The prior blocker was based on an inferred regression claim, not an approved requirement. The explicit clarification now makes the intended phase boundary clear: the package CLI migration does not need to preserve or reintroduce wrapper-local `--pairs` / `--full-auto-answers` controls.
+
+Open issues / next step
+
+No further implementation change is needed from me on that point. The next step is verifier re-review with the clarification applied so `IMP-004` can be retired or downgraded based on the authoritative intent.

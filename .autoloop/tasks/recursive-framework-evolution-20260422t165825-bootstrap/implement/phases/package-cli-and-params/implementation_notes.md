@@ -48,6 +48,7 @@
 - Default read-only and mutating command output may be JSON as long as it is deterministic and concise.
 - Generic runtime/provider flags may remain on package-based commands when they do not reintroduce raw workflow targeting; `--provider-factory` is treated as that kind of generic runtime flag.
 - A workflow package’s compiled workflow `name` must match manifest discovery metadata to keep workspace paths and CLI identifiers coherent.
+- Per explicit clarification, wrapper-local `--pairs` and `--full-auto-answers` controls are not required behavior for this phase because they are not part of the approved package CLI contract and the repo has no runtime consumer for them.
 
 ## Preserved invariants
 
@@ -70,6 +71,7 @@
 - Real config-backed provider backend implementations were not added in this phase; mutating CLI commands still rely on a provider factory, now via public `--provider-factory`, internal test injection, or `AUTOLOOP_PROVIDER_FACTORY`.
 - Autoloop-v1 still has package-local parity code and custom harness code paths; this phase did not relocate or delete them.
 - Docs outside the active runtime/package CLI surfaces were not rewritten in this phase-local change set.
+- The recursive wrapper still records `pair_selection` as wrapper-local state, but preserving or remapping old `--pairs` / `--full-auto-answers` controls was explicitly confirmed as out of scope for this package-CLI phase.
 
 ## Expected side effects
 
