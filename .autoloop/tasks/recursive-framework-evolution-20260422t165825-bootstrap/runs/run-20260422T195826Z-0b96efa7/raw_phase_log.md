@@ -1325,3 +1325,50 @@ The phase should stay incomplete until the wrapper preserves its prior pair-sele
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m tracing the remaining wrapper regression through the old runtime behavior before I change anything. The blocker is specific: preserve pair selection and auto-answer behavior under the new package CLI instead of just dropping those controls.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"question","question":"WARNING:\n1) The remaining blocker is ambiguous. The recursive wrapper historically passed `--pairs` and `--full-auto-answers`, but the repo’s prior runtime CLI in `autoloop_v3/runtime/cli.py` did not implement those flags either, and the current `workflows/autoloop_v1` package does not consume any equivalent parameters. I should not invent new pair-selection or auto-answer semantics without confirmation. Should those wrapper controls still be treated as required behavior for this phase despite not being part of the approved public package CLI contract? Answer YES or NO.\nBest supposition: NO.\n2) If YES, should the intended replacement be explicit generic package-CLI flags (for example `autoloop run ... --pairs ... --full-auto-answers`) rather than workflow-specific `-wf` parameters on `autoloop_v1`? Answer YES or NO.\nBest supposition: YES.","best_supposition":"Do not invent replacement semantics unless you explicitly confirm that the wrapper’s old `--pairs` and `--full-auto-answers` behavior must remain supported in this phase."}
+</loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=clarification | pair=implement | phase=producer | cycle=3 | attempt=1 | source=auto
+---
+Question:
+WARNING:
+1) The remaining blocker is ambiguous. The recursive wrapper historically passed `--pairs` and `--full-auto-answers`, but the repo’s prior runtime CLI in `autoloop_v3/runtime/cli.py` did not implement those flags either, and the current `workflows/autoloop_v1` package does not consume any equivalent parameters. I should not invent new pair-selection or auto-answer semantics without confirmation. Should those wrapper controls still be treated as required behavior for this phase despite not being part of the approved public package CLI contract? Answer YES or NO.
+Best supposition: NO.
+2) If YES, should the intended replacement be explicit generic package-CLI flags (for example `autoloop run ... --pairs ... --full-auto-answers`) rather than workflow-specific `-wf` parameters on `autoloop_v1`? Answer YES or NO.
+Best supposition: YES.
+
+Answer:
+I’m checking the request snapshot, the raw phase log, and the current CLI/runtime code to determine whether those wrapper-only flags remain required by the approved redesign.
+
+The first search used the wrong path/`rg` flags. I’m rechecking the actual repo layout and the wrapper/CLI references directly.
+
+The repo has already moved to the package CLI with `-wf`, and `runtime/cli.py` does not expose `--pairs` or `--full-auto-answers`. I’m checking the recursive wrapper to see whether those are only wrapper-local orchestration controls.
+
+I’ve confirmed the current wrapper hardcodes `plan,implement,test` internally and only calls `autoloop run/resume ... --message`; it does not pass those controls through the package CLI. I’m checking whether any remaining requirements or tests still treat them as mandatory behavior.
+
+The current test suite only enforces that the wrapper uses `autoloop run/resume` with the package CLI shape; it does not require `--pairs` or `--full-auto-answers`. I’m checking the phase artifacts that raised the blocker to see whether that blocker is grounded in an approved requirement or in an inferred regression claim.
+
+The remaining ambiguity is coming from an implement-phase review note, not from the approved CLI contract itself. I’m reading that section of the phase log around the blocker to make sure there wasn’t a later decision that elevated those wrapper controls into a hard requirement.
+
+NO.
+
+Safest explicit assumption: do not treat those wrapper-only controls as required in this phase. The approved greenfield contract specifies the package CLI surface and `-wf` only for declared workflow parameters, and the current repo has no implemented or consumed equivalent in `runtime/cli.py`, `runtime/loader.py`, `tests/runtime/test_package_cli.py`, or `workflows/autoloop_v1/workflow.py`.
