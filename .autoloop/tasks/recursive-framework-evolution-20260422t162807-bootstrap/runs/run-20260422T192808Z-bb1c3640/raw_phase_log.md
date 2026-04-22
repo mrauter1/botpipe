@@ -162,3 +162,68 @@ The planner needs one more revision that adds the missing architectural guardrai
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=session_turn | pair=plan | phase=producer | cycle=3 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+I’m closing the remaining verifier gap now by adding the explicit negative guardrails the request calls for. This is a narrow revision: preserve `workflow.toml` as metadata-only and pin the extension seam against plugins, generic hooks, event buses, and second execution models.
+
+I’m adding the missing guardrails in the smallest possible way: one explicit architectural section in the narrative plan, matching out-of-scope boundaries in the manifest and subworkflow phases, and a turn-3 decision block that freezes the same constraints for later turns.
+
+The missing guardrails are now embedded in both the narrative plan and the phase boundaries. I’m re-validating the YAML and reading the changed sections back once so the producer turn ends with internally consistent artifacts only.
+
+Updated the planning artifacts again in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/plan.md:1), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/phase_plan.yaml:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/feedback.md:1), and the turn-3 block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/decisions.txt:11). The revision adds an explicit architectural guardrail section, freezes `workflow.toml` as metadata-only, and marks plugin platforms, generic event buses, arbitrary hooks, and second execution models as out of scope in the relevant phases.
+
+`phase_plan.yaml` was re-parsed with `python3` and `yaml.safe_load` after the edits and still loads cleanly with 6 phases.
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=session_turn | pair=plan | phase=verifier | cycle=3 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+The revised plan now covers the previously missing guardrails, and I’m not seeing a remaining material gap that would block implementation. I’m flipping the criteria to complete and appending a brief re-review note for continuity before closing this verifier turn.
+
+I’m checking the final verifier artifacts and YAML parse state, then I’ll close the loop if the revised plan is fully aligned and the checklist is accurate.
+
+The revised guardrails are present, and I’m doing one last consistency pass against the shared decisions history before closing this as complete.
+
+Scope considered
+The authoritative request snapshot, raw-log clarification history, shared decisions ledger, and the active planning artifacts `plan.md`, `phase_plan.yaml`, `feedback.md`, and `criteria.md`.
+
+What I analyzed
+I re-checked the final revised areas that previously blocked completion: manifest/discovery semantics, package-only CLI and `-wf` behavior, surviving typed config, metadata-only `workflow.toml`, and the extension-seam guardrails against plugins, event buses, hooks, and alternate runtimes.
+
+What I reviewed
+I reviewed the full narrative plan for intent coverage and internal consistency, the ordered phases for dependency and boundary quality, the shared decisions for conflicts or drift, the feedback history for closure continuity, and the YAML parse/readability of `phase_plan.yaml`.
+
+Key findings / decisions
+No blocking findings remain.
+`PLAN-001` through `PLAN-004` are addressed in the current plan revision.
+`PLAN-005` was appended as a non-blocking closure note recording that the revised plan is now implementation-ready against the request and decision history.
+`criteria.md` now accurately shows all verification criteria checked.
+`phase_plan.yaml` parses successfully and retains coherent ordered phases with non-empty required lists.
+
+Open issues / next step
+No open blocking issues. The plan artifacts are ready for implementation work.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
