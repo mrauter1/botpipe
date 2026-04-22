@@ -67,3 +67,6 @@
 {"ts": "2026-04-22T21:53:49.267793+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 67, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "package-cli-and-params", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-22T21:53:49.268651+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 68, "event_type": "pair_started", "pair": "test", "phase_id": "package-cli-and-params"}
 {"ts": "2026-04-22T21:53:49.268744+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 69, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "package-cli-and-params"}
+{"ts": "2026-04-22T21:56:40.064828+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 70, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "package-cli-and-params"}
+{"ts": "2026-04-22T21:57:50.878922+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 71, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "package-cli-and-params"}
+{"ts": "2026-04-22T21:57:52.939918+00:00", "run_id": "run-20260422T195826Z-0b96efa7", "seq": 72, "event_type": "cycle_started", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "package-cli-and-params"}
