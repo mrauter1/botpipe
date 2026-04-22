@@ -1921,3 +1921,108 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019db736-278b-79d0-996c-bc296c98ac15
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+I’m checking the current phase tests against the accepted scope and the latest implementer fixes. The main gap I’m looking for is whether the new child-run isolation is exercised across the failure path as well, not just success and pause.
+
+I found one worthwhile gap: the fatal child case checks metadata shape but not the shared task-request isolation that caused the original regression. I’m adding that assertion so the failure path can’t silently reintroduce the bug.
+
+The extra fatal-path isolation assertion is in. I’m running the workspace-context file and the full focused phase slice so the strategy/feedback updates reflect executed coverage, not just static expectations.
+
+The tests are green. I’m writing the coverage map and a concise auditor-facing note now, with the executed behaviors tied back to the phase acceptance criteria and the stabilization choices.
+
+Scope considered
+
+- The subworkflow/parity/git phase behaviors only, with emphasis on child-run isolation, fatal child metadata, Autoloop-v1 parity, and workflow-scoped git coverage.
+- The active test artifacts: [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/subworkflow-parity-and-git-scope/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/subworkflow-parity-and-git-scope/feedback.md).
+
+What I analyzed
+
+- Reviewed the current runtime tests against AC-1 through AC-4 and the latest implementer fix for child-message isolation.
+- Looked specifically for an uncovered failure path and found that the fatal child case checked metadata shape but not the shared task request/message invariants.
+
+What I changed
+
+- Extended `tests/runtime/test_workspace_and_context.py` so the fatal child invocation path now also asserts that task-level `request.md` and `messages.jsonl` remain unchanged.
+- Updated `test_strategy.md` with an explicit acceptance-criteria-to-test coverage map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise coverage summary to the phase `feedback.md`.
+
+Key findings / decisions
+
+- The main added regression guard is the fatal child path: it now proves the same task-request isolation invariant already covered for success and paused child runs.
+- Validation passed:
+  - `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py -q` -> `7 passed`
+  - `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_integration_parity.py tests/runtime/test_optional_extensions.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_engine_contracts.py -q` -> `48 passed`
+
+Open issues / next step
+
+- No new test gaps found inside this phase scope beyond the documented known gaps in `test_strategy.md`.
+- Next step is auditor review of the updated test artifacts and focused coverage.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019db736-278b-79d0-996c-bc296c98ac15
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+I’m auditing the phase-local tests against the accepted scope, with the highest scrutiny on the updated child-workflow isolation checks, fatal child metadata coverage, and the stated stabilization measures in the test strategy.
+
+Reviewing the phase audit artifacts and the focused test coverage now. I’m verifying the current `criteria.md`, `feedback.md`, and the relevant runtime tests before I update the phase-local audit files.
+
+I’ve confirmed the audit artifacts still reflect the pre-audit state. Next I’m checking the specific tests that carry the phase coverage and re-running the focused suite before I mark the audit complete.
+
+The focused test surfaces look consistent with the strategy: success, paused, and fatal child runs; Autoloop-v1 parity; workflow-scoped git; and stabilization around imports and `GIT_*` environment. I’m running the focused suite once more so the audit result is grounded in current execution, not just artifact summaries.
+
+I’ve re-run the focused suite and there are no failures. I’m updating the phase-local audit artifacts now: marking the criteria complete and appending a concise audit resolution note to the feedback log.
+
+Scope considered
+
+- The phase-local test artifacts for `subworkflow-parity-and-git-scope`
+- The focused test files covering child workflow invocation, Autoloop-v1 parity, and workflow-scoped git behavior
+- The focused regression suite for this phase only
+
+What I analyzed
+
+- Reviewed [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/subworkflow-parity-and-git-scope/test_strategy.md) against AC-1 through AC-4.
+- Inspected the concrete assertions in `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_workflow_integration_parity.py`, `tests/runtime/test_optional_extensions.py`, and `tests/unit/test_stdlib_and_extensions.py`.
+- Re-ran the focused suite: `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_integration_parity.py tests/runtime/test_optional_extensions.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_engine_contracts.py -q`.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/subworkflow-parity-and-git-scope/criteria.md) to mark all audit criteria satisfied.
+- Appended an audit resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/subworkflow-parity-and-git-scope/feedback.md).
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The test set now covers the material regression surface for this phase, including success, paused, and fatal child workflow paths, task-level request/message isolation, Autoloop-v1 parity sidecars and clarification persistence, and workflow-scoped git filtering.
+- Focused suite passed: `48 passed in 0.89s`.
+
+Open issues / next step
+
+- No open issues in this phase-local test audit.
+- The test phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
