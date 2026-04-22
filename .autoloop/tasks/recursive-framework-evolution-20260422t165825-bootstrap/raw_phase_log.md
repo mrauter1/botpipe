@@ -284,3 +284,53 @@ The YAML quote fix is applied. I’m rerunning the parse and a quick spot-check 
 Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt) to add the missing `ctx.invoke_workflow(...)` return contract.
 
 The plan now explicitly requires a structured child-workflow result with child identity, run id, terminal status, last event, selected output metadata or references, and child path references. That contract is reflected in the narrative plan, the validation list, the sub-workflow phase scope, acceptance criteria, deliverables, and the shared decisions log. `phase_plan.yaml` was re-validated successfully with `python3` and `yaml.safe_load`.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=plan | phase=verifier | cycle=3 | attempt=1 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+I’m doing the final audit pass now. The focus is whether the repaired sub-workflow contract closes the last blocker and whether the criteria can be marked complete without stretching beyond the actual plan text.
+
+The remaining checks are satisfied. I’m marking the criteria complete and appending one final non-blocking closure note to the feedback history so the file shows that the previous blockers were reverified and cleared.
+
+I’ve written the completion gate updates. I’m doing one last readback of the criteria and YAML status so the final promise is grounded in the file state, not just the narrative review.
+
+Scope considered
+
+- Final verification of the authoritative planning artifacts: `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and `decisions.txt`.
+- Focused on the previously flagged contract gaps: manifest scope, CLI behavior, sub-workflow safety, and the `ctx.invoke_workflow(...)` return contract.
+
+What I analyzed
+
+- Whether the plan now explicitly covers every previously missing interface and safety invariant from the request.
+- Whether the machine-readable phase plan still matches the narrative plan after the latest producer edits.
+- Whether the current criteria state can be truthfully promoted to complete.
+
+What I reviewed
+
+- `phase_plan.yaml` parses successfully with `yaml.safe_load`.
+- Required list fields in the phase plan remain populated.
+- The plan narrative, phase acceptance criteria, feedback history, and shared decisions ledger now align on the public CLI contract, metadata-only manifest rule, sub-workflow safety rules, and structured child-workflow result contract.
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `criteria.md` was updated so all verification gates are checked.
+- `feedback.md` now records a final non-blocking closure note confirming that `PLAN-001` through `PLAN-004` are addressed.
+
+Open issues / next step
+
+- No further planning corrections are required in this verifier pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
