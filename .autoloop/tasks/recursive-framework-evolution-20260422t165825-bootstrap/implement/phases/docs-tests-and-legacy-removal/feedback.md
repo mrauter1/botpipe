@@ -10,3 +10,7 @@
 ## Findings
 
 - IMP-001 `blocking` — `runtime.loader._import_discovered_module` still resolves discovered packages through the shared `workflows.*` module cache, so explicit `root` is not authoritative once one workflow package has already been imported in the current Python process. Repro: resolve `"demo"` from one temp root, then resolve `"demo"` from a different temp root in the same process; the second resolution returns the first root’s class (`WorkflowA` twice). The new optional-extension and package-cli tests avoid this only by manually clearing `sys.modules`, which masks a real runtime bug for library callers and long-lived processes. Minimal fix: centralize root-scoped module isolation in `runtime.loader` (for example by evicting stale `workflows` modules for the active root or importing discovered workflow modules under a root-specific namespace) instead of relying on callers/tests to clear caches.
+
+## Re-review
+
+- 2026-04-22: `IMP-001` verified fixed. `runtime.loader._import_discovered_module` now evicts stale cached `workflows.*` modules when their origin falls outside the requested repo-root `workflows/` tree, and `tests/runtime/test_compatibility_runtime.py::test_resolve_workflow_reference_switches_roots_without_reusing_cached_workflow_modules` proves sequential same-process resolution across two different roots returns the correct class from each root without caller-side cache clearing. No remaining findings.

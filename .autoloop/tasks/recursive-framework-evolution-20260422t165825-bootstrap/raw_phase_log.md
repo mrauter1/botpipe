@@ -2208,3 +2208,59 @@ Open issues / next step
 
 - No new blocker remains from the reviewer finding.
 - Validation passed: `./.venv/bin/python -m compileall runtime tests workflow workflows docs` and `./.venv/bin/pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py tests/runtime/test_optional_extensions.py tests/runtime/test_package_cli.py tests/runtime/test_workflow_integration_parity.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py` with `101 passed`.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db764-1e90-7230-9cee-c394c2d9f124
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+I’m re-reviewing the single blocker from the prior pass now. First I’m reading the updated phase artifacts and spot-checking the loader fix plus the new regression test to confirm explicit-root resolution is now correct without test-only cache clearing.
+
+I’m re-checking the loader fix against the original blocker and the phase acceptance criteria, then I’ll update the reviewer-owned artifacts to reflect the current state.
+
+The fix is in the right place. I’m checking the helper behavior and rerunning the new regression coverage so the reviewer artifacts reflect verified runtime behavior, not just a code read.
+
+The blocker reproducer now passes without test-side cache surgery, so I’m updating the reviewer artifacts to mark the phase complete and to record that `IMP-001` was verified fixed rather than leaving the stale blocking note in place.
+
+I’ve updated the phase artifacts. I’m doing one last pass to confirm there are no unchecked criteria boxes left and that the review log records the blocker as resolved rather than silently disappearing.
+
+Scope considered
+
+- Phase-local verifier artifacts in `.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/docs-tests-and-legacy-removal/`.
+- The producer’s fix for `IMP-001` in `runtime.loader` and the related regression coverage in `tests/runtime/test_compatibility_runtime.py`.
+- The current shared decisions ledger for this run.
+
+What I analyzed
+
+- `runtime.loader._import_discovered_module`, `_evict_stale_workflow_modules`, `_module_within_workflows_root`, and `_module_origin_path`.
+- The new same-process multi-root regression test.
+- The current `criteria.md` and `feedback.md` state to ensure the reviewer artifacts matched the re-review result.
+
+What I reviewed
+
+- The original blocker repro path: resolving the same workflow name from two different repo roots in one Python process.
+- The fix strategy: stale `workflows.*` cache eviction only when the cached module origin falls outside the requested repo-root `workflows/` tree.
+- Validation: `./.venv/bin/pytest tests/runtime/test_compatibility_runtime.py -q` passed with `9 passed`.
+
+Key findings / decisions
+
+- No remaining blocking findings.
+- `IMP-001` is resolved: explicit `root` is now authoritative across sequential different-root workflow resolutions in one process, without caller-side `sys.modules` cleanup.
+- I updated `criteria.md` to mark all review gates complete and appended a re-review note to `feedback.md` recording that `IMP-001` was verified fixed.
+
+Open issues / next step
+
+- No phase-local open issues remain.
+- Review status is complete for `docs-tests-and-legacy-removal`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
