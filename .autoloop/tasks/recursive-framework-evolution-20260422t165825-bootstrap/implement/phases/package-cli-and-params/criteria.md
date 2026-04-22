@@ -15,4 +15,4 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Technical Debt / Simplicity**: Changes avoid unnecessary indirection, duplicated logic, scattered ownership, over-engineering, and unrelated refactors.
 - [ ] **Maintainability / Validation**: Diffs are cohesive, follow repository conventions, and are supported by appropriate validation, documentation, or notes where needed.
 
-Review result: blocking findings remain open, so all criteria stay unchecked for this pass.
+Review result: blocking findings remain open after re-review, so all criteria stay unchecked for this pass.

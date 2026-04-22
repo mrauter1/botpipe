@@ -1277,3 +1277,51 @@ Open issues / next step
 - Validation was limited to `python3 -m py_compile runtime/cli.py runtime/loader.py runtime/runner.py runtime/workspace.py tests/runtime/test_package_cli.py` and `bash -n recursive_autoloop/run_recursive_autoloop.sh`.
 - I could not run `pytest` or a live runtime smoke test because the available `python3` still lacks project dependencies such as `pydantic` and does not have `pytest` installed.
 - The next step is verifier rerun in the project’s real environment so the phase criteria can be updated against executable tests rather than syntax-only checks.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m re-reviewing the active phase against the verifier findings and the updated code paths now. I’ll check the changed CLI/loader/wrapper surfaces first, then update the phase criteria and feedback based on whether any blockers remain.
+
+I’ve confirmed the direct fixes landed. I’m checking for second-order regressions now, especially whether the wrapper migration silently drops behavior the request still requires and whether the criteria can honestly be marked complete.
+
+I found one remaining blocker after the re-review. The direct parser regressions were fixed, but the wrapper migration dropped behavior that the repo was previously relying on, so I’m recording that precisely in the verifier artifacts now.
+
+Scope considered
+
+Active phase artifacts plus the changed request-relevant runtime surfaces: [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py), [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py), [recursive_autoloop/run_recursive_autoloop.sh](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop.sh), and [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py).
+
+What I analyzed
+
+I re-checked the three prior blockers against the updated code, the current shared decisions ledger, and the phase contract. I also reviewed the wrapper migration for adjacent operational regressions, since the request explicitly disallows feature loss during the CLI cutover.
+
+What I reviewed
+
+I updated the verifier artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/package-cli-and-params/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/package-cli-and-params/feedback.md)
+
+Key findings / decisions
+
+- `IMP-001` is resolved: typed workflow parameters are now normalized to JSON-safe values before CLI output and `run.json` persistence.
+- `IMP-002` is resolved: mutating commands again expose a public `--provider-factory module:function` path.
+- `IMP-003` is resolved narrowly: the recursive wrapper no longer calls removed legacy flags.
+- `IMP-004` remains `blocking`: [recursive_autoloop/run_recursive_autoloop.sh](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop.sh) now calls the package CLI, but it silently drops the prior `--pairs` and `--full-auto-answers` behavior instead of preserving those controls through an equivalent new-CLI path. That is an operational regression against the stated “no feature regressions” requirement.
+
+Open issues / next step
+
+The phase should stay incomplete until the wrapper preserves its prior pair-selection and auto-answer behavior through a supported package-CLI mapping. After that, the criteria can be re-evaluated for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
