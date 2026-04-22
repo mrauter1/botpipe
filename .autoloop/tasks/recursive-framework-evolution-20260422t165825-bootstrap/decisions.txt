@@ -1,0 +1,14 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="runtime" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260422T195826Z-0b96efa7" ts="2026-04-22T20:01:45.518112+00:00" entry="questions" qa_seq="1" />
+WARNING:
+1. The request has a public CLI contract conflict. The main redesign spec explicitly requires commands named `autoloop ...`, but the appended “Standalone CLI Contract Plan” defines the command tree as `flowpath ...`. These are different public interfaces and I should not choose one silently.
+Best supposition: treat `autoloop` as the authoritative executable name for this repository, and treat `flowpath` in the appended CLI contract as illustrative/generic wording only. Answer YES or NO.
+<autoloop-decisions-header version="1" block_seq="2" owner="runtime" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260422T195826Z-0b96efa7" ts="2026-04-22T20:01:45.518455+00:00" entry="answers" qa_seq="1" source="auto" />
+I’m checking the request snapshot, the phase log, and the repo’s current naming/docs to resolve whether `autoloop` or `flowpath` is the intended public CLI name.
+
+The current evidence is one-sided so far: the repo and main redesign text consistently say `autoloop`, while `flowpath` only appears inside the appended standalone CLI contract block. I’m checking the actual package entrypoints and any workflow instructions before answering.
+
+There doesn’t appear to be a packaging file in the root, so I’m checking the actual repo layout and runtime CLI module names directly rather than inferring from missing setup metadata.
+
+I’ve confirmed the implemented CLI module is still described as an `autoloop_v3` runtime, and the recursive driver in this repo invokes `autoloop` directly. I’m checking whether any task-level clarification overrode that before I answer.
+
+YES
