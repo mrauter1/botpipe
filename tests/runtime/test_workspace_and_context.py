@@ -21,13 +21,22 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     workflow_dir = task_dir / "wf_snapshot_demo"
     runs_dir = workflow_dir / "runs"
     first_run_dir = next(runs_dir.iterdir())
+    task_meta = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+    first_run_meta = json.loads((first_run_dir / "run.json").read_text(encoding="utf-8"))
 
     assert first_result.terminal == "SUCCESS"
     assert (task_dir / "messages.jsonl").exists()
+    assert not (first_run_dir / "messages.jsonl").exists()
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (workflow_dir / "workflow.json").exists()
-    assert json.loads((first_run_dir / "run.json").read_text(encoding="utf-8"))["status"] == "success"
+    assert task_meta["messages_file"] == ".autoloop/tasks/task-1/messages.jsonl"
+    assert task_meta["request_file"] == ".autoloop/tasks/task-1/request.md"
+    assert first_run_meta["status"] == "success"
+    assert first_run_meta["task_folder"] == ".autoloop/tasks/task-1"
+    assert first_run_meta["workflow_folder"] == ".autoloop/tasks/task-1/wf_snapshot_demo"
+    assert first_run_meta["run_folder"] == f".autoloop/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}"
+    assert first_run_meta["request_file"] == f".autoloop/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}/request.md"
 
     second_result = run_workflow(
         workflow_file,
