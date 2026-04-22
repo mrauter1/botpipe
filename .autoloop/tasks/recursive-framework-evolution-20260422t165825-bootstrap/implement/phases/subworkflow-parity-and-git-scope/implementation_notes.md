@@ -46,9 +46,12 @@
 - `runtime.loader.coerce_workflow_parameter_mapping(...)`
 - `runtime.workspace.write_parent_run_metadata(...)`
 - `runtime.workspace.append_child_run_record(...)`
+- `runtime.workspace.ensure_workspace(..., record_message=...)`
+- `RunnerOptions.record_task_message`
 - `runtime.runner._build_workflow_invoker(...)`
 - `runtime.runner._build_child_workflow_result(...)`
 - `runtime.runner._child_run_record_payload(...)`
+- `runtime.runner._child_run_record_payload_from_parts(...)`
 - `runtime.events.EventLogger.emit(...)`
 - `extensions.git.workflow_workspace_pathspec(...)`
 - `GitTrackingConfig.track_workflow_workspace_artifacts`
@@ -73,6 +76,7 @@
 ## Preserved invariants
 
 - Child workflows stay under the same `task_id` but always receive isolated run folders, workflow folders, checkpoints, sessions, request snapshots, trace files, and pending-answer state.
+- Child workflow invocation no longer mutates shared task-level `request.md` or `messages.jsonl`; nested child messages stay run-local.
 - `ctx.invoke_workflow(...)` remains runtime-backed only and is supported from `SystemStep` handlers without exposing a second execution model.
 - Autoloop-v1 continues to preserve raw logs, `sessions/plan.json`, per-phase sessions, clarification persistence, and blocked/question/failed status mapping without reintroducing a custom harness.
 - Git tracking remains workflow-declared opt-in and tracing remains run-local.
@@ -81,6 +85,7 @@
 
 - Parent workflows can now invoke child workflows by imported class or package name and receive a stable structured result object with identity, terminal status, last event, metadata, artifact references, and path references.
 - Child runs now write `parent.json`, parent runs append `children.jsonl`, and the child `run.json` also carries parent linkage.
+- Parent-side child history now uses the same serialized field set for fatal and non-fatal child outcomes.
 - Autoloop-v1 now runs through the general runtime with package-local prompts and parity side effects reconstructed from extension callbacks rather than provider wrapping.
 - Default git tracking scope now filters to `workflow_folder`, and git commands ignore inherited outer-repo selection env vars.
 
@@ -94,10 +99,13 @@
 
 - Workflow-local parity code may append extra runtime events to `events.jsonl`; event sequencing is therefore synchronized against the on-disk log before each emit.
 - Parent-side child history is append-only in `children.jsonl`; callers should treat `parent.json` as the child-side provenance record.
+- Nested child-run messages do not appear in the shared task message ledger; only top-level task messages update task request state.
 
 ## Validation performed
 
 - `python3 -m py_compile core/context.py core/extensions.py core/engine.py runtime/loader.py runtime/workspace.py runtime/runner.py runtime/events.py extensions/git/repo.py tests/runtime/test_optional_extensions.py tests/unit/test_stdlib_and_extensions.py`
+- `python3 -m py_compile runtime/runner.py runtime/workspace.py tests/runtime/test_workspace_and_context.py`
+- `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py -q`
 - `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_integration_parity.py tests/runtime/test_optional_extensions.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_engine_contracts.py -q`
 - Focused git slice after env sanitation: `.venv/bin/python -m pytest tests/runtime/test_optional_extensions.py tests/unit/test_stdlib_and_extensions.py -q`
 

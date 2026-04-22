@@ -1814,3 +1814,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db736-278b-79d0-996c-bc296c98ac15
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+I’ve got the reviewer delta. I’m fixing the task-state contamination in child invocation first, then I’ll normalize the parent child-history serializer so the outcome shape stays stable across success, pause, and fatal paths.
+
+I’ve settled the fix shape. The child run needs a run-local request snapshot without going through the shared task message-update path, and the child-history writer needs one serializer for all outcomes so fatal child records don’t drift.
+
+The main fix is in. I’m tightening the new fatal-child test fixture now so it compiles cleanly even though the child never reaches its declared transition in the failing path.
+
+The code path is patched and the new assertions are in. I’m running compile and the focused runtime tests now, specifically the child-invocation suite first, because that’s where the regression was reproduced.
+
+The targeted and focused suites are green. I’m updating the phase notes now to reflect the reviewer-driven changes: child runs no longer touch shared task request state, and `children.jsonl` uses one serializer for fatal and non-fatal child outcomes.
+
+I’m just folding the reviewer-driven fix details into the phase notes now: the new task-message isolation flag, the stabilized child-history serializer, and the extra fatal-child coverage.
+
+Scope considered
+
+- The reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/subworkflow-parity-and-git-scope/feedback.md), specifically child-run task-state contamination and child-history schema drift.
+- The child invocation path in `runtime/runner.py` and `runtime/workspace.py`, plus the focused runtime tests that exercise class-based, name-based, and fatal child runs.
+
+What I analyzed
+
+- Traced how `ctx.invoke_workflow(...)` creates child runs and confirmed the reviewer’s repro: child messages were flowing through the shared task request/message update path.
+- Checked the parent-side `children.jsonl` write paths and confirmed fatal child records were serialized differently from success/pause records.
+
+What I changed
+
+- Added `RunnerOptions.record_task_message` and `ensure_workspace(..., record_message=...)`, then used that path so nested child runs keep their explicit run-local `request.md` without mutating shared task `request.md` or `messages.jsonl`.
+- Normalized parent child-history emission through one serializer, so fatal and non-fatal child records now share the same path fields and `last_event` shape.
+- Extended `tests/runtime/test_workspace_and_context.py` to assert task-level request/message isolation for child runs and to cover fatal child metadata shape, then updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/subworkflow-parity-and-git-scope/implementation_notes.md).
+
+Key findings / decisions
+
+- Child workflow messages are now run-local only; shared task request state stays tied to top-level task messages.
+- Parent `children.jsonl` records now use a stable schema across success, pause, and fatal child outcomes.
+- Validation passed:
+  - `python3 -m py_compile runtime/runner.py runtime/workspace.py tests/runtime/test_workspace_and_context.py`
+  - `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py -q`
+  - `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_integration_parity.py tests/runtime/test_optional_extensions.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_engine_contracts.py -q`
+  - Result: `48 passed in 1.06s`
+
+Open issues / next step
+
+- No remaining local failures in the focused phase suite.
+- The next step is verifier rerun against the updated child-request isolation and stabilized `children.jsonl` payloads.

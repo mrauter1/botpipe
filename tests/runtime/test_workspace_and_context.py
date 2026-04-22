@@ -303,6 +303,11 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
     parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
     child_payload = json.loads((child_run_dir / "child.json").read_text(encoding="utf-8"))
     child_parent = json.loads((child_run_dir / "parent.json").read_text(encoding="utf-8"))
+    task_messages = [
+        json.loads(line)
+        for line in (task_dir / "messages.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
     child_records = [
         json.loads(line)
         for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
@@ -317,7 +322,9 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
     assert Path(parent_payload["child_run_folder"]) == child_run_dir
     assert Path(parent_payload["child_request_file"]) == child_run_dir / "request.md"
     assert Path(parent_payload["child_artifacts"]["child_dump"]) == child_run_dir / "child.json"
+    assert (task_dir / "request.md").read_text(encoding="utf-8") == "Parent request\n"
     assert (child_run_dir / "request.md").read_text(encoding="utf-8") == "Run child from class\n"
+    assert [entry["message"] for entry in task_messages] == ["Parent request"]
     assert child_payload["answer"] is None
     assert child_payload["workflow_params"] == {"mode": "strict"}
     assert (child_run_dir / "sessions" / "main.json").exists()
@@ -393,6 +400,11 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
     child_payload = json.loads((child_run_dir / "child.json").read_text(encoding="utf-8"))
     child_meta = json.loads((child_run_dir / "run.json").read_text(encoding="utf-8"))
     child_parent = json.loads((child_run_dir / "parent.json").read_text(encoding="utf-8"))
+    task_messages = [
+        json.loads(line)
+        for line in (task_dir / "messages.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
     child_records = [
         json.loads(line)
         for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
@@ -401,6 +413,8 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
 
     assert paused_parent.terminal == "PAUSE"
     assert resumed_parent.terminal == "SUCCESS"
+    assert (task_dir / "request.md").read_text(encoding="utf-8") == "Parent request\n"
+    assert [entry["message"] for entry in task_messages] == ["Parent request"]
     assert parent_payload["parent_answer"] == "Proceed parent"
     assert parent_payload["child_workflow"] == "child_pause"
     assert parent_payload["child_status"] == "paused"
@@ -418,6 +432,39 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
     assert child_records[0]["last_event"] == {"tag": "question", "reason": "", "question": "Child question?"}
 
 
+def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_children(tmp_path: Path) -> None:
+    _write_child_failing_workflow_package(tmp_path)
+    _write_parent_failing_invoker_workflow_package(tmp_path)
+
+    with pytest.raises(RuntimeError, match="child boom"):
+        run_workflow_package(
+            "parent_failing",
+            provider=ScriptedLLMProvider(),
+            options=RunnerOptions(root=tmp_path, task_id="subworkflow-fatal-task", request_text="Parent request"),
+        )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-fatal-task"
+    parent_run_dir = next((task_dir / "wf_parent_failing" / "runs").iterdir())
+    child_run_dir = next((task_dir / "wf_child_failing" / "runs").iterdir())
+    child_records = [
+        json.loads(line)
+        for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+    assert len(child_records) == 1
+    assert child_records[0]["workflow_name"] == "child_failing"
+    assert child_records[0]["run_id"] == child_run_dir.name
+    assert child_records[0]["terminal"] == "fatal"
+    assert child_records[0]["status"] == "fatal_error"
+    assert child_records[0]["last_event"] is None
+    assert child_records[0]["package_folder"] == str(tmp_path / "workflows" / "child_failing")
+    assert child_records[0]["run_folder"] == str(child_run_dir)
+    assert child_records[0]["request_file"] == str(child_run_dir / "request.md")
+    assert child_records[0]["parent_file"] == str(child_run_dir / "parent.json")
+    assert child_records[0]["error"] == "child boom"
+
+
 def _write_system_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
     package_dir = root / "workflows" / workflow_name
     package_dir.mkdir(parents=True, exist_ok=True)
@@ -433,6 +480,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from workflow import SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
 from workflow.primitives import Event
 
 
@@ -771,6 +819,84 @@ class ParentNameWorkflow(Workflow):
         }
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
         return state.model_copy(update={"finished": True}), Event("done")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_child_failing_workflow_package(root: Path) -> None:
+    package_dir = root / "workflows" / "child_failing"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        "from .workflow import ChildFailingWorkflow\n__all__ = ['ChildFailingWorkflow']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text('name = "child_failing"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "workflow.py").write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+from workflow import SUCCESS, SystemStep, Workflow
+
+
+class ChildFailingWorkflow(Workflow):
+    name = "child_failing"
+
+    class State(BaseModel):
+        note: str = ""
+
+    explode = SystemStep(name="explode")
+    entry = explode
+    transitions = {explode: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_explode(state: State, ctx):
+        raise RuntimeError("child boom")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_parent_failing_invoker_workflow_package(root: Path) -> None:
+    package_dir = root / "workflows" / "parent_failing"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        "from .workflow import ParentFailingWorkflow\n__all__ = ['ParentFailingWorkflow']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text('name = "parent_failing"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "workflow.py").write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+from workflow import SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+
+
+class ParentFailingWorkflow(Workflow):
+    name = "parent_failing"
+
+    class State(BaseModel):
+        note: str = ""
+
+    launch = SystemStep(name="launch")
+    entry = launch
+    transitions = {launch: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_launch(state: State, ctx):
+        ctx.invoke_workflow("child_failing", message="Run child fatal")
+        return state, Event("done")
 """.strip()
         + "\n",
         encoding="utf-8",
