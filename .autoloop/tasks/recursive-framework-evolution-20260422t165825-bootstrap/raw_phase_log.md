@@ -416,3 +416,45 @@ Open issues / next step
 - Next phase should switch runtime/CLI entry to the new package resolver and then migrate task/workflow/run workspace layout and message semantics.
 - Full Autoloop-v1 runtime/parity wiring is still deferred; this phase only established its package-local home and shell.
 - Validation completed: `python3 -m compileall workflow workflows runtime core tests` and full pytest suite in the isolated venv passed: `74 passed`.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+I’m reviewing the phase-local workflow-package foundation changes only: loader/discovery, the `workflows/` namespace/package shell, and the phase docs/tests. I’ll inspect those diffs against the phase contract, then update the criteria and feedback artifacts with any concrete findings.
+
+I found one likely contract gap in the loader and I’m verifying it directly before I mark anything blocking: package-name resolution appears to depend on `workflows/` already being importable on `sys.path`, even though the loader also takes an explicit repo root. If that reproduces cleanly, it’s a real phase miss for CLI-oriented package resolution.
+
+I confirmed one blocking contract miss: package-name resolution only works when the repo root is already on `sys.path`, and the new tests globally force that state instead of proving the loader works from just the provided `<root>`. I’m recording that in the phase feedback and leaving the criteria unchecked accordingly.
+
+Scope considered
+- Phase-local workflow-package foundation only: `runtime/loader.py`, `runtime/__init__.py`, repo-root `workflows/` package scaffolding, and the replacement docs/tests tied to this phase.
+
+What I analyzed
+- The phase contract, shared decisions, implementation notes, loader/discovery code, new `autoloop_v1` package shell, and the new tests/docs.
+- The claimed validation versus the actual package-resolution behavior from both repo-root and neutral-cwd import contexts.
+
+What I reviewed
+- Manifest discovery, alias resolution, `__init__.py` export enforcement, strict `workflow` shim coverage, and whether package-name resolution really works from the explicit `<root>` argument.
+- The test harness changes, especially `tests/conftest.py`, for coverage gaps that could mask loader regressions.
+
+Key findings / decisions
+- Blocking: `resolve_workflow_reference(root, "<workflow>")` still depends on top-level `workflows` already being importable on `sys.path`; from a neutral cwd with only the repository parent on `PYTHONPATH`, discovery succeeds but resolution fails with `ModuleNotFoundError: No module named 'workflows'`.
+- The new tests mask that gap by globally prepending the repo root in `tests/conftest.py`, so the phase does not yet prove the requested CLI-oriented package-name resolution contract.
+
+Open issues / next step
+- Fix package loading in `runtime.loader` so it is anchored to the provided repo root instead of ambient import state, then add a regression test that resolves a workflow package name from outside the repo root without pre-importable top-level `workflows`.
+- Criteria remain unchecked because the blocking contract gap affects correctness, safety, and validation coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
