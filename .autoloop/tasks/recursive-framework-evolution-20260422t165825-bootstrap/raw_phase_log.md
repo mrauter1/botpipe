@@ -2156,3 +2156,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db764-1e90-7230-9cee-c394c2d9f124
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+I’m addressing the reviewer’s blocking loader issue now. First I’m tracing the package import path in `runtime.loader` and adding a same-process multi-root regression case so the fix is enforced centrally instead of by test-only `sys.modules` clearing.
+
+I’ve narrowed the fix to one central place: `runtime.loader._import_discovered_module`. I’m changing it to evict stale `workflows.*` modules only when they come from a different root, then I’m adding a regression test that resolves the same workflow name from two different roots sequentially without manual cache clearing.
+
+The central loader fix and regression test are in. I’m rerunning the loader/runtime-heavy slice plus the full targeted phase suite because this change touches package import identity and could easily break imported-class workflows if it’s too aggressive.
+
+The new same-process multi-root regression case is passing so far, and the loader change hasn’t tripped the workspace or optional-extension suites. I’m waiting on the rest of the phase suite, especially the package CLI and imported-class workflow paths, before I update the phase notes.
+
+I’ve resolved the reviewer’s blocker centrally in the loader rather than by adding more test-side cache clearing. I’m recording that exact constraint in the shared ledger and phase notes now so later turns don’t regress explicit-root resolution again.
+
+Scope considered
+
+- Reviewer finding `IMP-001` in the active phase feedback.
+- Phase-relevant loader/runtime behavior plus the package-based tests that were masking the issue with manual `sys.modules` clearing.
+- Phase notes and shared decisions files only for bookkeeping.
+
+What I analyzed
+
+- `runtime.loader._import_discovered_module` and the explicit-root workflow resolution path.
+- Existing package/discovery tests to see where cross-root import caching was already being worked around.
+- A direct same-process repro resolving the same workflow name from two different temp roots, which returned the first root’s class twice before the fix.
+
+What I changed
+
+- Added central stale-module eviction in `runtime.loader` so cached `workflows.*` modules are dropped only when they originate outside the requested repo-root `workflows/` tree.
+- Added a regression test in `tests/runtime/test_compatibility_runtime.py` that resolves the same workflow name from two different roots sequentially in one Python process without manual cache clearing.
+- Updated the phase implementation notes and appended the non-obvious loader decision to `decisions.txt`.
+
+Key findings / decisions
+
+- The blocker was real runtime behavior, not just brittle tests: explicit `root` was not authoritative across multiple repositories in one process.
+- The fix is centralized in the loader rather than pushed into more test-only `sys.modules` cleanup.
+- Same-root imported-class identity remains stable because eviction only happens when cached workflow modules come from a different root.
+
+Open issues / next step
+
+- No new blocker remains from the reviewer finding.
+- Validation passed: `./.venv/bin/python -m compileall runtime tests workflow workflows docs` and `./.venv/bin/pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py tests/runtime/test_optional_extensions.py tests/runtime/test_package_cli.py tests/runtime/test_workflow_integration_parity.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py` with `101 passed`.

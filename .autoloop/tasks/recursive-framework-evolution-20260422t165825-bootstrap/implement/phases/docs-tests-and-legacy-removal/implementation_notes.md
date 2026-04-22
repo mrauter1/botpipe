@@ -41,6 +41,7 @@
 - `runtime.runner.run_workflow_package`
 - `runtime.loader.discover_workflow_packages`
 - `runtime.loader.resolve_workflow_reference`
+- `runtime.loader._evict_stale_workflow_modules`
 - `runtime.workspace.ensure_workspace`
 - `runtime.workspace.create_run`
 - `runtime.workspace.resolve_resume_state_root`
@@ -71,6 +72,7 @@
 - Runtime config no longer discovers `superloop.*` files or accepts `runtime.intent_mode`.
 - Task message persistence stores only timestamped messages; task `request.md` is always the latest snapshot instead of supporting append/preserve merge modes.
 - Raw loader/runner helpers are no longer re-exported from `runtime`; live tests now exercise generated workflows through discovered packages.
+- Explicit workflow `root` resolution now remains authoritative across multiple repositories in the same Python process; stale `workflows.*` modules from another root are evicted centrally in the loader.
 
 ## Known Non-Changes
 
@@ -86,11 +88,12 @@
 
 - Optional-extension tests now use the same package-based execution model as the other runtime tests instead of maintaining a separate raw-file path.
 - Strictness coverage for removed runtime exports lives in `tests/strictness/test_no_compat.py` so legacy public-surface checks stay centralized.
+- Cross-root workflow cache invalidation is centralized in `runtime.loader` instead of scattered `sys.modules` clearing in callers.
 
 ## Validation Performed
 
 - `./.venv/bin/python -m compileall runtime tests workflow workflows docs`
-- `./.venv/bin/pytest tests/strictness/test_no_compat.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py tests/runtime/test_optional_extensions.py tests/runtime/test_workflow_integration_parity.py tests/test_architecture_baseline_docs.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_package_cli.py`
+- `./.venv/bin/pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py tests/runtime/test_optional_extensions.py tests/runtime/test_package_cli.py tests/runtime/test_workflow_integration_parity.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py`
 
 ## Open Follow-Up
 
