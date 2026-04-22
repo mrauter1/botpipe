@@ -1870,3 +1870,54 @@ Open issues / next step
 
 - No remaining local failures in the focused phase suite.
 - The next step is verifier rerun against the updated child-request isolation and stabilized `children.jsonl` payloads.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db736-278b-79d0-996c-bc296c98ac15
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+I’m rechecking only the reviewer-flagged surfaces: task request isolation for child runs and `children.jsonl` shape stability. If those are clean under the updated tests and code paths, I’ll mark the phase green and leave a short cycle-2 audit note in the reviewer artifacts.
+
+The recheck is clean. I’m marking the criteria as satisfied and appending a short cycle-2 resolution note so the feedback file doesn’t look like the original findings still stand.
+
+Scope considered
+
+- The reviewer-flagged child-invocation isolation fix in `runtime/workspace.py` and `runtime/runner.py`
+- The child-history serializer normalization in `runtime/runner.py`
+- The updated focused coverage in `tests/runtime/test_workspace_and_context.py`
+- The active phase artifacts only
+
+What I analyzed
+
+- Re-read the code paths that previously let child messages overwrite shared task request state.
+- Re-checked the fatal and non-fatal `children.jsonl` write paths for schema drift.
+- Re-ran the focused phase suite to verify the fixes against the requested subworkflow/parity/git scope.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/subworkflow-parity-and-git-scope/criteria.md) to mark all acceptance dimensions satisfied.
+- Appended a cycle-2 resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/subworkflow-parity-and-git-scope/feedback.md).
+
+Key findings / decisions
+
+- `IMP-001` is resolved: child runs now keep their message/request state run-local and no longer rewrite shared task `request.md` or `messages.jsonl`.
+- `IMP-002` is resolved: fatal and non-fatal child records now use the same serializer shape.
+- No remaining blocking or non-blocking findings in the reviewed phase scope.
+- Validation passed: `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_integration_parity.py tests/runtime/test_optional_extensions.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_engine_contracts.py -q` -> `48 passed in 0.90s`.
+
+Open issues / next step
+
+- No open issues in this phase-local review.
+- The phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

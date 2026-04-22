@@ -12,3 +12,5 @@
 
 - IMP-002 | non-blocking | `runtime.runner._child_run_record_payload`, `runtime.runner._execute_compiled_workflow`
   Parent-side `children.jsonl` records are not shape-stable across outcomes. Success/pause child records are emitted via `_child_run_record_payload(...)` with absolute path fields plus `last_event`, while the fatal-error path writes a hand-built payload with repo-relative paths and no `package_folder` / `last_event`. That makes future readers branch on outcome type just to parse one metadata file. Minimal fix: route fatal child-record emission through the same serializer used for non-fatal child runs, extending that helper with optional error details instead of duplicating a second schema.
+
+Cycle 2 re-review: `IMP-001` and `IMP-002` are resolved in the current diff. Child runs now keep their messages run-local without rewriting shared task request state, fatal and non-fatal child records share one serializer shape, and the focused phase suite passed (`48 passed`).
