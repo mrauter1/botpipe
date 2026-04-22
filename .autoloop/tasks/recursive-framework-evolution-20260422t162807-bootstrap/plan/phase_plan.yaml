@@ -48,6 +48,8 @@ phases:
     workflows/ralph_loop/.
   - Add discovery helpers in runtime/loader.py that scan <root>/workflows/*/workflow.toml
     and validate the package contract.
+  - Honor manifest name overrides through the discovery map without adding import-path
+    shim packages, and keep aliases as metadata only.
   - Resolve package-local prompts and assets from the workflow package root rather
     than cwd.
   out_of_scope:
@@ -61,7 +63,8 @@ phases:
       for missing required files or bad __init__.py exports.
   - id: AC-2
     text: Direct imports such as from workflows.autoloop_v1 import AutoloopV1 and
-      from workflows.ralph_loop import RalphLoop work without raw-target loading.
+      from workflows.ralph_loop import RalphLoop work without raw-target loading,
+      even when discovery uses a manifest override key.
   - id: AC-3
     text: Relative prompt resolution prefers the workflow package root and never falls
       back to cwd.
@@ -121,11 +124,15 @@ phases:
   - Replace runtime/cli.py with the required package-based subcommand tree.
   - Make runtime/runner.py execute discovered workflow packages only.
   - Add repeatable -wf <name> <value> parsing and validation/coercion through an optional
-    workflow Parameters model.
+    workflow Parameters model, and reject -wf usage entirely when no Parameters model
+    exists.
   - Persist resolved workflow parameters in run.json and keep them immutable for the
     life of the run.
-  - Remove public raw module/file/class targeting and request_text/intent_mode semantics
-    from the CLI.
+  - Require --message for autoloop run, keep --run-id diagnostic/advanced for runs
+    show and logs, and add mutually exclusive --events/--trace/--raw log selectors.
+  - Define the surviving autoloop.yaml typed config contract for provider/runtime
+    controls only, then remove public raw module/file/class targeting and request_text/intent_mode
+    semantics from the CLI.
   out_of_scope:
   - Child workflow invocation internals.
   - Autoloop-v1 parity migration.
@@ -133,22 +140,27 @@ phases:
   - workspace-message-model
   acceptance_criteria:
   - id: AC-1
-    text: The public CLI exposes only the package-based commands required by the request
-      and rejects raw workflow targets and --class-name.
+    text: The public CLI exposes only the package-based commands required by the request,
+      rejects raw workflow targets and --class-name, and requires --message on autoloop
+      run.
   - id: AC-2
-    text: autoloop run/resume/answer operate on discovered package names and resolve
-      the latest resumable run when --run-id is omitted.
+    text: autoloop run/resume/answer operate on discovered package names, runs show/logs
+      default to the latest relevant run when --run-id is omitted, and autoloop logs
+      supports --events, --trace, and --raw selectors.
   - id: AC-3
     text: -wf arguments are parsed as ordered pairs, validated by the target workflow
-      package, persisted in run.json, and rejected when unknown or invalid.
+      package, rejected when no Parameters model exists or when unknown/invalid, persisted
+      in run.json, and kept separate from the autoloop.yaml runtime/provider contract.
   deliverables:
   - Rewritten runtime/cli.py and package-aware runtime/runner.py
   - Workflow-parameter validation path
-  - CLI integration tests for run/resume/answer/workflows/runs/logs/init
+  - Canonical autoloop.yaml config contract plus CLI integration tests for run/resume/answer/workflows/runs/logs/init
   risks:
   - CLI removal may strand existing capabilities if packaged workflow execution is
     incomplete.
   - Resume resolution may become ambiguous without careful workflow/task scoping.
+  - Removing legacy config names without a replacement contract could regress provider
+    or runtime controls.
   rollback:
   - Revert the CLI and runner switch together; do not leave raw and package entrypoints
     mixed publicly.
@@ -195,8 +207,9 @@ phases:
   status: planned
   in_scope:
   - Change git tracking defaults and helper naming from task scope to workflow scope.
-  - Remove .superloop fallback, superloop.* config discovery, legacy thread_id/session
-    compatibility, and compatibility-only public loaders/status behavior.
+  - Remove .superloop fallback, autoloop.config and superloop.* config discovery,
+    legacy thread_id/session compatibility, and compatibility-only public loaders/status
+    behavior.
   - Rewrite docs to describe autoloop_v3.core, workflow packages, package-based CLI,
     the message model, and the task -> workflow -> runs layout.
   - Rewrite tests to cover the requested discovery, CLI, workspace, placeholder, child-run,
@@ -215,9 +228,9 @@ phases:
       autoloop_v3.workflows helpers, raw-target CLI, retained compatibility posture,
       or the old workspace layout.
   - id: AC-3
-    text: Compatibility-only runtime code and tests for thread_id, superloop.*, legacy
-      status handling, and raw-target public execution are removed or redesigned in
-      line with the new architecture.
+    text: Compatibility-only runtime code and tests for thread_id, autoloop.config,
+      superloop.*, legacy status handling, and raw-target public execution are removed
+      or redesigned in line with the new architecture.
   deliverables:
   - Workflow-scoped git tracking implementation
   - Rewritten docs and tests

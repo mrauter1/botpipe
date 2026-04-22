@@ -94,3 +94,30 @@ The planner should revise the plan to resolve the manifest-contract contradictio
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db6aa-0477-7ca0-9c82-f3df6481311e
+---
+I’m revising the plan against the verifier’s blocking findings now. The fixes are straightforward: remove the unconfirmed manifest narrowing, spell out the missing CLI and `-wf` behaviors, and add an explicit surviving typed config contract with migration and rollback notes.
+
+I’ve got the exact corrections. I’m patching the narrative plan, phase acceptance criteria, and the turn-2 decisions block together so the manifest, CLI, and config contracts all say the same thing.
+
+The revisions are in. I’m re-validating the phase YAML and reviewing the edited sections for internal consistency, especially where the manifest override rule now interacts with import paths and where the new config contract touches CLI/runtime behavior.
+
+I found one internal contradiction during the self-review: the risk register still described manifest names as needing equality with the package directory after I had already restored override semantics. I’m correcting that and tightening the package-path/config wording so the plan no longer fights itself.
+
+The manifest/config contradictions are cleaned up. I’m doing a final consistency pass over the changed sections and re-parsing the phase YAML before I close this producer turn.
+
+Revised the planning artifacts to address the verifier’s blocking findings in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/plan.md:1), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/phase_plan.yaml:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/plan/feedback.md:1), and the turn-2 block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t162807-bootstrap/decisions.txt:6). The plan now restores the request’s manifest-override semantics, keeps aliases as metadata only, makes the missing CLI and `-wf` rules explicit, and defines the surviving typed runtime config contract around canonical `autoloop.yaml` with migration and rollback notes.
+
+`phase_plan.yaml` was re-parsed with `python3` and `yaml.safe_load` after the edits and still loads cleanly with 6 phases.

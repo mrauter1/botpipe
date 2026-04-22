@@ -20,8 +20,10 @@
 
 - `autoloop_v3.core` becomes the only internal kernel package; `workflow/` remains a strict authoring shim only.
 - Repo-root `workflows/` is reserved for real workflow packages and remains a regular package with `__init__.py`.
-- Each workflow package is importable as `workflows.<workflow_name>` and must contain `__init__.py`, `workflow.py`, and `workflow.toml`.
-- To preserve direct Python imports without loader aliases, treat the workflow directory name and `workflow.toml.name` as the same canonical package key; use `aliases` for alternate CLI lookup names.
+- Each workflow package is importable as a regular package at its real directory path under `workflows/` and must contain `__init__.py`, `workflow.py`, and `workflow.toml`.
+- Workflow directory name is the default discovery key, and `workflow.toml.name` may override the CLI/runtime workflow key when explicitly set by the package.
+- Manifest overrides must map back to the scanned package directory without adding authoring-time import shims; direct Python imports continue to use the real package path.
+- `aliases` remain discovery metadata for list/show output unless a later clarification explicitly promotes them to execution keys.
 - Package-local prompts and assets resolve relative to the workflow package root; mutable artifacts never write into `package_folder`.
 - Workspace scopes are strict: task scope is shared across workflows, workflow scope persists across runs of one workflow on one task, and run scope holds immutable or run-local artifacts only.
 - Child workflow invocation is metadata-linked rather than folder-nested and never inherits parent sessions implicitly.
@@ -44,7 +46,8 @@
 - `../autoloop_v1.py` -> `workflows/autoloop_v1/`
 - `../Ralph_loop.py` -> `workflows/ralph_loop/`
 - Introduce manifest discovery in `runtime/loader.py` by scanning `<root>/workflows/*/workflow.toml`.
-- Enforce the package contract: required files exist, `__init__.py` re-exports the main workflow class, optional `Parameters` export is discoverable, and manifest aliases act only as secondary lookup names rather than changing package identity.
+- Enforce the package contract: required files exist, `__init__.py` re-exports the main workflow class, optional `Parameters` export is discoverable, manifest `name` may override the discovered workflow key, and aliases remain metadata rather than extra execution targets.
+- Resolve manifest overrides through the discovery map back to the scanned package directory; do not create alias/shim packages to manufacture new import paths.
 - Update prompt resolution to search package root first and never fall back to cwd-relative behavior.
 - Regression control: direct imports such as `from workflows.autoloop_v1 import AutoloopV1` and `from workflows.ralph_loop import RalphLoop` must be part of the test suite.
 
@@ -76,9 +79,13 @@
 - `autoloop runs show ...`
 - `autoloop logs ...`
 - `autoloop init workflow <name>`
+- `autoloop run` requires `--message` and accepts repeatable `-wf <name> <value>` pairs.
+- `autoloop runs show` and `autoloop logs` default to the latest relevant run for the workflow/task; `--run-id` stays diagnostic or advanced rather than normal-path required.
+- `autoloop logs` must expose mutually exclusive `--events`, `--trace`, and `--raw` selectors.
 - Remove public raw execution, public `--class-name`, and public raw module/file/class targeting.
-- Add repeatable `-wf <name> <value>` parsing, ordered collection, workflow-specific validation/coercion through optional package `Parameters`, and persistence of resolved parameters in `run.json`.
+- Add repeatable `-wf <name> <value>` parsing, ordered collection, workflow-specific validation/coercion through optional package `Parameters`, rejection of any `-wf` usage when no `Parameters` model exists, and persistence of resolved parameters in `run.json`.
 - Keep provider/runtime controls separate from workflow parameters so `-wf` cannot override generic runtime/provider options.
+- Define the surviving typed config contract in the same phase: optional `autoloop.yaml` at repo root and user config dir, provider/runtime controls only, no `intent_mode`, no request-merging semantics, and no `superloop.*` discovery.
 - Regression control: CLI integration tests must cover ambiguous resume selection, latest resumable run resolution, and `-wf` failure modes for unknown or invalid parameters.
 
 ### 5. Sub-Workflow Invocation And Autoloop-v1 Parity Migration
@@ -118,6 +125,8 @@
 - `discover_workflows(root: Path) -> dict[str, DiscoveredWorkflow]`
 - `load_workflow_package(root: Path, workflow_name: str) -> DiscoveredWorkflow`
 - `resolve_workflow_target(target: str | type[Workflow]) -> DiscoveredWorkflow`
+- `DiscoveredWorkflow` should carry both the discovered workflow key and the actual package directory/module path so manifest overrides do not require import-path shims.
+- Discovery key defaults to the package directory name and may be overridden by `workflow.toml.name`; aliases stay descriptive metadata rather than additional execution keys.
 - Reject packages missing required files or violating the `__init__.py` export contract before execution starts.
 
 ### Workspace / Metadata
@@ -141,6 +150,14 @@
 - Explicit absolute paths remain supported when authors opt in explicitly.
 - Runtime must never look in cwd for relative prompts or assets.
 
+### Runtime / Config
+
+- Post-redesign runtime keeps one typed config contract in `autoloop.yaml`, loaded from `~/.config/autoloop/autoloop.yaml` and overridden by repo-root `autoloop.yaml` when both exist.
+- The config schema stays small and typed: provider selection, provider model/effort controls, and runtime policy such as `max_steps`; workflow parameters never live in config and `intent_mode` is removed.
+- CLI flags override config, and `-wf` never overrides runtime/provider controls.
+- `autoloop.config` and all `superloop.*` filenames are intentionally dropped; migration is manual rewrite/rename rather than compatibility loading.
+- Rollback safety: ship the new config contract and its tests before deleting the old discovery code, and revert the parser/docs/tests together if the new contract proves incomplete.
+
 ## Compatibility And Migration Notes
 
 - Intentional behavior breaks, all explicitly permitted by the request:
@@ -149,7 +166,9 @@
 - framework-owned `autoloop_v3.workflows` disappears
 - runtime layout changes to task -> workflow -> runs
 - session/checkpoint/config payload compatibility is dropped when it only exists for legacy wire support
+- `autoloop.yaml` becomes the sole surviving config filename; `autoloop.config` and `superloop.*` are removed as part of the greenfield cutover
 - There is no planned runtime migration path for old `.autoloop` or `.superloop` state. Old runs become archival once the redesign lands.
+- Config migration is explicit and manual: users either rewrite existing runtime settings into the new `autoloop.yaml` schema or run with CLI defaults/flags only.
 - Existing workflows must move into repo-root packages before the raw-target CLI is removed, otherwise capability compatibility would regress.
 
 ## Validation Strategy
@@ -159,12 +178,14 @@
 - manifest validation and loader discovery
 - placeholder resolution for `workflow_folder`, `package_folder`, and `workflow_name`
 - workflow-parameter coercion and rejection rules
+- typed config parsing/merging for the surviving `autoloop.yaml` contract
 - Contract coverage:
 - `Context.invoke_workflow(...)` return contract and failure behavior
 - `RunBinding` / `StepFinish` extension events include the new fields
 - prompt resolution prefers package root over cwd
 - Runtime integration coverage:
 - all package-based CLI commands
+- `autoloop run` requiring `--message`, `logs` mode selectors, and latest-run defaulting for `runs show` / `logs`
 - task/workflow/run workspace creation and resume/answer behavior
 - parent/child metadata links without nested folders
 - Autoloop-v1 parity artifacts via the general runtime only
@@ -178,8 +199,9 @@
 | Risk | Why it matters | Mitigation |
 | --- | --- | --- |
 | `workflow` -> `core` split leaks or breaks imports | The same package currently serves internal and public roles | Move implementation first, then replace `workflow` with thin re-exports and add explicit shim-surface tests |
-| Workflow naming drifts between directory, manifest, and import path | Direct imports and CLI discovery become inconsistent | Validate `workflow.toml.name` against the package directory, keep aliases non-canonical, and fail discovery early |
+| Workflow naming drifts between discovery key, manifest override, and package path | Direct imports and CLI discovery become inconsistent | Track both the discovered workflow key and the real package path, fail on duplicate discovered keys, and test direct imports plus manifest-override lookups together |
 | Workspace refactor breaks resume/checkpoint/session lookup | Resume behavior is capability-critical | Introduce `WorkflowWorkspace` explicitly, keep run-local checkpoint/session ownership, and add end-to-end run/resume/answer coverage before deleting old layout |
+| Config cleanup strands provider/runtime controls | The redesign removes legacy config names and fields while keeping typed runtime config as a supported interface | Define one canonical `autoloop.yaml` contract, test CLI/config precedence, document manual migration, and remove legacy discovery only after the new parser is covered |
 | Child invocation causes nested-folder or session-leak regressions | Sub-workflows are a first-class requirement | Centralize child-run creation in one invoker service, persist parent/child metadata only, and prohibit implicit session inheritance |
 | Autoloop-v1 parity regresses after removing the special harness | This is the strongest operational compatibility requirement in the request | Add raw outputs to `StepFinish`, migrate parity code into the package, and prove parity artifacts through integration tests before deleting `run_autoloop_v1(...)` |
 | Git tracking commits too much after multi-workflow tasks arrive | Task scope becomes overly broad under the new layout | Rename helpers around workflow scope, default to `workflow_folder`, and test commit pathspecs against multi-workflow tasks |
