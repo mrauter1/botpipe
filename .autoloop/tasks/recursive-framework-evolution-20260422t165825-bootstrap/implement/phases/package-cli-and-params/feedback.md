@@ -24,3 +24,9 @@
 - IMP-003 resolved narrowly — the recursive wrapper no longer calls removed top-level flags like `--workspace`, `--task-id`, or `--resume`.
 
 - IMP-004 `blocking` — `recursive_autoloop/run_recursive_autoloop.sh:512-559` updates the wrapper to the new package CLI shape, but it silently drops the old `--pairs "$pair_selection"` and `--full-auto-answers` behavior instead of preserving those controls through an equivalent package-CLI path. The concrete regression is that recursive bootstrap/cycle runs now ignore the wrapper’s requested pair selection and may stop on questions that previously auto-advanced, even though the request explicitly forbids feature regressions. Minimal fix: preserve those wrapper behaviors through a supported new-CLI mapping at one central boundary, such as explicit generic runtime flags or validated workflow parameters that the target workflow actually consumes, rather than just deleting the controls during the migration.
+
+## Re-review (Cycle 3)
+
+- IMP-004 closed by explicit clarification — the authoritative clarification states that wrapper-local `--pairs` and `--full-auto-answers` behavior is not required for this phase because those controls are not part of the approved package CLI contract and the repo has no runtime consumer for them.
+
+- No remaining blocking findings for this phase.
