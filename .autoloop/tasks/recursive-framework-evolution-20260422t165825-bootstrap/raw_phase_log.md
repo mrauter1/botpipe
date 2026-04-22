@@ -829,3 +829,54 @@ Open issues / next step
 
 - Verifier should rerun `IMP-001`; this turn addresses that specific blocker.
 - Execution-level tests are still blocked in this shell because both `pytest` and `pydantic` are missing.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+---
+I’m reviewing the producer’s fix for the `workflow_params` resume regression and checking whether it closes the blocker without introducing a new workspace or context regression.
+
+I’ve confirmed the original blocker is addressed in both runners. I’m reading the rest of the new regression test helper now to make sure it exercises the real pause/resume path and doesn’t mask a different contract issue.
+
+The original omitted-param bug is fixed, but there is still one material immutability hole: resume-time params can still explicitly overwrite an existing run’s persisted params. I’m updating the review artifacts to keep the phase incomplete on that narrower blocker.
+
+Scope considered
+
+- Reviewed the producer’s cycle-2 fix for the runtime workspace/context phase, focusing on persisted `workflow_params` behavior across create and resume paths.
+- Audited [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [workflows/autoloop_v1/parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/parity.py), and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- Updated only the phase review artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/runtime-workspace-and-context/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/runtime-workspace-and-context/feedback.md).
+
+What I analyzed
+
+- The new `resolve_run_workflow_params(...)` helper and how it is used by both the generic runner and the Autoloop-v1 parity runner.
+- Whether the resumed-run parameter contract is now actually immutable, not just preserved for the `None` case.
+- The new regression test to see which resume scenario it covers.
+
+What I reviewed
+
+- `IMP-001` appears addressed: omitted resume params no longer collapse persisted run params to `{}`.
+- The fix does not cover explicit resume-time overrides; existing runs can still have their persisted params replaced by a new `workflow_params` dict.
+- The new test covers the omitted-param path only, not the explicit-override path.
+
+Key findings / decisions
+
+- `IMP-002` is blocking: [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), and [workflows/autoloop_v1/parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/parity.py) still allow resume-time `workflow_params` to overwrite an existing run’s persisted params, which violates the requested immutability contract.
+- Criteria remain incomplete and feedback was updated to point at `IMP-002` as the current blocker.
+
+Open issues / next step
+
+- Enforce immutability centrally in `resolve_run_workflow_params(...)` for existing runs by treating persisted `run.json` params as authoritative and rejecting or ignoring resume-time overrides.
+- Add a regression test for the explicit-override resume case, then rerun verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

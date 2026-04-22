@@ -15,4 +15,4 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Technical Debt / Simplicity**: Changes avoid unnecessary indirection, duplicated logic, scattered ownership, over-engineering, and unrelated refactors.
 - [ ] **Maintainability / Validation**: Diffs are cohesive, follow repository conventions, and are supported by appropriate validation, documentation, or notes where needed.
 
-Reviewer status: blocking finding `IMP-001` keeps the phase incomplete.
+Reviewer status: blocking finding `IMP-002` keeps the phase incomplete.
