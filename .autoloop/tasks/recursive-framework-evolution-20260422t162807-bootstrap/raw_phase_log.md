@@ -227,3 +227,12 @@ No open blocking issues. The plan artifacts are ready for implementation work.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T192808Z-bb1c3640 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=core-kernel-split,workflow-package-discovery,workspace-message-model,package-cli-and-params,subworkflow-and-parity,git-docs-tests-cleanup
+explicit=True
+current_phase_index=0
