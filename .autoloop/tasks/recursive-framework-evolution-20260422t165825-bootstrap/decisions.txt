@@ -16,3 +16,7 @@ YES
 `autoloop` is the canonical public CLI executable; `flowpath` in the appended standalone CLI contract is illustrative text only.
 Plan from the current partially migrated repository state (`core/` and the root `workflow/` shim already exist) and focus implementation on the remaining runtime, workspace, loader, parity, docs, and test gaps.
 Stale docs/tests that still pin missing legacy top-level workflow files or `run_autoloop_v1(...)` are rewrite targets, not compatibility requirements.
+<autoloop-decisions-header version="1" block_seq="4" owner="planner" phase_id="task-global" pair="plan" turn_seq="3" run_id="run-20260422T195826Z-0b96efa7" ts="2026-04-22T20:08:28.040746+00:00" />
+`workflow.toml` is metadata-only discovery and human-facing package information; it must not become a second DSL for topology, prompts, parameters, transitions, or workflow logic.
+The package-based `autoloop` CLI contract includes explicit output, error, and exit semantics; matching command names alone is insufficient.
+`ctx.invoke_workflow(...)` is only for runtime-backed contexts, must be supported from `SystemStep` handlers, and child runs must never inherit parent session bindings or pending answers implicitly.

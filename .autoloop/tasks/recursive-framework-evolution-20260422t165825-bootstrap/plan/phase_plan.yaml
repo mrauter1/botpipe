@@ -10,6 +10,8 @@ phases:
   in_scope:
   - Convert `workflows/` from framework-owned helper modules into actual workflow
     packages with `__init__.py`, `workflow.py`, `workflow.toml`, `prompts/`, and `assets/`.
+  - Enforce `workflow.toml` as metadata-only discovery and human-facing package information,
+    not a second DSL for topology, prompts, parameters, transitions, or workflow logic.
   - Add discovery helpers that scan `<root>/workflows/*/workflow.toml`, resolve canonical
     names and aliases, and locate the main workflow class.
   - Support workflow resolution by package name for CLI entry and by imported workflow
@@ -24,7 +26,8 @@ phases:
   acceptance_criteria:
   - id: AC-1
     text: Workflow discovery resolves packages from repo-root `workflows/` using `workflow.toml`
-      metadata without relying on public raw file/module targets.
+      as metadata only, without relying on public raw file/module targets or manifest-defined
+      execution semantics.
   - id: AC-2
     text: Each workflow package `__init__.py` re-exports its main workflow class and
       optional `Parameters`, and tests pin that contract.
@@ -102,6 +105,8 @@ phases:
     coercion, and persistence.
   - Implement deterministic workflow resolution by canonical name then alias and command-specific
     run lookup when `--run-id` is omitted.
+  - Define mutating-command summary output, read-only command output expectations,
+    and explicit exit/error behavior for validation, resolution, and runtime failures.
   out_of_scope:
   - Child workflow invocation.
   - Autoloop-v1 parity relocation details.
@@ -118,6 +123,9 @@ phases:
   - id: AC-3
     text: '`-wf` values are validated through workflow `Parameters`, stored in run
       metadata, and rejected when unknown or unsupported.'
+  - id: AC-4
+    text: Mutating commands emit concise run summaries, read-only commands produce
+      deterministic output, and CLI errors/exit codes follow the explicit public contract.
   deliverables:
   - A rewritten `runtime/cli.py` and supporting runner/orchestration updates.
   - Parameter model loading and validation logic tied to workflow packages.
@@ -139,6 +147,8 @@ phases:
   in_scope:
   - Implement `Context.invoke_workflow(...)` for both imported workflow classes and
     workflow package names.
+  - Restrict child invocation to runtime-backed contexts, support `SystemStep` handlers,
+    and forbid implicit inheritance of parent session bindings or pending answers.
   - Create child run metadata with `children.jsonl` on the parent and `parent.json`
     on the child while keeping child runs outside parent folders.
   - Enrich `StepFinish` with producer and optional verifier raw output for parity
@@ -154,12 +164,13 @@ phases:
   - package-cli-and-params
   acceptance_criteria:
   - id: AC-1
-    text: Child workflows can be invoked by imported class or workflow name and receive
-      their own workflow/run scope, checkpoints, sessions, and logs under the same
-      task.
+    text: Child workflows can be invoked by imported class or workflow name from runtime-backed
+      contexts, including `SystemStep` handlers, and receive their own workflow/run
+      scope, checkpoints, sessions, and logs under the same task.
   - id: AC-2
-    text: Autoloop-v1 runs through the general runtime only and still preserves package-local
-      raw logs, session naming, clarification persistence, and status mapping.
+    text: Child invocation never inherits parent session bindings or pending answers
+      implicitly, and Autoloop-v1 still preserves package-local raw logs, session
+      naming, clarification persistence, and status mapping.
   - id: AC-3
     text: Default git tracking scopes commits to `workflow_folder` rather than `task_folder`,
       with tests covering both included and excluded changes.

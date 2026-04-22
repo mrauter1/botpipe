@@ -36,6 +36,7 @@
 - Make repo-root `workflows/` a regular package whose contents are actual workflow packages only.
 - Require each workflow package to contain `__init__.py`, `workflow.py`, `workflow.toml`, `prompts/`, and `assets/`.
 - Require each workflow package `__init__.py` to re-export its main workflow class and optional `Parameters`.
+- `workflow.toml` is discovery and human metadata only, limited to fields such as `name`, `title`, `description`, and `aliases`; it must not become a second DSL for topology, prompts, parameters, transitions, domain semantics, or workflow logic.
 - Discovery scans `<root>/workflows/*/workflow.toml`; canonical workflow name comes from the package directory unless the manifest explicitly overrides it.
 - Loader supports two entry forms only:
   - workflow package name or alias for CLI/runtime entry
@@ -81,11 +82,17 @@
 - `-wf <name> <value>` is repeatable, ordered, workflow-validated, persisted to run metadata, and immutable for the life of the run.
 - If a workflow does not export `Parameters`, any `-wf` usage for that workflow fails before execution starts.
 - Omitted `--run-id` resolves deterministically by command-specific rules; ambiguous or missing candidates fail clearly.
+- `workflows show` resolves canonical names first, aliases second, fails clearly on ambiguity, and reports canonical metadata, parameter support, package location, and main workflow class details.
+- `runs list`, `runs show`, and `logs` are read-only and must produce deterministic terminal output; `logs` uses a sensible default view when no log flag is selected and fails clearly when the requested log stream is missing.
+- Mutating commands (`run`, `resume`, `answer`) print concise summaries that include workflow, task id, run id, current or terminal status, pause state, pending question when present, and useful artifact references.
+- Exit and error behavior is explicit: success returns `0`, failures return non-zero, validation and resolution errors fail before execution, and the CLI never silently falls back or auto-creates a run on a failed lookup. Optional `--json` output is not required for this redesign, but if added later it must be consistent across commands.
 
 ### Sub-Workflow And Parity Contract
 
 - `ctx.invoke_workflow(...)` accepts either a workflow package name or an imported workflow class.
+- `ctx.invoke_workflow(...)` is available only on runtime-backed `Context` objects and must be supported from `SystemStep` handlers.
 - Child workflows run under the same `task_id` but receive their own `workflow_name`, `workflow_folder`, `run_id`, run-local request snapshot, checkpoint, sessions, trace, and event log.
+- Child invocation must never implicitly inherit parent session bindings, pending answers, or nested folder placement; every child run starts with its own run-local session state unless workflow code explicitly opens or passes new state through artifacts.
 - Parent-child linkage is metadata only:
   - parent run writes `children.jsonl`
   - child run writes `parent.json`
@@ -119,9 +126,11 @@
 
 - Add or replace tests for all requested acceptance surfaces:
   - workflow package discovery from repo-root `workflows/`
+  - metadata-only `workflow.toml` enforcement
   - required `__init__.py` export contract
   - direct workflow-to-workflow imports
   - package-based CLI commands
+  - CLI output, error, and exit-code behavior
   - `-wf` parsing and validation
   - task -> workflow -> runs workspace creation
   - task `messages.jsonl`
@@ -129,6 +138,7 @@
   - package-root prompt resolution
   - new placeholder resolution
   - class-based and name-based sub-workflow invocation
+  - runtime-backed `ctx.invoke_workflow(...)`, `SystemStep` support, and no implicit child session inheritance
   - parent-child linkage metadata
   - workflow-folder git tracking
   - run-local tracing
@@ -154,6 +164,12 @@
 
 ## Risk Register
 
+- Manifest DSL creep
+  - Risk: `workflow.toml` grows execution semantics and duplicates code-based topology or prompt logic.
+  - Control: keep a metadata-only manifest schema and add tests that reject semantic fields.
+- CLI contract drift
+  - Risk: command names match the spec while stdout, error text, or exit behavior diverges from the public contract.
+  - Control: pin mutating-command summaries, read-only output expectations, and non-zero failure behavior in CLI tests.
 - Discovery drift
   - Risk: manifest metadata, package names, aliases, and `__init__.py` exports disagree.
   - Control: enforce one loader path and dedicated discovery tests.
@@ -167,8 +183,8 @@
   - Risk: `-wf` values leak into generic runtime config or mutate during resume.
   - Control: separate parser paths, persist resolved params in `run.json`, and reject unknown params before execution.
 - Sub-workflow persistence bugs
-  - Risk: child runs inherit parent sessions implicitly or land in nested folders.
-  - Control: explicit child run creation API, dedicated parent/child metadata tests, and no nested run directories.
+  - Risk: child runs inherit parent sessions implicitly, reuse pending answers, or land in nested folders.
+  - Control: explicit child run creation API, runtime-backed/SystemStep invocation rules, dedicated session-isolation tests, and no nested run directories.
 - Autoloop-v1 parity loss
   - Risk: raw logs, session naming, clarification persistence, or status mapping drift during package migration.
   - Control: migrate parity after `StepFinish` enrichment and preserve package-local parity tests as a release gate.

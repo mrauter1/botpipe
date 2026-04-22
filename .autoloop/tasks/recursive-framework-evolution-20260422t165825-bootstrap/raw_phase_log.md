@@ -182,3 +182,30 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+I’m revising the plan against the verifier’s blocking findings. First I’m reading the latest decision block and the current plan artifacts so I can make the fixes directly in the narrative and the phase acceptance criteria without drifting scope.
+
+I’ve narrowed the revisions to three concrete fixes: manifest boundary, CLI output/error/exit semantics, and sub-workflow invocation/session-isolation rules. I’m patching both the narrative plan and the phase acceptance criteria so the verifier gaps are resolved end-to-end.
+
+The first patch missed because I combined plan, phase, and feedback contexts in one hunk. I’m reapplying the same fixes in smaller targeted edits so the narrative plan, phase criteria, and shared notes stay in sync.
+
+The revisions are in. I’m doing the final verification pass now, with the focus on the three repaired surfaces: CLI behavior, manifest scope, and sub-workflow safety.
+
+The YAML is valid. I’m doing one last text scan with simpler matching to confirm each verifier gap is now represented in both the narrative plan and the machine-readable phase criteria.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt) to address the verifier’s three blocking findings.
+
+The plan now makes `workflow.toml` explicitly metadata-only, carries the CLI output/error/exit contract into both the narrative and the CLI phase acceptance criteria, and makes sub-workflow invocation rules explicit: runtime-backed contexts only, `SystemStep` support required, and no implicit child session or pending-answer inheritance. `phase_plan.yaml` was re-validated with `python3` and `yaml.safe_load`.
