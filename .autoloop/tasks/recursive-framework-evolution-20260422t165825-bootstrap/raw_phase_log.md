@@ -334,3 +334,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=workflow-package-foundation,runtime-workspace-and-context,package-cli-and-params,subworkflow-parity-and-git-scope,docs-tests-and-legacy-removal
+explicit=True
+current_phase_index=0
