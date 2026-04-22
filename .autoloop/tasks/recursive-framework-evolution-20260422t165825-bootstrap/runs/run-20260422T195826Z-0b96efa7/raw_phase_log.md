@@ -2264,3 +2264,110 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019db764-1e90-7230-9cee-c394c2d9f124
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+I’m reviewing the phase artifacts and the current test surface first, then I’ll either add missing regression coverage or record that the implemented tests already meet the phase contract with the necessary traceability.
+
+The phase artifacts are mostly blank on the test side, and the current suite covers the major contract changes. I’m checking for one missing edge case around the new loader behavior so the test phase adds real value instead of only writing bookkeeping.
+
+I found one worthwhile gap: the new loader regression test proves different roots stop leaking into each other, but it doesn’t lock the preserved invariant that same-root resolutions keep class identity stable. I’m adding that edge-case test, then I’ll update the phase test strategy and test feedback.
+
+I’ve added the new loader edge-case test and the phase traceability artifacts. I’m running a focused validation slice now: the changed runtime-compatibility file plus the phase’s doc/strictness contract checks.
+
+Scope considered
+
+- Phase-local test work for `docs-tests-and-legacy-removal`.
+- The loader regression fix in `runtime.loader` plus the updated docs/strictness/runtime compatibility test surface.
+- The test-phase artifacts [`test_strategy.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/docs-tests-and-legacy-removal/test_strategy.md) and [`feedback.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/docs-tests-and-legacy-removal/feedback.md).
+
+What I analyzed
+
+- `tests/runtime/test_compatibility_runtime.py` for loader/config regression coverage.
+- `tests/strictness/test_no_compat.py` and `tests/test_architecture_baseline_docs.py` for the phase’s public-surface and docs contract.
+- The implement-phase notes to align the test coverage map with the actual changed behavior.
+
+What I changed
+
+- Added `test_resolve_workflow_reference_preserves_same_root_workflow_class_identity` to [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py) so the loader fix is pinned on both sides:
+  - different roots must not leak through the shared `workflows.*` cache
+  - same-root repeated resolution must keep workflow class identity stable
+- Filled in [`test_strategy.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/docs-tests-and-legacy-removal/test_strategy.md) with an explicit behavior-to-test coverage map across docs, strictness, workspace/message semantics, package CLI/`-wf`, subworkflow metadata, parity/git/trace, and legacy-config rejection.
+- Appended a concise summary entry to [`feedback.md`](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/docs-tests-and-legacy-removal/feedback.md).
+
+Key findings / decisions
+
+- The main remaining useful gap was the preserved same-root identity invariant after the loader cache-isolation fix; that is now covered.
+- I did not add broader test churn because the phase’s existing suite already exercises the requested docs/tests/legacy-removal contract, and the focused addition materially reduces regression risk around the loader change.
+- No new intent ambiguity surfaced.
+
+Open issues / next step
+
+- Focused validation passed: `tests/runtime/test_compatibility_runtime.py`, `tests/strictness/test_no_compat.py`, and `tests/test_architecture_baseline_docs.py` all passed (`17 passed`).
+- No phase-local follow-up is needed from the test author side.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019db764-1e90-7230-9cee-c394c2d9f124
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+I’m auditing the new test coverage and the test-phase artifacts first, then I’ll either record blockers or mark the audit complete with the criteria updated to match the actual coverage and validation state.
+
+The strategy and phase notes are aligned with the confirmed decisions. I’m doing one focused execution check on the changed test slice and rereading the loader edge-case test itself before I update the audit artifacts.
+
+The focused slice passed, and the added same-root identity test closes the only material edge-case gap I could see around the loader fix. I’m marking the audit complete and recording that no test-audit findings remain.
+
+I’ve updated the audit artifacts. I’m doing one last check that the criteria file has no unchecked boxes and that the feedback file records the audit outcome explicitly before I close this out.
+
+Scope considered
+
+- Phase-local test audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/docs-tests-and-legacy-removal/`.
+- The changed regression coverage in `tests/runtime/test_compatibility_runtime.py`.
+- The phase’s docs/strictness contract coverage and the shared decisions relevant to legacy-removal expectations.
+
+What I analyzed
+
+- `test_strategy.md` for behavior-to-test traceability against the phase contract.
+- `tests/runtime/test_compatibility_runtime.py`, especially the new cross-root and same-root loader cache tests.
+- `tests/strictness/test_no_compat.py` and `tests/test_architecture_baseline_docs.py` as the phase’s public-surface and docs assertions.
+- The applicable decisions in `decisions.txt`, including removal of `superloop.*`, `runtime.intent_mode`, and raw public runtime surfaces.
+
+What I reviewed
+
+- The new same-root loader invariant test and how it complements the already-added cross-root cache-isolation regression.
+- Whether the test strategy accurately maps the requested docs/tests/legacy-removal behaviors to concrete test files.
+- Focused validation: `./.venv/bin/pytest tests/runtime/test_compatibility_runtime.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py -q` passed with `17 passed`.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings.
+- The added same-root identity test closes the only material edge-case gap around the loader cache fix.
+- I updated `criteria.md` to mark all audit gates complete and appended an audit note to `feedback.md` recording that the focused validation slice passed and no findings remain.
+
+Open issues / next step
+
+- No phase-local open issues remain for the test audit.
+- Audit status is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
