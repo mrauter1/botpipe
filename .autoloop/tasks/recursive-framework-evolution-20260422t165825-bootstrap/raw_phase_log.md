@@ -209,3 +209,51 @@ The YAML is valid. I’m doing one last text scan with simpler matching to confi
 Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt) to address the verifier’s three blocking findings.
 
 The plan now makes `workflow.toml` explicitly metadata-only, carries the CLI output/error/exit contract into both the narrative and the CLI phase acceptance criteria, and makes sub-workflow invocation rules explicit: runtime-backed contexts only, `SystemStep` support required, and no implicit child session or pending-answer inheritance. `phase_plan.yaml` was re-validated with `python3` and `yaml.safe_load`.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+The three earlier gaps are resolved, but one material sub-workflow interface detail is still absent from the plan: the return contract of `ctx.invoke_workflow(...)`. I’m recording that as the remaining blocker and leaving the criteria gates unchanged because the plan is still not implementation-complete.
+
+I’ve recorded the remaining blocker. I’m doing one last sanity check on YAML validity and the feedback tail, then I’ll mark the turn incomplete.
+
+Scope considered
+
+- Authoritative request snapshot, clarification and decisions history, current `plan.md`, `phase_plan.yaml`, `feedback.md`, and `criteria.md`.
+- Focused re-audit of the verifier-triggered fix areas plus remaining sub-workflow interface coverage.
+
+What I analyzed
+
+- Whether the producer revisions fully closed the previous blocking findings on manifest scope, CLI behavior, and sub-workflow safety.
+- Whether the plan now captures the full requested sub-workflow contract, not just invocation rules.
+- `phase_plan.yaml` parseability and acceptance-criteria coherence after the latest edits.
+
+What I reviewed
+
+- The earlier blocking items `PLAN-001` through `PLAN-003` now appear addressed in both the narrative plan and the phase plan.
+- `phase_plan.yaml` remains parseable YAML.
+- `criteria.md` remains accurate as-is because the plan is still missing one material interface requirement.
+
+Key findings / decisions
+
+- `PLAN-004` blocking: the plan still does not define the structured return contract for `ctx.invoke_workflow(...)`.
+- Evidence: the request requires at least child workflow name, child run id, terminal status, last event, selected output metadata or references, and child run path references; the plan currently stops at invocation forms, isolation rules, and metadata files.
+- Result: the plan is still not implementation-complete for workflow composition.
+
+Open issues / next step
+
+- The producer needs one more revision that adds the explicit `ctx.invoke_workflow(...)` return object contract to `plan.md` and to phase `subworkflow-parity-and-git-scope` acceptance criteria or deliverables.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
