@@ -583,3 +583,45 @@ Key findings / decisions
 Open issues / next step
 - No test blocker remains in this phase-local scope.
 - Later phases should add coverage for CLI package resolution, workspace layout, prompt-root resolution, and Autoloop-v1 runtime parity when those behaviors land.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+I’m rechecking the new phase test coverage against the implemented loader behavior, then I’ll update the audit artifacts to reflect whether the phase test surface is complete or still missing a material regression guard.
+
+The phase slice is green and the added test closes the main regression risk from the loader change. I’m marking the audit complete and recording the recheck result in the phase feedback with a stable audit ID.
+
+Scope considered
+- Phase-local `workflow-package-foundation` test surface only: the added runtime regression test, the existing package-foundation tests, and the phase-local audit artifacts.
+
+What I analyzed
+- The in-scope tests in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:1), [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:1), [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:1), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+- The phase strategy and feedback artifacts, plus the green phase validation run (`16 passed`).
+
+What I reviewed
+- Coverage for AC-1 through AC-3, especially the changed loader behavior around explicit-root package resolution.
+- Failure-path and edge-case coverage for metadata-only manifests, ambiguous aliases, export contract enforcement, and `sys.path` restoration.
+- Reliability controls around neutral-cwd setup, `sys.path` cleanup, module cache cleanup, and the documented `GIT_*` env handling.
+
+Key findings / decisions
+- No blocking audit findings remain in this phase.
+- The added regression guard for `sys.path` restoration materially improves protection against unintended side effects from the loader fix.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/workflow-package-foundation/criteria.md:1) to checked and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/workflow-package-foundation/feedback.md:1).
+
+Open issues / next step
+- No open issues in this phase-local audit scope.
+- The remaining documented gaps are appropriately deferred to later phases rather than missing test coverage for this one.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
