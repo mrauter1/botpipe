@@ -1458,3 +1458,54 @@ No open blocking issues remain within the active phase scope. The phase can be t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m auditing the current CLI tests against the phase acceptance criteria now. I expect to keep the blast radius in the existing package-CLI test file and fill the gap in the phase test artifacts with a behavior-to-coverage map.
+
+The current tests already cover most of the happy path. I’m adding the missing contract-level regression guards now: alias resolution failure/precedence and deterministic latest-run selection when multiple runs exist.
+
+I’ve identified the two highest-signal gaps left in the current test file: canonical-vs-alias workflow resolution and multi-run lookup behavior. I’m patching those into the existing CLI test module and then I’ll record the coverage map and test decisions in the phase artifacts.
+
+I’ve landed the two additional regression tests. I’m updating the phase test strategy, feedback summary, and the shared ledger now so the coverage intent is explicit and the clarified wrapper scope doesn’t drift back into the test contract.
+
+I’ve updated the repo test file and the phase artifacts. I’m doing a quick syntax pass on the touched Python test file now, then I’ll summarize the coverage additions and remaining execution gap.
+
+Scope considered
+
+The active `package-cli-and-params` test phase only: [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/feedback.md), and the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt).
+
+What I analyzed
+
+I checked the existing package-CLI tests against the phase acceptance criteria and the latest clarification. The biggest remaining coverage gaps were workflow resolution order and multi-run lookup behavior when `--run-id` is omitted or explicitly provided.
+
+What I changed
+
+- Added CLI regression coverage in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) for:
+  - canonical-name precedence over alias matches
+  - ambiguous alias failure
+  - deterministic latest-run selection across multiple paused runs
+  - explicit `--run-id` targeting of an older run
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/test_strategy.md) into a behavior-to-test coverage map with invariants, failure paths, reliability notes, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/test/phases/package-cli-and-params/feedback.md).
+- Appended the non-obvious test decisions under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+- I intentionally did not encode wrapper-local `--pairs` / `--full-auto-answers` behavior in tests because the authoritative clarification removed that from this phase contract.
+- The new multi-run coverage avoids sleeps and timestamp mutation by using two paused runs plus explicit `--run-id`, which keeps the tests deterministic while still exercising latest-run resolution.
+
+Open issues / next step
+
+`python3 -m py_compile tests/runtime/test_package_cli.py` passed. I could not execute `pytest` in this loop because the available environment still lacks `pytest` and project runtime dependencies such as `pydantic`, so the next step is to run the updated test file in the project’s real test environment.

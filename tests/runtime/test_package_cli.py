@@ -199,6 +199,55 @@ class Parameters(BaseModel):
     ]
 
 
+def test_cli_workflow_resolution_prefers_canonical_names_and_rejects_ambiguous_aliases(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "review_pkg",
+        workflow_name="review",
+        class_name="ReviewWorkflow",
+        aliases=("shared",),
+    )
+    _write_workflow_package(
+        tmp_path,
+        "shared_pkg",
+        workflow_name="shared",
+        class_name="SharedWorkflow",
+    )
+
+    canonical_exit = cli.main(["workflows", "show", "shared", "--root", str(tmp_path)])
+    canonical_payload = json.loads(capsys.readouterr().out)
+
+    assert canonical_exit == 0
+    assert canonical_payload["name"] == "shared"
+    assert canonical_payload["workflow_class"] == "SharedWorkflow"
+
+    _write_workflow_package(
+        tmp_path,
+        "audit_pkg",
+        workflow_name="audit",
+        class_name="AuditWorkflow",
+        aliases=("common",),
+    )
+    _write_workflow_package(
+        tmp_path,
+        "reviewer_pkg",
+        workflow_name="reviewer",
+        class_name="ReviewerWorkflow",
+        aliases=("common",),
+    )
+
+    ambiguous_exit = cli.main(["workflows", "show", "common", "--root", str(tmp_path)])
+    ambiguous_captured = capsys.readouterr()
+
+    assert ambiguous_exit == cli.EXIT_RESOLUTION_ERROR
+    assert "workflow alias 'common' is ambiguous" in ambiguous_captured.err
+    assert "audit" in ambiguous_captured.err
+    assert "reviewer" in ambiguous_captured.err
+
+
 def test_cli_serializes_typed_workflow_parameters_as_json_safe_values(
     tmp_path: Path,
     capsys,
@@ -439,6 +488,89 @@ class Parameters(BaseModel):
     assert final_show["paused"] is False
     assert result_payload["answer"] == "Use OAuth"
     assert result_payload["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
+
+
+def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministic(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "review_workflow",
+        workflow_name="review",
+        class_name="ReviewWorkflow",
+        workflow_source=_paused_workflow_source("ReviewWorkflow", "review"),
+    )
+
+    first_exit = cli.main(
+        ["run", "review", "task-runs", "--root", str(tmp_path), "--message", "First request"],
+        provider_factory=_provider_factory,
+    )
+    first_run = json.loads(capsys.readouterr().out)
+    second_exit = cli.main(
+        ["run", "review", "task-runs", "--root", str(tmp_path), "--message", "Second request"],
+        provider_factory=_provider_factory,
+    )
+    second_run = json.loads(capsys.readouterr().out)
+
+    assert first_exit == 0
+    assert second_exit == 0
+    assert first_run["run_id"] != second_run["run_id"]
+
+    latest_show_exit = cli.main(["runs", "show", "review", "task-runs", "--root", str(tmp_path)])
+    latest_show = json.loads(capsys.readouterr().out)
+
+    assert latest_show_exit == 0
+    assert latest_show["run_id"] == second_run["run_id"]
+    assert latest_show["status"] == "paused"
+
+    latest_resume_exit = cli.main(
+        ["resume", "review", "task-runs", "--root", str(tmp_path)],
+        provider_factory=_provider_factory,
+    )
+    latest_resume = json.loads(capsys.readouterr().out)
+
+    assert latest_resume_exit == 0
+    assert latest_resume["run_id"] == second_run["run_id"]
+    assert latest_resume["status"] == "paused"
+
+    explicit_answer_exit = cli.main(
+        [
+            "answer",
+            "review",
+            "task-runs",
+            "--root",
+            str(tmp_path),
+            "--run-id",
+            first_run["run_id"],
+            "--answer",
+            "Resolve the older run explicitly",
+        ],
+        provider_factory=_provider_factory,
+    )
+    explicit_answer = json.loads(capsys.readouterr().out)
+
+    assert explicit_answer_exit == 0
+    assert explicit_answer["run_id"] == first_run["run_id"]
+    assert explicit_answer["status"] == "success"
+
+    latest_run_state_exit = cli.main(
+        [
+            "runs",
+            "show",
+            "review",
+            "task-runs",
+            "--root",
+            str(tmp_path),
+            "--run-id",
+            second_run["run_id"],
+        ]
+    )
+    latest_run_state = json.loads(capsys.readouterr().out)
+
+    assert latest_run_state_exit == 0
+    assert latest_run_state["run_id"] == second_run["run_id"]
+    assert latest_run_state["status"] == "paused"
 
 
 def test_cli_rejects_invalid_or_unsupported_workflow_params(
