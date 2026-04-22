@@ -1762,3 +1762,55 @@ Open issues / next step
 
 - This phase is green against its focused acceptance slice.
 - Remaining work is outside this phase: broader docs rewrite and any later cleanup of repo-wide stale artifacts.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db736-278b-79d0-996c-bc296c98ac15
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+I’m reviewing the subworkflow/parity/git phase against the acceptance criteria and the actual code paths that changed. First I’m loading the reviewer artifacts and the implementation surfaces that can hide regressions: child invocation, Autoloop-v1 parity, and git repo scoping.
+
+I’ve loaded the main surfaces. Next I’m checking the exact child-run plumbing and parity/event interactions for edge cases: resume paths, event sequencing, metadata persistence, and whether the tests actually cover the non-inheritance and git-scope rules claimed by the notes.
+
+I’ve hit one possible regression surface that the current tests don’t check: child runs are created through the same workspace path that appends/replaces task-level messages, which may let an internal child message overwrite the shared task request snapshot. I’m verifying that behavior directly before I write it up.
+
+I’ve confirmed a real regression: invoking a child workflow currently rewrites the shared task request snapshot and task message ledger with the child’s internal message. I’m recording that as blocking, plus one schema-consistency note on the parent child-history records, then I’ll mark the phase artifacts accordingly.
+
+Scope considered
+
+- Child-workflow execution in `core/context.py`, `runtime/runner.py`, and `runtime/workspace.py`
+- Autoloop-v1 parity in `workflows/autoloop_v1/*`
+- Workflow-scoped git tracking in `extensions/git/*`
+- The focused tests and phase artifacts only
+
+What I analyzed
+
+- Compared the implementation against AC-1 through AC-4, the phase notes, and the shared decisions ledger.
+- Reproduced the new child invocation path directly and inspected the resulting task-level `request.md` and `messages.jsonl` to check whether nested runs stay isolated from shared task state.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/subworkflow-parity-and-git-scope/criteria.md) to reflect that blocking issues remain.
+- Appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/subworkflow-parity-and-git-scope/feedback.md).
+
+Key findings / decisions
+
+- `IMP-001` `blocking` in `runtime.runner._build_workflow_invoker`, `runtime.runner._prepare_workspaces`, and `runtime.workspace.ensure_workspace`: child workflow invocation currently mutates the shared task request state. Repro: invoking the new class-based child flow leaves `.autoloop/tasks/<task>/request.md` equal to the child message and appends that internal child message to `messages.jsonl`. That breaks the intended task/workflow/run separation and can change parent or sibling workflow behavior when they read `{task_folder}/request.md`. The fix should be centralized in the workspace/runner path so nested child runs get only their own run-local `request.md` and do not rewrite task-level request/message state.
+- `IMP-002` `non-blocking` in `runtime.runner._child_run_record_payload` and the fatal-error append path: `children.jsonl` is schema-inconsistent between non-fatal and fatal child outcomes. Centralize fatal child-record emission through the same serializer used for non-fatal records.
+
+Open issues / next step
+
+- This review is not yet approvable because `IMP-001` is a behavioral regression against the shared task request contract.
+- After fixing that isolation bug, rerun the focused child/parity/git test slice and resubmit; `IMP-002` can be cleaned up in the same pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
