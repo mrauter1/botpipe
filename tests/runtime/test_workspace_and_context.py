@@ -104,6 +104,77 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
     assert run_meta["workflow_folder"] == ".autoloop/tasks/context-task/wf_context_demo"
 
 
+def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path: Path) -> None:
+    workflow_file = _write_pause_resume_workflow_package(tmp_path, "resume_params_demo", "ResumeParamsWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "workflow_params": request.context.workflow_params,
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "workflow_params": request.context.workflow_params,
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(
+                    raw_output="Answered",
+                    tag="answered",
+                    payload={"answer": request.context.answer},
+                ),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow(
+        workflow_file,
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-params",
+            request_text="Need workflow parameters",
+            workflow_params={"mode": "strict"},
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-params" / "wf_resume_params_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+    paused_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    resumed = run_workflow(
+        workflow_file,
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-params",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+        ),
+    )
+
+    resumed_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+    resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert paused.terminal == "PAUSE"
+    assert paused_meta["workflow_params"] == {"mode": "strict"}
+    assert resumed.terminal == "SUCCESS"
+    assert resumed_context["workflow_params"] == {"mode": "strict"}
+    assert resumed_context["answer"] == "42"
+    assert resumed_meta["workflow_params"] == {"mode": "strict"}
+
+
 def _write_system_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
     package_dir = root / "workflows" / workflow_name
     package_dir.mkdir(parents=True, exist_ok=True)
@@ -179,6 +250,56 @@ class {class_name}(Workflow):
     @staticmethod
     def on_ask(state: State, outcome, artifacts):
         return state.model_copy(update={{"note": artifacts.workflow_dump.read_text().strip()}})
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    return package_dir / "workflow.py"
+
+
+def _write_pause_resume_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
+    package_dir = root / "workflows" / workflow_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(f"from .workflow import {class_name}\n__all__ = [{class_name!r}]\n", encoding="utf-8")
+    (package_dir / "workflow.toml").write_text(f'name = "{workflow_name}"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "prompts" / "ask.md").write_text("package prompt\n", encoding="utf-8")
+    (package_dir / "workflow.py").write_text(
+        f"""
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import Artifact, LLMStep, SUCCESS, Workflow
+from workflow.primitives import Event, Outcome
+
+
+class {class_name}(Workflow):
+    name = "{workflow_name}"
+
+    class State(BaseModel):
+        answer: str | None = None
+
+    context_dump = Artifact("{{run_folder}}/context.json")
+    ask = LLMStep(
+        name="ask",
+        producer="prompts/ask.md",
+        produces={{"context_dump": context_dump}},
+    )
+    entry = ask
+    transitions = {{ask: {{"answered": SUCCESS, "question": "PAUSE"}}}}
+
+    @staticmethod
+    def on_ask(state: State, outcome: Outcome, artifacts):
+        return state.model_copy(update={{"answer": outcome.payload.get("answer")}})
+
+    @staticmethod
+    def on_outcome(state: State, outcome: Outcome):
+        if outcome.tag == "question":
+            return Event("question", question=outcome.question)
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",

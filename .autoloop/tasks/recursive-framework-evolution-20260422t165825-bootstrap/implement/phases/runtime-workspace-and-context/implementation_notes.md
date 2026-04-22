@@ -27,6 +27,7 @@
 
 - `TaskWorkspace`, `WorkflowWorkspace`, `RunWorkspace`
 - `ensure_workspace(...)`, `ensure_workflow_workspace(...)`, `create_run(...)`, `open_existing_run(...)`
+- `resolve_run_workflow_params(...)`
 - `update_run_metadata(...)`, `update_workflow_metadata(...)`, `latest_run_id(...)`
 - `RunnerOptions`, `PreparedRunContext`, `prepare_runtime_services(...)`, `run_workflow(...)`
 - `Context`, `RunBinding`, `resolve_artifact_template(...)`, `Engine.run(...)`, `Engine.resume(...)`
@@ -45,6 +46,7 @@
 - Task request history is append-only in `messages.jsonl`; task `request.md` is the current snapshot and run `request.md` is copied at run creation.
 - Runtime metadata now writes `workflow.json` at workflow scope and `run.json` at run scope.
 - Relative prompt lookup now resolves from the workflow package root only; the runtime no longer falls back to the repository root/cwd-style secondary lookup.
+- Resumed runs now preserve persisted `workflow_params` when the caller does not re-supply them; runtime context and `run.json` continue to reflect the original run-scoped parameter set.
 
 ## Preserved Invariants
 
@@ -69,6 +71,7 @@
 - `python3 -m compileall core runtime workflows tests`
 - `python3 -m py_compile core/context.py core/extensions.py core/artifacts.py core/engine.py runtime/__init__.py runtime/runner.py runtime/workspace.py workflows/autoloop_v1/parity.py tests/runtime/test_optional_extensions.py tests/runtime/test_workspace_and_context.py tests/unit/test_primitives_and_stores.py tests/unit/test_stdlib_and_extensions.py`
 - `bash -n recursive_autoloop/run_recursive_autoloop.sh`
+- Added source-level regression coverage for pause/resume preserving persisted `workflow_params` in `tests/runtime/test_workspace_and_context.py`.
 
 ## Validation Gaps
 

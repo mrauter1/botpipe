@@ -49,6 +49,7 @@ try:  # pragma: no branch - supports both `workflows.*` and `autoloop_v3.workflo
         latest_run_id,
         update_run_metadata,
         open_existing_run,
+        resolve_run_workflow_params,
         resolve_resume_state_root,
         task_request_text,
     )
@@ -83,6 +84,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         latest_run_id,
         update_run_metadata,
         open_existing_run,
+        resolve_run_workflow_params,
         resolve_resume_state_root,
         task_request_text,
     )
@@ -342,13 +344,14 @@ def run_autoloop_v1(
         checkpoint_store=prepared.checkpoint_store,
         prompt_registry=prepared.prompt_registry,
     )
+    resolved_workflow_params = resolve_run_workflow_params(run.run, options.workflow_params)
 
     prepared.logger.emit(
         "run_resumed" if options.resume else "run_started",
         workflow=prepared.compiled.workflow_name,
         task_id=workspace.task.task_id,
     )
-    update_run_metadata(run.run, workflow_params=options.workflow_params or {}, status="running", pending_question=None)
+    update_run_metadata(run.run, workflow_params=resolved_workflow_params, status="running", pending_question=None)
     try:
         if options.resume:
             _append_resume_clarification(prepared.compiled, prepared.checkpoint_store, run, answer=options.answer)
@@ -360,7 +363,7 @@ def run_autoloop_v1(
                 run_folder=run.run.run_dir,
                 package_folder=workspace.workflow.package_dir,
                 root=workspace.task.root,
-                workflow_params=options.workflow_params or {},
+                workflow_params=resolved_workflow_params,
                 answer=options.answer,
                 max_steps=max_steps,
             )
@@ -373,12 +376,12 @@ def run_autoloop_v1(
                 run_folder=run.run.run_dir,
                 package_folder=workspace.workflow.package_dir,
                 root=workspace.task.root,
-                workflow_params=options.workflow_params or {},
+                workflow_params=resolved_workflow_params,
                 max_steps=max_steps,
             )
         update_run_metadata(
             run.run,
-            workflow_params=options.workflow_params or {},
+            workflow_params=resolved_workflow_params,
             status=_autoloop_terminal_status_from_result(result),
             terminal=result.terminal,
             pending_question=result.last_event.question if result.terminal == "PAUSE" and result.last_event is not None else None,
@@ -394,7 +397,7 @@ def run_autoloop_v1(
         )
         update_run_metadata(
             run.run,
-            workflow_params=options.workflow_params or {},
+            workflow_params=resolved_workflow_params,
             status="fatal_error",
             error=str(exc),
         )
@@ -434,11 +437,13 @@ def create_autoloop_v1_run(
     *,
     run_id: str | None = None,
     request_text: str | None = None,
+    workflow_params: dict[str, Any] | None = None,
 ) -> AutoloopV1RunWorkspace:
     run = create_run(
         workspace.workflow,
         run_id=run_id,
         request_text=request_text,
+        workflow_params=workflow_params,
     )
     run_raw_log = run.run_dir / "raw_phase_log.md"
     run_raw_log.write_text(f"# Autoloop Raw Phase Log ({run.run_id})\n", encoding="utf-8")
@@ -477,6 +482,7 @@ def _prepare_autoloop_v1_workspaces(
             workspace,
             run_id=options.run_id,
             request_text=task_request_text(workspace.task.task_request_file),
+            workflow_params=options.workflow_params,
         )
         return workspace, run
 
