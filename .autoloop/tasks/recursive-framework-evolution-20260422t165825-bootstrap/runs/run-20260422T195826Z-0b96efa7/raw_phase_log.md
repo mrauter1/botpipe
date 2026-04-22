@@ -458,3 +458,88 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+I’ve isolated the fix to the loader itself: discovered package imports now need to be anchored to the explicit repo root instead of whichever cwd/import state the process happened to start with. I’m patching that path-loading behavior and then adding a regression test that runs from a neutral cwd with the repo root removed from `sys.path`.
+
+The loader fix and neutral-cwd regression test are in. I’m rerunning the phase suite and the full suite with the same isolated venv so I can confirm the reviewer’s reproduction now passes without relying on repo-root `sys.path` state.
+
+The reviewer issue is fixed and the neutral-cwd reproduction now resolves successfully from the explicit repo root. I’m updating the phase notes with that fix and the refreshed validation result, then I’ll hand it back with the concise phase summary.
+
+Scope considered
+- Phase-local workflow-package foundation only: the package/discovery loader, repo-root `workflows/` scaffolding, and the phase docs/tests tied to reviewer finding `IMP-001`.
+
+What I analyzed
+- The blocking feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/workflow-package-foundation/feedback.md:1), especially the neutral-cwd reproduction where package-name resolution failed without repo-root `sys.path` state.
+- The discovered-package import path in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py:1) and the repo package regression coverage in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:1).
+
+What I changed
+- Patched [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py:1) so discovered workflow packages are imported with the explicit repo root temporarily added to `sys.path`, instead of relying on ambient cwd/import state.
+- Added a regression test in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:1) that removes the repo root from `sys.path`, switches to a neutral cwd, and verifies `resolve_workflow_reference(REPO_ROOT, "autoloop_v1")` still works.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/workflow-package-foundation/implementation_notes.md:1) with the reviewer-fix details and refreshed validation.
+
+Key findings / decisions
+- `IMP-001` is resolved in code: package-name workflow resolution now works from a neutral working directory when the caller supplies the repo root.
+- I kept the fix localized to discovered-package loading and did not broaden scope into CLI/runtime cutover work.
+
+Open issues / next step
+- No new code blockers found in this phase-local scope.
+- Validation passed with the isolated venv path used earlier: targeted phase suite passed, neutral-cwd reproduction passed, and the full suite passed (`75 passed`).
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019db6d5-e14e-7301-bcf3-388ca08a5307
+---
+I’m re-reviewing the same phase-local scope after the producer addressed `IMP-001`: loader package-resolution behavior, the added neutral-cwd regression coverage, and the phase artifacts. I’ll verify the fix against the original contract, then I’ll update the criteria and feedback files to reflect the final status.
+
+I’m re-checking the phase artifacts against the reviewer finding, then I’ll update the phase-local criteria and feedback only if the fix closes the blocker cleanly.
+
+I’ve confirmed the fix landed where the blocker was raised. I’m checking the rest of the loader path for side effects before I close the review and update the phase artifacts.
+
+The blocker is reproduced as fixed, and the phase validation slice is green. I’m updating the verifier-owned artifacts to mark the phase complete and record the recheck result.
+
+Scope considered
+- Phase-local `workflow-package-foundation` only: verifier-owned artifacts, the loader/discovery fix, and the regression coverage added for package-name resolution from an explicit repo root.
+
+What I analyzed
+- The prior blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/workflow-package-foundation/feedback.md:1), the loader changes in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py:1), the added regression test in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:1), and the phase implementation notes.
+- The phase validation slice rerun in the isolated venv: `15 passed`.
+
+What I reviewed
+- Whether discovered workflow package imports now anchor to the explicit `<root>` instead of ambient `sys.path`.
+- Whether the new regression test actually covers the neutral-cwd scenario that previously failed.
+- Whether the phase acceptance criteria can now be marked complete without introducing new phase-local concerns.
+
+Key findings / decisions
+- No blocking findings remain in this phase.
+- `IMP-001` is resolved by the centralized explicit-root import path in `runtime.loader` plus the neutral-cwd regression test.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/workflow-package-foundation/criteria.md:1) to checked and appended the recheck result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/workflow-package-foundation/feedback.md:1).
+
+Open issues / next step
+- No open issues in this phase-local scope.
+- Proceed to the next planned phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
