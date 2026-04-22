@@ -1163,3 +1163,50 @@ I updated the phase notes and appended the non-obvious decisions to the authorit
 
 **Open issues / next step**
 Validation was limited by the environment: `pytest` is not installed, and the available `python3` lacks repo dependencies such as `pydantic`, so I could only run `python3 -m py_compile` on the touched files. The next step is to run the new CLI tests and the related runtime tests in the project’s real Python environment, then update remaining callers/docs that still assume the old CLI surface.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db70e-879b-75a3-b0cb-56ebbc31a5c2
+---
+I’m reviewing the package CLI phase against the request, decisions ledger, and touched runtime files first, then I’ll update the phase criteria and feedback artifacts with any concrete findings.
+
+I’ve verified the main surfaces. I’m checking the package-run path and the new tests now for anything that silently violates the phase contract, especially around provider handling, deterministic run lookup, and whether the new CLI can actually be exercised by existing repo tooling.
+
+I’ve isolated three material regressions: one in parameter serialization, one in provider resolution, and one in the repo’s own CLI caller. I’m recording them in the verifier artifacts now and leaving the criteria unchecked because the phase isn’t safe to mark complete yet.
+
+Scope considered
+
+Active phase artifacts plus the changed CLI/runtime surfaces they depend on: `runtime/cli.py`, `runtime/loader.py`, `runtime/runner.py`, `runtime/workspace.py`, `tests/runtime/test_package_cli.py`, and the repo-owned recursive caller for regression analysis.
+
+What I analyzed
+
+I checked the phase contract, the shared decisions ledger, the new package CLI implementation, workflow-parameter serialization/validation paths, run-selection logic, and the new CLI tests. I also checked repo callers to see whether the CLI cutover preserved operational behavior.
+
+What I reviewed
+
+I updated the verifier artifacts:
+- `.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/package-cli-and-params/criteria.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/package-cli-and-params/feedback.md`
+
+Key findings / decisions
+
+- Blocking: workflow params/defaults are kept in Python mode, so non-JSON-safe typed parameters like `Path`, `Enum`, or `datetime` will break `run.json` persistence and `workflows show`.
+- Blocking: the new public CLI removed the old provider-factory path without replacing it with a repo-backed provider resolver, so `run/resume/answer` are not executable through the public CLI unless callers use a private injection seam or `AUTOLOOP_PROVIDER_FACTORY`.
+- Blocking: the repo’s own recursive driver still calls the removed legacy CLI flags, so the CLI cutover introduces an immediate operational regression for that path.
+
+Open issues / next step
+
+The phase should not be marked complete until the blocking findings in `feedback.md` are addressed and the criteria can be checked honestly. The next implement pass should centralize JSON-safe workflow-param serialization, restore a real public provider-resolution path, and migrate repo-owned CLI callers to the new command tree.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
