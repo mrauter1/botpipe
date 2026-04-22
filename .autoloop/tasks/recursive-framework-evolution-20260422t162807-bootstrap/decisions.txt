@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260422T192808Z-bb1c3640" ts="2026-04-22T19:28:08.415769+00:00" />
+Treat the workflow package directory name and workflow.toml name as the same canonical package key; use aliases for alternate CLI lookup names so regular Python imports stay first-class without loader alias shims.
+Migrate the existing top-level runnable workflows ../autoloop_v1.py and ../Ralph_loop.py into repo-root workflow packages before removing the raw-target CLI so capability coverage does not regress during the greenfield cutover.
+No migration or resume support is planned for pre-redesign .autoloop or .superloop state; legacy runs become archival once the package-based runtime and new workspace layout land.
+workflow/ remains an authoring shim only after the redesign; internal engine/compiler/runtime imports must point at autoloop_v3.core and must not re-expose internals through the shim.
