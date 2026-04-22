@@ -133,3 +133,52 @@ The duplicate key is fixed. I’m doing the final YAML parse now and then I’ll
 Updated the planning artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/decisions.txt). The plan is now implementation-ready and anchored to the actual repo state: partial `core/` + `workflow/` migration already exists, while runtime/workspace/loader/git/docs/tests still carry the legacy contract.
 
 The phase plan now has five ordered phases: workflow package foundation, runtime workspace/context migration, package CLI plus `-wf` parameters, sub-workflows plus Autoloop-v1 parity and git scope, then docs/tests/legacy removal. It also records the clarified decision that `autoloop` is the canonical public CLI name and treats stale legacy tests/docs as rewrite scope rather than compatibility requirements. `phase_plan.yaml` was validated locally with `python3` and `yaml.safe_load`.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=2 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=2 | thread_id=019db6c5-c1b5-77d2-ae30-357057e77e8d
+---
+I’ve finished the verification pass. The phase plan is structurally sound and parseable, but I found a few material intent-coverage gaps in the narrative plan that should block acceptance until they’re made explicit.
+
+I’ve written the verifier findings and updated the criteria gates. I’m doing one quick readback to ensure the recorded findings match the actual plan text before I mark the turn incomplete.
+
+Scope considered
+
+- Authoritative request snapshot, clarification confirming `autoloop` as the CLI name, `decisions.txt`, `plan.md`, `phase_plan.yaml`, `feedback.md`, and `criteria.md`.
+- Repository-state implications only where needed to judge regression risk and plan feasibility.
+
+What I analyzed
+
+- Intent coverage against the greenfield redesign contract, especially CLI semantics, workflow manifest rules, sub-workflow behavior, workspace layout, parity migration, and git-scope changes.
+- Phase ordering, dependency coherence, acceptance criteria quality, and rollback coverage in `phase_plan.yaml`.
+- Whether the updated plan introduced avoidable indirection or left material behavior unspecified.
+
+What I reviewed
+
+- `phase_plan.yaml` is parseable YAML and structurally coherent.
+- The plan is strong on phase decomposition, rollback framing, and partial-repo-state awareness.
+- The current blockers are missing interface details, not sequencing or YAML quality.
+
+Key findings / decisions
+
+- `PLAN-001` blocking: the plan does not carry forward the CLI output, error, and exit-code contract from the request, so the public CLI behavior remains underspecified.
+- `PLAN-002` blocking: the plan does not explicitly preserve the request’s sub-workflow safety rules around runtime-backed invocation, `SystemStep` support, and no implicit session inheritance.
+- `PLAN-003` blocking: the plan omits the explicit “metadata only, not a second DSL” boundary for `workflow.toml`.
+- `criteria.md` was updated accordingly: only `Technical Debt` is currently satisfied.
+
+Open issues / next step
+
+- The producer plan needs one revision that adds the missing CLI behavior contract, sub-workflow safety invariants, and manifest boundary rules to both `plan.md` and the relevant `phase_plan.yaml` acceptance criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
