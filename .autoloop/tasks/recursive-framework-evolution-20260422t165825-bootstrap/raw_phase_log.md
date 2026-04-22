@@ -2105,3 +2105,54 @@ Open issues / next step
 
 - No phase-local blockers remain.
 - Validation passed: `./.venv/bin/python -m compileall runtime tests workflow workflows docs` and the targeted/full pytest slice passed with `100 passed`.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db764-1e90-7230-9cee-c394c2d9f124
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db764-1e90-7230-9cee-c394c2d9f124
+---
+I’m reviewing the docs/tests/legacy-removal phase against the accepted contract now. First I’m reading the reviewer-owned criteria and feedback artifacts, then I’m spot-checking the phase-relevant runtime/docs/test changes for any remaining contract violations or regression risks before I update the phase files.
+
+I’ve got one potential correctness gap worth checking before I mark the phase complete: the implementation solves cross-root `workflows.*` import collisions in tests by clearing `sys.modules`, but I need to verify whether the runtime itself still resolves the wrong package when two different roots are used in the same Python process.
+
+I confirmed the cache-clearing pattern is spread across the tests. I’m running one direct loader repro now with two different temp roots in the same Python process to see whether this is just a test harness concern or an actual runtime package-resolution bug.
+
+I’ve confirmed a real runtime regression, not just a brittle test: package resolution is still wrong across multiple roots in one Python process because the loader reuses cached `workflows.*` modules. I’m writing that up as a blocking finding and leaving the phase criteria unchecked accordingly.
+
+Scope considered
+
+- Active phase artifacts in `.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/docs-tests-and-legacy-removal/`.
+- Phase-relevant runtime/docs/test changes, with extra focus on the new package-loading path and the decisions ledger.
+
+What I analyzed
+
+- `criteria.md`, `feedback.md`, `implementation_notes.md`, and the latest `decisions.txt` entries.
+- `runtime.loader`, `runtime.__all__`, the config/message cleanup, and the rewritten package-based tests.
+- The new test-side `sys.modules` eviction pattern to see whether it hides a runtime bug.
+
+What I reviewed
+
+- I reproduced package resolution across two different temporary roots in one Python process using `resolve_workflow_reference(...)`.
+- I confirmed the second lookup reuses the first root’s cached `workflows.*` module instead of honoring the explicit `root`.
+- I updated `criteria.md` and appended the blocking finding to `feedback.md`.
+
+Key findings / decisions
+
+- `IMP-001` blocking: `runtime.loader._import_discovered_module` still relies on the shared `workflows.*` import cache, so explicit root-scoped package discovery is unsafe across multiple repositories in one process. The rewritten tests pass by manually clearing `sys.modules`, but the runtime itself remains wrong for library callers and long-lived processes.
+
+Open issues / next step
+
+- Fix loader-side module isolation centrally in `runtime.loader` and add a regression test that resolves the same workflow name from two different roots sequentially in one process.
+- Current review status is incomplete because of the blocking finding above.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
