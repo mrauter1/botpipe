@@ -1650,3 +1650,167 @@ The only remaining limitation is environmental, not a coverage blocker: this loo
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019db736-278b-79d0-996c-bc296c98ac15
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+I’m implementing the `subworkflow-parity-and-git-scope` phase. First I’m reading the phase artifacts and the relevant runtime/workflow code paths so I can map the requested behavior onto the current package-based runtime without pulling unrelated files into scope.
+
+I have the phase contract and prior decisions. Next I’m tracing the current sub-workflow, parity, and git-scope implementations to see what already landed in earlier phases and where the gaps still are.
+
+The repo already has a large in-progress greenfield cutover: old `autoloop_v3/*` paths are deleted and the live code is at repo-root `core/`, `runtime/`, `extensions/`, `workflows/`. I’m switching analysis to those live modules and ignoring the deleted legacy tree unless I need it for regression comparison.
+
+I can already see some of the target surface exists: `Context.invoke_workflow`, child metadata files, and package-folder plumbing are present, while tests and parity code still reference old names and the old Autoloop-v1 harness. I’m reading those exact implementations before I patch anything.
+
+I’ve got enough context to check the current failure surface. I’m running the phase-adjacent tests now so I can patch the actual broken contracts rather than guessing from the design spec alone.
+
+`pytest` isn’t on PATH in this environment. I’m using `python -m pytest` instead so I can still get the runtime/test failures for this phase.
+
+The Autoloop-v1 package currently has the parity helper code, but the live workflow class is still just a bootstrap shell. I’m checking local git history for the prior workflow definition so I can recover the intended phase/session shape instead of inventing a new one.
+
+I’ve narrowed the work into four concrete slices. I’m patching them in this order so the runtime stays coherent while I move Autoloop-v1 off its custom harness:
+
+1. Child workflow execution: wire a runtime invoker through `Engine`/`Runner`, add a structured child result, and persist `parent.json` plus `children.jsonl`.
+2. Parity seam: enrich step lifecycle events with raw model output, then convert `workflows/autoloop_v1/parity.py` from a custom runner/provider wrapper into a normal workflow extension plus session-path strategy.
+3. Git scope: switch default tracking from `task_folder` to `workflow_folder` and update the git extension surface/tests to reflect that narrower scope.
+4. Validation: add focused contract/runtime tests for name/class child invocation, session isolation, child metadata, Autoloop-v1 parity sidecars, and workflow-scoped git filtering.
+
+I’m starting the code edits now. The first patch wires the child-invocation contract and the raw-output lifecycle fields, because the parity and git changes build on those runtime primitives.
+
+The runtime seam patch is in. I’m checking the new loader/workspace edges now so I can add child metadata and parameter coercion without leaving partial contracts behind.
+
+The next patch is the main runtime change: the runner will gain a real child-invocation path and start persisting parent/child linkage. After that I’ll swap Autoloop-v1 over to the same runner path.
+
+The child runner path compiles. I’m switching to git scope now: the default filter is still task-wide, so I’m narrowing that to workflow-wide and renaming the surface to match the new layout.
+
+I’ve reached the Autoloop-v1 cutover. I’m replacing the custom parity harness with a normal workflow extension and rebuilding the package workflow around the general runner, so there’s no separate execution path left for `autoloop_v1`.
+
+I found one collision in the new subworkflow tests: I was using `parent.json` inside the parent run for test assertions, but that path is reserved for child-link metadata. I’m moving those parent-side assertions to a separate summary file so the test mirrors the actual runtime contract.
+
+The parity tests need one more adjustment: package execution resolves under `options.root`, so I’m staging the repo’s `workflows/autoloop_v1` package into each temp root before I run it. That keeps the workspace isolated while still exercising the real package code.
+
+I found a sequencing bug before it could leak into the event log: the generic `EventLogger` cached its sequence number, but the new parity extension also appends events to the same file. I’m making the logger re-check the latest sequence on each emit so mixed writers don’t collide.
+
+There’s one last correctness gap in child-parameter validation: mapping-based invocation could bypass the CLI’s unknown-parameter check on permissive Pydantic models. I’m tightening that so `ctx.invoke_workflow(..., parameters=...)` fails on undeclared keys before the child run starts.
+
+The code compiles after the patch set. I’m installing `pytest` into the local Python environment now so I can run the phase-focused tests instead of stopping at static checks.
+
+System Python is PEP 668 managed, so a direct `pip install --user` is blocked. I’m using a throwaway virtualenv in the repo instead so I can run the tests without modifying the base environment.
+
+The virtualenv is ready. I’m running the changed contract/runtime tests now, starting with the subworkflow, parity, git-scope, and raw-output coverage I just added.
+
+The test runner is up, and collection is failing only because the virtualenv doesn’t have runtime deps yet. I’m adding `pydantic` to the same throwaway env and rerunning the focused suite.
+
+The failures are narrow: one import-cache issue in the temp `workflows/` tests, and the git helpers are using `git -C ...` in a way this environment isn’t accepting for relative pathspecs. I’m fixing both and rerunning the same focused suite.
+
+I’ve got the phase scope and the current delta. Next I’m rerunning the focused test slice to isolate the remaining failures, then I’ll patch only the subworkflow/parity/git surfaces still breaking and finish the phase notes.
+
+The remaining failures are all concentrated in the newly added parity and child-workflow tests. I’m pulling the full failure details now so I can fix the contract mismatches instead of broadening scope.
+
+The failing slice is narrower than it first looked: the child/parity work is green, and the remaining breakage is isolated to the git-test helpers. I’m checking those helpers and the git runtime assumptions now, because the failures are all the same `pathspec did not match any files` symptom.
+
+The root cause is explicit now: this shell session exports `GIT_DIR` and `GIT_WORK_TREE`, so plain subprocess git calls are bound to the outer repo even when `cwd` points at a temp repo. That’s a real integration bug for git tracking, not just a test quirk, so I’m fixing the git wrapper at the extension layer and hardening the test helpers the same way.
+
+I’ve got the fix path. The git layer needs to ignore inherited repo-selection env like `GIT_DIR`/`GIT_WORK_TREE`, and the temporary-repo test helpers need the same sanitation during setup so they actually operate on the repos they create.
+
+I’ve patched the git subprocess environment at the implementation layer and in the temp-repo test helpers. Next step is rerunning the previously failing git-focused tests first; if those go green, I’ll rerun the full focused phase suite and then update the phase artifacts.
+
+The focused phase suite is green now. I’m doing the close-out pass: reviewing the final diff for drift, then writing the phase notes and any decision entries needed so later turns inherit the actual constraints instead of re-deriving them.
+
+I’m doing one more hygiene pass before writing notes. The test run generated tracked `__pycache__` noise in this repo, so I’m checking what can be cleaned safely versus what belongs to the repo’s existing odd tracked state.
+
+I’m cleaning generated cache artifacts now. They came from my validation runs and would otherwise muddy the phase diff without adding any source changes.
+
+I have the source delta settled. I’m writing the phase notes and the non-obvious decisions now so the next turn inherits the runtime contracts that actually shipped: child-result persistence, parity event sequencing, and repo-scoped git sanitation.
+
+Scope considered
+
+- Runtime-backed child workflow execution, Autoloop-v1 package-local parity, workflow-scoped git tracking, and the required phase-local notes/decision ledger.
+- Unrelated dirty files already present in the repo were left untouched.
+
+What I analyzed
+
+- Reviewed `core/`, `runtime/`, `extensions/git/`, `workflows/autoloop_v1/`, the active phase artifacts, and the focused acceptance tests for child execution, parity, and git scope.
+- The remaining failures after the main implementation were all git-related. Root cause was inherited `GIT_DIR` / `GIT_WORK_TREE` leaking temp-repo operations into the outer repo.
+
+What I changed
+
+- Added first-class child workflow execution with a structured `ChildWorkflowResult`, class-name and package-name invocation paths, parent/child linkage files, and isolated child run/session/answer state.
+- Enriched step events with resume-answer and raw-output fields so package-local parity code can rebuild raw logs and status sidecars without a custom runner/provider wrapper.
+- Rebuilt `workflows/autoloop_v1` on the general runtime via `AutoloopV1Parity`, added package-local prompts, switched git tracking defaults to `workflow_folder`, sanitized git repo-selection env in `extensions/git/repo.py`, and updated the focused tests plus phase notes/decisions.
+
+Key findings / decisions
+
+- Child provenance now lives on both sides: parent `children.jsonl`, child `parent.json`, and child `run.json.parent`.
+- `runtime.events.EventLogger.emit(...)` now re-reads the latest on-disk sequence before appending because workflow-local parity code may also write to the same `events.jsonl`.
+- Validation passed:
+  - `python3 -m py_compile ...` on touched runtime/git/test modules
+  - `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_integration_parity.py tests/runtime/test_optional_extensions.py tests/unit/test_stdlib_and_extensions.py tests/contract/test_engine_contracts.py -q`
+  - Result: `47 passed in 0.90s`
+
+Open issues / next step
+
+- This phase is green against its focused acceptance slice.
+- Remaining work is outside this phase: broader docs rewrite and any later cleanup of repo-wide stale artifacts.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db736-278b-79d0-996c-bc296c98ac15
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019db736-278b-79d0-996c-bc296c98ac15
+---
+I’m reviewing the subworkflow/parity/git phase against the acceptance criteria and the actual code paths that changed. First I’m loading the reviewer artifacts and the implementation surfaces that can hide regressions: child invocation, Autoloop-v1 parity, and git repo scoping.
+
+I’ve loaded the main surfaces. Next I’m checking the exact child-run plumbing and parity/event interactions for edge cases: resume paths, event sequencing, metadata persistence, and whether the tests actually cover the non-inheritance and git-scope rules claimed by the notes.
+
+I’ve hit one possible regression surface that the current tests don’t check: child runs are created through the same workspace path that appends/replaces task-level messages, which may let an internal child message overwrite the shared task request snapshot. I’m verifying that behavior directly before I write it up.
+
+I’ve confirmed a real regression: invoking a child workflow currently rewrites the shared task request snapshot and task message ledger with the child’s internal message. I’m recording that as blocking, plus one schema-consistency note on the parent child-history records, then I’ll mark the phase artifacts accordingly.
+
+Scope considered
+
+- Child-workflow execution in `core/context.py`, `runtime/runner.py`, and `runtime/workspace.py`
+- Autoloop-v1 parity in `workflows/autoloop_v1/*`
+- Workflow-scoped git tracking in `extensions/git/*`
+- The focused tests and phase artifacts only
+
+What I analyzed
+
+- Compared the implementation against AC-1 through AC-4, the phase notes, and the shared decisions ledger.
+- Reproduced the new child invocation path directly and inspected the resulting task-level `request.md` and `messages.jsonl` to check whether nested runs stay isolated from shared task state.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/subworkflow-parity-and-git-scope/criteria.md) to reflect that blocking issues remain.
+- Appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/subworkflow-parity-and-git-scope/feedback.md).
+
+Key findings / decisions
+
+- `IMP-001` `blocking` in `runtime.runner._build_workflow_invoker`, `runtime.runner._prepare_workspaces`, and `runtime.workspace.ensure_workspace`: child workflow invocation currently mutates the shared task request state. Repro: invoking the new class-based child flow leaves `.autoloop/tasks/<task>/request.md` equal to the child message and appends that internal child message to `messages.jsonl`. That breaks the intended task/workflow/run separation and can change parent or sibling workflow behavior when they read `{task_folder}/request.md`. The fix should be centralized in the workspace/runner path so nested child runs get only their own run-local `request.md` and do not rewrite task-level request/message state.
+- `IMP-002` `non-blocking` in `runtime.runner._child_run_record_payload` and the fatal-error append path: `children.jsonl` is schema-inconsistent between non-fatal and fatal child outcomes. Centralize fatal child-record emission through the same serializer used for non-fatal records.
+
+Open issues / next step
+
+- This review is not yet approvable because `IMP-001` is a behavioral regression against the shared task request contract.
+- After fixing that isolation bug, rerun the focused child/parity/git test slice and resubmit; `IMP-002` can be cleaned up in the same pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
