@@ -931,3 +931,52 @@ Open issues / next step
 
 - Verifier should rerun `IMP-002`; this turn is specifically aimed at closing that blocker.
 - Execution-level tests are still unavailable in this shell because `pytest` and `pydantic` are not installed.
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+
+
+---
+run_id=run-20260422T195826Z-0b96efa7 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019db6ec-e4aa-7132-8995-f84f3102e4bc
+---
+I’m rerunning the review on the narrowed cycle-3 change: the persisted-params helper, the new explicit-override regression test, and the updated phase notes.
+
+The cycle-3 change closes the remaining blocker from the review side. I’m updating the criteria to complete and leaving the feedback log as-is, since there are no new findings to append.
+
+Scope considered
+
+- Re-reviewed the cycle-3 fix for persisted `workflow_params` immutability in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py) and the new explicit-override regression coverage in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- Updated only the reviewer-owned phase artifact [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260422t165825-bootstrap/implement/phases/runtime-workspace-and-context/criteria.md).
+
+What I analyzed
+
+- The centralized `resolve_run_workflow_params(...)` logic to confirm existing runs now treat persisted `run.json` params as authoritative.
+- The new test case that resumes with an explicit override attempt and verifies the original params remain visible in both `Context` and `run.json`.
+- The phase notes and prior decisions to confirm the implementation still matches the accepted runtime-workspace-and-context scope.
+
+What I reviewed
+
+- `IMP-001` is addressed: omitted resume params no longer clear persisted run params.
+- `IMP-002` is addressed: explicit resume-time param overrides are now ignored for existing runs.
+- No new blocking or non-blocking findings were identified, so the feedback log was left unchanged.
+
+Key findings / decisions
+
+- The remaining immutability requirement is now enforced in one place, without duplicating override rules across runners.
+- Acceptance criteria for this phase are satisfied from a code-review standpoint.
+- Validation remains limited to compile/shell checks because `pytest` and `pydantic` are unavailable in this shell, but that gap is already documented and is not a blocker for this review outcome.
+
+Open issues / next step
+
+- No review blockers remain for this phase.
+- The next step is the normal handoff to the next planned implementation phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
