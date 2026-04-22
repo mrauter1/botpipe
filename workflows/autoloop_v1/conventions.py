@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-try:  # pragma: no branch - supports both `workflows.*` and `autoloop_v3.workflows.*` imports
+try:  # pragma: no branch - prefer installed-package imports when available
     from autoloop_v3.runtime.stores.filesystem import scope_key
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from runtime.stores.filesystem import scope_key

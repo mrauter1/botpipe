@@ -467,7 +467,7 @@ class Parameters(BaseModel):
     logs_output = capsys.readouterr().out
 
     assert logs_exit == 0
-    assert '"event": "run_started"' in logs_output
+    assert '"event_type": "run_started"' in logs_output
 
     raw_logs_exit = cli.main(["logs", "review", "task-42", "--root", str(tmp_path), "--raw"])
     raw_logs_captured = capsys.readouterr()

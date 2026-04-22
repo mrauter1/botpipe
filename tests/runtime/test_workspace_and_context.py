@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.runtime.runner import RunnerOptions, run_workflow, run_workflow_package
-from autoloop_v3.workflow.primitives import Outcome
+from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
+from workflow.primitives import Outcome
 
 
 def _clear_workflow_modules() -> None:
@@ -27,12 +27,12 @@ def _isolate_generated_workflow_modules():
 
 
 def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tmp_path: Path) -> None:
-    workflow_file = _write_system_workflow_package(tmp_path, "snapshot_demo", "SnapshotWorkflow")
+    _write_system_workflow_package(tmp_path, "snapshot_demo", "SnapshotWorkflow")
 
-    first_result = run_workflow(
-        workflow_file,
+    first_result = run_workflow_package(
+        "snapshot_demo",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="task-1", request_text="First message"),
+        options=RunnerOptions(root=tmp_path, task_id="task-1", message="First message"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "task-1"
@@ -56,10 +56,10 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert first_run_meta["run_folder"] == f".autoloop/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}"
     assert first_run_meta["request_file"] == f".autoloop/tasks/task-1/wf_snapshot_demo/runs/{first_run_dir.name}/request.md"
 
-    second_result = run_workflow(
-        workflow_file,
+    second_result = run_workflow_package(
+        "snapshot_demo",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="task-1", request_text="Second message"),
+        options=RunnerOptions(root=tmp_path, task_id="task-1", message="Second message"),
     )
 
     run_dirs = sorted(path for path in runs_dir.iterdir() if path.is_dir())
@@ -70,6 +70,7 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     assert second_result.terminal == "SUCCESS"
     assert len(run_dirs) == 2
     assert [entry["message"] for entry in messages] == ["First message", "Second message"]
+    assert all("intent_mode" not in entry for entry in messages)
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "Second message\n"
     assert (first_run_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
     assert (second_run_dir / "request.md").read_text(encoding="utf-8") == "Second message\n"
@@ -77,7 +78,7 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
 
 
 def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_root(tmp_path: Path) -> None:
-    workflow_file = _write_llm_workflow_package(tmp_path, "context_demo", "ContextWorkflow")
+    _write_llm_workflow_package(tmp_path, "context_demo", "ContextWorkflow")
     (tmp_path / "prompts").mkdir(parents=True, exist_ok=True)
     (tmp_path / "prompts" / "ask.md").write_text("root-level prompt\n", encoding="utf-8")
 
@@ -102,13 +103,13 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
         ]
     )
 
-    result = run_workflow(
-        workflow_file,
+    result = run_workflow_package(
+        "context_demo",
         provider=provider,
         options=RunnerOptions(
             root=tmp_path,
             task_id="context-task",
-            request_text="Inspect runtime context",
+            message="Inspect runtime context",
             workflow_params={"mode": "strict"},
         ),
     )
@@ -122,17 +123,17 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
     assert result.terminal == "SUCCESS"
     assert payload["workflow_name"] == "context_demo"
     assert Path(payload["workflow_folder"]) == workflow_dir
-    assert Path(payload["package_folder"]) == workflow_file.parent
+    assert Path(payload["package_folder"]) == tmp_path / "workflows" / "context_demo"
     assert payload["workflow_params"] == {"mode": "strict"}
     assert payload["prompt_text"] == "package prompt\n"
-    assert Path(payload["prompt_path"]) == workflow_file.parent / "prompts" / "ask.md"
+    assert Path(payload["prompt_path"]) == tmp_path / "workflows" / "context_demo" / "prompts" / "ask.md"
     assert (workflow_dir / "workflow-note.txt").read_text(encoding="utf-8") == "workflow-scoped\n"
     assert run_meta["workflow_params"] == {"mode": "strict"}
     assert run_meta["workflow_folder"] == ".autoloop/tasks/context-task/wf_context_demo"
 
 
 def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path: Path) -> None:
-    workflow_file = _write_pause_resume_workflow_package(tmp_path, "resume_params_demo", "ResumeParamsWorkflow")
+    _write_pause_resume_workflow_package(tmp_path, "resume_params_demo", "ResumeParamsWorkflow")
     provider = ScriptedLLMProvider(
         llm_turns=[
             lambda request: (
@@ -164,13 +165,13 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
         ]
     )
 
-    paused = run_workflow(
-        workflow_file,
+    paused = run_workflow_package(
+        "resume_params_demo",
         provider=provider,
         options=RunnerOptions(
             root=tmp_path,
             task_id="task-params",
-            request_text="Need workflow parameters",
+            message="Need workflow parameters",
             workflow_params={"mode": "strict"},
         ),
     )
@@ -179,8 +180,8 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
     run_dir = next((workflow_dir / "runs").iterdir())
     paused_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
-    resumed = run_workflow(
-        workflow_file,
+    resumed = run_workflow_package(
+        "resume_params_demo",
         provider=provider,
         options=RunnerOptions(
             root=tmp_path,
@@ -203,7 +204,7 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
 
 
 def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_path: Path) -> None:
-    workflow_file = _write_pause_resume_workflow_package(tmp_path, "resume_override_demo", "ResumeOverrideWorkflow")
+    _write_pause_resume_workflow_package(tmp_path, "resume_override_demo", "ResumeOverrideWorkflow")
     provider = ScriptedLLMProvider(
         llm_turns=[
             lambda request: (
@@ -235,13 +236,13 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
         ]
     )
 
-    paused = run_workflow(
-        workflow_file,
+    paused = run_workflow_package(
+        "resume_override_demo",
         provider=provider,
         options=RunnerOptions(
             root=tmp_path,
             task_id="task-override",
-            request_text="Need workflow parameters",
+            message="Need workflow parameters",
             workflow_params={"mode": "strict"},
         ),
     )
@@ -249,8 +250,8 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-override" / "wf_resume_override_demo"
     run_dir = next((workflow_dir / "runs").iterdir())
 
-    resumed = run_workflow(
-        workflow_file,
+    resumed = run_workflow_package(
+        "resume_override_demo",
         provider=provider,
         options=RunnerOptions(
             root=tmp_path,
@@ -294,7 +295,7 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
                 )[1]
             ]
         ),
-        options=RunnerOptions(root=tmp_path, task_id="subworkflow-class-task", request_text="Parent request"),
+        options=RunnerOptions(root=tmp_path, task_id="subworkflow-class-task", message="Parent request"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-class-task"
@@ -363,7 +364,7 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
     paused_parent = run_workflow_package(
         "parent_name",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="subworkflow-name-task", request_text="Parent request"),
+        options=RunnerOptions(root=tmp_path, task_id="subworkflow-name-task", message="Parent request"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-name-task"
@@ -440,7 +441,7 @@ def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_c
         run_workflow_package(
             "parent_failing",
             provider=ScriptedLLMProvider(),
-            options=RunnerOptions(root=tmp_path, task_id="subworkflow-fatal-task", request_text="Parent request"),
+            options=RunnerOptions(root=tmp_path, task_id="subworkflow-fatal-task", message="Parent request"),
         )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-fatal-task"
