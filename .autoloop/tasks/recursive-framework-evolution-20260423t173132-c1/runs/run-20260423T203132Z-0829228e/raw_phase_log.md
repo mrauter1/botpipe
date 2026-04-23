@@ -421,3 +421,97 @@ Phase-local review is complete and the implementation is acceptable as shipped. 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbc20-dc0e-7303-800f-19c7eb124502
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+I’m treating this as a phase-local test hardening pass over the shipped incident workflow. First I’m reviewing the new runtime proof, the reviewer feedback, the active test artifacts, and the shared decisions so I can add only the narrowest missing regression coverage instead of churning unrelated tests.
+
+The current proof is good on discovery, compilation, happy path, and one publish failure path. The highest-value missing regression check is the rest of the publication authority contract in `incident_summary.json`, so I’m extending the negative coverage there instead of adding broader or redundant tests.
+
+I’m making one narrow test change: parameterizing the publish-failure test so it covers all three summary fields that gate `incident_receipt.json` creation. After that I’ll update the phase test strategy, append the test-note feedback, and rerun the targeted validation slice.
+
+The extra coverage is in. I’m rerunning the same targeted slice the reviewer used so the new negative publish checks are proven against the incident workflow, the adjacent shipped packages, and the recursive-memory baseline together.
+
+Scope considered
+
+Phase-local test hardening for `incident-hardening-program-package`: the new incident workflow runtime proof, adjacent builder/release package regressions, the recursive-memory baseline test, the active test artifacts, and the shared decisions ledger.
+
+What I analyzed
+
+I reviewed the shipped incident workflow tests, the publish-step validation logic in `workflows/incident_to_hardening_program/workflow.py`, the reviewer’s non-blocking feedback, and the current behavior already covered by the new runtime proof. The missing regression surface was the rest of the machine-readable publication contract in `incident_summary.json`.
+
+What I changed
+
+- Expanded `tests/runtime/test_incident_to_hardening_program.py` so the publish failure-path now covers all three summary fields that gate `incident_receipt.json` creation: `recommended_posture`, `primary_hypothesis`, and `hardening_backlog_items`.
+- Updated `test_strategy.md` with an explicit behavior-to-test coverage map, preserved invariants, flake controls, and known gaps.
+- Appended a concise summary to the phase `feedback.md`.
+- Appended one test decision under the current test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+- The highest-value extra regression check was publication-authority coverage, not more happy-path duplication.
+- The targeted validation slice is green: `.venv/bin/pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py` -> `81 passed in 1.04s`.
+- No new flake risks were introduced; the slice remains fully deterministic through scripted providers, temp dirs, and module-cache eviction.
+
+Open issues / next step
+
+No phase-local test blockers remain. The reviewer’s non-blocking stale-path note in `.autoloop_recursive/framework_evolution_charter.md` remains outside this test change and was not normalized into test expectations.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbc20-dc0e-7303-800f-19c7eb124502
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+I’m reviewing the phase-local test slice now: the incident workflow runtime proof, the added publish-failure coverage, the updated test strategy, and the shared decisions that the tests are supposed to preserve. I’ll verify the coverage shape first, then I’ll update the audit artifacts with either blockers or a clean verdict.
+
+The coverage shape looks sound: happy path, preserved invariants, and the publish-step failure contract are all represented, and the test strategy matches the code. I’m running the targeted slice once myself so the audit verdict is grounded in an independent pass before I update the audit artifacts.
+
+I have the audit verdict: no blocking gaps in the incident workflow test slice. I’m marking the criteria accordingly and recording one non-blocking follow-up on the recursive-memory baseline test so the known charter-path inconsistency is easier to lock down later.
+
+Scope considered
+
+Phase-local audit of the incident-hardening test slice: `tests/runtime/test_incident_to_hardening_program.py`, the adjacent builder/release/runtime baseline tests that were rerun, the updated `test_strategy.md`, the phase feedback artifact, and the shared decisions relevant to publish-step coverage.
+
+What I analyzed
+
+I checked whether the tests cover the changed behavior at the right level: package discovery, contract compilation, parameter coercion, happy-path runtime execution, deterministic receipt publication, and the machine-readable publish guards recorded in `decisions.txt`. I also checked whether the documented test strategy matches the actual assertions and whether the slice stays deterministic.
+
+What I reviewed
+
+I reviewed the updated runtime test file, the phase test strategy, the test-author feedback, and the implement-review feedback for any uncovered regression surface. I independently ran `.venv/bin/pytest -q tests/runtime/test_incident_to_hardening_program.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/test_architecture_baseline_docs.py`, which passed with `27 passed in 0.70s`.
+
+Key findings / decisions
+
+No blocking findings. I updated `criteria.md` to all checked and appended one non-blocking audit note:
+- `TST-001`: the recursive-memory baseline test still does not guard against the known stale `src/autoloop/main.py` reference in the charter, so that documentation inconsistency remains outside automated detection for now.
+
+Open issues / next step
+
+The incident workflow test slice is acceptable as shipped. The only follow-up is the non-blocking docs-baseline tightening noted above, once the charter path reference itself is corrected.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
