@@ -9,6 +9,7 @@ from workflow import (
     Session,
     Artifact,
     Prompt,
+    RouteContract,
     PairStep,
     LLMStep,
     SystemStep,
@@ -82,10 +83,11 @@ review = PairStep(
     verifier="prompts/review_verifier.md",
     expected_output_schema=ReviewPayload,
     route_contracts={
-        "review_complete": {
-            "summary": "Review artifacts and verdict are complete.",
-            "required_artifacts": ["review_report"],
-        }
+        "review_complete": RouteContract(
+            summary="Review artifacts and verdict are complete.",
+            required_artifacts=["review_report"],
+            work_item_effect="Advances the review package to the next declared step.",
+        )
     },
 )
 ```
@@ -95,6 +97,8 @@ Runtime behavior:
 - `expected_output_schema` defines the JSON-schema-like contract for `Outcome.payload`
 - `available_routes` is derived mechanically from the declared workflow transitions plus reserved routes
 - `route_contracts` is optional step-owned metadata for legal application routes only
+- route contracts normalize to `summary`, `required_artifacts`, and `work_item_effect`
+- mapping-style declarations remain valid; legacy `state_effect` values normalize to `work_item_effect`
 
 Authoring rules:
 

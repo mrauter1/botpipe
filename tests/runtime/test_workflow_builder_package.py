@@ -81,6 +81,9 @@ def test_workflow_builder_package_compiles_with_explicit_control_contracts(monke
         "candidate_comparison",
         "selected_workflow_brief",
     ]
+    assert frame_step.route_contracts["candidate_selected"]["work_item_effect"] == (
+        "Locks the selected addition and its classification for downstream design."
+    )
     assert frame_step.expected_output_schema is not None
 
     build_step = compiled.steps["build_package"]
@@ -403,6 +406,9 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
         "generated_assets_dir",
         "build_report",
     ]
+    assert provider.calls[5].route_contracts["package_built"]["work_item_effect"] == (
+        "Promotes the candidate implementation to evaluation."
+    )
     assert (run_dir / "run.json").exists()
 
 

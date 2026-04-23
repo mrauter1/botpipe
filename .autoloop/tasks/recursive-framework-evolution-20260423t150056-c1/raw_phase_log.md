@@ -111,3 +111,85 @@ phase_mode=single
 phase_ids=route-contract-normalization,release-go-no-go-package,proof-docs-and-recursive-memory
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbbd3-328e-7a50-9050-83420d5e980f
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+I’m implementing the route-contract normalization phase. I’ll inspect the phase artifacts, the mandatory framework files, and current workflow declarations first so I can keep the change additive and regression-safe.
+
+The current repo has already been reshaped away from the original `src/autoloop/...` paths, so I’m mapping the phase onto the live `core/`, `runtime/`, and `workflows/` surfaces. Next I’m tracing existing `route_contracts` usage and the validation path before I touch code.
+
+I’ve confirmed the current control-contract surface is very thin: steps carry raw `route_contracts`, validation only checks “mapping shape + legal route names,” and compiled requests just deep-copy that mapping through to providers. The phase target is a normalization seam between author declarations and that runtime surface, not a runtime boundary expansion.
+
+Plan for this phase:
+
+1. Add a dedicated normalization seam for route contracts.
+   - Introduce a strict-surface helper for typed author declarations.
+   - Keep existing dict-style declarations valid.
+   - Normalize everything into the existing runtime payload shape.
+
+2. Wire validation through the normalized form.
+   - Check route legality.
+   - Check `required_artifacts` against the known artifact inventory.
+   - Check `work_item_effect` against a constrained set of legal semantics.
+
+3. Prove the seam without widening scope.
+   - Add unit and contract coverage for typed declarations, legacy alias normalization, and validation failures.
+   - Use the existing workflow-builder package as backward-compatibility evidence rather than refactoring unrelated workflow code.
+   - Update phase artifacts and decisions only for the behavior actually shipped.
+
+I have enough context to edit safely. I’m adding one internal normalization module, then touching the strict authoring exports, validation, and compiler so the runtime still receives only normalized `route_contracts` without any new control surface.
+
+The first pass is in. I’m checking the seam for small correctness issues now: import hygiene, legacy alias behavior, and whether the normalized shape is exactly what provider requests and builder-package compilation will see.
+
+I found two small follow-ups before running the suite: one normalization helper was too permissive for dict-shaped artifact lists, and there’s a stray validation loop from the old mapping-only path. I’m tightening those now, then I’ll run the targeted tests.
+
+The code path is ready for proof. I’m running the narrow regression set for this seam: validation, engine/provider contract propagation, workflow-builder backward compatibility, and the authoring docs baseline.
+
+The first test run exposed two real integration edges, not logic failures. One is a genuine bug in my validation patch (`inventory` wasn’t threaded into the control-contract validator); the other is that the test harness resolves `workflow` from the package root one directory above this repo folder, so the new strict-surface export has to be visible there through the repo’s package surface rather than only the local shim file I edited.
+
+I’m making two constrained follow-up edits: threading artifact inventory into normalization validation, and updating the sibling strict `workflow` shim the tests actually import. That second change is narrowly justified by the package-level import surface the repo already treats as public.
+
+The seam is now passing its proof set. I’m doing the wrap-up work next: recording the non-obvious decisions for future turns and writing the phase implementation notes with the actual files, preserved invariants, and validation that shipped.
+
+I’m recording the two future-drift points explicitly: canonical normalization drops legacy key names in the runtime payload but still accepts them on input, and the sibling `workflow` shim has to stay in sync with the repo’s strict surface because the test harness imports it first.
+
+I’m just collecting exact file references for the close-out now. The implementation itself is complete and the targeted proof set is green; only the unrelated recursive-memory baseline doc check remains outside scope.
+
+Scope considered
+
+Phase-local route-contract normalization only, plus the directly impacted strict import surface, authoring docs, and proof tests.
+
+What I analyzed
+
+I traced the control-contract path through [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py:1), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:433), and [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:114), then checked existing legacy route-contract usage in the workflow-builder package and its tests.
+
+What I changed
+
+Added a typed helper and centralized normalization in [core/route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/route_contracts.py:1), exported it through [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1) and the sibling workspace shim [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/workflow/__init__.py:1) that the test harness resolves first.
+
+Validation now normalizes route contracts and checks `required_artifacts` against the workflow artifact inventory in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:433). Compilation now emits only canonical `route_contracts` payloads in [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:114). I also updated the authoring contract in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:3) and added coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:231), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:297), and [tests/runtime/test_workflow_builder_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_builder_package.py:51).
+
+Key findings / decisions
+
+Normalized runtime `route_contracts` now always expose `summary`, `required_artifacts`, and `work_item_effect`. Legacy mapping input stays additive: `state_effect` and `evidence` are accepted as authoring-time aliases, and the existing workflow-builder package remains unchanged as the backward-compatibility proof. I also recorded the non-obvious decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/decisions.txt:9) and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/route-contract-normalization/implementation_notes.md:1).
+
+Open issues / next step
+
+Passed:
+- `tests/unit/test_validation.py`
+- `tests/contract/test_engine_contracts.py`
+- `tests/runtime/test_workflow_builder_package.py`
+- targeted doc checks in `tests/test_architecture_baseline_docs.py`
+
+Residual unrelated failure remains in `tests/test_architecture_baseline_docs.py::test_recursive_memory_files_record_cycle_one_closeout_baseline`; it reflects current `.autoloop_recursive/` content drift and was left out of this phase.
