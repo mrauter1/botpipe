@@ -10,3 +10,5 @@ Do not absorb or revert the unrelated dirty deletions and repo-layout churn visi
 Step-owned control contracts remain optional and are only legal on provider-owned steps; `SystemStep` rejects `expected_output_schema` and `route_contracts` to keep runtime-owned events separate from provider-owned outcomes.
 `available_routes` are compiled mechanically in local-first then global-route order so provider requests cannot drift from the workflow transition table.
 If a step opts into `route_contracts`, every non-reserved application route for that step must be covered while reserved routes (`question`, `blocked`, `failed`) continue to use runtime defaults.
+<autoloop-decisions-header version="1" block_seq="3" owner="test_author" phase_id="step-control-contracts" pair="test" turn_seq="1" run_id="run-20260423T164234Z-94b626d6" ts="2026-04-23T17:14:08.616492+00:00" />
+Test coverage treats raw JSON schema mappings as dependency-gated because the project venv does not provide `jsonschema`; the stable regression contract is an early `WorkflowValidationError`, not an environment-dependent runtime branch.

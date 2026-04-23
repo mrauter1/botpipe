@@ -232,3 +232,49 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+I’m treating this as a focused test-authoring pass on the new step-control-contract surface. First I’m checking the existing test coverage and phase artifacts, then I’ll add only the missing high-value cases and update the phase test artifacts.
+
+The main remaining gap is the raw JSON Schema branch: the implementation claims to support both Pydantic-backed specs and raw schema mappings, but the current tests only exercise the Pydantic path. I’m adding one compile-time and one runtime test for that branch, then I’ll update the phase strategy and feedback.
+
+The raw-schema branch needs to be made deterministic rather than environment-lucky. I’m replacing the venv-dependent test with an explicit dependency-missing failure-path test, and I’m dropping the runtime test because raw mapping cannot reach runtime when the dependency gate trips at workflow definition time.
+
+The test additions are green. I’m now writing the phase test strategy and feedback so the next turn can see exactly which behavior is covered, which invariants stayed stable, and which branch is still dependency-gated.
+
+I caught one artifact mismatch before finishing: this turn only added a new unit test and refreshed the phase artifacts; the contract coverage was validated, not expanded. I’m correcting the test feedback summary so it reflects the actual diff.
+
+Scope considered
+- Phase-local test authoring for the step-control-contract surface only: changed test files plus the active test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/step-control-contracts/`.
+
+What I analyzed
+- The implemented control-contract path in `core/steps.py`, `core/validation.py`, `core/compiler.py`, `core/engine.py`, and the existing coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- The shared decisions ledger and the current project venv behavior around the optional `jsonschema` dependency.
+
+What I changed
+- Added a deterministic raw-JSON-schema dependency-gate test in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) by monkeypatching `__import__` so the failure-path stays stable even if the ambient environment changes.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/step-control-contracts/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge/failure paths, stabilization notes, and the known gap.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/step-control-contracts/feedback.md) and one non-obvious test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt).
+
+Key findings / decisions
+- The project venv does not provide `jsonschema`, so raw JSON schema mappings are currently dependency-gated rather than executable at runtime; the stable regression contract is an early `WorkflowValidationError`.
+- Revalidated the changed surface with:
+  - `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  - `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_integration_parity.py tests/runtime/test_workspace_and_context.py tests/runtime/test_optional_extensions.py tests/runtime/test_compatibility_runtime.py`
+- Results: `24 passed`, `25 passed`, and `34 passed` respectively.
+
+Open issues / next step
+- There is still no happy-path runtime test for raw JSON schema mappings. If `jsonschema` becomes a first-class dependency in the project venv, the next step is to add an execute-time success test for that branch.

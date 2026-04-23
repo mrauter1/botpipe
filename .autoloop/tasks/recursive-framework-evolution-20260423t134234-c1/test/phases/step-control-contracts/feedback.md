@@ -6,3 +6,6 @@
 - Phase Directory Key: step-control-contracts
 - Phase Title: Add Step Control Contracts
 - Scope: phase-local authoritative verifier artifact
+
+- Added a deterministic dependency-gated raw JSON schema failure-path test in `tests/unit/test_validation.py`; existing contract coverage in `tests/contract/test_engine_contracts.py` was retained and revalidated.
+- Re-ran the changed-surface regression suites: `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, `tests/runtime/test_workflow_integration_parity.py`, `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_optional_extensions.py`, and `tests/runtime/test_compatibility_runtime.py`.
