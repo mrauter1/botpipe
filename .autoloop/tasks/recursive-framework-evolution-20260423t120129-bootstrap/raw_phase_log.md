@@ -567,3 +567,56 @@ One quick cleanup check failed because `rg` parsed the pattern as a flag. I’m 
   - `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
   - `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
 - One existing wrapper test was intentionally deselected because it belongs to the later recursive-wrapper cleanup phase, not this provider-contract phase.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+I’m reviewing the provider-contract implementation against the phase acceptance criteria and the shared decisions ledger. First I’m reading the reviewer artifacts and the changed runtime/test paths so I can verify scope fidelity before I mark criteria or write findings.
+
+I’ve finished the first-pass review of the changed files. Next I’m doing a narrow regression sweep for the removed surfaces and the preserved runner API so I can decide whether there are any blocking findings before I touch the reviewer artifacts.
+
+I found a likely precedence regression in the new config merge logic. I’m reproducing it with a minimal runtime-config scenario now, because if it holds, it’s a blocking issue: a lower-precedence generic model override can overwrite a higher-precedence provider-specific override.
+
+I reproduced the precedence issue. I’m updating the reviewer artifacts now: one blocking finding in `feedback.md`, and the criteria stays incomplete because the new merge strategy can silently pick the wrong model when a lower-precedence generic override and a higher-precedence provider-specific override coexist.
+
+Scope considered
+
+- Phase-local review of the public provider contract changes in `runtime/cli.py`, `runtime/config.py`, `runtime/runner.py`, the phase notes, and the provider-facing tests.
+- Reviewer artifacts updated in `.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/public-cli-provider-contract/criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- Parser/help changes for `--provider` and removal of public `--provider-factory`.
+- Provider config merge semantics in `_merge_provider_config(...)`.
+- Preservation of the non-public `cli.main(..., provider_factory=...)` seam and the direct `run_workflow_package(..., provider=...)` / `execute_workflow_package(..., provider=...)` runner surfaces.
+- Phase-scoped validation plus a direct repro of the config-merge precedence behavior.
+
+What I reviewed
+
+- `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+- `./.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py`
+- A direct Python repro showing that a lower-precedence generic `provider.model` currently overwrites a higher-precedence local `provider.claude.model` once the final provider resolves to `claude`.
+
+Key findings / decisions
+
+- Blocking: `runtime/config.py` introduces a layer-precedence regression. Generic `provider.model` / `provider.model_effort` are replayed only after all layers merge, so a user-level generic override can clobber a repo-local typed provider override. I recorded this as `IMP-001` in the phase `feedback.md`.
+- Criteria are not complete. I left correctness, behavioral safety, compatibility, and validation unchecked; only the simplicity/debt criterion is checked.
+
+Open issues / next step
+
+- Fix `_merge_provider_config(...)` so each layer’s generic model/effort is applied to the then-effective provider as that layer is processed, not once at the end.
+- Add a regression test for global generic + local provider-specific override precedence, then rerun the provider/CLI tests and re-review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
