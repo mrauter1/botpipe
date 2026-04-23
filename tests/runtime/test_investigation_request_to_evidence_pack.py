@@ -358,7 +358,39 @@ def test_investigation_evidence_pack_package_can_be_composed_through_helper_seam
     )
 
 
-def test_investigation_evidence_pack_publish_requires_machine_readable_summary(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("summary_payload", "match"),
+    (
+        (
+            {
+                "authoritative_artifacts": ["evidence_pack"],
+                "finding_count": 1,
+                "investigation_kind": "security_remediation",
+                "key_findings": ["One finding"],
+                "source_count": 1,
+                "unresolved_gap_count": 0,
+            },
+            "ready_for_downstream_assessment",
+        ),
+        (
+            {
+                "authoritative_artifacts": ["evidence_pack"],
+                "finding_count": 1,
+                "investigation_kind": "release_readiness",
+                "key_findings": ["One finding"],
+                "ready_for_downstream_assessment": True,
+                "source_count": 1,
+                "unresolved_gap_count": 0,
+            },
+            "investigation_kind must match workflow state",
+        ),
+    ),
+)
+def test_investigation_evidence_pack_publish_rejects_invalid_machine_readable_summary(
+    tmp_path: Path,
+    summary_payload: dict[str, object],
+    match: str,
+) -> None:
     _install_repo_investigation_package(tmp_path)
     monkeypatch_root = tmp_path
     importlib.invalidate_caches()
@@ -381,19 +413,7 @@ def test_investigation_evidence_pack_publish_requires_machine_readable_summary(t
     (workflow_folder / "evidence_gap_register.md").write_text("# Gap Register\n", encoding="utf-8")
     (workflow_folder / "evidence_pack.md").write_text("# Evidence Pack\n", encoding="utf-8")
     (workflow_folder / "evidence_pack_summary.json").write_text(
-        json.dumps(
-            {
-                "authoritative_artifacts": ["evidence_pack"],
-                "finding_count": 1,
-                "investigation_kind": "security_remediation",
-                "key_findings": ["One finding"],
-                "source_count": 1,
-                "unresolved_gap_count": 0,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
+        json.dumps(summary_payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
@@ -416,7 +436,7 @@ def test_investigation_evidence_pack_publish_requires_machine_readable_summary(t
         session_store=InMemorySessionStore(),
     )
 
-    with pytest.raises(ValueError, match="ready_for_downstream_assessment"):
+    with pytest.raises(ValueError, match=match):
         workflow_pkg.InvestigationRequestToEvidencePack.on_publish_evidence_pack(state, ctx)
 
     assert not (workflow_folder / "evidence_pack_receipt.json").exists()
