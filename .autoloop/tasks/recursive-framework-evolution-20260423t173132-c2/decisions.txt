@@ -6,3 +6,5 @@ Do not migrate the shipped release or incident workflows to the new building blo
 <autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="composition-helpers-and-contracts" pair="implement" turn_seq="1" run_id="run-20260423T212522Z-c2aa04a6" ts="2026-04-23T21:38:30.314443+00:00" />
 `stdlib/composition.py` remains an authoring-only seam: `run_child_workflow(...)` delegates directly to `ctx.invoke_workflow(...)` and does not add runtime sequencing, metadata, or control-contract behavior.
 `adopt_child_artifacts(...)` copies explicitly named child files into `ctx.workflow_folder` and rejects absolute or parent-escaping targets so parent-local artifact adoption stays durable and scoped.
+<autoloop-decisions-header version="1" block_seq="3" owner="test_author" phase_id="composition-helpers-and-contracts" pair="test" turn_seq="1" run_id="run-20260423T212522Z-c2aa04a6" ts="2026-04-23T21:47:49.878543+00:00" />
+Test coverage adds the `adopt_child_artifacts(...)` missing-source `FileNotFoundError` branch at unit scope; helper-based parent/child integration coverage remains the existing runtime proof so the phase stays additive and deterministic.
