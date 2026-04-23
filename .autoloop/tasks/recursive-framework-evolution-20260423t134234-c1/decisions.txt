@@ -6,3 +6,7 @@ The chosen framework improvement is additive step-owned narrow control contracts
 Keep `Outcome.tag` as the route carrier and use the new expected-output schema to validate `Outcome.payload`; do not introduce a new provider-facing packet abstraction.
 This task's planner-owned `plan/phase_plan.yaml` is a YAML contract for the task harness and must not be treated as input to the current `workflows/autoloop_v1/workflow.py` JSON-only phase-plan parser without a separate compatibility fix.
 Do not absorb or revert the unrelated dirty deletions and repo-layout churn visible in `git status`; scope the cycle to additive framework files, the new workflow package, targeted docs/tests, and recursive memory.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="step-control-contracts" pair="implement" turn_seq="1" run_id="run-20260423T164234Z-94b626d6" ts="2026-04-23T16:56:54.540379+00:00" />
+Step-owned control contracts remain optional and are only legal on provider-owned steps; `SystemStep` rejects `expected_output_schema` and `route_contracts` to keep runtime-owned events separate from provider-owned outcomes.
+`available_routes` are compiled mechanically in local-first then global-route order so provider requests cannot drift from the workflow transition table.
+If a step opts into `route_contracts`, every non-reserved application route for that step must be covered while reserved routes (`question`, `blocked`, `failed`) continue to use runtime defaults.
