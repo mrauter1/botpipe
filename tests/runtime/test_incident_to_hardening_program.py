@@ -595,7 +595,42 @@ def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Pa
     assert (run_dir / "run.json").exists()
 
 
-def test_incident_hardening_publish_rejects_missing_recommended_posture(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize(
+    ("summary_payload", "match"),
+    (
+        (
+            {
+                "authoritative_artifacts": ["incident_summary"],
+                "hardening_backlog_items": 3,
+                "primary_hypothesis": "Connection pool exhaustion under retry storm pressure.",
+            },
+            "recommended_posture",
+        ),
+        (
+            {
+                "authoritative_artifacts": ["incident_summary"],
+                "hardening_backlog_items": 3,
+                "recommended_posture": "urgent",
+            },
+            "primary_hypothesis",
+        ),
+        (
+            {
+                "authoritative_artifacts": ["incident_summary"],
+                "hardening_backlog_items": -1,
+                "primary_hypothesis": "Connection pool exhaustion under retry storm pressure.",
+                "recommended_posture": "urgent",
+            },
+            "hardening_backlog_items",
+        ),
+    ),
+)
+def test_incident_hardening_publish_rejects_invalid_summary_fields(
+    tmp_path: Path,
+    monkeypatch,
+    summary_payload: dict[str, object],
+    match: str,
+) -> None:
     monkeypatch.syspath_prepend(str(REPO_ROOT))
     importlib.invalidate_caches()
     _clear_workflow_modules()
@@ -604,16 +639,7 @@ def test_incident_hardening_publish_rejects_missing_recommended_posture(tmp_path
     workflow_folder = tmp_path / "task" / "wf_incident_to_hardening_program"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     (workflow_folder / "incident_summary.json").write_text(
-        json.dumps(
-            {
-                "authoritative_artifacts": ["incident_summary"],
-                "hardening_backlog_items": 3,
-                "primary_hypothesis": "Connection pool exhaustion under retry storm pressure.",
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
+        json.dumps(summary_payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     (workflow_folder / "hardening_program.md").write_text("# Hardening Program\n", encoding="utf-8")
@@ -639,7 +665,7 @@ def test_incident_hardening_publish_rejects_missing_recommended_posture(tmp_path
         session_store=InMemorySessionStore(),
     )
 
-    with pytest.raises(ValueError, match="recommended_posture"):
+    with pytest.raises(ValueError, match=match):
         workflow_pkg.IncidentToHardeningProgram.on_publish_incident_package(state, ctx)
 
     assert not (workflow_folder / "incident_receipt.json").exists()
