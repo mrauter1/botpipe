@@ -1,0 +1,4 @@
+name = "workflow_idea_to_workflow_package"
+title = "Workflow Idea To Workflow Package"
+description = "Compare candidate additions, design a workflow package, build it, verify it, and publish evidence."
+aliases = ["workflow-builder", "workflow-idea-builder"]
