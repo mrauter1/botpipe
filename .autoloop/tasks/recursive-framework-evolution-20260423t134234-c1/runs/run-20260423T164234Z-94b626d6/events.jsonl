@@ -30,3 +30,7 @@
 {"ts": "2026-04-23T17:45:09.489224+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 30, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-builder-package"}
 {"ts": "2026-04-23T17:46:07.781398+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 31, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-builder-package"}
 {"ts": "2026-04-23T17:46:07.797238+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 32, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-builder-package"}
+{"ts": "2026-04-23T17:46:07.854855+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 33, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-builder-package", "phase_mode": "single"}
+{"ts": "2026-04-23T17:46:07.858237+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 34, "event_type": "phase_started", "phase_id": "proof-docs-and-memory", "phase_mode": "single"}
+{"ts": "2026-04-23T17:46:07.859111+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 35, "event_type": "pair_started", "pair": "implement", "phase_id": "proof-docs-and-memory"}
+{"ts": "2026-04-23T17:46:07.859346+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 36, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "proof-docs-and-memory"}
