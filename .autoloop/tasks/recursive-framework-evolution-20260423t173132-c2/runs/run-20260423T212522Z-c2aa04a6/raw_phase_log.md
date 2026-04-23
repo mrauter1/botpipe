@@ -237,3 +237,100 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc47-ba94-7062-9b6c-3596654cf800
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbc47-ba94-7062-9b6c-3596654cf800
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc47-ba94-7062-9b6c-3596654cf800
+---
+I’m checking the phase-local test artifacts and the current helper coverage first, then I’ll add only the smallest missing regression test surface and update the test-phase records to match what is actually covered.
+
+The only meaningful coverage gap I see is the untested `FileNotFoundError` branch when a child artifact is declared in the result map but the backing file is gone. I’m adding that unit test, then I’ll update the phase test strategy and feedback with the exact behavior map and rerun the scoped pytest slice.
+
+I’ve added the missing failure-path unit coverage. I’m rerunning the same scoped proof set so the test-phase artifacts record both the new unit branch and the unchanged runtime/doc guarantees.
+
+I have the rerun results. I’m writing the test-phase artifacts now with a behavior-to-test map, the added failure-path branch, and the exact proof commands/results so the auditor gets a precise coverage record.
+
+Scope considered
+
+- Phase-local test work for `composition-helpers-and-contracts` only: helper-seam unit/runtime/doc coverage plus the test-phase artifacts.
+
+What I analyzed
+
+- The implemented helper tests in [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:189) and [test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:360).
+- The shared decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/decisions.txt:1) and the empty phase test artifacts that needed completion.
+
+What I changed
+
+- Added a missing failure-path unit test in [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:237) for `adopt_child_artifacts(...)` when the child result advertises an artifact name but the backing file does not exist.
+- Updated the behavior-to-test coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/composition-helpers-and-contracts/test_strategy.md:10).
+- Appended the scoped proof summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/composition-helpers-and-contracts/feedback.md:10).
+- Recorded the non-obvious test-scope decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/decisions.txt:9).
+
+Key findings / decisions
+
+- The main uncovered regression branch was the explicit `FileNotFoundError` path in `adopt_child_artifacts(...)`; happy-path runtime composition and doc-boundary coverage were already present and deterministic.
+- Reran the scoped proof set successfully:
+- `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` -> `16 passed`
+- `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py` -> `8 passed`
+- `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` -> `8 passed`
+
+Open issues / next step
+
+- No phase-local test blockers remain. The next phase can build the new workflow package on top of this seam, and its own test slice should then extend runtime coverage from the dedicated parent/child fixture to the new workflow package itself.
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc47-ba94-7062-9b6c-3596654cf800
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbc47-ba94-7062-9b6c-3596654cf800
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc47-ba94-7062-9b6c-3596654cf800
+---
+I’m auditing the added test coverage against the phase contract and the shared decisions, then I’ll update only the test-audit artifacts with the verdict and any findings.
+
+The coverage map and the added failure-path test line up with the phase intent on read. I’m rerunning the scoped proof set independently so the audit verdict is based on executed evidence as well as inspection.
+
+I found no phase-scoped audit issues. I’m marking the audit criteria complete and appending one auditor note that records the clean verdict and the independently rerun proof commands.
+
+Scope considered
+
+- Phase-local test audit only for `composition-helpers-and-contracts`, limited to the updated helper tests, the behavior-to-test map, the shared decisions, and the test audit artifacts.
+
+What I analyzed
+
+- The shared decisions in `decisions.txt`, the updated unit/runtime/doc tests for the composition helper seam, and the phase test strategy and feedback artifacts.
+- Independent pytest evidence from `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`, `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py`, and `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`.
+
+What I reviewed
+
+- Whether the tests cover the changed helper behavior and the preserved `ctx.invoke_workflow(...)` semantics at the right levels.
+- Whether relevant failure paths and edge cases are covered.
+- Whether the tests remain deterministic and avoid encoding any unconfirmed regression or widened runtime contract.
+
+Key findings / decisions
+
+- No phase-scoped blocking findings.
+- Updated `criteria.md` with all boxes checked.
+- Appended `TST-000` to `feedback.md` recording the clean audit verdict and the independently rerun proof results: `16 passed`, `8 passed`, `8 passed`.
+
+Open issues / next step
+
+- No audit blockers remain for this phase. The next workflow-package phase should extend runtime coverage from the dedicated helper fixture to the new package once that package exists.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
