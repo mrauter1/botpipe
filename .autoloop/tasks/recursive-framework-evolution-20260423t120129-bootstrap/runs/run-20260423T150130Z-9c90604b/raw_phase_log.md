@@ -1311,3 +1311,127 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+---
+I’m handling the docs, strictness, and regression-proofing phase. I’ll inspect the phase artifacts, the maintained docs, and the existing guard tests first so the edits stay aligned with the already-landed runtime and wrapper changes.
+
+I’ve confirmed earlier phases already appended decisions and that the worktree has many unrelated changes outside this phase. Next I’m reading the maintained docs and guard tests against the current runtime/wrapper code so I can tighten only the intended surfaces.
+
+I’ve got the maintained docs and the current guard tests in view. The next pass is locating the remaining live references to the removed surfaces so the test hardening matches the actual active tree rather than historical task artifacts.
+
+The remaining live hits are mostly in maintained tests and a couple of non-maintained narrative docs. I’m now narrowing to the exact assertions that need to move from “present/absent in one place” to repo-level regression guards.
+
+I’ve confirmed the wrapper/template side is already package-only, so this phase is mostly about documenting the cleaned contract and making the repo fail loudly if those old seams come back. I’m checking the config and session tests now so the doc examples use the real typed shapes the runtime actually accepts.
+
+The runtime tests confirm the typed config surface already exists and the session schema is canonical now. I’m pulling those exact config expectations into the docs next, then I’ll add repo-scoped guards that only scan maintained sources and templates.
+
+I’ve got a clean path for the guardrails: rewrite the remaining test literals to computed tokens, then a strictness scan can include active tests without tripping on its own assertions. I’m checking the repo shape one more time so the scan covers the right live directories and not historical material.
+
+Plan for this phase:
+1. Update `docs/architecture.md` and `docs/authoring.md` to document typed provider selection, canonical `session_id` resumability, and package-only recursive execution.
+2. Tighten `tests/test_architecture_baseline_docs.py` to freeze the new doc contract and explicitly forbid the removed public/legacy surfaces.
+3. Expand `tests/strictness/test_no_compat.py` into a maintained-tree scan over live source, docs, templates, and tests, while rewriting guard tests to avoid literal false positives.
+4. Run targeted suites for docs/strictness and runtime contract coverage, then run full `pytest` and fix any fallout within this phase’s scope.
+
+I’ve finished the analysis pass. I’m editing the two maintained docs now, then I’ll rework the guard tests so they can scan the live tree without being tripped by their own sentinel strings.
+
+The docs and first-pass guards are in place. I’m doing a quick review of the edited files and then I’ll run a repo scan for the forbidden surfaces before starting pytest, because the strictness test is intentionally broad now.
+
+The broad scan found one self-inflicted false positive in the strictness file itself. I’m fixing that token construction now; after that the live-tree search should be clean and I can move straight into pytest.
+
+The maintained tree is now clean of the removed literals under the intended scan scope. I’m running the doc/strictness guards and the affected runtime suites next; if those pass, I’ll move to full `pytest`.
+
+`pytest` is not on PATH in this workspace. I’m switching to the repo virtualenv runner and rerunning the same suites from `.venv/bin/pytest`.
+
+One baseline doc assertion failed because `docs/authoring.md` didn’t spell out `provider.name` explicitly, even though the example schema was otherwise correct. I’m making that doc wording explicit and then rerunning the doc/strictness suite.
+
+The phase-specific suites are green now: docs/strictness and the affected runtime suites both pass. I’m running the full test suite to catch any broader regression before I write notes and close the phase.
+
+The full suite is in progress and has cleared the contract/runtime/provider sections so far. I’m waiting on the remaining tests before I update the phase notes and ledger.
+
+The full suite passed. I’m writing the phase notes and a short decision entry now so later turns inherit the exact scan scope and the reason the tests use computed sentinel tokens instead of literal forbidden strings.
+
+The implementation notes and decision ledger are updated. I’m doing one last diff review on the files changed in this phase so the closeout only reports the scoped work, not the unrelated worktree noise.
+
+**Scope considered**
+- Maintained phase scope only: [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), plus the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/docs-strictness-and-regression-proof/implementation_notes.md) and shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/decisions.txt).
+
+**What I analyzed**
+- The maintained docs against the landed runtime/provider/session/wrapper contract.
+- Existing package CLI, session-schema, parity, and wrapper regression tests to align wording and avoid false-positive strictness scans.
+
+**What I changed**
+- Updated the maintained docs to describe typed provider selection via `autoloop.yaml` / `autoloop.config` and `--provider` / `--model` / `--model-effort`, canonical resumability via `session_id` and `provider_metadata`, and package-only recursive operation.
+- Expanded doc-baseline coverage to require those contract points and forbid the removed public/legacy surfaces.
+- Reworked strictness coverage to scan the maintained live tree for banned compatibility tokens, and rewrote guard tests to construct those tokens from split literals so the scan can include `tests/` safely.
+- Updated the phase notes and appended the phase decision entries.
+
+**Key findings / decisions**
+- Strictness scanning is intentionally limited to the maintained live tree, not historical narrative docs or task artifacts.
+- No runtime behavior changed in this phase; this was docs and regression-guard hardening only.
+- Validation passed:
+  - `.venv/bin/pytest tests/test_architecture_baseline_docs.py tests/strictness/test_no_compat.py`
+  - `.venv/bin/pytest tests/runtime/test_package_cli.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_integration_parity.py`
+  - `.venv/bin/pytest` with `125 passed`
+
+**Open issues / next step**
+- No open issues from this phase. The scoped docs and regression guards are green.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+---
+I’m reviewing the docs/strictness phase artifacts against the changed docs and guard tests first, then I’ll update the phase criteria and feedback based on any blocking or non-blocking findings.
+
+I have the phase notes and decisions in hand. I’m doing an independent pass over the edited docs/tests and rerunning the live-tree checks so the review isn’t just trusting the implementation notes.
+
+The live-tree scan is clean and the edited docs/tests line up with the decisions. I’m rerunning the full test suite once from the reviewer side to verify the implementation notes’ evidence independently.
+
+The reviewer-side full run is progressing cleanly through the contract and runtime suites. I’m waiting for completion, then I’ll write the verdict into the phase artifacts.
+
+The review did not surface any blocking or non-blocking defects in phase scope. I’m marking the criteria complete and recording a no-findings review note with the independent verification evidence.
+
+Scope considered
+- Phase-local review scope only: maintained docs, the touched regression tests, the phase implementation notes, and the shared decisions ledger.
+- Artifact updates were limited to the active phase [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/docs-strictness-and-regression-proof/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/docs-strictness-and-regression-proof/feedback.md).
+
+What I analyzed
+- The accepted phase contract and the latest shared decisions for provider selection, `session_id` resumability, and maintained-tree strictness scope.
+- The edited [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), and the wrapper/template guard coverage in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py).
+
+What I reviewed
+- Independent forbidden-surface scan across the maintained live tree returned clean.
+- Reviewer-side `.venv/bin/pytest` completed successfully with `125 passed`.
+- Criteria were marked complete and feedback was updated with a no-findings review note.
+
+Key findings / decisions
+- No blocking or non-blocking defects were identified in phase scope.
+- The maintained docs now reflect the cleaned contract, and the strictness scan scope is consistent with the shared decision to exclude task artifacts and historical narrative docs from repo guards.
+
+Open issues / next step
+- No open issues from this review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
