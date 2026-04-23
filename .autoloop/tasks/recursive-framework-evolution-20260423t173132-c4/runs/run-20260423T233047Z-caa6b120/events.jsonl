@@ -17,3 +17,7 @@
 {"ts": "2026-04-23T23:58:19.714093+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 17, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-catalog-seam"}
 {"ts": "2026-04-23T23:59:16.460451+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 18, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-catalog-seam"}
 {"ts": "2026-04-23T23:59:16.486272+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 19, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-catalog-seam"}
+{"ts": "2026-04-23T23:59:16.551633+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-catalog-seam", "phase_mode": "single"}
+{"ts": "2026-04-23T23:59:16.555163+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 21, "event_type": "phase_started", "phase_id": "task-to-workflow-strategy-package", "phase_mode": "single"}
+{"ts": "2026-04-23T23:59:16.555719+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 22, "event_type": "pair_started", "pair": "implement", "phase_id": "task-to-workflow-strategy-package"}
+{"ts": "2026-04-23T23:59:16.555787+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 23, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "task-to-workflow-strategy-package"}
