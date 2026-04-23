@@ -39,3 +39,7 @@
 {"ts": "2026-04-23T15:46:56.218213+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-cli-provider-contract"}
 {"ts": "2026-04-23T15:47:52.849588+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 40, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-cli-provider-contract"}
 {"ts": "2026-04-23T15:47:52.867603+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 41, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-cli-provider-contract"}
+{"ts": "2026-04-23T15:47:52.922131+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 42, "event_type": "phase_completed", "pair": "test", "phase_id": "public-cli-provider-contract", "phase_mode": "single"}
+{"ts": "2026-04-23T15:47:52.925320+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 43, "event_type": "phase_started", "phase_id": "session-id-schema-cleanup", "phase_mode": "single"}
+{"ts": "2026-04-23T15:47:52.926387+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 44, "event_type": "pair_started", "pair": "implement", "phase_id": "session-id-schema-cleanup"}
+{"ts": "2026-04-23T15:47:52.926584+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 45, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "session-id-schema-cleanup"}

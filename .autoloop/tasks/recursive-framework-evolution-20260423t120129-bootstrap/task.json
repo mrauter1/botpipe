@@ -16,13 +16,13 @@
       "docs-strictness-and-regression-proof"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "public-cli-provider-contract"
+    "current_phase_index": 2,
+    "current_phase_id": "session-id-schema-cleanup"
   },
   "phase_status": {
     "provider-backend-boundary": "completed",
-    "public-cli-provider-contract": "in_progress",
-    "session-id-schema-cleanup": "planned",
+    "public-cli-provider-contract": "completed",
+    "session-id-schema-cleanup": "in_progress",
     "recursive-wrapper-package-only": "planned",
     "docs-strictness-and-regression-proof": "planned"
   },
@@ -45,6 +45,19 @@
       "run_id": "run-20260423T150130Z-9c90604b",
       "status": "in_progress",
       "ts": "2026-04-23T15:29:53.691191+00:00"
+    },
+    {
+      "phase_id": "public-cli-provider-contract",
+      "run_id": "run-20260423T150130Z-9c90604b",
+      "status": "completed",
+      "ts": "2026-04-23T15:47:52.921561+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "session-id-schema-cleanup",
+      "run_id": "run-20260423T150130Z-9c90604b",
+      "status": "in_progress",
+      "ts": "2026-04-23T15:47:52.924780+00:00"
     }
   ]
 }
