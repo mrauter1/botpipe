@@ -13,3 +13,7 @@
 - The new assertion pins the cycle-3 closeout-proof text plus the explicit unchanged `recursive_autoloop/` residual boundary across the standing recursive-memory ledgers.
 - Validation target for this phase remains the combined targeted pytest sweep covering helper/composition/evidence-pack/security-workflow/builder/docs.
 - Rerun result: `63 passed`.
+
+## Audit findings
+
+- `TST-000` | `non-blocking` | No actionable audit findings. The added baseline-doc assertion matches the cycle-3 decisions and phase contract, avoids brittle timing or exact pass-count coupling, and the full targeted closeout suite reran cleanly under audit (`63 passed`).
