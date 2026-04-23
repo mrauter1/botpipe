@@ -230,3 +230,98 @@ No blocking review issues remain for this phase. The implement pair can stay `CO
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc7b-f101-7551-a283-090257102c2f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbc7b-f101-7551-a283-090257102c2f
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc7b-f101-7551-a283-090257102c2f
+---
+I’m reviewing the phase-local test surface now: the accepted contract, the producer/reviewer outputs, the current helper/tests, and the test-phase artifacts that need to be updated.
+
+I’ve confirmed the earlier phases left the actual test-phase artifacts blank, so I’m reading the current helper/tests directly and deciding whether the existing proof is sufficient or whether one more focused regression case is warranted before I write the test strategy and feedback.
+
+The current proof is good, but it only exercises the new helper in unit space. I’m checking whether the existing runtime composition fixture can absorb the helper with a tiny change, which would give this phase a stronger end-to-end regression guard without widening scope.
+
+I’m making one small runtime-proof refinement: the existing parent composition fixture will now call `require_child_workflow_result(...)` before adoption, so this phase has both focused unit rejection coverage and a real runtime-backed happy-path integration check.
+
+The runtime fixture is updated. I’m rerunning the narrow phase validation now so the test-phase artifacts record current evidence rather than relying on the earlier producer run.
+
+I’ve got green evidence. I’m writing the phase test strategy and feedback now, and I’m appending one small shared decision so later turns know the runtime composition fixture was intentionally upgraded to exercise the new helper too.
+
+The repo tests and phase artifacts are updated. I’m doing one quick readback of the runtime fixture change and the test-phase artifacts so the closeout matches exactly what’s on disk.
+
+Scope considered
+
+Phase-local child-result helper testing only: the new validation helper, its export/docs boundary, the focused unit/runtime/doc proof, and the required test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/child-result-contract-helper/`.
+
+What I analyzed
+
+Read the accepted phase contract, the shared decisions, the implementation notes, the reviewer closeout, the active session artifact, and the touched code/tests in [stdlib/composition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/composition.py), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+
+What I changed
+
+Extended the existing runtime composition-helper fixture in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) so it now calls `require_child_workflow_result(...)` before artifact adoption, giving this phase a runtime-backed happy-path integration check in addition to the unit rejection coverage already added. Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/child-result-contract-helper/test_strategy.md) with an explicit behavior-to-test coverage map, appended [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/child-result-contract-helper/feedback.md) with the test additions and rerun evidence, and recorded the runtime-fixture decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/decisions.txt).
+
+Key findings / decisions
+
+Targeted validation is green:
+- `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` -> `19 passed`
+- `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py -k 'composition_helpers_keep_child_invocation_explicit_and_adopt_selected_artifacts_into_parent_workflow_folder or invoke_workflow_accepts_imported_main_workflow_classes_and_records_child_metadata or invoke_workflow_by_name_creates_isolated_child_runs_without_inheriting_parent_answers'` -> `3 passed`
+- `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py -k 'authoring_doc_describes_additive_composition_helper_boundary or authoring_doc_freezes_the_root_workflow_import_surface'` -> `2 passed`
+
+The deliberate test decision for this phase is to keep blocked/paused negative routing coverage at the existing invocation-path level while adding a runtime-backed positive path for the new helper, since `question` / `blocked` propagation remains explicitly parent-owned.
+
+Open issues / next step
+
+No blocking test-phase issues remain. The auditor can now review the updated test strategy, rerun evidence, and phase feedback against the accepted contract.
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc7b-f101-7551-a283-090257102c2f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbc7b-f101-7551-a283-090257102c2f
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc7b-f101-7551-a283-090257102c2f
+---
+I’m auditing the phase-local test work now against the accepted contract: coverage depth for the new helper, preserved invocation semantics, runtime-backed proof, and the updated test-phase artifacts.
+
+I’m not seeing a material coverage gap or flake risk in the phase-local test work. I’m updating the audit criteria to complete and appending a concise non-blocking audit note to the feedback artifact now.
+
+The audit artifacts are updated. I’m doing a quick readback of the criteria and feedback entries, then I’ll close with `COMPLETE` because there are no blocking test-audit findings.
+
+Scope considered
+
+Phase-local test audit only: the child-result helper test additions, the runtime-backed composition proof, the documentation assertions, and the verifier-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/child-result-contract-helper/`.
+
+What I analyzed
+
+Reviewed the accepted phase contract, raw-log scope decisions, shared decisions, the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/child-result-contract-helper/test_strategy.md), and the touched tests in `tests/unit/test_stdlib_and_extensions.py`, `tests/runtime/test_workspace_and_context.py`, and `tests/test_architecture_baseline_docs.py`. Checked coverage for helper success/failure behavior, preserved `ctx.invoke_workflow(...)` semantics, explicit blocked/paused routing ownership, and fixture stability.
+
+What I reviewed
+
+Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/child-result-contract-helper/criteria.md) to mark all audit gates satisfied and appended a non-blocking closeout note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/child-result-contract-helper/feedback.md). Confirmed the recorded validation evidence remains coherent: `19 passed` for the unit slice, `3 passed` for the targeted runtime slice, and `2 passed` for the targeted docs slice.
+
+Key findings / decisions
+
+No blocking audit findings. The tests cover the new helper’s happy path plus status / route / artifact failure paths, preserve regression protection for `ctx.invoke_workflow(...)`, and keep flake risk low by relying on deterministic filesystem-local scripted fixtures.
+
+Open issues / next step
+
+No blocking test-audit issues remain for this phase. The test pair can stay `COMPLETE` and the run can proceed to the next planned phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
