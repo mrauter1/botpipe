@@ -120,3 +120,113 @@ phase_mode=single
 phase_ids=child-result-contract-helper,security-remediation-workflow-package,proof-docs-and-recursive-memory
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc7b-f101-7551-a283-090257102c2f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbc7b-f101-7551-a283-090257102c2f
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc7b-f101-7551-a283-090257102c2f
+---
+I’m scoping the phase-local change around the child-result validation helper and first reading the active plan, feedback, implementation notes, decisions, and the relevant framework files before I touch code.
+
+I’ve confirmed the phase scope and the planner’s decision: this turn is intentionally narrow, centered on an authoring-only child-result validation helper that supports the new security workflow without changing runtime semantics. Now I’m reading the framework surfaces that govern workflow authoring, composition, and existing child workflow behavior.
+
+The active session file path in the preamble doesn’t exist as given, so I’m locating the actual session artifact and then reading the composition helper, stdlib exports, runtime context invocation path, and current tests around stdlib/workflow composition.
+
+I’ve got the current seam: `run_child_workflow` is a pure passthrough, `adopt_child_artifacts` only copies files, and the existing tests stop at missing artifacts and path escape. Next I’m checking how docs/tests pin this boundary so I can add validation without accidentally implying runtime-owned pause/block propagation.
+
+I’ve pinned the intended helper API from the approved plan: `require_child_workflow_result(result, *, status='success', last_event=None, required_artifacts=())`. I’m editing the stdlib helper and the focused unit/doc coverage now, keeping all pause/block routing decisions outside the helper.
+
+I’m applying the code changes now in the smallest slice that satisfies the phase: one stdlib helper, one export, one authoring-doc boundary update, and focused unit/doc assertions.
+
+The helper is in place. I’m running the narrow validation slice now: stdlib unit coverage, the authoring-doc assertions, and one runtime composition proof so the helper is proven additive rather than a semantic change to child invocation.
+
+The code and tests are green. I’m doing a quick diff audit now, then I’ll write the required phase notes and append only any non-obvious decision that future turns could otherwise drift on.
+
+I’m writing the required implementation notes now and appending one non-obvious decision to the shared ledger: the helper validates `last_event.tag` plus required files only, while parent workflows still own `question` and `blocked` propagation explicitly.
+
+The phase work is complete. I’m doing one final status check on the exact touched files, then I’ll close out with the required summary and validation results.
+
+Scope considered
+
+- Phase-local child-result helper only: composition authoring seam, authoring docs, focused proof, and required phase artifacts.
+
+What I analyzed
+
+- Current child-workflow composition surfaces in [stdlib/composition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/composition.py), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), and [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py).
+- Existing composition/runtime coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py), and authoring-boundary assertions in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- The approved phase contract and milestone notes in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/plan/plan.md).
+
+What I changed
+
+- Added `require_child_workflow_result(...)` to [stdlib/composition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/composition.py). It validates expected child `status`, `last_event.tag`, and required artifact file presence, then returns the unchanged child result.
+- Exported the helper from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py).
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) to document the helper and to state explicitly that child `question` / `blocked` routing remains parent-owned.
+- Extended [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) with success coverage plus rejection cases for wrong status, wrong terminal route, missing required artifact declaration, and missing artifact file.
+- Updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/implement/phases/child-result-contract-helper/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/decisions.txt).
+
+Key findings / decisions
+
+- The helper is validation-only. It does not change `ctx.invoke_workflow(...)`, `ChildWorkflowResult`, child-run metadata, or runtime-injected control contracts.
+- The helper intentionally checks `child_result.last_event.tag` for the expected terminal route, not the engine terminal enum.
+- Targeted validation passed:
+- `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` -> `19 passed`
+- `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py -k 'authoring_doc or architecture_doc'` -> `4 passed`
+- `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py -k 'composition_helper or invoke_workflow_accepts_imported_main_workflow_classes_and_records_child_metadata_shape_for_fatal_children or invoke_workflow_by_name_creates_isolated_child_runs_without_inheriting_parent_answers'` -> `2 passed`
+
+Open issues / next step
+
+- No blocking phase-local issues remain.
+- This repo snapshot currently shows [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) as untracked in `git status`; the on-disk changes are validated, but those paths are not currently in the index.
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc7b-f101-7551-a283-090257102c2f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbc7b-f101-7551-a283-090257102c2f
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc7b-f101-7551-a283-090257102c2f
+---
+I’m auditing the phase-local implementation against the accepted phase contract now: helper behavior, authoring-boundary docs, focused proof, and whether any regression or scope violation slipped in.
+
+I’ve got the producer’s self-report. Now I’m reading the actual touched code and tests directly to check for drift, hidden behavior changes, and whether the proof really matches the phase contract.
+
+I’m not seeing a material correctness, safety, or scope problem in the implementation. I’m updating the phase criteria to complete and appending a concise non-blocking closeout note to the feedback artifact now.
+
+The review artifacts are updated. I’m doing a quick readback of the criteria and feedback entries, then I’ll close with a `COMPLETE` control block because there are no blocking findings.
+
+Scope considered
+
+Phase-local review only: the child-result contract helper implementation, its export and docs boundary, the focused proof, and the required verifier-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/implement/phases/child-result-contract-helper/`.
+
+What I analyzed
+
+Read the authoritative request scope, raw log, shared decisions, the producer’s implementation notes, and the touched implementation files in `stdlib/`, `docs/`, and `tests/`. Checked that the helper remained authoring-only, that explicit child `question` / `blocked` routing stayed outside the helper, and that the proof matched the required status / route / artifact / passthrough coverage.
+
+What I reviewed
+
+Verified `stdlib/composition.py`, `stdlib/__init__.py`, `docs/authoring.md`, `tests/unit/test_stdlib_and_extensions.py`, and `tests/test_architecture_baseline_docs.py` against the accepted phase contract. Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/implement/phases/child-result-contract-helper/criteria.md) to mark all gates satisfied and appended a non-blocking closeout note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/implement/phases/child-result-contract-helper/feedback.md).
+
+Key findings / decisions
+
+No blocking findings. The implementation matches the planned helper API, stays out of runtime semantics, preserves `ctx.invoke_workflow(...)` behavior, and is supported by targeted unit/runtime/documentation proof.
+
+Open issues / next step
+
+No blocking review issues remain for this phase. The implement pair can stay `COMPLETE` and the run can proceed to the next planned phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
