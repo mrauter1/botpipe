@@ -780,3 +780,60 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbca6-2477-7dc1-8d1f-7f0bb44aba69
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbca6-2477-7dc1-8d1f-7f0bb44aba69
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbca6-2477-7dc1-8d1f-7f0bb44aba69
+---
+I’m treating this as a closeout-test pass: check the existing proof coverage for cycle-3 memory and residual handling, then add only the smallest repo test refinement needed to lock that behavior in and update the phase test artifacts.
+
+The existing baseline-doc test already checks the cycle-3 shipped/deferred statuses, but it doesn’t lock the new closeout-proof language or the explicit residual boundary. I’m adding one focused assertion to `tests/test_architecture_baseline_docs.py`, then I’ll update the phase test strategy and feedback to map that coverage.
+
+The new coverage is in place. I’m running the full targeted suite for this phase, not just the doc test, so the closeout proof stays anchored to the exact helper, composition, building-block, security-workflow, builder, and baseline-doc surfaces the phase contract calls for.
+
+The targeted run is still in progress, but the early segments are clean. Once it finishes, I’ll record the updated pass count in the phase artifacts and stop; there’s no reason to widen scope beyond this suite.
+
+The suite finished at `63 passed`, which is the right outcome after adding one new baseline-doc assertion. I’m doing a final small documentation sync so the phase artifacts reflect the actual rerun result instead of the pre-change baseline count.
+
+The new assertion is otherwise right, but pinning the exact `62 passed` count is too brittle because the test suite can legitimately grow without changing the closeout contract. I’m tightening that test now so it protects the proof boundary without freezing an incidental pass count.
+
+I removed the brittle pass-count pin. One last targeted rerun is enough now, because that change only affects the baseline-doc assertion file and the phase contract still wants the full combined proof surface.
+
+The final rerun stayed green, but the phase test artifacts shouldn’t freeze wall-clock timing. I’m normalizing those two notes to `63 passed` only and then I’m done.
+
+Scope considered
+
+- The `proof-docs-and-recursive-memory` test phase only.
+- Focus stayed on the targeted validation set, the standing recursive-memory assertions, and the phase-local test artifacts.
+
+What I analyzed
+
+- Existing baseline-doc coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- The phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/proof-docs-and-recursive-memory/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/proof-docs-and-recursive-memory/feedback.md).
+- The shared decisions ledger in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/decisions.txt) to keep the closeout-proof expectations aligned with cycle-3 scope.
+
+What I changed
+
+- Added `test_recursive_memory_cycle_three_closeout_proof_stays_explicit_without_claiming_recursive_wrapper_parity` to [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/proof-docs-and-recursive-memory/test_strategy.md) with the behavior-to-test coverage map, deterministic validation command, flake assessment, and known gap.
+- Appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/proof-docs-and-recursive-memory/feedback.md).
+- Added the non-obvious test decision under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/decisions.txt).
+
+Key findings / decisions
+
+- The new test locks the cycle-3 closeout-proof language and the explicit unchanged `recursive_autoloop/` residual boundary across the standing recursive-memory ledgers.
+- I deliberately removed an exact pass-count assertion from the repo test to avoid brittle coupling to incidental suite growth.
+- The targeted validation set passed after the new assertion: `63 passed`.
+
+Open issues / next step
+
+- No additional repo tests were added for `recursive_autoloop/` because that layer remained out of scope for this phase and the residual is supposed to stay explicit rather than normalized.
