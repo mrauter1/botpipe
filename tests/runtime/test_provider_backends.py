@@ -99,8 +99,19 @@ def test_cli_resolve_provider_uses_builtin_backend_resolver_when_not_injected(
 ) -> None:
     sentinel = _StubProvider()
     config = _resolved_config("codex")
-    args = argparse.Namespace(provider_factory="provider_backend:build")
+    args = argparse.Namespace(provider_factory=None)
 
     monkeypatch.setattr(cli, "resolve_provider_backend", lambda *, config: sentinel)
 
     assert cli._resolve_provider(config=config, args=args, provider_factory=None) is sentinel
+
+
+def test_cli_resolve_provider_rejects_public_provider_factory_flag() -> None:
+    config = _resolved_config("codex")
+    args = argparse.Namespace(provider_factory="provider_backend:build")
+
+    with pytest.raises(
+        ConfigError,
+        match="provider factories are no longer supported on the public CLI path",
+    ):
+        cli._resolve_provider(config=config, args=args, provider_factory=None)

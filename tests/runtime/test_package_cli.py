@@ -367,6 +367,36 @@ def test_cli_mutating_commands_accept_non_public_provider_factory_injection_seam
     assert payload["status"] == "success"
 
 
+def test_cli_run_rejects_public_provider_factory_flag(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "public_provider",
+        workflow_name="public_provider",
+        class_name="PublicProviderWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "public_provider",
+            "task-public-provider",
+            "--root",
+            str(tmp_path),
+            "--message",
+            "Run with a public provider factory",
+            "--provider-factory",
+            "provider_backend:build",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == cli.EXIT_USAGE_ERROR
+    assert "provider factories are no longer supported on the public CLI path" in captured.err
+
+
 def test_cli_run_resume_answer_and_diagnostics_follow_package_contract(
     tmp_path: Path,
     capsys,
