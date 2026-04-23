@@ -548,3 +548,97 @@ Implementation review is complete for this phase. The next step is the later pro
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+---
+I’m reviewing the shipped release-workflow tests and the phase artifacts first so I can see whether there’s a real gap to close or whether this phase only needs the coverage map and test-phase notes.
+
+The current package tests cover the happy path and one parameter failure path, but they don’t yet lock the deterministic publish gate itself. I’m checking the lightest-weight way to add that failure-path coverage without turning the file into a brittle integration monster.
+
+I found a worthwhile gap: the current test file doesn’t lock the deterministic publish gate or the repeatable `evidence_paths` parameter normalization. I’m adding one focused edge-case test and one focused failure-path test rather than refactoring the existing happy-path coverage.
+
+I’m adding two focused tests: one public-interface edge case around repeatable `evidence_paths`, and one failure-path test that locks the deterministic publish gate when `decision_summary.json` is malformed.
+
+The new tests are in. I’m running the release-workflow test file and the same regression-sensitive proof set again to make sure the added negative-path coverage stays deterministic and doesn’t disturb the normalized route-contract seam.
+
+I’ve got the expanded proof set green. I’m writing the test-phase artifacts now: an explicit coverage map in `test_strategy.md` and a short feedback entry summarizing the added edge-case and failure-path coverage.
+
+I’m collecting the final references for the new test additions and the coverage map. The test work is done and the regression set is green.
+
+Scope considered
+
+Phase-local test work for `release-go-no-go-package`: I reviewed the shipped workflow-specific test file, the new workflow’s deterministic publish step, and the phase test artifacts. I kept unrelated recursive-memory remediation out of scope.
+
+What I analyzed
+
+I checked the existing coverage in [tests/runtime/test_release_candidate_to_go_no_go.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_release_candidate_to_go_no_go.py:164) against the phase contract and looked for missing happy-path, edge-case, and failure-path assertions around the public parameter surface and the deterministic `publish_decision` gate.
+
+What I changed
+
+I extended [tests/runtime/test_release_candidate_to_go_no_go.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_release_candidate_to_go_no_go.py:132) with one edge-case test for repeatable `evidence_paths` normalization and one failure-path test for malformed `decision_summary.json` at publish time in [the new publish-gate test](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_release_candidate_to_go_no_go.py:512). I updated the explicit coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/release-go-no-go-package/test_strategy.md:10) and appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/release-go-no-go-package/feedback.md:10).
+
+Key findings / decisions
+
+The main gap was not in the happy path; it was that the deterministic publish step was only indirectly covered. The new tests now lock both the repeatable-parameter normalization behavior and the failure path where publication must refuse an invalid authoritative summary. The regression-sensitive proof set passed with `66 passed`.
+
+Open issues / next step
+
+No phase-local testing blocker remains. The later closeout phase still owns the unrelated recursive-memory docs residual; this turn only expanded the release-workflow test surface and kept the proof deterministic.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+---
+I’m auditing the release-workflow test additions now. I’ll inspect the changed test file and the test-phase artifacts first, then I’ll decide whether there’s any remaining coverage or flake risk before I update the audit criteria and feedback.
+
+The added tests look coherent. I’m rerunning the exact release-workflow regression set from the audit side so the artifact updates can reflect observed proof, not just the test-author notes.
+
+I don’t see a phase-scoped coverage gap or flake risk that rises to a blocking finding. I’m updating the audit artifacts now: all criteria will be marked true, and I’ll append one non-blocking audit note summarizing the proof state.
+
+Scope considered
+
+Phase-local audit of the release-workflow test additions only: the updated [tests/runtime/test_release_candidate_to_go_no_go.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_release_candidate_to_go_no_go.py:1), the new coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/release-go-no-go-package/test_strategy.md:1), the current feedback artifact, and the underlying workflow behavior those tests are meant to protect.
+
+What I analyzed
+
+I checked whether the tests now cover the phase contract at the right levels: package discovery and compilation, route-contract exposure, parameter validation and normalization, happy-path terminal receipt publication, and a meaningful deterministic failure path around `publish_decision`. I also checked for flake risk in setup, import isolation, and environment assumptions.
+
+What I reviewed
+
+I reran `.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_workflow_builder_package.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py` and observed `66 passed`. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/release-go-no-go-package/criteria.md:1) to mark all audit gates true and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/release-go-no-go-package/feedback.md:1).
+
+Key findings / decisions
+
+No phase-scoped blocking findings. The added tests now cover the main regression surfaces that were previously light: repeatable `evidence_paths` normalization and the deterministic publish-step failure path when `decision_summary.json` is malformed. The test setup remains stable because it is filesystem-local, uses `tmp_path`, and isolates workflow module caching explicitly.
+
+Open issues / next step
+
+Test audit is complete for this phase. The remaining unrelated recursive-memory docs residual belongs to the later closeout work, not to this release-workflow test surface.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
