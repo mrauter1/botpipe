@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260423T150130Z-9c90604b" ts="2026-04-23T15:01:30.479374+00:00" />
+Generic provider overrides (`provider.model`, `--model`, `--model-effort`) must resolve against the effective provider name instead of continuing the current Codex-only merge behavior.
+Removing `thread_id` is an intentional greenfield behavior break; old session payloads that rely on `thread_id`-only compatibility are out of scope after this refactor.
+The recursive wrapper must fail fast unless the installed `autoloop` exposes the package CLI surface; legacy auto-detection and fallback are not allowed.
+Strictness scans for removed compatibility surfaces should stay scoped to maintained source, docs, templates, and tests so task artifacts and historical snapshots do not create false failures.
