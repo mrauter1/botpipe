@@ -400,3 +400,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+I’m treating this as a focused test pass on the new provider boundary. First I’m reading the active test artifacts and the existing resolver/CLI tests so I can fill any remaining regression gaps without encoding behavior that the later CLI-cleanup phase is supposed to remove.
+
+I’ve identified the remaining test gap worth covering in this phase: preserving the non-public injection seam even if a parsed public flag is present. I’m adding that invariant test now, then I’ll record the coverage map and the temporary staged behavior in the test artifacts.
+
+The extra invariant test is in. I’m validating the touched test modules with `py_compile` now, then I’ll write the test strategy/feedback with the exact behavior-to-coverage mapping and note the environment limitation on actually running pytest here.
+
+I’ve finished the repo test change itself. I’m writing the coverage map now and appending one decision line so later turns don’t accidentally collapse the temporary public-flag rejection path together with the preserved non-public seam.
+
+The coverage artifacts are updated. I’m doing a final readback of the new invariant test plus the test strategy/feedback files so the handoff is tight and the recorded gaps match what was actually validated here.
+
+Scope considered
+
+- Phase-local test coverage for the provider backend boundary in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:97) and [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py:340).
+- Test-phase artifacts only: [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/provider-backend-boundary/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/provider-backend-boundary/feedback.md:1), and the shared decisions ledger entry.
+
+What I analyzed
+
+- The current `_resolve_provider(...)` behavior in [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py:428).
+- Existing resolver tests and the user-facing `run` CLI regression test.
+- The shared decision that public `--provider-factory` is a temporary rejection path while the non-public `cli.main(..., provider_factory=...)` seam remains preserved.
+
+What I changed
+
+- Added a new invariant test in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:120) to prove the non-public injected seam still wins even if a parsed public `--provider-factory` value is present.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/provider-backend-boundary/test_strategy.md:1) with an explicit behavior-to-test coverage map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise coverage summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/provider-backend-boundary/feedback.md:1).
+- Appended one test-scope decision line to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/decisions.txt:1) under the test-author header.
+
+Key findings / decisions
+
+- The important preserved invariant here is not just rejection of the public flag, but preservation of the non-public injected seam’s precedence.
+- I kept user-facing CLI coverage focused on `run`; shared `_resolve_provider(...)` unit coverage already exercises the common rejection branch for mutating commands without redundant churn.
+- Validation completed with `python3 -m py_compile tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py`.
+
+Open issues / next step
+
+- `pytest` is still unavailable in this environment, so I could not execute the runtime test files here.
+- The next step is test-auditor review of these additions; later CLI cleanup can remove the public flag/help surface without weakening seam-preservation coverage.

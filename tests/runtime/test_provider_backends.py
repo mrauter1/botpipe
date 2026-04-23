@@ -115,3 +115,17 @@ def test_cli_resolve_provider_rejects_public_provider_factory_flag() -> None:
         match="provider factories are no longer supported on the public CLI path",
     ):
         cli._resolve_provider(config=config, args=args, provider_factory=None)
+
+
+def test_cli_resolve_provider_preserves_non_public_injection_seam_precedence() -> None:
+    sentinel = _StubProvider()
+    config = _resolved_config("codex")
+    args = argparse.Namespace(provider_factory="provider_backend:build")
+
+    provider = cli._resolve_provider(
+        config=config,
+        args=args,
+        provider_factory=lambda **_: sentinel,
+    )
+
+    assert provider is sentinel
