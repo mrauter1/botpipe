@@ -740,3 +740,99 @@ No further action is required for this phase. The next separate follow-up is eit
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+---
+I’m treating this as a phase-local test hardening pass, not a broad retest of the whole repo. I’m checking the existing closeout coverage first so I only add tests where the current assertions still leave room for a stale “release deferred” or similar regression to slip through.
+
+The current docs baseline test would still miss one important stale-state regression: it checks that release and incident are mentioned, but not that release is no longer treated as deferred. I’m tightening that now with a section-aware assertion so future closeout edits can’t silently reintroduce the old roadmap/candidate state.
+
+The new assertion is small but materially tighter: it now fails if the closeout memory drifts back into “release deferred” while still mentioning the right workflow names. I’m rerunning the planned proof set so the phase finishes with updated evidence, not just a new test file.
+
+I’ve got the final test result: the planned proof set now runs with one extra closeout regression guard and stays green. I’m recording that in the test strategy and feedback artifacts, plus one short shared-decision note about why the new assertion is section-aware instead of another loose string-presence check.
+
+Scope considered
+
+Phase-local test coverage for the closeout pass only: the standing `.autoloop_recursive/` memory updates, the docs baseline around cycle-one closeout state, and the targeted proof set for the normalized route-contract seam and `release_candidate_to_go_no_go`. I kept scope out of `recursive_autoloop/` parity work and unrelated repo tests.
+
+What I analyzed
+
+I compared the implementation notes, shared decisions, standing memory files, and the existing `tests/test_architecture_baseline_docs.py` coverage. The main remaining gap was that the docs baseline only checked string presence, so it would not fail if `release_candidate_to_go_no_go` were still incorrectly left under `Deferred Ideas`.
+
+What I changed
+
+I updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) with a small `_section_body(...)` helper and a new regression test that asserts the roadmap no longer defers `release_candidate_to_go_no_go` while `incident_to_hardening_program` remains deferred.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/proof-docs-and-recursive-memory/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/proof-docs-and-recursive-memory/feedback.md), and appended the test-specific closeout decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/decisions.txt).
+
+Key findings / decisions
+
+The planned proof set still passes after the extra regression guard:
+`.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_workflow_builder_package.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/test_architecture_baseline_docs.py`
+Result: `72 passed in 0.72s`.
+
+The new assertion is intentionally section-aware rather than another loose string check, because the likely regression here is stale status, not missing names.
+
+Open issues / next step
+
+No additional test work is needed for this phase. The next separate expansion point is the dedicated `recursive_autoloop/` package-CLI wrapper/template cleanup, which remains explicitly out of scope here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+---
+I’m auditing the closeout test pass now. I’ll inspect the new docs-baseline assertion, the test strategy/feedback artifacts, and rerun the targeted proof set so the audit result is grounded in the actual updated coverage rather than the producer notes.
+
+The added assertion is the right kind of tightening: it guards status drift without widening into the deferred package-CLI area. I’m rerunning the planned proof set now so the audit result rests on current execution, not just the test author’s report.
+
+The rerun is green, so I’m closing this as a clean test audit rather than reopening scope. I’m updating the auditor checklist now and appending the audit result to the phase feedback artifact.
+
+Scope considered
+
+Phase-local audit of the closeout test pass only: the updated docs-baseline coverage in `tests/test_architecture_baseline_docs.py`, the proof-docs test strategy/feedback artifacts, and the planned regression suite for the normalized route-contract seam and `release_candidate_to_go_no_go`.
+
+What I analyzed
+
+I checked whether the new assertion actually closes a material regression hole, whether it stays aligned with the shared decisions and explicit out-of-scope wrapper/template residual, and whether the phase still avoids encoding any unconfirmed behavior break.
+
+What I reviewed
+
+I reviewed [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/proof-docs-and-recursive-memory/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/proof-docs-and-recursive-memory/feedback.md), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/proof-docs-and-recursive-memory/test_strategy.md), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), and reran:
+`.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_workflow_builder_package.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/test_architecture_baseline_docs.py`
+Result: `72 passed in 0.70s`.
+
+Key findings / decisions
+
+No phase-scoped blocking findings. The added section-aware assertion is the right level of protection for this phase because it catches stale shipped-vs-deferred memory drift without widening into the explicitly deferred `recursive_autoloop/` parity surface. I marked all audit criteria complete and appended `TST-001` to the phase feedback.
+
+Open issues / next step
+
+No further audit action is needed for this phase. Any next test expansion should happen only when the dedicated package-CLI wrapper/template cleanup is brought into scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
