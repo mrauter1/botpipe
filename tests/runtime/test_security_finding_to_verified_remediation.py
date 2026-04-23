@@ -379,6 +379,75 @@ def test_security_remediation_package_propagates_child_question_without_adopting
     ]
 
 
+def test_security_remediation_package_blocks_when_child_publishes_not_ready_pack(tmp_path: Path) -> None:
+    _install_repo_security_package(tmp_path)
+    provider = _child_not_ready_provider()
+
+    result = run_workflow_package(
+        "security_finding_to_verified_remediation",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="security-remediation-blocked-task",
+            message="Pentest found privilege escalation in admin impersonation.",
+            workflow_params={
+                "finding_title": "Admin impersonation privilege escalation",
+                "finding_source": "pentest",
+                "severity": "high",
+                "affected_system": "delegated admin impersonation",
+                "sponsor_role": "security engineering",
+                "evidence_paths": [
+                    "pentest/findings/admin-impersonation.md",
+                    "src/auth/impersonation.py",
+                ],
+                "deployment_constraints": [
+                    "Preserve emergency admin access during rollout.",
+                    "Avoid schema changes in the same patch.",
+                ],
+            },
+        ),
+    )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "security-remediation-blocked-task"
+    workflow_dir = task_dir / "wf_security_finding_to_verified_remediation"
+    run_dir = next((workflow_dir / "runs").iterdir())
+    child_workflow_dir = task_dir / "wf_investigation_request_to_evidence_pack"
+    child_run_dir = next((child_workflow_dir / "runs").iterdir())
+    parent_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    child_meta = json.loads((child_run_dir / "run.json").read_text(encoding="utf-8"))
+    child_invocation_contract = json.loads((child_workflow_dir / "invocation_contract.json").read_text(encoding="utf-8"))
+    child_records = [
+        json.loads(line)
+        for line in (run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+    assert result.terminal == "PAUSE"
+    assert result.last_event is not None
+    assert result.last_event.tag == "blocked"
+    assert result.last_event.reason == "Child evidence pack published without downstream-readiness approval."
+    assert parent_meta["status"] == "blocked"
+    assert child_meta["status"] == "success"
+    assert child_invocation_contract["source_constraints"] == []
+    assert child_invocation_contract["evidence_paths"] == [
+        "pentest/findings/admin-impersonation.md",
+        "src/auth/impersonation.py",
+    ]
+    assert not (workflow_dir / "finding_scope_brief.md").exists()
+    assert not (workflow_dir / "security_evidence_pack.md").exists()
+    assert not (workflow_dir / "security_evidence_pack_summary.json").exists()
+    assert not (workflow_dir / "exploit_summary.md").exists()
+    assert child_records[0]["workflow_name"] == "investigation_request_to_evidence_pack"
+    assert child_records[0]["status"] == "success"
+    assert child_records[0]["last_event"] == {"tag": "evidence_pack_published", "reason": "", "question": None}
+    assert [call.step_name for call in provider.calls] == [
+        "frame_investigation",
+        "frame_investigation",
+        "assemble_evidence_pack",
+        "assemble_evidence_pack",
+    ]
+
+
 def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_deployment_constraints_local(
     tmp_path: Path,
     monkeypatch,
@@ -1061,6 +1130,182 @@ def _child_question_provider() -> ScriptedLLMProvider:
                     "evidence_focus": ["production environment boundary"],
                 },
             )
+        ],
+    )
+
+
+def _child_not_ready_provider() -> ScriptedLLMProvider:
+    return ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: (
+                request.artifacts.investigation_scope_brief.write_text(
+                    "\n".join(
+                        (
+                            "# Investigation Scope Brief",
+                            "",
+                            "Scope the delegated-admin impersonation finding and publish the current evidence with gaps intact.",
+                            "",
+                        )
+                    )
+                    + "\n",
+                ),
+                request.artifacts.investigation_objectives.write_text(
+                    "\n".join(
+                        (
+                            "# Investigation Objectives",
+                            "",
+                            "- Bound what is already proven from the repository and pentest evidence.",
+                            "- Surface remaining gaps without overstating readiness for downstream assessment.",
+                            "",
+                        )
+                    )
+                    + "\n",
+                ),
+                request.artifacts.evidence_intake_register.write_text(
+                    "\n".join(
+                        (
+                            "# Evidence Intake Register",
+                            "",
+                            "- pentest/findings/admin-impersonation.md",
+                            "- src/auth/impersonation.py",
+                            "- Missing: production audit excerpt for delegated-admin impersonation sessions.",
+                            "",
+                        )
+                    )
+                    + "\n",
+                ),
+                "framed investigation\n",
+            )[3],
+            lambda request: (
+                request.artifacts.evidence_source_inventory.write_text(
+                    "\n".join(
+                        (
+                            "# Evidence Source Inventory",
+                            "",
+                            "- `pentest/findings/admin-impersonation.md`",
+                            "- `src/auth/impersonation.py`",
+                            "",
+                        )
+                    )
+                    + "\n",
+                ),
+                request.artifacts.evidence_coverage_matrix.write_text(
+                    "\n".join(
+                        (
+                            "# Evidence Coverage Matrix",
+                            "",
+                            "| Objective | Supporting evidence | Gaps |",
+                            "| --- | --- | --- |",
+                            "| Bound exploitability | pentest finding and impersonation code path | production audit excerpt missing |",
+                            "",
+                        )
+                    )
+                    + "\n",
+                ),
+                request.artifacts.evidence_findings.write_text(
+                    "\n".join(
+                        (
+                            "# Evidence Findings",
+                            "",
+                            "1. The delegated-admin impersonation bypass is reproduced by the pentest and code path.",
+                            "2. Production audit proof is still missing, so downstream assessment is not yet ready.",
+                            "",
+                        )
+                    )
+                    + "\n",
+                ),
+                request.artifacts.evidence_gap_register.write_text(
+                    "\n".join(
+                        (
+                            "# Evidence Gap Register",
+                            "",
+                            "- Missing production audit excerpt for delegated-admin impersonation sessions.",
+                            "",
+                        )
+                    )
+                    + "\n",
+                ),
+                request.artifacts.evidence_pack.write_text(
+                    "\n".join(
+                        (
+                            "# Evidence Pack",
+                            "",
+                            "The current evidence confirms the bypass but leaves production audit coverage unresolved.",
+                            "",
+                        )
+                    )
+                    + "\n",
+                ),
+                request.artifacts.evidence_pack_summary.write_text(
+                    json.dumps(
+                        {
+                            "authoritative_artifacts": [
+                                "evidence_source_inventory",
+                                "evidence_coverage_matrix",
+                                "evidence_findings",
+                                "evidence_gap_register",
+                                "evidence_pack",
+                                "evidence_pack_summary",
+                            ],
+                            "finding_count": 2,
+                            "investigation_kind": "security_remediation",
+                            "key_findings": [
+                                "The delegated-admin impersonation bypass is reproduced by the pentest and code path.",
+                                "Production audit proof is still missing.",
+                            ],
+                            "ready_for_downstream_assessment": False,
+                            "source_count": 2,
+                            "unresolved_gap_count": 1,
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                ),
+                "assembled evidence pack\n",
+            )[6],
+        ],
+        verifier_turns=[
+            Outcome(
+                raw_output="framed investigation\n",
+                tag="investigation_framed",
+                payload={
+                    "summary": "The security investigation boundary and intake are explicit.",
+                    "authoritative_artifacts": [
+                        "investigation_scope_brief",
+                        "investigation_objectives",
+                        "evidence_intake_register",
+                    ],
+                    "evidence_focus": [
+                        "impersonation authorization path",
+                        "missing production audit proof",
+                    ],
+                },
+            ),
+            Outcome(
+                raw_output="evidence pack ready but not downstream ready\n",
+                tag="evidence_pack_ready",
+                payload={
+                    "summary": "The evidence pack is publishable but not ready for downstream assessment.",
+                    "evidence_artifacts": [
+                        "evidence_source_inventory",
+                        "evidence_coverage_matrix",
+                        "evidence_findings",
+                        "evidence_gap_register",
+                        "evidence_pack",
+                        "evidence_pack_summary",
+                    ],
+                    "source_count": 2,
+                    "unresolved_gaps": [
+                        "Missing production audit excerpt for delegated-admin impersonation sessions.",
+                    ],
+                    "key_findings": [
+                        "The delegated-admin impersonation bypass is reproduced by the pentest and code path.",
+                        "Production audit proof is still missing.",
+                    ],
+                    "ready_for_downstream_assessment": False,
+                },
+            ),
         ],
     )
 

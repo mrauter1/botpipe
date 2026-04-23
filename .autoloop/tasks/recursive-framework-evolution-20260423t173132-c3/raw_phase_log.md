@@ -560,3 +560,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbc85-f094-7921-93a7-61448ce26ebd
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+I’m checking the current security-remediation proof surface and the test-phase artifacts before I add anything. The likely gap is end-to-end blocked-path coverage for a published-but-not-ready child evidence pack, so I’m verifying that against the existing tests and phase notes first.
+
+The existing test file already covers the happy path, question propagation, and a direct compose-step seam. I’m adding one full runner test for the blocked child-evidence path so the regression surface includes runtime status mapping, child metadata, and non-adoption of parent artifacts, then I’ll update the test strategy and phase feedback.
+
+The new runtime blocked-path test is in. I’m running the security workflow file first to catch fixture issues, then I’ll rerun the broader targeted suite so the phase artifacts can record the actual post-change evidence.
+
+The workflow-local file passed. The broader targeted suite is still running; I’m polling it so the strategy and feedback can reflect the final count rather than an inferred one.
+
+I have passing validation now. I’m appending the non-obvious test-coverage decision under this turn’s header and tightening the test feedback entry with the actual suite results so later turns have a precise baseline.
+
+Scope considered
+
+- Phase-local test authoring for `security-remediation-workflow-package`, focused on the child-composition regression surface, the workflow-local runtime proof, and the required test-phase artifacts.
+
+What I analyzed
+
+- Existing coverage in [test_security_finding_to_verified_remediation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_security_finding_to_verified_remediation.py:179).
+- The updated child-composition decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/decisions.txt:14).
+- The empty phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/security-remediation-workflow-package/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/security-remediation-workflow-package/feedback.md:1).
+- Adjacent blocked-run expectations in existing runtime tests to keep status assertions aligned with repo conventions.
+
+What I changed
+
+- Added a full runtime blocked-path regression test in [test_security_finding_to_verified_remediation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_security_finding_to_verified_remediation.py:382) for a child evidence pack that publishes with `ready_for_downstream_assessment=false`.
+- Added a dedicated scripted provider fixture for that blocked runtime path in the same file.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/security-remediation-workflow-package/test_strategy.md:10) with a behavior-to-test coverage map, stabilization notes, and a concise known-gap note.
+- Appended a concise validation summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/test/phases/security-remediation-workflow-package/feedback.md:10).
+- Appended the non-obvious coverage decision under the current test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+- The highest-risk regression after the implement/review loop was not just the compose-step seam; it was end-to-end blocked-run behavior. The new runtime test now pins blocked status mapping, child success metadata, parent artifact non-adoption, and the absence of leaked `source_constraints`.
+- I kept the existing direct seam test in place because it complements the runtime proof: the seam test catches parameter/adoption regressions cheaply, while the runtime test catches runner-status and workspace regressions.
+
+Open issues / next step
+
+- No blocking test gaps remain for this phase.
+- Known gap recorded in the strategy: there is still no dedicated runtime test for an explicit child `blocked` route, because the phase acceptance criteria require success-path and child-question runtime proof, and the new blocked-runtime path already covers the highest-risk readiness regression.
+- Validation passed:
+  `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py` with `10 passed`
+  `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py` with `57 passed`
