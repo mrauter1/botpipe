@@ -611,3 +611,48 @@ No phase-local blockers remain. The next separate follow-up is still the deferre
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+---
+I’m treating this as a regression-proof pass on the closeout state, not a broad test rewrite. First I’m reading the active test artifacts, the current baseline-doc coverage, and the shared decisions so I can add only the minimum test that closes the remaining memory-doc regression gap and then record the coverage map.
+
+The remaining test gap is specific and worth closing: the baseline-doc suite didn’t actually guard against the stale `src/autoloop/main.py` reference the verifier found. I’m adding that regression check to `tests/test_architecture_baseline_docs.py`, then I’ll update the phase strategy/feedback and rerun the targeted validation slice.
+
+The new baseline-doc guard is in place and the full closeout validation slice is running again. If this passes cleanly, I’ll only do a quick readback of the updated strategy/feedback and then close the phase.
+
+The new test is deterministic and filesystem-only, so there isn’t a hidden flake surface here. I’m adding that stabilization note to the strategy and recording the exact `41 passed` result in the phase feedback before I close out.
+
+Scope considered
+
+Phase-local only: the closeout regression surface for recursive memory, baseline docs, and the targeted helper/builder/release/incident validation slice. I left `recursive_autoloop/` tests alone because no wrapper/template files changed and that residual remains explicitly out of scope.
+
+What I analyzed
+
+I reviewed the shared decisions, the implement/verifier closeout notes, and the existing baseline-doc coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1). The main uncovered risk was that the suite did not actually fail if the recursive charter drifted back to the retired `src/autoloop/main.py` path.
+
+What I changed
+
+I added a regression test in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:196) that requires `runtime/cli.py` and `runtime/runner.py` in the recursive charter and forbids the retired runtime-entrypoint path. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/test/phases/proof-docs-and-recursive-memory/test_strategy.md:10), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/test/phases/proof-docs-and-recursive-memory/feedback.md:10), and appended the test decision under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/decisions.txt:19).
+
+Key findings / decisions
+
+The added coverage is deterministic and low-flake because it only reads checked-in files and reuses the existing repo-local pytest slice. Validation passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py` -> `41 passed in 1.02s`.
+
+Open issues / next step
+
+No test-phase blocker remains. The deferred follow-up is still the separate `recursive_autoloop/` package-CLI/template cleanup, not additional closeout-slice testing here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
