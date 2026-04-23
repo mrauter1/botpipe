@@ -226,6 +226,32 @@ result = ctx.invoke_workflow(
 
 Child workflows run as normal workflow packages with their own run ids and run-local artifacts. They are reusable building blocks, not a special execution mode.
 
+For optional authoring-level composition helpers, `stdlib/composition.py` keeps the same runtime semantics while making artifact adoption explicit in workflow code:
+
+```python
+from autoloop_v3.stdlib import adopt_child_artifacts, run_child_workflow
+
+child = run_child_workflow(
+    ctx,
+    "child_workflow",
+    message="Do the child task",
+    parameters={"mode": "strict"},
+)
+adopted = adopt_child_artifacts(
+    ctx,
+    child,
+    mapping={"evidence_pack": "adopted/evidence_pack.md"},
+)
+```
+
+Composition helper boundary:
+
+- `run_child_workflow(...)` is a thin authoring wrapper over `ctx.invoke_workflow(...)`
+- `adopt_child_artifacts(...)` copies explicitly named child artifacts into `ctx.workflow_folder`
+- these helpers do not create hidden runtime sequencing, automatic system steps, or new child-run metadata
+- they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- parent workflows still own which child artifacts are adopted, where they land, and whether overwriting those parent-local files is acceptable
+
 ## Recursive And Package-Only Guidance
 
 If a workflow, template, or recursive harness emits Autoloop instructions, keep them package-CLI-only and repo-layout-accurate:

@@ -357,6 +357,72 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
     ]
 
 
+def test_composition_helpers_keep_child_invocation_explicit_and_adopt_selected_artifacts_into_parent_workflow_folder(
+    tmp_path: Path,
+) -> None:
+    _write_child_success_workflow_package(tmp_path)
+    _write_parent_composition_helper_workflow_package(tmp_path)
+
+    result = run_workflow_package(
+        "parent_composed",
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                lambda request: (
+                    request.artifacts.child_dump.write_text(
+                        json.dumps(
+                            {
+                                "answer": request.context.answer,
+                                "workflow_params": request.context.workflow_params,
+                                "session_id": request.session.session_id if request.session is not None else None,
+                            }
+                        ),
+                    ),
+                    Outcome(raw_output="child complete\n", tag="done", payload={"summary": "child complete"}),
+                )[1]
+            ]
+        ),
+        options=RunnerOptions(root=tmp_path, task_id="subworkflow-helper-task", message="Parent request"),
+    )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-helper-task"
+    parent_workflow_dir = task_dir / "wf_parent_composed"
+    parent_run_dir = next((parent_workflow_dir / "runs").iterdir())
+    child_run_dir = next((task_dir / "wf_child_success" / "runs").iterdir())
+    adopted_path = parent_workflow_dir / "adopted" / "child-evidence.json"
+    parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
+    child_payload = json.loads((child_run_dir / "child.json").read_text(encoding="utf-8"))
+    child_parent = json.loads((child_run_dir / "parent.json").read_text(encoding="utf-8"))
+    task_messages = [
+        json.loads(line)
+        for line in (task_dir / "messages.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    child_records = [
+        json.loads(line)
+        for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+
+    assert result.terminal == "SUCCESS"
+    assert parent_payload["child_workflow"] == "child_success"
+    assert parent_payload["child_status"] == "success"
+    assert parent_payload["child_last_event"] == "done"
+    assert parent_payload["child_output_metadata"] == {"summary": "child complete"}
+    assert parent_payload["adopted_artifacts"] == {"child_dump": str(adopted_path)}
+    assert adopted_path.read_text(encoding="utf-8") == (child_run_dir / "child.json").read_text(encoding="utf-8")
+    assert (task_dir / "request.md").read_text(encoding="utf-8") == "Parent request\n"
+    assert (child_run_dir / "request.md").read_text(encoding="utf-8") == "Run child via helper\n"
+    assert [entry["message"] for entry in task_messages] == ["Parent request"]
+    assert child_payload["answer"] is None
+    assert child_payload["workflow_params"] == {"mode": "strict"}
+    assert child_parent["workflow_name"] == "parent_composed"
+    assert child_parent["run_id"] == parent_run_dir.name
+    assert len(child_records) == 1
+    assert child_records[0]["workflow_name"] == "child_success"
+    assert child_records[0]["status"] == "success"
+    assert child_records[0]["output_artifacts"] == {"child_dump": str(child_run_dir / "child.json")}
+
+
 def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inheriting_parent_answers(tmp_path: Path) -> None:
     _write_child_pause_workflow_package(tmp_path)
     _write_parent_name_invoker_workflow_package(tmp_path)
@@ -710,6 +776,72 @@ class ParentClassWorkflow(Workflow):
             "child_run_folder": str(result.run_folder),
             "child_request_file": str(result.request_file),
             "parent_session_id": ctx.get_session("main").session_id,
+        }
+        (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
+        return state.model_copy(update={"finished": True}), Event("done")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_parent_composition_helper_workflow_package(root: Path) -> None:
+    package_dir = root / "workflows" / "parent_composed"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        "from .workflow import ParentCompositionHelperWorkflow\n__all__ = ['ParentCompositionHelperWorkflow']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text('name = "parent_composed"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "workflow.py").write_text(
+        """
+from __future__ import annotations
+
+import json
+
+from pydantic import BaseModel
+
+from autoloop_v3.stdlib import adopt_child_artifacts, run_child_workflow
+from workflow import SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+
+
+class ParentCompositionHelperWorkflow(Workflow):
+    name = "parent_composed"
+
+    class State(BaseModel):
+        finished: bool = False
+
+    launch = SystemStep(name="launch")
+    entry = launch
+    transitions = {launch: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_launch(state: State, ctx):
+        child = run_child_workflow(
+            ctx,
+            "child_success",
+            message="Run child via helper",
+            parameters={"mode": "strict"},
+        )
+        adopted = adopt_child_artifacts(
+            ctx,
+            child,
+            mapping={"child_dump": "adopted/child-evidence.json"},
+        )
+        payload = {
+            "child_workflow": child.workflow_name,
+            "child_run_id": child.run_id,
+            "child_status": child.status,
+            "child_last_event": None if child.last_event is None else child.last_event.tag,
+            "child_output_metadata": child.output_metadata,
+            "child_artifacts": {name: str(path) for name, path in child.output_artifacts.items()},
+            "adopted_artifacts": {name: str(path) for name, path in adopted.items()},
+            "child_run_folder": str(child.run_folder),
+            "child_request_file": str(child.request_file),
         }
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
         return state.model_copy(update={"finished": True}), Event("done")

@@ -3,3 +3,6 @@ Cycle 2 planning maps the stale snapshot paths to repo-root docs/core/runtime/wo
 Chosen addition is the reusable building block `investigation_request_to_evidence_pack`; `security_finding_to_verified_remediation` stays deferred to avoid a third monolithic workflow before evidence-pack composition is proven.
 Chosen framework improvement is an authoring-only composition helper seam for explicit child-workflow invocation and parent-local artifact adoption; reject a runtime `SubworkflowStep` this cycle.
 Do not migrate the shipped release or incident workflows to the new building block in cycle 2; prove reuse with targeted direct and composed tests first to keep the regression surface bounded.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="composition-helpers-and-contracts" pair="implement" turn_seq="1" run_id="run-20260423T212522Z-c2aa04a6" ts="2026-04-23T21:38:30.314443+00:00" />
+`stdlib/composition.py` remains an authoring-only seam: `run_child_workflow(...)` delegates directly to `ctx.invoke_workflow(...)` and does not add runtime sequencing, metadata, or control-contract behavior.
+`adopt_child_artifacts(...)` copies explicitly named child files into `ctx.workflow_folder` and rejects absolute or parent-escaping targets so parent-local artifact adoption stays durable and scoped.
