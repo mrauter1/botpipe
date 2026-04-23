@@ -449,3 +449,114 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbc85-f094-7921-93a7-61448ce26ebd
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+I’ve got the fix shape: keep deployment constraints parent-local, and treat a child evidence pack with `ready_for_downstream_assessment=false` as a parent `blocked` outcome before any parent-local adoption. I’m patching the workflow and its proof/doc artifacts together so the contract, behavior, and tests stay aligned.
+
+I’m addressing the two blocking review findings in the new security remediation workflow. First I’m re-reading the relevant workflow composition code, the child contract, and the phase artifacts so the fix stays local and doesn’t disturb adjacent behavior.
+
+The main workflow code already contains the two behavioral fixes, so I’m checking whether the remaining gap is proof coverage and whether any adjacent paths still contradict the intended contract. Next I’m inspecting the runtime test surface and the child-result types before I patch only the missing pieces.
+
+I’ve confirmed the workflow/doc contract already reflects the reviewer’s requested behavior. The missing piece is proof: I’m adding tests that exercise the child invocation contract and the not-ready evidence-pack block path, then I’ll update the implementation notes and shared decisions to match the actual fixed behavior.
+
+I’ve narrowed the change to phase-local proof and bookkeeping. I’m patching the security-remediation test file to cover the reviewer’s two concerns directly, then I’ll update the implementation notes and append the non-obvious composition decisions under the current decisions header.
+
+The patch is in. I’m running the workflow-specific test file first to catch any local contract mistakes quickly, then I’ll rerun the same broader targeted suite used in the previous turn to check the nearby regression surface.
+
+The repo doesn’t expose `pytest` on PATH here, so I’m rerunning with the project virtualenv to keep validation consistent with the earlier phase run.
+
+The workflow-specific file passed. The broader regression suite is still running; I’m polling it to confirm the composition helper, child workflow, workspace metadata, and baseline docs still hold together after the new proof.
+
+Scope considered
+
+- Phase-local reviewer follow-up for `security-remediation-workflow-package`: the child-composition contract, its proof surface, and the required phase artifacts only.
+
+What I analyzed
+
+- The compose-step behavior in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py:269), the blocking findings in `feedback.md`, and the existing runtime proof in [test_security_finding_to_verified_remediation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_security_finding_to_verified_remediation.py:179).
+
+What I changed
+
+- Added a direct regression test in [test_security_finding_to_verified_remediation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_security_finding_to_verified_remediation.py:382) that exercises `on_compose_evidence_pack(...)` with a successful-but-not-ready child result, asserts the parent blocks before any artifact adoption, and proves `deployment_constraints` are not forwarded into the child `source_constraints` channel.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/implement/phases/security-remediation-workflow-package/implementation_notes.md:41) to record the reviewer follow-up and the extra validation.
+- Appended the phase-local composition decisions under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/decisions.txt:14).
+
+Key findings / decisions
+
+- The current compose-step implementation in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py:269) already matches the intended fix: it forwards only evidence-side child parameters and blocks on `ready_for_downstream_assessment=false` before adoption.
+- The actual gap was proof coverage, not another workflow-code change. The new regression test now pins both blocking review findings.
+
+Open issues / next step
+
+- No open phase-local issues after this pass.
+- Validation passed:
+  `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py` with `9 passed`
+  `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py` with `56 passed`
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbc85-f094-7921-93a7-61448ce26ebd
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+I’m re-reviewing the security-remediation phase after the producer follow-up, focusing on the compose-step contract, the new regression proof, and whether the phase artifacts now support a clean completion decision.
+
+The compose-step contract and the new regression test line up with the shared decisions. I’m running the same targeted suite the producer reported so the completion decision is based on a fresh verifier-side pass, not only the implementation notes.
+
+The targeted suite is still running. I’m polling for the final result so I can update the reviewer artifacts accurately rather than inferring completion from partial output.
+
+The verifier-side test run passed. I’m updating the phase reviewer artifacts now: criteria to `complete`, and feedback with a short resolution note so the next turn doesn’t reopen the same two findings without cause.
+
+Scope considered
+
+- Phase-local re-review of `security-remediation-workflow-package`, limited to the compose-step child-workflow contract, the new regression proof, and the active reviewer artifacts.
+
+What I analyzed
+
+- The current `compose_evidence_pack` implementation in `workflows/security_finding_to_verified_remediation/workflow.py`.
+- The new regression test added in `tests/runtime/test_security_finding_to_verified_remediation.py`.
+- The shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/decisions.txt`.
+- The producer’s updated implementation notes.
+
+What I reviewed
+
+- Whether `ready_for_downstream_assessment=false` now blocks the parent before artifact adoption.
+- Whether `deployment_constraints` stay parent-local and are no longer forwarded into the child `source_constraints` channel.
+- Whether the phase still satisfies the accepted scope and targeted validation.
+- Verifier-side rerun:
+  `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py`
+  Result: `56 passed`.
+
+Key findings / decisions
+
+- No blocking or non-blocking findings remain in phase scope.
+- `IMP-001` and `IMP-002` are resolved by the current compose-step behavior and the added regression proof.
+- Updated `criteria.md` to complete and appended a review-pass resolution note to `feedback.md`.
+
+Open issues / next step
+
+- No open phase-local issues.
+- Next step is normal orchestration closeout for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
