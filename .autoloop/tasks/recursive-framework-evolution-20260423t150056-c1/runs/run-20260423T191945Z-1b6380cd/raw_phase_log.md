@@ -238,3 +238,103 @@ Make the repo own the canonical `workflow` import surface used by tests/runtime,
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbbd3-328e-7a50-9050-83420d5e980f
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+I’ve got the reviewer’s blocking point. The failure is real and repo-local: `tests/conftest.py` currently prepends the repo parent ahead of the repo root, so `import workflow` resolves the sibling shim first. I’m tracing whether that path ordering exists anywhere else before I edit it.
+
+There’s a straightforward repo-local fix path. `tests/conftest.py` is building `sys.path` in the wrong order today, so the reviewer’s concern can be resolved without touching anything outside the repository root. I’m checking whether runtime package loading has a similar ordering bug before I change just that surface.
+
+I’ve got the repo-local repair: fix `tests/conftest.py` so the repo root wins over the repo parent, then tighten the strict-surface test to lock the import location and the new `RouteContract` export. After that I’ll rerun the seam tests including strictness.
+
+The repo-local import surface is patched. I’m verifying two things now: `workflow` resolves to the repo-owned shim without any sibling-file help, and the route-contract/strictness suites still pass with that ordering locked in.
+
+The import-order fix itself is working: `workflow` now resolves to the repo-local shim. I hit one unrelated existing strictness failure while running the broader strictness file, so I’m narrowing validation to the new import-surface assertion and then I’ll update the notes with both residuals.
+
+I’m cleaning up the phase record now so it matches the final repo-owned fix rather than the superseded sibling-shim workaround. That means updating the implementation notes to reflect the repo-local path-order change and appending one superseding decision entry for future turns.
+
+Scope considered
+
+Phase-local fix for the reviewer’s blocking import-surface containment finding on route-contract normalization. I stayed inside the repo-owned path/order and strict-surface test coverage.
+
+What I analyzed
+
+I checked [tests/conftest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/conftest.py:1), [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1), [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:1), and the reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/route-contract-normalization/feedback.md:1). The root cause was repo-local: `tests/conftest.py` inserted `REPO_PARENT` ahead of `PACKAGE_ROOT`, so `import workflow` resolved the sibling shim first.
+
+What I changed
+
+I fixed the repo-owned test harness in [tests/conftest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/conftest.py:1) so it removes both paths and reinserts them with `PACKAGE_ROOT` ahead of `REPO_PARENT`. I also updated [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:1) to reflect the new `RouteContract` strict-surface export and to assert that `workflow` resolves to the repo-local shim.
+
+Key findings / decisions
+
+The reviewer’s blocking finding is addressed without relying on any out-of-repo shim change. `workflow` now resolves to `/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py` under the repo test harness, so the route-contract seam is self-contained in the repository root. I also appended the superseding implementation note in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/decisions.txt:12) and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/route-contract-normalization/implementation_notes.md:1).
+
+Open issues / next step
+
+Validation that passed:
+- `tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_workflow_builder_package.py tests/unit/test_primitives_and_stores.py`
+- `tests/strictness/test_no_compat.py -k 'workflow_shim_exports_only_the_strict_authoring_surface'`
+- targeted doc checks in `tests/test_architecture_baseline_docs.py`
+
+Unrelated existing failures remain outside this phase in the full `tests/strictness/test_no_compat.py` token scan and the recursive-memory baseline doc check. The next step is reviewer re-verification of the phase artifacts and criteria.
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbbd3-328e-7a50-9050-83420d5e980f
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+I’m re-reviewing the phase after the import-surface fix. I’ll verify the repo-local `workflow` resolution, rerun the relevant proof set, and then update the reviewer artifacts to either clear or retain findings.
+
+I don’t see a remaining phase-scoped defect in the code paths themselves, but I’m rerunning the proof set directly before I clear the reviewer artifacts. I want one clean pass on the repo-local `workflow` resolution plus the route-contract and strict-surface tests.
+
+The first aggregate pytest command overfiltered because of the shared `-k`. I’m rerunning the route-contract suites and the import-surface suites as separate commands so the reviewer record is based on the intended coverage, not the shell filter accident.
+
+The repo-local import fix is holding under the intended proof set now. I’m clearing the reviewer artifacts: all phase criteria can be checked, and I’m appending a re-review note that the original blocking issue is resolved so the feedback ledger stays chronological.
+
+Scope considered
+
+Phase-local re-review of the route-contract normalization seam after the repo-local import-surface fix, with attention to the prior blocking finding and the targeted proof set for route contracts and strict authoring imports.
+
+What I analyzed
+
+I inspected [tests/conftest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/conftest.py:1), [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:1), the updated implementation notes, and the shared decisions. I also verified `import workflow` resolves to `/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py`.
+
+What I reviewed
+
+I reran:
+- `tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_workflow_builder_package.py tests/unit/test_primitives_and_stores.py` (`65 passed`)
+- `tests/strictness/test_no_compat.py -k 'workflow_shim_exports_only_the_strict_authoring_surface'`
+- `tests/test_architecture_baseline_docs.py -k 'freezes_the_root_workflow_import_surface or explains_step_control_contract_boundaries'`
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/route-contract-normalization/criteria.md:1) and appended the re-review result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/route-contract-normalization/feedback.md:1).
+
+Key findings / decisions
+
+IMP-001 is resolved. The repo now owns the active `workflow` import surface for the test harness, the strict-surface test locks that path and the `RouteContract` export, and I found no remaining phase-scoped blocking issues. The unrelated residual failures documented by the implementer remain outside this phase and do not change the route-contract review outcome.
+
+Open issues / next step
+
+No phase-scoped blocking findings remain. The phase can move forward; any later work on the unrelated recursive-memory baseline or broader strictness token scan should be handled separately from this route-contract normalization change.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
