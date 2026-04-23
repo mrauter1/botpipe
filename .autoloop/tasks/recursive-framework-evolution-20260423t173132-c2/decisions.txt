@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260423T212522Z-c2aa04a6" ts="2026-04-23T21:25:22.658567+00:00" />
+Cycle 2 planning maps the stale snapshot paths to repo-root docs/core/runtime/workflows and treats recursive wrapper/template cleanup as a known residual, not the chosen framework improvement.
+Chosen addition is the reusable building block `investigation_request_to_evidence_pack`; `security_finding_to_verified_remediation` stays deferred to avoid a third monolithic workflow before evidence-pack composition is proven.
+Chosen framework improvement is an authoring-only composition helper seam for explicit child-workflow invocation and parent-local artifact adoption; reject a runtime `SubworkflowStep` this cycle.
+Do not migrate the shipped release or incident workflows to the new building block in cycle 2; prove reuse with targeted direct and composed tests first to keep the regression surface bounded.
