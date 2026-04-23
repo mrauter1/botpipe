@@ -14,13 +14,13 @@
       "proof-docs-and-recursive-memory"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "proof-docs-and-recursive-memory"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "route-contract-normalization": "completed",
     "release-go-no-go-package": "completed",
-    "proof-docs-and-recursive-memory": "in_progress"
+    "proof-docs-and-recursive-memory": "completed"
   },
   "phase_history": [
     {
@@ -54,6 +54,13 @@
       "run_id": "run-20260423T191945Z-1b6380cd",
       "status": "in_progress",
       "ts": "2026-04-23T20:10:13.619233+00:00"
+    },
+    {
+      "phase_id": "proof-docs-and-recursive-memory",
+      "run_id": "run-20260423T191945Z-1b6380cd",
+      "status": "completed",
+      "ts": "2026-04-23T20:21:03.925460+00:00",
+      "pair": "test"
     }
   ]
 }
