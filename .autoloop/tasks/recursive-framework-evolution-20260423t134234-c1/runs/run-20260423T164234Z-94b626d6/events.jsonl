@@ -8,3 +8,6 @@
 {"ts": "2026-04-23T16:56:54.487884+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 8, "event_type": "phase_started", "phase_id": "step-control-contracts", "phase_mode": "single"}
 {"ts": "2026-04-23T16:56:54.488642+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "step-control-contracts"}
 {"ts": "2026-04-23T16:56:54.488705+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "step-control-contracts"}
+{"ts": "2026-04-23T17:11:47.567674+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 11, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "step-control-contracts"}
+{"ts": "2026-04-23T17:14:08.502306+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 12, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "step-control-contracts"}
+{"ts": "2026-04-23T17:14:08.520251+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 13, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "step-control-contracts"}

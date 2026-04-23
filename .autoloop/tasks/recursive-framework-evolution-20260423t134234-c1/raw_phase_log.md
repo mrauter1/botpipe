@@ -181,3 +181,54 @@ Key findings / decisions
 
 Open issues / next step
 - `.venv/bin/python -m pytest -q tests/runtime/test_package_cli.py` still has unrelated existing failures in untouched recursive surfaces: [recursive_autoloop/run_recursive_autoloop.sh](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop.sh), [bootstrap_task.md.tmpl](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop_templates/bootstrap_task.md.tmpl), and [cycle_task.md.tmpl](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop_templates/cycle_task.md.tmpl). I left those untouched because they are outside this phase.
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+I’m reviewing only the phase-local control-contract implementation and its adjacent regression surface. First I’m checking the changed kernel paths against the phase contract and decisions ledger, then I’ll update the reviewer artifacts with either findings or an explicit clean pass.
+
+I haven’t found a phase-local defect in the changed paths yet, but the engine changes are broad enough that I’m running a few more adjacent runtime suites before I mark the criteria complete.
+
+The extra runtime coverage stayed green. I’m marking the phase complete, with one non-blocking note in feedback to distinguish the unrelated recursive-wrapper failures from this implementation.
+
+Scope considered
+- Phase-local review of the step-control-contract implementation only: strict-kernel step metadata, compilation, engine/provider plumbing, targeted tests, and the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/`.
+- I checked unrelated repo state only far enough to classify the already-red broader runtime suite and avoid misattributing it to this phase.
+
+What I analyzed
+- The authoritative phase contract, [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt).
+- The changed request-relevant code paths: `core/steps.py`, `core/validation.py`, `core/compiler.py`, `core/engine.py`, `core/providers/models.py`, `core/providers/fake.py`, plus the new/updated tests.
+
+What I reviewed
+- Verified AC-1 and AC-2 against the implementation and test coverage.
+- Re-ran:
+  - `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  - `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_integration_parity.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_optional_extensions.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py`
+  - `.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/feedback.md).
+
+Key findings / decisions
+- No phase-local blocking findings.
+- `IMP-001` is non-blocking and only records an out-of-scope broader-suite issue: `tests/runtime/test_package_cli.py` remains red in untouched recursive wrapper/template files.
+- The phase artifacts are consistent with a `COMPLETE` review outcome, and all criteria boxes are checked.
+
+Open issues / next step
+- If you want the broader runtime suite fully green, the next separate task is to clean up `recursive_autoloop/run_recursive_autoloop.sh` and `recursive_autoloop/run_recursive_autoloop_templates/*` so `tests/runtime/test_package_cli.py` stops failing. That is outside this phase and does not block completion here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -118,3 +118,117 @@ phase_mode=single
 phase_ids=step-control-contracts,workflow-builder-package,proof-docs-and-memory
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+I’m treating the active phase contract as the scope: add additive step control contracts through compile, engine, and provider plumbing, then cover it with regression tests. I’m first reading the required framework docs, workflow/runtime code, and the phase artifacts so the changes stay narrow and don’t drift from the accepted plan.
+
+The mandatory paths in the request are stale, and the planner already mapped them to the current repo layout. I’m now tracing the actual strict-kernel path for step definitions, compilation, engine execution, and provider requests so the control-contract fields land in the narrowest possible place.
+
+I’ve confirmed the implementation surface: `core/steps.py`, `core/compiler.py`, `core/validation.py`, `core/engine.py`, and `core/providers/models.py` are the strict-kernel path. Next I’m checking the existing validation and contract tests to extend current patterns instead of inventing a new abstraction.
+
+I’ve narrowed the design choice now. The cleanest path is step-level optional control-contract kwargs, compile-time derivation of legal routes, and runtime validation of `Outcome.tag` plus `Outcome.payload` without adding any new provider packet layer.
+
+I’ve got the implementation shape pinned down. I’m editing the step/kernel files now to add optional control-contract metadata at the step declaration boundary, compile it once, and pass it through requests without changing existing workflow topology or CLI behavior.
+
+The kernel edits are in place. I’m running the smallest relevant tests first to catch shape or import errors before I add the new regression cases on top.
+
+I’m extending the test surface in two layers: validation tests for compile-time contract shape, then engine contract tests for request plumbing and runtime enforcement. After that I’ll run the existing parity-sensitive runtime suite to confirm `autoloop_v1` still behaves the same.
+
+`pytest` isn’t available in the default interpreter here, so I’m locating the project’s actual test runner environment before I continue. I want to validate in the repo’s intended Python environment rather than guessing and reporting a false pass/fail.
+
+The compile-time and engine-contract suites are green in the project venv. I’m moving to the parity-sensitive runtime checks now, because that’s the real regression surface for this phase.
+
+One broader runtime suite (`tests/runtime/test_package_cli.py`) is red, but the failures are in untouched recursive wrapper/template files, not in the control-contract path. I’m documenting that as an unrelated pre-existing surface and doing a quick review of the edited code before I update the phase notes.
+
+I’m writing the phase notes and decision ledger now. I’m keeping the notes explicit about preserved invariants and the one unrelated runtime suite failure so the next turn doesn’t silently misattribute that red test to this change.
+
+Scope considered
+- Phase-local only: additive step control contracts in the strict kernel, engine/provider plumbing, and regression coverage. I did not widen scope into the workflow package, CLI redesign, or unrelated dirty recursive files.
+
+What I analyzed
+- [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md)
+- [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [core/providers/models.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/models.py), [core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/fake.py)
+- [workflows/autoloop_v1/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/workflow.py) and the existing unit/contract/runtime tests
+
+What I changed
+- Added optional step-owned `expected_output_schema` and `route_contracts` on provider-owned steps in [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py).
+- Centralized control-contract validation and route derivation in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), and compiled `available_routes`, schema metadata, and validators onto [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py).
+- Passed `expected_output_schema`, `available_routes`, and `route_contracts` through [core/providers/models.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/models.py) and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py); the engine now rejects illegal route tags and invalid payloads early with `ProviderExecutionError`.
+- Extended fake-provider call recording in [core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/fake.py) and added targeted coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt).
+
+Key findings / decisions
+- Control contracts remain optional and only apply to `PairStep` / `LLMStep`; `SystemStep` rejects them to keep runtime-owned events separate from provider-owned outcomes.
+- `available_routes` are derived mechanically from each step’s local transitions plus legal global routes, in local-first order.
+- If a step opts into `route_contracts`, every non-reserved application route must be covered; reserved routes (`question`, `blocked`, `failed`) continue to use runtime defaults.
+- Validation passed in the repo venv:
+  - `.venv/bin/python -m pytest -q tests/unit/test_validation.py` (`23 passed`)
+  - `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py` (`25 passed`)
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_integration_parity.py` (`7 passed`)
+  - `.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py` (`3 passed`)
+
+Open issues / next step
+- `.venv/bin/python -m pytest -q tests/runtime/test_package_cli.py` still has unrelated existing failures in untouched recursive surfaces: [recursive_autoloop/run_recursive_autoloop.sh](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop.sh), [bootstrap_task.md.tmpl](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop_templates/bootstrap_task.md.tmpl), and [cycle_task.md.tmpl](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop_templates/cycle_task.md.tmpl). I left those untouched because they are outside this phase.
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+I’m reviewing only the phase-local control-contract implementation and its adjacent regression surface. First I’m checking the changed kernel paths against the phase contract and decisions ledger, then I’ll update the reviewer artifacts with either findings or an explicit clean pass.
+
+I haven’t found a phase-local defect in the changed paths yet, but the engine changes are broad enough that I’m running a few more adjacent runtime suites before I mark the criteria complete.
+
+The extra runtime coverage stayed green. I’m marking the phase complete, with one non-blocking note in feedback to distinguish the unrelated recursive-wrapper failures from this implementation.
+
+Scope considered
+- Phase-local review of the step-control-contract implementation only: strict-kernel step metadata, compilation, engine/provider plumbing, targeted tests, and the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/`.
+- I checked unrelated repo state only far enough to classify the already-red broader runtime suite and avoid misattributing it to this phase.
+
+What I analyzed
+- The authoritative phase contract, [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt).
+- The changed request-relevant code paths: `core/steps.py`, `core/validation.py`, `core/compiler.py`, `core/engine.py`, `core/providers/models.py`, `core/providers/fake.py`, plus the new/updated tests.
+
+What I reviewed
+- Verified AC-1 and AC-2 against the implementation and test coverage.
+- Re-ran:
+  - `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  - `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_integration_parity.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_optional_extensions.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py`
+  - `.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/step-control-contracts/feedback.md).
+
+Key findings / decisions
+- No phase-local blocking findings.
+- `IMP-001` is non-blocking and only records an out-of-scope broader-suite issue: `tests/runtime/test_package_cli.py` remains red in untouched recursive wrapper/template files.
+- The phase artifacts are consistent with a `COMPLETE` review outcome, and all criteria boxes are checked.
+
+Open issues / next step
+- If you want the broader runtime suite fully green, the next separate task is to clean up `recursive_autoloop/run_recursive_autoloop.sh` and `recursive_autoloop/run_recursive_autoloop_templates/*` so `tests/runtime/test_package_cli.py` stops failing. That is outside this phase and does not block completion here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
