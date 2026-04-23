@@ -324,3 +324,108 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+---
+I’m starting by reading the mandatory framework files, the active phase artifacts, and the existing workflow packages so I can anchor the new workflow-builder package in current repository patterns before editing.
+
+The repository layout has drifted from the request snapshot, and the plan already maps the stale paths to current equivalents. I’m reading those current framework files plus the existing workflow package and prior phase notes to line up the new package with the actual kernel.
+
+The prior phase already landed the narrow control-contract plumbing, so this phase can stay focused on the workflow package itself and use those contracts rather than extending the kernel again. Next I’m inspecting the existing workflow package, discovery/CLI conventions, and relevant tests so the new package fits without hidden runtime branches.
+
+I’ve got the package pattern and the step-contract surface. Now I’m reading the compile/validation tests and a few runtime helpers so I can implement the new package with realistic payload schemas, route contracts, and an exercisable fake-provider test instead of a doc-only stub.
+
+I’ve got the runtime mechanics pinned down. I’m shifting from reading to design now: defining the workflow’s step/state/artifact contract so the package can actually run end to end with the current engine, then I’ll write the package files and the exercise tests around that contract.
+
+I’ve finished the design pass. The implementation will be a new package with a deterministic `bootstrap -> frame -> design -> build -> evaluate -> publish` flow, workflow-local payload models and route contracts, explicit artifact paths, and a doc/test set that proves discovery, compilation, and a scripted end-to-end run.
+
+I’m writing the package files now: the workflow class, parameter and contract helpers, prompt templates, the workflow-specific design doc, and a focused runtime test that installs the package into a temp root and drives a full scripted run.
+
+The package files are in place. I’m doing a tight inspection pass before testing to catch compile-time issues in the workflow class, especially around artifact templates, transitions, and the bootstrap/system-step behavior.
+
+I’m moving into validation. First pass is the new workflow-builder test file only, because it exercises discovery, compilation, and a full scripted run; if that’s clean I’ll widen to adjacent regression surfaces and then update the task-local notes and shared memory.
+
+The package-level tests are green. I’m doing one extra discovery check through the actual CLI surface now, then I’ll update the implementation notes, decisions ledger, and recursive memory to reflect that the builder package shipped and the step-control gap is now closed.
+
+I’m in the close-out edit pass now. This is only task-local documentation and memory: implementation notes, the shared decisions block for this phase, and the recursive standing files so the next cycle inherits the shipped builder package instead of the pre-implementation plan state.
+
+The code and workflow tests are done. I’m doing a final scoped review of the edited files and worktree status now so I can close with a precise summary and not accidentally blur this phase with the unrelated dirty tree.
+
+Scope considered
+- Phase-local workflow-builder delivery plus the required cycle memory updates.
+- Excluded unrelated dirty deletions and unrelated recursive wrapper/template cleanup.
+
+What I analyzed
+- Current package/runtime conventions in `workflows/autoloop_v1`, `runtime/cli.py`, `runtime/loader.py`, `runtime/runner.py`, and the step-control-contract plumbing already shipped in cycle 1.
+- The active plan, shared decisions, and standing `.autoloop_recursive/` memory files.
+
+What I changed
+- Added the new workflow-builder package at [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/workflow.py) with package-local [params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/params.py), [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/contracts.py), manifest, asset checklist, and eight explicit producer/verifier prompt files.
+- Added the workflow-specific design/decision record at [workflow_idea_to_workflow_package.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_idea_to_workflow_package.md).
+- Added targeted coverage in [test_workflow_builder_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_builder_package.py) for discovery, compilation, docs, and a scripted end-to-end run that emits a compilable generated package.
+- Updated the active phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/workflow-builder-package/implementation_notes.md), the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt), and the `.autoloop_recursive/` standing memory files so future cycles inherit the shipped builder baseline.
+- Validated with `.venv/bin/python -m pytest -q tests/runtime/test_workflow_builder_package.py`, `.venv/bin/python -m pytest -q tests/runtime/test_workflow_integration_parity.py tests/test_architecture_baseline_docs.py`, and `PYTHONPATH=.. .venv/bin/python -m autoloop_v3.runtime.cli workflows show workflow_idea_to_workflow_package --root .`.
+
+Key findings / decisions
+- The package uses deterministic `bootstrap` and `publish_package` system steps so invocation state and final publication stay artifact-first without new runtime machinery.
+- Generated package outputs stay explicit through stable file/directory artifacts plus `prompt_contract_matrix.md` and `build_report.md`; there is no hidden generator layer.
+- `evaluate_package` routes `needs_rework` back to build and `needs_replan` back to design, keeping repair local unless the package contract itself changed materially.
+
+Open issues / next step
+- The next strong cycle should use the builder to author a real domain workflow such as `release_candidate_to_go_no_go` or `incident_to_hardening_program`.
+- Remaining recursive wrapper/template path cleanup is still outside this phase.
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+---
+I’m reviewing the phase-local implementation only: the new workflow-builder package, its docs/tests, and the task-local notes. I’m checking the changed files against the accepted phase contract and the shared decisions ledger before I update the reviewer artifacts.
+
+I’ve finished the audit pass against the phase contract, the shared decisions, the shipped package, and the targeted validation evidence. I’m updating the reviewer-owned criteria and feedback now; there are no blocking findings from the phase-local diff.
+
+Scope considered
+- Phase-local review of the new `workflow_idea_to_workflow_package` package, its workflow-specific docs/tests, the phase implementation notes, and the required recursive-memory updates.
+
+What I analyzed
+- The accepted phase contract, shared decisions, prompt-template doctrine, route/artifact contract shape, and the cited validation evidence for discovery, compilation, and scripted execution.
+- Adjacent regression risk only where it touched package discovery, compile behavior, and workflow execution coverage.
+
+What I reviewed
+- `workflows/workflow_idea_to_workflow_package/*`
+- `docs/workflows/workflow_idea_to_workflow_package.md`
+- `tests/runtime/test_workflow_builder_package.py`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/workflow-builder-package/implementation_notes.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt`
+
+Key findings / decisions
+- No blocking findings.
+- Updated `criteria.md` so all five review gates are checked.
+- Appended `IMP-000` to `feedback.md` to record a clean phase-local review pass.
+
+Open issues / next step
+- No phase-local blockers remain for `workflow-builder-package`.
+- The next cycle can build a domain workflow on top of the shipped workflow-builder package.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
