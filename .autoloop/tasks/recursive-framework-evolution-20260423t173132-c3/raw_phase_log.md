@@ -325,3 +325,71 @@ No blocking test-audit issues remain for this phase. The test pair can stay `COM
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbc85-f094-7921-93a7-61448ce26ebd
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+I’m implementing the `security_finding_to_verified_remediation` phase-scoped change set. I’ll first inspect the required framework files, the active phase artifacts, and the existing workflow patterns so the new workflow composes cleanly with the current runtime and the child-result helper.
+
+I’ve confirmed the phase scope and the planner’s decisions. Next I’m reading the current framework and workflow implementations, especially the evidence-pack workflow and the new child-result helper, to match existing authoring and runtime patterns instead of inventing new ones.
+
+The existing packages follow a stable pattern: typed `Parameters`, `contracts.py` payloads plus route contracts, deterministic bootstrap/publish hooks, and workflow-local docs/tests. I’m now reading the evidence-pack tests and the runtime script harness so the new workflow proof covers the required success path and child-question propagation without ad hoc test scaffolding.
+
+I’ve got the implementation pattern and the test harness shape. One remaining scope choice is whether to also update the recursive memory ledgers inside this phase-local turn; I’m checking the existing ledger format and any tests that bind to those files before I decide whether that’s a justified additive edit or something better left to cycle closeout.
+
+I have enough context to start file edits. I’m creating the new workflow package structure and then I’ll fill in the workflow code, prompt contracts, docs, tests, and the cycle-memory updates in one pass so the proof and the shipped-status records stay aligned.
+
+The workflow package files are in place. I’m checking the new module for any structural or contract mistakes now, then I’ll add the runtime proof and the cycle-memory closeout so I’m not debugging test failures blind across multiple files later.
+
+I’m moving on to the proof layer now. The next patch adds the workflow documentation and the runtime tests, including the child-workflow pause propagation case, because that’s the main regression seam this package is supposed to prove.
+
+The shipped workflow itself is drafted. I’m updating the recursive memory and the baseline assertions now so cycle 3 records this package as shipped, preserves the cycle 1/2 historical sections, and moves the deferred focus forward to the next portfolio gap instead of leaving stale “security workflow next” guidance behind.
+
+The first proof run found two issues: one test helper used the artifact-handle API incorrectly, and one baseline-doc assertion was too specific to the old pre-cycle-3 roadmap wording. I’m fixing both now and then rerunning the targeted suite before moving on to the phase notes and shared decisions.
+
+The workflow-specific suite now passes. I’m running the broader targeted regression set next: the new security workflow, the reused evidence-pack workflow, the composition helper tests, the workspace child-run tests, and the recursive-memory baseline assertions.
+
+I’ve got passing targeted validation. I’m finishing the phase artifacts now: concise implementation notes mapped to the plan checklist, and the shared decision lines that future turns would otherwise be likely to drift on.
+
+Scope considered
+
+- Implemented the phase-local `security_finding_to_verified_remediation` package, its docs, proof, and the cycle-3 standing memory updates required by the request.
+- Kept unrelated dirty/untracked repo state out of scope.
+
+What I analyzed
+
+- Current workflow/package patterns in `workflows/investigation_request_to_evidence_pack/`, `workflows/release_candidate_to_go_no_go/`, and `workflows/incident_to_hardening_program/`.
+- The authoring/runtime boundary in `docs/architecture.md`, `docs/authoring.md`, `Workflow_Instructions.md`, and `stdlib/composition.py`.
+- Existing runtime proof patterns in `tests/runtime/test_investigation_request_to_evidence_pack.py` and child-workflow metadata behavior in `tests/runtime/test_workspace_and_context.py`.
+
+What I changed
+
+- Added `workflows/security_finding_to_verified_remediation/` with `workflow.py`, `workflow.toml`, `__init__.py`, `params.py`, `contracts.py`, prompts, and an asset checklist.
+- Implemented deterministic child composition of `investigation_request_to_evidence_pack`, explicit child `question` / `blocked` propagation, child-result validation, and parent-local artifact adoption before the security-specific pair steps.
+- Added `docs/workflows/security_finding_to_verified_remediation.md`.
+- Added `tests/runtime/test_security_finding_to_verified_remediation.py` covering discovery, compilation, parameter normalization, end-to-end success, publish validation, and child-question propagation.
+- Updated `.autoloop_recursive/framework_evolution_charter.md`, `.autoloop_recursive/framework_roadmap.md`, `.autoloop_recursive/framework_gap_ledger.md`, `.autoloop_recursive/workflow_candidate_ledger.md`, plus the matching baseline assertions in `tests/test_architecture_baseline_docs.py`.
+- Updated the phase `implementation_notes.md` and appended the non-obvious decisions to `decisions.txt`.
+
+Key findings / decisions
+
+- The workflow-builder remains credible enough that cycle 3 was better spent shipping a real production consumer rather than another builder-first package.
+- `security_finding_to_verified_remediation` now serves as the first production consumer of `investigation_request_to_evidence_pack`.
+- Child-workflow success validation stays authoring-owned and explicit: the parent only adopts child artifacts after `require_child_workflow_result(...)` confirms success, the expected terminal route, and required artifacts.
+- Recursive memory now marks `security_finding_to_verified_remediation` as shipped and moves the deferred front-door gap to `task_to_workflow_strategy`.
+
+Open issues / next step
+
+- No blocking issues in this phase scope.
+- Deferred intentionally: migrating `release_candidate_to_go_no_go` or `incident_to_hardening_program` to the evidence-pack building block, extracting reusable security assessment/remediation sub-workflows, and `recursive_autoloop/` package-CLI cleanup.
+- Validation passed: `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py` with `55 passed`.
