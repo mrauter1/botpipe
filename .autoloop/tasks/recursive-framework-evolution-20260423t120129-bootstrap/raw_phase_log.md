@@ -1136,3 +1136,67 @@ Key findings / decisions
 
 Open issues / next step
 - No open issues in this phase.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb14-fb83-72e2-8c42-7dee59954603
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb14-fb83-72e2-8c42-7dee59954603
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb14-fb83-72e2-8c42-7dee59954603
+---
+I’m reviewing the recursive-wrapper package-only phase now. First I’m reading the phase criteria/feedback artifacts and the implemented wrapper/template/test surfaces so I can verify the scope against the acceptance criteria before I write the review result.
+
+I’ve got the artifact stubs and the main implementation files. Next I’m scanning the wrapper and templates for forbidden legacy surfaces and reading the targeted test section so I can decide whether the phase is actually complete or if anything material was missed.
+
+The code paths and file-content scans line up with the requested contract. I’m running the relevant tests myself now so the review is based on fresh verification, not only on the producer’s notes.
+
+The scoped regression surface is clean. I’m doing one full-suite pass as well because the repo is small and this phase intentionally removed compatibility paths that could have unexpected ripple effects outside the wrapper tests.
+
+The full suite is still running, and it has already cleared the contract/runtime/provider/package portions again. I’m waiting for completion before I mark the criteria so the review record reflects the final result.
+
+The implementation clears the scope as written: the legacy wrapper paths are gone, the template guidance is current, and the regression coverage is in place. I’m updating the reviewer-owned artifacts now with a clean pass and the validation evidence.
+
+The reviewer-owned artifacts are updated. I’m doing one quick readback of `criteria.md` and `feedback.md` so the closeout matches what was actually written.
+
+Scope considered
+- Active phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/recursive-wrapper-package-only/`
+- `recursive_autoloop/run_recursive_autoloop.sh`
+- `recursive_autoloop/run_recursive_autoloop_templates/*.tmpl`
+- `tests/runtime/test_package_cli.py`
+- Adjacent strictness/doc regression surfaces in `tests/strictness/test_no_compat.py` and `tests/test_architecture_baseline_docs.py`
+
+What I analyzed
+- Wrapper command construction, recovery hints, CLI-surface validation, and remaining legacy-branch references.
+- Template guidance for repo layout, package CLI doctrine, and forbidden legacy paths.
+- Test assertions covering wrapper/package-only behavior and stale-template regressions.
+- Phase implementation notes and shared decisions relevant to the requested behavior break.
+
+What I reviewed
+- Verified AC-1: wrapper now emits only package `autoloop run/resume` commands and contains no legacy CLI mode detection.
+- Verified AC-2: maintained recursive templates reference the current repo structure and package-workflow model only.
+- Verified AC-3: wrapper-focused tests assert absence of `--intent`, `--pairs`, legacy `--task-id` invocation, and legacy mode branches.
+- Updated reviewer-owned artifacts:
+  - `criteria.md` with all boxes checked
+  - `feedback.md` with a recorded no-findings review result
+- Reran validation:
+  - `./.venv/bin/python -m pytest tests/runtime/test_package_cli.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py`
+  - `./.venv/bin/python -m pytest`
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings beyond the recorded review note.
+- Validation passed cleanly: full suite `124 passed`.
+
+Open issues / next step
+- No open issues for this phase.
+- Review result: complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
