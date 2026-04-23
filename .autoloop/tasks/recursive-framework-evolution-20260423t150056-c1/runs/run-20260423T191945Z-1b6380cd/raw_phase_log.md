@@ -102,3 +102,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=route-contract-normalization,release-go-no-go-package,proof-docs-and-recursive-memory
+explicit=True
+current_phase_index=0
