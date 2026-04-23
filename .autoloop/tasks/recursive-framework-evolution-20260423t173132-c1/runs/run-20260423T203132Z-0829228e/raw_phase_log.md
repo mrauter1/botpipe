@@ -301,3 +301,123 @@ No phase-local test-audit blockers remain. The known broader-suite gap is unchan
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbc20-dc0e-7303-800f-19c7eb124502
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+I’m starting with the phase contract and the existing workflow framework so I can fit the new incident workflow into the current patterns without guessing. Next I’m reading the mandatory docs, the active phase artifacts, and the existing workflow packages to identify the required integration points and any helper added by the earlier lifecycle phase.
+
+The request snapshot’s `src/autoloop/...` paths are stale in this checkout, and the plan already mapped them to the repo-root package layout. I’m now reading the actual runtime, existing workflows, and the shared lifecycle helper so the new package matches the shipped conventions and uses the helper instead of cloning the logic.
+
+I’ve confirmed the framework improvement from the earlier phase: it added an authoring-only lifecycle helper and kept receipt semantics inside each workflow. Next I’m reading the existing workflow packages and their runtime tests in detail so the incident workflow can mirror the established package contract and proof style.
+
+I’ve confirmed there isn’t already an incident package in the repo, and the prior phase logs show the intended direction clearly: add the incident workflow and prove it with the same style of scripted runtime test used for the shipped packages. I’m pulling the remaining test helper patterns and artifact-writing conventions now, then I’ll draft the new package and its proof together.
+
+The plan artifact is more specific than the request snapshot for the incident package: it already fixes the parameter set, artifact list, step topology, and test targets. I’m using that as the implementation contract now, and I’m checking the current recursive memory status in parallel so I can decide whether those updates belong in this phase or should stay out of scope.
+
+Plan for this phase:
+
+1. Add `workflows/incident_to_hardening_program/` with `workflow.py`, `params.py`, `contracts.py`, `workflow.toml`, `__init__.py`, prompt templates, and a package checklist asset. The workflow will mirror the established package pattern: deterministic `bootstrap` and `publish_incident_package` edges around four producer/verifier work items.
+2. Add workflow-local documentation and a scripted runtime proof in `tests/runtime/test_incident_to_hardening_program.py`, including discovery, compilation, parameter coercion, legal-route flow, and `incident_receipt.json` creation.
+3. Run the targeted validation slice, then update the phase `implementation_notes.md` and append any non-obvious implementation decisions under the existing current-turn header in `decisions.txt`. I’ll decide on the recursive-memory files after the core package is green, because that’s the only likely out-of-phase surface here.
+
+I have the package shape and test shape pinned down now. I’m creating the new workflow package directories and then writing the workflow, contracts, prompts, docs, and runtime proof in one cohesive patch so the package lands atomically.
+
+The new package and proof are on disk. I’m doing a quick pass over the workflow and the new runtime test before running pytest, because the highest-risk issues here are import/syntax mismatches and any contract drift between the prompts, receipt validation, and scripted test assertions.
+
+I’m at the validation stage now. First pass is the package-focused regression slice plus the generic validation/engine contract tests from the plan, so I can catch both local package issues and any broader workflow-shape breakage before I touch the phase artifacts or the recursive memory files.
+
+The workflow package is green against the planned regression slice. I’m making the scope call on the recursive memory now: because the original cycle request explicitly requires those files to inherit the new state, I’m checking the current closeout notes and their corresponding baseline test so I can either update them consistently or leave them untouched with a clear justification.
+
+The doc-baseline test surface makes the memory decision straightforward: those files are currently still recording “incident deferred,” which is stale now that the package exists and the runtime proof passes. I’m updating the recursive memory and its baseline test in one pass so the cycle state matches the code that just shipped.
+
+The package itself was already green; the remaining regression surface is now the recursive-memory baseline I just touched. I’m rerunning the same validation slice with `tests/test_architecture_baseline_docs.py` added so the shipped workflow, the memory updates, and the baseline assertions all prove out together.
+
+The only failing assertion is a missing exact baseline phrase in the charter; the behavioral surface is otherwise clean. I’m fixing that wording to match the baseline test and then rerunning just the affected slice.
+
+The validation slice is fully green now, including the recursive-memory baseline. I’m doing the closeout edits next: phase-local implementation notes with the exact scope and validations, then the current-turn decision lines under the existing header in `decisions.txt`, without touching earlier blocks.
+
+I’m writing the phase notes with one explicit justification for the recursive-memory edits: they’re outside the narrow phase deliverables, but they’re directly required by the cycle request and now covered by the baseline docs test. After that I’ll append the two non-obvious implementation decisions that later turns are most likely to drift on.
+
+The code and the phase artifacts are done. I’m pulling a few line references for the final handoff so the closeout can point straight to the new workflow, its proof, and the recursive-memory updates without turning into a file-by-file changelog.
+
+**Scope considered**
+
+- Phase-local implementation for the new `incident_to_hardening_program` workflow package, its package docs, runtime proof, and the required recursive-memory closeout updates.
+- I left `recursive_autoloop/` wrapper/template cleanup out of scope; that pre-existing package-CLI drift remains deferred.
+
+**What I analyzed**
+
+- Existing package patterns in [release_candidate_to_go_no_go workflow](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py:1), the shipped lifecycle helper seam, runtime loader/runner behavior, and the cycle plan/decision artifacts.
+- The recursive-memory baseline and its assertions in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:161).
+
+**What I changed**
+
+- Added the incident workflow package with explicit artifacts, route contracts, prompts, checklist asset, deterministic bootstrap/publication behavior, and receipt validation in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/incident_to_hardening_program/workflow.py:35).
+- Added the workflow decision/design record in [incident_to_hardening_program.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/incident_to_hardening_program.md:1).
+- Added the scripted runtime proof in [test_incident_to_hardening_program.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_incident_to_hardening_program.py:41).
+- Updated the recursive memory to record the incident workflow and lifecycle helper as shipped cycle-1 outcomes in [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:5) and the other standing memory files.
+- Recorded the phase closeout in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/implement/phases/incident-hardening-program-package/implementation_notes.md:1).
+
+**Key findings / decisions**
+
+- `incident_summary.json` is the machine-readable publication authority for the new workflow; `publish_incident_package` validates `recommended_posture`, `primary_hypothesis`, and `hardening_backlog_items` there instead of parsing markdown.
+- The workflow stays inside the narrow runtime contract boundary: only `expected_output_schema`, `available_routes`, and `route_contracts` are runtime-injected.
+- Recursive-memory updates were necessary to keep the cycle baseline consistent with the now-shipped incident workflow and the baseline docs test.
+
+**Open issues / next step**
+
+- Known residual remains unchanged: `recursive_autoloop/run_recursive_autoloop.sh` still lacks `require_package_autoloop_cli`, and some recursive templates still reference legacy `src/autoloop/...` paths.
+- Validation passed: `.venv/bin/pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py` -> `79 passed in 0.81s`.
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbc20-dc0e-7303-800f-19c7eb124502
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+I’m down to the review verdict. The workflow package itself is sound and the validation slice is green; the only issue I see is a low-risk documentation inconsistency in the recursive charter, so I’m recording that as non-blocking and marking the phase criteria accordingly.
+
+I’ve finished the review pass and I’m updating the phase artifacts now. I’m marking the implementation accepted with one non-blocking follow-up on the recursive charter path reference; there are no blocking findings against the incident workflow package itself.
+
+Scope considered
+
+Phase-local review of the incident-hardening implementation, plus adjacent regression surfaces justified by the changed files: the new workflow package, its docs and runtime proof, the recursive-memory baseline updates, the active phase artifacts, and the shared decisions ledger.
+
+What I analyzed
+
+I checked the new workflow topology, route contracts, prompt/package contract alignment, publication semantics, parameter normalization, and the scope spillover into `.autoloop_recursive/`. I also compared the implementation against the accepted phase contract and the recorded decisions about keeping lifecycle behavior authoring-only.
+
+What I reviewed
+
+I reviewed `workflows/incident_to_hardening_program/`, `docs/workflows/incident_to_hardening_program.md`, `tests/runtime/test_incident_to_hardening_program.py`, the recursive-memory files, `implementation_notes.md`, and `decisions.txt`. I independently validated with `.venv/bin/pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py`, which passed with `79 passed in 0.81s`.
+
+Key findings / decisions
+
+No blocking findings. I updated `criteria.md` to all checked and appended one non-blocking follow-up in `feedback.md`:
+- `IMP-001`: `.autoloop_recursive/framework_evolution_charter.md:49` still references retired `src/autoloop/main.py`, which leaves the standing recursive memory slightly inconsistent with the repo-root runtime layout.
+
+Open issues / next step
+
+Phase-local review is complete and the implementation is acceptable as shipped. The only follow-up is the non-blocking charter path cleanup noted above.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

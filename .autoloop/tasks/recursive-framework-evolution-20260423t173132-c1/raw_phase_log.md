@@ -379,3 +379,45 @@ The code and the phase artifacts are done. I’m pulling a few line references f
 
 - Known residual remains unchanged: `recursive_autoloop/run_recursive_autoloop.sh` still lacks `require_package_autoloop_cli`, and some recursive templates still reference legacy `src/autoloop/...` paths.
 - Validation passed: `.venv/bin/pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py` -> `79 passed in 0.81s`.
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbc20-dc0e-7303-800f-19c7eb124502
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc20-dc0e-7303-800f-19c7eb124502
+---
+I’m down to the review verdict. The workflow package itself is sound and the validation slice is green; the only issue I see is a low-risk documentation inconsistency in the recursive charter, so I’m recording that as non-blocking and marking the phase criteria accordingly.
+
+I’ve finished the review pass and I’m updating the phase artifacts now. I’m marking the implementation accepted with one non-blocking follow-up on the recursive charter path reference; there are no blocking findings against the incident workflow package itself.
+
+Scope considered
+
+Phase-local review of the incident-hardening implementation, plus adjacent regression surfaces justified by the changed files: the new workflow package, its docs and runtime proof, the recursive-memory baseline updates, the active phase artifacts, and the shared decisions ledger.
+
+What I analyzed
+
+I checked the new workflow topology, route contracts, prompt/package contract alignment, publication semantics, parameter normalization, and the scope spillover into `.autoloop_recursive/`. I also compared the implementation against the accepted phase contract and the recorded decisions about keeping lifecycle behavior authoring-only.
+
+What I reviewed
+
+I reviewed `workflows/incident_to_hardening_program/`, `docs/workflows/incident_to_hardening_program.md`, `tests/runtime/test_incident_to_hardening_program.py`, the recursive-memory files, `implementation_notes.md`, and `decisions.txt`. I independently validated with `.venv/bin/pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py`, which passed with `79 passed in 0.81s`.
+
+Key findings / decisions
+
+No blocking findings. I updated `criteria.md` to all checked and appended one non-blocking follow-up in `feedback.md`:
+- `IMP-001`: `.autoloop_recursive/framework_evolution_charter.md:49` still references retired `src/autoloop/main.py`, which leaves the standing recursive memory slightly inconsistent with the repo-root runtime layout.
+
+Open issues / next step
+
+Phase-local review is complete and the implementation is acceptable as shipped. The only follow-up is the non-blocking charter path cleanup noted above.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
