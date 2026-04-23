@@ -334,3 +334,125 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc53-29ca-7fe2-b1f4-71f7e282c5c3
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbc53-29ca-7fe2-b1f4-71f7e282c5c3
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc53-29ca-7fe2-b1f4-71f7e282c5c3
+---
+I’m implementing the phase-scoped `investigation_request_to_evidence_pack` building block and the required runtime proof. I’ll first inspect the mandatory framework files, the active phase artifacts, and the existing workflow patterns so the new package fits the repository’s current contracts instead of inventing a parallel shape.
+
+The repository has already been restructured away from the older `src/autoloop/...` layout in the request snapshot, so I’m mapping the mandatory inspection set onto the current root-level packages and checking the active phase artifacts before touching code. I’m also treating the large unrelated dirty tree as off-limits unless this phase genuinely depends on it.
+
+I have the planning artifact and the composition-helper seam. Next I’m reading the existing packaged workflows and their runtime proofs so the new building block follows the exact authoring pattern already used for deterministic bootstrap, prompt contracts, and publication receipts.
+
+I’ve confirmed the new package should follow the release/incident pattern: `bootstrap` via lifecycle helpers, two provider-owned work items, deterministic publish, and explicit route contracts. I’m now checking the doc/test conventions and the child-workflow runtime surface so the new proof covers both direct execution and composed usage without widening runtime behavior.
+
+I have enough context to edit safely. I’m adding a new workflow package with the same package contract as the shipped workflows, plus a workflow-specific test file that proves both direct execution and helper-based composition, and then I’ll record the phase-local decisions and implementation notes without expanding into unrelated cycle-closeout files.
+
+The new package, prompts, docs, and phase-local proof are in place. I’m running the targeted runtime tests now to catch contract mismatches in discovery, publication, or helper-based composition before I finalize the notes.
+
+The first test pass surfaced a runtime-specific detail, not a design issue: scripted artifact handles don’t accept `encoding=`. I’m removing that only from provider-turn artifact writes and rerunning the targeted proof plus the adjacent regression set.
+
+The remaining failure is expected given the workflow shape: a composed child run finishes at the publish system step, so its last event is the deterministic publication route, not the evidence-verifier route. I’m tightening that assertion to the actual terminal contract and rerunning the workflow-specific proof.
+
+The new workflow proof is passing, along with the helper and documentation regression suites. I’m adding one more targeted portfolio check from the plan, then I’ll update the phase notes with the actual validation results and close out with the phase summary.
+
+The implementation is functionally complete and the targeted suites are green. I’m just updating the phase note with the actual validation outcomes so the next phase inherits the real proof surface instead of a placeholder.
+
+Scope considered
+
+- Phase-local work only for `investigation-evidence-pack-building-block`; I kept the large unrelated dirty tree out of scope.
+- I treated the repo-root package layout as authoritative and matched the new building block to the existing release/incident workflow package pattern.
+
+What I analyzed
+
+- Current workflow/package conventions in `docs/architecture.md`, `docs/authoring.md`, `stdlib/lifecycle.py`, `stdlib/composition.py`, `runtime/runner.py`, and the shipped workflow packages under `workflows/`.
+- Existing runtime proof patterns in `tests/runtime/test_workflow_builder_package.py`, `tests/runtime/test_release_candidate_to_go_no_go.py`, `tests/runtime/test_incident_to_hardening_program.py`, and `tests/runtime/test_workspace_and_context.py`.
+- The active phase artifacts, plan, and shared decision ledger.
+
+What I changed
+
+- Added the new reusable workflow package at [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/investigation_request_to_evidence_pack/workflow.py), with `workflow.toml`, `__init__.py`, `params.py`, `contracts.py`, prompt templates, and an asset checklist.
+- Added workflow-local documentation at [investigation_request_to_evidence_pack.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/investigation_request_to_evidence_pack.md).
+- Added direct and composed runtime proof at [test_investigation_request_to_evidence_pack.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_investigation_request_to_evidence_pack.py).
+- Recorded phase-local implementation decisions and notes in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/decisions.txt) and [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/implement/phases/investigation-evidence-pack-building-block/implementation_notes.md).
+
+Key findings / decisions
+
+- The building block boundary is `bootstrap -> frame_investigation -> assemble_evidence_pack -> publish_evidence_pack`; diagnosis/remediation stays out of scope so the package remains reusable.
+- `evidence_pack.md` is the human-facing deliverable, `evidence_pack_summary.json` is the machine-readable composition contract, and `evidence_pack_receipt.json` is the deterministic terminal receipt.
+- Reuse is proven through a fixture parent workflow that invokes the child through `run_child_workflow(...)` and adopts explicit child artifacts through `adopt_child_artifacts(...)`, without adding new runtime machinery.
+- Validation passed:
+- `.venv/bin/pytest -q tests/runtime/test_investigation_request_to_evidence_pack.py` -> `8 passed`
+- `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py tests/unit/test_stdlib_and_extensions.py` -> `24 passed`
+- `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` -> `8 passed`
+- `.venv/bin/pytest -q tests/runtime/test_workflow_builder_package.py` -> `5 passed`
+
+Open issues / next step
+
+- Recursive memory updates under `.autoloop_recursive/` were intentionally not changed in this phase-local run because the active phase contract scoped this pass to the new workflow package, docs, and runtime proof.
+- Existing `release_candidate_to_go_no_go` and `incident_to_hardening_program` workflows were intentionally not migrated; the next cycle-level step is to decide whether closeout should update recursive memory only, or whether a later cycle should migrate one parent workflow onto this building block.
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc53-29ca-7fe2-b1f4-71f7e282c5c3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbc53-29ca-7fe2-b1f4-71f7e282c5c3
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc53-29ca-7fe2-b1f4-71f7e282c5c3
+---
+I’m reviewing the phase-local implementation against the active contract and the shared decisions, starting with the changed workflow package, the new runtime proof, and the phase artifacts before I mark criteria or write findings.
+
+I’ve got the phase artifacts and the main diff in view. I’m drilling into the publication path and the composed-child metadata path now, because those are the two spots most likely to hide regressions even when the happy-path tests are green.
+
+I’m not finding a phase-scoped correctness or regression issue in the implementation. I’m marking the criteria accordingly and noting the clean review result in the feedback artifact, then I’ll emit the required completion block.
+
+I’ve marked the criteria and feedback based on the code review itself. I’m doing one quick independent rerun of the workflow-specific proof and the helper regression slice so the review record isn’t relying only on the producer’s notes.
+
+Scope considered
+
+- Phase-local review only for `investigation-evidence-pack-building-block`.
+- I limited analysis to the new workflow package, its docs/tests, and the active phase artifacts, and did not pull unrelated dirty files into scope.
+
+What I analyzed
+
+- The authoritative phase contract, shared decisions, current implementation notes, and the changed workflow package under `workflows/investigation_request_to_evidence_pack/`.
+- The new workflow-local documentation and runtime proof.
+- Adjacent runtime surfaces that matter for publication and child-workflow composition: `runtime/runner.py`, `core/context.py`, and the existing composition-helper tests.
+
+What I reviewed
+
+- Artifact-first contract completeness: package discovery, params, route contracts, prompt templates, deterministic publish step, and receipt generation.
+- Behavioral safety around composed child runs and parent-local artifact adoption.
+- Independent validation rerun:
+- `.venv/bin/pytest -q tests/runtime/test_investigation_request_to_evidence_pack.py` -> `8 passed`
+- `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py tests/unit/test_stdlib_and_extensions.py` -> `24 passed`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/implement/phases/investigation-evidence-pack-building-block/criteria.md) to fully checked and recorded the clean review result in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/implement/phases/investigation-evidence-pack-building-block/feedback.md).
+
+Open issues / next step
+
+- No phase-local review issues remain.
+- The next step is the normal downstream closeout for this cycle; this verifier pass is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
