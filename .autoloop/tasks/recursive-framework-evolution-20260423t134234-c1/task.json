@@ -14,13 +14,13 @@
       "proof-docs-and-memory"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "proof-docs-and-memory"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "step-control-contracts": "completed",
     "workflow-builder-package": "completed",
-    "proof-docs-and-memory": "in_progress"
+    "proof-docs-and-memory": "completed"
   },
   "phase_history": [
     {
@@ -54,6 +54,13 @@
       "run_id": "run-20260423T164234Z-94b626d6",
       "status": "in_progress",
       "ts": "2026-04-23T17:46:07.857862+00:00"
+    },
+    {
+      "phase_id": "proof-docs-and-memory",
+      "run_id": "run-20260423T164234Z-94b626d6",
+      "status": "completed",
+      "ts": "2026-04-23T17:57:27.520295+00:00",
+      "pair": "test"
     }
   ]
 }
