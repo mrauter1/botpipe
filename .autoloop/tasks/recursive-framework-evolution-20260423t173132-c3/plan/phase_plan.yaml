@@ -1,4 +1,148 @@
 version: 1
 task_id: recursive-framework-evolution-20260423t173132-c3
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/runs/run-20260423T222351Z-263b1d5b/request.md
-phases: []
+phases:
+- phase_id: child-result-contract-helper
+  title: Add Child Result Contract Helper
+  objective: Introduce an authoring-only stdlib helper for validating child workflow
+    success contracts before artifact adoption, while keeping child pause or block
+    routing explicit in workflow code.
+  status: planned
+  in_scope:
+  - Add a validation-only helper in stdlib/composition.py for expected child status,
+    terminal route, and required artifact checks.
+  - Export the helper through stdlib/__init__.py and document the boundary in docs/authoring.md.
+  - Add focused unit coverage proving the helper rejects wrong status, wrong terminal
+    route, and missing child artifacts without changing ctx.invoke_workflow semantics.
+  out_of_scope:
+  - New runtime-owned step types such as SubworkflowStep.
+  - Changes to ChildWorkflowResult shape, persisted child-run metadata, or public
+    CLI behavior.
+  - Automatic pause or block propagation hidden inside the helper.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: A shared stdlib helper exists for explicit child-result validation before
+      parent-local artifact adoption.
+  - id: AC-2
+    text: The helper remains authoring-only and does not widen runtime-injected control
+      contracts beyond expected_output_schema, available_routes, and route_contracts.
+  - id: AC-3
+    text: Targeted unit coverage passes and proves existing ctx.invoke_workflow behavior
+      remains unchanged.
+  deliverables:
+  - Updated stdlib composition helper module and export wiring.
+  - Authoring documentation for the child-result validation boundary.
+  - Focused unit tests for child-result validation failures and success behavior.
+  risks:
+  - The helper may accidentally absorb routing semantics that should remain visible
+    in workflow code.
+  - The helper may overfit the current security workflow instead of staying reusable
+    across parent workflows.
+  rollback:
+  - Remove the helper and keep validation inline in the new workflow if the seam cannot
+    stay narrow.
+  - Preserve existing ctx.invoke_workflow and adopt_child_artifacts behavior as the
+    fallback.
+- phase_id: security-remediation-workflow-package
+  title: Ship Security Remediation Workflow
+  objective: Implement security_finding_to_verified_remediation as the first production
+    consumer of investigation_request_to_evidence_pack, with explicit security assessment,
+    remediation planning, closure packaging, and deterministic publication.
+  status: planned
+  in_scope:
+  - Create workflows/security_finding_to_verified_remediation/ with workflow.py, workflow.toml,
+    __init__.py, params.py, contracts.py, prompts/, and assets/.
+  - Use a deterministic system step to invoke investigation_request_to_evidence_pack,
+    explicitly forward child question or blocked outcomes, validate successful child
+    completion, and adopt parent-local artifacts.
+  - Define explicit pair-step contracts for security assessment, remediation planning,
+    and closure packaging.
+  - Add workflow-local docs under docs/workflows/security_finding_to_verified_remediation.md.
+  - Add scripted-provider runtime proof for successful end-to-end execution and child-question
+    propagation.
+  out_of_scope:
+  - Migrating release_candidate_to_go_no_go or incident_to_hardening_program to the
+    evidence-pack building block.
+  - Changing the workflow-builder package or authoring a new workflow-router package
+    in the same cycle.
+  - Recursive wrapper or template cleanup unless the implementation intentionally
+    touches recursive_autoloop/.
+  dependencies:
+  - child-result-contract-helper
+  acceptance_criteria:
+  - id: AC-1
+    text: The repository contains a discoverable security_finding_to_verified_remediation
+      package with explicit prompts, route contracts, parameters, and artifact-first
+      workflow docs.
+  - id: AC-2
+    text: The workflow composes investigation_request_to_evidence_pack instead of
+      re-implementing evidence framing and assembly locally.
+  - id: AC-3
+    text: Workflow-specific runtime proof passes for the success path and for explicit
+      child-question propagation.
+  deliverables:
+  - New workflow package files under workflows/security_finding_to_verified_remediation/.
+  - Workflow documentation under docs/workflows/security_finding_to_verified_remediation.md.
+  - Workflow-specific runtime tests covering success and child-question propagation.
+  risks:
+  - The workflow may accidentally duplicate child evidence semantics instead of staying
+    focused on security-specific work.
+  - Child-result handling may be unsafe if the parent does not validate expected terminal
+    route and required artifacts before adoption.
+  rollback:
+  - Remove the new workflow package, its docs, and its tests if the child-consumption
+    contract cannot be made safe.
+  - Keep the child-result helper only if it remains independently useful and well-proven.
+- phase_id: proof-docs-and-recursive-memory
+  title: Close With Proof And Memory
+  objective: Run the targeted validation set, update recursive memory for the chosen
+    workflow and helper direction, and record explicit residuals without overclaiming
+    recursive wrapper cleanup.
+  status: planned
+  in_scope:
+  - Run the targeted validation set for the child-result helper, workspace composition
+    behavior, the investigation evidence-pack building block, the new security workflow,
+    builder proof, and baseline docs.
+  - Update .autoloop_recursive/framework_evolution_charter.md, framework_roadmap.md,
+    framework_gap_ledger.md, and workflow_candidate_ledger.md with the shipped security
+    workflow and the chosen child-result helper improvement.
+  - Record compatibility notes, explicit residuals, and non-obvious decisions in task-local
+    feedback and shared decisions.
+  - Only if implementation touches recursive_autoloop/, rerun the targeted recursive
+    package-CLI tests and document the result explicitly.
+  out_of_scope:
+  - Claiming recursive wrapper or template parity if recursive_autoloop/ remains untouched.
+  - Unrelated repository cleanup outside the new helper seam, the new workflow package,
+    targeted docs or tests, task artifacts, and recursive memory updates.
+  - Editing verifier-owned criteria.md.
+  dependencies:
+  - security-remediation-workflow-package
+  acceptance_criteria:
+  - id: AC-1
+    text: The targeted validation set passes under .venv/bin/pytest, or any unchanged
+      pre-existing residual is explicitly documented as out of scope.
+  - id: AC-2
+    text: Standing recursive memory records that workflow_idea_to_workflow_package
+      remains credible, security_finding_to_verified_remediation shipped this cycle,
+      task_to_workflow_strategy remains deferred, and child-result validation was
+      the chosen framework improvement.
+  - id: AC-3
+    text: The final scoped diff remains limited to the helper seam, the new workflow
+      package, targeted docs and tests, task artifacts, and required recursive memory
+      updates.
+  deliverables:
+  - Validation evidence and closeout notes for the child-result helper and the new
+    security workflow.
+  - Updated recursive memory files under .autoloop_recursive/.
+  - Updated task-local feedback and shared decisions capturing the selected direction
+    and explicit residual risk.
+  risks:
+  - The known recursive wrapper and template failures may still appear if broader
+    package-CLI suites are run without intentionally fixing recursive_autoloop/.
+  - Recursive memory may preserve stale repo-layout guidance unless the touched files
+    are updated deliberately.
+  rollback:
+  - Keep proof scoped to the targeted suites and document any untouched recursive
+    residual explicitly.
+  - Revert wording changes that overclaim behavior not actually validated.
