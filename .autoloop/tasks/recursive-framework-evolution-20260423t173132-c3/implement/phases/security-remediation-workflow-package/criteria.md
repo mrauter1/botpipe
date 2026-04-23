@@ -6,6 +6,7 @@
 - Phase Directory Key: security-remediation-workflow-package
 - Phase Title: Ship Security Remediation Workflow
 - Scope: phase-local authoritative verifier artifact
+- Review outcome: incomplete due to blocking findings `IMP-001` and `IMP-002`.
 
 Check these boxes (`- [x]`) only when true.
 

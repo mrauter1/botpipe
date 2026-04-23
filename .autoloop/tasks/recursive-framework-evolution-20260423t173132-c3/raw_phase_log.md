@@ -393,3 +393,59 @@ Open issues / next step
 - No blocking issues in this phase scope.
 - Deferred intentionally: migrating `release_candidate_to_go_no_go` or `incident_to_hardening_program` to the evidence-pack building block, extracting reusable security assessment/remediation sub-workflows, and `recursive_autoloop/` package-CLI cleanup.
 - Validation passed: `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py` with `55 passed`.
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbc85-f094-7921-93a7-61448ce26ebd
+
+
+---
+run_id=run-20260423T222351Z-263b1d5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc85-f094-7921-93a7-61448ce26ebd
+---
+I’m reviewing the shipped security-remediation phase against the active criteria, the shared decisions, and the actual code/tests. I’ll inspect the new workflow package, the proof coverage, and the recursive-memory side effects, then I’ll update only the phase-local review artifacts.
+
+I’ve confirmed the implementation notes and the shared decisions. Next I’m reading the actual workflow and proof files for correctness and regression risk, with emphasis on the deterministic child-workflow step, publication validation, and whether anything outside the accepted phase scope was pulled in unnecessarily.
+
+I’ve isolated two correctness-level concerns in the composition step. I’m pulling exact file/symbol references now, then I’ll write the feedback and criteria updates in the phase-local artifacts only.
+
+I’ve finished the review. I’m recording the two blocking findings in the phase feedback and marking the criteria as incomplete because the current composition step can advance on an explicitly not-ready evidence pack and it also misroutes rollout constraints into the child evidence workflow’s source-constraint channel.
+
+Scope considered
+
+- Phase-local review of `security-remediation-workflow-package`.
+- Reviewed the new workflow package, its runtime proof, the recursive-memory/test updates required by the cycle request, and the phase-local reviewer artifacts only.
+
+What I analyzed
+
+- `workflows/security_finding_to_verified_remediation/`
+- `tests/runtime/test_security_finding_to_verified_remediation.py`
+- `docs/workflows/security_finding_to_verified_remediation.md`
+- The child workflow contract in `workflows/investigation_request_to_evidence_pack/`
+- Shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/decisions.txt`
+
+What I reviewed
+
+- Deterministic child-workflow composition, reserved-route forwarding, and publication checks.
+- Whether the implementation matches the accepted plan and keeps the runtime/provider boundary narrow.
+- Targeted validation rerun:
+  `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py`
+  Result: `55 passed`.
+
+Key findings / decisions
+
+- `IMP-001` blocking: [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py:320) records the child summary’s `ready_for_downstream_assessment` flag but does not require it to be `true` before advancing. The parent can proceed into assessment/remediation on an evidence pack that explicitly says it is not ready.
+- `IMP-002` blocking: [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py:274) forwards `deployment_constraints` into the child as `source_constraints`. The child workflow treats `source_constraints` as evidence-framing/evidence-gathering limits, so rollout constraints are being sent down the wrong contract and can distort evidence framing.
+
+Open issues / next step
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/implement/phases/security-remediation-workflow-package/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c3/implement/phases/security-remediation-workflow-package/feedback.md).
+- Next step is to fix the two blocking composition issues, then rerun the same targeted suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
