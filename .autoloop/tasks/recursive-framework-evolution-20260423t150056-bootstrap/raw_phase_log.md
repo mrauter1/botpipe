@@ -220,3 +220,48 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+---
+I’m addressing the reviewer’s Claude capability-gating finding and keeping the change local to the runtime provider validation path and its tests. First I’m re-reading the current feedback entry and the Claude adapter/tests so the fix lands on the exact failing branch without widening scope.
+
+I’ve isolated the fix: Claude capability validation should keep the always-used headless flags unconditional, but gate `--allowedTools` and `--dangerously-skip-permissions` only when those strategies are actually configured. I’m patching that branch and tightening the tests around the default `inherit` path plus one strategy-specific regression check.
+
+The fix is in and the tests now exercise the default `inherit` surface separately from strategy-specific permission flags. I’m running the focused backend/provider slice plus compatibility/docs checks again before I update the phase notes.
+
+I’ve verified the reviewer’s repro is closed in the targeted test slice. I’m only updating the implementation notes now to reflect the narrowed Claude capability gate and the new regression coverage; I’m not touching reviewer-owned artifacts.
+
+Scope considered
+- Reviewer finding `IMP-001` only, centered on [runtime/providers/claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/claude.py), [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py), [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py), and the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-bootstrap/implement/phases/runtime-provider-foundation/implementation_notes.md).
+
+What I analyzed
+- The Claude capability-validation branch in `_validate_claude_surface()`.
+- The reviewer’s repro scenario for the default `provider.claude.permission_strategy="inherit"` path.
+- Existing backend/provider tests to see where to pin coverage for the default path versus strategy-specific permission flags.
+
+What I changed
+- Updated [runtime/providers/claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/claude.py) so `--allowedTools` is only required for `allow_core_tools`, `--dangerously-skip-permissions` is only required for `bypass`, and the always-used headless flags remain unconditional.
+- Tightened [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py) so a default `inherit` config now resolves successfully against a headless-only Claude help surface, while `allow_core_tools` still fails when `--allowedTools` is absent.
+- Updated [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py) to cover the headless-only `inherit` path and a strategy-specific validation failure for `allow_core_tools`.
+- Refreshed the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-bootstrap/implement/phases/runtime-provider-foundation/implementation_notes.md) for the reviewer fix. I did not touch reviewer-owned `criteria.md` or `feedback.md`.
+
+Key findings / decisions
+- The blocking Claude compatibility issue is fixed by separating always-used headless capability checks from optional permission-strategy checks.
+- The default `inherit` path now accepts Claude CLI installations that expose only `-p`/`--print`, `--output-format`, `--resume`, and `--model`.
+- Strategy-selected permission flags still fail fast with precise `ConfigError`s when the requested CLI surface is missing.
+
+Open issues / next step
+- Validation passed: `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/runtime/test_compatibility_runtime.py tests/test_architecture_baseline_docs.py -k 'not test_recursive_memory_files_record_cycle_one_closeout_baseline' -q`
+- The unrelated pre-existing `tests/runtime/test_package_cli.py -q` failures remain outside this phase scope.
+- Next step is verifier re-review of `IMP-001`.

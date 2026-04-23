@@ -42,6 +42,7 @@ import autoloop_v3.runtime.providers.codex as codex_runtime_provider
 
 CODEX_START_HELP = "--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n"
 CODEX_RESUME_HELP = "--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n"
+CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n"
 CLAUDE_HELP = "--print\n-p\n--output-format\n--resume\n--model\n--allowedTools\n--dangerously-skip-permissions\n"
 
 
@@ -303,7 +304,7 @@ def test_verify_claude_code_capabilities_succeeds(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(
         claude_runtime_provider.subprocess,
         "run",
-        lambda command, **_: _completed(args=command, stdout=CLAUDE_HELP),
+        lambda command, **_: _completed(args=command, stdout=CLAUDE_HEADLESS_HELP),
     )
 
     verify_claude_code_capabilities()
@@ -319,6 +320,20 @@ def test_verify_claude_code_capabilities_rejects_missing_required_flag(monkeypat
 
     with pytest.raises(ConfigError, match=r"provider 'claude' requires '--output-format' support"):
         verify_claude_code_capabilities()
+
+
+def test_verify_claude_code_capabilities_rejects_missing_allowed_tools_when_strategy_selected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(args=command, stdout=CLAUDE_HEADLESS_HELP),
+    )
+
+    with pytest.raises(ConfigError, match=r"--allowedTools"):
+        verify_claude_code_capabilities(ClaudeProviderConfig(permission_strategy="allow_core_tools"))
 
 
 def test_codex_provider_run_producer_uses_start_command_for_placeholder_session(
@@ -490,7 +505,7 @@ def test_claude_provider_run_producer_parses_json_result(monkeypatch: pytest.Mon
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HELP)
+            return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
         return _completed(
             args=command,
             stdout='{"result":"producer text","session_id":"claude-session-1","stop_reason":"end_turn"}',
@@ -515,7 +530,7 @@ def test_claude_provider_run_verifier_parses_strict_json_outcome(monkeypatch: py
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HELP)
+            return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
         return _completed(
             args=command,
             stdout='{"result":"{\\"tag\\":\\"pair_ok\\",\\"payload\\":{\\"summary\\":\\"ok\\"}}","session_id":"claude-session-2"}',
@@ -574,7 +589,7 @@ def test_claude_provider_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch)
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HELP)
+            return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
         return _completed(args=command, stdout="{bad-json}")
 
     monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
@@ -589,7 +604,7 @@ def test_claude_provider_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HELP)
+            return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
         return _completed(args=command, stdout="oops", stderr="bad", returncode=3)
 
     monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
@@ -604,7 +619,7 @@ def test_claude_provider_rejects_cross_provider_resume(monkeypatch: pytest.Monke
     monkeypatch.setattr(
         claude_runtime_provider.subprocess,
         "run",
-        lambda command, **_: _completed(args=command, stdout=CLAUDE_HELP),
+        lambda command, **_: _completed(args=command, stdout=CLAUDE_HEADLESS_HELP),
     )
     provider = ClaudeProvider(_config(provider_name="claude"))
 

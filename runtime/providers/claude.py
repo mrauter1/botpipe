@@ -223,9 +223,10 @@ def _validate_claude_surface(surface: _ClaudeHelpSurface, config: ClaudeProvider
         raise ConfigError("provider 'claude' requires '--resume' support, but the flag is unavailable.")
     if not surface.supports_model:
         raise ConfigError("provider 'claude' requires '--model' support, but the flag is unavailable.")
-    if not surface.supports_allowed_tools:
+    permission_strategy = config.permission_strategy if config is not None else None
+    if permission_strategy == "allow_core_tools" and not surface.supports_allowed_tools:
         raise ConfigError("provider 'claude' requires '--allowedTools' support, but the flag is unavailable.")
-    if not surface.supports_bypass_permissions:
+    if permission_strategy == "bypass" and not surface.supports_bypass_permissions:
         raise ConfigError(
             "provider 'claude' requires '--dangerously-skip-permissions' support, but the flag is unavailable."
         )

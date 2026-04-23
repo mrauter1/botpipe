@@ -53,6 +53,7 @@
 - Built-in `codex` and `claude` runtime adapters now resolve through `runtime/provider_backends.py` instead of placeholder “unimplemented adapter” errors.
 - Verifier and single-LLM turns now require strict locally validated JSON outcomes for both built-in CLI adapters.
 - Cross-provider resume attempts now fail explicitly with `ProviderExecutionError`.
+- Claude capability validation now requires permission flags only for the configured `provider.claude.permission_strategy`, so the default `inherit` path no longer rejects otherwise valid headless CLI installations for unused optional flags.
 
 ## Known non-changes
 
@@ -64,12 +65,13 @@
 
 - Backend resolution now probes CLI capabilities once per process and caches the discovered help surface.
 - Codex/Claude provider builds fail early with precise `ConfigError` messages when required binaries or flags are unavailable.
+- Claude backend resolution now distinguishes always-used headless flags from optional permission-strategy flags, preserving compatibility for default `inherit` installs while still failing fast for unsupported `allow_core_tools` / `bypass` selections.
 - Provider response metadata surfaces only mode plus provider metadata; raw subprocess streams remain error-only surfaces.
 
 ## Validation performed
 
 - `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py -q`
-- `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/runtime/test_compatibility_runtime.py tests/test_architecture_baseline_docs.py -k 'not test_recursive_memory_files_record_cycle_one_closeout_baseline' -q`
+- `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/runtime/test_compatibility_runtime.py tests/test_architecture_baseline_docs.py -k 'not test_recursive_memory_files_record_cycle_one_closeout_baseline' -q` after fixing reviewer finding `IMP-001`
 - `.venv/bin/python -m pytest tests/runtime/test_package_cli.py -q` (fails in unrelated pre-existing recursive package CLI/template assertions outside this phase scope)
 
 ## Deduplication / centralization decisions

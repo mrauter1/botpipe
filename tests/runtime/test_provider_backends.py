@@ -26,6 +26,9 @@ from autoloop_v3.runtime.provider_backends import resolve_provider_backend
 import autoloop_v3.runtime.provider_backends as provider_backends
 
 
+CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n"
+
+
 class _StubProvider:
     def run_producer(self, request):  # pragma: no cover - defensive
         raise AssertionError(f"unexpected producer call: {request!r}")
@@ -145,7 +148,7 @@ def test_resolve_provider_backend_returns_real_claude_provider(
         "run",
         lambda command, **_: _completed(
             args=command,
-            stdout="--print\n-p\n--output-format\n--resume\n--model\n--allowedTools\n--dangerously-skip-permissions\n",
+            stdout=CLAUDE_HEADLESS_HELP,
         ),
     )
 
@@ -224,6 +227,31 @@ def test_resolve_provider_backend_rejects_claude_effort_when_cli_does_not_suppor
     )
 
     with pytest.raises(ConfigError, match=r"provider\.claude\.effort"):
+        resolve_provider_backend(config=config)
+
+
+def test_resolve_provider_backend_rejects_allow_core_tools_when_claude_cli_lacks_allowed_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(args=command, stdout=CLAUDE_HEADLESS_HELP),
+    )
+    config = replace(
+        _resolved_config("claude"),
+        provider=replace(
+            _resolved_config("claude").provider,
+            claude=ClaudeProviderConfig(
+                model="claude-test",
+                effort=None,
+                permission_strategy="allow_core_tools",
+            ),
+        ),
+    )
+
+    with pytest.raises(ConfigError, match=r"--allowedTools"):
         resolve_provider_backend(config=config)
 
 
