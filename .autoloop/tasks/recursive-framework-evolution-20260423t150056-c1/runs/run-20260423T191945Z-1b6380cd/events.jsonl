@@ -20,3 +20,7 @@
 {"ts": "2026-04-23T19:49:24.664277+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-contract-normalization"}
 {"ts": "2026-04-23T19:50:34.444331+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-contract-normalization"}
 {"ts": "2026-04-23T19:50:34.474081+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-contract-normalization"}
+{"ts": "2026-04-23T19:50:34.538288+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "route-contract-normalization", "phase_mode": "single"}
+{"ts": "2026-04-23T19:50:34.540649+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 24, "event_type": "phase_started", "phase_id": "release-go-no-go-package", "phase_mode": "single"}
+{"ts": "2026-04-23T19:50:34.541423+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "release-go-no-go-package"}
+{"ts": "2026-04-23T19:50:34.541519+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "release-go-no-go-package"}

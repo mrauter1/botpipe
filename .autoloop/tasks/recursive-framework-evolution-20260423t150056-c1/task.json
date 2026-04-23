@@ -14,12 +14,12 @@
       "proof-docs-and-recursive-memory"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "route-contract-normalization"
+    "current_phase_index": 1,
+    "current_phase_id": "release-go-no-go-package"
   },
   "phase_status": {
-    "route-contract-normalization": "in_progress",
-    "release-go-no-go-package": "planned",
+    "route-contract-normalization": "completed",
+    "release-go-no-go-package": "in_progress",
     "proof-docs-and-recursive-memory": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260423T191945Z-1b6380cd",
       "status": "in_progress",
       "ts": "2026-04-23T19:31:13.263379+00:00"
+    },
+    {
+      "phase_id": "route-contract-normalization",
+      "run_id": "run-20260423T191945Z-1b6380cd",
+      "status": "completed",
+      "ts": "2026-04-23T19:50:34.537795+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "release-go-no-go-package",
+      "run_id": "run-20260423T191945Z-1b6380cd",
+      "status": "in_progress",
+      "ts": "2026-04-23T19:50:34.540248+00:00"
     }
   ]
 }
