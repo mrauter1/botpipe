@@ -21,3 +21,6 @@ Canonical session persistence now uses only `session_id` plus `provider_metadata
 Autoloop-v1 parity raw logs still expose the continuation handle when available, but the framework-owned field name is now `session_id` instead of provider-specific `thread_id`.
 <autoloop-decisions-header version="1" block_seq="9" owner="test_author" phase_id="session-id-schema-cleanup" pair="test" turn_seq="1" run_id="run-20260423T150130Z-9c90604b" ts="2026-04-23T15:58:48.807295+00:00" />
 Phase 3 test coverage must exercise `FilesystemSessionStore` itself, not only serializer helpers, so the intentional non-resumable behavior for legacy `thread_id`-only payloads is pinned at the actual binding-load boundary.
+<autoloop-decisions-header version="1" block_seq="10" owner="implementer" phase_id="recursive-wrapper-package-only" pair="implement" turn_seq="1" run_id="run-20260423T150130Z-9c90604b" ts="2026-04-23T16:03:27.396370+00:00" />
+`run_recursive_autoloop.sh` now treats `last_action.env` as package-CLI-only state and no longer stores `pair_selection`, because package runs are always started via `autoloop run/resume` without any pair-selection surface.
+Recursive template regression coverage lives in `tests/runtime/test_package_cli.py` and pins both forbidden legacy strings and required package-layout/package-CLI guidance for the maintained wrapper templates.

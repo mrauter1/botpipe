@@ -1055,3 +1055,84 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb14-fb83-72e2-8c42-7dee59954603
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbb14-fb83-72e2-8c42-7dee59954603
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb14-fb83-72e2-8c42-7dee59954603
+---
+I’m taking the recursive-wrapper package-only phase. First I’m checking the active phase notes, current wrapper/templates, and the existing test coverage so I can limit edits to the scoped surfaces and avoid pulling unrelated work into this turn.
+
+I’ve confirmed the active plan and the existing decisions ledger. Next I’m reading the wrapper script, every recursive template in scope, and the current package CLI tests so I can remove only the legacy branches that are still live.
+
+The old surfaces are present exactly where the phase description said they would be: the wrapper still branches on CLI mode, and the bootstrap/cycle templates still direct readers into `src/autoloop/...`. I’m narrowing now to the specific functions and assertions that need to change so I can patch them without broad churn.
+
+The existing tests already started pinning the package-only command strings, but they only cover slices of the wrapper. I’m reading that region now and I’ll extend it to assert the legacy branches and stale repo-layout guidance are completely absent, not just partially unused.
+
+I found one immediate mismatch in the current tests: they split on `run_autoloop_start()` / `run_autoloop_resume()`, while the actual wrapper functions are `run_autoloop_start_cli()` / `run_autoloop_resume_cli()`. I’m checking whether that test currently passes by accident or if it’s already stale, then I’ll patch the assertions against the real functions.
+
+The package-only wrapper path is layered: there are `*_cli()` helpers plus higher-level `run_autoloop_start()` / `run_autoloop_resume()` orchestration functions. I’m reading the orchestration section now so I can remove legacy references at the right layer instead of only patching the helper functions.
+
+I’ve got the exact wrapper functions to rewrite now. Before editing the templates, I’m checking the current repo layout and existing docs so the new “mandatory reading” sections point at real active surfaces instead of just replacing one stale path with another.
+
+The templates are worse than stale paths; they currently point to files that don’t exist in this repo at all. I’m pulling one prior phase’s `implementation_notes.md` now so I can update this phase artifact in the same structure after the code and tests are in place.
+
+Plan for this phase:
+1. Remove legacy CLI mode state and branches from `recursive_autoloop/run_recursive_autoloop.sh`, keeping only package CLI validation plus the existing recovery/git-scoping behavior.
+2. Rewrite the recursive templates so their required reading, repo guidance, and framework language match the current `docs/`, `core/`, `runtime/`, `extensions/`, `stdlib/`, and `workflows/` layout.
+3. Strengthen wrapper-focused tests to assert the absence of legacy flags/branches and the absence of `src/autoloop/...` guidance in the maintained templates.
+4. Run the targeted wrapper test slice, then update this phase’s `implementation_notes.md` and the current decisions block with any non-obvious constraints that should persist.
+
+I’ve got enough context to edit. I’m patching the wrapper first to remove the legacy mode state and pair/intent plumbing, then I’ll rewrite the recursive templates and backstop the new contract with direct file-content tests.
+
+The main patch is in. I’m doing a quick source scan now for leftovers like `AUTOLOOP_CLI_MODE`, `--intent`, `--pairs`, and `src/autoloop/`, then I’ll run the targeted tests before I touch the phase notes.
+
+The source scan is clean on the targeted leftovers. I’m running the package CLI test module now; that’s the relevant regression surface for this phase because the wrapper and templates are enforced there directly.
+
+The only failure is a brittle string expectation around the resume-hint line. I’m tightening that assertion against the actual quoted shell text now, then I’ll rerun the module and, if it’s clean, run the full suite to catch anything adjacent.
+
+I’m only editing the failing assertion. The wrapper behavior is correct; the test was comparing against the unescaped display form rather than the shell source representation.
+
+The wrapper contract itself is fine; I corrected the test to match the shell source quoting. Rerunning the package CLI module now, then I’ll broaden verification if it passes.
+
+The phase-local module is clean. I’m running the full suite now because the request’s definition of done still expects no parity fallout or hidden regressions across the current package/runtime contract.
+
+The full suite is still running and has cleared the contract/runtime/provider/package slices so far. I’m waiting for the tail to finish before I write the phase notes and decisions, so the artifact summary reflects the actual validation result rather than a partial run.
+
+The code and tests are green. I’m closing the phase artifacts now: one small decisions block for the non-obvious wrapper-state cleanup, and a concise `implementation_notes.md` entry with the exact files, behaviors, and validation that landed.
+
+The phase artifact updates are in. I’m doing one final diff summary so the closeout is accurate and scoped to the wrapper/templates/test surfaces that changed.
+
+Scope considered
+- [run_recursive_autoloop.sh](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop.sh)
+- Recursive wrapper templates under `recursive_autoloop/run_recursive_autoloop_templates/`
+- [test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py)
+- The phase artifacts in `.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/recursive-wrapper-package-only/`
+
+What I analyzed
+- The wrapper’s legacy CLI detection, start/resume branches, recovery hints, and persisted wrapper state.
+- Template references to nonexistent `docs/autoloop_workflow_framework_*` files and obsolete `src/autoloop/...` paths.
+- Existing package CLI tests and the current repo/docs layout in `docs/`, `core/`, `runtime/`, `extensions/`, `stdlib/`, and `workflows/`.
+
+What I changed
+- Removed `AUTOLOOP_CLI_MODE`, `detect_autoloop_cli_mode`, and all legacy `--intent` / `--pairs` / legacy `--task-id` invocation paths from [run_recursive_autoloop.sh](/home/rauter/autoloop_v3_bkp/autoloop_v3/recursive_autoloop/run_recursive_autoloop.sh).
+- Made the wrapper fail fast unless `autoloop --help` exposes the package CLI surface, while keeping nested-git scoping, resumable-run discovery, and recovery hints intact.
+- Rewrote the bootstrap/cycle/charter/roadmap/doctrine/examples templates to point at the current repo layout and package-CLI doctrine instead of `src/autoloop/...`.
+- Expanded [test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) to assert the absence of legacy wrapper strings and stale template guidance.
+- Updated the phase `implementation_notes.md` and appended the non-obvious wrapper-state decisions to `decisions.txt`.
+
+Key findings / decisions
+- `pair_selection` was dead wrapper state once package-only `autoloop run/resume` became the only execution path, so I removed it from `last_action.env` persistence instead of keeping inert metadata.
+- The template regressions are pinned in the existing package CLI test module rather than a new scanner file, which keeps this phase scoped and still prevents `src/autoloop/...` or legacy CLI guidance from returning.
+- Validation passed end-to-end: `./.venv/bin/python -m pytest tests/runtime/test_package_cli.py` and `./.venv/bin/python -m pytest` with `124 passed`.
+
+Open issues / next step
+- No open issues in this phase.

@@ -14,6 +14,16 @@ from autoloop_v3.runtime import cli
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _read_recursive_template(name: str) -> str:
+    return (REPO_ROOT / "recursive_autoloop" / "run_recursive_autoloop_templates" / name).read_text(
+        encoding="utf-8"
+    )
+
+
+def _shell_function_section(script: str, name: str, next_name: str) -> str:
+    return script.split(f"{name}() {{", 1)[1].split(f"{next_name}()", 1)[0]
+
+
 def _evict_generated_modules() -> None:
     importlib.invalidate_caches()
     for name in list(sys.modules):
@@ -746,11 +756,103 @@ def test_cli_init_workflow_scaffolds_package_and_rejects_duplicates(
 def test_recursive_wrapper_targets_the_package_cli_contract() -> None:
     script = (REPO_ROOT / "recursive_autoloop" / "run_recursive_autoloop.sh").read_text(encoding="utf-8")
 
-    start_section = script.split("run_autoloop_start() {", 1)[1].split("run_autoloop_resume()", 1)[0]
-    resume_section = script.split("run_autoloop_resume() {", 1)[1].split("run_framework_prd_bootstrap()", 1)[0]
+    start_cli_section = _shell_function_section(script, "run_autoloop_start_cli", "run_autoloop_resume_cli")
+    resume_cli_section = _shell_function_section(script, "run_autoloop_resume_cli", "latest_autoloop_run_dir")
 
-    assert 'run \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE"' in start_section
-    assert "--intent" not in start_section
-    assert "--task-id" not in start_section
-    assert "resume \\\n    \"$AUTOLOOP_WORKFLOW_NAME\" \\\n    \"$task_id\" \\\n    --root \"$WORKSPACE\"" in resume_section
-    assert "--resume" not in resume_section
+    assert "AUTOLOOP_CLI_MODE" not in script
+    assert "detect_autoloop_cli_mode" not in script
+    assert "--intent" not in script
+    assert "--pairs" not in script
+    assert "legacy)" not in script
+    assert 'Direct Autoloop resume hint: autoloop resume \\"$AUTOLOOP_WORKFLOW_NAME\\" \\"$task_id\\" --root \\"$WORKSPACE\\"' in script
+    assert 'run \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE" \\\n    --message "$message"' in start_cli_section
+    assert "--task-id" not in start_cli_section
+    assert "--workspace" not in start_cli_section
+    assert 'resume \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE"' in resume_cli_section
+    assert "--resume" not in resume_cli_section
+    assert "--task-id" not in resume_cli_section
+    assert "--workspace" not in resume_cli_section
+
+
+def test_recursive_templates_reference_current_package_repo_layout_only() -> None:
+    templates = {
+        name: _read_recursive_template(name)
+        for name in (
+            "bootstrap_task.md.tmpl",
+            "cycle_task.md.tmpl",
+            "framework_evolution_charter.md.tmpl",
+            "framework_roadmap.md.tmpl",
+            "workflow_authoring_doctrine.md.tmpl",
+            "workflow_examples.md.tmpl",
+        )
+    }
+
+    for text in templates.values():
+        assert "src/autoloop/" not in text
+        assert "docs/autoloop_workflow_framework_prd.md" not in text
+        assert "docs/autoloop_workflow_framework_adr.md" not in text
+
+    bootstrap_lower = templates["bootstrap_task.md.tmpl"].lower()
+    cycle_lower = templates["cycle_task.md.tmpl"].lower()
+    charter_lower = templates["framework_evolution_charter.md.tmpl"].lower()
+    roadmap_lower = templates["framework_roadmap.md.tmpl"].lower()
+    doctrine_lower = templates["workflow_authoring_doctrine.md.tmpl"].lower()
+    examples_lower = templates["workflow_examples.md.tmpl"].lower()
+
+    for text in (bootstrap_lower, cycle_lower):
+        for required in (
+            "docs/architecture.md",
+            "docs/authoring.md",
+            "core/",
+            "runtime/",
+            "extensions/",
+            "stdlib/",
+            "workflows/",
+            ".autoloop_recursive/",
+            "greenfield",
+            "feature compatibility",
+            "autoloop run <workflow> <task-id> --root ... --message ...",
+            "autoloop resume <workflow> <task-id> --root ...",
+            "ctx.invoke_workflow(...)",
+        ):
+            assert required in text
+
+    for required in (
+        "workflows/",
+        "workflow.toml",
+        "workflow.py",
+        "prompts/",
+        "assets/",
+        "autoloop run <workflow> <task-id> --root ... --message ...",
+        "autoloop answer <workflow> <task-id> --root ... --answer ...",
+        "greenfield",
+    ):
+        assert required in charter_lower
+
+    for required in (
+        "runtime/cli.py",
+        "runtime/runner.py",
+        "workflows/",
+        "autoloop run/resume/answer",
+        "greenfield",
+        "feature compatibility only",
+    ):
+        assert required in roadmap_lower
+
+    for required in (
+        "workflows/<name>/",
+        "autoloop run/resume/answer",
+        "ctx.invoke_workflow(...)",
+    ):
+        assert required in doctrine_lower
+
+    for required in (
+        "workflows/<name>/",
+        "workflow.toml",
+        "workflow.py",
+        "prompts/",
+        "assets/",
+        "autoloop run <workflow> <task-id> --root ... --message ...",
+        "ctx.invoke_workflow(...)",
+    ):
+        assert required in examples_lower
