@@ -620,3 +620,109 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+I’m addressing the reviewer’s precedence bug in `_merge_provider_config(...)`. First I’m re-reading the feedback alongside the config merge path so I can fix the layer ordering without widening the phase beyond the provider contract.
+
+I’ve narrowed the fix to `runtime/config.py`. The safest approach is a two-pass merge: compute the final selected provider first, then replay the config layers in order against that final provider so generic overrides still target the effective backend without breaking layer precedence.
+
+I’ve patched the merge logic and added the missing precedence coverage. I’m recording the corrected contract in the decisions ledger now so later phases don’t drift back to the broken “apply generic overrides only at the end” behavior.
+
+The fix is in. I’m rerunning the provider and runner-adjacent suites now, including the direct `run_workflow_package(...)` coverage, to make sure the precedence fix didn’t disturb the preserved non-CLI runner surface.
+
+I’m updating the phase notes last. The important correction is that generic overrides still target the final selected provider, but now they do it in layer order so later provider-specific config keeps winning.
+
+Scope considered
+
+- Phase-local fix for reviewer finding `IMP-001` in the public provider contract slice: [runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/config.py:190), [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:126), and the phase artifacts under `.autoloop/.../public-cli-provider-contract/`.
+- I did not broaden into docs, session payloads, or recursive-wrapper implementation.
+
+What I analyzed
+
+- The reviewer’s precedence failure in `_merge_provider_config(...)`: lower-precedence generic config overriding later provider-specific config.
+- How that merge interacts with the phase requirement that generic overrides still follow the final effective provider name, including CLI `--provider`.
+- Adjacent preserved surfaces: `cli.main(..., provider_factory=...)` and direct `run_workflow_package(..., provider=...)` / `execute_workflow_package(..., provider=...)`.
+
+What I changed
+
+- Reworked [runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/config.py:190) to compute the final selected provider name first, then replay config layers in order while applying generic model/effort overrides through a shared `_apply_generic_provider_overrides(...)` helper.
+- That keeps generic overrides targeted at the final provider, but no longer lets an earlier generic layer clobber a later provider-specific layer.
+- Added regression coverage in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:167) for:
+  - global generic + later local provider-specific precedence
+  - generic file config following a CLI-selected provider
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/public-cli-provider-contract/implementation_notes.md:1) and appended the corrected merge rule under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/decisions.txt:1).
+
+Key findings / decisions
+
+- `IMP-001` is addressed: generic overrides now respect normal config layer precedence while still resolving against the effective provider.
+- The fix stays centralized in `runtime.config` and does not change the preserved non-CLI runner APIs or the non-public injected provider seam.
+- The public CLI contract from cycle 1 remains intact: `--provider` is public, `--provider-factory` is parser-rejected.
+
+Open issues / next step
+
+- Validation passed:
+  - `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+  - `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+- I did not run the full suite, and the known recursive-wrapper test remains intentionally deselected because that cleanup belongs to a later phase.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+I’m re-reviewing the phase after the precedence fix. I’m checking the updated config merge logic, the new regression tests, and the reviewer artifacts so I can either close the phase or add any remaining findings without touching non-artifact files.
+
+The precedence bug is fixed and the phase-scoped validations are clean. I’m closing out the reviewer artifacts now: marking the criteria complete and appending a resolved follow-up entry rather than deleting the original finding.
+
+Scope considered
+
+- Phase-local re-review of the public provider contract changes, focused on the updated merge logic in `runtime/config.py`, the new regression coverage in `tests/runtime/test_provider_backends.py`, and the phase artifacts.
+- No out-of-scope code or artifacts were modified.
+
+What I analyzed
+
+- The corrected `_merge_provider_config(...)` behavior against the reviewer’s original precedence failure.
+- Consistency with the decisions ledger: generic overrides must follow the effective provider name while preserving normal config layer precedence.
+- Preservation of the direct non-CLI runner surface and the non-public injected provider seam.
+
+What I reviewed
+
+- `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+- The new regression tests covering:
+  - lower-precedence generic config versus later provider-specific config
+  - generic file config following a CLI-selected provider
+
+Key findings / decisions
+
+- `IMP-001` is resolved. The merge now determines the final provider first, replays layers in order, and applies generic overrides against that provider without letting earlier generic config overwrite later typed provider config.
+- I marked all criteria complete and appended a non-blocking `IMP-001 follow-up` closeout entry in `feedback.md`.
+- No remaining phase-scope findings were identified.
+
+Open issues / next step
+
+- No blocking issues remain for this phase.
+- The known recursive-wrapper test remains outside this phase and was intentionally deselected in validation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

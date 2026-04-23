@@ -676,3 +676,53 @@ Open issues / next step
   - `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
   - `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
 - I did not run the full suite, and the known recursive-wrapper test remains intentionally deselected because that cleanup belongs to a later phase.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+I’m re-reviewing the phase after the precedence fix. I’m checking the updated config merge logic, the new regression tests, and the reviewer artifacts so I can either close the phase or add any remaining findings without touching non-artifact files.
+
+The precedence bug is fixed and the phase-scoped validations are clean. I’m closing out the reviewer artifacts now: marking the criteria complete and appending a resolved follow-up entry rather than deleting the original finding.
+
+Scope considered
+
+- Phase-local re-review of the public provider contract changes, focused on the updated merge logic in `runtime/config.py`, the new regression coverage in `tests/runtime/test_provider_backends.py`, and the phase artifacts.
+- No out-of-scope code or artifacts were modified.
+
+What I analyzed
+
+- The corrected `_merge_provider_config(...)` behavior against the reviewer’s original precedence failure.
+- Consistency with the decisions ledger: generic overrides must follow the effective provider name while preserving normal config layer precedence.
+- Preservation of the direct non-CLI runner surface and the non-public injected provider seam.
+
+What I reviewed
+
+- `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+- The new regression tests covering:
+  - lower-precedence generic config versus later provider-specific config
+  - generic file config following a CLI-selected provider
+
+Key findings / decisions
+
+- `IMP-001` is resolved. The merge now determines the final provider first, replays layers in order, and applies generic overrides against that provider without letting earlier generic config overwrite later typed provider config.
+- I marked all criteria complete and appended a non-blocking `IMP-001 follow-up` closeout entry in `feedback.md`.
+- No remaining phase-scope findings were identified.
+
+Open issues / next step
+
+- No blocking issues remain for this phase.
+- The known recursive-wrapper test remains outside this phase and was intentionally deselected in validation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
