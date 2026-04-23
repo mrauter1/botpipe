@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.core.compiler import compile_workflow
+from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.core.stores import InMemorySessionStore
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
@@ -125,6 +127,38 @@ def test_release_go_no_go_package_rejects_blank_release_name(tmp_path: Path) -> 
 
     with pytest.raises(WorkflowParameterError, match="release_name"):
         coerce_workflow_parameter_mapping(parameters_cls, {"release_name": "   "})
+
+
+def test_release_go_no_go_package_normalizes_repeatable_evidence_paths(tmp_path: Path) -> None:
+    _install_repo_release_package(tmp_path)
+    parameters_cls = resolve_workflow_reference(tmp_path, "release_candidate_to_go_no_go").parameters_cls
+
+    normalized = coerce_workflow_parameter_mapping(
+        parameters_cls,
+        {
+            "release_name": " 2026.04 ",
+            "target_date": " ",
+            "deployment_environment": " production ",
+            "release_owner": " Release Captain ",
+            "evidence_paths": [
+                " docs/releases/2026.04.md ",
+                "",
+                "docs/releases/2026.04.md",
+                "reports/test-summary-2026.04.md",
+            ],
+        },
+    )
+
+    assert normalized == {
+        "deployment_environment": "production",
+        "evidence_paths": [
+            "docs/releases/2026.04.md",
+            "reports/test-summary-2026.04.md",
+        ],
+        "release_name": "2026.04",
+        "release_owner": "Release Captain",
+        "target_date": None,
+    }
 
 
 def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:
@@ -473,6 +507,52 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
         "Advances the release workflow to deterministic publication of the terminal receipt."
     )
     assert (run_dir / "run.json").exists()
+
+
+def test_release_go_no_go_publish_decision_rejects_missing_recommendation(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.release_candidate_to_go_no_go")
+    workflow_folder = tmp_path / "task" / "wf_release_candidate_to_go_no_go"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    (workflow_folder / "decision_summary.json").write_text(
+        json.dumps(
+            {
+                "blocking_issue_count": 1,
+                "ready_for_packaging": False,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (workflow_folder / "release_decision_package.md").write_text("# Decision Package\n", encoding="utf-8")
+    (workflow_folder / "release_communications_draft.md").write_text("# Communications\n", encoding="utf-8")
+
+    state = workflow_pkg.ReleaseCandidateToGoNoGo.State(
+        release_name="2026.04",
+        deployment_environment="production",
+        release_owner="Release Captain",
+    )
+    ctx = Context(
+        task_id="release-go-no-go-task",
+        run_id="run-1",
+        workflow_name="release_candidate_to_go_no_go",
+        task_folder=tmp_path / "task",
+        workflow_folder=workflow_folder,
+        run_folder=tmp_path / "task" / "wf_release_candidate_to_go_no_go" / "runs" / "run-1",
+        package_folder=REPO_ROOT / "workflows" / "release_candidate_to_go_no_go",
+        state=state,
+        session_store=InMemorySessionStore(),
+    )
+
+    with pytest.raises(ValueError, match="recommended_decision"):
+        workflow_pkg.ReleaseCandidateToGoNoGo.on_publish_decision(state, ctx)
+
+    assert not (workflow_folder / "decision_receipt.json").exists()
 
 
 def _install_repo_release_package(root: Path) -> None:
