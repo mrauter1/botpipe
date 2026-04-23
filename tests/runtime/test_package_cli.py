@@ -182,6 +182,17 @@ def test_cli_help_exposes_package_commands_only() -> None:
         assert forbidden not in help_text
 
 
+def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(capsys) -> None:
+    for command in ("run", "resume", "answer"):
+        with pytest.raises(SystemExit) as excinfo:
+            cli.build_arg_parser().parse_args([command, "--help"])
+
+        assert excinfo.value.code == 0
+        help_text = capsys.readouterr().out
+        assert "--provider" in help_text
+        assert "--provider-factory" not in help_text
+
+
 def test_cli_workflows_show_reports_parameters_and_aliases(
     tmp_path: Path,
     capsys,
@@ -367,6 +378,52 @@ def test_cli_mutating_commands_accept_non_public_provider_factory_injection_seam
     assert payload["status"] == "success"
 
 
+def test_cli_mutating_commands_route_public_provider_selection_through_typed_config(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    seen_configs: list[object] = []
+
+    def inspect_provider_factory(**kwargs: object) -> _UnusedProvider:
+        seen_configs.append(kwargs["config"])
+        return _UnusedProvider()
+
+    _write_workflow_package(
+        tmp_path,
+        "selected_provider",
+        workflow_name="selected_provider",
+        class_name="SelectedProviderWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "selected_provider",
+            "task-selected-provider",
+            "--root",
+            str(tmp_path),
+            "--message",
+            "Run with a public provider selection path",
+            "--provider",
+            "claude",
+            "--model",
+            "claude-opus",
+            "--model-effort",
+            "max",
+        ],
+        provider_factory=inspect_provider_factory,
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["workflow"] == "selected_provider"
+    assert len(seen_configs) == 1
+    config = seen_configs[0]
+    assert config.provider.name == "claude"
+    assert config.provider.claude.model == "claude-opus"
+    assert config.provider.claude.effort == "max"
+
+
 def test_cli_run_rejects_public_provider_factory_flag(
     tmp_path: Path,
     capsys,
@@ -378,23 +435,24 @@ def test_cli_run_rejects_public_provider_factory_flag(
         class_name="PublicProviderWorkflow",
     )
 
-    exit_code = cli.main(
-        [
-            "run",
-            "public_provider",
-            "task-public-provider",
-            "--root",
-            str(tmp_path),
-            "--message",
-            "Run with a public provider factory",
-            "--provider-factory",
-            "provider_backend:build",
-        ]
-    )
+    with pytest.raises(SystemExit) as excinfo:
+        cli.main(
+            [
+                "run",
+                "public_provider",
+                "task-public-provider",
+                "--root",
+                str(tmp_path),
+                "--message",
+                "Run with a public provider factory",
+                "--provider-factory",
+                "provider_backend:build",
+            ]
+        )
     captured = capsys.readouterr()
 
-    assert exit_code == cli.EXIT_USAGE_ERROR
-    assert "provider factories are no longer supported on the public CLI path" in captured.err
+    assert excinfo.value.code == cli.EXIT_USAGE_ERROR
+    assert "unrecognized arguments: --provider-factory provider_backend:build" in captured.err
 
 
 def test_cli_run_resume_answer_and_diagnostics_follow_package_contract(

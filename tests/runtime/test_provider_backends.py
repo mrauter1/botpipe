@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +14,9 @@ from autoloop_v3.runtime.config import (
     ProviderConfig,
     ResolvedRuntimeConfig,
     RuntimeConfig,
+    resolve_runtime_config,
 )
+import autoloop_v3.runtime.config as runtime_config
 from autoloop_v3.runtime.provider_backends import resolve_provider_backend
 import autoloop_v3.runtime.provider_backends as provider_backends
 
@@ -99,28 +102,17 @@ def test_cli_resolve_provider_uses_builtin_backend_resolver_when_not_injected(
 ) -> None:
     sentinel = _StubProvider()
     config = _resolved_config("codex")
-    args = argparse.Namespace(provider_factory=None)
+    args = argparse.Namespace()
 
     monkeypatch.setattr(cli, "resolve_provider_backend", lambda *, config: sentinel)
 
     assert cli._resolve_provider(config=config, args=args, provider_factory=None) is sentinel
 
 
-def test_cli_resolve_provider_rejects_public_provider_factory_flag() -> None:
-    config = _resolved_config("codex")
-    args = argparse.Namespace(provider_factory="provider_backend:build")
-
-    with pytest.raises(
-        ConfigError,
-        match="provider factories are no longer supported on the public CLI path",
-    ):
-        cli._resolve_provider(config=config, args=args, provider_factory=None)
-
-
 def test_cli_resolve_provider_preserves_non_public_injection_seam_precedence() -> None:
     sentinel = _StubProvider()
     config = _resolved_config("codex")
-    args = argparse.Namespace(provider_factory="provider_backend:build")
+    args = argparse.Namespace(provider="claude")
 
     provider = cli._resolve_provider(
         config=config,
@@ -129,3 +121,56 @@ def test_cli_resolve_provider_preserves_non_public_injection_seam_precedence() -
     )
 
     assert provider is sentinel
+
+
+def test_resolve_runtime_config_routes_generic_file_overrides_to_selected_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    global_config_dir = tmp_path / "global-config"
+    local_config_path = tmp_path / "autoloop.yaml"
+    global_config_path = global_config_dir / "autoloop.yaml"
+    global_config_dir.mkdir(parents=True)
+    global_config_path.write_text("", encoding="utf-8")
+    local_config_path.write_text("", encoding="utf-8")
+
+    payloads = {
+        global_config_path: {
+            "provider": {
+                "name": "claude",
+                "model": "claude-sonnet",
+                "model_effort": "high",
+                "codex": {"model": "gpt-explicit"},
+            }
+        },
+        local_config_path: {
+            "provider": {
+                "claude": {"permission_strategy": "bypass"},
+            }
+        },
+    }
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: global_config_dir)
+    monkeypatch.setattr(runtime_config, "load_runtime_config_file", lambda path: payloads[path])
+
+    resolved = resolve_runtime_config(
+        tmp_path,
+        argparse.Namespace(provider=None, model=None, model_effort=None, max_steps=None),
+    )
+
+    assert resolved.provider.name == "claude"
+    assert resolved.provider.claude.model == "claude-sonnet"
+    assert resolved.provider.claude.effort == "high"
+    assert resolved.provider.claude.permission_strategy == "bypass"
+    assert resolved.provider.codex.model == "gpt-explicit"
+
+
+def test_resolve_runtime_config_routes_cli_overrides_to_selected_provider(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(
+        tmp_path,
+        argparse.Namespace(provider="claude", model="claude-opus", model_effort="max", max_steps=None),
+    )
+
+    assert resolved.provider.name == "claude"
+    assert resolved.provider.claude.model == "claude-opus"
+    assert resolved.provider.claude.effort == "max"
+    assert resolved.provider.codex.model == "gpt-5.4"
