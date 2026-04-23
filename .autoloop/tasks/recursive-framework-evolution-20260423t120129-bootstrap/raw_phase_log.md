@@ -244,3 +244,56 @@ Open issues / next step
 - [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py:60) still declares `--provider-factory`, and [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py:83) still contains `load_provider_factory(...)`; the next phase should remove those public remnants and add the typed `--provider` override.
 - Validation here was limited to `python3 -m py_compile runtime/provider_backends.py runtime/cli.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py`.
 - `python3 -m pytest ...` could not run because `pytest` is not installed, and direct runtime smoke imports were blocked because `pydantic` is not installed in this environment.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+I’m reviewing the phase artifacts and the actual provider-resolution changes now. First step is to read the criteria and feedback stubs, then compare the changed runtime/test files against the phase acceptance criteria and the shared decisions ledger.
+
+I’ve confirmed the changed surface. Next I’m checking the adjacent tests and call sites for the most likely regression here: a user-visible CLI flag that still parses but is now ignored, which can silently contradict the current help text and the old test contract.
+
+I’ve found one blocking issue. The new resolver boundary is in place, but the public CLI still advertises and parses `--provider-factory` while the implementation now silently ignores it, so users get a different backend error than the flag/help text promises. I’m recording that in the criteria and reviewer feedback now.
+
+I’ve recorded the blocking finding and left the criteria unchecked. I’m doing a final readback of the artifact files now so the closeout summary and loop-control status match the recorded review exactly.
+
+Scope considered
+
+- Phase-local review of the provider backend boundary changes in `runtime/provider_backends.py`, `runtime/cli.py`, and the new/updated runtime tests.
+- Active phase artifacts only were edited: `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- The new resolver in `runtime/provider_backends.py`.
+- The CLI integration path in `runtime/cli.py`, especially `_resolve_provider(...)` and the still-parsed `--provider-factory` flag.
+- The new resolver tests and the updated package CLI seam test.
+
+What I reviewed
+
+- Acceptance criteria AC-1 and AC-2 against the actual code path.
+- Conformance with the shared decision that the resolver is now the normal CLI path while later CLI cleanup is still pending.
+- User-visible behavior/regression risk around still-documented public flags.
+
+Key findings / decisions
+
+- `IMP-001` is blocking: the CLI still advertises and accepts `--provider-factory`, but the implementation now silently ignores it and routes to the built-in backend resolver instead.
+- That creates a silent public behavior regression and misleading help text, and the new test currently locks that incorrect behavior in.
+- I left all criteria unchecked and recorded the blocking fix direction in `feedback.md`.
+
+Open issues / next step
+
+- Implementer should either keep the parsed public flag wired until the cleanup phase removes it, or reject the parsed flag immediately with a precise `ConfigError`.
+- Add a user-facing CLI test for that public flag path so the behavior cannot silently drift again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
