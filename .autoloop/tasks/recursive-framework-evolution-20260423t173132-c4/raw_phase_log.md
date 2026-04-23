@@ -125,3 +125,64 @@ phase_mode=single
 phase_ids=workflow-catalog-seam,task-to-workflow-strategy-package,closeout-memory-and-regression-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbcb8-46bd-7f83-9aa5-2663605ededc
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbcb8-46bd-7f83-9aa5-2663605ededc
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcb8-46bd-7f83-9aa5-2663605ededc
+---
+I’m treating this as a scoped implementation pass for the `workflow-catalog-seam` phase. First I’m reading the required framework files, the active phase artifacts, and the current workflow definitions to find the cleanest seam for shared catalog discovery and the additive portfolio snapshot helper.
+
+The mandatory framework paths in the request don’t exist under `src/`; this repo appears to use a top-level `autoloop/` package instead. I’m verifying the actual code layout and then I’ll map the phase scope onto the live modules and tests rather than the stale path examples.
+
+I’ve confirmed this turn is phase-scoped, so I’m implementing only the shared discovery seam, the portfolio snapshot helper, and the corresponding docs/tests. Next I’m tracing how workflow packages are currently discovered and how authoring helpers are exposed so the new seam lands in the existing boundaries instead of adding a side system.
+
+I’ve found the existing lifecycle helper seam and the current runtime-only workflow discovery path. The cleanest implementation looks like: extract pure catalog discovery into `core/`, have `runtime.loader` wrap it for compatibility, and add a small `stdlib` JSON writer that publishes a workflow-local catalog snapshot without changing manifests or runtime control contracts.
+
+I’ve got the seam design settled. I’m editing the runtime loader to consume a new pure catalog module, adding the workflow-local snapshot helper under `stdlib`, and then I’ll wire the boundary into authoring docs and focused tests.
+
+I’ve finished the code and test edits for the seam itself. I’m checking the touched modules for import/syntax issues now, then I’ll run the focused test set and write the phase notes/decision entries.
+
+The implementation itself is green: targeted compile and test passes succeeded. I’m writing the turn-specific decision ledger entries and the phase notes now so the next phases inherit the seam boundaries and the intentional non-changes.
+
+Scope considered
+
+- Phase-local `workflow-catalog-seam` only: shared catalog discovery, workflow-local portfolio snapshot helper, docs/tests, and phase artifacts.
+- I stayed out of automatic routing, manifest schema changes, new workflow packages, and `.autoloop_recursive/` memory updates.
+
+What I analyzed
+
+- Existing runtime discovery in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py:1).
+- Existing authoring helper boundary in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:186) and [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:1).
+- Current helper-focused and compatibility tests in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:1), [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:1), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+
+What I changed
+
+- Added a pure shared catalog seam in [core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_catalog.py:1) with `WorkflowCatalogEntry` and `discover_workflow_catalog(...)`, including linked `workflow.py`, optional `params.py`, and optional `docs/workflows/<package>.md` paths.
+- Refactored [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py:75) to wrap that seam and keep existing runtime discovery/error behavior stable; exported the additive API from [runtime/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/__init__.py:1).
+- Added [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py:1) and re-exported `write_workflow_portfolio_snapshot(...)` from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:1).
+- Documented the helper boundary in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:205).
+- Added focused coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:154), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:192), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:176).
+- Updated phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/implement/phases/workflow-catalog-seam/implementation_notes.md:1) and appended turn decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/decisions.txt:6).
+
+Key findings / decisions
+
+- The clean seam is a pure `core` module, not more `runtime` logic. That lets future portfolio workflows reuse discovery without importing runtime-owned behavior.
+- The snapshot helper is intentionally artifact-only: it publishes inspectable catalog state but does not rank, select, adapt, or execute workflows.
+- Validation passed:
+  - `.venv/bin/python -m compileall ...`
+  - `.venv/bin/pytest tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/test_architecture_baseline_docs.py`
+  - Result: `51 passed`
+
+Open issues / next step
+
+- No open issue in this phase scope.
+- The next phase can consume `write_workflow_portfolio_snapshot(...)` and the shared catalog seam when implementing the portfolio-facing workflow itself.

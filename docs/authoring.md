@@ -202,6 +202,25 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 - they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
 - publication-artifact validation and any workflow-specific receipt semantics still belong in workflow code
 
+## Optional Portfolio Snapshot Helpers
+
+`stdlib/portfolio.py` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.
+
+```python
+from autoloop_v3.stdlib import write_workflow_portfolio_snapshot
+
+write_workflow_portfolio_snapshot(ctx)
+```
+
+Portfolio snapshot boundary:
+
+- the helper writes `workflow_portfolio_snapshot.json` under `ctx.workflow_folder` by default
+- it uses the shared workflow catalog seam to capture workflow metadata plus linked code/doc paths from `workflows/*/workflow.toml`, `workflow.py`, optional `params.py`, and `docs/workflows/<package>.md` when present
+- it does not add new `workflow.toml` fields and preserves the metadata-only manifest doctrine
+- it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
+- portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics in workflow code and prompt templates
+- the helper does not import runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
+
 ## Workflow Composition
 
 Runtime-backed contexts can invoke child workflows by package name or imported main class:
