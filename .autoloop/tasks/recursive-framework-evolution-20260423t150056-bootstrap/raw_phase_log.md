@@ -265,3 +265,55 @@ Open issues / next step
 - Validation passed: `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/runtime/test_compatibility_runtime.py tests/test_architecture_baseline_docs.py -k 'not test_recursive_memory_files_record_cycle_one_closeout_baseline' -q`
 - The unrelated pre-existing `tests/runtime/test_package_cli.py -q` failures remain outside this phase scope.
 - Next step is verifier re-review of `IMP-001`.
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+---
+I’m re-reviewing the narrowed Claude capability fix against the same phase scope and the prior blocking finding. I’ll verify the new conditionals, confirm the targeted regression coverage, then update only the phase criteria and feedback artifacts if the fix closes the issue cleanly.
+
+Reviewing the Claude verifier fix and the phase artifacts now. I’m checking the updated provider/tests against the recorded blocking finding, then I’ll update `criteria.md` and `feedback.md` if the phase is clean.
+
+The review target is narrow now: I’ve confirmed the feedback artifact still reflects the old blocking issue, so I’m checking the exact Claude validation branch and the new tests before I clear the phase.
+
+The Claude validation branch now matches the intended conditional behavior. I’m rerunning the focused provider suites under the repo venv to confirm the fix before updating the reviewer artifacts.
+
+The focused suites passed, and the only prior blocker is fixed. I’m updating the reviewer artifacts now: all criteria will be checked and the feedback log will get a re-review entry that closes out `IMP-001`.
+
+The reviewer artifacts are updated. I’m doing one last readback to make sure `criteria.md` is fully checked and the feedback log records the fixed blocker before I close the phase.
+
+Scope considered
+- The active phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t150056-bootstrap/implement/phases/runtime-provider-foundation/`.
+- The Claude capability-validation fix in `runtime/providers/claude.py` and its focused regression coverage in `tests/runtime/test_provider_backends.py` and `tests/runtime/test_runtime_providers.py`.
+
+What I analyzed
+- The updated `_validate_claude_surface()` logic for default `inherit` versus strategy-specific permission checks.
+- The prior blocking finding in `feedback.md` against the current implementation.
+- Focused provider test coverage for the headless-only Claude help surface and the `allow_core_tools` failure path.
+
+What I reviewed
+- The fix now conditions `--allowedTools` on `permission_strategy='allow_core_tools'` and `--dangerously-skip-permissions` on `permission_strategy='bypass'`, while keeping the always-used headless flags unconditional.
+- Focused validation passed with `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py -q` (`50 passed`).
+- `criteria.md` now has all boxes checked, and `feedback.md` records the original blocker plus a non-blocking re-review entry confirming it is fixed.
+
+Key findings / decisions
+- No blocking findings remain in phase scope.
+- `IMP-001` is resolved by the current Claude validation behavior and accompanying regression tests.
+- The phase is ready to close as `COMPLETE`.
+
+Open issues / next step
+- No open blocking issues in this phase.
+- Next step is to let the loop advance to the next phase or broader verification scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
