@@ -14,13 +14,13 @@
       "proof-docs-and-recursive-memory"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "incident-hardening-program-package"
+    "current_phase_index": 2,
+    "current_phase_id": "proof-docs-and-recursive-memory"
   },
   "phase_status": {
     "workflow-lifecycle-helpers": "completed",
-    "incident-hardening-program-package": "in_progress",
-    "proof-docs-and-recursive-memory": "planned"
+    "incident-hardening-program-package": "completed",
+    "proof-docs-and-recursive-memory": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260423T203132Z-0829228e",
       "status": "in_progress",
       "ts": "2026-04-23T20:56:02.914227+00:00"
+    },
+    {
+      "phase_id": "incident-hardening-program-package",
+      "run_id": "run-20260423T203132Z-0829228e",
+      "status": "completed",
+      "ts": "2026-04-23T21:17:19.656947+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-and-recursive-memory",
+      "run_id": "run-20260423T203132Z-0829228e",
+      "status": "in_progress",
+      "ts": "2026-04-23T21:17:19.659128+00:00"
     }
   ]
 }
