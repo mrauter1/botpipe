@@ -1200,3 +1200,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb14-fb83-72e2-8c42-7dee59954603
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbb14-fb83-72e2-8c42-7dee59954603
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb14-fb83-72e2-8c42-7dee59954603
+---
+I’m taking the phase-local test pass for the recursive wrapper cleanup. First I’m checking the existing strategy/feedback artifacts and the current wrapper regression tests to decide whether there’s any remaining gap worth codifying beyond the tests that already landed.
+
+The current tests already cover the main contract, but one meaningful gap remains: the new package-only fail-fast guard from `decisions.txt` isn’t pinned yet. I’m tightening the wrapper test around `require_package_autoloop_cli(...)`, then I’ll record the coverage map and the rationale in the phase test artifacts.
+
+The extra coverage is in. I’m rerunning the wrapper/doc/strictness slice first to confirm the new guard assertions are stable, then I’ll do a full-suite pass because the repo is fast enough and this phase intentionally changes a cross-cutting shell entrypoint.
+
+The targeted slice is green. Full pytest is still running, and it has already cleared the runtime/package/provider surfaces that are most adjacent to this phase; I’m waiting for the final result before I close the test artifacts.
+
+The tests are clean. I’m doing a quick readback of the updated strategy and feedback artifacts so the final summary reflects the exact coverage map and recorded rationale.
+
+Scope considered
+- `tests/runtime/test_package_cli.py`
+- `recursive_autoloop/run_recursive_autoloop.sh`
+- `recursive_autoloop/run_recursive_autoloop_templates/*.tmpl`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/recursive-wrapper-package-only/test_strategy.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/recursive-wrapper-package-only/feedback.md`
+
+What I analyzed
+- The existing wrapper regression assertions added during implement.
+- The phase requirements and shared decisions for package-only CLI behavior, especially the fail-fast package-CLI guard.
+- The maintained recursive templates to confirm the tests were pinning the intended repo-layout/package-CLI doctrine.
+
+What I changed
+- Tightened `tests/runtime/test_package_cli.py` so `test_recursive_wrapper_targets_the_package_cli_contract` also asserts the new `require_package_autoloop_cli(...)` guard, its `workflows` / `runs` / `answer` surface check, its fatal message, and its top-level invocation.
+- Updated `test_strategy.md` with a concrete behavior-to-test coverage map, preserved invariants, failure paths, flake-stabilization notes, and known gaps.
+- Appended a concise summary entry to the phase `feedback.md`.
+- Appended one test-design note to `decisions.txt` under the current test-phase header.
+
+Key findings / decisions
+- The only meaningful coverage gap was the new fail-fast guard; that is now pinned.
+- I kept the new coverage at deterministic source-assertion level rather than shell-harness execution because this phase’s primary regression risk is command/template contract drift, and the repo already gets full pytest coverage quickly.
+- Validation passed:
+  - `./.venv/bin/python -m pytest tests/runtime/test_package_cli.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py`
+  - `./.venv/bin/python -m pytest` with `124 passed`
+
+Open issues / next step
+- No blocking issues in this phase.
+- Known gap recorded in `test_strategy.md`: there is still no end-to-end shell execution test for the wrapper under a mocked `autoloop` binary.

@@ -756,6 +756,7 @@ def test_cli_init_workflow_scaffolds_package_and_rejects_duplicates(
 def test_recursive_wrapper_targets_the_package_cli_contract() -> None:
     script = (REPO_ROOT / "recursive_autoloop" / "run_recursive_autoloop.sh").read_text(encoding="utf-8")
 
+    cli_guard_section = _shell_function_section(script, "require_package_autoloop_cli", "resolve_task_dir")
     start_cli_section = _shell_function_section(script, "run_autoloop_start_cli", "run_autoloop_resume_cli")
     resume_cli_section = _shell_function_section(script, "run_autoloop_resume_cli", "latest_autoloop_run_dir")
 
@@ -764,6 +765,11 @@ def test_recursive_wrapper_targets_the_package_cli_contract() -> None:
     assert "--intent" not in script
     assert "--pairs" not in script
     assert "legacy)" not in script
+    assert '"workflows"' in cli_guard_section
+    assert '"runs"' in cli_guard_section
+    assert '"answer"' in cli_guard_section
+    assert 'fatal "autoloop on PATH does not expose the package CLI surface required by recursive_autoloop."' in cli_guard_section
+    assert "\nrequire_package_autoloop_cli\n" in script
     assert 'Direct Autoloop resume hint: autoloop resume \\"$AUTOLOOP_WORKFLOW_NAME\\" \\"$task_id\\" --root \\"$WORKSPACE\\"' in script
     assert 'run \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE" \\\n    --message "$message"' in start_cli_section
     assert "--task-id" not in start_cli_section
