@@ -240,3 +240,67 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbcb8-46bd-7f83-9aa5-2663605ededc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbcb8-46bd-7f83-9aa5-2663605ededc
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcb8-46bd-7f83-9aa5-2663605ededc
+---
+I’m reviewing the phase-local catalog seam from a test-author perspective. First I’m checking the active test artifacts, the current implementation, and the existing seam-focused tests to see whether there are missing edge or failure-path cases before I add or refine coverage.
+
+I’ve confirmed the implementation shape. Now I’m reading the current seam-focused tests in detail to find any uncovered behavior that could regress later, especially alias/doc-path edge cases and helper isolation from runtime-owned behavior.
+
+I’ve narrowed the useful additions to regression-oriented tests around the new runtime wrapper boundary and the catalog seam’s linked-doc behavior. I’m checking existing test-strategy conventions next so the phase artifact stays consistent with prior turns before I edit files.
+
+The existing coverage already proves the main happy path and helper path validation. I’m adding two small regression tests in the compatibility suite: one to lock the direct `runtime.loader.discover_workflow_catalog(...)` API surface, and one to lock its runtime-owned error translation so later refactors don’t leak `core` exception types or stale behavior.
+
+I’ve added the runtime-export regression coverage. I’m running the focused seam suite again now so the phase notes can point at a fresh, phase-relevant green run rather than relying on the earlier implement-phase execution.
+
+The focused suite is green with the new runtime-export coverage. I’m writing the phase-local test strategy and feedback now, and I’m recording the one non-obvious test decision in the shared ledger so later turns don’t accidentally drop the direct runtime API coverage.
+
+Scope considered
+
+- Phase-local `workflow-catalog-seam` only: the new catalog discovery seam, runtime re-export, workflow-local portfolio snapshot helper, and the seam-specific docs/tests.
+- I stayed out of runtime routing, manifest schema changes, workflow package authoring, and non-phase artifact updates.
+
+What I analyzed
+
+- The phase contract, current shared decisions, and existing seam implementation in `core/workflow_catalog.py`, `runtime/loader.py`, `runtime/__init__.py`, and `stdlib/portfolio.py`.
+- Existing seam-focused tests in `tests/runtime/test_compatibility_runtime.py`, `tests/unit/test_stdlib_and_extensions.py`, and `tests/test_architecture_baseline_docs.py`.
+- The phase-local test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/test/phases/workflow-catalog-seam/`.
+
+What I changed
+
+- Added direct runtime-export regression coverage in `tests/runtime/test_compatibility_runtime.py`:
+  - `test_runtime_package_reexports_catalog_discovery_happy_path`
+  - `test_runtime_package_reexported_catalog_discovery_preserves_runtime_error_types`
+- Updated `test_strategy.md` with the behavior-to-test coverage map, preserved invariants, edge cases, failure paths, stabilization notes, and known gap.
+- Appended a concise test summary to the phase `feedback.md`.
+- Appended one shared decision noting that direct `autoloop_v3.runtime.discover_workflow_catalog(...)` coverage is intentional and should stay protected.
+
+Key findings / decisions
+
+- The useful missing regression surface was the direct runtime re-export, not the helper happy path, which was already covered.
+- The new tests lock both:
+  - the additive public runtime discovery surface
+  - runtime-owned error translation so future refactors do not leak `core.workflow_catalog` exceptions through runtime APIs
+- Validation run:
+  - `.venv/bin/pytest tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/test_architecture_baseline_docs.py`
+  - Result: `53 passed`
+
+Open issues / next step
+
+- No blocking issue in this phase scope.
+- A later workflow-package phase can add full runtime proof for a real portfolio-routing workflow consuming the snapshot helper.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

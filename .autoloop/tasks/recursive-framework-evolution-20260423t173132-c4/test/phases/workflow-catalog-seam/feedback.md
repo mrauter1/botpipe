@@ -6,3 +6,10 @@
 - Phase Directory Key: workflow-catalog-seam
 - Phase Title: Workflow Catalog Seam
 - Scope: phase-local authoritative verifier artifact
+
+## Test additions
+
+- Added direct runtime-export regression coverage in `tests/runtime/test_compatibility_runtime.py` for `autoloop_v3.runtime.discover_workflow_catalog(...)`, including happy-path metadata discovery and runtime error translation on invalid roots/manifests.
+- Re-ran the focused seam suite:
+  `.venv/bin/pytest tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/test_architecture_baseline_docs.py`
+  Result: `53 passed`
