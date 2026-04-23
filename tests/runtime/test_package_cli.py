@@ -337,56 +337,33 @@ class Parameters(BaseModel):
     }
 
 
-def test_cli_mutating_commands_accept_public_provider_factory_flag(
+def test_cli_mutating_commands_accept_non_public_provider_factory_injection_seam(
     tmp_path: Path,
-    monkeypatch,
     capsys,
 ) -> None:
     _write_workflow_package(
         tmp_path,
-        "public_provider",
-        workflow_name="public_provider",
-        class_name="PublicProviderWorkflow",
+        "injected_provider",
+        workflow_name="injected_provider",
+        class_name="InjectedProviderWorkflow",
     )
-    provider_module = tmp_path / "provider_backend.py"
-    provider_module.write_text(
-        """
-class _Provider:
-    def run_producer(self, request):
-        raise AssertionError(f"producer should not run for system-only workflow: {request!r}")
-
-    def run_verifier(self, request):
-        raise AssertionError(f"verifier should not run for system-only workflow: {request!r}")
-
-    def run_llm(self, request):
-        raise AssertionError(f"llm should not run for system-only workflow: {request!r}")
-
-
-def build(**_):
-    return _Provider()
-""".strip()
-        + "\n",
-        encoding="utf-8",
-    )
-    monkeypatch.syspath_prepend(str(tmp_path))
 
     exit_code = cli.main(
         [
             "run",
-            "public_provider",
-            "task-public-provider",
+            "injected_provider",
+            "task-injected-provider",
             "--root",
             str(tmp_path),
             "--message",
-            "Run with a public provider factory",
-            "--provider-factory",
-            "provider_backend:build",
-        ]
+            "Run with a non-public injected provider factory",
+        ],
+        provider_factory=_provider_factory,
     )
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 0
-    assert payload["workflow"] == "public_provider"
+    assert payload["workflow"] == "injected_provider"
     assert payload["status"] == "success"
 
 

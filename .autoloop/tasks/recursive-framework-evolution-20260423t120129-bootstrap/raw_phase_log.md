@@ -162,3 +162,85 @@ phase_mode=single
 phase_ids=provider-backend-boundary,public-cli-provider-contract,session-id-schema-cleanup,recursive-wrapper-package-only,docs-strictness-and-regression-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+I’m implementing the phase-scoped provider backend boundary. First I’m reading the phase artifacts and the current runtime/provider code so I can wire the new resolver into the existing contracts without dragging unrelated compatibility paths into scope.
+
+I’ve confirmed the phase artifacts and the planner’s constraints. Next I’m tracing how provider construction works today, including any existing provider adapters, so the new resolver can slot in cleanly and the tests can pin the intended boundary before later CLI cleanup.
+
+There are no existing real provider adapters in the repo, only the fake test provider and the current `module:function` loader. I’m now pinning the new contract in tests and checking existing CLI behavior so I can add the resolver boundary without overreaching into the later phases.
+
+I’ve narrowed the design point: the resolver needs to become the default public path now, but there are still no built-in provider implementations in-tree. I’m checking the repo’s declared dependencies next so the adapter boundary can fail precisely against the environment instead of inventing a fake backend contract.
+
+The repo doesn’t declare an in-tree provider package or even a project manifest, which reinforces the phase boundary: the resolver should own dispatch and erroring, not invent a plugin system. I’m checking whether the environment exposes any provider CLIs now, because that determines whether the built-in adapters can be thin entrypoints or must be explicit unavailable stubs for this pass.
+
+I’ve got enough context to make the change narrowly. Plan now:
+
+1. Add `runtime/provider_backends.py` with a strict dispatcher on `config.provider.name`, explicit rejection of `module:function`-style names, and backend-specific builders that raise precise `ConfigError`s when unavailable.
+2. Wire `runtime/cli.py` to consult the new resolver for the normal public path while preserving `cli.main(..., provider_factory=...)` as the non-public direct seam.
+3. Add focused tests for resolver dispatch, invalid/factory-like names, unavailable-backend errors, and CLI delegation to the resolver.
+4. Record the phase notes and validate the targeted runtime tests.
+
+I’ve finished the analysis slice. I’m editing three places now: the new resolver module, the CLI’s provider-resolution branch, and focused tests that pin dispatch/error semantics without dragging in the later public-flag and docs cleanup.
+
+The resolver and the first test slice are in place. I’m doing a quick readback now before running pytest because I changed the CLI branch directly and want to catch any obvious contract mistakes before the test loop.
+
+I found one straight bug in the readback: I deleted `args` before passing it through the non-public injection seam. I’m fixing that now and adding one more default-provider failure test so the new boundary is pinned for both supported provider names.
+
+The CLI change invalidates one existing test that was asserting the old public factory path. I’m rewriting that test now to pin the surviving non-public seam instead of leaving the suite in a knowingly broken intermediate state.
+
+The environment doesn’t have a `pytest` entrypoint, so I’m switching to `python3 -m pytest` for validation. If that’s missing too, I’ll report it explicitly rather than pretending the checks ran.
+
+`pytest` itself isn’t installed here, so I’m falling back to syntax checks plus a small direct Python smoke test against the resolver and injected CLI seam. That won’t replace the real suite, but it will at least validate the edited paths in this environment.
+
+The smoke import hit another environment gap: `pydantic` isn’t installed, so even direct module import can’t run here. Syntax compilation passed, but runtime validation is blocked by missing test/runtime dependencies in this shell. I’m reviewing the diff now and then I’ll update the phase notes with exactly what changed and what validation was or wasn’t possible.
+
+I’m at the bookkeeping/verification stage now. I need to capture one non-obvious staging decision in the shared ledger and write the phase notes cleanly, because the code moved the live CLI resolution path to the new backend resolver before the later parser/help cleanup phase removes the stale public flag text.
+
+I’m writing the phase notes now. They need to make one thing explicit for the next turn: the resolver boundary is live in `runtime/cli.py`, but the parser/help cleanup for `--provider-factory` is intentionally deferred, so the next phase shouldn’t “restore” the old execution path by accident.
+
+I’ve finished the implementation slice. I’m doing one last grep for the provider-factory path in active code/tests so I can be explicit about what still remains by design in this phase versus what was actually removed from execution.
+
+I’ve confirmed the staged state: execution now goes through the new resolver, while the public parser/help surfaces are still present and intentionally deferred. I’m collecting exact file references for the handoff summary now.
+
+Scope considered
+
+- Phase-local provider backend boundary only: [runtime/provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/provider_backends.py:1), [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py:428), and the focused runtime tests/docs artifacts for this phase.
+
+What I analyzed
+
+- The existing CLI provider path in [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py:428) and its dependency on `load_provider_factory(...)`.
+- The current runtime config/provider surface and the fact that there are no real in-repo Codex/Claude adapters yet.
+- The affected tests in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py:340) and the phase artifacts under `.autoloop/.../provider-backend-boundary/`.
+
+What I changed
+
+- Added [runtime/provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/provider_backends.py:15) with explicit built-in backend dispatch, rejection of `module:function`-style provider names, and precise `ConfigError` failures for unavailable/unimplemented `codex` and `claude`.
+- Switched the normal CLI resolution path in [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py:428) to call `resolve_provider_backend(...)`, while preserving the non-public `cli.main(..., provider_factory=...)` seam.
+- Added focused resolver tests in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:43).
+- Replaced the old public factory-path test with a non-public injection-seam test in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py:340).
+- Updated the shared decision ledger and phase notes.
+
+Key findings / decisions
+
+- There is no production provider adapter in the repo yet, so this phase stops at a framework-owned resolver boundary plus precise backend-unavailable errors.
+- The normal CLI execution path no longer uses public factory loading. Parser/help/env cleanup for `--provider-factory` is intentionally deferred to the later CLI-contract phase.
+- `runtime/runner.py` was left unchanged in this phase, per the scoped plan.
+
+Open issues / next step
+
+- [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py:60) still declares `--provider-factory`, and [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py:83) still contains `load_provider_factory(...)`; the next phase should remove those public remnants and add the typed `--provider` override.
+- Validation here was limited to `python3 -m py_compile runtime/provider_backends.py runtime/cli.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py`.
+- `python3 -m pytest ...` could not run because `pytest` is not installed, and direct runtime smoke imports were blocked because `pydantic` is not installed in this environment.
