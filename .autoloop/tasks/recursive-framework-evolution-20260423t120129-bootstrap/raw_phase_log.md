@@ -910,3 +910,50 @@ The active runtime/parity tree is now clean of the legacy field name. I’m coll
   - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py`
   - `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
 - The full `tests/runtime/test_package_cli.py` still has the known out-of-scope wrapper failure `test_recursive_wrapper_targets_the_package_cli_contract`; that belongs to the later recursive-wrapper cleanup phase.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+---
+I’m reviewing the session-id cleanup implementation against the phase contract. First I’m loading the authoritative artifacts and the changed runtime/parity code paths, then I’ll validate the behavior and record any blocking or non-blocking findings directly in the phase feedback.
+
+The authoritative phase session file still has a legacy `thread_id`, but that appears to be runtime bookkeeping produced by the external loop harness, not a repo file the implementer was allowed to change. I’m checking the actual repo surfaces next to see whether the implementation itself still leaves any in-scope `thread_id` paths or missed regressions.
+
+The repo-side source scan is clean so far, and the broader targeted suite is still running. I’m waiting for the package CLI tail to finish, then I’ll inspect one more dependency path around filesystem session loading for edge cases before I decide whether there are any blocking findings.
+
+The implementation looks phase-correct: the repo-side `thread_id` paths are gone, the canonical schema is centralized in the store helpers, and the widened targeted suite passed. I’m marking the criteria complete and appending a no-findings review note to the phase feedback now.
+
+Scope considered
+- Authoritative request snapshot, active phase contract, shared decisions, authoritative raw log, implementation notes, and the repo-side files changed for `session-id-schema-cleanup`.
+
+What I analyzed
+- `runtime/stores/filesystem.py` canonical session payload load/write/placeholder behavior.
+- `workflows/autoloop_v1/parity.py` continuation logging and resume-clarification handling.
+- The added regression coverage in `tests/runtime/test_compatibility_runtime.py` and `tests/runtime/test_workflow_integration_parity.py`, plus adjacent engine/store/context/package-CLI surfaces.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/session-id-schema-cleanup/criteria.md) to all checked.
+- Updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/implement/phases/session-id-schema-cleanup/feedback.md) with the review result.
+- Validation passed with:
+- `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_integration_parity.py tests/contract/test_engine_contracts.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+
+Key findings / decisions
+- No blocking or non-blocking findings.
+- The implementation satisfies the phase contract: canonical `session_id` payloads, no repo-side `thread_id` references left in the reviewed runtime/parity/test surfaces, and Autoloop-v1 resumability remains covered.
+
+Open issues / next step
+- No blocking issues remain for this phase.
+- The deselected wrapper test remains owned by the later recursive-wrapper cleanup phase and does not block `session-id-schema-cleanup`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
