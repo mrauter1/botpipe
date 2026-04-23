@@ -6,3 +6,7 @@
 - Phase Directory Key: proof-docs-and-memory
 - Phase Title: Close With Proof And Memory
 - Scope: phase-local authoritative verifier artifact
+
+## Review Findings
+
+- `IMP-002` | `non-blocking` | Targeted proof passed for `tests/runtime/test_workflow_builder_package.py`, `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, `tests/runtime/test_workflow_integration_parity.py`, and `tests/test_architecture_baseline_docs.py`. Broader `tests/runtime/test_package_cli.py` still fails in untouched recursive wrapper/template files because `recursive_autoloop/run_recursive_autoloop.sh` is missing `require_package_autoloop_cli` and some templates still reference `src/autoloop/...`; this remains a documented future-cycle cleanup item rather than a blocker for the shipped builder/control-contract baseline.

@@ -64,6 +64,46 @@ autoloop run review task-42 \
 
 If a workflow supports parameters, export a `Parameters` model from the package. The runtime validates and coerces `-wf` values through that model before execution starts.
 
+## Step Control Contracts
+
+Provider-owned steps may declare narrow machine-readable control contracts directly on `PairStep` and `LLMStep`.
+
+```python
+from pydantic import BaseModel
+
+
+class ReviewPayload(BaseModel):
+    summary: str
+
+
+review = PairStep(
+    name="review",
+    producer="prompts/review_producer.md",
+    verifier="prompts/review_verifier.md",
+    expected_output_schema=ReviewPayload,
+    route_contracts={
+        "review_complete": {
+            "summary": "Review artifacts and verdict are complete.",
+            "required_artifacts": ["review_report"],
+        }
+    },
+)
+```
+
+Runtime behavior:
+
+- `expected_output_schema` defines the JSON-schema-like contract for `Outcome.payload`
+- `available_routes` is derived mechanically from the declared workflow transitions plus reserved routes
+- `route_contracts` is optional step-owned metadata for legal application routes only
+
+Authoring rules:
+
+- keep provider-facing operational guidance in the prompt templates, not in runtime-only metadata
+- reserve runtime-injected control data for `expected_output_schema`, `available_routes`, and `route_contracts`
+- continue using `Outcome.tag` as the route carrier
+- use `needs_rework` when the current work-item boundary still holds and `needs_replan` when the boundary changed materially
+- do not declare `expected_output_schema` or `route_contracts` on `SystemStep`
+
 ## Runtime Config And Provider Selection
 
 Workflow code does not construct providers directly. Operators select the built-in runtime backend through typed config and generic CLI flags.
