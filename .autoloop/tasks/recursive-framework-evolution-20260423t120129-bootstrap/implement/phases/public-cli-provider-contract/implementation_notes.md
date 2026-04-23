@@ -23,6 +23,7 @@
 - `runtime.config.ProviderConfigOverride`
 - `runtime.config.parse_runtime_config`
 - `runtime.config._merge_provider_config`
+- `runtime.config._apply_generic_provider_overrides`
 - `runtime.config._optional_cli_provider_name`
 - `runtime.runner.run_workflow_package`
 - `runtime.runner.execute_workflow_package`
@@ -31,9 +32,9 @@
 
 - Plan Phase 2 / add public provider selector: added parser-level `--provider` on mutating commands.
 - Plan Phase 2 / remove public provider-factory surfaces: removed parser exposure of `--provider-factory` and deleted the runner factory-loader helper.
-- Plan Phase 2 / route generic overrides through effective provider: generic config and CLI model/effort overrides now apply after final provider selection.
+- Plan Phase 2 / route generic overrides through effective provider: generic config and CLI model/effort overrides now apply to the final selected provider while preserving config layer precedence.
 - Plan Phase 2 / preserve non-public seam: kept `cli.main(..., provider_factory=...)` precedence unchanged for tests/programmatic callers.
-- Plan Phase 2 / CLI tests: added help-text, unknown-argument rejection, and selected-provider merge coverage.
+- Plan Phase 2 / CLI tests: added help-text, unknown-argument rejection, selected-provider merge coverage, and the reviewer-requested precedence regression coverage.
 
 ## Assumptions
 
@@ -50,7 +51,7 @@
 
 - Mutating CLI commands expose `--provider` and no longer expose `--provider-factory`.
 - Passing `--provider-factory` on the public CLI now fails as an argparse unknown-argument error.
-- `provider.model`, `provider.model_effort`, `--model`, and `--model-effort` now target the effective provider instead of always mutating Codex config.
+- `provider.model`, `provider.model_effort`, `--model`, and `--model-effort` now target the effective provider instead of always mutating Codex config, without letting lower-precedence generic config override higher-precedence provider-specific config.
 
 ## Known non-changes
 
@@ -62,13 +63,17 @@
 
 - Public CLI callers must select providers through typed config or `--provider`.
 - Tests that previously asserted runtime-level provider-factory rejection now assert parser-level unknown-argument rejection.
+- Generic config values still follow the final selected provider name, including CLI provider overrides, while later typed provider config remains authoritative within the normal layer precedence order.
 
 ## Validation performed
 
 - `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+- `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
 - `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+- `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
 
 ## Deduplication / centralization decisions
 
 - Kept the public provider selection merge logic centralized in `runtime.config._merge_provider_config` instead of duplicating provider-specific override wiring in CLI handlers.
+- Kept the reviewer fix centralized in `runtime.config._apply_generic_provider_overrides(...)` so layer-order handling and the CLI overlay share one code path.
 - Removed the now-dead `runtime.runner.load_provider_factory(...)` helper instead of leaving an unused module:function loader in runtime code.
