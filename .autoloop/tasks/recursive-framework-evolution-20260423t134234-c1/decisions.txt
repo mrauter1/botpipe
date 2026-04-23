@@ -1,0 +1,8 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260423T164234Z-94b626d6" ts="2026-04-23T16:42:34.792002+00:00" />
+The request's `src/autoloop/...` and `docs/autoloop_workflow_framework_*` paths are stale; current planning and implementation targets are repo-root `core/`, `runtime/`, `workflow/`, `workflows/`, `docs/architecture.md`, `docs/authoring.md`, and `Workflow_Instructions.md`.
+Cycle 1 should prioritize a first-class workflow-builder because the repository currently has only `workflows/autoloop_v1` and a minimal `autoloop init workflow` scaffold, not a credible workflow-authoring workflow.
+The chosen addition is the end-to-end workflow package `workflow_idea_to_workflow_package`; domain workflows such as release go/no-go and incident hardening are deferred until the builder exists.
+The chosen framework improvement is additive step-owned narrow control contracts: `expected_output_schema`, runtime-derived `available_routes`, and `route_contracts` passed mechanically through the runtime/provider boundary.
+Keep `Outcome.tag` as the route carrier and use the new expected-output schema to validate `Outcome.payload`; do not introduce a new provider-facing packet abstraction.
+This task's planner-owned `plan/phase_plan.yaml` is a YAML contract for the task harness and must not be treated as input to the current `workflows/autoloop_v1/workflow.py` JSON-only phase-plan parser without a separate compatibility fix.
+Do not absorb or revert the unrelated dirty deletions and repo-layout churn visible in `git status`; scope the cycle to additive framework files, the new workflow package, targeted docs/tests, and recursive memory.
