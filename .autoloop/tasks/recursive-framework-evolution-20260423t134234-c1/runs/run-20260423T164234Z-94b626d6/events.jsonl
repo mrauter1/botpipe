@@ -14,3 +14,6 @@
 {"ts": "2026-04-23T17:14:08.568882+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 14, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "step-control-contracts", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-23T17:14:08.569592+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 15, "event_type": "pair_started", "pair": "test", "phase_id": "step-control-contracts"}
 {"ts": "2026-04-23T17:14:08.569696+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 16, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "step-control-contracts"}
+{"ts": "2026-04-23T17:18:08.881050+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 17, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "step-control-contracts"}
+{"ts": "2026-04-23T17:19:35.400453+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 18, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "step-control-contracts"}
+{"ts": "2026-04-23T17:19:35.417673+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 19, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "step-control-contracts"}

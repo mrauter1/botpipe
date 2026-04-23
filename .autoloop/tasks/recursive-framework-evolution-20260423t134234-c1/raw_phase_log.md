@@ -278,3 +278,49 @@ Key findings / decisions
 
 Open issues / next step
 - There is still no happy-path runtime test for raw JSON schema mappings. If `jsonschema` becomes a first-class dependency in the project venv, the next step is to add an execute-time success test for that branch.
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb45-eb63-7572-b587-d84d1ddcbd90
+---
+I’m auditing the phase-local test coverage against the accepted control-contract scope, not re-litigating the implementation itself. I’ll check the changed tests, the test strategy, and the rerun evidence first, then I’ll update the audit artifacts with either findings or a clean pass.
+
+The coverage map is coherent. I’m re-running the exact changed-surface suites once from the auditor side so the criteria reflect verified evidence rather than just the producer note.
+
+I don’t have a phase-local blocking issue. I’m marking the criteria complete and adding one non-blocking audit note so the known raw-schema happy-path gap stays visible without blocking this phase.
+
+Scope considered
+- Phase-local audit of the step-control-contract test coverage only: [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), the adjacent runtime regression suites, and the active audit artifacts under [.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/step-control-contracts/](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/step-control-contracts/).
+
+What I analyzed
+- The shared decisions ledger, especially the local-first `available_routes` rule, optional provider-owned control contracts, and the dependency-gated raw-JSON-schema test decision.
+- The concrete test coverage for compile-time contracts, provider request plumbing, invalid route handling, invalid payload handling, and preserved `autoloop_v1` / runtime behavior.
+
+What I reviewed
+- Re-ran:
+  - `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  - `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_integration_parity.py tests/runtime/test_workspace_and_context.py tests/runtime/test_optional_extensions.py tests/runtime/test_compatibility_runtime.py`
+- Results were green: `24 passed`, `25 passed`, and `34 passed`.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/step-control-contracts/criteria.md) and appended one non-blocking note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/step-control-contracts/feedback.md).
+
+Key findings / decisions
+- No blocking audit findings.
+- `TST-001` is non-blocking only: the raw JSON schema branch has a deterministic dependency-gate failure test, but not a runtime success-path test because the project venv does not currently ship `jsonschema`.
+- The criteria are fully satisfied for this phase.
+
+Open issues / next step
+- If `jsonschema` becomes a first-class project dependency later, add an execute-time success test for raw JSON schema mappings. That is a future enhancement, not a blocker for the current phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
