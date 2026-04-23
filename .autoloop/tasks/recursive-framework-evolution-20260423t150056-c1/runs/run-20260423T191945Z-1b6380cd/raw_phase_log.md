@@ -642,3 +642,101 @@ Test audit is complete for this phase. The remaining unrelated recursive-memory 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+---
+I’m treating this as the phase-local closeout pass: validate the route-contract normalization and release workflow changes, then update task artifacts, shared decisions, and recursive memory without widening scope. First I’m reading the mandatory framework/workflow files, the active phase artifacts, and the current repo state so the proof and memory updates reflect what actually shipped.
+
+The repo layout has already moved off the stale `src/autoloop/...` paths, and the plan/decisions ledger confirms this phase is strictly a proof-and-memory closeout around the shipped route-contract seam and `release_candidate_to_go_no_go`. I’m reading the current framework docs, the new workflow package, and the active phase artifacts now so the validation and recursive-memory updates stay aligned with the actual implementation rather than the stale request paths.
+
+I’ve confirmed the current gap: the standing `.autoloop_recursive/` files still describe cycle 1 as if the release workflow were deferred, which is why the docs baseline test is failing. Next I’m reading the closeout acceptance file and a couple of adjacent artifacts so I can update the recursive memory, phase notes, and shared decisions in the same vocabulary the task expects before I rerun the targeted proof set.
+
+I have the closeout shape now: the shipped code is fine, but the standing memory and phase artifacts still lag the actual cycle outcome. I’m locking the work to four recursive-memory files plus this phase’s notes/feedback/decisions, then I’ll rerun the narrow proof set that was already green except for the stale memory baseline.
+
+I’m editing the standing memory now. The changes are limited to making cycle 1’s actual outcome explicit: builder is credible, route-contract normalization shipped, `release_candidate_to_go_no_go` shipped, `incident_to_hardening_program` stays deferred, and the recursive wrapper drift remains a separate residual rather than hidden scope creep.
+
+The memory baseline is updated and now matches the cycle’s actual outcome instead of the earlier “release deferred” state. I’m running the closeout proof set next: the release workflow runtime test, the workflow-builder regression, route-contract unit/contract coverage, and the full docs baseline that was previously failing only on the stale memory files.
+
+I’ve got the proof result: the planned closeout suite is now green end-to-end. I’m writing the phase-local record next so later turns inherit the right state without re-litigating what shipped, what was deferred, and which residual is still intentionally left to the package-CLI cleanup pass.
+
+Scope considered
+
+Phase-local closeout only: standing recursive memory, this phase’s task artifacts, and shared decisions for the shipped route-contract normalization and `release_candidate_to_go_no_go` workflow. I kept scope out of `recursive_autoloop/` and out of code/runtime changes.
+
+What I analyzed
+
+I read the live framework docs, the release workflow package/tests, prior phase notes, the closeout acceptance artifacts, and the four standing `.autoloop_recursive/` files. The only targeted proof gap left was the stale recursive-memory baseline.
+
+What I changed
+
+I updated [framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md), [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md), [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md), and [workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md) so cycle 1 now records the credible builder baseline, shipped `release_candidate_to_go_no_go`, deferred `incident_to_hardening_program`, the normalized `route_contracts` improvement, and the remaining package-CLI wrapper/template residual.
+
+I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/proof-docs-and-recursive-memory/implementation_notes.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/proof-docs-and-recursive-memory/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/decisions.txt) with the proof scope, checklist mapping, and residual-risk note.
+
+Key findings / decisions
+
+The closeout proof set is now green:
+`.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_workflow_builder_package.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/test_architecture_baseline_docs.py`
+Result: `71 passed in 0.76s`.
+
+The known residual is unchanged and still explicit by design: the package-CLI wrapper/template drift covered by `tests/runtime/test_package_cli.py`, especially `recursive_autoloop/run_recursive_autoloop.sh`, `require_package_autoloop_cli`, and legacy `src/autoloop/...` template references, remains out of this phase’s scope.
+
+Open issues / next step
+
+This phase is closed within scope. The next useful move is either the dedicated package-CLI wrapper/template cleanup pass or the deferred `incident_to_hardening_program` workflow.
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbf6-e8aa-7160-8d54-d0bfa9094f43
+---
+I’m reviewing the closeout phase now. I’ll inspect the phase artifacts, the standing memory updates, and the targeted proof evidence, then I’ll update the reviewer checklist and feedback with either findings or a clean re-review result.
+
+The memory updates themselves look consistent with the accepted plan: release shipped, incident deferred, builder credible, wrapper drift still isolated. I’m re-running the closeout proof set myself now so the review result isn’t just trusting the producer notes.
+
+I’ve re-run the proof set and it’s still green, so I’m closing the review as a clean re-review rather than reopening scope. I’m updating the verifier checklist now and appending the final review note to the phase feedback artifact.
+
+Scope considered
+
+Phase-local review of the closeout pass only: the standing `.autoloop_recursive/` memory updates, the proof-docs-and-recursive-memory task artifacts, the shared decisions ledger, and the targeted regression/doc proof set for the normalized route-contract seam and `release_candidate_to_go_no_go`.
+
+What I analyzed
+
+I checked the updated recursive-memory content against the accepted plan and AC-2, verified the documented residual stayed explicitly out of scope, and confirmed the closeout stayed off unrelated code and `recursive_autoloop/` wrapper/template edits.
+
+What I reviewed
+
+I reviewed [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/proof-docs-and-recursive-memory/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/proof-docs-and-recursive-memory/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/proof-docs-and-recursive-memory/implementation_notes.md), the four standing memory files under `.autoloop_recursive/`, and re-ran:
+`.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_workflow_builder_package.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/test_architecture_baseline_docs.py`
+Result: `71 passed in 0.66s`.
+
+Key findings / decisions
+
+No phase-scoped blocking findings. I marked all verifier criteria complete and appended `IMP-002` to the phase feedback noting the clean re-review. The known package-CLI wrapper/template drift remains explicitly documented as an out-of-scope residual, which is consistent with the phase contract.
+
+Open issues / next step
+
+No further action is required for this phase. The next separate follow-up is either the dedicated package-CLI wrapper/template cleanup or the deferred `incident_to_hardening_program` workflow cycle.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
