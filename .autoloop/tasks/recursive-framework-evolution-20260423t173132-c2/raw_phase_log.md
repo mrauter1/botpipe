@@ -725,3 +725,53 @@ Open issues / next step
 
 - The standing residual is unchanged: `recursive_autoloop/run_recursive_autoloop.sh` still needs `require_package_autoloop_cli`, and some recursive templates still reference legacy `src/autoloop/...` paths.
 - Existing `release_candidate_to_go_no_go` and `incident_to_hardening_program` workflows still do not consume the new building block; that remains a future workflow/portfolio step rather than a closeout-test change.
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+---
+I’m auditing the phase-local test work now. I’ll review the new cycle-2 recursive-memory coverage, rerun the scoped proof set independently, and then update the test audit artifacts with either concrete findings or a clean pass.
+
+The new test is still the main area of interest. I’m rerunning the scoped proof set independently now to verify the recorded `48 passed` result and confirm the added status-consistency assertion is stable rather than an accidental no-op.
+
+I don’t see a blocking coverage gap. I’m marking the audit criteria complete and appending the independent audit result to feedback now.
+
+Scope considered
+
+- Phase-local test audit only: the updated recursive-memory regression guard in `tests/test_architecture_baseline_docs.py`, the targeted proof set named in the phase contract, and the audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/`.
+- I treated `recursive_autoloop/` cleanup and workflow migrations as out of scope except to confirm the tests do not falsely normalize those residuals.
+
+What I analyzed
+
+- The active phase contract, the current test strategy and feedback artifacts, the shared decisions ledger, and the changed recursive-memory assertions in `tests/test_architecture_baseline_docs.py`.
+- The cycle-2 shipped/deferred status semantics that the new test is supposed to lock: builder remains credible, `investigation_request_to_evidence_pack` is shipped, and `security_finding_to_verified_remediation` stays deferred.
+
+What I reviewed
+
+- Independent rerun of `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_workflow_builder_package.py tests/test_architecture_baseline_docs.py` -> `48 passed`.
+- Audit criteria updated to all checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/criteria.md).
+- Audit feedback appended in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/feedback.md).
+
+Key findings / decisions
+
+- No blocking findings.
+- The added cycle-2 recursive-memory assertion materially improves regression protection by checking shipped-vs-deferred status consistency instead of only checking for string presence.
+- The test strategy correctly documents the preserved invariants, the explicit out-of-scope recursive wrapper residual, and the absence of any widened behavior expectations.
+
+Open issues / next step
+
+- The standing residual remains unchanged: `recursive_autoloop/run_recursive_autoloop.sh` still needs `require_package_autoloop_cli`, and some recursive templates still reference legacy `src/autoloop/...` paths.
+- A future cycle can decide whether `release_candidate_to_go_no_go` and `incident_to_hardening_program` should consume the new building block; that is not something this test closeout should normalize.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -673,3 +673,105 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+---
+I’m handling the test-side closeout for this phase. I’m checking whether the current proof set and the new recursive-memory guard are sufficient, then I’ll tighten any missing regression coverage and update the phase test artifacts accordingly.
+
+I found the new cycle-2 baseline assertions, but there’s still a gap around status consistency: the test file proves the strings exist, not that the shipped building block stays out of deferred lists while the deferred security workflow stays deferred. I’m tightening that next, then I’ll rerun the proof set.
+
+I’m making a small targeted addition to the baseline-doc test file: one more status-consistency assertion for the cycle-2 recursive-memory state. That keeps this phase additive and catches the most likely future drift without widening scope.
+
+The new assertion is in place. I’m rerunning the full closeout proof set now so the phase artifacts and decision note can carry the final post-edit result instead of an outdated count.
+
+The proof set now passes at `48 passed`. I’m updating the phase test strategy, the test feedback note, and the test-author decision line to capture the extra cycle-2 status-consistency coverage and the final proof count.
+
+The repo test change is finished and the proof set already passed after it. I’m doing a quick final check on the phase test artifacts and the decision entry, then I’ll close out with the exact proof result and remaining gap.
+
+Scope considered
+
+- Phase-local test closeout only: the targeted proof set, the recursive-memory guard coverage in `tests/test_architecture_baseline_docs.py`, and the phase test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/`.
+- I treated `recursive_autoloop/` and any workflow migrations as out of scope except to preserve the documented residual.
+
+What I analyzed
+
+- The active phase contract, the cycle plan’s targeted validation list, the shared decisions ledger, the existing cycle-2 recursive-memory assertions in `tests/test_architecture_baseline_docs.py`, and the current test-phase artifacts.
+- The status/deferred expectations already encoded for cycle 1 so the cycle-2 addition would stay consistent with the existing baseline-doc test style.
+
+What I changed
+
+- Added one more regression guard in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) to ensure the shipped `investigation_request_to_evidence_pack` building block cannot silently drift into deferred status while `security_finding_to_verified_remediation` remains deferred.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/test_strategy.md) with the behavior-to-test map, preserved invariants, edge cases, flake controls, and known gaps for this closeout phase.
+- Appended the test-side summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/feedback.md) and recorded the non-obvious coverage decision under the phase’s header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/decisions.txt).
+
+Key findings / decisions
+
+- Reran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_workflow_builder_package.py tests/test_architecture_baseline_docs.py` -> `48 passed`.
+- The added coverage is intentionally narrow: it strengthens cycle-2 shipped-vs-deferred status protection without widening into recursive wrapper cleanup or workflow migration expectations.
+- The test-phase artifacts now explicitly document that no recursive package-cli subset rerun was required because `recursive_autoloop/` remained untouched.
+
+Open issues / next step
+
+- The standing residual is unchanged: `recursive_autoloop/run_recursive_autoloop.sh` still needs `require_package_autoloop_cli`, and some recursive templates still reference legacy `src/autoloop/...` paths.
+- Existing `release_candidate_to_go_no_go` and `incident_to_hardening_program` workflows still do not consume the new building block; that remains a future workflow/portfolio step rather than a closeout-test change.
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc66-72b3-76e1-93a9-3d3e2e708731
+---
+I’m auditing the phase-local test work now. I’ll review the new cycle-2 recursive-memory coverage, rerun the scoped proof set independently, and then update the test audit artifacts with either concrete findings or a clean pass.
+
+The new test is still the main area of interest. I’m rerunning the scoped proof set independently now to verify the recorded `48 passed` result and confirm the added status-consistency assertion is stable rather than an accidental no-op.
+
+I don’t see a blocking coverage gap. I’m marking the audit criteria complete and appending the independent audit result to feedback now.
+
+Scope considered
+
+- Phase-local test audit only: the updated recursive-memory regression guard in `tests/test_architecture_baseline_docs.py`, the targeted proof set named in the phase contract, and the audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/`.
+- I treated `recursive_autoloop/` cleanup and workflow migrations as out of scope except to confirm the tests do not falsely normalize those residuals.
+
+What I analyzed
+
+- The active phase contract, the current test strategy and feedback artifacts, the shared decisions ledger, and the changed recursive-memory assertions in `tests/test_architecture_baseline_docs.py`.
+- The cycle-2 shipped/deferred status semantics that the new test is supposed to lock: builder remains credible, `investigation_request_to_evidence_pack` is shipped, and `security_finding_to_verified_remediation` stays deferred.
+
+What I reviewed
+
+- Independent rerun of `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_workflow_builder_package.py tests/test_architecture_baseline_docs.py` -> `48 passed`.
+- Audit criteria updated to all checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/criteria.md).
+- Audit feedback appended in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c2/test/phases/proof-docs-and-recursive-memory/feedback.md).
+
+Key findings / decisions
+
+- No blocking findings.
+- The added cycle-2 recursive-memory assertion materially improves regression protection by checking shipped-vs-deferred status consistency instead of only checking for string presence.
+- The test strategy correctly documents the preserved invariants, the explicit out-of-scope recursive wrapper residual, and the absence of any widened behavior expectations.
+
+Open issues / next step
+
+- The standing residual remains unchanged: `recursive_autoloop/run_recursive_autoloop.sh` still needs `require_package_autoloop_cli`, and some recursive templates still reference legacy `src/autoloop/...` paths.
+- A future cycle can decide whether `release_candidate_to_go_no_go` and `incident_to_hardening_program` should consume the new building block; that is not something this test closeout should normalize.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
