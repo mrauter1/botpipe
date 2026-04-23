@@ -17,3 +17,7 @@
 {"ts": "2026-04-23T17:18:08.881050+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 17, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "step-control-contracts"}
 {"ts": "2026-04-23T17:19:35.400453+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 18, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "step-control-contracts"}
 {"ts": "2026-04-23T17:19:35.417673+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 19, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "step-control-contracts"}
+{"ts": "2026-04-23T17:19:35.471115+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "step-control-contracts", "phase_mode": "single"}
+{"ts": "2026-04-23T17:19:35.473239+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 21, "event_type": "phase_started", "phase_id": "workflow-builder-package", "phase_mode": "single"}
+{"ts": "2026-04-23T17:19:35.474535+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 22, "event_type": "pair_started", "pair": "implement", "phase_id": "workflow-builder-package"}
+{"ts": "2026-04-23T17:19:35.474689+00:00", "run_id": "run-20260423T164234Z-94b626d6", "seq": 23, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "workflow-builder-package"}
