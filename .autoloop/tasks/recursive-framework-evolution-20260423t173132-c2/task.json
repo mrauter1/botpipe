@@ -14,13 +14,13 @@
       "proof-docs-and-recursive-memory"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "investigation-evidence-pack-building-block"
+    "current_phase_index": 2,
+    "current_phase_id": "proof-docs-and-recursive-memory"
   },
   "phase_status": {
     "composition-helpers-and-contracts": "completed",
-    "investigation-evidence-pack-building-block": "in_progress",
-    "proof-docs-and-recursive-memory": "planned"
+    "investigation-evidence-pack-building-block": "completed",
+    "proof-docs-and-recursive-memory": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260423T212522Z-c2aa04a6",
       "status": "in_progress",
       "ts": "2026-04-23T21:50:59.595203+00:00"
+    },
+    {
+      "phase_id": "investigation-evidence-pack-building-block",
+      "run_id": "run-20260423T212522Z-c2aa04a6",
+      "status": "completed",
+      "ts": "2026-04-23T22:12:03.437032+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-and-recursive-memory",
+      "run_id": "run-20260423T212522Z-c2aa04a6",
+      "status": "in_progress",
+      "ts": "2026-04-23T22:12:03.439460+00:00"
     }
   ]
 }
