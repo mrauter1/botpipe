@@ -109,3 +109,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=step-control-contracts,workflow-builder-package,proof-docs-and-memory
+explicit=True
+current_phase_index=0
