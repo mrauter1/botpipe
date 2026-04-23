@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.core.compiler import compile_workflow
-from autoloop_v3.core.context import Context
+from autoloop_v3.core.context import ChildWorkflowResult, Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
 from autoloop_v3.runtime.loader import (
@@ -19,7 +19,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from workflow.primitives import Event, Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -377,6 +377,154 @@ def test_security_remediation_package_propagates_child_question_without_adopting
         "frame_investigation",
         "frame_investigation",
     ]
+
+
+def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_deployment_constraints_local(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.security_finding_to_verified_remediation")
+    task_folder = tmp_path / "task"
+    workflow_folder = task_folder / "wf_security_finding_to_verified_remediation"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    child_workflow_folder = task_folder / "wf_investigation_request_to_evidence_pack"
+    child_workflow_folder.mkdir(parents=True, exist_ok=True)
+    child_run_folder = child_workflow_folder / "runs" / "child-run-1"
+    child_run_folder.mkdir(parents=True, exist_ok=True)
+    (child_run_folder / "sessions").mkdir(parents=True, exist_ok=True)
+    (child_run_folder / "raw").mkdir(parents=True, exist_ok=True)
+    (child_run_folder / "request.md").write_text(
+        'Assemble the evidence pack for the security finding "Admin impersonation privilege escalation".\n',
+        encoding="utf-8",
+    )
+
+    child_artifacts = {
+        "investigation_scope_brief": child_workflow_folder / "investigation_scope_brief.md",
+        "evidence_pack": child_workflow_folder / "evidence_pack.md",
+        "evidence_pack_summary": child_workflow_folder / "evidence_pack_summary.json",
+        "evidence_gap_register": child_workflow_folder / "evidence_gap_register.md",
+        "evidence_pack_receipt": child_workflow_folder / "evidence_pack_receipt.json",
+    }
+    child_artifacts["investigation_scope_brief"].write_text("# Investigation Scope Brief\n", encoding="utf-8")
+    child_artifacts["evidence_pack"].write_text("# Evidence Pack\n", encoding="utf-8")
+    child_artifacts["evidence_pack_summary"].write_text(
+        json.dumps(
+            {
+                "authoritative_artifacts": [
+                    "evidence_source_inventory",
+                    "evidence_coverage_matrix",
+                    "evidence_findings",
+                    "evidence_gap_register",
+                    "evidence_pack",
+                    "evidence_pack_summary",
+                ],
+                "finding_count": 2,
+                "investigation_kind": "security_remediation",
+                "key_findings": ["Delegated-admin bypass confirmed."],
+                "ready_for_downstream_assessment": False,
+                "source_count": 2,
+                "unresolved_gap_count": 1,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    child_artifacts["evidence_gap_register"].write_text("# Evidence Gap Register\n", encoding="utf-8")
+    child_artifacts["evidence_pack_receipt"].write_text("{}\n", encoding="utf-8")
+
+    child_result = ChildWorkflowResult(
+        workflow_name="investigation_request_to_evidence_pack",
+        run_id="child-run-1",
+        terminal="SUCCESS",
+        status="success",
+        last_event=Event("evidence_pack_published"),
+        output_metadata={},
+        output_artifacts=child_artifacts,
+        task_folder=task_folder,
+        workflow_folder=child_workflow_folder,
+        run_folder=child_run_folder,
+        package_folder=REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack",
+        request_file=child_run_folder / "request.md",
+        run_meta_file=child_run_folder / "run.json",
+        events_file=child_run_folder / "events.jsonl",
+        checkpoint_file=child_run_folder / "checkpoint.json",
+        sessions_dir=child_run_folder / "sessions",
+        trace_file=child_run_folder / "trace.jsonl",
+        raw_dir=child_run_folder / "raw",
+        parent_file=child_run_folder / "parent.json",
+    )
+    child_invocation: dict[str, object] = {}
+
+    def _invoke_child(workflow, *, message: str, parameters: dict[str, object]):
+        child_invocation["workflow"] = workflow
+        child_invocation["message"] = message
+        child_invocation["parameters"] = parameters
+        return child_result
+
+    state = workflow_pkg.SecurityFindingToVerifiedRemediation.State(
+        finding_title="Admin impersonation privilege escalation",
+        finding_source="pentest",
+        severity="high",
+        affected_system="delegated admin impersonation",
+        sponsor_role="security engineering",
+        evidence_paths=[
+            "pentest/findings/admin-impersonation.md",
+            "src/auth/impersonation.py",
+        ],
+        deployment_constraints=[
+            "Preserve emergency admin access during rollout.",
+            "Avoid schema changes in the same patch.",
+        ],
+    )
+    ctx = Context(
+        task_id="security-remediation-task",
+        run_id="run-1",
+        workflow_name="security_finding_to_verified_remediation",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "security_finding_to_verified_remediation",
+        state=state,
+        session_store=InMemorySessionStore(),
+        workflow_invoker=_invoke_child,
+    )
+
+    next_state, event = workflow_pkg.SecurityFindingToVerifiedRemediation.on_compose_evidence_pack(state, ctx)
+
+    assert child_invocation == {
+        "workflow": "investigation_request_to_evidence_pack",
+        "message": (
+            'Assemble the evidence pack for the security finding "Admin impersonation privilege escalation" '
+            "affecting delegated admin impersonation."
+        ),
+        "parameters": {
+            "investigation_title": "Admin impersonation privilege escalation",
+            "investigation_kind": "security_remediation",
+            "sponsor_role": "security engineering",
+            "evidence_paths": [
+                "pentest/findings/admin-impersonation.md",
+                "src/auth/impersonation.py",
+            ],
+        },
+    }
+    assert event.tag == "blocked"
+    assert event.reason == "Child evidence pack published without downstream-readiness approval."
+    assert next_state.evidence_pack_status == "blocked"
+    assert next_state.evidence_pack_child_run_id == "child-run-1"
+    assert next_state.ready_for_downstream_assessment is False
+    assert not (workflow_folder / "finding_scope_brief.md").exists()
+    assert not (workflow_folder / "security_evidence_pack.md").exists()
+    assert not (workflow_folder / "security_evidence_pack_summary.json").exists()
+    assert not (workflow_folder / "security_evidence_gap_register.md").exists()
+    assert not (workflow_folder / "security_evidence_pack_receipt.json").exists()
 
 
 def test_security_remediation_publish_rejects_missing_selected_remediation(tmp_path: Path, monkeypatch) -> None:

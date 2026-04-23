@@ -43,6 +43,7 @@
 - Milestone 2 workflow package: complete via the new `workflows/security_finding_to_verified_remediation/` package, prompts, assets, docs, and runtime proof.
 - Milestone 2 deterministic composition requirement: complete via `compose_evidence_pack` in `workflow.py`, which invokes `investigation_request_to_evidence_pack`, forwards child `question` / `blocked`, validates child success, and adopts parent-local artifacts.
 - Milestone 2 workflow-specific proof: complete via `tests/runtime/test_security_finding_to_verified_remediation.py`.
+- Reviewer follow-up on deterministic composition: complete via proof that deployment constraints stay parent-local and that a published-but-not-ready child evidence pack blocks before parent-local adoption.
 - Milestone 3 recursive memory closeout: complete via the four `.autoloop_recursive/` standing memory files and the updated baseline assertions in `tests/test_architecture_baseline_docs.py`.
 
 ## Assumptions
@@ -61,6 +62,8 @@
 
 - Added a discoverable `security_finding_to_verified_remediation` workflow package that composes `investigation_request_to_evidence_pack` and produces a deterministic `remediation_receipt.json`.
 - Added targeted runtime proof for successful end-to-end execution and explicit child-question propagation.
+- The compose step now keeps `deployment_constraints` in the parent remediation contract and does not forward them into the child workflow's `source_constraints` evidence channel.
+- A child evidence pack that publishes with `ready_for_downstream_assessment=false` now blocks the parent before any parent-local evidence artifact adoption.
 - Updated recursive memory to record cycle 3 as shipped for `security_finding_to_verified_remediation` and to move the deferred portfolio focus to `task_to_workflow_strategy`.
 
 ## Known non-changes
@@ -77,6 +80,8 @@
 ## Validation performed
 
 - `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/test_architecture_baseline_docs.py`
+- `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py`
+- `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py`
 - `.venv/bin/pytest -q tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py`
 
 ## Deduplication / centralization decisions

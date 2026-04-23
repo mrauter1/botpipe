@@ -183,9 +183,10 @@ Application routes:
 `compose_evidence_pack` explicitly:
 
 - calls `run_child_workflow(...)` with `workflow="investigation_request_to_evidence_pack"`
-- passes `investigation_title=<finding_title>`, `investigation_kind="security_remediation"`, `sponsor_role=<sponsor_role>`, forwarded `evidence_paths`, and forwarded `deployment_constraints` as `source_constraints`
+- passes `investigation_title=<finding_title>`, `investigation_kind="security_remediation"`, `sponsor_role=<sponsor_role>`, and forwarded `evidence_paths`
 - forwards child `question` and `blocked` outcomes as parent `question` or `blocked`
 - validates successful child completion through `require_child_workflow_result(...)`
+- requires `ready_for_downstream_assessment=true` in the child summary before any parent-local artifact adoption
 - adopts the child artifacts below into parent-local names before any provider-owned security step runs:
 - `investigation_scope_brief` -> `finding_scope_brief.md`
 - `evidence_pack` -> `security_evidence_pack.md`
@@ -223,6 +224,7 @@ Step payload models:
 - Runtime proof must cover:
 - successful end-to-end execution with explicit child-workflow composition
 - deterministic parent-local adoption of child evidence artifacts
+- refusal to adopt a child evidence pack that publishes with `ready_for_downstream_assessment=false`
 - explicit child `question` propagation to the parent run
 - publication of `remediation_receipt.json` only after the required terminal artifacts and summaries exist
 - Publish validation must reject a missing or invalid `selected_remediation` before the terminal receipt is written.

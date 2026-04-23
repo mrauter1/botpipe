@@ -276,7 +276,6 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "investigation_kind": "security_remediation",
                 "sponsor_role": state.sponsor_role,
                 "evidence_paths": state.evidence_paths,
-                "source_constraints": state.deployment_constraints,
             },
         )
         if child.last_event is not None and child.last_event.tag == "question":
@@ -306,7 +305,26 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "evidence_pack_receipt",
             ),
         )
-        adopted = adopt_child_artifacts(
+        summary = _read_json(child.output_artifacts["evidence_pack_summary"])
+        if summary.get("investigation_kind") != "security_remediation":
+            raise ValueError("adopted security_evidence_pack_summary.json must report investigation_kind=security_remediation")
+        ready_for_downstream_assessment = summary.get("ready_for_downstream_assessment")
+        if not isinstance(ready_for_downstream_assessment, bool):
+            raise ValueError(
+                "adopted security_evidence_pack_summary.json must define boolean ready_for_downstream_assessment"
+            )
+        if not ready_for_downstream_assessment:
+            return state.model_copy(
+                update={
+                    "evidence_pack_status": "blocked",
+                    "evidence_pack_child_run_id": child.run_id,
+                    "ready_for_downstream_assessment": False,
+                }
+            ), Event(
+                "blocked",
+                reason="Child evidence pack published without downstream-readiness approval.",
+            )
+        adopt_child_artifacts(
             ctx,
             child,
             mapping={
@@ -317,14 +335,6 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "evidence_pack_receipt": "security_evidence_pack_receipt.json",
             },
         )
-        summary = _read_json(adopted["evidence_pack_summary"])
-        if summary.get("investigation_kind") != "security_remediation":
-            raise ValueError("adopted security_evidence_pack_summary.json must report investigation_kind=security_remediation")
-        ready_for_downstream_assessment = summary.get("ready_for_downstream_assessment")
-        if not isinstance(ready_for_downstream_assessment, bool):
-            raise ValueError(
-                "adopted security_evidence_pack_summary.json must define boolean ready_for_downstream_assessment"
-            )
         return state.model_copy(
             update={
                 "evidence_pack_status": "evidence_pack_adopted",
