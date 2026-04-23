@@ -43,3 +43,45 @@ Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recur
 The plan is now implementation-ready and follows the requested order in five phases: built-in provider backend resolver, public CLI provider cleanup, canonical `session_id` session schema cleanup, package-only recursive wrapper/template cleanup, and docs/strictness/full-suite hardening. It also captures the non-obvious repo findings that matter for implementation: the repo currently lacks built-in provider adapters, generic model/effort overrides are still effectively Codex-only, `workflows/autoloop_v1/parity.py` still leaks `thread_id`, and strictness scans must stay scoped to maintained source/docs/tests rather than task artifacts.
 
 Validation: `phase_plan.yaml` was parsed locally with `yaml.safe_load` and contains 5 planned phases.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbadc-4464-79c3-8d7f-e46eef6f9855
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dbadc-4464-79c3-8d7f-e46eef6f9855
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbadc-4464-79c3-8d7f-e46eef6f9855
+---
+I found one material gap in the plan rather than a code-coverage issue. I’m recording it now: the plan does not explicitly preserve the `runtime.runner.run_workflow_package(..., provider=...)` programmatic surface that the request called out, so the runner refactor is under-constrained and could regress non-CLI callers.
+
+I’ve confirmed the verifier artifacts were still in their initial state. I’m applying the criteria judgment and appending the blocking finding with evidence now.
+
+Scope considered
+
+Authoritative request snapshot, authoritative raw log, shared decisions, current planning artifacts, and the request-relevant runtime, wrapper, template, test, and doc files needed for dependency and regression analysis.
+
+What I analyzed
+
+Plan coverage against the requested provider-factory removal, `thread_id` removal, recursive wrapper/template cleanup, docs/strictness hardening, and required implementation order. I also checked the concrete repo surfaces those phases target: `runtime/cli.py`, `runtime/config.py`, `runtime/runner.py`, `runtime/stores/filesystem.py`, `workflows/autoloop_v1/parity.py`, `recursive_autoloop/run_recursive_autoloop.sh`, the recursive templates, and the related tests/docs.
+
+What I reviewed
+
+Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/plan/criteria.md), appended findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/plan/feedback.md), and rechecked [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/plan/phase_plan.yaml), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/decisions.txt). `phase_plan.yaml` remains parseable and its runtime-owned metadata is intact.
+
+Key findings / decisions
+
+`PLAN-001` blocking: the plan does not explicitly preserve the user-required `runtime.runner.run_workflow_package(..., provider=...)` programmatic execution surface while removing factory-loader logic, so the runner refactor remains under-constrained and can regress direct callers.
+Criteria are therefore not fully satisfied; only `Technical Debt` is currently checked.
+
+Open issues / next step
+
+The planner should revise Phase 2 in both `plan.md` and `phase_plan.yaml` to explicitly freeze the non-CLI runner surface and make that invariant part of scope and acceptance criteria, then rerun verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
