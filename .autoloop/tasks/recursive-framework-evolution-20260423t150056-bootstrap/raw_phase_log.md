@@ -168,3 +168,55 @@ Open issues / next step
 - Relevant validation passed: `.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/runtime/test_compatibility_runtime.py tests/test_architecture_baseline_docs.py -k 'not test_recursive_memory_files_record_cycle_one_closeout_baseline' -q`
 - A broader baseline docs test is already failing outside this change scope: `tests/test_architecture_baseline_docs.py::test_recursive_memory_files_record_cycle_one_closeout_baseline`.
 - `tests/runtime/test_package_cli.py -q` also still has unrelated pre-existing recursive wrapper/template failures.
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+---
+I’m reviewing the runtime provider foundation changes against the authoritative request, the phase contract, and the shared decisions ledger. I’ll read the phase criteria/feedback first, then audit the modified provider/backend/test/doc files for correctness and regression risk before writing the reviewer artifacts.
+
+I have the artifact state and shared decisions. I’m reading the new provider modules directly now, because the highest-risk review points are hidden in start-vs-resume behavior, strict outcome parsing, and capability validation, not in the artifact scaffolding.
+
+I found a likely compatibility edge in the Claude capability gate, and I’m confirming it with a minimal repro before I write the review artifact. If it behaves the way the code reads, that’s a blocking failure because it rejects the default `inherit` strategy on installations that never need the unused permission flags.
+
+I have one concrete blocking defect reproduced locally. I’m checking the repository’s review-artifact style now so I can record the finding in the expected format and update the phase criteria consistently.
+
+Scope considered
+- The active phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t150056-bootstrap/implement/phases/runtime-provider-foundation/`.
+- The request snapshot, raw phase log, shared decisions ledger, and the changed runtime provider/backend/test/doc files relevant to this phase.
+
+What I analyzed
+- The new runtime provider helpers and adapters in `runtime/providers/`.
+- Backend wiring in `runtime/provider_backends.py`.
+- Focused provider/backend tests and the updated docs.
+- The non-obvious session decision recorded in `decisions.txt`.
+- A local repro for Claude backend construction with `permission_strategy='inherit'` and a reduced help surface.
+
+What I reviewed
+- Start vs resume behavior against the canonical `session_id` model.
+- Strict outcome parsing and provider mismatch handling.
+- CLI capability verification logic for Codex and Claude.
+- Regression risk in provider resolution under default config.
+- Phase artifact accuracy in `criteria.md` and `feedback.md`.
+
+Key findings / decisions
+- Blocking finding recorded as `IMP-001` in `feedback.md`.
+- `runtime/providers/claude.py` currently rejects otherwise valid Claude CLI installations when `provider.claude.permission_strategy` is the default `inherit`, because capability validation unconditionally requires `--allowedTools` and `--dangerously-skip-permissions` even though that strategy uses neither flag.
+- `criteria.md` was updated accordingly; the phase is not ready to mark complete.
+
+Open issues / next step
+- Fix `verify_claude_code_capabilities()` / `_validate_claude_surface()` so permission-flag checks are conditional on the selected Claude permission strategy.
+- Add focused regression coverage for the `inherit` path where only the always-used headless flags are present.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
