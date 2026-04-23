@@ -86,3 +86,12 @@ No open verification blockers. The planning artifacts are ready for the implemen
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=runtime-provider-foundation,codex-runtime-adapter,claude-runtime-adapter-and-hardening
+explicit=True
+current_phase_index=0
