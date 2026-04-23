@@ -348,3 +348,55 @@ Open issues / next step
 
 - I could not run `pytest` here because `pytest` is not installed, and direct runtime smoke imports remain blocked because `pydantic` is not installed in this environment.
 - Next step is verifier review of this fix; after that, the later CLI-contract phase should remove the lingering parser/help surface for `--provider-factory` entirely.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+I’m re-reviewing the corrected CLI path now. The main question is whether the phase has cleared the prior blocker cleanly enough to mark complete, given that the parser/help cleanup is intentionally deferred to a later phase but the public flag now rejects explicitly instead of being ignored.
+
+I’m clearing the old blocker in the artifacts now. There isn’t a new phase-scope finding after the re-review, so I’m marking the criteria complete and appending a short status update to the feedback file so the historical blocking note doesn’t read as still-open.
+
+The phase artifacts are updated. I’m doing one quick readback of the criteria and feedback so the closeout matches the recorded review state exactly before I mark the phase complete.
+
+Scope considered
+
+- Phase-local re-review of the provider backend boundary changes in `runtime/provider_backends.py`, `runtime/cli.py`, and the directly affected runtime tests.
+- Active artifact updates only in `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- The corrected `_resolve_provider(...)` path in `runtime/cli.py`.
+- The resolver follow-up tests in `tests/runtime/test_provider_backends.py`.
+- The user-facing CLI rejection test in `tests/runtime/test_package_cli.py`.
+- The phase criteria and prior blocking feedback entry.
+
+What I reviewed
+
+- Whether the prior `IMP-001` blocker was actually fixed.
+- Whether the non-public `cli.main(..., provider_factory=...)` seam remained intact.
+- Whether the phase now satisfies AC-1 and AC-2 without introducing a new regression in the reviewed scope.
+
+Key findings / decisions
+
+- The prior blocker is resolved: the parsed public `--provider-factory` path now fails fast with a precise `ConfigError` instead of being silently ignored.
+- Coverage now exists for both the internal rejection path and the user-facing CLI rejection path.
+- I marked all criteria complete and appended a non-blocking follow-up note to the feedback file stating that no remaining phase-scope findings were identified.
+
+Open issues / next step
+
+- No remaining blocking findings in this phase scope.
+- The later CLI-cleanup phase should still remove the stale public parser/help surface for `--provider-factory`, but that is outside this verifier pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
