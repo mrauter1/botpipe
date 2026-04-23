@@ -957,3 +957,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+---
+I’m validating the session-id cleanup from the test-author side now. First I’m loading the phase artifacts and the current runtime/parity tests, then I’ll fill any remaining coverage gap around the actual session-store integration path and update the test strategy/feedback accordingly.
+
+The main gap I see is at the actual `FilesystemSessionStore` consumer boundary: current tests hit the helper functions directly, but they don’t yet prove that a fresh store reloads canonical payloads or ignores legacy-only files. I’m adding that integration coverage now, then I’ll update the phase strategy and feedback.
+
+I’ve pinned the gap: the helper-level tests are good, but they still leave the real `FilesystemSessionStore` load boundary implicit. I’m adding two deterministic store-level tests now to cover canonical reload behavior and the intentional non-resume behavior for legacy-only files.
+
+The new coverage is in. I’m running the compatibility/parity slice first to prove the store integration behavior is stable, then I’ll widen to the same regression set the implementer used so the phase handoff stays consistent.
+
+The widened regression slice passed. I’m recording the one non-obvious test decision in the shared ledger now, then I’ll write the behavior-to-coverage map and the concise feedback summary for the auditor handoff.
+
+The repository tests and phase artifacts are updated. I’m doing one final readback of the new store-level tests and the phase notes now so the handoff can point cleanly at what changed and what remains out of scope.
+
+Scope considered
+- Phase-local `session-id-schema-cleanup` test scope: repo-side runtime/parity/session-store behavior, the implementation notes, the active decisions ledger, and the existing regression suites adjacent to session persistence and resume flow.
+
+What I analyzed
+- The new helper-level coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:300) and parity integration coverage in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:92).
+- The actual `FilesystemSessionStore` load boundary in [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py:185), which still needed direct consumer-level coverage.
+- Phase artifacts and shared decisions so the new expectations matched the intentional greenfield break for legacy-only payloads.
+
+What I changed
+- Added `FilesystemSessionStore` integration tests in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:426) to prove canonical payload reload behavior and intentional non-resume handling of legacy-only session files.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/session-id-schema-cleanup/test_strategy.md) with a behavior-to-coverage map.
+- Appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/session-id-schema-cleanup/feedback.md).
+- Recorded the non-obvious store-boundary coverage decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/decisions.txt).
+
+Key findings / decisions
+- The meaningful remaining gap was store integration, not serializer helpers; the new tests now pin behavior at the actual `FilesystemSessionStore` binding-load path.
+- Validation passed:
+- `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_integration_parity.py`
+- `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+
+Open issues / next step
+- No blocking test gaps remain for this phase.
+- Docs/strictness hardening and the recursive-wrapper package-only test remain owned by later scoped phases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
