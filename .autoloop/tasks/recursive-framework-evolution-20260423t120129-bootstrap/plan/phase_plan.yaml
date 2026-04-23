@@ -45,6 +45,8 @@ phases:
     instead of hard-coding Codex fields.
   - Remove --provider-factory, AUTOLOOP_PROVIDER_FACTORY, and load_provider_factory(...)
     from the public CLI path.
+  - Keep runtime/runner.py cleanup narrow so run_workflow_package(..., provider=...)
+    and execute_workflow_package(..., provider=...) remain available to non-CLI callers.
   - Preserve cli.main(..., provider_factory=...) as a direct non-public seam for tests
     and programmatic callers.
   out_of_scope:
@@ -61,9 +63,13 @@ phases:
   - id: AC-3
     text: cli.main(..., provider_factory=...) still works for tests without being
       reachable from parser help, docs, or env vars.
+  - id: AC-4
+    text: Removing factory-loader helpers does not change the direct runtime runner
+      surface for non-CLI callers using run_workflow_package(..., provider=...) or
+      execute_workflow_package(..., provider=...).
   deliverables:
   - Updated runtime/cli.py, runtime/config.py, and runtime/runner.py public-provider
-    contract.
+    contract with the non-CLI runner surface explicitly preserved.
   - CLI tests covering help text, unknown-argument rejection, typed provider selection,
     and the retained injection seam.
   risks:

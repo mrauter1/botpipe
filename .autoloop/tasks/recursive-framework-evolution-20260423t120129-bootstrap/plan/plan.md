@@ -41,6 +41,7 @@ def resolve_provider_backend(*, config: ResolvedRuntimeConfig) -> LLMProvider:
   1. Use the non-public `provider_factory` seam when passed directly to `cli.main(...)`.
   2. Otherwise call `resolve_provider_backend(config=config)`.
   3. Never read CLI/env factory strings.
+- `runtime/runner.py` keeps `run_workflow_package(..., provider=...)` and `execute_workflow_package(..., provider=...)` as the direct programmatic execution surfaces. Provider-factory cleanup may delete loader helpers, but it must not widen into a non-CLI runner API redesign.
 
 ### Session Payload
 
@@ -108,11 +109,13 @@ Rollback:
 - Add `--provider` to mutating CLI parsers.
 - Fix `resolve_runtime_config(...)` merge semantics so generic config and CLI overrides target the effective provider rather than hard-coding Codex fields.
 - Remove `--provider-factory`, `AUTOLOOP_PROVIDER_FACTORY`, and `load_provider_factory(...)` from the public CLI path.
+- Keep `runtime/runner.py` cleanup narrow: preserve `run_workflow_package(..., provider=...)` and `execute_workflow_package(..., provider=...)` for non-CLI callers while removing only factory-loader helpers and CLI-facing resolution glue.
 - Delete `load_provider_factory(...)` from `runtime/runner.py` once no code uses it.
 - Preserve `cli.main(..., provider_factory=...)` with its current direct-injection role for tests.
 
 Regression control:
 - Add CLI tests for help text, unknown-argument rejection, selected-provider config merging, and the retained non-public seam.
+- Add a narrow runner-surface regression assertion so provider cleanup cannot silently change the direct execution API for non-CLI callers.
 - Keep provider resolution typed; do not add any public “factory” config field.
 
 Rollback:
