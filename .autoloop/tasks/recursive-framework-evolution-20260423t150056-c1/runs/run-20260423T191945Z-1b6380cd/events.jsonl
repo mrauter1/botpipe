@@ -8,3 +8,6 @@
 {"ts": "2026-04-23T19:31:13.264092+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 8, "event_type": "phase_started", "phase_id": "route-contract-normalization", "phase_mode": "single"}
 {"ts": "2026-04-23T19:31:13.264972+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "route-contract-normalization"}
 {"ts": "2026-04-23T19:31:13.265110+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "route-contract-normalization"}
+{"ts": "2026-04-23T19:40:44.324073+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 11, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-contract-normalization"}
+{"ts": "2026-04-23T19:43:08.421169+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 12, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-contract-normalization"}
+{"ts": "2026-04-23T19:43:10.488319+00:00", "run_id": "run-20260423T191945Z-1b6380cd", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "route-contract-normalization"}
