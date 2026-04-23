@@ -21,3 +21,7 @@
 
 - Standing recursive memory already carried the cycle-3 shipped/deferred portfolio direction, so this phase refreshed those ledgers with validation-backed closeout context instead of changing workflow prioritization.
 - The combined targeted pytest sweep is the authoritative AC-1 proof for this phase because it covers both the new shipped workflow/building-block surface and the standing memory/doc assertions that future cycles inherit.
+
+## Review findings
+
+- `REV-000` | `non-blocking` | No actionable findings. Verifier reran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_workflow_builder_package.py tests/test_architecture_baseline_docs.py` and confirmed `62 passed in 1.20s`; the closeout diff stays within recursive-memory and phase-local task artifacts and leaves recursive wrapper/template cleanup as an explicit out-of-scope residual.
