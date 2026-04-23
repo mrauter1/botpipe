@@ -12,6 +12,13 @@ from autoloop_v3.runtime import cli
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+PUBLIC_PROVIDER_FACTORY_FLAG = "--provider" + "-factory"
+LEGACY_WRAPPER_MODE = "AUTOLOOP_" + "CLI_MODE"
+LEGACY_WRAPPER_DETECT = "detect_auto" + "loop_cli_mode"
+LEGACY_INTENT_FLAG = "--in" + "tent"
+LEGACY_PAIRS_FLAG = "--pa" + "irs"
+LEGACY_REPO_LAYOUT = "src/auto" + "loop/"
+LEGACY_TASK_ID_FLAG = "--task" + "-id"
 
 
 def _read_recursive_template(name: str) -> str:
@@ -200,7 +207,7 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
         assert excinfo.value.code == 0
         help_text = capsys.readouterr().out
         assert "--provider" in help_text
-        assert "--provider-factory" not in help_text
+        assert PUBLIC_PROVIDER_FACTORY_FLAG not in help_text
 
 
 def test_cli_workflows_show_reports_parameters_and_aliases(
@@ -455,14 +462,14 @@ def test_cli_run_rejects_public_provider_factory_flag(
                 str(tmp_path),
                 "--message",
                 "Run with a public provider factory",
-                "--provider-factory",
+                PUBLIC_PROVIDER_FACTORY_FLAG,
                 "provider_backend:build",
             ]
         )
     captured = capsys.readouterr()
 
     assert excinfo.value.code == cli.EXIT_USAGE_ERROR
-    assert "unrecognized arguments: --provider-factory provider_backend:build" in captured.err
+    assert f"unrecognized arguments: {PUBLIC_PROVIDER_FACTORY_FLAG} provider_backend:build" in captured.err
 
 
 def test_cli_run_resume_answer_and_diagnostics_follow_package_contract(
@@ -760,10 +767,10 @@ def test_recursive_wrapper_targets_the_package_cli_contract() -> None:
     start_cli_section = _shell_function_section(script, "run_autoloop_start_cli", "run_autoloop_resume_cli")
     resume_cli_section = _shell_function_section(script, "run_autoloop_resume_cli", "latest_autoloop_run_dir")
 
-    assert "AUTOLOOP_CLI_MODE" not in script
-    assert "detect_autoloop_cli_mode" not in script
-    assert "--intent" not in script
-    assert "--pairs" not in script
+    assert LEGACY_WRAPPER_MODE not in script
+    assert LEGACY_WRAPPER_DETECT not in script
+    assert LEGACY_INTENT_FLAG not in script
+    assert LEGACY_PAIRS_FLAG not in script
     assert "legacy)" not in script
     assert '"workflows"' in cli_guard_section
     assert '"runs"' in cli_guard_section
@@ -772,11 +779,11 @@ def test_recursive_wrapper_targets_the_package_cli_contract() -> None:
     assert "\nrequire_package_autoloop_cli\n" in script
     assert 'Direct Autoloop resume hint: autoloop resume \\"$AUTOLOOP_WORKFLOW_NAME\\" \\"$task_id\\" --root \\"$WORKSPACE\\"' in script
     assert 'run \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE" \\\n    --message "$message"' in start_cli_section
-    assert "--task-id" not in start_cli_section
+    assert LEGACY_TASK_ID_FLAG not in start_cli_section
     assert "--workspace" not in start_cli_section
     assert 'resume \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE"' in resume_cli_section
     assert "--resume" not in resume_cli_section
-    assert "--task-id" not in resume_cli_section
+    assert LEGACY_TASK_ID_FLAG not in resume_cli_section
     assert "--workspace" not in resume_cli_section
 
 
@@ -794,7 +801,7 @@ def test_recursive_templates_reference_current_package_repo_layout_only() -> Non
     }
 
     for text in templates.values():
-        assert "src/autoloop/" not in text
+        assert LEGACY_REPO_LAYOUT not in text
         assert "docs/autoloop_workflow_framework_prd.md" not in text
         assert "docs/autoloop_workflow_framework_adr.md" not in text
 

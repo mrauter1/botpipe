@@ -76,6 +76,54 @@ There is no public raw execution mode. The CLI does not accept raw workflow file
 
 `autoloop run` is message-first and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
 
+Mutating commands also accept generic runtime controls:
+
+- `--provider`
+- `--model`
+- `--model-effort`
+- `--max-steps`
+
+## Provider Selection
+
+Public provider selection is typed and package-runtime-owned. The runtime discovers `autoloop.yaml` or `autoloop.config` from the user config directory and the repo root, then merges those layers with CLI overrides.
+
+Typed example:
+
+```yaml
+provider:
+  name: claude
+  model: claude-sonnet
+  model_effort: high
+  claude:
+    permission_strategy: inherit
+runtime:
+  max_steps: 100
+```
+
+Contract:
+
+- `provider.name` selects the built-in backend, currently `codex` or `claude`
+- `provider.model` and `provider.model_effort` are generic typed overrides that target the selected provider
+- provider-specific blocks such as `provider.codex.*` and `provider.claude.*` remain typed config, not ad-hoc loader strings
+- CLI overrides use `--provider`, `--model`, and `--model-effort`
+- provider construction is framework-owned and resolved from the typed provider name
+
+## Resumability
+
+Provider resumability is modeled as an opaque continuation token stored in `session_id`.
+
+Framework-owned persisted session payloads use canonical fields such as:
+
+- `provider`
+- `session_id`
+- `provider_metadata`
+- `model_override`
+- `effort_override`
+- `pending_clarification_note`
+- timestamps
+
+`session_id` is the only cross-provider continuation handle in the runtime model. Provider-specific extra state belongs under `provider_metadata`.
+
 ## Workspace Layout
 
 Runtime data lives under task, workflow, and run scopes:
@@ -110,6 +158,15 @@ Semantics:
 - run scope stores immutable request snapshots and run-local execution artifacts
 
 The task `request.md` is the latest rendered request snapshot for the task. Each run also stores its own immutable `request.md` snapshot at run start.
+
+## Recursive Operation
+
+Recursive automation under `recursive_autoloop/` assumes the package CLI only.
+
+- Wrapper start commands use `autoloop run <workflow> <task-id> --root ... --message ...`
+- Wrapper resume commands use `autoloop resume <workflow> <task-id> --root ...`
+- Recursive memory lives under `.autoloop_recursive/`
+- Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, and repo-root `workflows/`
 
 ## Composition And Parity
 
