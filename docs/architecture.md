@@ -108,6 +108,14 @@ Contract:
 - CLI overrides use `--provider`, `--model`, and `--model-effort`
 - provider construction is framework-owned and resolved from the typed provider name
 
+Built-in runtime adapters live under `runtime/providers/` and are selected only through `runtime/provider_backends.py`. Those adapters satisfy the existing `LLMProvider` protocol directly:
+
+- `run_producer(...) -> ProducerResponse`
+- `run_verifier(...) -> OutcomeResponse`
+- `run_llm(...) -> OutcomeResponse`
+
+Provider loading is not a public factory surface. Operators stay on typed config plus the generic CLI flags above.
+
 ## Resumability
 
 Provider resumability is modeled as an opaque continuation token stored in `session_id`.
@@ -123,6 +131,8 @@ Framework-owned persisted session payloads use canonical fields such as:
 - timestamps
 
 `session_id` is the only cross-provider continuation handle in the runtime model. Provider-specific extra state belongs under `provider_metadata`.
+
+Verifier and single-LLM turns remain strict runtime contracts: built-in CLI adapters must return machine-parseable JSON outcomes that the runtime validates locally before the workflow engine accepts them. Provider-specific continuation aliases do not leak into framework-owned session payloads.
 
 ## Workspace Layout
 

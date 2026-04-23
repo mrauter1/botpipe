@@ -2,3 +2,6 @@
 Treat the request snapshot and repo-root provider_implementation.md as the authoritative command-surface baseline because no separate uploaded helper implementation exists in the repository.
 Keep provider-specific implementation strictly under runtime/providers and preserve core/providers plus runtime session persistence as unchanged framework contracts.
 Use a dedicated runtime provider test module in addition to tests/runtime/test_provider_backends.py if needed so backend-resolution assertions stay separate from adapter/parser subprocess simulations.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="runtime-provider-foundation" pair="implement" turn_seq="1" run_id="run-20260423T180056Z-5e4b6957" ts="2026-04-23T18:06:48.275808+00:00" />
+Treat only provider-tagged session bindings as resumable; freshly opened session slots still carry synthetic local placeholder session_ids until a real provider turn writes canonical metadata, so adapters must start instead of resume when metadata lacks the matching provider name.
+Use `codex exec resume ... <session_id> -` for resumed turns so the prompt remains stdin-driven while matching the current local Codex CLI help surface that advertises `[SESSION_ID] [PROMPT]` with `-` as the stdin prompt sentinel.

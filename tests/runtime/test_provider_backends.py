@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from autoloop_v3.runtime import cli
+from autoloop_v3.runtime.providers.claude import ClaudeProvider
+import autoloop_v3.runtime.providers.claude as claude_runtime_provider
+from autoloop_v3.runtime.providers.codex import CodexProvider
+import autoloop_v3.runtime.providers.codex as codex_runtime_provider
 from autoloop_v3.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
@@ -36,11 +41,21 @@ def _resolved_config(provider_name: str = "codex") -> ResolvedRuntimeConfig:
     return ResolvedRuntimeConfig(
         provider=ProviderConfig(
             name=provider_name,
-            codex=CodexProviderConfig(model="gpt-test", model_effort="medium"),
-            claude=ClaudeProviderConfig(model="claude-test", effort="high"),
+            codex=CodexProviderConfig(model="gpt-test", model_effort=None),
+            claude=ClaudeProviderConfig(model="claude-test", effort=None),
         ),
         runtime=RuntimeConfig(max_steps=5),
     )
+
+
+@pytest.fixture(autouse=True)
+def _clear_provider_cli_caches() -> None:
+    codex_runtime_provider._probe_codex_exec_surface.cache_clear()
+    claude_runtime_provider._probe_claude_help_surface.cache_clear()
+
+
+def _completed(*, args: list[str], stdout: str = "", stderr: str = "", returncode: int = 0) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(args=args, returncode=returncode, stdout=stdout, stderr=stderr)
 
 
 def test_resolve_provider_backend_dispatches_by_provider_name(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -75,7 +90,7 @@ def test_resolve_provider_backend_rejects_module_function_provider_names() -> No
 def test_resolve_provider_backend_raises_precise_error_for_unavailable_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(provider_backends, "_command_on_path", lambda name: None)
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: None)
 
     with pytest.raises(
         ConfigError,
@@ -84,17 +99,132 @@ def test_resolve_provider_backend_raises_precise_error_for_unavailable_backend(
         resolve_provider_backend(config=_resolved_config("claude"))
 
 
-def test_resolve_provider_backend_raises_precise_error_for_unimplemented_codex_adapter(
+def test_resolve_provider_backend_raises_precise_error_for_unavailable_codex_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(provider_backends, "_command_on_path", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: None)
 
     with pytest.raises(
         ConfigError,
-        match=r"provider 'codex' is unavailable in this repository build: the framework-owned Codex adapter "
-        r"has not been implemented yet \(detected CLI at /usr/bin/codex\)\.",
+        match=r"provider 'codex' is unavailable in this environment: the 'codex' CLI was not found on PATH\.",
     ):
         resolve_provider_backend(config=_resolved_config("codex"))
+
+
+def test_resolve_provider_backend_returns_real_codex_provider_when_capabilities_are_supported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command == ["codex", "exec", "--help"]:
+            return _completed(
+                args=command,
+                stdout="--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n",
+            )
+        if command == ["codex", "exec", "resume", "--help"]:
+            return _completed(
+                args=command,
+                stdout="--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n",
+            )
+        raise AssertionError(f"unexpected command: {command!r}")
+
+    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+
+    provider = resolve_provider_backend(config=_resolved_config("codex"))
+
+    assert isinstance(provider, CodexProvider)
+
+
+def test_resolve_provider_backend_returns_real_claude_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(
+            args=command,
+            stdout="--print\n-p\n--output-format\n--resume\n--model\n--allowedTools\n--dangerously-skip-permissions\n",
+        ),
+    )
+
+    provider = resolve_provider_backend(config=_resolved_config("claude"))
+
+    assert isinstance(provider, ClaudeProvider)
+
+
+def test_resolve_provider_backend_raises_precise_error_for_unsupported_codex_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command == ["codex", "exec", "--help"]:
+            return _completed(args=command, stdout="--full-auto\n-m, --model <MODEL>\n")
+        if command == ["codex", "exec", "resume", "--help"]:
+            return _completed(args=command, stdout="--json\n-m, --model <MODEL>\n--full-auto\n")
+        raise AssertionError(f"unexpected command: {command!r}")
+
+    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+
+    with pytest.raises(ConfigError, match=r"provider 'codex' requires 'codex exec --json' support"):
+        resolve_provider_backend(config=_resolved_config("codex"))
+
+
+def test_resolve_provider_backend_rejects_codex_model_effort_when_cli_does_not_support_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command == ["codex", "exec", "--help"]:
+            return _completed(
+                args=command,
+                stdout="--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n",
+            )
+        if command == ["codex", "exec", "resume", "--help"]:
+            return _completed(
+                args=command,
+                stdout="--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n",
+            )
+        raise AssertionError(f"unexpected command: {command!r}")
+
+    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+    config = replace(
+        _resolved_config("codex"),
+        provider=replace(
+            _resolved_config("codex").provider,
+            codex=CodexProviderConfig(model="gpt-test", model_effort="medium"),
+        ),
+    )
+
+    with pytest.raises(ConfigError, match=r"provider\.codex\.model_effort"):
+        resolve_provider_backend(config=config)
+
+
+def test_resolve_provider_backend_rejects_claude_effort_when_cli_does_not_support_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(
+            args=command,
+            stdout="--print\n-p\n--output-format\n--resume\n--model\n--allowedTools\n--dangerously-skip-permissions\n",
+        ),
+    )
+    config = replace(
+        _resolved_config("claude"),
+        provider=replace(
+            _resolved_config("claude").provider,
+            claude=ClaudeProviderConfig(model="claude-test", effort="high"),
+        ),
+    )
+
+    with pytest.raises(ConfigError, match=r"provider\.claude\.effort"):
+        resolve_provider_backend(config=config)
 
 
 def test_cli_resolve_provider_uses_builtin_backend_resolver_when_not_injected(

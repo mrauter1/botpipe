@@ -133,6 +133,10 @@ autoloop run review task-42 \
 
 If a workflow or template documents operational usage, keep it on this typed surface. Do not document ad-hoc backend construction or out-of-band provider injection.
 
+Concrete runtime adapters live under `runtime/providers/`, but that package is framework-owned implementation detail. Workflow authors should target the typed runtime config surface and the generic CLI flags rather than importing provider adapters or describing non-public factory hooks.
+
+For `PairStep` verifiers and `LLMStep` prompts, treat the provider-facing completion contract as strict JSON. The runtime now validates verifier and single-LLM outcomes locally, so prompts should ask for one JSON object matching the declared routes and payload contract rather than free-form prose.
+
 ## Prompt And Artifact Resolution
 
 Relative prompts and bundled assets resolve from the workflow package root, never from the current working directory.
@@ -173,6 +177,7 @@ Implications for authors:
 - do not assume provider-specific naming for the continuation handle
 - do not read or write session JSON directly from workflow logic
 - keep provider-specific behavior inside provider adapters or provider-specific prompts, not workflow contracts
+- do not document or depend on any legacy provider-specific continuation alias outside the canonical `session_id` contract
 
 ## Workflow Composition
 
