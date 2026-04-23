@@ -209,3 +209,95 @@ No phase-local review blockers remain. This phase can be marked complete; the kn
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+---
+I’m treating this as a phase-local test pass on the lifecycle-helper seam and the two migrated workflow packages. First I’m reading the active test artifacts and the current helper-focused coverage so I can see what regression surface still needs explicit assertions before I edit tests.
+
+I found one regression surface that isn’t explicitly pinned yet: the invocation-contract helper’s reserved run identity fields must stay ctx-owned even if a workflow accidentally passes colliding keys. I’m adding a narrow unit test for that, then I’ll update the phase test strategy and the phase feedback summary around the exact coverage we now have.
+
+The extra regression pin is in. I’m running the same helper-focused plus builder/release targeted pytest slice now to verify the added assertion didn’t accidentally narrow behavior or introduce a flaky assumption.
+
+The targeted test slice is clean: `25 passed`. I’m doing one quick read of the test artifact files to make sure the recorded coverage map and feedback accurately match the assertions I added, then I’ll close the phase out.
+
+Scope considered
+
+Phase-local only: the new lifecycle helper coverage in `tests/unit/test_stdlib_and_extensions.py`, the existing targeted builder/release regression tests, and the active test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/test/phases/workflow-lifecycle-helpers/`.
+
+What I analyzed
+
+I reviewed the helper implementation and the current test surface for `open_workflow_sessions`, workflow-local JSON writes, invocation-contract writing, and publication-receipt writing. The main uncovered regression risk was reserved-field collision in `write_invocation_contract(...)`, where future refactors could accidentally let payload data override ctx-owned workflow/task/run/request identity.
+
+What I changed
+
+- Added a unit test in `tests/unit/test_stdlib_and_extensions.py` that asserts `write_invocation_contract(...)` keeps `workflow_name`, `task_id`, `run_id`, `request_file`, and `message` authoritative from `ctx` even if the payload collides.
+- Updated `test_strategy.md` with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, flake controls, and known gaps.
+- Appended a concise summary to the phase `feedback.md`.
+- Appended one non-obvious test decision under the latest `decisions.txt` header.
+
+Key findings / decisions
+
+- The helper-focused regression slice now covers happy path, failure path, and the most important identity-preservation edge case for invocation contracts.
+- Validation passed: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py` -> `25 passed in 0.79s`.
+- I kept the scope narrow and did not normalize any broader behavior change or recurse into unrelated failing areas.
+
+Open issues / next step
+
+- No phase-local blockers.
+- Known gap remains unchanged: I did not run the broader suite beyond the helper-focused plus builder/release targeted regressions.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+---
+I’m auditing the phase-local test work only: the new helper-focused assertions, the updated test strategy, and the feedback summary against the accepted lifecycle-helper scope. First I’m reading the audit artifacts and the touched test coverage, then I’ll re-run the targeted pytest slice before I mark the audit verdict.
+
+I’ve confirmed the test plan and feedback align with the actual assertions that were added. I’m re-running the targeted slice one more time from the auditor side so the verdict is based on an independent pass, then I’ll update the phase audit artifacts.
+
+Scope considered
+
+Phase-local test-audit scope only: the lifecycle-helper assertions in `tests/unit/test_stdlib_and_extensions.py`, the existing targeted builder/release regression tests, the updated `test_strategy.md`, and the phase feedback/criteria artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/test/phases/workflow-lifecycle-helpers/`.
+
+What I analyzed
+
+I checked whether the tests actually cover the changed helper behavior and the preserved workflow behavior that mattered for this phase: workflow-local JSON writing, invocation-contract writing, publication-receipt writing, and the guarantee that the helper stays authoring-level without changing builder/release receipt semantics. I also checked for missing edge/failure coverage and for flaky assumptions.
+
+What I reviewed
+
+I reviewed the new helper-focused assertions, the existing builder/release runtime tests that pin artifact and receipt behavior, the phase test strategy coverage map, the shared decisions ledger, and the raw log context. I independently reran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py`, which passed with `25 passed in 0.81s`.
+
+Key findings / decisions
+
+No blocking audit findings. The test set now covers happy path, failure-path validation for workflow-local JSON writes, and the key invocation-contract edge case where payload collisions must not override ctx-owned identity fields. I updated the phase criteria to all checked and appended a non-blocking audit verdict to the phase feedback file.
+
+Open issues / next step
+
+No phase-local test-audit blockers remain. The known broader-suite gap is unchanged: this phase validated the helper-focused plus builder/release targeted regression slice only.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
