@@ -16,15 +16,15 @@
       "docs-strictness-and-regression-proof"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "docs-strictness-and-regression-proof"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "provider-backend-boundary": "completed",
     "public-cli-provider-contract": "completed",
     "session-id-schema-cleanup": "completed",
     "recursive-wrapper-package-only": "completed",
-    "docs-strictness-and-regression-proof": "in_progress"
+    "docs-strictness-and-regression-proof": "completed"
   },
   "phase_history": [
     {
@@ -84,6 +84,13 @@
       "run_id": "run-20260423T150130Z-9c90604b",
       "status": "in_progress",
       "ts": "2026-04-23T16:17:20.950760+00:00"
+    },
+    {
+      "phase_id": "docs-strictness-and-regression-proof",
+      "run_id": "run-20260423T150130Z-9c90604b",
+      "status": "completed",
+      "ts": "2026-04-23T16:30:44.519435+00:00",
+      "pair": "test"
     }
   ]
 }
