@@ -804,7 +804,7 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop_v3.stdlib import adopt_child_artifacts, run_child_workflow
+from autoloop_v3.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
 from workflow import SUCCESS, SystemStep, Workflow
 from workflow.primitives import Event
 
@@ -826,6 +826,12 @@ class ParentCompositionHelperWorkflow(Workflow):
             "child_success",
             message="Run child via helper",
             parameters={"mode": "strict"},
+        )
+        require_child_workflow_result(
+            child,
+            status="success",
+            last_event="done",
+            required_artifacts=("child_dump",),
         )
         adopted = adopt_child_artifacts(
             ctx,
