@@ -544,3 +544,115 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+---
+I’m treating this as the final proof/docs/memory phase for the recursive framework cycle. I’ll first inspect the mandatory framework/workflow files plus the active phase artifacts to confirm what already shipped, what still needs validation, and what proof surface is missing.
+
+The repository layout has already diverged from the original `src/autoloop/...` paths, and the phase plan documents the current equivalents. I’m switching to the live kernel/docs paths plus the prior phase notes so the proof work stays aligned with what actually shipped.
+
+The earlier phases already landed the workflow-builder package and the step control-contract kernel. I’m now checking the phase-owned proof artifacts, recursive memory, and the shipped package/tests to see what still needs documentation or validation evidence in this closing phase.
+
+I’ve confirmed the core implementation is already present. The likely missing piece is a final proof pass plus small doc/memory cleanup, especially around making the new step control-contract surface explicit in the stable authoring docs rather than only inside the workflow-builder package docs and instructions.
+
+Plan for the closeout phase:
+1. Run the targeted proof suite around the new workflow package, the step control-contract kernel, and the stable docs surface.
+2. If the proof exposes a documentation gap, patch only the relevant docs/tests and record the residual broader-suite issue separately.
+3. Update the phase notes, shared decisions, and recursive memory so the next cycle inherits the shipped baseline and the remaining cleanup target.
+
+The targeted kernel, workflow-builder, and baseline-doc suites are green. I’m pulling the full `test_package_cli` failure output now so I can decide whether this phase needs a tiny docs/test patch or just a documented residual issue.
+
+I’ve narrowed the remaining work to a small closeout patch: make the new step control-contract surface explicit in `docs/authoring.md`, tighten the baseline doc test around that contract, and record the final proof results plus the still-outstanding recursive wrapper/template CLI gap in the phase notes and recursive memory.
+
+I’ve applied the closeout patch. I’m rerunning the doc-baseline proof now to confirm the new authoring-contract wording is enforced cleanly, and then I’ll do a quick diff/status review before wrapping.
+
+The doc proof is green. I’m doing one last content check on the untracked recursive-memory and baseline-doc files, since this repo state treats them as newly added surfaces rather than tracked edits.
+
+**Scope considered**
+
+Targeted closeout for the shipped workflow-builder and step control-contract work: stable docs, proof notes, recursive memory, and phase-local decision capture. I kept the phase scoped away from the unrelated repo churn and from fixing `recursive_autoloop/` itself.
+
+**What I analyzed**
+
+I reviewed the live architecture/authoring surface, the shipped workflow-builder package and its tests, the active phase artifacts, the shared decisions ledger, and the standing recursive memory. I then ran the targeted proof suite around the builder, control-contract kernel, parity, docs, and the broader package-CLI check.
+
+**What I changed**
+
+I made the narrow step control-contract surface explicit in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and tightened the baseline doc assertion in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+
+I updated recursive memory in [framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md), [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md), [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md), and [workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md) so later cycles inherit the shipped baseline and the concrete remaining wrapper/template cleanup seam. I also recorded the closeout disposition in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/proof-docs-and-memory/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/proof-docs-and-memory/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt).
+
+**Key findings / decisions**
+
+Targeted proof passed for:
+- `tests/runtime/test_workflow_builder_package.py`
+- `tests/unit/test_validation.py tests/contract/test_engine_contracts.py`
+- `tests/runtime/test_workflow_integration_parity.py tests/test_architecture_baseline_docs.py`
+
+Residual broader-suite failure remains in `tests/runtime/test_package_cli.py`: `recursive_autoloop/run_recursive_autoloop.sh` is missing `require_package_autoloop_cli`, and some recursive templates still reference `src/autoloop/...`. I documented that as a future-cycle cleanup item rather than expanding this phase into wrapper/template repairs.
+
+**Open issues / next step**
+
+The strongest next move is either:
+- author the first real domain workflow through `workflow_idea_to_workflow_package`, or
+- explicitly target the recursive wrapper/template package-CLI alignment gap now recorded in standing memory.
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+---
+I’m reviewing the proof/docs/memory closeout against the active phase contract. I’ll inspect the changed scope, verify the documented proof surface and residual failure handling, then update the phase criteria and feedback with any findings.
+
+I have the scoped diff and notes. I’m rerunning the proof commands directly as the reviewer so the criteria and feedback are based on verified results, not just the implementation notes.
+
+The rerun matches the implementation notes: all targeted proof suites pass, and the broader package-CLI failure is limited to the already-documented recursive wrapper/template drift. I’m updating the phase criteria to complete and appending the final reviewer disposition to feedback.
+
+Scope considered
+
+Phase-local review of the proof/docs/memory closeout for cycle 1, focused on the scoped doc update, recursive-memory updates, phase notes, and the documented validation surface. I did not pull unrelated dirty files into scope.
+
+What I analyzed
+
+I reviewed the active phase artifacts, the shared decisions ledger, the changed authoring-doc and recursive-memory surfaces, and the reported proof commands. I also checked the scoped worktree status for the files touched by this phase.
+
+What I reviewed
+
+I reran:
+- `tests/runtime/test_workflow_builder_package.py`
+- `tests/unit/test_validation.py tests/contract/test_engine_contracts.py`
+- `tests/runtime/test_workflow_integration_parity.py tests/test_architecture_baseline_docs.py`
+- `tests/runtime/test_package_cli.py`
+
+I verified that the first three commands pass and that the last command still fails only in untouched `recursive_autoloop/` wrapper/template files, matching the documented residual.
+
+Key findings / decisions
+
+No blocking findings. I marked all criteria as passed in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/proof-docs-and-memory/criteria.md) and appended the reviewer disposition in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/implement/phases/proof-docs-and-memory/feedback.md). The only remaining issue is the already-documented, out-of-scope `tests/runtime/test_package_cli.py` residual around `require_package_autoloop_cli` and stale `src/autoloop/...` template references.
+
+Open issues / next step
+
+The phase can be treated as complete. The next explicit follow-up, if chosen in a later cycle, is the dedicated `recursive_autoloop/` wrapper/template package-CLI alignment cleanup captured in the standing memory and phase feedback.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
