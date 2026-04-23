@@ -106,3 +106,65 @@ phase_mode=single
 phase_ids=workflow-lifecycle-helpers,incident-hardening-program-package,proof-docs-and-recursive-memory
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc15-d406-7dd1-9e11-907ac6787d83
+---
+I’m treating this as a scoped implement/test turn for the `workflow-lifecycle-helpers` phase. First I’m reading the phase artifacts, the mandatory framework/workflow files, and the current shipped workflow packages to map the helper seam without widening runtime behavior.
+
+The request snapshot’s old doc/session paths are stale in this repo, which matches the plan note. I’m switching to the current equivalents, then I’ll isolate the duplicated bootstrap/publication logic in the shipped builder and release packages before editing.
+
+The repository is already dirty in many unrelated places, so I’m keeping scope to the phase files plus the two shipped packages and their tests. Next I’m reading the current workflow implementations and tracing the duplicated lifecycle functions they already share informally.
+
+I’ve confirmed the duplication is narrowly in three places: opening the step sessions, writing the workflow-local invocation contract JSON, and writing/validating the terminal publication receipt. I’m checking the existing package/export pattern now so the helper lands as pure authoring support under `stdlib/` and stays importable through both repo-root and installed-package layouts.
+
+I have enough context to lock the implementation shape.
+
+Plan:
+1. Add a small `stdlib` lifecycle helper module for opening workflow sessions and writing workflow-local JSON artifacts, with specialized helpers for invocation contracts and publication receipts.
+2. Migrate `workflow_idea_to_workflow_package` and `release_candidate_to_go_no_go` to that helper without changing their artifact paths, route names, or receipt contents.
+3. Update `docs/authoring.md` to describe the helper as optional authoring support only, explicitly not runtime-owned automation.
+4. Extend stdlib-focused unit coverage for the helper seam, then run the targeted builder/release regression tests in `.venv`.
+
+I’m editing the helper seam now. The code change will stay narrow: one new `stdlib` module, small import rewires in the builder and release workflows, a doc note in `docs/authoring.md`, and helper-focused unit coverage.
+
+The seam is in place. I’m reading the patched files once before running tests to catch any import-order or helper-shape mistakes, then I’ll update the phase notes and run the targeted pytest set.
+
+The helper seam and migrations are holding under the targeted test slice so far. I’m capturing the final test status, then I’ll append the phase notes and decision ledger entry before closing out.
+
+I’m writing the phase-local notes now. After that I’ll do one quick diff sanity check so the close-out can call out exactly what changed and what stayed intentionally untouched.
+
+Scope considered
+- Phase-local only: shared lifecycle helpers under `stdlib/`, the shipped builder/release workflow packages, `docs/authoring.md`, helper coverage, and the phase notes/decision ledger.
+- I intentionally left `core/engine.py`, `runtime/runner.py`, and `runtime/cli.py` untouched.
+
+What I analyzed
+- The duplicated deterministic bootstrap/publication logic in [workflow_idea_to_workflow_package/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/workflow.py:257) and [release_candidate_to_go_no_go/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py:213).
+- The current authoring/runtime boundary in `docs/architecture.md`, [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:186), and the context/session surface.
+- The builder/release regression tests and stdlib unit coverage that would catch behavior drift.
+
+What I changed
+- Added [stdlib/lifecycle.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/lifecycle.py:1) with `open_workflow_sessions`, `write_workflow_json`, `write_invocation_contract`, and `write_publication_receipt`, and exported it via `stdlib/__init__.py`.
+- Migrated the builder and release packages to use that seam for bootstrap session opening, invocation-contract writing, and publication-receipt writing while keeping artifact names, routes, and receipt payload semantics unchanged.
+- Documented the helper as optional authoring support only in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:186).
+- Added helper-focused unit coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:43).
+- Updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/implement/phases/workflow-lifecycle-helpers/implementation_notes.md:10) and appended the non-obvious decision to `decisions.txt`.
+
+Key findings / decisions
+- The helper stays authoring-only. Workflow-specific publication validation remains in the workflow handlers, not in runtime or hidden helper automation.
+- Workflow-local JSON writes now reject non-`.json` targets and path escape attempts.
+- Validation passed: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py` -> `24 passed`.
+
+Open issues / next step
+- No in-phase blockers.
+- I did not run the broader suite. The known recursive wrapper/package-CLI drift called out in the plan remains untouched.

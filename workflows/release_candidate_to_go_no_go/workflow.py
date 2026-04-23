@@ -8,8 +8,14 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.lifecycle import (
+        open_workflow_sessions,
+        write_invocation_contract,
+        write_publication_receipt,
+    )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
 from workflow.primitives import Event, Outcome
@@ -231,23 +237,15 @@ class ReleaseCandidateToGoNoGo(Workflow):
                 "published": False,
             }
         )
-        for session_name in ("frame_session", "evidence_session", "assessment_session", "package_session"):
-            ctx.open_session(session_name)
-
-        request_text = (ctx.run_folder / "request.md").read_text(encoding="utf-8")
-        _write_json(
-            ctx.workflow_folder / "invocation_contract.json",
+        open_workflow_sessions(ctx, "frame_session", "evidence_session", "assessment_session", "package_session")
+        write_invocation_contract(
+            ctx,
             {
-                "workflow_name": ctx.workflow_name,
-                "task_id": ctx.task_id,
-                "run_id": ctx.run_id,
                 "release_name": next_state.release_name,
                 "target_date": next_state.target_date,
                 "deployment_environment": next_state.deployment_environment,
                 "release_owner": next_state.release_owner,
                 "evidence_paths": next_state.evidence_paths,
-                "request_file": str(ctx.run_folder / "request.md"),
-                "message": request_text,
             },
         )
         return next_state, Event("inputs_prepared")
@@ -298,8 +296,9 @@ class ReleaseCandidateToGoNoGo(Workflow):
         if not isinstance(recommended_decision, str) or not recommended_decision.strip():
             raise ValueError("decision_summary.json must define a non-empty recommended_decision")
 
-        _write_json(
-            ctx.workflow_folder / "decision_receipt.json",
+        write_publication_receipt(
+            ctx,
+            "decision_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
                 "release_name": state.release_name,
@@ -348,11 +347,6 @@ def _read_json(path) -> dict:
     if not isinstance(raw, dict):
         raise ValueError(f"expected a JSON object in {path}")
     return raw
-
-
-def _write_json(path, payload) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 __all__ = ["ReleaseCandidateToGoNoGo"]

@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.lifecycle import (
+        open_workflow_sessions,
+        write_invocation_contract,
+        write_publication_receipt,
+    )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
 from workflow.primitives import Event, Outcome
@@ -275,23 +279,15 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
                 "published": False,
             }
         )
-        for session_name in ("frame_session", "design_session", "build_session", "evaluate_session"):
-            ctx.open_session(session_name)
-
-        request_text = (ctx.run_folder / "request.md").read_text(encoding="utf-8")
-        _write_json(
-            ctx.workflow_folder / "invocation_contract.json",
+        open_workflow_sessions(ctx, "frame_session", "design_session", "build_session", "evaluate_session")
+        write_invocation_contract(
+            ctx,
             {
-                "workflow_name": ctx.workflow_name,
-                "task_id": ctx.task_id,
-                "run_id": ctx.run_id,
                 "package_name": next_state.package_name,
                 "package_title": next_state.package_title,
                 "workflow_kind": next_state.workflow_kind,
                 "aliases": next_state.aliases,
                 "target_test_command": next_state.target_test_command,
-                "request_file": str(ctx.run_folder / "request.md"),
-                "message": request_text,
             },
         )
         return next_state, Event("inputs_prepared")
@@ -335,8 +331,9 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             raise FileNotFoundError(f"missing promotion record at {promotion_path}")
         if not rollback_path.exists():
             raise FileNotFoundError(f"missing rollback plan at {rollback_path}")
-        _write_json(
-            ctx.workflow_folder / "publish_receipt.json",
+        write_publication_receipt(
+            ctx,
+            "publish_receipt.json",
             {
                 "workflow_name": ctx.workflow_name,
                 "package_name": state.package_name,
@@ -349,11 +346,6 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         return state.model_copy(update={"published": True}), Event("package_published")
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
-
-
-def _write_json(path, payload) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 __all__ = ["WorkflowIdeaToWorkflowPackage"]

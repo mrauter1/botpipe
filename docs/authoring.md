@@ -183,6 +183,25 @@ Implications for authors:
 - keep provider-specific behavior inside provider adapters or provider-specific prompts, not workflow contracts
 - do not document or depend on any legacy provider-specific continuation alias outside the canonical `session_id` contract
 
+## Optional Lifecycle Helpers
+
+`stdlib/lifecycle.py` provides a small opt-in helper seam for deterministic authoring tasks such as opening declared sessions and writing workflow-local JSON artifacts like invocation contracts and publication receipts.
+
+```python
+from autoloop_v3.stdlib import (
+    open_workflow_sessions,
+    write_invocation_contract,
+    write_publication_receipt,
+)
+```
+
+Use it only as authoring support inside explicit workflow hooks such as `on_bootstrap(...)` or `on_publish_* (...)`.
+
+- these helpers do not create hidden runtime sequencing or automatic system steps
+- they only operate on the workflow-owned `ctx` surface and `ctx.workflow_folder`
+- they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- publication-artifact validation and any workflow-specific receipt semantics still belong in workflow code
+
 ## Workflow Composition
 
 Runtime-backed contexts can invoke child workflows by package name or imported main class:
