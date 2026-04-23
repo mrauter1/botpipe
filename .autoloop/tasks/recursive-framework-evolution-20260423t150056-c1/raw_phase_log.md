@@ -438,3 +438,68 @@ No blocking audit issues remain in this phase. Unrelated known failures outside 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbe4-eae3-7041-8bb8-efaba6ee21e8
+---
+I’m inspecting the workflow framework, the active phase artifacts, and the existing workflow packages first so I can map the new `release_candidate_to_go_no_go` package onto current patterns without pulling unrelated changes into scope.
+
+The repository layout has already moved away from the stale `src/autoloop/...` paths in the request, so I’m reading the current framework entry points and the existing workflow-builder package next to mirror the live authoring contract instead of the legacy layout.
+
+I have the live authoring rules now. Next I’m reading the workflow compiler/runtime surfaces plus the existing builder package and its tests so the new package follows the same package contract and the new test exercises the real execution path instead of only static metadata.
+
+I’ve confirmed the package authoring pattern and the normalized route-contract surface. I’m checking the remaining runtime/test helpers and the prior phase notes now so the new workflow plugs into the current test harness cleanly and doesn’t duplicate any already-decided conventions.
+
+I’ve identified the live seams and the package pattern. I’m pulling the remaining implementation details now: scripted-provider behavior, prompt style, and the current validation/context helpers that will constrain how the release workflow writes artifacts and how the runtime test can drive it end to end.
+
+I’ve got the prompt contract style and the scripted-provider harness. I’m filling in a few framework details before editing: the transition helpers, validation rules around system/pair steps, and the existing `autoloop_v1` package shape so the new workflow reads like a native package rather than a one-off.
+
+I have enough context to start implementing. Before I patch files, I’m checking the phase checklist details for this package and then I’ll add the workflow package, prompts, docs, and a scripted-provider runtime test as one cohesive change set.
+
+I’m starting the scoped file edits now. The package will mirror the existing builder package contract: workflow class plus `Parameters` and `contracts`, explicit producer/verifier prompts for four pair steps, a package asset, workflow docs with the required decision records, and a scripted-provider runtime test that exercises the full terminal receipt path.
+
+I’m writing the package definition first: manifest, parameters, typed route contracts, workflow class, and the package asset/README. After that I’ll add the step prompts and the runtime test so the package and its proof land together.
+
+The package definition is in place. I’m adding the eight step prompts now, with the provider-facing contract carrying the operational SOP and the runtime surface staying limited to `expected_output_schema`, `available_routes`, and `route_contracts`.
+
+The package topology and prompts are in. I’m adding the workflow doc and the scripted-provider runtime test now so the phase proves discovery, compilation, legal routes, and terminal artifact creation from the same change set.
+
+I’ve written the package, prompts, doc, and runtime test. I’m doing a tight verification pass now for syntax, route-contract validity, and test assumptions before I touch the phase notes and shared decisions.
+
+I’ve finished the first verification pass and the files are internally consistent. I’m running the targeted proof set now: the new workflow test, the builder regression, and the validation/engine suites that cover the normalized route-contract seam.
+
+The core proof set is green. I’m running the broader documentation baseline check once so I can separate any package-local issues from the known recursive-memory residual before I close the phase notes.
+
+The package and proof are done. I’m recording the non-obvious package decisions and the phase-local implementation notes now, including the one unrelated doc-baseline residual so the next phase doesn’t mistake it for a regression from this change set.
+
+I’m collecting the final references now. The implementation itself is complete; I just want the close-out to point at the exact package, doc, and proof files and to call out the one non-phase residual cleanly.
+
+Scope considered
+
+Phase-local `release-go-no-go-package` work only: the new package under [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py:29), its typed contracts in [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/contracts.py:51), parameters in [params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/params.py:8), prompts/assets, package docs, runtime proof, and the required phase artifacts. I kept recursive memory updates and recursive wrapper/template remediation out of scope for this phase.
+
+What I analyzed
+
+I traced the live package/runtime contract through `core/validation.py`, `core/compiler.py`, `runtime/runner.py`, the strict `workflow` shim, and the existing builder package/test so the new workflow would use the normalized `route_contracts` seam cleanly and stay inside the current artifact-first package pattern.
+
+What I changed
+
+I added the full `release_candidate_to_go_no_go` workflow package with deterministic `bootstrap` and `publish_decision` system steps around four explicit pair steps for framing, evidence assembly, assessment, and final package assembly in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py:29). I also added the typed payloads and route contracts in [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/contracts.py:51), the package documentation and decision records in [release_candidate_to_go_no_go.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/release_candidate_to_go_no_go.md:38), and the scripted-provider runtime proof in [test_release_candidate_to_go_no_go.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_release_candidate_to_go_no_go.py:130). I updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/release-go-no-go-package/implementation_notes.md:10) and appended the non-obvious package decisions to `decisions.txt`.
+
+Key findings / decisions
+
+This is the first repo-owned workflow package that uses typed `RouteContract` declarations directly rather than mapping-style contracts. The workflow intentionally treats a materially broken assessment surface as a reset back to release framing, while package-level replan routes only back to assessment. The package now produces the concrete terminal artifacts the phase asked for, including `release_decision_package.md`, `release_communications_draft.md`, and deterministic `decision_receipt.json`.
+
+Open issues / next step
+
+Validation passed for `.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_workflow_builder_package.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py` with `64 passed`. The broader doc baseline still has the known unrelated failure in `tests/test_architecture_baseline_docs.py::test_recursive_memory_files_record_cycle_one_closeout_baseline`; that remains for the later proof/recursive-memory closeout phase rather than this package-local phase.
