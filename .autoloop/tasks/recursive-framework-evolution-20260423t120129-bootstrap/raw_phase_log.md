@@ -110,3 +110,46 @@ Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recur
 Phase 2 now explicitly freezes the non-CLI runner surface: `runtime/runner.py` cleanup may remove factory-loader helpers, but it must preserve `run_workflow_package(..., provider=...)` and `execute_workflow_package(..., provider=...)`. That invariant is now present in the target-interface section, Phase 2 scope, regression controls, machine-readable acceptance criteria, feedback history, and the current-turn decisions block.
 
 Validation: `phase_plan.yaml` was re-parsed locally with `yaml.safe_load` and still contains 5 planned phases.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbadc-4464-79c3-8d7f-e46eef6f9855
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dbadc-4464-79c3-8d7f-e46eef6f9855
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbadc-4464-79c3-8d7f-e46eef6f9855
+---
+I’m verifying only the revised planning artifacts and the verifier-raised gap. I’m rechecking the plan, phase YAML, feedback continuity, decisions alignment, and YAML parseability before I set the final criteria state.
+
+I’ve finished the recheck. The runner-surface invariant is now explicit in both plan artifacts, the decisions file aligns with it, and the YAML contract still parses cleanly. I’m marking the criteria complete and appending the resolution note to feedback now.
+
+Scope considered
+
+Authoritative request snapshot, authoritative raw log, shared decisions, the revised plan artifacts, and the verifier-raised runner-surface gap.
+
+What I analyzed
+
+I rechecked the updated `plan.md` and `phase_plan.yaml` against the request’s explicit requirements for provider-factory removal, preservation of the non-CLI runner surface, `thread_id` removal, recursive wrapper/template cleanup, docs/strictness hardening, sequencing, rollback, and regression controls. I also revalidated `phase_plan.yaml` parseability and required-list integrity.
+
+What I reviewed
+
+Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/plan/criteria.md) so all verification criteria are now checked, and appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/plan/feedback.md). I also rechecked [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/plan/phase_plan.yaml), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/decisions.txt). `phase_plan.yaml` still parses cleanly and its runtime-owned metadata remains intact.
+
+Key findings / decisions
+
+`PLAN-001` is resolved: the revised plan now explicitly preserves `run_workflow_package(..., provider=...)` and `execute_workflow_package(..., provider=...)` while removing factory-loader helpers.
+No remaining blocking findings.
+All criteria are now satisfied.
+
+Open issues / next step
+
+No blocking issues remain. The plan is complete and ready for implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
