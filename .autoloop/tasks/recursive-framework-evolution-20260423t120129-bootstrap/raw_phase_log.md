@@ -831,3 +831,82 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+---
+I’m implementing the session-id schema cleanup phase. First I’m reading the phase artifacts and the runtime/session code paths that currently read or write `thread_id`, then I’ll patch the store and parity surfaces and tighten the tests around the canonical `session_id` contract.
+
+I’ve loaded the prior provider-contract work and the current phase notes. Next I’m tracing every active `thread_id` reference through the runtime store, parity helpers, and tests so the cleanup stays phase-scoped and doesn’t miss a resumability path.
+
+I’ve isolated the two active code paths still leaking `thread_id`: the filesystem session payload loader/writer and the Autoloop-v1 parity raw-log helper. I’m reading the current runtime/parity tests now so I can replace compatibility assertions instead of weakening coverage.
+
+The remaining references are tightly scoped; no other active runtime tests currently pin `thread_id`. I’m checking the provider-facing session APIs next so the store cleanup doesn’t accidentally drop metadata a provider needs for resumability.
+
+The provider-facing types are clean: resumability flows through `SessionBinding.session_id` plus opaque metadata already, so the runtime change can stay local. I’m reading the phase criteria/session artifact now, then I’ll patch the store and parity helpers in one slice and add targeted tests around the new on-disk schema.
+
+The phase criteria are straightforward. The referenced phase-session JSON isn’t at the injected path, so I’m locating the actual session artifact in the run workspace before I edit anything that should be reflected in it.
+
+Plan for this phase:
+- Patch `runtime/stores/filesystem.py` so load, placeholder creation, and writes use only canonical `session_id` plus `provider_metadata`, with no `thread_id` aliasing or metadata mirroring.
+- Patch `workflows/autoloop_v1/parity.py` so raw-log/session helper naming follows `session_id` instead of `thread_id`.
+- Add focused tests for placeholder schema, roundtrip persistence, parity resumability, and a narrow source-scan guard that `thread_id` is gone from active runtime/parity code.
+
+I’ve got enough context to edit. I’m changing the filesystem session schema first so it never reads or writes the legacy top-level field, then I’m renaming the parity raw-log/session helper path to `session_id` so resume tracing stays intact without leaking provider-specific naming.
+
+The first patch missed current file context, so I’m reopening the exact sections and reapplying narrowly. The implementation target stays the same: remove the aliasing/mirroring logic and rename the parity raw-log field.
+
+The code-path cleanup is in. I’m adding tests in two layers now: store-level schema tests for the persisted JSON contract, and parity integration assertions that resumed Autoloop-v1 runs still carry the canonical session handle and never log the legacy field name.
+
+The schema and parity edits are patched, and the new tests cover both the JSON payload shape and the integration path. I’m running a focused scan now to verify the legacy name is gone from active runtime/parity code before I execute the targeted pytest slice.
+
+The first targeted slice passed. I’m widening verification a bit across store/context/CLI paths now, because the session payload change sits underneath run/resume and I want to catch any indirect regression before I close the phase.
+
+The broader runtime surface is mostly clean; one CLI test failed after the session-schema change. I’m pulling that failure detail now so I can fix the regression or tighten the assertion if it was implicitly depending on the legacy payload shape.
+
+The only broader failure is the already-known recursive wrapper test, which belongs to a later phase and still expects package-only wrapper cleanup that hasn’t been implemented yet. I’ve rerun the CLI slice with that out-of-scope test excluded, and the session-related runtime paths are passing.
+
+I’m doing a final read of the edited sections now and then I’ll update the phase notes and decision ledger. There’s one structural wrinkle in this repo: the current root files are untracked relative to the nested deleted tree, so I’m validating by direct file reads and targeted pytest rather than relying on `git diff` alone.
+
+One requirement wasn’t explicitly locked yet: an existing session file with no `provider` must use the configured default provider rather than silently inferring Codex. I’m adding that regression test before I wrap up.
+
+I’m updating the phase artifacts now: one decision entry to capture the intentional greenfield break and one concise implementation note block mapping the edits and validation back to the plan.
+
+The active runtime/parity tree is now clean of the legacy field name. I’m collecting line references for the touched code and then I’ll close with the phase summary plus the one out-of-scope wrapper failure that remains for the later recursive-wrapper phase.
+
+**Scope considered**
+- Phase-local `session-id-schema-cleanup`: runtime session payload persistence, Autoloop-v1 parity raw-log/session helpers, and the directly affected tests and phase artifacts.
+
+**What I analyzed**
+- [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py:185) load/write/placeholder paths and how `SessionBinding.session_id` is restored.
+- [workflows/autoloop_v1/parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/parity.py:163) continuation logging and resume clarification persistence.
+- Existing runtime/parity tests plus the active phase plan, notes, and decisions.
+
+**What I changed**
+- [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py:185) now only loads/writes canonical `session_id` plus `provider_metadata`; it no longer aliases or emits `thread_id`, and provider-less payloads now use the configured default provider instead of implicit Codex inference.
+- [workflows/autoloop_v1/parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/parity.py:163) now resolves/logs `session_id` rather than `thread_id`.
+- Added schema/no-alias/default-provider/source-guard tests in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:300).
+- Added parity/resume assertions in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:92).
+- Updated the phase notes and decision ledger.
+
+**Key findings / decisions**
+- `thread_id`-only session payloads are now intentionally unsupported and load as non-resumable; that matches the greenfield phase contract.
+- `SessionBinding.session_id` remains the only framework continuation handle, and provider-owned extra state still round-trips through `provider_metadata`.
+- No active `thread_id` references remain under `runtime/`, `workflows/`, or `tests/runtime/`.
+
+**Open issues / next step**
+- Validation passed:
+  - `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_integration_parity.py`
+  - `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py`
+  - `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+- The full `tests/runtime/test_package_cli.py` still has the known out-of-scope wrapper failure `test_recursive_wrapper_targets_the_package_cli_contract`; that belongs to the later recursive-wrapper cleanup phase.

@@ -164,7 +164,7 @@ class _AutoloopV1ParityRuntime:
         cycle, attempt = self._advance_progress(key, turn_kind)
         phase_id = _phase_id(state)
         self.last_turn_kind[(step_name, phase_id)] = turn_kind
-        thread_id = self._thread_id_for_step(step_name, state)
+        session_id = self._session_id_for_step(step_name, state)
 
         for raw_log in (self.task_raw_log, self.run_raw_log):
             _append_runtime_raw_log(
@@ -176,7 +176,7 @@ class _AutoloopV1ParityRuntime:
                 phase=turn_kind,
                 cycle=cycle,
                 attempt=attempt,
-                thread_id=thread_id,
+                session_id=session_id,
             )
 
     def _append_resume_clarification(self, event: StepStart) -> None:
@@ -265,7 +265,7 @@ class _AutoloopV1ParityRuntime:
         key = (step_name, step.session_name or "", self._scope_for_step(step.session_name, state) if state else None)
         return self.step_progress.get(key, (1, 1))
 
-    def _thread_id_for_step(self, step_name: str, state: BaseModel) -> str | None:
+    def _session_id_for_step(self, step_name: str, state: BaseModel) -> str | None:
         step = self.compiled.steps.get(step_name)
         if step is None or step.session_name is None:
             return None
@@ -358,7 +358,7 @@ def _append_runtime_raw_log(
     phase: str | None = None,
     cycle: int | None = None,
     attempt: int | None = None,
-    thread_id: str | None = None,
+    session_id: str | None = None,
     source: str | None = None,
 ) -> None:
     header = " | ".join(
@@ -370,7 +370,7 @@ def _append_runtime_raw_log(
             "phase": phase,
             "cycle": cycle,
             "attempt": attempt,
-            "thread_id": thread_id,
+            "session_id": session_id,
             "source": source,
         }.items()
         if value is not None
