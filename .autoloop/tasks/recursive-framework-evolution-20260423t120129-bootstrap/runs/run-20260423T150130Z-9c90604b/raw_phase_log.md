@@ -153,3 +153,12 @@ No blocking issues remain. The plan is complete and ready for implementation.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=provider-backend-boundary,public-cli-provider-contract,session-id-schema-cleanup,recursive-wrapper-package-only,docs-strictness-and-regression-proof
+explicit=True
+current_phase_index=0
