@@ -1,0 +1,8 @@
+# Implementation Notes
+
+- Task ID: recursive-framework-evolution-20260423t173132-c2
+- Pair: implement
+- Phase ID: investigation-evidence-pack-building-block
+- Phase Directory Key: investigation-evidence-pack-building-block
+- Phase Title: Ship Investigation Evidence-Pack Building Block
+- Scope: phase-local producer artifact
