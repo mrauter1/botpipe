@@ -390,3 +390,51 @@ Validation passed for:
 Open issues / next step
 
 Unrelated existing failures remain outside this phase in the full strictness token scan and the recursive-memory baseline doc check. The next step is the auditor/verifier pass over the updated test artifacts and coverage map.
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbbd3-328e-7a50-9050-83420d5e980f
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+I’m auditing the route-contract test phase now. I’ll inspect the added coverage against the phase contract, verify the claimed proof set, and then update only the test audit artifacts with the result.
+
+The coverage map looks coherent. I’m running the claimed route-contract proof set myself now so the audit is based on executed behavior, not just the strategy notes.
+
+I don’t see a phase-scoped coverage hole or flaky-risk issue after running the proof set. I’m marking the audit criteria complete and appending a concise audit result to the feedback ledger so the pass/fail state is explicit.
+
+Scope considered
+
+Phase-local audit of the route-contract normalization test work: the added unit/contract coverage, the runtime builder regression proof, the repo-local `workflow` shim assertion, and the phase strategy/feedback artifacts.
+
+What I analyzed
+
+I reviewed [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/route-contract-normalization/test_strategy.md:1), the shared decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/decisions.txt:1), and the relevant tests in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1), and [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:1).
+
+What I reviewed
+
+I executed:
+- `.venv/bin/pytest -q tests/unit/test_validation.py` (`28 passed`)
+- `.venv/bin/pytest -q tests/contract/test_engine_contracts.py` (`26 passed`)
+- `.venv/bin/pytest -q tests/runtime/test_workflow_builder_package.py tests/strictness/test_no_compat.py -k 'workflow_shim_exports_only_the_strict_authoring_surface'` (`1 passed`, remaining items intentionally deselected by the targeted filter)
+
+I also updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/route-contract-normalization/criteria.md:1) and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/test/phases/route-contract-normalization/feedback.md:1).
+
+Key findings / decisions
+
+No phase-scoped blocking findings. The tests cover the changed typed route-contract surface, preserved legacy mapping aliases (`state_effect` and `evidence`), route-legality and artifact-name rejection paths, and the repo-local `workflow` shim resolution after the import-order fix. The strategy artifact matches the exercised coverage.
+
+Open issues / next step
+
+No blocking audit issues remain in this phase. Unrelated known failures outside this phase still exist in the broader strictness/doc baselines, but they do not change the route-contract test audit result.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
