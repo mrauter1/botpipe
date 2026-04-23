@@ -779,3 +779,55 @@ Open issues / next step
 - Validation passed:
   - `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py tests/runtime/test_compatibility_runtime.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
 - The recursive-wrapper contract remains the only intentional phase gap; I did not add coverage for it here because that belongs to the later wrapper-cleanup phase.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+I’m auditing the provider-contract tests against the phase acceptance criteria and the shared decisions ledger. First I’m reading the test artifacts and the touched tests so I can judge whether the new coverage actually protects the intended contract before I mark the audit artifacts.
+
+The phase-scoped tests are covering the intended contract and the validation run is clean. I’m closing out the audit artifacts now with all criteria checked and a concise non-blocking audit note rather than inventing churn where there isn’t a real gap.
+
+Scope considered
+
+- Phase-local audit of the public provider contract tests only: the updated runtime tests, the phase `test_strategy.md`, and the phase audit artifacts.
+- I did not broaden into code changes or out-of-phase wrapper coverage beyond checking the stated intentional gap.
+
+What I analyzed
+
+- Whether the tests cover the requested public contract: `--provider` help exposure, parser rejection of `--provider-factory`, preserved `cli.main(..., provider_factory=...)` seam, typed provider merge order, and preserved non-CLI runner execution.
+- Whether the tests match the shared decisions on final-provider routing and layer precedence.
+- Whether the setup is deterministic and avoids environment-dependent flake.
+
+What I reviewed
+
+- `tests/runtime/test_package_cli.py`
+- `tests/runtime/test_provider_backends.py`
+- `tests/runtime/test_workspace_and_context.py`
+- `tests/runtime/test_compatibility_runtime.py`
+- Validation run:
+  - `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py tests/runtime/test_compatibility_runtime.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+
+Key findings / decisions
+
+- No blocking audit findings remain.
+- I marked all audit criteria complete.
+- I appended `TST-001 | non-blocking | Audit closeout` to `feedback.md` to record that the coverage is sufficient and stable for this phase scope.
+
+Open issues / next step
+
+- No phase-scope test gaps remain for the provider-contract work.
+- The recursive-wrapper coverage gap remains intentionally out of phase and was appropriately left out of this test audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
