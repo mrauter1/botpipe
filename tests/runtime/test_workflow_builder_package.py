@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -9,7 +10,12 @@ import pytest
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.runtime.loader import discover_workflow_packages, resolve_workflow_reference
+from autoloop_v3.runtime.loader import (
+    WorkflowParameterError,
+    coerce_workflow_parameter_mapping,
+    discover_workflow_packages,
+    resolve_workflow_reference,
+)
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from workflow.primitives import Outcome
 
@@ -105,6 +111,20 @@ def test_workflow_builder_package_docs_capture_decision_records() -> None:
         "tests/runtime/test_workflow_builder_package.py",
     ):
         assert required in text
+
+
+def test_workflow_builder_package_rejects_invalid_package_name(tmp_path: Path) -> None:
+    _install_repo_workflow_builder_package(tmp_path)
+    parameters_cls = resolve_workflow_reference(tmp_path, "workflow_idea_to_workflow_package").parameters_cls
+
+    with pytest.raises(WorkflowParameterError, match="package_name"):
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "package_name": "release-candidate-to-go-no-go",
+                "workflow_kind": "end_to_end",
+            },
+        )
 
 
 def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_path: Path) -> None:
@@ -313,6 +333,8 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
 
     workflow_dir = tmp_path / ".autoloop" / "tasks" / "workflow-builder-task" / "wf_workflow_idea_to_workflow_package"
     run_dir = next((workflow_dir / "runs").iterdir())
+    invocation_contract = json.loads((workflow_dir / "invocation_contract.json").read_text(encoding="utf-8"))
+    publish_receipt = json.loads((workflow_dir / "publish_receipt.json").read_text(encoding="utf-8"))
 
     assert result.terminal == "SUCCESS"
     assert (workflow_dir / "invocation_contract.json").exists()
@@ -323,6 +345,26 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
     assert (workflow_dir / "promotion_record.md").exists()
     assert (workflow_dir / "rollback_plan.md").exists()
     assert (workflow_dir / "publish_receipt.json").exists()
+    assert invocation_contract == {
+        "aliases": ["release-go-no-go"],
+        "message": "We need a workflow for release readiness reviews.\n",
+        "package_name": generated_name,
+        "package_title": "Release Candidate To Go No Go",
+        "request_file": str(run_dir / "request.md"),
+        "run_id": run_dir.name,
+        "target_test_command": "pytest -q",
+        "task_id": "workflow-builder-task",
+        "workflow_kind": "end_to_end",
+        "workflow_name": "workflow_idea_to_workflow_package",
+    }
+    assert publish_receipt == {
+        "package_name": generated_name,
+        "promotion_record": str(workflow_dir / "promotion_record.md"),
+        "published": True,
+        "rollback_plan": str(workflow_dir / "rollback_plan.md"),
+        "selected_candidate": "workflow_idea_to_workflow_package",
+        "workflow_name": "workflow_idea_to_workflow_package",
+    }
 
     generated_pkg_dir = tmp_path / "workflows" / generated_name
     assert generated_pkg_dir.is_dir()

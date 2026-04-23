@@ -429,3 +429,72 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb5a-afe0-7710-a456-ee6b2eaaba08
+---
+I’m treating this turn as phase-local test authoring for the workflow-builder package. I’ll inspect the new package, the existing workflow-builder tests, and the active test-phase artifacts first so I can add only the missing coverage and then write a concise behavior-to-test map.
+
+I’m validating the shipped workflow-builder package from the test phase now. First step is to inspect the current tests and phase-local test artifacts, then I’ll add any missing regression coverage before updating the strategy and feedback files.
+
+The current coverage already proves discovery, compilation, docs, and a scripted end-to-end run. I’m checking for a meaningful gap around deterministic system artifacts and loop behavior so the test phase adds something beyond restating the implementation pass.
+
+The main gap is that the existing integration test only checks that the bootstrap and publish artifacts exist, not that they carry the authoritative control data the workflow is supposed to make durable. I’m tightening that, and I’m also looking for one failure-path assertion around invalid invocation parameters.
+
+I found a clean failure-path candidate: invalid workflow parameters should be rejected before any provider turn runs. I’m wiring that into the package test file and strengthening the end-to-end assertions so the deterministic bootstrap/publish artifacts are checked by content, not just presence.
+
+I’m editing the test file now. The changes are limited to phase-relevant regression coverage: one invalid-parameter failure path and stronger assertions around the authoritative JSON receipts emitted by the workflow’s deterministic system steps.
+
+The repository test file is updated. Next I’m running the focused package tests to verify the new failure-path and artifact-content assertions behave deterministically before I write the phase-local strategy and feedback artifacts.
+
+The first attempt exposed that `run_workflow_package()` does not coerce top-level `workflow_params` through the package `Parameters` model before execution, so that path can’t serve as a stable parameter-validation test here. I’m adjusting the test to exercise the package’s declared parameter contract directly instead of encoding a runtime behavior this phase did not change.
+
+I’m keeping the new failure-path coverage, but moving it to the stable coercion surface the runtime already exposes for package parameters. That avoids baking an unrelated runtime gap into this phase’s expectations while still protecting the workflow-builder’s declared parameter contract.
+
+The focused package suite is green with the new assertions. I’m doing one broader adjacent pass now so the test-phase notes can distinguish package-specific coverage from the nearby regression surface that remained intact.
+
+I have the final shape now: one additional failure-path check, stronger artifact-content assertions, and a narrow note that the failure-path is anchored to the parameter-coercion surface rather than the top-level runner entry. I’m recording that in the phase-local test strategy, feedback, and shared decisions ledger.
+
+Scope considered
+- Phase-local test coverage for the shipped `workflow_idea_to_workflow_package` package.
+- The active test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/workflow-builder-package/`.
+- Adjacent regression surface limited to workflow discovery, compile, and package-doc parity checks.
+
+What I analyzed
+- Existing coverage in [tests/runtime/test_workflow_builder_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_builder_package.py).
+- The builder package contracts and deterministic system-step behavior in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/workflow.py) and [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/contracts.py).
+- The shared decisions ledger and the phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/workflow-builder-package/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/workflow-builder-package/feedback.md).
+
+What I changed
+- Extended [tests/runtime/test_workflow_builder_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_builder_package.py) with:
+  - a failure-path test for invalid package-name coercion through the exported `Parameters` contract
+  - content assertions for `invocation_contract.json` and `publish_receipt.json` in the scripted end-to-end run
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/workflow-builder-package/test_strategy.md) with an explicit behavior-to-test coverage map, invariants, failure paths, flake controls, known gaps, and validation commands.
+- Appended [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/workflow-builder-package/feedback.md) with `TEST-001`.
+- Appended the current turn’s test decisions under block `5` in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt).
+
+Key findings / decisions
+- The main regression gap was existence-only checking for the deterministic bootstrap/publish artifacts; coverage now asserts their authoritative contents.
+- Failure-path coverage is anchored to `coerce_workflow_parameter_mapping` plus the exported `Parameters` model, which is the stable coercion surface for this package.
+- Validation passed:
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_builder_package.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_integration_parity.py tests/test_architecture_baseline_docs.py`
+  - `PYTHONPATH=.. .venv/bin/python -m autoloop_v3.runtime.cli workflows show workflow_idea_to_workflow_package --root .`
+
+Open issues / next step
+- `run_workflow_package(..., workflow_params=...)` currently preserves raw initial mappings without coercing them through package `Parameters` before execution; I documented that as a known gap rather than encoding it as a failing expectation in this phase.
+- No phase-local test blocker remains for `workflow-builder-package`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
