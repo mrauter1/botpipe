@@ -515,3 +515,99 @@ The incident workflow test slice is acceptable as shipped. The only follow-up is
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+---
+I’m closing the proof/docs/memory phase: first I’m reading the phase artifacts, mandatory framework files, and the current diff so I can validate scope, verify what already shipped, and only touch the documentation and recursive-memory surfaces this phase owns.
+
+I’ve confirmed the core direction from earlier phases: the builder stayed credible, `incident_to_hardening_program` was shipped, and lifecycle helpers were the chosen framework improvement. I’m reading the actual workflow package, docs, memory files, and prior implementation notes now so the closeout updates match what really landed and the validation set covers the right surfaces.
+
+The recursive memory files are already partly updated from the incident phase, and the baseline-docs test explicitly treats them as shipped baseline. I’m checking the current scoped diff and then I’ll run the phase validation slice so the final memory/feedback updates reflect actual test results, not assumptions.
+
+I found one real closeout inconsistency: the recursive charter still referenced the retired `src/autoloop/main.py` path even though the shipped baseline moved future guidance to `runtime/cli.py` and `runtime/runner.py`. I’m patching that and writing the phase-local proof notes now, then I’ll run the targeted pytest slice against the final closeout state.
+
+The closeout patch is in and the targeted phase validation is running now. Once pytest finishes, I’ll do one last scoped status check and then write the final proof summary against the phase contract.
+
+Pytest finished cleanly: the closeout validation slice passed `40 passed in 1.02s`. I’m folding that exact result into the phase notes and then doing a final scoped status check before I wrap.
+
+Scope considered
+
+- Closeout only: recursive memory, phase-local proof artifacts, and the shipped helper/builder/release/incident surfaces this phase needed to validate.
+- I left `recursive_autoloop/`, runtime code, and workflow package semantics untouched.
+
+What I analyzed
+
+- Current recursive memory against the shipped cycle-1 baseline.
+- Prior implementation notes for the lifecycle-helper and incident-workflow phases.
+- The baseline-doc assertions in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+
+What I changed
+
+- Retargeted the one stale charter guardrail in [.autoloop_recursive/framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md:46) from retired `src/autoloop/main.py` guidance to `runtime/cli.py` and `runtime/runner.py`.
+- Recorded closeout proof, compatibility notes, and the unchanged residual in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/implement/phases/proof-docs-and-recursive-memory/feedback.md:10) and [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/implement/phases/proof-docs-and-recursive-memory/implementation_notes.md:10).
+- Appended the non-obvious closeout decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/decisions.txt:16).
+
+Key findings / decisions
+
+- Targeted validation passed: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py` -> `40 passed in 1.02s`.
+- Standing memory is consistent with the shipped baseline: builder remains credible, `incident_to_hardening_program` shipped, `security_finding_to_verified_remediation` remains deferred, and lifecycle helpers remain the chosen framework improvement.
+- The known `recursive_autoloop/` package-CLI/template drift remains explicitly documented as unchanged and out of scope because this phase did not edit those files.
+
+Open issues / next step
+
+- No blocker remains for this phase.
+- The next dedicated follow-up is still the deferred `recursive_autoloop/` package-CLI/template cleanup tied to `tests/runtime/test_package_cli.py`.
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+
+
+---
+run_id=run-20260423T203132Z-0829228e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbc34-5748-74a0-9cef-62f2e629dd8b
+---
+I’m reviewing the phase-local closeout now: first I’m reading the active proof artifacts, the shared decisions, and the final recursive-memory state, then I’ll rerun the targeted validation slice and write the verifier verdict into the phase artifacts only.
+
+The closeout state is coherent so far: the only code-adjacent change is the charter path retarget, and the other recursive-memory files already match the cycle-1 baseline. I’m rerunning the targeted pytest slice independently now and checking the scoped status at the same time so the review verdict is grounded in the final state, not the producer notes.
+
+I’ve finished the independent audit: the targeted slice passed again, the residual is documented exactly within scope, and I don’t see a correctness or safety gap in the closeout edits. I’m updating the verifier-owned `criteria.md` and appending the final review finding to `feedback.md` now.
+
+Scope considered
+
+Phase-local review only: the recursive-memory closeout, the active proof artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/implement/phases/proof-docs-and-recursive-memory/`, and the shipped helper/builder/release/incident surfaces this phase was supposed to validate. I treated `recursive_autoloop/` cleanup and unrelated dirty files as out of scope.
+
+What I analyzed
+
+I checked the authoritative request, the shared decisions ledger, the final recursive-memory state, and the producer’s closeout notes against the phase contract and acceptance criteria. I also checked that the residual package-CLI/template drift stayed documented as unchanged and out of scope.
+
+What I reviewed
+
+I independently reran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py` and observed `40 passed in 0.94s`. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/implement/phases/proof-docs-and-recursive-memory/criteria.md:1) to all checked and appended the verifier finding/verdict to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c1/implement/phases/proof-docs-and-recursive-memory/feedback.md:1).
+
+Key findings / decisions
+
+`IMP-001` is non-blocking only: no blocking findings. The closeout satisfies intent, keeps scope limited, preserves runtime/workflow behavior, and leaves the known `recursive_autoloop/` drift explicitly documented as an unchanged residual.
+
+Open issues / next step
+
+No phase-local blockers remain. The next separate follow-up is still the deferred `recursive_autoloop/` package-CLI/template alignment pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
