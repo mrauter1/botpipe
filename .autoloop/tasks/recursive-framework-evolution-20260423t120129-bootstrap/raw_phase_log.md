@@ -1010,3 +1010,48 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb06-b984-78a1-91ce-acf8dd394a11
+---
+I’m auditing the session-id cleanup tests against the phase contract. First I’m loading the updated test artifacts and the touched test files, then I’ll verify the new coverage against the concrete runtime/parity behavior and record any gaps in the phase feedback.
+
+The targeted suite is still green through the runtime/unit/context layers. I’m waiting for the package-CLI tail to finish now; if that stays clean, I’ll mark the audit complete unless I find a real coverage hole in the remaining file reads.
+
+The test suite and coverage map both line up with the phase contract. I don’t see a material coverage or flake gap after the store-level additions, so I’m marking the audit criteria complete and appending a no-findings audit note to the phase feedback.
+
+Scope considered
+- Phase-local `session-id-schema-cleanup` test scope: the updated runtime/parity tests, the test strategy and feedback artifacts, the shared decisions ledger, and the adjacent regression suites the new coverage depends on.
+
+What I analyzed
+- The new helper and store-integration coverage in `tests/runtime/test_compatibility_runtime.py`.
+- The parity/resume coverage in `tests/runtime/test_workflow_integration_parity.py`.
+- The phase strategy/feedback against the accepted decisions, especially the intentional greenfield break for legacy `thread_id`-only payloads.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/session-id-schema-cleanup/criteria.md) so all audit criteria are checked.
+- Appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/session-id-schema-cleanup/feedback.md).
+- Revalidated the targeted suite:
+- `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_integration_parity.py tests/contract/test_engine_contracts.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py tests/runtime/test_package_cli.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+
+Key findings / decisions
+- No blocking or non-blocking findings.
+- The added `FilesystemSessionStore` tests close the main remaining consumer-boundary gap, and the suite now covers canonical helper behavior, store reload behavior, intentional non-resume handling for legacy-only payloads, and parity resume flow.
+
+Open issues / next step
+- No blocking audit issues remain for this phase.
+- Later docs/strictness and recursive-wrapper phases still own their respective out-of-scope coverage work.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
