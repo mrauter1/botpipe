@@ -117,3 +117,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T212522Z-c2aa04a6 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=composition-helpers-and-contracts,investigation-evidence-pack-building-block,proof-docs-and-recursive-memory
+explicit=True
+current_phase_index=0
