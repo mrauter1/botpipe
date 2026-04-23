@@ -23,3 +23,7 @@
 {"ts": "2026-04-23T15:28:54.119045+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-backend-boundary"}
 {"ts": "2026-04-23T15:29:53.612655+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-backend-boundary"}
 {"ts": "2026-04-23T15:29:53.629184+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-backend-boundary"}
+{"ts": "2026-04-23T15:29:53.688883+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "provider-backend-boundary", "phase_mode": "single"}
+{"ts": "2026-04-23T15:29:53.691526+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 27, "event_type": "phase_started", "phase_id": "public-cli-provider-contract", "phase_mode": "single"}
+{"ts": "2026-04-23T15:29:53.692081+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "public-cli-provider-contract"}
+{"ts": "2026-04-23T15:29:53.692163+00:00", "run_id": "run-20260423T150130Z-9c90604b", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "public-cli-provider-contract"}
