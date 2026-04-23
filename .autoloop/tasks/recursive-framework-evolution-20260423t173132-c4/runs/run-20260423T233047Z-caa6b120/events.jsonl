@@ -14,3 +14,6 @@
 {"ts": "2026-04-23T23:54:56.705428+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 14, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "workflow-catalog-seam", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-23T23:54:56.707069+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 15, "event_type": "pair_started", "pair": "test", "phase_id": "workflow-catalog-seam"}
 {"ts": "2026-04-23T23:54:56.707291+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 16, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-catalog-seam"}
+{"ts": "2026-04-23T23:58:19.714093+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 17, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-catalog-seam"}
+{"ts": "2026-04-23T23:59:16.460451+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 18, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-catalog-seam"}
+{"ts": "2026-04-23T23:59:16.486272+00:00", "run_id": "run-20260423T233047Z-caa6b120", "seq": 19, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-catalog-seam"}
