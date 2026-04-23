@@ -193,3 +193,48 @@ Passed:
 - targeted doc checks in `tests/test_architecture_baseline_docs.py`
 
 Residual unrelated failure remains in `tests/test_architecture_baseline_docs.py::test_recursive_memory_files_record_cycle_one_closeout_baseline`; it reflects current `.autoloop_recursive/` content drift and was left out of this phase.
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbbd3-328e-7a50-9050-83420d5e980f
+
+
+---
+run_id=run-20260423T191945Z-1b6380cd | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbbd3-328e-7a50-9050-83420d5e980f
+---
+I’m reviewing the route-contract normalization implementation against the phase contract now. I’ll inspect the changed control-contract path, the targeted tests, and the phase artifacts, then I’ll update the reviewer criteria and feedback files with the result.
+
+I’ve got the phase artifacts and shared decisions. Next I’m inspecting the actual normalization implementation and the live import/test surface to decide whether the result is self-contained and truly backward compatible, not just locally green.
+
+I’ve reached the main review question: the normalization logic itself looks coherent, but the implementation notes show one compatibility patch landed in a sibling file outside the repository root. I’m validating whether that external dependency is actually required for the current test/runtime path before I decide if it’s a blocking containment issue.
+
+I found one blocking issue. The normalization logic and repo-local tests are fine, but the new public `RouteContract` surface is only complete because of a mutation in the sibling `../workflow/__init__.py` shim outside the repository root; that makes the phase result non-self-contained under the current import path.
+
+Scope considered
+
+Phase-local review of the route-contract normalization seam, plus the directly impacted import surface and targeted tests needed to judge backward compatibility and self-containment.
+
+What I analyzed
+
+I inspected [core/route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/route_contracts.py:1), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:1), [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1), [tests/conftest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/conftest.py:1), and the phase artifacts. I also verified the live import path with `.venv/bin/python` and reran `.venv/bin/pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_workflow_builder_package.py` (`57 passed`).
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/route-contract-normalization/criteria.md:1) and appended the reviewer finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t150056-c1/implement/phases/route-contract-normalization/feedback.md:1).
+
+Key findings / decisions
+
+- IMP-001 [blocking]: the new `RouteContract` surface is not self-contained in the repository root. Under the current test/runtime import path, `import workflow` resolves to the sibling `/home/rauter/autoloop_v3_bkp/workflow/__init__.py` first, and the implementation only works because that non-repo file was edited out of tree. The repo-local changes themselves are coherent, but the shipped phase result depends on a file outside `/home/rauter/autoloop_v3_bkp/autoloop_v3`.
+
+Open issues / next step
+
+Make the repo own the canonical `workflow` import surface used by tests/runtime, or change the import path so it resolves the repo-local shim instead of `../workflow/__init__.py`. After that, rerun the same targeted proof set and the phase can be re-reviewed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
