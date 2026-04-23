@@ -656,3 +656,59 @@ The phase can be treated as complete. The next explicit follow-up, if chosen in 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+
+
+---
+run_id=run-20260423T164234Z-94b626d6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb72-fc19-7911-a519-2c93c60b0e05
+---
+I’m treating this as the test-phase closeout for the proof/docs/memory scope. I’ll inspect the active test artifacts and the newly touched docs/memory surfaces, then add the smallest deterministic regression tests that lock the final proof narrative into place.
+
+The current regression lock is still a little thin for the closeout phase: it checks the authoring doc terms, but it does not yet assert that the standing recursive memory preserves the chosen builder, deferred domain workflows, and the documented wrapper/template gap. I’m adding that coverage and tightening the authoring-doc assertions around the reserved route carrier and `SystemStep` restriction.
+
+I’ve got the exact regression surface. I’m patching one existing doc-baseline test file rather than creating a parallel test module, so the public docs and standing recursive memory stay locked in one deterministic text-surface suite.
+
+The closeout tests are in place. I’m running the doc-baseline suite plus the adjacent parity/package-CLI checks so the phase artifacts can record both the new passing coverage and the still-documented residual.
+
+The new coverage is passing, and the broader package-CLI suite still fails only on the already-documented wrapper/template drift. I’m doing a quick final diff check so the test-phase summary can point at the exact artifacts and coverage locked by this turn.
+
+Scope considered
+
+Phase-local closeout for proof/docs/memory only. I focused on the authoring-doc control-contract wording, the standing `.autoloop_recursive/` memory files, the active test-phase artifacts, and the already-documented `tests/runtime/test_package_cli.py` residual.
+
+What I analyzed
+
+I inspected the active `test_strategy.md`, `feedback.md`, the shared `decisions.txt` ledger, the updated `tests/test_architecture_baseline_docs.py`, and the four recursive memory files. I also checked existing test coverage to avoid creating a parallel test surface for the same text contracts.
+
+What I changed
+
+I extended [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) with:
+- a tighter authoring-doc boundary test for `Outcome.tag`, `needs_rework`, `needs_replan`, and the `SystemStep` control-contract restriction
+- a new recursive-memory baseline test that locks the shipped builder, shipped control-contract improvement, deferred domain workflows, and the documented wrapper/template residual
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/proof-docs-and-memory/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/test/phases/proof-docs-and-memory/feedback.md), and appended the non-obvious test decisions under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t134234-c1/decisions.txt).
+
+Key findings / decisions
+
+The added closeout coverage is deterministic and green:
+- `tests/test_architecture_baseline_docs.py`: `5 passed`
+- `tests/runtime/test_workflow_integration_parity.py tests/test_architecture_baseline_docs.py`: `12 passed`
+
+The broader residual remains unchanged and documented:
+- `tests/runtime/test_package_cli.py`: still fails only in untouched `recursive_autoloop/` wrapper/template files because `require_package_autoloop_cli` is missing and some templates still reference `src/autoloop/...`
+
+Open issues / next step
+
+No blocking test gap remains inside this phase scope. The next explicit follow-up is the out-of-scope `recursive_autoloop/` wrapper/template package-CLI cleanup already captured in standing memory and the implement/test phase notes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
