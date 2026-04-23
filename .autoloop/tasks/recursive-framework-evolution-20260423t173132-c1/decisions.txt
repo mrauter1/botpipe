@@ -6,3 +6,5 @@ Chosen framework improvement: authoring-level stdlib lifecycle helpers for deter
 Known recursive_autoloop package-CLI/template drift is a pre-existing residual; do not claim it fixed unless implementation intentionally edits recursive_autoloop and reruns the targeted failing tests.
 <autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="workflow-lifecycle-helpers" pair="implement" turn_seq="1" run_id="run-20260423T203132Z-0829228e" ts="2026-04-23T20:44:00.043307+00:00" />
 Keep the lifecycle helper authoring-only: it may open declared sessions and write workflow-local JSON artifacts, but publication validation and receipt semantics stay in the workflow handlers so shipped package behavior does not drift.
+<autoloop-decisions-header version="1" block_seq="3" owner="test_author" phase_id="workflow-lifecycle-helpers" pair="test" turn_seq="1" run_id="run-20260423T203132Z-0829228e" ts="2026-04-23T20:52:57.868212+00:00" />
+Test coverage treats workflow/task/run/request identity as ctx-owned invocation-contract fields and asserts that helper payload collisions cannot override them.
