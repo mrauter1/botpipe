@@ -236,6 +236,42 @@ def test_resolve_runtime_config_applies_generic_file_override_to_cli_selected_pr
     assert resolved.provider.codex.model == "gpt-5.4"
 
 
+def test_resolve_runtime_config_applies_cli_override_after_provider_specific_file_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    global_config_dir = tmp_path / "global-config"
+    local_config_path = tmp_path / "autoloop.yaml"
+    global_config_path = global_config_dir / "autoloop.yaml"
+    global_config_dir.mkdir(parents=True)
+    global_config_path.write_text("", encoding="utf-8")
+    local_config_path.write_text("", encoding="utf-8")
+
+    payloads = {
+        global_config_path: {},
+        local_config_path: {
+            "provider": {
+                "name": "claude",
+                "claude": {
+                    "model": "repo-specific",
+                    "effort": "high",
+                },
+            }
+        },
+    }
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: global_config_dir)
+    monkeypatch.setattr(runtime_config, "load_runtime_config_file", lambda path: payloads[path])
+
+    resolved = resolve_runtime_config(
+        tmp_path,
+        argparse.Namespace(provider="claude", model="cli-model", model_effort="max", max_steps=None),
+    )
+
+    assert resolved.provider.name == "claude"
+    assert resolved.provider.claude.model == "cli-model"
+    assert resolved.provider.claude.effort == "max"
+
+
 def test_resolve_runtime_config_routes_cli_overrides_to_selected_provider(tmp_path: Path) -> None:
     resolved = resolve_runtime_config(
         tmp_path,

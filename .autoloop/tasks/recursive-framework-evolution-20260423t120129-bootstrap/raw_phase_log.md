@@ -726,3 +726,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbaf6-4196-7091-aa22-590ad71dbbc3
+---
+I’m authoring the phase-scoped test closeout now. First I’m checking the current provider-contract tests and the test-phase artifacts so I can fill any real coverage gaps instead of duplicating what the implementer already added.
+
+The repo tests are already close to complete. I’m adding one last layer-order test now: CLI `--model` / `--model-effort` should still win over file-based typed provider config, because that is the public override path the phase is defining.
+
+I’ve added the final precedence guard. I’m recording that test decision in the shared ledger because the layer order is easy to regress later: file-generic, file-specific, and CLI overrides all need distinct coverage.
+
+The repository tests are updated. I’m running the provider-contract suites now so the strategy and feedback artifacts reflect validated coverage rather than just intended coverage.
+
+I’ve got a clean validation run. I’m writing the phase test strategy and a short feedback entry now, including the explicit behavior-to-test map and the one intentional gap that belongs to the recursive-wrapper phase.
+
+Scope considered
+
+- Phase-local test authoring for the public provider contract only: [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:1), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py:176), and the phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/public-cli-provider-contract/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/public-cli-provider-contract/feedback.md:1).
+- I kept recursive-wrapper cleanup out of scope.
+
+What I analyzed
+
+- The current provider-contract tests added during implementation and re-review.
+- Remaining precedence risk in `resolve_runtime_config(...)`: file-generic routing, later file-specific overrides, and CLI last-wins behavior.
+- Shared decisions so the test expectations only encode the intended greenfield contract.
+
+What I changed
+
+- Added one more regression test in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py:239) to lock in CLI `--model` / `--model-effort` precedence over file-based provider-specific config.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/public-cli-provider-contract/test_strategy.md:1) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, reliability notes, and known gaps.
+- Appended a concise test-summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/public-cli-provider-contract/feedback.md:1).
+- Appended the test-layering coverage decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/decisions.txt:1).
+
+Key findings / decisions
+
+- Provider merge order is now covered in all three risky directions: generic file config to the final selected provider, later file-specific overrides over earlier generic config, and CLI last-wins overrides over file config.
+- The user-facing CLI contract remains covered without broadening into unrelated runtime areas.
+- Tests stay deterministic by monkeypatching config loading instead of depending on PyYAML being installed.
+
+Open issues / next step
+
+- Validation passed:
+  - `./.venv/bin/python -m pytest tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py tests/runtime/test_compatibility_runtime.py -k 'not recursive_wrapper_targets_the_package_cli_contract'`
+- The recursive-wrapper contract remains the only intentional phase gap; I did not add coverage for it here because that belongs to the later wrapper-cleanup phase.
