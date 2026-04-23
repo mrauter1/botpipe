@@ -317,3 +317,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=session_recovery | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+---
+provider=codex
+context=phase_turn
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+failed_mode=resume
+stale_session_id=019dbb85-e974-7e52-818e-fc3363a76fbb
+warning=Saved Codex thread id `019dbb85-e974-7e52-818e-fc3363a76fbb` could not be resumed for test:producer; restarting this phase in a new thread.
+error=[!] Codex CLI failed with exit code 1.
+
+STDERR:
+file:///usr/lib/node_modules/@openai/codex/bin/codex.js:100
+    throw new Error(
+          ^
+
+Error: Missing optional dependency @openai/codex-linux-x64. Reinstall Codex: npm install -g @openai/codex@latest
+    at file:///usr/lib/node_modules/@openai/codex/bin/codex.js:100:11
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v22.22.2
+
+
+---
+run_id=run-20260423T180056Z-5e4b6957 | entry=provider_failure | pair=test | phase=producer | cycle=1 | attempt=1
+---
+provider=codex
+context=phase_turn
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+error=[!] Codex CLI failed with exit code 1.
+
+STDERR:
+file:///usr/lib/node_modules/@openai/codex/bin/codex.js:100
+    throw new Error(
+          ^
+
+Error: Missing optional dependency @openai/codex-linux-x64. Reinstall Codex: npm install -g @openai/codex@latest
+    at file:///usr/lib/node_modules/@openai/codex/bin/codex.js:100:11
+    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:665:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+
+Node.js v22.22.2

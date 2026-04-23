@@ -1,8 +1,8 @@
 {
   "mode": "persistent",
   "provider": "codex",
-  "session_id": "019dbb85-e974-7e52-818e-fc3363a76fbb",
-  "thread_id": "019dbb85-e974-7e52-818e-fc3363a76fbb",
+  "session_id": null,
+  "thread_id": null,
   "provider_metadata": {},
   "model_override": null,
   "effort_override": null,
