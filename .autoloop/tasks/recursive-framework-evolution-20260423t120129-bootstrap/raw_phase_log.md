@@ -1435,3 +1435,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbb21-b3ec-7b10-b4a1-0e0434f90861
+---
+I’m validating the new doc and strictness coverage from the test-author side first. I’ll inspect the phase artifacts, then decide whether the current regression guards need any extra test coverage before updating the test strategy and feedback.
+
+The current guards are solid, but there’s one useful gap: the tests don’t pin the strictness scan scope itself, and the doc baseline only checks `autoloop.yaml` even though the contract documents both config filenames. I’m tightening those two points now.
+
+I’ve refined the guards to lock both documented config filenames and the intended strictness scan scope. I’m running the doc/strictness suite first, then the full suite again so the added meta-coverage is validated end to end.
+
+The refined guards passed in isolation and the full suite is moving cleanly through the runtime coverage. I’m waiting for the rest of the suite before I write the test-strategy coverage map and feedback entry.
+
+The extra guard is behaving as intended: it would now fail both if someone removes one of the documented config filenames from the maintained docs or if they silently narrow the strictness scan away from the maintained live tree. I’m recording that scope choice in the shared ledger and updating the phase test artifacts now.
+
+The repo tests are done and the phase artifacts are updated. I’m doing a quick readback of the strategy and feedback files so the closeout accurately reflects the coverage that was just added.
+
+Scope considered
+- Phase-local test scope only: [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), existing wrapper/template guards in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), and the phase test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/docs-strictness-and-regression-proof/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/docs-strictness-and-regression-proof/feedback.md).
+
+What I analyzed
+- The maintained docs/strictness changes against the phase contract and the shared decisions on maintained live-tree scan scope.
+- Existing doc-baseline and wrapper/template regression tests to identify any remaining coverage gap.
+
+What I changed
+- Added baseline-doc assertions for both supported config filenames, `autoloop.yaml` and `autoloop.config`, in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- Added a strictness meta-test in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) that pins inclusion of `docs/architecture.md`, `docs/authoring.md`, `recursive_autoloop/`, and `tests/`, while confirming `docs/refactor.md` stays out of scope.
+- Updated the shared decisions ledger plus the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/docs-strictness-and-regression-proof/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t120129-bootstrap/test/phases/docs-strictness-and-regression-proof/feedback.md).
+
+Key findings / decisions
+- The useful remaining regression risk was scan-scope drift, not missing forbidden-token coverage.
+- Validation passed:
+  - `.venv/bin/pytest tests/test_architecture_baseline_docs.py tests/strictness/test_no_compat.py`
+  - `.venv/bin/pytest`
+- Full suite result after the added tests: `126 passed`.
+
+Open issues / next step
+- No open issues in phase scope. The maintained doc contract and the strictness scan scope are now both pinned by tests.
