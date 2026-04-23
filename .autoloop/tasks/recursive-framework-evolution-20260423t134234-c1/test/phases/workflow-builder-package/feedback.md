@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - `TEST-001` Added deterministic regression coverage in `tests/runtime/test_workflow_builder_package.py` for invalid package-name coercion and for the authoritative contents of `invocation_contract.json` and `publish_receipt.json`, then revalidated the package-specific and adjacent workflow/runtime suites.
+- `TST-000` `non-blocking` Audit pass: no test coverage defects found. The added discovery, compile, failure-path, scripted-exercise, and deterministic artifact-content assertions align with the phase contract and the shared workflow-builder decisions.
