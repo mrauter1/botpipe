@@ -10,3 +10,6 @@
 - Added resolver regression coverage for the preserved built-in path, explicit rejection of parsed public `--provider-factory`, and precedence of the non-public injected seam in `tests/runtime/test_provider_backends.py`.
 - Kept user-facing CLI coverage focused and deterministic by asserting `run` rejects parsed public `--provider-factory` while the injected seam still succeeds in `tests/runtime/test_package_cli.py`.
 - Validation in this environment: `python3 -m py_compile tests/runtime/test_provider_backends.py tests/runtime/test_package_cli.py`.
+
+- TST-001 | non-blocking | Audit closeout
+  Coverage is sufficient for this phase scope. The tests cover resolver dispatch, module:function rejection, unavailable-backend failures, explicit rejection of the parsed public flag, preservation of the non-public injected seam, and one deterministic user-facing mutating CLI path without introducing flake-prone setup.

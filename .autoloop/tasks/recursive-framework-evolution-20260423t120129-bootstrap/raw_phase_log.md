@@ -452,3 +452,54 @@ Open issues / next step
 
 - `pytest` is still unavailable in this environment, so I could not execute the runtime test files here.
 - The next step is test-auditor review of these additions; later CLI cleanup can remove the public flag/help surface without weakening seam-preservation coverage.
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+
+
+---
+run_id=run-20260423T150130Z-9c90604b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbae7-ab1c-7ce0-99cf-a417edae9053
+---
+I’m auditing the new provider-boundary tests and the phase test artifacts now. First I’m reading the current strategy/feedback/criteria plus the changed runtime test cases so I can judge coverage depth and whether any changed behavior is still missing regression protection.
+
+I’m not seeing a material coverage hole in phase scope. The resolver dispatch, rejection path, preserved seam precedence, and one deterministic user-facing CLI path are all covered, so I’m marking the test criteria complete and appending a short audit closeout note instead of inventing a blocker.
+
+The audit artifacts are updated. I’m doing one quick readback of the criteria and feedback so the closeout accurately reflects that there are no remaining coverage blockers in this phase scope.
+
+Scope considered
+
+- Phase-local audit of the provider backend boundary tests in `tests/runtime/test_provider_backends.py` and `tests/runtime/test_package_cli.py`.
+- Test audit artifacts only: `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- The resolver-focused unit coverage for dispatch, invalid provider-name rejection, unavailable backend errors, public-flag rejection, and preserved seam precedence.
+- The user-facing CLI regression coverage for the `run` command.
+- The test strategy and shared decision that the parsed public `--provider-factory` path is a temporary rejection path while the non-public injected seam remains preserved.
+
+What I reviewed
+
+- Whether changed behavior and preserved invariants are covered at the right level.
+- Whether material failure paths and edge cases are covered without redundant churn.
+- Whether the tests encode only confirmed behavior for this phase and avoid flake-prone setup.
+
+Key findings / decisions
+
+- No blocking coverage gaps were identified in phase scope.
+- The test set covers the important regression surfaces here: built-in resolver dispatch, `module:function` rejection, unavailable-backend failures, explicit public-flag rejection, preserved non-public seam precedence, and one deterministic user-facing mutating CLI path.
+- I marked all audit criteria complete and appended a non-blocking audit closeout note to `feedback.md`.
+
+Open issues / next step
+
+- No remaining test-audit blockers in this phase scope.
+- The environment still only supports syntax validation, not `pytest` execution, but that limitation is already recorded in the test artifacts and does not change the audit outcome here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
