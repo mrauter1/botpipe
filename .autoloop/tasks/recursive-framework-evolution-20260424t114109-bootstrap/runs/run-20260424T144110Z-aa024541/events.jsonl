@@ -27,3 +27,6 @@
 {"ts": "2026-04-24T15:27:30.111142+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 27, "event_type": "phase_started", "phase_id": "catalog-and-helper-migration", "phase_mode": "single"}
 {"ts": "2026-04-24T15:27:30.111850+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "catalog-and-helper-migration"}
 {"ts": "2026-04-24T15:27:30.111920+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "catalog-and-helper-migration"}
+{"ts": "2026-04-24T15:50:48.575374+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 30, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "catalog-and-helper-migration"}
+{"ts": "2026-04-24T15:53:19.258968+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 31, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "catalog-and-helper-migration"}
+{"ts": "2026-04-24T15:53:21.334974+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 32, "event_type": "cycle_started", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "catalog-and-helper-migration"}
