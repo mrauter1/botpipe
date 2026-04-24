@@ -17,3 +17,6 @@
 {"ts": "2026-04-24T05:26:19.186912+00:00", "run_id": "run-20260424T045554Z-27198177", "seq": 17, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "refinement-surface-seam", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-24T05:26:19.188755+00:00", "run_id": "run-20260424T045554Z-27198177", "seq": 18, "event_type": "pair_started", "pair": "test", "phase_id": "refinement-surface-seam"}
 {"ts": "2026-04-24T05:26:19.188980+00:00", "run_id": "run-20260424T045554Z-27198177", "seq": 19, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "refinement-surface-seam"}
+{"ts": "2026-04-24T05:28:14.801552+00:00", "run_id": "run-20260424T045554Z-27198177", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "refinement-surface-seam"}
+{"ts": "2026-04-24T05:29:22.602810+00:00", "run_id": "run-20260424T045554Z-27198177", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "refinement-surface-seam"}
+{"ts": "2026-04-24T05:29:22.633391+00:00", "run_id": "run-20260424T045554Z-27198177", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "refinement-surface-seam"}
