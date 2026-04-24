@@ -1,4 +1,147 @@
 version: 1
 task_id: recursive-framework-evolution-20260423t173132-c12
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c12/runs/run-20260424T104407Z-fed72790/request.md
-phases: []
+phases:
+- phase_id: company-operation-snapshot-seam
+  title: Company Operation Snapshot Seam
+  objective: Add a narrow read-only company-operation snapshot seam that company-level
+    workflows can publish under the workflow folder without widening runtime-owned
+    behavior.
+  status: planned
+  in_scope:
+  - Add shared task/company summary logic on top of existing task metadata and read-only
+    run records.
+  - Add an authoring-only helper in `stdlib/company.py` for publishing bounded company-operation
+    snapshots under `ctx.workflow_folder`.
+  - Export the helper through `stdlib/__init__.py` and document the boundary in `docs/authoring.md`.
+  - Add focused unit and runtime coverage for task summaries, filter handling, bounded
+    message excerpts, and read-only behavior.
+  out_of_scope:
+  - CLI changes.
+  - Runtime-owned company prioritization or automatic cycle execution.
+  - Overloading `write_workflow_portfolio_health_snapshot(...)` with task/company
+    semantics.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The new helper writes only under `ctx.workflow_folder` and does not mutate
+      `.autoloop` task or run state.
+  - id: AC-2
+    text: The helper publishes deterministic bounded task summaries, recent message
+      excerpts, per-task workflow telemetry, and authoritative source paths from shared
+      read-only workspace seams.
+  - id: AC-3
+    text: Authoring docs and focused tests freeze the helper boundary and its non-goals,
+      including no company-level scoring or hidden downstream execution.
+  deliverables:
+  - '`runtime/workspace.py` read-only task/company summary additions.'
+  - '`stdlib/company.py` and `stdlib/__init__.py` helper/export wiring.'
+  - '`docs/authoring.md` updates plus focused helper coverage in unit/runtime tests.'
+  risks:
+  - The helper may become too broad and start owning prioritization policy that should
+    remain visible in workflow code and prompts.
+  - Task/company summary capture may drift from the real workspace contract if it
+    bypasses shared task and run record seams.
+  rollback:
+  - Revert the additive task/company summary logic, new stdlib helper/export, authoring-doc
+    updates, and helper-specific tests together.
+  - Keep company-level evidence capture inline in the new workflow only if the shared
+    seam cannot stay narrow.
+- phase_id: company-operation-to-recursive-improvement-cycle
+  title: Ship Company Recursive Improvement Workflow
+  objective: Implement `company_operation_to_recursive_improvement_cycle` as the top-level
+    recursive learner that turns company work history plus workflow telemetry into
+    a published next-cycle improvement package.
+  status: planned
+  in_scope:
+  - Add the workflow package under `workflows/company_operation_to_recursive_improvement_cycle/`
+    with `workflow.py`, `workflow.toml`, `__init__.py`, `params.py`, `contracts.py`,
+    `prompts/`, and `assets/`.
+  - Reuse the existing capability and portfolio-health helpers plus the new company-operation
+    snapshot helper inside an explicit deterministic capture step.
+  - Define explicit pair-step contracts for framing, recursive-improvement analysis,
+    and final cycle packaging.
+  - Add workflow-local docs under `docs/workflows/company_operation_to_recursive_improvement_cycle.md`.
+  - Add scripted-provider runtime proof for successful publication, filter handling,
+    and rejection of hidden downstream execution or summary drift.
+  out_of_scope:
+  - Auto-running builder, governance, refinement, diagnostics, decomposition, or remediation
+    workflows.
+  - Mutating authoritative workflow packages or `.autoloop` history as part of the
+    package.
+  - Public CLI, provider, session, or manifest-contract changes.
+  dependencies:
+  - company-operation-snapshot-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: Workflow discovery and compilation succeed from the repo root and expose
+      explicit typed control contracts on the three pair steps.
+  - id: AC-2
+    text: A scripted runtime proof publishes the capability snapshot, portfolio-health
+      snapshot, company-operation snapshot, pressure artifacts, terminal cycle package,
+      next actions, and deterministic receipt.
+  - id: AC-3
+    text: Publish-time validation rejects missing snapshot artifacts, unknown focus-task
+      or focus-workflow references, summary drift, invalid priority categories, and
+      outputs that imply hidden downstream execution.
+  - id: AC-4
+    text: Each producer/verifier prompt makes required reads, required writes, legal
+      routes, evidence expectations, and forbidden actions explicit for its step-local
+      work item.
+  deliverables:
+  - '`workflows/company_operation_to_recursive_improvement_cycle/`.'
+  - '`docs/workflows/company_operation_to_recursive_improvement_cycle.md`.'
+  - '`tests/runtime/test_company_operation_to_recursive_improvement_cycle.py`.'
+  risks:
+  - Company-level analysis may collapse into generic prioritization prose unless the
+    pressure map, priority matrix, and candidate manifest stay explicit.
+  - Cycle packaging may blur into hidden execution unless the workflow stops at next-action
+    publication and receipt validation.
+  rollback:
+  - Remove the new workflow package, workflow doc, and runtime test together if terminal
+    cycle publication proof does not hold.
+- phase_id: cycle-twelve-closeout
+  title: Cycle Twelve Closeout
+  objective: Update recursive memory, architecture-baseline docs/tests, and targeted
+    proof so cycle 12 becomes the new explicit recursive framework baseline.
+  status: planned
+  in_scope:
+  - Update `.autoloop_recursive/framework_evolution_charter.md`.
+  - Update `.autoloop_recursive/framework_roadmap.md`.
+  - Update `.autoloop_recursive/framework_gap_ledger.md`.
+  - Update `.autoloop_recursive/workflow_candidate_ledger.md`.
+  - Update `tests/test_architecture_baseline_docs.py` and any cycle-closeout expectations
+    affected by the new seam and workflow baseline.
+  - Run targeted pytest proof for the company-operation snapshot seam, the new workflow,
+    the builder baseline, the portfolio-governance and decomposition baselines, and
+    the recursive-memory docs.
+  out_of_scope:
+  - '`recursive_autoloop/` wrapper/template cleanup.'
+  - Runtime-owned company-learning automation.
+  - Compatibility shims for the stale `src/autoloop/...` request paths.
+  dependencies:
+  - company-operation-snapshot-seam
+  - company-operation-to-recursive-improvement-cycle
+  acceptance_criteria:
+  - id: AC-1
+    text: The four standing recursive-memory files record that the builder stayed
+      credible, `company_operation_to_recursive_improvement_cycle` shipped, and the
+      company-operation snapshot seam is the chosen framework improvement.
+  - id: AC-2
+    text: Architecture-baseline docs/tests and any closeout-proof assertions describe
+      cycle 12 accurately.
+  - id: AC-3
+    text: Targeted pytest proof passes without widening runtime/provider control surfaces
+      or changing public CLI/runtime contracts.
+  deliverables:
+  - Updated `.autoloop_recursive/*.md` standing memory files.
+  - '`tests/test_architecture_baseline_docs.py`.'
+  - Recorded targeted validation command and result in cycle-12 closeout docs.
+  risks:
+  - Recursive memory or baseline tests may drift from the actual shipped behavior
+    if updated separately from code and proof.
+  - Cycle-closeout assertions may miss the new helper boundary unless docs and tests
+    are updated together.
+  rollback:
+  - Revert cycle-12 memory and baseline-test updates if they claim behavior or proof
+    the implementation does not actually ship.

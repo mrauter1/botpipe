@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T104407Z-fed72790" ts="2026-04-24T10:44:08.079336+00:00" />
+Cycle 12 planning maps the request snapshot's stale `src/autoloop/...` inspection paths onto the live repo-root framework at `docs/architecture.md`, `docs/authoring.md`, `Workflow_Instructions.md`, `core/`, `runtime/`, `stdlib/`, and `workflows/`.
+`workflow_idea_to_workflow_package` remains the standing credible builder baseline for cycle 12; do not revisit builder-first authoring unless implementation uncovers a concrete blocker severe enough to invalidate that baseline.
+Cycle 12 should ship `company_operation_to_recursive_improvement_cycle` as the new workflow addition because the builder, portfolio-governance, and decomposition layers are already credible and the clearest remaining portfolio gap is company-level recursive learning.
+The paired framework improvement for cycle 12 is an additive read-only company-operation snapshot seam, not runtime-owned company-learning automation and not an overload of the existing portfolio-health helper.
