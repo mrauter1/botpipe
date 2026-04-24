@@ -663,3 +663,104 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+---
+Reviewing the phase’s current runtime coverage first. I’m checking the new adaptation-package tests, the active test strategy artifact, and the decisions ledger to see whether there’s still a meaningful regression path that should be locked down in the test phase.
+
+The most useful remaining gap is the real runtime failure path for an invalid package verifier payload. I’m reading the lower half of the adaptation-package test file now to place a deterministic provider-level regression test rather than another direct callback-only assertion.
+
+I’ve chosen the smallest useful extra coverage: a validator-level failure-path test for missing required package payload fields. It exercises the runtime-owned control contract directly without duplicating the full scripted provider run, and I’m updating the test strategy/feedback artifacts alongside it.
+
+The new failure-path test is in. I’m running the focused suites now, and because this adds three cases under the same frozen cycle-6 closeout command, I’m checking whether the roadmap/baseline proof count needs to move again before I stop.
+
+The closeout proof count did move, as expected: the frozen cycle-6 command is now `68 passed`. I’m updating the roadmap and baseline-doc test to keep the recorded proof honest, then I’ll add the exact validation result to the phase feedback.
+
+I’ve refreshed the frozen proof to `68 passed`. One final rerun on the updated roadmap/baseline-test state will make the coverage note and recorded count line up exactly with the repository before I close the test phase.
+
+Scope considered
+
+- The runtime coverage for `candidate_workflow_to_adapted_execution_plan`, especially the package-step control contract, its non-ready callback path, and the frozen cycle-6 closeout proof that changed when new regression tests were added.
+
+What I analyzed
+
+- Read [tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/candidate-workflow-adapted-execution-plan-package/test_strategy.md), the active [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/candidate-workflow-adapted-execution-plan-package/feedback.md), and the latest test-author block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/decisions.txt).
+- Checked existing coverage for happy-path publication, publish-time rejection paths, and the new package-step payload contract.
+
+What I changed
+
+- Added a parametrized validator-level failure-path test in [tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py) so the compiled `package_adapted_execution_plan` validator rejects missing `selected_workflow_parameters_supported`, `proposed_parameter_keys`, or `ready_for_execution`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/candidate-workflow-adapted-execution-plan-package/test_strategy.md) with an explicit coverage map, stabilization notes, and the remaining known gap.
+- Appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/candidate-workflow-adapted-execution-plan-package/feedback.md), added the non-obvious test decision under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/decisions.txt), and refreshed the frozen cycle-6 proof in [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md) plus [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) from `65 passed` to `68 passed`.
+
+Key findings / decisions
+
+- The most useful extra regression guard was a direct compiled-validator test, not a second full scripted provider run. It exercises the runtime-owned contract for the exact failure mode that previously drifted, with less fixture duplication and lower flake risk.
+- Validation passed:
+  `.venv/bin/pytest -q tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py` -> `14 passed`
+  `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` -> `68 passed`
+
+Open issues / next step
+
+- No blocking test-phase issues in this scope.
+- The only recorded gap is that there is still no separate full-engine invalid-verifier-payload run, but the validator-level test now covers that contract deterministically.
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+---
+Auditing the test-phase follow-up now. I’m checking the new validator-level regression coverage, the updated test strategy, and the final validation evidence before I rewrite the audit criteria and append the audit result.
+
+The coverage looks coherent on read. I’m rerunning the same focused validation command the test author recorded so the audit result is grounded in the current repository state, not just in the phase notes.
+
+The reviewer-side rerun is clean, and the new failure-path test closes the material gap without introducing flake risk. I’m marking the audit criteria complete and appending a concise “no remaining findings” audit result to the phase feedback now.
+
+Scope considered
+
+- The new validator-level failure-path tests for `candidate_workflow_to_adapted_execution_plan`, the updated phase test strategy, the recorded validation evidence, and the final cycle-6 closeout proof count.
+
+What I analyzed
+
+- Reviewed [tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py:630), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/candidate-workflow-adapted-execution-plan-package/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/candidate-workflow-adapted-execution-plan-package/feedback.md), and the latest test-author decisions block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/decisions.txt).
+- Re-ran the focused reviewer-side validation command:
+  `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py`
+  Result: `68 passed in 1.17s`
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/candidate-workflow-adapted-execution-plan-package/criteria.md) to all checked.
+- Appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/candidate-workflow-adapted-execution-plan-package/feedback.md).
+
+Key findings / decisions
+
+- No blocking audit findings.
+- The added validator-level failure-path coverage is sufficient for the material regression risk here: it exercises the runtime-owned package-step contract directly, complements the existing non-ready callback and publish-boundary tests, and avoids flake-prone duplication of a second large scripted provider run.
+
+Open issues / next step
+
+- No open audit issues in this phase scope.
+- The test phase is ready to close on the current state.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
