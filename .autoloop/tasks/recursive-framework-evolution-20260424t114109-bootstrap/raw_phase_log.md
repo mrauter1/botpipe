@@ -871,3 +871,54 @@ Open issues / next step
 
 - Out-of-scope doc/template assertions remain for later phases.
 - This phase’s helper coverage is now materially stronger for non-package workflow origins, and it is ready for audit.
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+---
+I’m checking the new single-file helper coverage against the phase acceptance criteria and making sure the strategy/feedback artifacts accurately reflect what was added.
+
+The new cases are focused and deterministic, and they close the helper coverage gap without normalizing any behavior break. I’m marking the audit criteria complete and recording that there are no outstanding findings in phase scope.
+
+Scope considered
+
+- Phase-local test audit for `catalog-and-helper-migration`.
+- Reviewed the new single-file helper tests, the updated test strategy, and the active phase audit artifacts.
+
+What I analyzed
+
+- `tests/unit/test_stdlib_and_extensions.py` additions for `company`, `diagnostics`, and `evaluation`.
+- The existing runtime coverage cited in the strategy for shallow discovery and deep inspection.
+- `.autoloop/.../test_strategy.md`, `.autoloop/.../feedback.md`, and `.autoloop/.../criteria.md`.
+
+What I reviewed
+
+- Whether AC-3 helper coverage now includes package and single-file workflow references across the named helper seams.
+- Whether the new tests are deterministic and avoid flaky dependencies.
+- Whether the strategy artifact accurately maps changed behavior to concrete tests.
+- Whether the test expectations preserve user-intended behavior and do not normalize a regression.
+
+Key findings / decisions
+
+- No outstanding blocking findings.
+- The added tests close the remaining material helper-coverage gap for single-file workflow references in `company`, `diagnostics`, and `evaluation`.
+- The cases are stable: filesystem-local setup only, no timing/network assumptions, and explicit assertions on canonical resolved workflow names.
+- I updated the audit artifacts to mark the phase complete and recorded that no findings remain in phase scope.
+
+Open issues / next step
+
+- This test phase is complete.
+- Broader doc/template assertions remain out of scope for this slice and should be handled by later phases if needed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
