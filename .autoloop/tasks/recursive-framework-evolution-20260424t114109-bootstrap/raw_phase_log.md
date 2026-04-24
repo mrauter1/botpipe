@@ -429,3 +429,60 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+I’m reviewing the resolver-foundation test coverage against the implemented behavior and the phase contract, then I’ll add any missing regression tests before updating the phase-local strategy and feedback artifacts.
+
+The existing resolver test file already covers most of the phase contract, including the two late-cycle regressions. I’m looking for one or two missing failure-path assertions so this test turn adds distinct value instead of just restating the implementation coverage.
+
+The biggest remaining gap is imported-class coverage versus string module refs, plus the legacy `workflow.py` directory fallback path. I’m checking whether those behaviors are already asserted elsewhere before I add tests.
+
+I found one worthwhile gap in the phase-local resolver tests: named-reference ambiguity across inferred candidates. I’m adding a regression test for that, then I’ll record the behavior-to-test map and the exact additions in the phase test artifacts.
+
+I added the missing named-candidate ambiguity regression and updated the phase test artifacts. I’m running the focused resolver/runtime slice now to confirm the new assertion matches the current loader behavior and doesn’t destabilize adjacent coverage.
+
+The new test exposed a mismatch in the current resolver behavior instead of landing cleanly. I’m pulling the failure details now so I can decide whether this needs a narrower assertion or a follow-up clarification about intended ambiguity semantics.
+
+The failure is in the new fixture, not the resolver: I omitted `workflows/__init__.py`, so the loader stopped at the package-root precondition before it ever reached the ambiguity check. I’m correcting that fixture and rerunning the same slice.
+
+The fixture is corrected. I’m rerunning the focused resolver/runtime tests to confirm the new ambiguity check now exercises the intended code path.
+
+Scope considered
+
+- Resolver-foundation test scope only: unified workflow-reference resolution, prompt/source-container scoping, parameter precedence, ambiguity handling, and origin-safety regressions.
+- I did not broaden into shallow catalog migration, capability payload migration, builders, or docs/template work.
+
+What I analyzed
+
+- Existing phase-local coverage in [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py).
+- Adjacent runtime coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py) and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- Phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/feedback.md).
+
+What I changed
+
+- Added `test_named_references_fail_when_inferred_candidates_conflict` to [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py) to lock in the required ambiguity error when a bare workflow name matches multiple inferred candidates.
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/test_strategy.md) with an explicit behavior-to-test map, validation approach, preserved invariants, and known gaps.
+- Appended a concise test-additions summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/feedback.md).
+
+Key findings / decisions
+
+- The phase-local resolver tests already covered most of the contract, including the late-cycle bare-name shadowing and explicit package-path parameter-precedence regressions.
+- The distinct remaining gap was named-reference ambiguity across inferred candidates, which is now covered.
+- The new fixture needed `workflows/__init__.py`; without it, the loader correctly failed earlier on the package-root precondition instead of reaching the ambiguity branch.
+
+Open issues / next step
+
+- Focused validation passed: `.venv/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py` with `42 passed`.
+- No additional in-phase test gaps stood out after this slice; the remaining deferred areas stay the same as the phase’s out-of-scope items.

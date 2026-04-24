@@ -359,6 +359,72 @@ class BetaWorkflow(Workflow):
     assert resolved.workflow_cls.__name__ == "AlphaWorkflow"
 
 
+def test_named_references_fail_when_inferred_candidates_conflict(tmp_path: Path) -> None:
+    workflows_root = tmp_path / "workflows"
+    workflows_root.mkdir(parents=True, exist_ok=True)
+    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+
+    package_dir = workflows_root / "release_review"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    package_dir.joinpath("flow.py").write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+
+
+class PackageReleaseReview(Workflow):
+    name = "release_review"
+
+    class State(BaseModel):
+        done: bool = False
+
+    start = SystemStep(name="start")
+    entry = start
+    transitions = {start: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_start(state: State, ctx):
+        return state.model_copy(update={"done": True}), Event("done")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    workflows_root.joinpath("release_review.py").write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+
+
+class FileReleaseReview(Workflow):
+    name = "release_review"
+
+    class State(BaseModel):
+        done: bool = False
+
+    start = SystemStep(name="start")
+    entry = start
+    transitions = {start: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_start(state: State, ctx):
+        return state.model_copy(update={"done": True}), Event("done")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(WorkflowDiscoveryError, match="is ambiguous across"):
+        resolve_workflow_reference(tmp_path, "release_review")
+
+
 def test_parameter_resolution_follows_class_module_package_legacy_then_none(tmp_path: Path) -> None:
     examples_dir = tmp_path / "examples"
     examples_dir.mkdir(parents=True, exist_ok=True)
