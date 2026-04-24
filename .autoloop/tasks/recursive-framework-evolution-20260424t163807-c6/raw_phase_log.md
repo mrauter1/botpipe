@@ -371,3 +371,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+---
+I’m reviewing the final shared-seam test coverage against the phase contract first. If there’s a meaningful gap in the changed behavior, I’ll add one focused regression test and then update the phase test strategy and feedback artifacts.
+
+The existing unit coverage already exercised baseline and overlay path hardening, but the new guard also protects authoritative-drift reads. I’m adding one narrow regression test for that failure path so the full changed surface is covered, then I’ll update the phase strategy and test feedback.
+
+I’m validating the new shared-seam regression coverage and updating the phase-local test artifacts to match it. First I’m checking the exact test additions and current test-phase notes before I append feedback and rerun the focused suite.
+
+The remaining work is narrow now: I’m recording the coverage map in the test artifacts, adding the one test-phase decision that explains the new regression target, and then rerunning the focused candidate-surface suite to confirm nothing drifted.
+
+I’ve recorded the behavior-to-test mapping and the reason this phase extends coverage into authoritative-drift reads. Next I’m rerunning the focused candidate-surface tests so the phase notes and feedback reflect a fresh proof run, not just reused implement-phase output.
+
+Scope considered
+- Phase-local test work for the shared candidate-surface seam only.
+- Touched the focused unit coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:2148), the phase strategy in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/test/phases/shared-candidate-surface-seam/test_strategy.md:1), the phase feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/test/phases/shared-candidate-surface-seam/feedback.md:1), and the current test-turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/decisions.txt:14).
+
+What I analyzed
+- The shared seam’s guarded entry points after the implement-phase path-hardening fix: baseline copy, authoritative-drift reads, and overlay copy.
+- Existing candidate-surface unit coverage to identify the remaining regression gap.
+- The test-phase artifact requirements so the coverage map and feedback match the actual tests.
+
+What I changed
+- Added a focused regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:2148) to verify `validate_authoritative_surface_sources_unchanged(...)` rejects both parent-traversal and absolute-path manifest entries.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/test/phases/shared-candidate-surface-seam/test_strategy.md:1) with the explicit behavior-to-test coverage map, preserved invariants, failure paths, and known gaps.
+- Appended a concise test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/test/phases/shared-candidate-surface-seam/feedback.md:1).
+- Appended one test-phase decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/decisions.txt:14) explaining why authoritative-drift path hardening is now part of the regression surface.
+- Ran `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py -k 'candidate_surface or stdlib_modules_remain_pure_authoring_helpers'` -> `11 passed, 58 deselected`.
+
+Key findings / decisions
+- The only uncovered seam-level safety gap after implement verification was authoritative-drift path rejection; this phase closes that gap without broadening scope.
+- Coverage now exercises all three repo-relative guard sites with deterministic negative cases, while preserving the existing happy-path and overlay fallback tests.
+
+Open issues / next step
+- No phase-local test issues remain.
+- Next step is the test auditor pass over this phase’s `criteria.md` and `feedback.md`.
