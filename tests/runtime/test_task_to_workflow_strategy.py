@@ -23,6 +23,30 @@ from workflow.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+COMMON_PROMPT_CONTRACT_MARKERS = (
+    "## Step Contract",
+    "## Artifact Contract",
+    "| Artifact | Direction | Notes |",
+    "## Output Requirements",
+    "## Routes",
+    "## Forbidden",
+)
+LEGACY_PROMPT_SCAFFOLDING_MARKERS = ("Read these artifacts", "Write these artifacts")
+
+
+def _assert_compact_prompt_contract(
+    prompt_name: str,
+    text: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    for marker in COMMON_PROMPT_CONTRACT_MARKERS:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in required_markers:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in LEGACY_PROMPT_SCAFFOLDING_MARKERS:
+        assert marker not in text, f"{prompt_name} still contains legacy scaffolding marker: {marker}"
 
 
 def _clear_workflow_modules() -> None:
@@ -157,6 +181,110 @@ def test_task_to_workflow_strategy_adapt_handoff_docs_and_prompts_reference_adap
 
     for text in (doc_text, select_prompt, package_prompt, verifier_prompt, checklist):
         assert "candidate_workflow_to_adapted_execution_plan" in text
+
+
+def test_task_to_workflow_strategy_prompt_readme_uses_shared_contract_sections() -> None:
+    text = (REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
+        "Reserved routes:",
+        "`question`",
+        "`blocked`",
+        "`failed`",
+        "Application routes:",
+        "`task_framed`",
+        "`strategy_selected`",
+        "`strategy_package_ready`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "`frame_producer.md` / `frame_verifier.md`",
+        "StrategyPackagePayload",
+        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+    ):
+        assert required in text
+
+
+@pytest.mark.parametrize(
+    ("prompt_name", "required_markers"),
+    (
+        (
+            "frame_producer.md",
+            (
+                "`task_strategy_brief`",
+                "`workflow_selection_criteria`",
+                "`task_framed`",
+                "`needs_rework`",
+                "`needs_replan`",
+            ),
+        ),
+        (
+            "frame_verifier.md",
+            (
+                "Required outcome structure",
+                "`task_framed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`run_existing`, `compose`, `adapt`, and `create_new`",
+            ),
+        ),
+        (
+            "select_producer.md",
+            (
+                "`strategy_decision`",
+                "`strategy_selected`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`candidate_workflow_set_summary`",
+            ),
+        ),
+        (
+            "select_verifier.md",
+            (
+                "Required outcome structure",
+                "`strategy_selected`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`run_existing`, `compose`, `adapt`, or `create_new`",
+            ),
+        ),
+        (
+            "package_producer.md",
+            (
+                "`workflow_strategy_package`",
+                "`strategy_summary`",
+                "`strategy_next_action`",
+                "`strategy_package_ready`",
+                "`candidate_workflow_to_adapted_execution_plan`",
+            ),
+        ),
+        (
+            "package_verifier.md",
+            (
+                "Required outcome structure",
+                "`strategy_package_ready`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`candidate_workflow_to_adapted_execution_plan`",
+            ),
+        ),
+    ),
+)
+def test_task_to_workflow_strategy_prompts_keep_step_local_contracts_explicit(
+    prompt_name: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    text = (REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / prompt_name).read_text(
+        encoding="utf-8"
+    )
+
+    _assert_compact_prompt_contract(prompt_name, text, required_markers)
 
 
 def test_task_to_workflow_strategy_package_rejects_blank_task_title(tmp_path: Path) -> None:

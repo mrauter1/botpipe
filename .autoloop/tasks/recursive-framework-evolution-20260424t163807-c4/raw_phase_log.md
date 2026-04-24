@@ -557,3 +557,58 @@ Follow-up debt is limited to adding the same prompt-marker assertions to `test_w
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+---
+The review surfaced one concrete regression-risk gap in the test surface: four migrated workflow families still don’t pin the new prompt-body markers. I’m updating those suites now, then I’ll sync the phase test strategy and feedback artifacts to match the added coverage.
+
+The four front-door suites don’t currently test either the workflow-local prompt README shape or the migrated prompt-body headings. I’m adding lightweight contract checks that pin the new surface without overfitting to prompt prose or forcing identical optional sections across every file.
+
+I have the current prompt surfaces and README payload names in hand. The test shape is straightforward: one README contract test plus one prompt-body contract test per front-door suite, with shared common markers and suite-local route/artifact markers.
+
+The new assertions are in place. I’m running the four touched runtime suites first to catch any over-specific marker strings before I update the phase artifacts and closeout notes.
+
+The focused suites passed cleanly. I’m running the full scoped prompt-surface test slice now so the phase closeout reflects both the newly added front-door coverage and the already-migrated later-family coverage.
+
+Scope considered
+
+Phase-local prompt-surface migration only. I focused on the four front-door workflow families the reviewer flagged as still lacking prompt-body regression coverage: `workflow_idea_to_workflow_package`, `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, and `candidate_workflow_to_adapted_execution_plan`.
+
+What I analyzed
+
+I checked the active session state, the shared decisions ledger, the reviewer feedback, the existing prompt-facing runtime suites, and the already-updated later-family suites to match their testing style where it fit. I also inspected the current README payload tables and migrated prompt files so the new assertions pin the real compact contract surface rather than inventing a stricter one.
+
+What I changed
+
+I added README contract tests and prompt-body contract tests to:
+- `tests/runtime/test_workflow_builder_package.py`
+- `tests/runtime/test_task_to_candidate_workflow_set.py`
+- `tests/runtime/test_task_to_workflow_strategy.py`
+- `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
+
+The new assertions pin the shared README sections, the common prompt-body section/table markers, suite-local route and artifact markers, and absence of legacy `Read these artifacts` / `Write these artifacts` scaffolding. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-surface-migration/test_strategy.md), appended the test closeout to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-surface-migration/feedback.md), and recorded the non-obvious test boundary in `decisions.txt`.
+
+Key findings / decisions
+
+The main decision was to pin the common migrated prompt surface without forcing optional `## Evidence` headings in prompts where evidence expectations are still explicit under artifact checks or route guidance. Validation passed on both the focused slice and the full scoped prompt-surface slice:
+- Focused: `75 passed`
+- Full scoped slice plus baseline docs: `238 passed`
+
+Open issues / next step
+
+No blocking test gaps remain inside this phase scope. Older domain workflow prompt families are still out of scope and remain the next prompt-surface coverage expansion if the cycle continues.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

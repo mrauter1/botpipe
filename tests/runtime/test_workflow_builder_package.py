@@ -21,6 +21,30 @@ from workflow.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+COMMON_PROMPT_CONTRACT_MARKERS = (
+    "## Step Contract",
+    "## Artifact Contract",
+    "| Artifact | Direction | Notes |",
+    "## Output Requirements",
+    "## Routes",
+    "## Forbidden",
+)
+LEGACY_PROMPT_SCAFFOLDING_MARKERS = ("Read these artifacts", "Write these artifacts")
+
+
+def _assert_compact_prompt_contract(
+    prompt_name: str,
+    text: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    for marker in COMMON_PROMPT_CONTRACT_MARKERS:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in required_markers:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in LEGACY_PROMPT_SCAFFOLDING_MARKERS:
+        assert marker not in text, f"{prompt_name} still contains legacy scaffolding marker: {marker}"
 
 
 def _clear_workflow_modules() -> None:
@@ -114,6 +138,131 @@ def test_workflow_builder_package_docs_capture_decision_records() -> None:
         "tests/runtime/test_workflow_builder_package.py",
     ):
         assert required in text
+
+
+def test_workflow_builder_package_prompt_readme_uses_shared_contract_sections() -> None:
+    text = (REPO_ROOT / "workflows" / "workflow_idea_to_workflow_package" / "prompts" / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
+        "Reserved routes:",
+        "`question`",
+        "`blocked`",
+        "`failed`",
+        "Application routes:",
+        "`candidate_selected`",
+        "`design_accepted`",
+        "`package_built`",
+        "`evaluation_passed`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "`frame_producer.md` / `frame_verifier.md`",
+        "WorkflowEvaluationPayload",
+        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+    ):
+        assert required in text
+
+
+@pytest.mark.parametrize(
+    ("prompt_name", "required_markers"),
+    (
+        (
+            "frame_producer.md",
+            (
+                "`candidate_comparison`",
+                "`selected_workflow_brief`",
+                "`candidate_selected`",
+                "`needs_rework`",
+                "`needs_replan`",
+            ),
+        ),
+        (
+            "frame_verifier.md",
+            (
+                "Required outcome structure",
+                "`candidate_selected`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "at least three credible candidates were compared",
+            ),
+        ),
+        (
+            "design_producer.md",
+            (
+                "`workflow_package_spec`",
+                "`step_contracts`",
+                "`prompt_contract_matrix`",
+                "`verification_plan`",
+                "`design_accepted`",
+            ),
+        ),
+        (
+            "design_verifier.md",
+            (
+                "Required outcome structure",
+                "`design_accepted`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "provider-facing packet abstraction",
+            ),
+        ),
+        (
+            "build_producer.md",
+            (
+                "`generated_layout`",
+                "`build_report`",
+                "`package_built`",
+                "`needs_rework`",
+                "`needs_replan`",
+            ),
+        ),
+        (
+            "build_verifier.md",
+            (
+                "Required outcome structure",
+                "`package_built`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`build_report` accounts for the output set",
+            ),
+        ),
+        (
+            "evaluate_producer.md",
+            (
+                "`verification_report`",
+                "`promotion_record`",
+                "`rollback_plan`",
+                "`evaluation_passed`",
+                "`needs_rework`",
+            ),
+        ),
+        (
+            "evaluate_verifier.md",
+            (
+                "Required outcome structure",
+                "`evaluation_passed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "Do not accept missing rollback evidence.",
+            ),
+        ),
+    ),
+)
+def test_workflow_builder_package_prompts_keep_step_local_contracts_explicit(
+    prompt_name: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    text = (
+        REPO_ROOT / "workflows" / "workflow_idea_to_workflow_package" / "prompts" / prompt_name
+    ).read_text(encoding="utf-8")
+
+    _assert_compact_prompt_contract(prompt_name, text, required_markers)
 
 
 def test_workflow_builder_package_rejects_invalid_package_name(tmp_path: Path) -> None:

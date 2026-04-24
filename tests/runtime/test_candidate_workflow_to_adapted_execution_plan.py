@@ -26,6 +26,30 @@ from workflow.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+COMMON_PROMPT_CONTRACT_MARKERS = (
+    "## Step Contract",
+    "## Artifact Contract",
+    "| Artifact | Direction | Notes |",
+    "## Output Requirements",
+    "## Routes",
+    "## Forbidden",
+)
+LEGACY_PROMPT_SCAFFOLDING_MARKERS = ("Read these artifacts", "Write these artifacts")
+
+
+def _assert_compact_prompt_contract(
+    prompt_name: str,
+    text: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    for marker in COMMON_PROMPT_CONTRACT_MARKERS:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in required_markers:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in LEGACY_PROMPT_SCAFFOLDING_MARKERS:
+        assert marker not in text, f"{prompt_name} still contains legacy scaffolding marker: {marker}"
 
 
 def _clear_workflow_modules() -> None:
@@ -144,6 +168,114 @@ def test_candidate_workflow_to_adapted_execution_plan_package_docs_capture_decis
         "tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py",
     ):
         assert required in text
+
+
+def test_candidate_workflow_to_adapted_execution_plan_prompt_readme_uses_shared_contract_sections() -> None:
+    text = (
+        REPO_ROOT
+        / "workflows"
+        / "candidate_workflow_to_adapted_execution_plan"
+        / "prompts"
+        / "README.md"
+    ).read_text(encoding="utf-8")
+
+    for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
+        "Reserved routes:",
+        "`question`",
+        "`blocked`",
+        "`failed`",
+        "Application routes:",
+        "`adaptation_request_framed`",
+        "`adaptation_surface_analyzed`",
+        "`adapted_execution_plan_ready`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "`frame_producer.md` / `frame_verifier.md`",
+        "AdaptedExecutionPlanPayload",
+        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+    ):
+        assert required in text
+
+
+@pytest.mark.parametrize(
+    ("prompt_name", "required_markers"),
+    (
+        (
+            "frame_producer.md",
+            (
+                "`adaptation_request_brief`",
+                "`adaptation_success_criteria`",
+                "`adaptation_request_framed`",
+                "`needs_rework`",
+                "`needs_replan`",
+            ),
+        ),
+        (
+            "frame_verifier.md",
+            (
+                "Payload requirements",
+                "`adaptation_request_framed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`selected_workflow_name`",
+            ),
+        ),
+        (
+            "analyze_producer.md",
+            (
+                "`workflow_fit_assessment`",
+                "`step_adaptation_matrix`",
+                "`adaptation_surface_analyzed`",
+                "`needs_rework`",
+                "`needs_replan`",
+            ),
+        ),
+        (
+            "analyze_verifier.md",
+            (
+                "Payload requirements",
+                "`adaptation_surface_analyzed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`proposed_parameter_keys`",
+            ),
+        ),
+        (
+            "package_producer.md",
+            (
+                "`adapted_execution_plan`",
+                "`proposed_workflow_parameters`",
+                "`adapted_execution_summary`",
+                "`adapted_execution_next_action`",
+                "`adapted_execution_plan_ready`",
+            ),
+        ),
+        (
+            "package_verifier.md",
+            (
+                "Payload requirements",
+                "`adapted_execution_plan_ready`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`validated_workflow_parameters.json`",
+            ),
+        ),
+    ),
+)
+def test_candidate_workflow_to_adapted_execution_plan_prompts_keep_step_local_contracts_explicit(
+    prompt_name: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    text = (
+        REPO_ROOT / "workflows" / "candidate_workflow_to_adapted_execution_plan" / "prompts" / prompt_name
+    ).read_text(encoding="utf-8")
+
+    _assert_compact_prompt_contract(prompt_name, text, required_markers)
 
 
 def test_candidate_workflow_to_adapted_execution_plan_package_rejects_blank_selected_workflow(tmp_path: Path) -> None:
