@@ -293,3 +293,53 @@ Key findings / decisions
 Open issues / next step
 - No open test-phase issues for this seam.
 - The only deliberate gap left un-frozen is malformed legacy `events.jsonl` / `children.jsonl` / `parent.json` corruption handling, because the active phase contract did not define a public policy for that case.
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+---
+I’m auditing the phase-local test work against the active contract, the shared decisions ledger, and the actual repo test coverage. I’ll verify the added edge-case coverage and the targeted proof first, then I’ll update the test audit artifacts with the result.
+
+The added coverage matches the changed seam and the shared decision about empty histories. I’m rerunning the targeted proof now so the audit result rests on fresh execution, then I’ll update `criteria.md` and `feedback.md` with the final outcome.
+
+The proof passed, and I’m not seeing a material coverage hole in the phase-local tests. I’m updating the test-audit artifacts now to record a complete audit with an explicit no-findings entry.
+
+The audit artifacts are updated. I’m doing a quick final read of `criteria.md` and `feedback.md` so the recorded audit state matches the actual proof and coverage assessment, then I’ll close with the required summary and loop-control block.
+
+Scope considered
+- Phase-local test audit only: the added diagnostics helper tests in `tests/unit/test_stdlib_and_extensions.py`, the phase-local `test_strategy.md`, the shared decisions ledger, and the active test audit artifacts.
+- I did not expand into out-of-scope CLI, workflow-package, or runtime-owned diagnostics work.
+
+What I analyzed
+- The active phase contract and acceptance criteria for the diagnostic run-history seam.
+- The shared decisions, especially the rule that empty filtered histories remain valid at the helper layer.
+- The updated unit tests, the documented strategy coverage map, and the relevant authoring-doc boundary assertions.
+
+What I reviewed
+- Coverage of changed behavior: shared workflow resolution, read-only run discovery reuse, deterministic filtering, workflow-local output shape, and preserved read-only behavior.
+- Edge and failure-path coverage: empty filtered histories, main workflow class references, path escape rejection, suffix validation, invalid `max_runs`, and invalid/blank `statuses`.
+- Fresh targeted proof:
+  - `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`
+  - `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py`
+
+Key findings / decisions
+- No blocking or non-blocking audit defects were found in the phase-local test scope.
+- `criteria.md` was updated to fully checked.
+- `feedback.md` was updated with `TST-001` as an explicit no-findings audit note.
+
+Open issues / next step
+- No open test-audit issues remain for this phase-local seam.
+- The audit outcome is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
