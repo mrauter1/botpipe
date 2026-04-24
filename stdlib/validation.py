@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, ValidationInfo, field_validator
 
 from .lifecycle import write_workflow_json
 
@@ -108,6 +108,77 @@ def normalize_unique_strings(
         if candidate and candidate not in normalized:
             normalized.append(candidate)
     return normalized
+
+
+def required_text_fields(*field_names: str, error_message: str | None = None):
+    """Return one Pydantic validator for stripped required text fields."""
+
+    @field_validator(*field_names)
+    @classmethod
+    def _validate_required_text(cls, value: Any, info: ValidationInfo) -> str:
+        field_name = info.field_name or "value"
+        return require_non_empty_string(
+            value,
+            error_message=error_message or f"{field_name} must be non-empty",
+            field_name=field_name,
+        )
+
+    return _validate_required_text
+
+
+def optional_text_fields(*field_names: str, error_message: str | None = None):
+    """Return one Pydantic validator for stripped optional text fields."""
+
+    @field_validator(*field_names)
+    @classmethod
+    def _normalize_optional_text(cls, value: Any, info: ValidationInfo) -> str | None:
+        return normalize_optional_string(
+            value,
+            field_name=info.field_name or "value",
+            error_message=error_message,
+        )
+
+    return _normalize_optional_text
+
+
+def deduped_string_list_fields(
+    *field_names: str,
+    error_message: str | None = None,
+    item_error_message: str | None = None,
+):
+    """Return one Pydantic validator for deduped stripped string-list fields."""
+
+    @field_validator(*field_names)
+    @classmethod
+    def _normalize_repeatable_strings(cls, value: Any, info: ValidationInfo) -> list[str]:
+        return normalize_unique_strings(
+            value,
+            field_name=info.field_name or "value",
+            error_message=error_message,
+            item_error_message=item_error_message,
+        )
+
+    return _normalize_repeatable_strings
+
+
+def positive_int_fields(
+    *field_names: str,
+    error_message: str | None = None,
+    allow_bool: bool = False,
+):
+    """Return one Pydantic validator for positive integer fields."""
+
+    @field_validator(*field_names)
+    @classmethod
+    def _validate_positive_int(cls, value: Any, info: ValidationInfo) -> int:
+        return require_positive_int(
+            value,
+            error_message=error_message,
+            field_name=info.field_name or "value",
+            allow_bool=allow_bool,
+        )
+
+    return _validate_positive_int
 
 
 def require_string_list(
