@@ -728,3 +728,119 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+---
+I’m treating this as a phase-scoped implementation pass: wire `task_to_candidate_workflow_set` into `task_to_workflow_strategy`, preserve the existing front-door artifacts/contracts, update recursive memory/docs/tests, and prove it with targeted pytest. I’m starting by reading the phase artifacts, mandatory framework files, and current workflow definitions so I can map the approved seam onto the existing runtime without drifting scope.
+
+The worktree is already dirty well outside this phase, so I’m treating those unrelated deletions and moves as off-limits and staying inside the front-door, memory, and test surfaces. Next I’m reading the shipped cycle-5 code paths to see what the prior phases already implemented versus what this phase still needs to close.
+
+The repo already contains what looks like most of the cycle-5 seam, including updated docs and recursive memory. I’m drilling into the actual front-door workflow code and tests now to confirm whether this phase is already satisfied or whether there are still mismatches between the implementation, docs, and acceptance contract.
+
+I’ve confirmed the cycle-5 code, docs, and recursive-memory text are present. The remaining risk is regression or drift in this dirty worktree, so I’m checking the actual package layout and then running the targeted proof set from the cycle-5 closeout docs rather than assuming the current state is valid.
+
+I’m at the proof stage now. I’ve confirmed the repo layout and the front-door code path; the next step is the exact targeted pytest closeout set for cycle 5 so I can distinguish a finished implementation from a doc-only state.
+
+The targeted proof is running cleanly so far; I’ve only seen passing dots, no immediate contract or import failures. I’m waiting for the full result because this phase’s acceptance depends on the seam, front door, recursive-memory docs, and prior portfolio workflows all staying green together.
+
+The proof passed, but I found one concrete drift item while checking it: the targeted cycle-5 command now returns `103 passed`, so I’m auditing the recursive-memory text for any stale `102 passed` claim before I touch the phase notes.
+
+I found one real drift item to fix: the recorded cycle-5 closeout count says `102 passed`, but the authoritative targeted command in this worktree now returns `103 passed`. I’m updating the roadmap and the baseline-doc test to lock the real proof count, then I’ll record the phase notes and rerun the targeted validation.
+
+I’ve made the only in-scope correction that proof exposed: the cycle-5 closeout record now matches the real targeted test result, and the docs test locks that count. I’m rerunning the same targeted suite once more to make sure the proof, the recursive memory, and the new assertion stay aligned.
+
+The proof rerun stayed green at `103 passed`. I’m doing one last diff/line-number pass now so the closeout summary can point at the exact files updated in this turn rather than hand-waving over the already-dirty worktree.
+
+Scope considered
+
+- Phase-local closeout only: verify the `task_to_workflow_strategy` front-door composition, recursive memory state, and targeted regression proof; ignore unrelated dirty files.
+
+What I analyzed
+
+- Verified the front door already composes the child candidate-set workflow and preserves parent-local artifacts/contracts in [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:119) and [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:187).
+- Reviewed the cycle-5 recursive memory and doc-locking coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:498) and the standing roadmap entry in [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:39).
+
+What I changed
+
+- Corrected the recorded cycle-5 closeout proof count from `102 passed` to `103 passed` in [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:46).
+- Locked that count in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:504).
+- Recorded the turn outcome in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/front-door-integration-memory-and-proof/implementation_notes.md:1) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/decisions.txt:21).
+
+Key findings / decisions
+
+- The front-door integration itself was already correct in this worktree; no workflow, runtime, prompt, or stdlib logic change was needed.
+- The only real drift was stale proof metadata: the authoritative targeted pytest set now returns `103 passed`, not `102 passed`.
+- Validation passed twice with the cycle-5 closeout command: `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/test_architecture_baseline_docs.py` -> `103 passed`.
+
+Open issues / next step
+
+- No in-scope open issues remain.
+- `recursive_autoloop/` wrapper/template cleanup is still intentionally out of scope for this phase.
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+---
+I’m reviewing this phase as a scoped verifier pass: check the active phase artifacts, inspect the current front-door composition and closeout proof state, and then update the reviewer-owned criteria and feedback files only. I’ll start by reading the criteria/feedback, the recorded implementation notes, and the current diffs so I can decide whether there are any blocking gaps against AC-1 through AC-3.
+
+The diff in this turn is only the proof-record sync plus phase bookkeeping, but AC-1 still depends on the already-landed front-door composition being intact. I’m checking the live workflow and test surfaces directly and then rerunning the phase’s targeted pytest set to confirm the current repo state, not just the producer note.
+
+The current front-door workflow state still matches the shared decisions: child composition is explicit, the parent-local artifact contract is preserved, and the recursive memory says the right thing for cycle 5. I’m waiting on the full targeted pytest run now; if it lands green, I expect this review to close without blocking findings.
+
+The proof passed: `103 passed in 1.64s`. I found no blocking or non-blocking defects in the reviewed phase scope, so I’m marking the criteria complete and recording a no-findings review note in the verifier artifact.
+
+I’ve written the verifier-owned artifacts. I’m doing a quick readback of `criteria.md` and `feedback.md` to ensure the review state is internally consistent before I close the phase as complete.
+
+Scope considered
+
+- Phase-local review of `front-door-integration-memory-and-proof` only.
+- Reviewed the producer’s phase notes and decisions, the live `task_to_workflow_strategy` composition/publish contract, the cycle-5 recursive memory baseline, and the targeted regression proof.
+
+What I analyzed
+
+- `workflows/task_to_workflow_strategy/workflow.py`
+- `tests/runtime/test_task_to_workflow_strategy.py`
+- `.autoloop_recursive/framework_roadmap.md`
+- `.autoloop_recursive/workflow_candidate_ledger.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/decisions.txt`
+- The producer’s recorded diffs and implementation notes for this phase
+
+What I reviewed
+
+- AC-1: explicit child composition is present, parent-local artifact names are preserved, and publish-time validations still enforce the existing strategy contract.
+- AC-2: recursive memory records the builder baseline, the shipped candidate-set building block, and the capability-snapshot seam; the closeout proof count is now synchronized to `103 passed`.
+- AC-3: reran `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/test_architecture_baseline_docs.py` and got `103 passed in 1.64s`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated the verifier-owned artifacts only: all criteria boxes are checked, and `feedback.md` records a no-findings result plus the verified test command/output.
+
+Open issues / next step
+
+- No in-scope open issues remain for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
