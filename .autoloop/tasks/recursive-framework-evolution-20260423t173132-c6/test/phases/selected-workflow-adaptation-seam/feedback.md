@@ -6,3 +6,5 @@
 - Phase Directory Key: selected-workflow-adaptation-seam
 - Phase Title: Selected Workflow Adaptation Seam
 - Scope: phase-local authoritative verifier artifact
+
+- Added adaptation-seam regression coverage for alias-based selected-workflow snapshots, workflow-local path guards, delegation to the shared loader coercion path, and the shared unknown-parameter failure path.
