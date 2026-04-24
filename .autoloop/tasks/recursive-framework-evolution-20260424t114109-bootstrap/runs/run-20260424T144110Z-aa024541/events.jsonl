@@ -7,3 +7,7 @@
 {"ts": "2026-04-24T14:56:15.389959+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 7, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T14:57:29.861997+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 8, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T14:57:29.906172+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 9, "event_type": "pair_completed", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-24T14:57:29.974856+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 10, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["resolver-foundation", "catalog-and-helper-migration", "authoring-support-and-builder", "docs-templates-and-regression"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-04-24T14:57:29.980312+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 11, "event_type": "phase_started", "phase_id": "resolver-foundation", "phase_mode": "single"}
+{"ts": "2026-04-24T14:57:29.981837+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "resolver-foundation"}
+{"ts": "2026-04-24T14:57:29.982016+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "resolver-foundation"}

@@ -165,3 +165,12 @@ No open verifier issues remain on the current planning artifacts. The plan can p
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=resolver-foundation,catalog-and-helper-migration,authoring-support-and-builder,docs-templates-and-regression
+explicit=True
+current_phase_index=0
