@@ -14,13 +14,13 @@
       "portfolio-handoff-docs-and-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "candidate-workflow-adapted-execution-plan-package"
+    "current_phase_index": 2,
+    "current_phase_id": "portfolio-handoff-docs-and-closeout"
   },
   "phase_status": {
     "selected-workflow-adaptation-seam": "completed",
-    "candidate-workflow-adapted-execution-plan-package": "in_progress",
-    "portfolio-handoff-docs-and-closeout": "planned"
+    "candidate-workflow-adapted-execution-plan-package": "completed",
+    "portfolio-handoff-docs-and-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260424T015723Z-b21e6db6",
       "status": "in_progress",
       "ts": "2026-04-24T02:27:03.955317+00:00"
+    },
+    {
+      "phase_id": "candidate-workflow-adapted-execution-plan-package",
+      "run_id": "run-20260424T015723Z-b21e6db6",
+      "status": "completed",
+      "ts": "2026-04-24T03:25:37.244502+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "portfolio-handoff-docs-and-closeout",
+      "run_id": "run-20260424T015723Z-b21e6db6",
+      "status": "in_progress",
+      "ts": "2026-04-24T03:25:37.248201+00:00"
     }
   ]
 }
