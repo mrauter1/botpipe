@@ -34,3 +34,4 @@
 {"ts": "2026-04-24T20:33:50.000577+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 34, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-validation-migrations-and-closeout"}
 {"ts": "2026-04-24T20:33:50.041300+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 35, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-validation-migrations-and-closeout"}
 {"ts": "2026-04-24T20:33:50.112293+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 36, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-validation-migrations-and-closeout", "phase_mode": "single"}
+{"ts": "2026-04-24T20:33:50.191978+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 37, "event_type": "run_finished", "status": "success", "exit_code": 0}
