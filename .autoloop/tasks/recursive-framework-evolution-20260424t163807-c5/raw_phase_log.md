@@ -285,3 +285,61 @@ Result: `102 passed`
 Open issues / next step
 
 No open issues from the test pass. Coverage now pins shared README sections, compact prompt markers, legacy scaffold removal, and prompt-file inventory for the four older-domain workflow families.
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+I’m auditing the test-phase output against the phase contract: prompt-shape assertions, README coverage, inventory drift protection, and the phase-local test artifacts. I’ll verify the current tests and the strategy mapping, then update the audit artifacts and finish with the loop-control result.
+
+The test artifacts line up with the intended regression surface: README structure, prompt-body contract markers, legacy scaffold rejection, and prompt inventory drift are all covered explicitly. I’m waiting on the proof run to finish before I mark the audit criteria and close the phase.
+
+Scope considered
+
+The audit stayed phase-scoped to the four older-domain runtime suites, `tests/test_architecture_baseline_docs.py`, the shared decisions ledger, and the test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/test/phases/older-domain-prompt-surface-migration/`.
+
+What I analyzed
+
+I checked that the test additions cover the accepted scope for the prompt-surface migration: shared README sections, compact prompt-body markers, rejection of the legacy scaffold, prompt-file inventory drift, and baseline docs inclusion of the older-domain README set. I also verified the tests against the preserved invariants from the shared decisions file: prompt paths, artifact names, route names, and prompt-local-only scope.
+
+What I reviewed
+
+I reviewed the current assertions in:
+`tests/runtime/test_release_candidate_to_go_no_go.py`
+`tests/runtime/test_investigation_request_to_evidence_pack.py`
+`tests/runtime/test_security_finding_to_verified_remediation.py`
+`tests/runtime/test_incident_to_hardening_program.py`
+`tests/test_architecture_baseline_docs.py`
+
+I reviewed the phase-local artifacts:
+`test_strategy.md`
+`feedback.md`
+`criteria.md`
+
+I re-ran the targeted validation command and confirmed:
+`102 passed in 1.34s`
+
+Key findings / decisions
+
+No blocking or non-blocking findings.
+
+I updated the audit artifacts to reflect that outcome:
+all `criteria.md` checkboxes are now checked
+`feedback.md` now records an explicit no-findings audit outcome
+
+Open issues / next step
+
+No open issues from the test audit. The phase-local test coverage is adequate for the changed prompt surface and preserved prompt/runtime invariants.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
