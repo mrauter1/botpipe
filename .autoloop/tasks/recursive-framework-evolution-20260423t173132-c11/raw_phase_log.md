@@ -388,3 +388,78 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+I’m reading the phase artifacts, mandatory framework files, and the existing workflow packages first so I can pin the current contracts before editing anything.
+
+The repo is already dirty in unrelated areas, so I’m isolating scope to the live package-root layout plus the phase artifacts and the new decomposition workflow surface. Next I’m reading the existing workflow patterns and the decomposition seam from the prior phase.
+
+I have the current authoring seams. Now I’m pulling the closest existing workflow package and its tests so the new package matches the repo’s actual compile/runtime conventions instead of inventing a new shape.
+
+The refinement workflow already implements the same candidate-overlay publication pattern this phase needs. I’m tracing its publish-time validation helpers now so I can reuse the same boundary guarantees without widening runtime behavior.
+
+I don’t see an existing decomposition workflow package yet, so I’m checking whether any partial package or docs already landed before I decide between extending and creating files.
+
+Plan for this phase:
+1. Create `workflow_package_to_composable_building_blocks` by mirroring the repo’s existing building-block package structure: params, contracts, workflow, prompts, manifest, asset, and doc.
+2. Reuse the new decomposition surface seam and the existing refinement-style publication model, but keep validation local so hidden execution, identity drift, and repo-boundary escapes are rejected inside this workflow.
+3. Add runtime proof for discovery, compile-time contracts, successful candidate publication, fallback evidence capture, unreadable-evidence blocking, and invalid-overlay rejection.
+4. Update the phase notes, shared decisions block, and the recursive memory files after the implementation is stable.
+
+I’m sampling the prompt-template shape and the recursive memory files now so the new package lands with the same provider contract markers and the cycle artifacts reflect the actual shipped addition.
+
+I have the workflow shape. I’m pulling the refinement runtime tests around successful publication and publish-side rejection now, because those are the fastest way to align the new workflow’s validation proof with the repo’s current testing idioms.
+
+I’ve got the test shape. I’m reading the refinement overlay validator itself once so I can either copy its mechanics cleanly or deliberately narrow them for decomposition without guessing.
+
+The remaining work is mainly new files now. Before I edit, I’m checking the tail of the recursive memory ledgers so I can append cycle 11 in the same existing format instead of inventing a new one.
+
+I’m starting the file edits now: the new package, its local publish-time validation, the runtime proof, and the cycle-memory updates. I’m keeping the decomposition validation self-contained in the workflow package rather than widening runtime or shared helpers again.
+
+The package scaffolding is in. I’m wiring the actual workflow logic and publish-side validation next; that’s where the candidate manifest, boundary checks, and blocked evidence capture live.
+
+The new workflow and proof are on disk. I’m running a fast syntax/import pass before I touch the memory files so I can correct structural mistakes while the change set is still local.
+
+The targeted runtime suite is mostly green; there’s one failing assertion. I’m pulling the traceback and the relevant file slices before I edit again.
+
+The failures are straightforward: one order-sensitive normalization assertion and one test reaching into the package root instead of the workflow module. I’m patching those now and rerunning the targeted suite.
+
+The runtime suite is still running, but the syntax pass is clean and the early failing cases are fixed. I’m waiting for the full targeted result before I update the ledgers and notes.
+
+I’m at the closeout artifacts now: shared decisions, phase notes, and the recursive memory files. These don’t change runtime behavior, but they’re required so later cycles inherit the actual shipped workflow and the validation discipline.
+
+The code path is stable now. I’m doing a last pass over the changed-file summary and then I’ll close out with the required scope/findings summary plus the validation result.
+
+Scope considered
+- Phase-local implementation for the new decomposition workflow: [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py), its package assets/prompts/contracts/params, [workflow docs](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_package_to_composable_building_blocks.md), [runtime proof](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py), the phase notes/decision ledger, and the `.autoloop_recursive/` memory files.
+- I reused the already-shipped decomposition surface seam and left runtime/CLI behavior and existing authoritative workflow packages unchanged.
+
+What I analyzed
+- The live package-root architecture in `docs/architecture.md`, `docs/authoring.md`, the new `stdlib/decomposition.py` seam, and the closest existing workflow package pattern in `workflow_and_eval_to_refined_workflow_package`.
+- The phase plan/decision artifacts and the current recursive memory ledgers so cycle 11 could be appended in the existing format.
+
+What I changed
+- Added the full `workflow_package_to_composable_building_blocks` package with typed params, explicit route contracts, step-local prompt templates, checklist asset, deterministic baseline/evidence capture, deterministic candidate manifest derivation, and local publish-time validation.
+- Added workflow documentation and runtime proof covering discovery, compilation, successful candidate publication, `request.md` fallback evidence capture, unreadable-evidence `blocked` routing, and publish-side rejection of hidden execution, identity drift, and boundary escapes.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/workflow-package-to-building-blocks/implementation_notes.md), [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt), and the cycle memory files under [.autoloop_recursive](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/).
+
+Key findings / decisions
+- I kept overlay validation local to this workflow instead of extracting another shared helper; `candidate_building_block_index.json` is the authoritative declaration of new package roots, docs, and runtime tests.
+- `capture_decomposition_context` always writes `decomposition_evidence_manifest.json`; when `evidence_paths` are absent it copies run-local `request.md`, and unreadable evidence pauses the workflow with `blocked`.
+- Publication explicitly rejects non-`candidate_only` building-block publication modes as hidden execution and rejects candidate files outside the declared repo-relative boundary.
+
+Open issues / next step
+- Validation passed: `python3 -m py_compile workflows/workflow_package_to_composable_building_blocks/workflow.py workflows/workflow_package_to_composable_building_blocks/contracts.py workflows/workflow_package_to_composable_building_blocks/params.py tests/runtime/test_workflow_package_to_composable_building_blocks.py` and `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` (`20 passed in 5.17s`).
+- I did not run the full repository test suite. The next logical follow-on is either a company-level recursive learner above governance/decomposition or a migration candidate that consumes the new decomposition layer.
