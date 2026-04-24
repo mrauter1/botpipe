@@ -467,3 +467,160 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+I’m starting by reading the phase artifacts, required framework files, and current workflow packages to pin down the accepted design and the runtime seams this phase has to satisfy before I edit anything.
+
+The checkout is mid-migration, so I’m treating the repo-root `core/`, `runtime/`, `stdlib/`, and `workflows/` tree as authoritative and staying out of the unrelated dirty rename/delete noise. Next I’m reading the framework surfaces and the prior seam phase so I can implement against the approved architecture instead of guessing.
+
+I’ve confirmed the helper seam from the prior phase exists and is documented. Now I’m reading the reusable workflow patterns, lifecycle helpers, and validation surfaces so the new package plugs into the same conventions and the proof test hits the right failure modes.
+
+I have the main patterns now: deterministic bootstrap/publish hooks, stdlib helper seams, and the workflow package/test/doc conventions. I’m checking the remaining runtime and package details that matter for baseline/candidate path validation before I start writing the new workflow and proof.
+
+I’ve got enough of the repository pattern to start implementation. Before editing, I’m checking the exact phase acceptance text and the runtime proof style so the workflow/package/docs/tests line up with the reviewer-owned contract instead of drifting.
+
+I’ve finished the analysis pass. The implementation needs one cohesive change set: the new workflow package, publish-time candidate validation against an isolated overlay, docs/recursive-memory closeout updates, and a runtime proof that pins both the happy path and the publish-step rejection cases.
+
+I’m starting the actual edits now. First pass is the workflow package itself: params/contracts, deterministic capture and publish logic, and the prompt/checklist bundle that makes the provider-facing contract explicit on each step.
+
+The core workflow package landed. I’m doing a correctness sweep on the new logic before I add the prompts/tests, because the publish-side validation path is dense and it’s cheaper to fix those invariants now than after the proof harness is in place.
+
+I found one real bug in the new workflow hook: the implement-step handler was discarding `artifacts` before using it. I’m fixing that and then compiling the new package with the repo’s Python before I move on to prompts and the proof harness.
+
+The workflow code compiles cleanly now. I’m adding the prompt bundle and checklist next, and I’m keeping the prompt contracts very literal so the proof can assert reads, writes, legal routes, evidence expectations, and forbidden actions without ambiguity.
+
+The prompt bundle is in place. I’m writing the workflow decision/contract doc now so the package, tests, and recursive-memory updates all point at the same design instead of drifting in three different directions.
+
+I’m wiring the proof harness now. The main runtime proof exercises the full package end to end, and the direct publish-hook tests then mutate artifacts to pin the rejection cases without paying for repeated full runs.
+
+The package, prompts, doc, and proof file are all present now. I’m running the new workflow test file first so I can tighten any contract mismatches before I touch the recursive-memory closeout and baseline-doc assertions.
+
+The first proof run found three failures. I’m reading those failures now and fixing them before I fan the change out into the recursive-memory and baseline-doc closeout updates.
+
+The failures are all the same root cause: the overlay validator was shelling out to `pytest`, but this environment only guarantees the active Python, not a `pytest` binary on `PATH`. I’m switching that path to `sys.executable -m pytest` when the command starts with `pytest`, while keeping the user-facing command string unchanged in the receipt.
+
+I’ve finished the initial implementation pass for the new refinement workflow and I’m checking the remaining failing runtime proof before I touch docs and memory files. Next I’m pulling the exact failing assertion, fixing it locally, then I’ll update the phase notes and recursive state artifacts.
+
+The previous test session is gone, so I’m rerunning the phase test file directly and narrowing the remaining failure from fresh output.
+
+The failure is in publish-time overlay validation, not the new workflow logic itself. I’m checking how this repo makes `autoloop_v3` importable in temp copies and aligning the overlay runner with that pattern instead of weakening the validation.
+
+I found the root cause: the overlay validator copies the repo into a temp directory named after the test sandbox, so imports like `autoloop_v3.*` break during collection. I’m tracing how the runtime tests construct their temp repo and then I’ll make the overlay validator preserve the package root/import contract.
+
+I’ve isolated the fix: publish validation needs to build its overlay from a runnable repo root, not from the phase’s stripped-down temp workspace. I’m patching the validator to detect that case, copy the authoritative package repo when needed, and still overlay only the candidate workflow surface inside the selected-workflow boundary.
+
+The validator fix exposed a second issue: the publish step is importing transient `workflows.*` modules from the temp overlay into the current test process, then leaving those stale module entries behind after the temp directory is deleted. I’m tightening that helper so overlay compilation doesn’t pollute `sys.modules` for the rest of the run.
+
+I’m patching the overlay helper to preserve and restore the current `workflows.*` module cache around the temporary overlay import. That keeps the publish check isolated and prevents the deleted temp overlay from poisoning later imports in the same process.
+
+I’m trimming one debug field from the publication receipt and re-exporting the candidate-manifest helper from the package init so the existing runtime proof can call it directly. Those are both test-surface issues, not workflow-behavior changes.
+
+The runtime proof is green now. I’m moving to the repo-state follow-through: recursive memory files, architecture baseline expectations, phase notes, and decision ledger entries that future cycles will rely on.
+
+I’ve got the memory updates scoped now. I’m appending the cycle 8 baseline/outcome/gap/candidate sections rather than rewriting earlier cycles, so future turns keep the full decision trail and only inherit the new refinement baseline on top.
+
+The remaining work is bookkeeping and proof, so I’m running the closeout set that matches the cycle 8 memory updates and then I’ll write the phase notes and decision lines from the verified behavior rather than from assumptions.
+
+The closeout set passed cleanly, but the actual count is `47 passed`, not the estimate I wrote into the memory file while drafting. I’m correcting the recorded proof count now so the docs and baseline test stay aligned with the real run.
+
+I’ve moved from implementation into handoff cleanup. I’m writing the phase notes now with the actual symbols, acceptance-criteria mapping, preserved invariants, and the verified test command/results so the next turn doesn’t have to reconstruct what changed.
+
+The code and proof are done. I’m doing a last pass over the touched-file set and the dirty worktree so the closeout only reports the phase-local changes and doesn’t accidentally blur them with unrelated repo state.
+
+The tracked diff includes one generated `.pyc` file from the test run. I’m restoring just that cache artifact so the phase output stays focused on source and task artifacts, not interpreter byproducts.
+
+Scope considered
+
+- Phase-local cycle 8 work for `workflow_and_eval_to_refined_workflow_package`, its docs/tests, recursive memory updates, and phase notes/decision ledger only.
+- I left the unrelated dirty deletions and untracked repo migration state untouched.
+
+What I analyzed
+
+- The shipped builder/adaptation/eval surfaces, especially the refinement seam in `stdlib/refinement.py`, the runtime loader/import behavior, and the new workflow’s publish-time validation path.
+- The phase runtime proof, baseline-doc expectations, and the recursive memory files that needed cycle 8 closeout state.
+
+What I changed
+
+- Added the new refinement building block in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py:71) plus params, contracts, prompts, and checklist assets under [workflows/workflow_and_eval_to_refined_workflow_package](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package).
+- Added the workflow design/decision doc in [workflow_and_eval_to_refined_workflow_package.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_and_eval_to_refined_workflow_package.md:1).
+- Added runtime proof in [test_workflow_and_eval_to_refined_workflow_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py:426) and extended [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:192) for the refinement helper boundary and cycle 8 memory baseline.
+- Updated `.autoloop_recursive/` with cycle 8 baseline/outcome/gap/candidate entries and recorded phase decisions plus implementation notes.
+
+Key findings / decisions
+
+- Publish-time overlay validation cannot assume the active refinement root is a runnable package repo; it now falls back to a runnable authoritative repo copy while still overlaying only the candidate surface.
+- Overlay compilation was polluting `workflows.*` imports in-process; I preserved and restored the workflow module cache around that temp import so later workflow resolution stays stable.
+- Candidate manifest generation stays deterministic in workflow code, not provider-authored.
+
+Open issues / next step
+
+- No in-phase blocker remains.
+- Targeted validation passed with `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py` (`47 passed`).
+- I did not run the full repo suite.
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+I’m reviewing the phase-local implementation against the active acceptance criteria, the shared decisions ledger, and the changed workflow/doc/test surfaces. I’ll inspect the new refinement package, verify the claimed proof path, then update the phase criteria and feedback artifacts only.
+
+I’ve finished the artifact/decision review and I’m doing a code-path audit now: workflow contracts, publish-time validation, and the test coverage around the success path and rejection cases. If I find anything outside the implemented acceptance surface, I’ll call it out as explicitly out-of-scope.
+
+The workflow/package review is consistent so far, and I’m running the targeted proof set independently now. After that I’ll either write findings or mark the phase clean and update the verifier-owned artifacts.
+
+I found one contract hole worth checking carefully before I write the verdict: the workflow validates the selected workflow against its baseline/candidate surfaces, but I haven’t seen the same validation applied to the supplied evaluation summary itself. I’m confirming whether the implementation ever rejects cross-workflow evidence drift or whether that gap is real.
+
+I found one blocking contract gap and I’m recording it in the verifier artifacts now. After that I’ll leave the phase `INCOMPLETE` so the next implementation turn can close the evidence-boundary validation hole instead of silently carrying it forward.
+
+Scope considered
+
+- Phase-local review only for `workflow-and-eval-to-refined-workflow-package`.
+- I limited writes to the verifier-owned phase artifacts: `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- The shared decisions ledger, active phase contract, implementation notes, and the new refinement workflow package under `workflows/workflow_and_eval_to_refined_workflow_package/`.
+- The workflow’s capture, publish, manifest-validation, and overlay-validation paths, plus the cycle 8 recursive-memory and baseline-doc updates.
+
+What I reviewed
+
+- Workflow contracts, params, route contracts, and publish-time validation logic.
+- Runtime proof coverage in `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`.
+- Baseline-doc proof in `tests/test_architecture_baseline_docs.py`.
+- Independent targeted validation: `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py` (`47 passed`).
+
+Key findings / decisions
+
+- I recorded one blocking finding in `feedback.md` as `IMP-001`.
+- The workflow never validates that `baseline_evaluation_summary.json` actually belongs to the selected workflow, so it can publish a refinement receipt for workflow A using evaluation evidence from workflow B.
+- I left the phase criteria incomplete to reflect that contract hole.
+
+Open issues / next step
+
+- Fix `IMP-001` by validating the evaluation summary’s selected-workflow identifier against the resolved selected workflow before publication, and add a rejection test for cross-workflow evidence drift.
+- After that, rerun the targeted proof set and update the verifier artifacts again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
