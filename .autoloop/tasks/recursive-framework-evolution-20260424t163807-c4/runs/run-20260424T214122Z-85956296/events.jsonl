@@ -20,3 +20,7 @@
 {"ts": "2026-04-24T22:11:20.331209+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "prompt-contract-doctrine"}
 {"ts": "2026-04-24T22:12:17.546718+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "prompt-contract-doctrine"}
 {"ts": "2026-04-24T22:12:17.589628+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "prompt-contract-doctrine"}
+{"ts": "2026-04-24T22:12:17.672004+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "prompt-contract-doctrine", "phase_mode": "single"}
+{"ts": "2026-04-24T22:12:17.675884+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 24, "event_type": "phase_started", "phase_id": "prompt-surface-migration", "phase_mode": "single"}
+{"ts": "2026-04-24T22:12:17.677008+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "prompt-surface-migration"}
+{"ts": "2026-04-24T22:12:17.677128+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "prompt-surface-migration"}
