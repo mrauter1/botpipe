@@ -426,3 +426,140 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc110-98a3-73b0-af78-7032089be8b5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc110-98a3-73b0-af78-7032089be8b5
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc110-98a3-73b0-af78-7032089be8b5
+---
+I’m addressing the two blocking review findings: I’ll remove the remaining generic wrapper tails from the five larger workflows, then run the targeted runtime suites in the repo’s working environment so AC-2 is actually evidenced instead of inferred.
+
+I’m addressing the two blocking review findings now: finish the five remaining workflow migrations by removing generic local validation wrappers, then run the targeted runtime suites and update the phase notes.
+
+I’ve confirmed the reviewer’s second point: the five larger workflows still keep thin local wrappers around stdlib validators. I’m tracing those call sites now so I can inline the shared helpers and leave only the genuinely workflow-specific boundary checks behind.
+
+I’ve got the exact wrapper inventory now. Next step is mechanical but important: replace those wrappers with direct `stdlib` calls where the error contracts already match, and keep only the path-boundary and manifest-shape helpers that are actually domain-specific.
+
+I’ve verified the plan and notes. I’m moving narrowly: only the five flagged workflow files, the shared validator if it meaningfully removes duplicate uniqueness wrappers, and the phase notes after the regression suites run.
+
+I’m editing the validation seam first because it lets me delete the remaining local uniqueness wrappers cleanly. After that I’ll collapse the five workflow tails into direct stdlib usage and run the phase’s runtime suites.
+
+I’m applying the code edits now. The main behavioral guard is preserving each workflow’s existing validation options while deleting the local wrapper functions themselves.
+
+I caught a seam edit issue immediately: `require_unique_values` needs the new optional parameter added to its signature before the workflow cleanup can compile. I’m correcting that first, then continuing with the workflow migrations.
+
+The wrapper tails are gone from the five flagged workflows and the touched files still compile. I’m adding one focused validator assertion for the new duplicate-message option, then I’ll run the required runtime suites as the actual regression proof.
+
+The targeted pytest run is in flight. I’ve included the shared-validator unit file alongside the nine required runtime suites and the architecture-doc contract test so the duplicate-message seam is exercised together with the migration proofs.
+
+The runtime failures are from one specific seam mismatch, not from workflow logic: the stdlib helpers still require `error_message=` as keyword-only, while these workflows call the shared validators through the old positional error-message shape. I’m fixing that in the shared seam instead of reintroducing local wrappers.
+
+I’ve isolated the test breakage: the shared seam needs to accept the legacy positional error-message shape so the workflows can use stdlib directly without reintroducing local validators. There’s also one recursive-memory wording mismatch in the charter that the doc test is catching.
+
+I’ve fixed the last two regressions from the first pytest pass: one leftover direct call in the run-history workflow and a missing local variable in the architecture-doc test. I’m rerunning the full target set so AC-2 is backed by a clean green run, not just spot fixes.
+
+I’ve got the clean test run now. I’m recording the one non-obvious seam decision that made the migration possible and then updating the phase notes to reflect the actual validation evidence and the completed wrapper-tail removal.
+
+I’ve verified the five flagged workflow files no longer contain any `def _require_text` / `_read_json` style generic helper tails. I’m doing a final scoped status check on the exact files I touched so the closeout reflects only this phase’s blast radius.
+
+Scope considered
+
+- I stayed within the phase scope from the reviewer feedback: `stdlib/validation.py`, the five flagged workflow files, the targeted regression/test surface, the recursive-memory charter wording, and the phase-local notes/decisions files.
+- I did not pull unrelated dirty files into scope.
+
+What I analyzed
+
+- The two blocking findings in `feedback.md`.
+- The remaining generic helper-tail definitions and call sites in:
+  `workflow_run_history_to_failure_modes`,
+  `workflow_portfolio_to_operating_system`,
+  `company_operation_to_recursive_improvement_cycle`,
+  `workflow_and_eval_to_refined_workflow_package`,
+  `workflow_package_to_composable_building_blocks`.
+- The shared validation signatures needed to support direct stdlib binding without reintroducing local wrappers.
+- The failing doc-test expectation in `.autoloop_recursive/framework_evolution_charter.md`.
+
+What I changed
+
+- Removed the remaining generic workflow-local helper tails from the five flagged workflows. They now bind shared stdlib validators directly, while domain-specific publication, path-boundary, and hidden-execution checks stay local.
+- Extended `stdlib/validation.py` so the shared validators accept the legacy positional `error_message` shape and `require_unique_values(...)` accepts explicit error overrides. That preserved existing wording while allowing wrapper deletion.
+- Replaced the last local uniqueness wrappers with direct `require_unique_values(...)` use.
+- Fixed the cycle-closeout doc/test surface:
+  `.autoloop_recursive/framework_evolution_charter.md` now contains the exact consolidation wording the architecture baseline test expects, and `tests/test_architecture_baseline_docs.py` now restores its local `deferred_ideas` binding.
+- Updated `tests/unit/test_stdlib_and_extensions.py`, `implementation_notes.md`, and the turn-2 block in `decisions.txt`.
+- Files added/deleted in this turn: `0 / 0`.
+- Practical tracked diff for the directly modified tracked files was net-negative: `102` added / `216` deleted.
+
+Key findings / decisions
+
+- The clean way to satisfy the reviewer without reintroducing local wrappers was to make the shared seam accept the workflows’ existing positional error-message shape.
+- The five flagged workflows no longer contain `def _require_text`, `def _read_json`, `def _require_mapping`, or similar generic helper-tail definitions.
+- Boilerplate removed: repeated generic string, string-list, mapping, mapping-list, positive-int, JSON-read, and duplicate-value wrapper tails across the high-duplication workflow family.
+- Targeted regression proof is now complete:
+  `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  Result: `251 passed`.
+
+Open issues / next step
+
+- The deferred migration wave is unchanged: `investigation_request_to_evidence_pack`, `security_finding_to_verified_remediation`, `release_candidate_to_go_no_go`, and `incident_to_hardening_program`.
+- This phase is ready for verifier rerun.
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc110-98a3-73b0-af78-7032089be8b5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc110-98a3-73b0-af78-7032089be8b5
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc110-98a3-73b0-af78-7032089be8b5
+---
+I’m verifying the producer’s follow-up against the two prior blockers: the five workflow-tail removals and the targeted runtime proof. I’ll confirm the scoped code shape, the recorded validation evidence, then update the phase artifacts accordingly.
+
+I’ve confirmed the producer recorded the intended seam decision and the full targeted validation command. I’m doing one last scoped check on the migrated workflow files and the reported regression command before I mark the criteria.
+
+The scoped code shape looks consistent with the producer’s claim: the old helper-tail `def`s are gone, and the shared seam now owns the migration-compatible signature. I’m doing one direct rerun of the reported pytest command so the review closes on independently observed evidence, not just notes.
+
+Scope considered
+- Reviewed the phase-local follow-up against the same scoped contract: the shared validation seam, the five previously flagged workflow files, the targeted runtime/doc tests, the recursive-memory closeout wording, the implementation notes, and the decisions ledger.
+- Kept review edits confined to the phase artifact files under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c1/`.
+
+What I analyzed
+- The prior blocking findings `IMP-001` and `IMP-002`.
+- The migrated workflow tails in `workflow_run_history_to_failure_modes`, `workflow_portfolio_to_operating_system`, `company_operation_to_recursive_improvement_cycle`, `workflow_and_eval_to_refined_workflow_package`, and `workflow_package_to_composable_building_blocks`.
+- The shared-validator signature changes in `stdlib/validation.py`.
+- The updated `implementation_notes.md` and the turn-2 decisions entry.
+- The reported regression command, which I reran directly.
+
+What I reviewed
+- Confirmed the old generic helper-tail `def` blocks are gone from the five previously flagged workflows.
+- Confirmed the shared seam now carries the migration-compatible positional `error_message` shape and duplicate-error override needed to remove those workflow-local tails without changing publication wording.
+- Independently reran:
+  `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  Result: `251 passed in 23.18s`.
+- Updated `criteria.md` to checked.
+- Appended the review-pass resolution note to `feedback.md`.
+
+Key findings / decisions
+- `IMP-001` is resolved: AC-2 now has direct runtime proof.
+- `IMP-002` is resolved: the duplicated generic workflow-local helper tails have been removed from the flagged workflow set, while domain-specific publication/path logic remains local.
+- No new blocking or non-blocking findings.
+
+Open issues / next step
+- No open review issues remain for this phase.
+- The phase is ready to close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
