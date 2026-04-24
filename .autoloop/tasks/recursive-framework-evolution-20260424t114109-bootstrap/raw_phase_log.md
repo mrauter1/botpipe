@@ -618,3 +618,62 @@ Open issues / next step
 - `tests/runtime/test_package_cli.py` recursive wrapper/template assertions
 - `tests/unit/test_stdlib_and_extensions.py` checks that expect `docs/authoring.md`
 - Next phase should handle canonical docs/template migration so those broader suites can go green.
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+---
+I’m reviewing the `catalog-and-helper-migration` implementation against the phase criteria and the updated tests first. Then I’ll inspect the touched catalog/capability/helper seams for correctness and regression risk before I write findings into the phase artifacts.
+
+I found one likely correctness issue in deep inspection around alias conflicts, and I’m confirming it with a minimal repro before I write it up as a finding.
+
+I confirmed the alias/canonical-name collision bug with a minimal repro: catalog deep inspection can attach the wrong workflow to an inferred entry. I’m recording that as a blocking finding and marking the phase criteria accordingly.
+
+Scope considered
+
+- Phase-local review for `catalog-and-helper-migration`.
+- Touched catalog/capability/CLI/helper seams and the phase-specific tests/artifacts.
+- I updated the active phase `feedback.md`; the criteria file remains unchecked because of a blocking correctness issue.
+
+What I analyzed
+
+- `core/workflow_catalog.py`
+- `core/workflow_capabilities.py`
+- `runtime/loader.py`
+- `runtime/cli.py`
+- `stdlib/portfolio.py`
+- `stdlib/adaptation.py`
+- `stdlib/refinement.py`
+- `stdlib/decomposition.py`
+- Phase tests and implementation notes.
+
+What I reviewed
+
+- Acceptance criteria coverage for shallow discovery, deep inspection payloads, helper behavior, and manifest validation.
+- Alias/name resolution interactions across inferred workflows and manifest-backed workflows.
+- A minimal repro confirming deep inspection behavior under canonical-name vs alias collisions.
+
+Key findings / decisions
+
+- `IMP-001` blocking: `core/workflow_capabilities.py:_inspect_catalog_entry` resolves discovered entries by `entry.workflow_name` instead of their exact origin. When an inferred workflow’s canonical name matches another workflow’s alias, `inspect_workflow_capabilities(...)` inspects the aliased workflow twice and drops the inferred one. I confirmed this with a repro using `workflows/single_review.py` plus a manifest package alias `single_review`.
+- This breaks AC-2 and can feed wrong class/source/support-file data into capability consumers.
+- Feedback was appended to the phase `feedback.md`.
+
+Open issues / next step
+
+- Fix deep inspection to resolve each catalog entry by origin (`entry.source_path` or explicit manifest module), not by canonical name alone.
+- Add a regression test for inferred canonical-name vs manifest-alias collisions.
+- Re-run the targeted phase suites after that fix, then update criteria accordingly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
