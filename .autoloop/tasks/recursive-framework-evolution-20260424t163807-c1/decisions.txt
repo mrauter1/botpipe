@@ -1,3 +1,6 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T193807Z-9f2bcebf" ts="2026-04-24T19:38:07.890907+00:00" />
 Cycle 1 stays in consolidate mode; do not add a new workflow because the highest-leverage gap is repeated workflow-local validation copied across the current selected-workflow and governance family.
 The new helper seam must stay additive in stdlib validation helpers only; keep workflow-specific publication assertions local and do not widen runtime policy, the root workflow shim, or workflow.toml semantics.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="shared-workflow-validation-seam" pair="implement" turn_seq="1" run_id="run-20260424T193807Z-9f2bcebf" ts="2026-04-24T19:44:13.264563+00:00" />
+The shared validation seam keeps custom error_message hooks on the new helpers so later workflow migrations can preserve current artifact-contract wording while deleting workflow-local helper tails.
+The shared positive-int helper rejects booleans by default because workflow-local count and bound fields should not silently accept True/False as integers; callers may opt in explicitly with allow_bool=True if a workflow genuinely needs that behavior.

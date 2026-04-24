@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Mapping, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -43,6 +43,61 @@ def require_non_empty_string(value: Any, *, field_name: str = "value") -> str:
     return value.strip()
 
 
+def normalize_optional_string(
+    value: Any,
+    *,
+    field_name: str = "value",
+    error_message: str | None = None,
+    coerce: bool = True,
+) -> str | None:
+    """Return one stripped optional string or ``None``."""
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        normalized = value.strip()
+    elif coerce:
+        normalized = str(value).strip()
+    else:
+        raise ValueError(error_message or f"{field_name} must be a string or null")
+    return normalized or None
+
+
+def normalize_unique_strings(
+    value: Any,
+    *,
+    field_name: str = "value",
+    error_message: str | None = None,
+    item_error_message: str | None = None,
+    allow_scalar: bool = False,
+    allow_none: bool = True,
+    coerce: bool = True,
+) -> list[str]:
+    """Return one deduplicated normalized string list."""
+
+    if value is None:
+        if allow_none:
+            return []
+        raise ValueError(error_message or f"{field_name} must be a list of non-empty strings")
+    if isinstance(value, list):
+        candidates = value
+    elif allow_scalar:
+        candidates = [value]
+    else:
+        raise ValueError(error_message or f"{field_name} must be a list of non-empty strings")
+    normalized: list[str] = []
+    for raw_value in candidates:
+        candidate = normalize_optional_string(
+            raw_value,
+            field_name=field_name,
+            error_message=item_error_message or error_message,
+            coerce=coerce,
+        )
+        if candidate and candidate not in normalized:
+            normalized.append(candidate)
+    return normalized
+
+
 def require_string_list(
     value: Any,
     *,
@@ -77,10 +132,59 @@ def require_unique_values(values: list[str], *, field_name: str = "value") -> li
     return values
 
 
+def require_positive_int(
+    value: Any,
+    *,
+    field_name: str = "value",
+    error_message: str | None = None,
+    allow_bool: bool = False,
+) -> int:
+    """Return one positive integer or raise ``ValueError``."""
+
+    if isinstance(value, bool) and not allow_bool:
+        raise ValueError(error_message or f"{field_name} must be a positive integer")
+    if not isinstance(value, int) or value < 1:
+        raise ValueError(error_message or f"{field_name} must be a positive integer")
+    return value
+
+
+def require_mapping(
+    value: Any,
+    *,
+    field_name: str = "value",
+    error_message: str | None = None,
+) -> dict[str, Any]:
+    """Return one string-keyed mapping or raise ``ValueError``."""
+
+    if not isinstance(value, Mapping):
+        raise ValueError(error_message or f"{field_name} must be a JSON object")
+    return {str(key): item for key, item in value.items()}
+
+
+def require_mapping_list(
+    value: Any,
+    *,
+    field_name: str = "value",
+    error_message: str | None = None,
+    min_length: int = 1,
+) -> list[dict[str, Any]]:
+    """Return one mapping list or raise ``ValueError``."""
+
+    if not isinstance(value, list):
+        raise ValueError(error_message or f"{field_name} must be a JSON array of objects")
+    normalized = [
+        require_mapping(item, field_name=field_name, error_message=error_message)
+        for item in value
+    ]
+    if len(normalized) < min_length:
+        raise ValueError(error_message or f"{field_name} must contain at least {min_length} item(s)")
+    return normalized
+
+
 def read_model_file(path: str | Path, model_cls: type[ModelT]) -> ModelT:
     """Read and validate one JSON model file."""
 
-    payload = _read_json_object(path)
+    payload = read_json_object(path)
     return model_cls.model_validate(payload)
 
 
@@ -95,7 +199,7 @@ def validate_model_file(path: str | Path, model_cls: type[BaseModel]) -> Validat
 
     target = Path(path)
     try:
-        payload = _read_json_object(target)
+        payload = read_json_object(target)
         model_cls.model_validate(payload)
     except FileNotFoundError:
         issues = (ValidationIssue(location=("file",), message="file does not exist"),)
@@ -110,7 +214,9 @@ def validate_model_file(path: str | Path, model_cls: type[BaseModel]) -> Validat
     return ValidationReport(path=target, model_name=model_cls.__name__, issues=issues)
 
 
-def _read_json_object(path: str | Path) -> dict[str, Any]:
+def read_json_object(path: str | Path) -> dict[str, Any]:
+    """Read one JSON object from disk or raise ``ValueError``."""
+
     target = Path(path)
     payload = json.loads(target.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -127,8 +233,14 @@ def _validation_issue(error: dict[str, Any]) -> ValidationIssue:
 __all__ = [
     "ValidationIssue",
     "ValidationReport",
+    "normalize_optional_string",
+    "normalize_unique_strings",
+    "read_json_object",
     "read_model_file",
+    "require_mapping",
+    "require_mapping_list",
     "require_non_empty_string",
+    "require_positive_int",
     "require_string_list",
     "require_unique_values",
     "validate_model_file",
