@@ -59,3 +59,58 @@ Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recur
 The plan keeps `workflow_idea_to_workflow_package` as the credible builder baseline, chooses `workflow_and_eval_to_refined_workflow_package` as the cycle-8 addition, and pairs it with a narrow authoring-only selected-workflow authoring-surface helper seam in `stdlib/refinement.py`. The phase plan now has 3 ordered phases: helper seam, refinement workflow package, and cycle-8 closeout/baseline updates.
 
 Validation: `phase_plan.yaml` parsed successfully with `python3` + `yaml.safe_load` (`YAML_OK 3`). No other code/tests were run in this planning turn.
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+---
+I’m auditing the cycle-8 planning artifacts against the request, the shared decisions block, and the machine-readable phase contract first, then I’ll update `criteria.md` and `feedback.md` with any concrete findings.
+
+I’ve isolated one material risk in the current plan around how refinement is published. I’m checking the remaining sections now to confirm whether that issue is already mitigated elsewhere or whether it needs to be raised as a blocking correction.
+
+I’ve confirmed one blocking issue: the plan makes refinement mutate the authoritative selected workflow in place before the baseline/candidate boundary is made explicit, which conflicts with the request’s promotion-and-rollback doctrine. I’m updating the verifier artifacts now.
+
+Scope considered
+
+- Verified the cycle-8 planning artifacts against the immutable request snapshot, the raw log, the shared decisions block, and the machine-readable phase contract.
+- Kept scope on the planning artifacts and request-relevant framework/workflow behavior only.
+
+What I analyzed
+
+- Intent coverage for the chosen addition, framework improvement, prompt-template doctrine, artifact-first design, verification doctrine, and recursive self-improvement requirements.
+- Whether the plan preserves behavioral safety, rollback clarity, and explicit baseline/candidate/promotion boundaries.
+- Phase ordering, acceptance criteria quality, regression controls, and targeted validation coverage.
+
+What I reviewed
+
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/plan.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/phase_plan.yaml`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/feedback.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/criteria.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/decisions.txt`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/runs/run-20260424T045554Z-27198177/raw_phase_log.md`
+
+Key findings / decisions
+
+- `phase_plan.yaml` is parseable and structurally valid; required metadata and phase lists are intact.
+- I appended one blocking finding to `feedback.md` as `PLAN-001`.
+- I left all `criteria.md` checkboxes unchecked because the blocking issue materially affects intent fidelity, behavioral safety, completeness, technical-debt posture, and feasibility/compatibility.
+- The blocking issue is that the plan chooses in-place mutation of the authoritative selected workflow package before the baseline/candidate boundary is explicit, which conflicts with the request’s requirement that baseline, candidate, evaluation, regression, promotion, and rollback artifacts remain explicit.
+
+Open issues / next step
+
+- The producer plan should be revised so refinement stays explicitly candidate-scoped until deterministic promotion, or it must define an equally explicit baseline snapshot, candidate artifact boundary, and atomic promotion/rollback contract.
+- After that correction lands, the verifier should re-check `criteria.md` and close or downgrade `PLAN-001` if the fix is adequate.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
