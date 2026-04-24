@@ -200,3 +200,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=workflow-capability-snapshot-seam,task-to-candidate-workflow-set-package,front-door-integration-memory-and-proof
+explicit=True
+current_phase_index=0
