@@ -486,3 +486,60 @@ Open issues / next step
 
 - Focused validation passed: `.venv/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py` with `42 passed`.
 - No additional in-phase test gaps stood out after this slice; the remaining deferred areas stay the same as the phase’s out-of-scope items.
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+I’m auditing the new resolver-foundation tests against the phase contract and the changed runtime behavior, then I’ll update the test audit artifacts to reflect whether the slice is complete or still has coverage gaps.
+
+The phase-local file is strong on paths, prompts, ambiguity, and parameter precedence. I’m sanity-checking the imported-class coverage claim against adjacent runtime tests before I mark this slice complete.
+
+I hit a selector typo while checking adjacent imported-class coverage. I’m rerunning the correct package-level imported-class tests now so the audit closes on the intended behavior rather than on a bad test target.
+
+The resolver tests and adjacent imported-class checks are clean. I’m updating the test audit artifacts to record that no blocking coverage gaps remain in this phase slice.
+
+The audit artifacts are updated. I’m doing one quick readback to confirm the criteria are fully checked and the feedback records the completion state before I close the phase.
+
+Scope considered
+
+- Resolver-foundation test coverage only: unified workflow-reference resolution, prompt/source-container behavior, ambiguity and failure paths, parameter precedence, origin-collision protection, and adjacent imported-class resolution.
+- I did not audit out-of-phase catalog migration, scaffold/builder work, or docs/template rewrites.
+
+What I analyzed
+
+- The phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/feedback.md), and [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/criteria.md).
+- The runtime coverage in [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py).
+- Adjacent imported-class resolution checks in [tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py) and [tests/runtime/test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py).
+
+What I reviewed
+
+- Whether the new tests cover the phase’s required authoring/reference forms and the main preserved invariants.
+- Whether ambiguity, parameter-precedence, prompt-resolution, and origin-collision regressions would now be caught.
+- Whether the added coverage is deterministic and avoids flaky ordering, timing, or environment assumptions.
+
+Key findings / decisions
+
+- No blocking audit findings remain in the resolver-foundation test slice.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/criteria.md) to fully checked state.
+- I appended `TST-001` as a non-blocking completion note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/resolver-foundation/feedback.md).
+- Re-verified focused and adjacent coverage with:
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py::test_candidate_workflow_to_adapted_execution_plan_package_compiles_with_explicit_control_contracts tests/runtime/test_task_to_workflow_strategy.py::test_task_to_workflow_strategy_package_compiles_with_explicit_control_contracts`
+
+Open issues / next step
+
+- No phase-blocking test coverage gaps were found.
+- Remaining known gaps are the phase’s declared out-of-scope items, already documented in the test strategy.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
