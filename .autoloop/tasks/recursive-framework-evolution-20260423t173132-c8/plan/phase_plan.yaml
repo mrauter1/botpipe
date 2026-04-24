@@ -44,17 +44,18 @@ phases:
   title: Workflow And Eval To Refined Workflow Package
   objective: Ship `workflow_and_eval_to_refined_workflow_package` as a reusable closed-loop
     refinement building block that turns selected-workflow evaluation evidence into
-    an in-place refined package plus promotion and rollback artifacts.
+    an explicit candidate package surface plus promotion and rollback artifacts.
   status: planned
   in_scope:
   - Add the workflow package under `workflows/workflow_and_eval_to_refined_workflow_package/`.
   - Implement params, contracts, explicit per-step prompt templates, checklist asset,
-    workflow logic, and publish-time validation.
+    workflow logic, and candidate-scoped publish-time validation.
   - Add the workflow decision/contract doc under `docs/workflows/workflow_and_eval_to_refined_workflow_package.md`.
   - Add runtime proof in `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`.
   out_of_scope:
   - Auto-running evaluation suites or portfolio routing workflows.
   - Creating sibling candidate workflow packages.
+  - Mutating the authoritative selected workflow in place before promotion.
   - Public CLI or runtime-contract changes.
   dependencies:
   - refinement-surface-seam
@@ -63,13 +64,13 @@ phases:
     text: Workflow discovery and compilation succeed from the repo root and expose
       explicit typed control contracts on the four pair steps.
   - id: AC-2
-    text: A scripted runtime proof refines an existing selected workflow package in
-      an isolated temp repo copy and publishes the refinement receipt plus verification
-      artifacts.
+    text: A scripted runtime proof publishes a baseline snapshot, candidate workflow
+      surface, refinement receipt, and verification artifacts in an isolated temp
+      repo copy without mutating the authoritative selected workflow.
   - id: AC-3
     text: Publish-time validation rejects missing evidence inputs, selected-workflow/authoring-surface
-      mismatches, manifest or summary drift, and refinement outputs that do not stay
-      scoped to the selected workflow boundary.
+      mismatches, baseline/candidate manifest drift, and refinement outputs that do
+      not stay scoped to the selected workflow boundary.
   - id: AC-4
     text: Each producer/verifier prompt makes required reads, required writes, legal
       routes, evidence expectations, and forbidden actions explicit for its step-local
@@ -79,10 +80,10 @@ phases:
   - '`docs/workflows/workflow_and_eval_to_refined_workflow_package.md`'
   - '`tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`'
   risks:
-  - In-place refinement may blur package boundaries unless the changed-file manifest
-    and publish checks stay explicit.
+  - Baseline and candidate package boundaries may blur unless the manifests and promotion
+    boundary stay explicit.
   - The verification step may over-claim improvement unless it is anchored to supplied
-    baseline evidence plus concrete compile/test proof.
+    baseline evidence plus concrete candidate compile/test proof.
   rollback:
   - Remove the new workflow package, workflow doc, and runtime test together if terminal
     refinement publication proof does not hold.

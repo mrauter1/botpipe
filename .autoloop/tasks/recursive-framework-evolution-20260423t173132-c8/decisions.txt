@@ -3,3 +3,7 @@ In this checkout, `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime
 `workflow_idea_to_workflow_package` remains the credible builder baseline, so cycle 8 should prioritize `workflow_and_eval_to_refined_workflow_package` over another builder-first addition.
 The paired framework slice should be a narrow authoring-only selected-workflow authoring-surface snapshot seam, not runtime-owned refinement automation and not `workflow.toml` expansion.
 The refinement workflow should accept explicit evaluation evidence artifact paths and refine the selected workflow in place with rollback evidence, rather than auto-discovering or auto-running evaluation.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260424T045554Z-27198177" ts="2026-04-24T05:08:21.447294+00:00" />
+This turn supersedes the earlier in-place refinement direction: cycle 8 refinement must publish an explicit baseline snapshot plus workflow-local candidate package surface and stop before promotion.
+The refinement receipt and promotion record must describe candidate-to-baseline promotion explicitly; the workflow may not mutate the authoritative selected workflow package during candidate publication.
+Candidate verification should use a deterministic isolated overlay or equivalent temp-copy validation path so the candidate remains distinct from the baseline while still proving compile/test feasibility.

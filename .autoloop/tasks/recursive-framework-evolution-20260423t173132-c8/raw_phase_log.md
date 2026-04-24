@@ -114,3 +114,38 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+---
+I’m fixing the verifier’s blocking issue by revising the refinement workflow so baseline and candidate artifacts stay explicit until deterministic promotion, then I’ll align the phase plan and decisions with that safer boundary.
+
+I’m revising the plan around an explicit baseline-and-candidate refinement boundary now. The fix is to stop the new workflow at a validated candidate package surface plus promotion/rollback artifacts, instead of mutating the authoritative selected workflow in place during refinement.
+
+I’ve got the fix scoped. I’m updating the plan text, phase acceptance, and current-turn decisions so the refinement workflow now stops at an explicit candidate surface plus promotion/rollback artifacts instead of mutating the authoritative workflow during refinement.
+
+The first patch attempt hit a formatting mismatch in `phase_plan.yaml`, so I’m reapplying the fix in smaller hunks against the exact current file contents.
+
+The structural fix is in. I’m sweeping the plan for any leftover in-place semantics and then I’ll re-parse `phase_plan.yaml` with `yaml.safe_load` to finish the turn cleanly.
+
+I’m checking the revised planning artifacts against the verifier’s blocking point and the current active plan files before I close the producer turn.
+
+The active plan now reads consistently with the candidate-surface approach. I’m checking the current decisions block and feedback continuity one last time before I close the turn.
+
+I’ve confirmed the current block supersedes the earlier in-place direction. I’m looking at the final diff once so the close-out accurately describes what changed.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/feedback.md), and the current-turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/decisions.txt).
+
+The plan now resolves `PLAN-001` by replacing the earlier in-place refinement direction with an explicit `baseline_workflow_surface/` plus `candidate_workflow_surface/` model, keeping candidate publication separate from later deterministic promotion. The revised plan and phase contract now require baseline/candidate manifests, candidate-scoped publish validation, isolated overlay or temp-copy verification, and an explicit promotion/rollback boundary without mutating the authoritative selected workflow during refinement publication.
+
+Validation: `phase_plan.yaml` parsed successfully with `python3` + `yaml.safe_load` (`YAML_OK 3`). No other code or test execution was performed in this producer turn.
