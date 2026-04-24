@@ -149,3 +149,59 @@ Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recur
 The plan now resolves `PLAN-001` by replacing the earlier in-place refinement direction with an explicit `baseline_workflow_surface/` plus `candidate_workflow_surface/` model, keeping candidate publication separate from later deterministic promotion. The revised plan and phase contract now require baseline/candidate manifests, candidate-scoped publish validation, isolated overlay or temp-copy verification, and an explicit promotion/rollback boundary without mutating the authoritative selected workflow during refinement publication.
 
 Validation: `phase_plan.yaml` parsed successfully with `python3` + `yaml.safe_load` (`YAML_OK 3`). No other code or test execution was performed in this producer turn.
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbdd8-313f-7e10-ac1c-f7741a3c4773
+---
+I’m verifying the revised plan against the verifier gates, the current criteria checklist, and the cycle-8 request/decision history before I mark the artifact set complete or incomplete.
+
+The revised boundary is in place. I’m checking the remaining decision-record sections and the YAML parse so I can either close the blocker or add a new finding with concrete evidence.
+
+I found no remaining blocking issue in the revised plan. I’m updating the verifier checklist and feedback continuity so the artifact set records the closure of `PLAN-001` explicitly.
+
+The checklist and feedback closure are written. I’m doing one last readback of the verifier-owned files so the final status matches the artifact contents exactly.
+
+Scope considered
+
+- Verified the cycle-8 planning artifacts against the immutable request snapshot, the raw-log clarification state, the shared decisions ledger, and the revised candidate-publication plan boundary.
+- Kept scope on the plan artifacts and request-relevant workflow/framework semantics only.
+
+What I analyzed
+
+- Intent coverage for the chosen addition, the paired framework slice, the prompt-template doctrine, artifact-first design, and the recursive self-improvement requirement that baseline, candidate, evaluation, promotion, and rollback artifacts stay explicit.
+- Regression-prevention detail, compatibility boundaries, rollback clarity, and whether the revised plan still keeps runtime control narrow and mechanical.
+- Phase ordering, acceptance criteria quality, and whether the revised phase contract matches the narrative plan.
+
+What I reviewed
+
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/plan.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/phase_plan.yaml`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/feedback.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/plan/criteria.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/decisions.txt`
+
+Key findings / decisions
+
+- No blocking findings remain.
+- `PLAN-001` is now closed: the revised plan keeps baseline and candidate artifacts explicit, forbids mutation of the authoritative selected workflow during candidate publication, and requires isolated overlay or temp-copy verification plus explicit promotion/rollback evidence.
+- `criteria.md` is now fully checked because the revised plan meets intent fidelity, behavioral safety, completeness, technical-debt, and feasibility/compatibility gates.
+- `phase_plan.yaml` remains parseable and structurally valid (`YAML_OK 3`), with correct runtime-owned metadata and coherent phase boundaries.
+
+Open issues / next step
+
+- No open verifier blockers remain in the planning artifacts.
+- The next step is implementation against the revised candidate-surface plan, followed by the normal implementation-phase verification of code, docs, tests, and recursive-memory updates.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
