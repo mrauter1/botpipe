@@ -505,3 +505,58 @@ Open issues / next step
 
 - No blocking issues in the implemented scope.
 - Validation passed: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` -> `64 passed`.
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+---
+I’m reviewing the shipped scope for `candidate_workflow_to_adapted_execution_plan` and its adjacent regression surface. First I’m reading the phase artifacts and the implementation diff so I can verify intent fidelity, publication validation, and any front-door or memory drift before I touch the review files.
+
+Reviewing the new `candidate_workflow_to_adapted_execution_plan` scope now. I’m checking the changed workflow package, adjacent handoff surfaces, tests, and the phase artifacts before I update `criteria.md` and `feedback.md`.
+
+I’ve narrowed the touched scope from the phase notes. Next I’m reading the workflow code and its runtime proof to look for correctness gaps, publish-time validation holes, and any contract drift with the existing front door.
+
+The workflow implementation is mostly cohesive. I’m checking the two places most likely to hide regressions now: how publication validates against the shared loader seam, and whether the front-door `adapt` route stayed schema-stable while becoming more concrete.
+
+The targeted runtime and helper tests are clean so far. I’m doing one more pass for logic edges that tests can miss, especially state/summary consistency and any accidental widening of the `task_to_workflow_strategy` contract.
+
+I found one area worth proving instead of inferring: the package step’s payload model may allow a field omission that the workflow callback treats as mandatory. I’m reproducing that contract mismatch directly before I write the review artifact.
+
+I found a concrete contract bug rather than a style issue. I’m updating the phase artifacts now: one blocking finding for the package-step payload/schema mismatch, and criteria boxes reflecting that the implementation is not yet safe to sign off.
+
+Scope considered
+
+- The new `candidate_workflow_to_adapted_execution_plan` package, its shared `stdlib/adaptation.py` seam usage, the `task_to_workflow_strategy` adapt-route wording updates, and the phase-local verifier artifacts.
+
+What I analyzed
+
+- Read the new workflow code in `workflows/candidate_workflow_to_adapted_execution_plan/`, its runtime proof in `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`, the adjacent front-door docs/prompts, `implementation_notes.md`, and the shared decisions ledger.
+- Re-ran the targeted suites:
+  `.venv/bin/pytest -q tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py`
+  `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/implement/phases/candidate-workflow-adapted-execution-plan-package/criteria.md) to leave the phase incomplete.
+- Appended the blocking review finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/implement/phases/candidate-workflow-adapted-execution-plan-package/feedback.md).
+
+Key findings / decisions
+
+- `IMP-001` blocking: [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/contracts.py:27) makes `proposed_parameter_keys` optional via a default `[]`, but [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py:283) treats it as mandatory in `on_package_adapted_execution_plan(...)`. A verifier payload that omits the field is accepted by the step schema, then crashes the workflow with `ValueError` instead of taking `needs_rework` or `needs_replan`. I reproduced that directly with `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/python`.
+
+Open issues / next step
+
+- Align the package-step schema and callback on `proposed_parameter_keys`, then add a regression test covering a `needs_rework` or `needs_replan` payload with the omitted/defaulted field and rerun the targeted runtime suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
