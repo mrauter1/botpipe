@@ -38,7 +38,13 @@
 - `PortfolioGovernanceFramingPayload`
 - `PortfolioOperatingModelPayload`
 - `PortfolioOperatingSystemPayload`
+- `_HIDDEN_EXECUTION_PATTERNS`
+- `_NEGATED_HIDDEN_EXECUTION_MARKERS`
+- `_contains_hidden_execution_signal(...)`
+- `_validate_no_hidden_execution_signal(...)`
 - `test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_governance_artifacts(...)`
+- `test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstream_execution_in_next_actions(...)`
+- `test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstream_execution_in_summary_next_action(...)`
 - `test_recursive_memory_files_record_cycle_ten_closeout_baseline(...)`
 - `test_recursive_memory_cycle_ten_statuses_keep_portfolio_governance_out_of_deferred(...)`
 
@@ -70,6 +76,7 @@
 
 - Added an end-to-end governance workflow that turns workflow capability plus portfolio-health evidence into explicit lifecycle recommendations, change candidates, next actions, and a deterministic receipt.
 - Added publish-time validation for governance-package consistency and for language that implies hidden downstream execution.
+- Strengthened hidden-downstream-execution validation so publication now rejects queue/launch/execute-style automation phrasing in the markdown artifacts and in `portfolio_operating_summary.json["next_action"]`.
 - Elevated cycle-10 recursive memory so future cycles treat portfolio governance as shipped baseline capability and decomposition as the next deferred leverage point.
 
 ## Known non-changes
@@ -86,6 +93,7 @@
 
 ## Validation performed
 
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py -k hidden_downstream`
 - `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py`
 - `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py tests/test_architecture_baseline_docs.py`
 
@@ -94,3 +102,4 @@
 - Reused the existing capability snapshot and portfolio-health snapshot seams instead of adding workflow-local `.autoloop` scraping or runtime-owned governance logic.
 - Kept provider-facing operational guidance in prompt templates and checklist assets rather than introducing a parallel packet abstraction.
 - Relaxed the runtime proof around health-snapshot metadata text so it validates the stable operational contract owned by this phase while allowing catalog aliases/descriptions to evolve independently.
+- Centralized publish-time hidden-execution checks in one workflow-local validator and reused it for package markdown, next-actions markdown, and summary `next_action` so later phrasing changes do not drift across separate checks.

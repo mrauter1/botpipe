@@ -847,21 +847,62 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_invalid_lifecycl
         workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
 
 
-def test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstream_execution(
+@pytest.mark.parametrize(
+    "next_actions_text",
+    (
+        (
+            "# Portfolio Next Actions\n\n"
+            "Boundary: operating_system_publication_only.\n"
+            "Automatically run workflow_and_eval_to_refined_workflow_package for task_to_workflow_strategy next.\n"
+        ),
+        (
+            "# Portfolio Next Actions\n\n"
+            "Boundary: operating_system_publication_only.\n"
+            "The runtime queues workflow_and_eval_to_refined_workflow_package for task_to_workflow_strategy next.\n"
+        ),
+        (
+            "# Portfolio Next Actions\n\n"
+            "Boundary: operating_system_publication_only.\n"
+            "This workflow will launch workflow_and_eval_to_refined_workflow_package after publication.\n"
+        ),
+        (
+            "# Portfolio Next Actions\n\n"
+            "Boundary: operating_system_publication_only.\n"
+            "This package automatically queues the refinement workflow after publication.\n"
+        ),
+    ),
+)
+def test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstream_execution_in_next_actions(
+    tmp_path: Path,
+    monkeypatch,
+    next_actions_text: str,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_portfolio_operating_system_test_context(
+        tmp_path,
+        monkeypatch,
+        next_actions_text=next_actions_text,
+    )
+
+    with pytest.raises(ValueError, match="portfolio_next_actions.md must not imply hidden downstream execution"):
+        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+
+
+def test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstream_execution_in_summary_next_action(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     workflow_pkg, state, ctx = _make_publish_portfolio_operating_system_test_context(
         tmp_path,
         monkeypatch,
-        next_actions_text=(
-            "# Portfolio Next Actions\n\n"
-            "Boundary: operating_system_publication_only.\n"
-            "Automatically run workflow_and_eval_to_refined_workflow_package for task_to_workflow_strategy next.\n"
-        ),
+        summary_override={
+            "next_action": "The runtime queues workflow_and_eval_to_refined_workflow_package for task_to_workflow_strategy next.",
+        },
     )
 
-    with pytest.raises(ValueError, match="portfolio_next_actions.md must not imply hidden downstream execution"):
+    with pytest.raises(
+        ValueError,
+        match="portfolio_operating_summary.json next_action must not imply hidden downstream execution",
+    ):
         workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
 
 

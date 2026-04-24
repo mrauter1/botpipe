@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from typing import Any
 
@@ -59,11 +60,26 @@ _PACKAGE_SECTION_MARKERS = (
     "## Create Next",
 )
 _PUBLICATION_BOUNDARY = "operating_system_publication_only"
-_HIDDEN_EXECUTION_MARKERS = (
-    "auto-run",
-    "automatically run",
-    "the runtime will",
-    "without further review",
+_HIDDEN_EXECUTION_PATTERNS = (
+    re.compile(r"\bauto[- ]?run\b"),
+    re.compile(r"\bautomatically\s+(?:run|queue|launch|execute|trigger|start)(?:s|ed)?\b"),
+    re.compile(
+        r"\b(?:the runtime|the system|this workflow|this package)\s+(?:will\s+)?(?:queue|launch|run|execute|trigger|start)(?:s|ed)?\b"
+    ),
+    re.compile(r"\bwill\s+be\s+(?:queued|launched|run|executed|triggered|started)\b"),
+    re.compile(r"\bwithout further review\b"),
+)
+_NEGATED_HIDDEN_EXECUTION_MARKERS = (
+    "do not auto-run",
+    "does not auto-run",
+    "must not auto-run",
+    "should not auto-run",
+    "do not automatically",
+    "does not automatically",
+    "must not automatically",
+    "should not automatically",
+    "without auto-running",
+    "instead of auto-running",
 )
 
 
@@ -522,6 +538,10 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             summary.get("next_action"),
             "portfolio_operating_summary.json must define a non-empty next_action",
         )
+        _validate_no_hidden_execution_signal(
+            next_action,
+            "portfolio_operating_summary.json next_action must not imply hidden downstream execution",
+        )
         publication_boundary = _require_text(
             summary.get("publication_boundary"),
             "portfolio_operating_summary.json must define a non-empty publication_boundary",
@@ -831,8 +851,20 @@ def _ensure_unique_strings(values: list[str], error_message: str) -> None:
 
 
 def _contains_hidden_execution_signal(text: str) -> bool:
-    lowered = text.lower()
-    return any(marker in lowered for marker in _HIDDEN_EXECUTION_MARKERS)
+    for raw_line in text.splitlines():
+        lowered = raw_line.strip().lower()
+        if not lowered:
+            continue
+        if any(marker in lowered for marker in _NEGATED_HIDDEN_EXECUTION_MARKERS):
+            continue
+        if any(pattern.search(lowered) for pattern in _HIDDEN_EXECUTION_PATTERNS):
+            return True
+    return False
+
+
+def _validate_no_hidden_execution_signal(text: str, error_message: str) -> None:
+    if _contains_hidden_execution_signal(text):
+        raise ValueError(error_message)
 
 
 __all__ = ["WorkflowPortfolioToOperatingSystem"]
