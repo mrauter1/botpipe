@@ -1,4 +1,136 @@
 version: 1
 task_id: recursive-framework-evolution-20260423t173132-c9
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/runs/run-20260424T062640Z-13174b0c/request.md
-phases: []
+phases:
+- phase_id: diagnostic-run-history-seam
+  title: Diagnostic Run-History Seam
+  objective: Add a narrow read-only snapshot seam that lets workflows capture one
+    selected workflow's run history as a workflow-local diagnostic artifact.
+  status: planned
+  in_scope:
+  - Extend `runtime/workspace.py` read-only run records with the source paths needed
+    for diagnostics.
+  - Add `stdlib/diagnostics.py` with `write_selected_workflow_run_history_snapshot(...)`.
+  - Export the new helper from `stdlib/__init__.py`.
+  - Document the helper boundary in `docs/authoring.md`.
+  - Extend helper coverage in `tests/unit/test_stdlib_and_extensions.py`.
+  out_of_scope:
+  - CLI changes.
+  - Runtime-owned diagnostics automation or auto-indexing.
+  - New `workflow.toml` semantics.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The helper writes only under `ctx.workflow_folder` and does not mutate `.autoloop`
+      run state or selected workflow files.
+  - id: AC-2
+    text: The helper reuses shared workflow resolution and read-only run discovery
+      while capturing normalized run metadata, request text, parsed events, and parsed
+      child-run records with deterministic filtering.
+  - id: AC-3
+    text: Authoring docs and unit tests freeze the helper boundary and its non-goals,
+      including no runtime-owned failure-mode policy.
+  deliverables:
+  - '`runtime/workspace.py`'
+  - '`stdlib/diagnostics.py`'
+  - '`stdlib/__init__.py`'
+  - '`docs/authoring.md`'
+  - '`tests/unit/test_stdlib_and_extensions.py`'
+  risks:
+  - The helper may become too broad and start owning diagnostic policy that should
+    remain visible in workflow code.
+  - Run-history capture may drift from the real workspace contract if it bypasses
+    shared loader or run-record seams.
+  rollback:
+  - Revert the additive run-record exposure, new stdlib helper, export, authoring-doc
+    updates, and helper-specific unit tests together.
+- phase_id: workflow-run-history-to-failure-modes
+  title: Workflow Run History To Failure Modes
+  objective: Ship `workflow_run_history_to_failure_modes` as a reusable diagnostic
+    building block that turns selected-workflow history into failure modes, recurring
+    weak points, and ranked next actions.
+  status: planned
+  in_scope:
+  - Add the workflow package under `workflows/workflow_run_history_to_failure_modes/`.
+  - Implement params, contracts, explicit prompt templates, checklist asset, workflow
+    logic, and publish-side validation.
+  - Add the workflow decision/contract doc under `docs/workflows/workflow_run_history_to_failure_modes.md`.
+  - Add runtime proof in `tests/runtime/test_workflow_run_history_to_failure_modes.py`.
+  out_of_scope:
+  - Auto-running refinement or portfolio-governance workflows.
+  - Mutating the authoritative selected workflow package.
+  - Public CLI or runtime-contract changes.
+  dependencies:
+  - diagnostic-run-history-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: Workflow discovery and compilation succeed from the repo root and expose
+      explicit typed control contracts on the three pair steps.
+  - id: AC-2
+    text: A scripted runtime proof publishes selected-workflow history, failure-mode
+      artifacts, ranked improvement artifacts, and a deterministic receipt from mixed
+      historical evidence.
+  - id: AC-3
+    text: Publish-time validation rejects empty filtered histories, selected-workflow
+      mismatches, missing diagnostic artifacts, and outputs that leave workflow-local
+      scope or imply hidden downstream execution.
+  - id: AC-4
+    text: Each producer/verifier prompt makes required reads, required writes, legal
+      routes, evidence expectations, and forbidden actions explicit for its step-local
+      work item.
+  deliverables:
+  - '`workflows/workflow_run_history_to_failure_modes/`'
+  - '`docs/workflows/workflow_run_history_to_failure_modes.md`'
+  - '`tests/runtime/test_workflow_run_history_to_failure_modes.py`'
+  risks:
+  - Failure-mode clustering may duplicate repeated retries or miss contrast from non-failed
+    runs unless the history scope stays explicit.
+  - Diagnostic packaging may blur into refinement unless the workflow stops at next-action
+    recommendations and receipt publication.
+  rollback:
+  - Remove the new workflow package, workflow doc, and runtime test together if terminal
+    diagnostic publication proof does not hold.
+- phase_id: cycle-nine-closeout
+  title: Cycle Nine Closeout
+  objective: Update recursive memory and exact-string baseline tests so cycle 9 becomes
+    the new explicit recursive framework baseline.
+  status: planned
+  in_scope:
+  - Update `.autoloop_recursive/framework_evolution_charter.md`.
+  - Update `.autoloop_recursive/framework_roadmap.md`.
+  - Update `.autoloop_recursive/framework_gap_ledger.md`.
+  - Update `.autoloop_recursive/workflow_candidate_ledger.md`.
+  - Update `tests/test_architecture_baseline_docs.py` and any cycle-closeout expectations
+    affected by the new helper/workflow baseline.
+  - Run targeted pytest proof for the helper seam, run-history workflow, builder/refinement
+    regression surfaces, and the baseline docs.
+  out_of_scope:
+  - '`recursive_autoloop/` wrapper/template cleanup.'
+  - Runtime-owned diagnostics automation.
+  - Compatibility shims for the stale `src/autoloop/...` request paths.
+  dependencies:
+  - diagnostic-run-history-seam
+  - workflow-run-history-to-failure-modes
+  acceptance_criteria:
+  - id: AC-1
+    text: The four standing recursive-memory files record that the builder stayed
+      credible, `workflow_run_history_to_failure_modes` shipped, and the run-history
+      snapshot seam is the chosen framework improvement.
+  - id: AC-2
+    text: Architecture-baseline docs/tests and any closeout-proof assertions describe
+      cycle 9 accurately.
+  - id: AC-3
+    text: Targeted pytest proof passes without widening runtime/provider control surfaces
+      or changing public CLI/runtime contracts.
+  deliverables:
+  - Updated `.autoloop_recursive/*.md` standing memory files
+  - '`tests/test_architecture_baseline_docs.py`'
+  - Recorded targeted validation command/result in cycle-9 closeout docs
+  risks:
+  - Recursive memory or baseline tests may drift from the actual shipped behavior
+    if updated separately from code and proof.
+  - Cycle-closeout assertions may miss the new helper boundary unless docs and tests
+    are updated together.
+  rollback:
+  - Revert cycle-9 memory and baseline-test updates if they claim behavior or proof
+    the implementation does not actually ship.

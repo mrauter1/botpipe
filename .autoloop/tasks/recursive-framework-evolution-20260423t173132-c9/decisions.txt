@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T062640Z-13174b0c" ts="2026-04-24T06:26:40.665944+00:00" />
+The request's `src/autoloop/...` inspection paths are stale in this checkout; cycle 9 planning treats repo-root `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `stdlib/`, and `workflows/` as the authoritative equivalents.
+`workflow_idea_to_workflow_package` remains the credible workflow-builder baseline for cycle 9; the higher-leverage addition is `workflow_run_history_to_failure_modes`, not another builder-first cycle.
+The paired framework improvement is an additive read-only run-history snapshot seam for workflow-local diagnostics; do not widen runtime-owned diagnostics, CLI contracts, or manifest semantics in this cycle.
+`workflow_run_history_to_failure_modes` must stop at diagnostic package publication and explicit next-action recommendations; it must not auto-run refinement, portfolio governance, or mutate the selected workflow package.
