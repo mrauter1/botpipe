@@ -129,3 +129,66 @@ phase_mode=single
 phase_ids=diagnostic-run-history-seam,workflow-run-history-to-failure-modes,cycle-nine-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+---
+I’m implementing the phase-scoped diagnostic seam: first I’m reading the phase artifacts, mandatory framework files, and the current stdlib/runtime patterns so I can keep the change narrow and consistent.
+
+I’ve confirmed the plan and the phase scope: the change is intentionally a read-only diagnostic seam, not workflow automation. Next I’m tracing the existing workspace and stdlib snapshot helpers so the new helper reuses shared resolution and filtering rather than inventing a parallel path.
+
+The current patterns are clear: selected-workflow helpers resolve through the shared loader/catalog seams, and workflow-local JSON writes all go through `write_workflow_json`. I’m pulling the remaining design notes for the new helper now so I can match the planned payload and avoid accidental contract drift.
+
+I’ve got enough context to shape the code now. The implementation will be a small additive seam: extend `RunRecord` with the read-only source paths, add a diagnostics helper that writes a workflow-local JSON snapshot with normalized run history, then freeze that boundary in docs and unit tests.
+
+I’m editing the runtime and stdlib next. The code change is limited to three things: expose additional read-only run file paths on `RunRecord`, add the diagnostics snapshot helper on top of shared loader/workspace seams, and wire the export so tests and docs can bind to one canonical API.
+
+The seam is in place. I’m freezing the contract now in docs and unit tests, including the non-goals: workflow-local writes only, shared resolution/discovery reuse, and no runtime-owned diagnostics policy.
+
+I’m patching the docs and unit coverage now. The tests are aimed at the seam itself, not the future diagnostic workflow: correct shared-resolution reuse, deterministic filtering, workflow-local output, and strict read-only behavior against existing run/package files.
+
+The code is patched. I’m doing a quick read-through plus targeted pytest now to catch any contract mismatches before I touch the phase notes and decisions artifacts.
+
+I’m running the narrowest useful verification first: the updated stdlib unit file and the workspace/runtime test file most likely to regress from the added `RunRecord` fields.
+
+The targeted tests passed. I’m closing the loop on the phase artifacts now: recording the non-obvious decisions, updating the implementation notes with exact scope and validation, and then I’ll summarize the delivered seam and proof.
+
+I’m updating the phase-local artifacts with the actual implementation contract that shipped. After that I’ll do one last status check and close out with the required scope/analyzed/changed/findings summary plus the final user-facing result.
+
+The seam is complete and the phase artifacts are updated. I’m doing one final workspace check for the touched files only, then I’ll close out with the concise implementation summary and validation results.
+
+Scope considered
+- Phase-local scope only: the read-only diagnostic seam, its stdlib export, authoring docs, unit coverage, and the required phase artifacts.
+- I did not expand into CLI changes, workflow package authoring, runtime-owned diagnostics automation, or new `workflow.toml` semantics.
+
+What I analyzed
+- The shared workflow-resolution path and existing selected-workflow helpers in [stdlib/adaptation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/adaptation.py:1), [stdlib/refinement.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/refinement.py:1), and [stdlib/lifecycle.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/lifecycle.py:1).
+- Read-only run discovery and run metadata shape in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py:1).
+- The authoring contract and existing helper-boundary tests in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:1) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:1).
+
+What I changed
+- Added `write_selected_workflow_run_history_snapshot(...)` in [stdlib/diagnostics.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/diagnostics.py:1). It writes a workflow-local `selected_workflow_run_history.json` using shared workflow resolution plus `list_run_records(...)`, with deterministic `statuses` and `max_runs` filtering, normalized run metadata, request text, parsed `events.jsonl`, parsed `children.jsonl`, parsed `parent.json` when present, and source paths.
+- Extended `RunRecord` in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py:59) to expose `run_meta_file`, `request_file`, `children_file`, and `parent_file` as read-only fields instead of forcing helpers to reconstruct those paths.
+- Exported the helper from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:1), documented the seam boundary in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:250), and added unit coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:1).
+- Updated the phase notes and shared decisions artifacts to record the shipped behavior and non-obvious constraints.
+
+Key findings / decisions
+- The helper stays intentionally narrow: it snapshots evidence only and does not cluster failure modes, rank severity, or add runtime-owned diagnostics policy.
+- Empty filtered histories are allowed at the helper layer; later workflow publication logic should decide whether that is acceptable.
+- Targeted verification passed:
+  - `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`
+  - `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py`
+
+Open issues / next step
+- No open code issues from the targeted seam work.
+- The broader cycle items for the diagnostic workflow package itself remain out of this phase and would build on this helper.

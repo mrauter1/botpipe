@@ -269,6 +269,33 @@ Refinement helper boundary:
 - it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
 - prompt templates and workflow code still own refinement policy, baseline/candidate strategy, file copying, verification evidence, and promotion/rollback decisions
 
+## Optional Diagnostic Snapshot Helpers
+
+`stdlib/diagnostics.py` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's historical run evidence.
+
+```python
+from autoloop_v3.stdlib import write_selected_workflow_run_history_snapshot
+
+write_selected_workflow_run_history_snapshot(
+    ctx,
+    "release_candidate_to_go_no_go",
+    statuses=("failed", "paused"),
+    max_runs=25,
+)
+```
+
+Diagnostic helper boundary:
+
+- the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
+- it reuses the shared workflow resolution and read-only run discovery seams instead of ad hoc `.autoloop` scraping
+- it captures normalized run metadata, request text, parsed `events.jsonl` entries, parsed `children.jsonl` entries, parsed `parent.json` metadata when present, and authoritative source paths
+- it supports deterministic status filtering and `max_runs` bounds while keeping the selected history set explicit in `selected_workflow_run_history.json`
+- it does not mutate `.autoloop` run state or selected workflow files
+- it does not add CLI flags, new `workflow.toml` fields, runtime-owned diagnostics automation, or hidden downstream routing
+- it does not auto-cluster failure modes, auto-rank severity, or impose runtime-owned failure-mode policy
+- it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- workflow code and prompt templates still own diagnostic framing, failure-mode clustering, severity ranking, publication gating, and next-action recommendations
+
 ## Optional Evaluation Manifest Helpers
 
 `stdlib/evaluation.py` provides a narrow authoring-only seam for workflows that need to validate and canonicalize one workflow-local evaluation case manifest against one selected workflow.
