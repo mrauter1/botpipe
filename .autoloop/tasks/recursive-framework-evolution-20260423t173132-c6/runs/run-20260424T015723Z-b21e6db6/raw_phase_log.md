@@ -92,3 +92,79 @@ The next producer pass should resolve `PLAN-001` directly in both `plan.md` and 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dbd34-bf2d-7d80-91d3-a80caf0446a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dbd34-bf2d-7d80-91d3-a80caf0446a4
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbd34-bf2d-7d80-91d3-a80caf0446a4
+---
+I’m taking the verifier’s blocking point as the current contract: I’ll tighten the plan so the `task_to_workflow_strategy` handoff interface is explicitly frozen instead of leaving a public artifact decision open during implementation. Then I’ll update the machine-readable phases, feedback, and decisions so the plan is executable without new mid-implementation choices.
+
+I’ve got the fix path. I’m freezing the front-door machine-readable contract explicitly now, so phase 3 only sharpens the adapt-route handoff through the existing fields instead of leaving any schema decision to implementation time.
+
+The plan file updates are straightforward, but the phase YAML needs a precise re-patch because its current formatting differs from the earlier draft. I’m re-reading the exact current block and then applying the narrower contract freeze cleanly.
+
+The contract freeze is in place. I’m doing the final verification pass now: re-read the affected sections, confirm the decisions block is filled under the correct runtime header, and re-parse the phase YAML with `python3`/PyYAML.
+
+Tightened the cycle-6 plan to resolve the verifier’s blocking issue in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/phase_plan.yaml). Phase 3 now explicitly freezes the existing `task_to_workflow_strategy` machine-readable handoff contract: no `strategy_summary.json` or `StrategyPackagePayload` schema changes, and the adapt-route becomes more concrete only through the existing `next_action`, `strategy_next_action`, and `workflow_strategy_package.md` surfaces.
+
+I also appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/feedback.md) and recorded the narrowed contract in the current turn block of [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/decisions.txt). `phase_plan.yaml` was re-parsed successfully with `python3` and `yaml.safe_load`.
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbd34-bf2d-7d80-91d3-a80caf0446a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dbd34-bf2d-7d80-91d3-a80caf0446a4
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbd34-bf2d-7d80-91d3-a80caf0446a4
+---
+I’m re-verifying the revised plan against the request and the now-explicit decisions ledger. I’ll confirm that the front-door handoff ambiguity is actually closed in both the narrative and the phase contract, then update the verifier artifacts to reflect the current state.
+
+Verifying the updated cycle-6 plan artifacts now. I’m re-checking the narrowed handoff contract, the phase contract, and the current criteria/feedback state before I mark the plan complete or carry forward findings.
+
+The updated phase contract is coherent and parseable. I’m checking the remainder of the narrative plan for any hidden compatibility gaps before I update the verifier artifacts.
+
+I’ve narrowed it to a clean re-verification pass: the prior blocker is resolved, and I’m updating only the verifier-owned artifacts to reflect that state. After that I’ll emit the final completion summary and loop-control result.
+
+The verifier artifacts are updated. I’m doing one last read-back of `criteria.md` and `feedback.md` so the final completion state matches the written record exactly.
+
+Scope considered
+
+Verified the cycle-6 planning artifacts against the immutable request snapshot, the current raw-log authority, the shared decisions ledger, and the concrete `task_to_workflow_strategy` handoff contract that phase 3 now constrains.
+
+What I analyzed
+
+I checked intent coverage for the chosen reusable building block and paired framework seam, re-validated `phase_plan.yaml` parseability and phase coherence, and audited the phase-3 compatibility boundary to ensure the public `strategy_summary.json` / `StrategyPackagePayload` contract is no longer left open for redesign during implementation.
+
+What I reviewed
+
+I reviewed [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/decisions.txt). I also re-parsed `phase_plan.yaml` locally with `yaml.safe_load`.
+
+Key findings / decisions
+
+No blocking findings remain.
+
+`PLAN-001` is resolved. The plan now explicitly freezes the existing `strategy_summary.json` / `StrategyPackagePayload` field set, limits the adapt-route tightening to the existing `workflow_strategy_package.md`, `next_action`, and `strategy_next_action` surfaces, and carries that same constraint in both `phase_plan.yaml` and the current planner decision block.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/criteria.md) so every checkbox is checked, and appended [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/plan/feedback.md) with `PLAN-002` as the re-verification closure record.
+
+Open issues / next step
+
+No verifier-side open issues remain. The plan is complete and ready for implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
