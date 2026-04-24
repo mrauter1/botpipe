@@ -435,3 +435,95 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+---
+I’m starting with the mandatory inspection set plus the active phase artifacts so I can verify the current workflow patterns, the dependency from `portfolio-health-snapshot-seam`, and the exact gaps before I edit anything.
+
+The repo is mid-migration, so I’m switching to the current repo-root layout the planner recorded and reading the workflow/runtime patterns that this phase has to match before I touch the new package.
+
+I’ve confirmed the planner’s intended seam already exists. Next I’m checking whether the governance workflow package is absent or partially scaffolded, then I’ll mirror the strongest existing workflow patterns for contracts, publish gating, and runtime proof.
+
+I have the existing package pattern. I’m reading the recursive memory files and the phase-local session/criteria artifacts now so I can keep the implementation aligned with both the cycle-wide governance expectations and the phase scope.
+
+The phase session file path from the preamble doesn’t exist in this checkout, so I’m proceeding from the plan, criteria, and repo state. I’m reading the helper/test utilities and prompt wording conventions next so the new package lands cleanly without inventing new patterns.
+
+I’ve confirmed there’s no existing scaffold for this workflow. I’m now inspecting the capability and health snapshot payload shapes plus the portfolio-related tests so the publish-step validation can be strict without depending on guesses.
+
+I have the snapshot schemas now. I’m inspecting the existing runtime-proof harness in more detail so the new test covers the same axes: discovery, compilation, a scripted successful run, and publish-time rejection paths.
+
+I need one more pass through the architecture-baseline assertions before I edit, because cycle-10 memory updates will otherwise drift out of test coverage. After that I’ll move into the package implementation and docs in one pass.
+
+Plan for the implementation pass:
+
+1. Add `workflows/workflow_portfolio_to_operating_system/` with params, contracts, prompts, asset, manifest, and workflow logic using the existing capability and portfolio-health snapshot seams.
+2. Add `docs/workflows/workflow_portfolio_to_operating_system.md` and update recursive memory plus architecture-baseline assertions for cycle 10.
+3. Add `tests/runtime/test_workflow_portfolio_to_operating_system.py`, run targeted pytest for the new workflow plus the memory/doc baseline, then update implementation notes and this turn’s decisions block.
+
+I’ve finished the read-through. I’m moving into edits now: first the new workflow package and its publish-time guards, then the cycle-10 docs/memory/test updates that prove the package and keep the recursive records consistent.
+
+The new package skeleton is in place. I’m doing a quick compile/import check before I layer on docs and tests so I can catch workflow-definition issues while the diff is still localized.
+
+The repo shell doesn’t have `python` on `PATH`; I’m retrying with the project venv so I can validate the new package before adding the rest of the cycle-10 surface.
+
+The package, docs, and runtime proof are added. I’m updating the standing recursive memory now, including the current deferred-ideas target, and then I’ll align the baseline assertions to the new cycle-10 state.
+
+The cycle-10 surfaces are wired up. I’m running the new runtime proof plus the architecture-baseline assertions now; if anything breaks, I’ll fix it before touching the notes and decisions ledger.
+
+The baseline-doc test is clean. Two issues surfaced in the new runtime proof: the packaging payload schema was treating `ready_for_publication` as optional, and the fake-provider artifact handles don’t accept `encoding=`. I’m correcting both now.
+
+I’ve finished the phase implementation and I’m at the verification/closeout stage. I’m rerunning the targeted runtime proof first, then I’ll update the phase notes and decision ledger only if the test surface stays clean.
+
+The new workflow is executing end-to-end; the remaining failure is a strict snapshot mismatch in the published health artifact. I’m inspecting the exact emitted JSON now so I can fix the contract or the proof without broadening scope.
+
+The mismatch is likely in one nested field from the existing portfolio-health seam rather than in the new workflow logic. I’m pulling the emitted artifact directly and comparing it to the proof expectation before deciding whether to normalize the workflow output or tighten the test.
+
+The failure is test brittleness, not a workflow defect. The health snapshot now carries real workflow aliases and descriptions from the installed packages, so I’m tightening the proof around the stable operational fields this phase actually owns.
+
+I’ve narrowed the proof to the stable contract the phase owns: run health, scoped workflow selection, lifecycle evidence, and receipt integrity. I’m rerunning the runtime suite now, then I’ll do the closeout docs and decision ledger if it stays green.
+
+The workflow package and targeted regression surface are green. I’m switching to repository closeout now: phase notes, the turn’s decision ledger entries, and any small memory-file closeout lines needed to keep future cycles aligned.
+
+I’ve got the implementation surface locked. I’m recording the non-obvious decisions and the phase notes now so later turns inherit the intended boundaries instead of reinterpreting the workflow as an automation engine.
+
+The implementation record and decision ledger are updated. I’m doing one last readback for precise references, then I’ll close with the scoped summary and validation results.
+
+Scope considered
+- Implemented the approved phase-local addition: `workflow_portfolio_to_operating_system`, plus its required docs, runtime proof, and recursive-memory updates.
+- Kept scope off unrelated dirty files and off public CLI/runtime-contract changes.
+- Treated the repo-root layout as authoritative for the stale `src/autoloop/...` references in the request.
+
+What I analyzed
+- Framework/docs and authoring surfaces, especially `docs/architecture.md`, `docs/authoring.md`, existing workflow packages, and the prior portfolio-health seam.
+- The new workflow package at [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/workflow.py:70), typed contracts at [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/contracts.py:25), and the phase doc at [workflow_portfolio_to_operating_system.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_portfolio_to_operating_system.md:1).
+- The new runtime proof at [test_workflow_portfolio_to_operating_system.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_portfolio_to_operating_system.py:352) and cycle-10 memory assertions at [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:523).
+
+What I changed
+- Added the full `workflows/workflow_portfolio_to_operating_system/` package with params, contracts, prompts, checklist asset, explicit route grammar, publish validation, and deterministic receipt generation.
+- Added the workflow decision/contract doc at [docs/workflows/workflow_portfolio_to_operating_system.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_portfolio_to_operating_system.md:1).
+- Added the runtime proof and rejection coverage in [tests/runtime/test_workflow_portfolio_to_operating_system.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_portfolio_to_operating_system.py:352).
+- Updated recursive memory in [.autoloop_recursive/framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md:138), [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:85), [.autoloop_recursive/framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md:254), and [.autoloop_recursive/workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md:298).
+- Updated the phase closeout notes and appended this turn’s non-obvious decisions in the authoritative ledger.
+
+Key findings / decisions
+- The existing builder baseline remained credible, so cycle 10’s higher-leverage addition was portfolio governance rather than another builder-first workflow.
+- The paired framework improvement stayed narrow: reuse the additive portfolio-health seam instead of widening runtime contracts or adding runtime-owned governance/scoring.
+- The workflow is intentionally publication-only: it emits lifecycle recommendations and next actions, but does not auto-run refinement, decomposition, merge, or retirement work.
+- The runtime proof now locks onto stable operational health fields instead of freezing aliases/descriptions owned by other installed workflow packages.
+- Validation passed on the targeted suites: `tests/runtime/test_workflow_portfolio_to_operating_system.py` and `tests/test_architecture_baseline_docs.py` for a total of 51 passing tests.
+
+Open issues / next step
+- No blocking issues remain in this phase.
+- I did not run the full repository suite; only the targeted workflow and architecture-baseline tests were executed.
+- The clearest next workflow follow-on remains `workflow_package_to_composable_building_blocks`, now that portfolio governance can make decomposition pressure explicit.
