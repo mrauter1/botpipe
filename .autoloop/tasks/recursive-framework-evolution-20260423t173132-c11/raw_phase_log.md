@@ -826,3 +826,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbf0c-d357-7290-8daf-21864bde7c76
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbf0c-d357-7290-8daf-21864bde7c76
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbf0c-d357-7290-8daf-21864bde7c76
+---
+I’m treating this as a phase-local test pass: first I’ll inspect the active test artifacts, the shared decisions, and the current cycle-11 memory/test coverage so I can decide whether any repo test changes are still needed or whether this phase is just documenting and proving the existing coverage.
+
+I found one small remaining regression lock worth adding: the cycle-11 proof test should reject the stale runtime-only `20 passed` closeout evidence that this phase replaced. I’m adding that assertion, then I’ll update the test-strategy and feedback artifacts around the final rerun.
+
+The repo-side test delta is in now. I’m rerunning the primary suite to verify the new negative assertion and to make sure the phase artifacts I just updated still match the final proof record.
+
+Scope considered
+- Phase-local test work for `recursive-memory-and-validation` only.
+- I limited changes to the cycle-11 baseline-doc test plus the test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/recursive-memory-and-validation/`, and appended one test decision under the current header in `decisions.txt`.
+
+What I analyzed
+- The active phase contract, shared decisions ledger, implementer notes, the cycle-11 memory sections in the four `.autoloop_recursive/` files, and the existing cycle-11 assertions in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:955).
+- The planned primary proof suite and the condition for skipping the refinement-regression suite.
+
+What I changed
+- Extended [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1015) so the cycle-11 closeout-proof test also rejects the stale runtime-only `20 passed` evidence string.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/recursive-memory-and-validation/test_strategy.md:1) with an explicit behavior-to-test coverage map, edge cases, failure paths, and known gaps.
+- Appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/recursive-memory-and-validation/feedback.md:1).
+- Appended one non-obvious test-lock decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt:26).
+
+Key findings / decisions
+- The existing cycle-11 baseline coverage was largely sufficient; the only worthwhile repo test addition was locking out regression to the outdated runtime-only `20 passed` closeout proof.
+- Re-ran the planned primary suite successfully:
+  `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  Result: `104 passed in 7.36s`.
+- No conditional refinement-regression suite was added because overlay-validation logic remained workflow-local and no shared helper was extracted.
+
+Open issues / next step
+- No open issues in this test slice.
+- The remaining known gap is unchanged by design: no broader suite run and no refinement-regression rerun unless a future cycle extracts shared overlay-validation logic.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
