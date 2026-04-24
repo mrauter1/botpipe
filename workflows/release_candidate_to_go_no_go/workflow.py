@@ -307,7 +307,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         recommended_decision = require_non_empty_string(
             summary.get("recommended_decision"),
             error_message="decision_summary.json must define a non-empty recommended_decision",
-            coerce=True,
+            coerce=False,
         )
 
         write_publication_receipt(

@@ -332,12 +332,12 @@ class IncidentToHardeningProgram(Workflow):
         recommended_posture = require_non_empty_string(
             summary.get("recommended_posture"),
             error_message="incident_summary.json must define a non-empty recommended_posture",
-            coerce=True,
+            coerce=False,
         )
         primary_hypothesis = require_non_empty_string(
             summary.get("primary_hypothesis"),
             error_message="incident_summary.json must define a non-empty primary_hypothesis",
-            coerce=True,
+            coerce=False,
         )
         backlog_items = require_non_negative_int(
             summary.get("hardening_backlog_items"),

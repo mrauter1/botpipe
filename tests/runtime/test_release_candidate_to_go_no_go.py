@@ -509,7 +509,25 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
     assert (run_dir / "run.json").exists()
 
 
-def test_release_go_no_go_publish_decision_rejects_missing_recommendation(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "summary_payload",
+    (
+        {
+            "blocking_issue_count": 1,
+            "ready_for_packaging": False,
+        },
+        {
+            "blocking_issue_count": 1,
+            "ready_for_packaging": False,
+            "recommended_decision": 1,
+        },
+    ),
+)
+def test_release_go_no_go_publish_decision_rejects_missing_recommendation(
+    tmp_path: Path,
+    monkeypatch,
+    summary_payload: dict[str, object],
+) -> None:
     monkeypatch.syspath_prepend(str(REPO_ROOT))
     importlib.invalidate_caches()
     _clear_workflow_modules()
@@ -518,15 +536,7 @@ def test_release_go_no_go_publish_decision_rejects_missing_recommendation(tmp_pa
     workflow_folder = tmp_path / "task" / "wf_release_candidate_to_go_no_go"
     workflow_folder.mkdir(parents=True, exist_ok=True)
     (workflow_folder / "decision_summary.json").write_text(
-        json.dumps(
-            {
-                "blocking_issue_count": 1,
-                "ready_for_packaging": False,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
+        json.dumps(summary_payload, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     (workflow_folder / "release_decision_package.md").write_text("# Decision Package\n", encoding="utf-8")
