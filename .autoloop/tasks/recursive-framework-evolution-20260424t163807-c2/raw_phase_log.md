@@ -402,3 +402,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+I’m treating this as a test-audit turn: check the current test coverage against the migrated seam and the reviewer fix, then add only the smallest missing regression coverage before I update the phase test strategy and feedback.
+
+The current test slice already covers most of the migration. I’m adding one small strengthening pass: explicit boolean cases for the restored non-coercive publish fields, plus a concise coverage map and test-phase note.
+
+I added only deterministic regression cases. I’m running the two touched runtime suites now, since they directly exercise the boolean/numeric publish-field paths introduced in this test pass.
+
+Scope considered
+
+- The shared-validation migration’s test surface, with emphasis on the reviewer-restored strict publish-time string behavior in the release and incident workflows.
+- Existing unit/runtime coverage already added during implement, plus the phase-local `test_strategy.md` and `feedback.md`.
+- Only request-relevant regression risk; no unrelated test churn.
+
+What I analyzed
+
+- Current runtime tests for `release_candidate_to_go_no_go` and `incident_to_hardening_program`.
+- Existing unit coverage for `require_non_negative_int(...)` and shared validation exports.
+- Whether the snapshot-helper cleanup needed extra dedicated tests or was already covered by existing strict filter-validation tests.
+
+What I changed
+
+- Strengthened [tests/runtime/test_release_candidate_to_go_no_go.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_release_candidate_to_go_no_go.py) so publish-time recommendation rejection now covers missing, numeric, and boolean non-string payloads, and renamed the test to match that broader scope.
+- Strengthened [tests/runtime/test_incident_to_hardening_program.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_incident_to_hardening_program.py) so invalid summary-field rejection now covers numeric and boolean values for `recommended_posture` and `primary_hypothesis` in addition to existing missing/negative cases.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/test/phases/shared-validation-migration/test_strategy.md) with a behavior-to-test coverage map, edge cases, failure paths, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/test/phases/shared-validation-migration/feedback.md).
+
+Key findings / decisions
+
+- The highest-value remaining regression risk was coercion drift on publish-time summary strings, so I covered both numeric and boolean cases explicitly.
+- I did not add new snapshot-helper-specific tests because the helper cleanup was a direct reuse of already-tested strict string filtering, and broadening past that would have been redundant in this phase.
+- Validation passed:
+  - `./.venv/bin/python -m py_compile tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py`
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py` -> `22 passed`
+
+Open issues / next step
+
+- No test-authoring blocker remains in this phase slice.
+- Next step is test-phase review/audit of the updated strategy artifact and the strengthened release/incident regression coverage.

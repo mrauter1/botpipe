@@ -619,6 +619,15 @@ def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Pa
             {
                 "authoritative_artifacts": ["incident_summary"],
                 "hardening_backlog_items": 3,
+                "primary_hypothesis": "Connection pool exhaustion under retry storm pressure.",
+                "recommended_posture": True,
+            },
+            "recommended_posture",
+        ),
+        (
+            {
+                "authoritative_artifacts": ["incident_summary"],
+                "hardening_backlog_items": 3,
                 "recommended_posture": "urgent",
             },
             "primary_hypothesis",
@@ -628,6 +637,15 @@ def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Pa
                 "authoritative_artifacts": ["incident_summary"],
                 "hardening_backlog_items": 3,
                 "primary_hypothesis": 2,
+                "recommended_posture": "urgent",
+            },
+            "primary_hypothesis",
+        ),
+        (
+            {
+                "authoritative_artifacts": ["incident_summary"],
+                "hardening_backlog_items": 3,
+                "primary_hypothesis": False,
                 "recommended_posture": "urgent",
             },
             "primary_hypothesis",

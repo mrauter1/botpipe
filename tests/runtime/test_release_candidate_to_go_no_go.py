@@ -521,9 +521,14 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
             "ready_for_packaging": False,
             "recommended_decision": 1,
         },
+        {
+            "blocking_issue_count": 1,
+            "ready_for_packaging": False,
+            "recommended_decision": True,
+        },
     ),
 )
-def test_release_go_no_go_publish_decision_rejects_missing_recommendation(
+def test_release_go_no_go_publish_decision_rejects_invalid_recommendation(
     tmp_path: Path,
     monkeypatch,
     summary_payload: dict[str, object],
