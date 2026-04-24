@@ -165,3 +165,62 @@ phase_mode=single
 phase_ids=evaluation-helper-seam,workflow-to-eval-suite-package,cycle-seven-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+---
+I’m treating the active scope as the phase-local `evaluation-helper-seam` change. I’ll inspect the phase artifacts, the plan/decisions ledger, and the relevant loader/stdlib code paths before editing so the helper reuses existing workflow selection and parameter coercion behavior rather than introducing a parallel path.
+
+The plan already narrows this cycle’s framework work to an authoring-only eval seam, which matches the active phase. I’m reading the existing `stdlib` and workflow-capability code next to find the canonical workflow-selection and parameter-coercion path the new helper must call through.
+
+I have the boundary docs and the existing `adaptation` helper in view now. The next pass is focused on the exact loader functions behind workflow reference resolution and parameter validation so the eval helper can be a thin wrapper over those seams instead of re-encoding them.
+
+The repo doesn’t have `workflow_to_eval_suite` landed yet, so this phase is clearly the shared helper slice intended to support a later package change. I’m checking the local worktree and then I’ll patch just the phase-owned seam, docs, tests, and notes.
+
+The plan does define the intended seam explicitly: `write_validated_eval_case_manifest(ctx, workflow, case_manifest, ...)`. I’m reading that section so the helper’s payload shape and validation scope line up with the approved implementation rather than inventing a new contract.
+
+I have enough context to patch now. The code change is a small new `stdlib/evaluation.py` module plus the export, and then I’ll lock the helper boundary in `docs/authoring.md` and `tests/unit/test_stdlib_and_extensions.py` so the seam stays authoring-only and loader-backed.
+
+The helper and tests are in place. I’m doing a quick pass for edge conditions now; one thing I’m tightening is making sure the path-safety assertions hit the path guard rather than failing earlier on intentionally bad manifest content.
+
+I’m at verification. First pass is the phase-owned unit surface plus the baseline docs test file, because the helper is authoring-only and I need to prove the new section didn’t regress the existing documentation contract.
+
+The helper passed the targeted unit and docs-baseline checks. I’m recording the non-obvious implementation decisions and the phase notes now so the later phases inherit the exact boundary: canonical manifest validation only, no runtime expansion.
+
+Scope considered
+- Phase-local `evaluation-helper-seam` only: `stdlib/evaluation.py`, `stdlib/__init__.py`, `docs/authoring.md`, `tests/unit/test_stdlib_and_extensions.py`, and the phase notes/decision ledger.
+- Left CLI, runtime-owned evaluation execution, `workflow.toml` changes, and later cycle-7 workflow-package work out of scope.
+
+What I analyzed
+- Reviewed the cycle-7 plan, phase criteria/feedback, `docs/authoring.md`, `stdlib/adaptation.py`, `stdlib/lifecycle.py`, `stdlib/portfolio.py`, `runtime/loader.py`, `core/workflow_capabilities.py`, and the existing stdlib unit-test surface.
+
+What I changed
+- Added `write_validated_eval_case_manifest(...)` in `stdlib/evaluation.py`.
+- Exported the helper from `stdlib/__init__.py`.
+- Documented the helper boundary and non-goals in `docs/authoring.md`.
+- Extended `tests/unit/test_stdlib_and_extensions.py` for happy-path validation, invalid case shapes/artifacts/parameters, path safety, and docs-boundary coverage.
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/implement/phases/evaluation-helper-seam/implementation_notes.md` and appended phase-local decisions in `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt`.
+- Validation passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` and `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`.
+
+Key findings / decisions
+- The new helper reuses `write_selected_workflow_capability_snapshot(...)` and `coerce_workflow_parameter_mapping(...)` instead of introducing eval-specific workflow resolution or parameter schema logic.
+- Validation stays authoring-only: it refreshes `selected_workflow_capability.json`, validates expected artifacts against the selected workflow’s compiled artifact surface, canonicalizes deterministic `validated_cases`, and stops there.
+- No runtime/provider control-surface widening was introduced.
+
+Open issues / next step
+- No blocking issue remains in this phase scope.
+- The next phase can build `workflow_to_eval_suite` on top of `write_validated_eval_case_manifest(...)`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

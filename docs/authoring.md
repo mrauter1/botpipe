@@ -247,6 +247,42 @@ Adaptation helper boundary:
 - portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics in workflow code and prompt templates
 - the helper does not import runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
 
+## Optional Evaluation Manifest Helpers
+
+`stdlib/evaluation.py` provides a narrow authoring-only seam for workflows that need to validate and canonicalize one workflow-local evaluation case manifest against one selected workflow.
+
+```python
+from autoloop_v3.stdlib import write_validated_eval_case_manifest
+
+write_validated_eval_case_manifest(
+    ctx,
+    "release_candidate_to_go_no_go",
+    {
+        "cases": [
+            {
+                "case_id": "baseline_release_readiness",
+                "case_kind": "benchmark",
+                "prompt": "Assess a routine release candidate with complete evidence.",
+                "workflow_parameters": {"mode": "strict"},
+                "expected_artifacts": ["assessment_note"],
+            }
+        ]
+    },
+)
+```
+
+Evaluation helper boundary:
+
+- the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
+- it refreshes `selected_workflow_capability.json` through `write_selected_workflow_capability_snapshot(...)` instead of duplicating selected-workflow inspection logic
+- it validates per-case workflow parameters through the shared loader coercion path instead of re-implementing parameter schema logic
+- it validates unique case ids, legal case kinds (`benchmark`, `edge`, `adversarial`), non-empty case prompts, and non-empty expected artifacts
+- it validates expected artifacts against the selected workflow's compiled artifact surface derived from the selected-workflow capability snapshot
+- it writes the canonical result to `validated_eval_case_manifest.json` by default
+- it does not add CLI flags, new `workflow.toml` fields, runtime-owned evaluation execution, or hidden downstream routing
+- it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- workflows still own evaluation policy, category coverage requirements, prompt semantics, publication gating, and any downstream execution behavior in workflow code and prompt templates
+
 ## Optional Workflow Capability Snapshot Helpers
 
 `stdlib/portfolio.py` also provides an opt-in helper for portfolio workflows that need richer importing inspection of workflow parameters and compiled step contracts while keeping the lightweight catalog seam unchanged.
