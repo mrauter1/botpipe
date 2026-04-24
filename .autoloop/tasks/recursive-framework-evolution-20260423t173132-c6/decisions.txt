@@ -7,3 +7,6 @@ The paired framework slice should stay additive and authoring-only: selected-wor
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260424T015723Z-b21e6db6" ts="2026-04-24T02:09:16.180693+00:00" />
 Cycle 2 narrows phase 3 explicitly: `task_to_workflow_strategy` must keep the current `strategy_summary.json` / `StrategyPackagePayload` field set unchanged in cycle 6.
 The adapt-route handoff should become more concrete only through the already-existing `next_action`, `strategy_next_action`, and `workflow_strategy_package.md` artifacts, not by introducing new summary fields or new publish-time summary validators.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="selected-workflow-adaptation-seam" pair="implement" turn_seq="1" run_id="run-20260424T015723Z-b21e6db6" ts="2026-04-24T02:14:42.308096+00:00" />
+The selected-workflow adaptation seam resolves and snapshots exactly one chosen workflow package; it must not depend on importing unrelated workflow packages just to capture a single contract.
+`write_validated_workflow_parameters(...)` must continue delegating to `runtime.loader.coerce_workflow_parameter_mapping(...)`, with workflow-local JSON path enforcement still inherited from `write_workflow_json(...)`.

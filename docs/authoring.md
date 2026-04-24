@@ -218,6 +218,32 @@ Portfolio snapshot boundary:
 - it uses the shared workflow catalog seam to capture workflow metadata plus linked code/doc paths from `workflows/*/workflow.toml`, `workflow.py`, optional `params.py`, and `docs/workflows/<package>.md` when present
 - it does not add new `workflow.toml` fields and preserves the metadata-only manifest doctrine
 - it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
+
+## Optional Selected-Workflow Adaptation Helpers
+
+`stdlib/adaptation.py` provides a small additive seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
+
+```python
+from autoloop_v3.stdlib import (
+    write_selected_workflow_capability_snapshot,
+    write_validated_workflow_parameters,
+)
+
+write_selected_workflow_capability_snapshot(ctx, "release_candidate_to_go_no_go")
+write_validated_workflow_parameters(
+    ctx,
+    "release_candidate_to_go_no_go",
+    {"mode": "strict", "reviewers": ["ops", "qa"]},
+)
+```
+
+Adaptation helper boundary:
+
+- the helpers write only workflow-local JSON artifacts under `ctx.workflow_folder`
+- they reuse the existing workflow discovery, resolution, and parameter coercion seams instead of re-implementing schema logic
+- they accept the same workflow references the shared loader resolves, including canonical names, aliases, and main workflow classes
+- they are authoring-only support for explicit workflow code; they do not add CLI syntax, manifest fields, runtime-owned adaptation, or automatic downstream execution
+- they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
 - portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics in workflow code and prompt templates
 - the helper does not import runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
 

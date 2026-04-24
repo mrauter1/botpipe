@@ -177,3 +177,81 @@ phase_mode=single
 phase_ids=selected-workflow-adaptation-seam,candidate-workflow-adapted-execution-plan-package,portfolio-handoff-docs-and-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbd44-99f1-7231-a996-937280403ada
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbd44-99f1-7231-a996-937280403ada
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd44-99f1-7231-a996-937280403ada
+---
+I’m implementing the scoped authoring seam for selected-workflow snapshots and validated parameter artifacts. First I’m reading the phase artifacts and the required framework/workflow files to understand the existing contracts before changing anything.
+
+The repo is already dirty in many unrelated paths, so I’m constraining changes to the phase files and the current framework roots the plan calls out. Next I’m reading the current authoring/runtime surfaces and the existing stdlib test patterns so the new seam reuses the right validation path instead of inventing one.
+
+I’ve confirmed the existing seams: `stdlib/lifecycle.py` already owns safe workflow-local JSON writes, `stdlib/portfolio.py` already owns capability snapshots, and `runtime/loader.py` already owns parameter coercion. I’m now checking the remaining helper/test utilities so the new seam composes those exact pieces and matches current unit-test style.
+
+I’ve got the seam shape now. The remaining work is to verify how the test fixtures build synthetic workflow packages so I can add coverage for workflow resolution, path locality, and reuse of the existing parameter coercion path without broadening runtime code.
+
+Plan for this phase:
+1. Add `stdlib/adaptation.py` as a narrow helper layer over existing catalog/capability and loader validation seams.
+2. Export the new helpers from `stdlib/__init__.py` and document the boundary in `docs/authoring.md`.
+3. Extend `tests/unit/test_stdlib_and_extensions.py` for workflow-local path enforcement, selected-workflow resolution, and proof that parameter validation goes through the existing coercion function.
+4. Run the targeted unit test file, then update the phase implementation notes and this turn’s decision ledger with the non-obvious constraints the code now relies on.
+
+I’m at the edit stage now. The code change is limited to one new stdlib helper module plus its export, a narrow authoring-doc addition, and unit tests that prove the helper stays workflow-local and reuses the existing loader coercion path.
+
+The seam is in place. I’m doing a quick readback for correctness now, then I’ll run the targeted unit file and only adjust if something in the new helper or tests is off.
+
+The new unit coverage is green. I’m running the lightweight docs baseline as a regression check because the phase also changed `docs/authoring.md`, then I’ll record the implementation notes and the turn-level decisions.
+
+I’m writing the phase notes now. This is limited to the producer artifacts: one concise implementation note block tied back to the phase checklist, and one short decision entry block under this turn’s existing header so later turns don’t drift from the helper boundary.
+
+The code and doc checks are complete. I’m doing one last scoped status read so the close-out reflects only the touched phase files and I can verify the implementation notes/decision ledger landed where they should.
+
+Scope considered
+
+- Phase-local seam only: `stdlib/adaptation.py`, `stdlib/__init__.py`, `docs/authoring.md`, `tests/unit/test_stdlib_and_extensions.py`, plus the required phase notes and decision ledger updates.
+- I kept CLI, runtime routing, `workflow.toml`, and front-door workflow behavior out of scope.
+
+What I analyzed
+
+- The current authoring/runtime boundaries in `docs/authoring.md` and `docs/architecture.md`.
+- Existing helper patterns in `stdlib/lifecycle.py` and `stdlib/portfolio.py`.
+- Shared workflow inspection and parameter coercion paths in `core/workflow_capabilities.py` and `runtime/loader.py`.
+- Existing stdlib/unit test patterns in `tests/unit/test_stdlib_and_extensions.py`.
+
+What I changed
+
+- Added [stdlib/adaptation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/adaptation.py) with:
+- `write_selected_workflow_capability_snapshot(...)`
+- `write_validated_workflow_parameters(...)`
+- Exported the new helpers from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py).
+- Documented the seam as additive and authoring-only in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- Extended [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) for:
+- workflow-local path enforcement
+- selected-workflow resolution without importing unrelated packages
+- delegation to the shared loader coercion path
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/implement/phases/selected-workflow-adaptation-seam/implementation_notes.md) and appended the phase decision lines in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/decisions.txt).
+
+Key findings / decisions
+
+- The new seam stays authoring-only by reusing `write_workflow_json(...)` for locality and `runtime.loader.coerce_workflow_parameter_mapping(...)` for validation.
+- Selected-workflow snapshotting resolves and imports only the chosen workflow package instead of requiring full capability inspection across the whole portfolio.
+- No runtime-owned adaptation, hidden routing behavior, or manifest expansion was introduced.
+
+Open issues / next step
+
+- No blocker in this phase.
+- Next phase can build `candidate_workflow_to_adapted_execution_plan` directly on top of these helpers.
+
+Validation performed
+
+- `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`
+- `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
