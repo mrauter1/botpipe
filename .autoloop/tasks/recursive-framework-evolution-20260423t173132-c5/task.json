@@ -14,13 +14,13 @@
       "front-door-integration-memory-and-proof"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "task-to-candidate-workflow-set-package"
+    "current_phase_index": 2,
+    "current_phase_id": "front-door-integration-memory-and-proof"
   },
   "phase_status": {
     "workflow-capability-snapshot-seam": "completed",
-    "task-to-candidate-workflow-set-package": "in_progress",
-    "front-door-integration-memory-and-proof": "planned"
+    "task-to-candidate-workflow-set-package": "completed",
+    "front-door-integration-memory-and-proof": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260424T003247Z-3011b6ef",
       "status": "in_progress",
       "ts": "2026-04-24T01:08:33.942002+00:00"
+    },
+    {
+      "phase_id": "task-to-candidate-workflow-set-package",
+      "run_id": "run-20260424T003247Z-3011b6ef",
+      "status": "completed",
+      "ts": "2026-04-24T01:48:42.506635+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "front-door-integration-memory-and-proof",
+      "run_id": "run-20260424T003247Z-3011b6ef",
+      "status": "in_progress",
+      "ts": "2026-04-24T01:48:42.511138+00:00"
     }
   ]
 }
