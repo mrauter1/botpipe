@@ -111,3 +111,46 @@ The correction is in place. I’m re-validating the YAML and re-reading the clos
 Updated the plan to address the verifier’s blocking issue. [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/plan/plan.md) now makes `.autoloop_recursive/framework_evolution_charter.md` an explicit Milestone 3 closeout artifact and requires a no-doctrine-change note when prompt compaction does not alter doctrine. [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/plan/phase_plan.yaml) was updated in the `proof-docs-memory-closeout` phase to carry the same requirement.
 
 I also appended the correction note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/plan/feedback.md) and recorded the non-obvious charter constraint under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/decisions.txt). `phase_plan.yaml` re-validated successfully with `python3` and `yaml.safe_load`.
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc170-b8bc-7f92-ae3c-079f8bd04e90
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dc170-b8bc-7f92-ae3c-079f8bd04e90
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc170-b8bc-7f92-ae3c-079f8bd04e90
+---
+I’m re-running verification after the planner’s fix. The focus is whether the charter requirement is now explicit in both the narrative plan and the machine-readable phase contract, and whether any blocking gap remains.
+
+The charter gap is fixed, and the phase file is still valid YAML. I’m closing out the verification by marking the gating checklist complete and recording that the prior blocking finding is now resolved.
+
+Scope considered
+
+The corrected plan artifacts for cycle 4, with emphasis on the previously missing charter handling, plus the machine-readable phase contract, feedback continuity, criteria state, and shared decisions history.
+
+What I analyzed
+
+I checked whether the producer’s revision fully closes the prior blocking gap, preserves intent fidelity, keeps compatibility/regression controls intact, and keeps the phase decomposition coherent and parseable.
+
+What I reviewed
+
+`plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, `decisions.txt`, and a fresh local `yaml.safe_load` parse of `phase_plan.yaml`.
+
+Key findings / decisions
+
+- The prior blocking issue `PLAN-001` is resolved. The plan now explicitly includes `.autoloop_recursive/framework_evolution_charter.md` in closeout scope and requires a no-doctrine-change note when prompt compaction does not alter doctrine.
+- `phase_plan.yaml` remains valid YAML, keeps runtime-owned metadata intact, and still has coherent phases with non-empty `in_scope` and `deliverables`.
+- No remaining blocking or non-blocking findings were identified in the corrected plan artifacts.
+
+Open issues / next step
+
+No open verification issues remain. The plan artifacts are now complete and ready for implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
