@@ -655,3 +655,106 @@ No additional audit action is required inside this phase scope. Any further work
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc19f-dbc0-7971-be53-0c4f55322089
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc19f-dbc0-7971-be53-0c4f55322089
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc19f-dbc0-7971-be53-0c4f55322089
+---
+I’m auditing the repository and the prior phase artifacts first so the closeout stays within scope. I’ll identify the affected prompt-surface workflows, the prompt-facing tests that pin them, and the recursive memory files that need synchronized updates before making edits.
+
+I’ve confirmed the cycle plan and the shared decisions already point this phase at proof, baseline-doc assertions, and recursive-memory sync only. Next I’m reading the scoped phase notes, feedback, the prompt-facing tests, and the current recursive memory entries to see what still needs to move for closeout.
+
+The previous phases already rewrote the prompt family and some proof. I’m checking whether the remaining closeout gap is purely final verification plus memory/notes alignment, or whether one of the prompt-facing tests and ledgers still lags the actual repository state.
+
+I have enough context to close this phase cleanly. The remaining work is targeted: verify the migrated prompt family with the pinned suites, sync the recursive memory and phase notes to the actual proof outcome, and only touch tests or docs again if the proof exposes a mismatch.
+
+The targeted proof is running against the exact scoped workflow family from the plan. If it stays green, I’ll limit edits to closeout artifacts and avoid widening scope into the already-migrated prompt files.
+
+The proof passed cleanly, so I’m not reopening the prompt/test migration. I’m syncing the recursive memory and the phase-local closeout notes to the verified outcome now, with explicit notes that the cycle stayed docs/prompt-local and did not change CLI, runtime, provider, or composition contracts.
+
+The proof is green, so I’m keeping the code surface frozen and only recording the verified outcome. I’m updating the charter/roadmap/ledgers plus the phase implementation notes so later turns inherit the right closeout facts instead of repeating the migration work.
+
+I’m making the closeout-only edits now: recursive memory, the phase implementation notes, and one short decision ledger entry. I’m not touching the migrated prompt files or runtime tests because the targeted proof already passed exactly as scoped.
+
+The closeout artifacts are updated. I’m doing a quick sanity pass on the diff and the changed-file stats now so the final summary can report what actually moved instead of approximating from memory.
+
+The tracked diff is intentionally tiny because the proof stayed green and I didn’t reopen the migrated prompt/test surface. I’m doing one last content check on the recursive memory snippets themselves, since those files live outside the tracked diff but are part of the authoritative closeout output for this cycle.
+
+**Scope considered**
+`docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, `.autoloop_recursive/`, the cycle plan/decisions, and the prior prompt-contract / prompt-surface phase artifacts. I kept this phase inside the approved closeout scope and did not absorb unrelated dirty files.
+
+**What I analyzed**
+I checked the prompt-facing runtime suites that pin the compact README/prompt contract, the baseline docs test, the prior phase implementation notes, and the recursive-memory ledgers that still needed final closeout language. I also verified the current prompt family state before deciding not to reopen any prompt markdown or test assertions.
+
+**What I changed**
+I left the migrated prompt/test surface untouched because the scoped proof passed as-is. I updated the recursive memory closeout records in `.autoloop_recursive/`, appended the phase decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/decisions.txt), and filled the phase summary in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/implement/phases/proof-docs-memory-closeout/implementation_notes.md).
+
+**Key findings / decisions**
+The targeted proof passed cleanly:
+`.venv/bin/pytest -q tests/runtime/test_workflow_builder_package.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+Result: `238 passed in 22.34s`.
+
+Cycle 4 is now explicitly recorded as prompt-authoring compaction only: no new workflow, no CLI/runtime/provider change, and no `ctx.invoke_workflow(...)` compatibility change. Remaining deferred work is unchanged: older domain prompt-family compaction and selected-workflow serializer convergence.
+
+**Open issues / next step**
+No blocker remains for this phase. The next high-leverage follow-on is either older domain prompt-family compaction or serializer convergence, not portfolio expansion.
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc19f-dbc0-7971-be53-0c4f55322089
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc19f-dbc0-7971-be53-0c4f55322089
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc19f-dbc0-7971-be53-0c4f55322089
+---
+I’m reviewing the proof-and-memory closeout against the phase contract now. I’ll verify the scoped proof, check that the recursive-memory notes record the right cycle outcome without overclaiming compatibility changes, then update the reviewer artifacts only.
+
+I’ve confirmed the closeout artifacts say the right things. I’m rerunning the scoped proof myself now so the review isn’t just trusting the implementation notes.
+
+The reviewer proof is in flight against the same scoped suites and baseline docs target. If it stays green, I’ll mark the criteria complete and record a no-findings review note rather than inventing churn.
+
+The scoped proof passed under review as well. I’m updating the verifier-owned artifacts now: all criteria boxes will be checked, and the feedback log will record that there were no blocking findings after review.
+
+Scope considered
+
+Active phase artifacts, the shared decisions ledger, the implementation notes, the recursive-memory files named in scope, and the scoped prompt-facing runtime suites plus `tests/test_architecture_baseline_docs.py`. I did not broaden into unrelated dirty files.
+
+What I analyzed
+
+I checked the phase contract against the implementation notes and the recursive-memory updates, then verified that the closeout artifacts only claimed prompt-authoring compaction and did not overclaim any CLI, runtime, provider, or `ctx.invoke_workflow(...)` change.
+
+What I reviewed
+
+I reran the scoped proof:
+`.venv/bin/pytest -q tests/runtime/test_workflow_builder_package.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+Result: `238 passed in 22.07s`.
+
+I updated the verifier-owned artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/implement/phases/proof-docs-memory-closeout/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/implement/phases/proof-docs-memory-closeout/feedback.md)
+
+Key findings / decisions
+
+No blocking findings. The phase satisfies both acceptance criteria: the scoped proof passes against the compact prompt surface, and the recursive memory records cycle 4 as prompt-authoring compaction with no new workflow and no CLI/runtime/provider contract change.
+
+Open issues / next step
+
+No reviewer blocker remains for this phase. The next deferred work stays the same: older domain prompt-family compaction and selected-workflow serializer convergence.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
