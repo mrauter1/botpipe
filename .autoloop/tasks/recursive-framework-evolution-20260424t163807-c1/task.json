@@ -13,12 +13,12 @@
       "workflow-validation-migrations-and-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "workflow-validation-migrations-and-closeout"
+    "current_phase_index": 2,
+    "current_phase_id": null
   },
   "phase_status": {
     "shared-workflow-validation-seam": "completed",
-    "workflow-validation-migrations-and-closeout": "in_progress"
+    "workflow-validation-migrations-and-closeout": "completed"
   },
   "phase_history": [
     {
@@ -39,6 +39,13 @@
       "run_id": "run-20260424T193807Z-9f2bcebf",
       "status": "in_progress",
       "ts": "2026-04-24T19:56:22.958662+00:00"
+    },
+    {
+      "phase_id": "workflow-validation-migrations-and-closeout",
+      "run_id": "run-20260424T193807Z-9f2bcebf",
+      "status": "completed",
+      "ts": "2026-04-24T20:33:50.111320+00:00",
+      "pair": "test"
     }
   ]
 }
