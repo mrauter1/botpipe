@@ -36,3 +36,7 @@
 {"ts": "2026-04-24T09:04:53.904601+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-portfolio-to-operating-system"}
 {"ts": "2026-04-24T09:06:09.692393+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-portfolio-to-operating-system"}
 {"ts": "2026-04-24T09:06:09.719852+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-portfolio-to-operating-system"}
+{"ts": "2026-04-24T09:06:09.780756+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 39, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-portfolio-to-operating-system", "phase_mode": "single"}
+{"ts": "2026-04-24T09:06:09.783791+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 40, "event_type": "phase_started", "phase_id": "cycle-ten-closeout", "phase_mode": "single"}
+{"ts": "2026-04-24T09:06:09.784690+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 41, "event_type": "pair_started", "pair": "implement", "phase_id": "cycle-ten-closeout"}
+{"ts": "2026-04-24T09:06:09.784865+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 42, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "cycle-ten-closeout"}

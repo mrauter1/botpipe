@@ -14,13 +14,13 @@
       "cycle-ten-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "workflow-portfolio-to-operating-system"
+    "current_phase_index": 2,
+    "current_phase_id": "cycle-ten-closeout"
   },
   "phase_status": {
     "portfolio-health-snapshot-seam": "completed",
-    "workflow-portfolio-to-operating-system": "in_progress",
-    "cycle-ten-closeout": "planned"
+    "workflow-portfolio-to-operating-system": "completed",
+    "cycle-ten-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260424T074057Z-3b578ba2",
       "status": "in_progress",
       "ts": "2026-04-24T08:14:37.465859+00:00"
+    },
+    {
+      "phase_id": "workflow-portfolio-to-operating-system",
+      "run_id": "run-20260424T074057Z-3b578ba2",
+      "status": "completed",
+      "ts": "2026-04-24T09:06:09.779849+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "cycle-ten-closeout",
+      "run_id": "run-20260424T074057Z-3b578ba2",
+      "status": "in_progress",
+      "ts": "2026-04-24T09:06:09.782860+00:00"
     }
   ]
 }
