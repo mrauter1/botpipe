@@ -243,3 +243,112 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+---
+I’m auditing the new company-operation snapshot seam from a test-author perspective. First I’m reading the active test artifacts, the shared decisions, and the newly added tests to identify any uncovered regression surfaces before I edit anything.
+
+I found one meaningful gap in the current coverage: the new seam’s explicit `task_ids` retention behavior isn’t frozen by tests yet, and the message-excerpt truncation path is only implemented, not asserted. I’m tightening those two cases now, then I’ll rerun the focused suite and update the phase test artifacts.
+
+One assertion is off in the refined helper test. I’m reading the failing case and fixing the expected truncation/output shape rather than relaxing coverage.
+
+The added edge coverage is passing. I’m writing the phase-local test strategy and feedback artifacts now, and I’m recording the one non-obvious coverage decision in the shared ledger so later turns don’t silently drop it.
+
+Scope considered
+
+- Phase-local test work for the company-operation snapshot seam: focused repo tests plus the active test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c12/test/phases/company-operation-snapshot-seam`.
+- I stayed scoped to the new read-only task/company summary seam, the authoring helper contract, and their adjacent regression surfaces.
+
+What I analyzed
+
+- The implemented behavior in `runtime/workspace.py` and `stdlib/company.py`.
+- Existing runtime/unit coverage to find missing edge and regression cases.
+- The shared decisions ledger, especially the explicit `task_ids` retention rule and the bounded-excerpt requirement.
+
+What I changed
+
+- Added runtime coverage in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:517) for the edge case where explicit `task_ids` must still produce task summaries even when scoped workflow/status telemetry is empty.
+- Refined helper assertions in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:813) to freeze bounded recent-message truncation and the normalized `max_messages_per_task` contract.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c12/test/phases/company-operation-snapshot-seam/test_strategy.md) with a behavior-to-test coverage map.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c12/test/phases/company-operation-snapshot-seam/feedback.md).
+- Recorded the non-obvious coverage decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c12/decisions.txt).
+
+Key findings / decisions
+
+- The meaningful uncovered regression surface was the explicit-`task_ids` edge: without a test, a later refactor could incorrectly drop requested tasks when filtered telemetry is empty.
+- Bounded message excerpts are now explicitly asserted as truncated outputs instead of only being incidentally exercised.
+- Validation passed: `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py tests/unit/test_stdlib_and_extensions.py` -> `57 passed`.
+
+Open issues / next step
+
+- No test-phase blockers remain for this seam.
+- The downstream workflow phase still needs end-to-end publication tests for `company_operation_to_recursive_improvement_cycle`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+---
+I’m auditing the new phase-local test coverage against the active acceptance criteria and the shared decisions first, then I’ll update the test audit artifacts with either concrete findings or an explicit clean pass.
+
+The coverage looks coherent and aligned with the recorded decisions. I’m doing one independent targeted pytest pass now to confirm the new edge assertions are stable before I mark the audit artifacts complete.
+
+The independent audit pass is clean. I’m marking the test-audit criteria complete and recording an explicit no-findings result in the phase feedback artifact now.
+
+Scope considered
+
+- Phase-local audit of the company-operation snapshot seam tests and the active test artifacts only.
+- I focused on the new runtime/unit coverage, the updated test strategy, and alignment with the shared decisions for explicit `task_ids` retention and bounded message excerpts.
+
+What I analyzed
+
+- Coverage depth for the changed task/company summary behavior, helper contract, failure paths, and preserved invariants.
+- Regression protection around deterministic ordering, empty filtered telemetry for explicit task selections, truncation of long message excerpts, and workflow-local path validation.
+- Flake risk from ordering, environment, and fixture setup.
+
+What I reviewed
+
+- [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:370)
+- [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:813)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c12/test/phases/company-operation-snapshot-seam/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c12/test/phases/company-operation-snapshot-seam/feedback.md)
+- The relevant entries in `decisions.txt`
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings.
+- The tests now freeze both material edge contracts recorded in the shared decisions: explicit `task_ids` retention with empty scoped telemetry, and bounded truncation of long recent messages.
+- The coverage is deterministic and non-flaky: it uses filesystem fixtures, fixed timestamps, explicit ordering assertions, and no timing/network assumptions.
+- Independent validation passed: `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py tests/unit/test_stdlib_and_extensions.py` -> `57 passed`.
+
+Open issues / next step
+
+- No open test-audit issues remain for this phase.
+- The next downstream workflow phase should add end-to-end tests for `company_operation_to_recursive_improvement_cycle` on top of this seam.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
