@@ -9,7 +9,7 @@ import pytest
 
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from autoloop_v3.runtime.workspace import list_workflow_run_summaries
+from autoloop_v3.runtime.workspace import list_task_operation_summaries, list_workflow_run_summaries
 from workflow.primitives import Outcome
 
 
@@ -367,6 +367,153 @@ def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filte
         list_workflow_run_summaries(tmp_path, max_runs_per_workflow=0)
 
 
+def test_list_task_operation_summaries_publish_bounded_task_history_and_filtered_workflow_telemetry(
+    tmp_path: Path,
+) -> None:
+    task_one_dir = _write_task_operation_record(
+        tmp_path,
+        task_id="task-1",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:04:00+00:00",
+        request_text="Investigate the paused release gate for the reporting hotfix.\n",
+        messages=[
+            (
+                "2026-04-24T06:01:00+00:00",
+                "Customer escalation: reporting exports still disagree with the dashboard totals for the enterprise rollout and the release gate is blocked until that discrepancy is explained to operations.",
+            ),
+            (
+                "2026-04-24T06:02:00+00:00",
+                "Need go/no-go owner before we can close the release gate for 2026.04.",
+            ),
+            (
+                "2026-04-24T06:03:00+00:00",
+                "Waiting on the release manager confirmation.",
+            ),
+        ],
+    )
+    _write_task_operation_record(
+        tmp_path,
+        task_id="task-2",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:05:00+00:00",
+        request_text="Routine release check.\n",
+        messages=[
+            (
+                "2026-04-24T06:05:00+00:00",
+                "Routine confirmation only.",
+            ),
+        ],
+    )
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-1",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-failed",
+        status="failed",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:02:00+00:00",
+        request_text="Investigate the failed release gate.\n",
+        terminal="FAIL",
+        error="missing evidence",
+    )
+    paused_dir = _write_run_summary_record(
+        tmp_path,
+        task_id="task-1",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-paused",
+        status="paused",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:04:00+00:00",
+        request_text="Investigate the paused release gate. Need owner confirmation.\n",
+        pending_question="Who owns the gate?",
+    )
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-2",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-success",
+        status="success",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:05:00+00:00",
+        request_text="Routine release check.\n",
+    )
+
+    summaries = list_task_operation_summaries(
+        tmp_path,
+        workflow_names=["release_candidate_to_go_no_go", "incident_to_hardening_program"],
+        statuses=(status for status in ["failed", "paused", "failed"]),
+        max_runs_per_workflow=1,
+        max_messages_per_task=2,
+    )
+
+    assert len(summaries) == 1
+    summary = summaries[0]
+    assert summary["task_id"] == "task-1"
+    assert summary["created_at"] == "2026-04-24T06:00:00+00:00"
+    assert summary["updated_at"] == "2026-04-24T06:04:00+00:00"
+    assert summary["request_updated_at"] == "2026-04-24T06:03:00+00:00"
+    assert summary["latest_activity_at"] == "2026-04-24T06:04:00+00:00"
+    assert summary["message_count"] == 3
+    assert summary["request_excerpt"] == "Investigate the paused release gate for the reporting hotfix."
+    assert summary["source_paths"] == {
+        "messages_file": str(task_one_dir / "messages.jsonl"),
+        "request_file": str(task_one_dir / "request.md"),
+        "task_dir": str(task_one_dir),
+        "task_meta_file": str(task_one_dir / "task.json"),
+    }
+    assert summary["recent_messages"][0] == {
+        "message_excerpt": "Waiting on the release manager confirmation.",
+        "ts": "2026-04-24T06:03:00+00:00",
+    }
+    assert summary["recent_messages"][1] == {
+        "message_excerpt": "Need go/no-go owner before we can close the release gate for 2026.04.",
+        "ts": "2026-04-24T06:02:00+00:00",
+    }
+    assert summary["workflow_run_summaries"] == [
+        {
+            "latest_run_id": None,
+            "latest_updated_at": None,
+            "recent_runs": [],
+            "run_count": 0,
+            "status_counts": {},
+            "workflow_name": "incident_to_hardening_program",
+        },
+        {
+            "latest_run_id": "run-paused",
+            "latest_updated_at": "2026-04-24T06:04:00+00:00",
+            "recent_runs": [
+                {
+                    "created_at": "2026-04-24T06:00:00+00:00",
+                    "error": None,
+                    "pending_question": "Who owns the gate?",
+                    "request_excerpt": "Investigate the paused release gate. Need owner confirmation.",
+                    "request_file": str(paused_dir / "request.md"),
+                    "run_folder": str(paused_dir),
+                    "run_id": "run-paused",
+                    "status": "paused",
+                    "task_id": "task-1",
+                    "terminal": None,
+                    "updated_at": "2026-04-24T06:04:00+00:00",
+                }
+            ],
+            "run_count": 2,
+            "status_counts": {"failed": 1, "paused": 1},
+            "workflow_name": "release_candidate_to_go_no_go",
+        },
+    ]
+
+    with pytest.raises(ValueError, match="task_ids entries must be non-empty strings"):
+        list_task_operation_summaries(tmp_path, task_ids=["task-1", "  "])
+    with pytest.raises(ValueError, match="workflow_names entries must be non-empty strings"):
+        list_task_operation_summaries(tmp_path, workflow_names=["release_candidate_to_go_no_go", "  "])
+    with pytest.raises(ValueError, match="statuses entries must be non-empty strings"):
+        list_task_operation_summaries(tmp_path, statuses=["failed", "  "])
+    with pytest.raises(ValueError, match="positive integer"):
+        list_task_operation_summaries(tmp_path, max_tasks=0)
+    with pytest.raises(ValueError, match="positive integer"):
+        list_task_operation_summaries(tmp_path, max_messages_per_task=0)
+
+
 def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_records_child_metadata(tmp_path: Path) -> None:
     _write_child_success_workflow_package(tmp_path)
     _write_parent_class_invoker_workflow_package(tmp_path)
@@ -668,6 +815,44 @@ def _write_run_summary_record(
         payload["pending_question"] = pending_question
     (run_dir / "run.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return run_dir
+
+
+def _write_task_operation_record(
+    root: Path,
+    *,
+    task_id: str,
+    created_at: str,
+    updated_at: str,
+    request_text: str,
+    messages: list[tuple[str, str]],
+) -> Path:
+    task_dir = root / ".autoloop" / "tasks" / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    (task_dir / "request.md").write_text(request_text, encoding="utf-8")
+    (task_dir / "messages.jsonl").write_text(
+        "".join(
+            json.dumps({"message": message, "ts": ts}, sort_keys=True) + "\n"
+            for ts, message in messages
+        ),
+        encoding="utf-8",
+    )
+    (task_dir / "task.json").write_text(
+        json.dumps(
+            {
+                "created_at": created_at,
+                "messages_file": str(Path(".autoloop") / "tasks" / task_id / "messages.jsonl"),
+                "request_file": str(Path(".autoloop") / "tasks" / task_id / "request.md"),
+                "request_updated_at": messages[-1][0] if messages else updated_at,
+                "task_id": task_id,
+                "updated_at": updated_at,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return task_dir
 
 
 def _write_system_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:

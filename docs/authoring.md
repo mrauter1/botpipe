@@ -235,6 +235,37 @@ Portfolio health snapshot boundary:
 - workflow code and prompt templates still own governance framing, lifecycle interpretation, recommendation policy, publication gating, and any downstream follow-through
 - it does not auto-rank workflows, auto-select actions, auto-cluster failure modes, or impose runtime-owned portfolio policy
 
+## Optional Company Operation Snapshot Helpers
+
+`stdlib/company.py` provides a narrow authoring-only seam for workflows that need one bounded snapshot of repo-local company operation history.
+
+```python
+from autoloop_v3.stdlib import write_company_operation_snapshot
+
+write_company_operation_snapshot(
+    ctx,
+    task_ids=("recursive-framework-evolution-20260423t173132-c12",),
+    workflows=("workflow_portfolio_to_operating_system", "workflow_idea_to_workflow_package"),
+    statuses=("success", "paused"),
+    max_tasks=10,
+    max_runs_per_workflow=5,
+    max_messages_per_task=3,
+)
+```
+
+Company operation snapshot boundary:
+
+- `write_company_operation_snapshot` writes `company_operation_snapshot.json` under `ctx.workflow_folder` by default
+- it captures repo-local `.autoloop` task history plus read-only workflow telemetry; it is not an external business-system integration seam
+- it publishes bounded task summaries, recent message excerpts, per-task workflow telemetry, and authoritative source paths
+- it supports deterministic `task_ids`, workflow, and status filtering plus `max_tasks`, `max_runs_per_workflow`, and `max_messages_per_task` bounds
+- it writes only workflow-local JSON artifacts under `ctx.workflow_folder`
+- it does not mutate `.autoloop` task or run state, workflow packages, or external business systems
+- it does not add CLI flags, runtime-owned company scoring, automatic prioritization, or hidden downstream execution
+- it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- workflow code and prompt templates still own company framing, recursive-improvement analysis, prioritization policy, publication gating, and next-cycle recommendations
+- it does not auto-rank tasks, auto-select improvements, auto-run downstream workflows, or imply external CRM, incident, or ticketing integration
+
 ## Optional Selected-Workflow Adaptation Helpers
 
 `stdlib/adaptation.py` provides a small additive seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
