@@ -13,12 +13,12 @@
       "proof-docs-and-memory-sync"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "proof-docs-and-memory-sync"
+    "current_phase_index": 2,
+    "current_phase_id": null
   },
   "phase_status": {
     "shared-validation-migration": "completed",
-    "proof-docs-and-memory-sync": "in_progress"
+    "proof-docs-and-memory-sync": "completed"
   },
   "phase_history": [
     {
@@ -39,6 +39,13 @@
       "run_id": "run-20260424T203350Z-420719ce",
       "status": "in_progress",
       "ts": "2026-04-24T20:59:25.662113+00:00"
+    },
+    {
+      "phase_id": "proof-docs-and-memory-sync",
+      "run_id": "run-20260424T203350Z-420719ce",
+      "status": "completed",
+      "ts": "2026-04-24T21:07:45.770537+00:00",
+      "pair": "test"
     }
   ]
 }
