@@ -7,3 +7,7 @@
 {"ts": "2026-04-24T03:55:21.630730+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 7, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T03:57:40.221561+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 8, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T03:57:40.270145+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 9, "event_type": "pair_completed", "pair": "plan", "cycle": 2, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-24T03:57:40.361936+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 10, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["evaluation-helper-seam", "workflow-to-eval-suite-package", "cycle-seven-closeout"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-04-24T03:57:40.363529+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 11, "event_type": "phase_started", "phase_id": "evaluation-helper-seam", "phase_mode": "single"}
+{"ts": "2026-04-24T03:57:40.364134+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "evaluation-helper-seam"}
+{"ts": "2026-04-24T03:57:40.364203+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "evaluation-helper-seam"}
