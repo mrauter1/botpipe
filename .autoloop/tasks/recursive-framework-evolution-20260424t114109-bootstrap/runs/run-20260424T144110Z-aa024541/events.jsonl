@@ -17,3 +17,6 @@
 {"ts": "2026-04-24T15:22:55.871579+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 17, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "resolver-foundation"}
 {"ts": "2026-04-24T15:24:08.723336+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 18, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "resolver-foundation"}
 {"ts": "2026-04-24T15:24:08.744437+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 19, "event_type": "pair_completed", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "resolver-foundation"}
+{"ts": "2026-04-24T15:24:08.820485+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 20, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "resolver-foundation", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-04-24T15:24:08.822829+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 21, "event_type": "pair_started", "pair": "test", "phase_id": "resolver-foundation"}
+{"ts": "2026-04-24T15:24:08.823079+00:00", "run_id": "run-20260424T144110Z-aa024541", "seq": 22, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "resolver-foundation"}
