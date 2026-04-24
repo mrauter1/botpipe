@@ -130,3 +130,116 @@ phase_mode=single
 phase_ids=company-operation-snapshot-seam,company-operation-to-recursive-improvement-cycle,cycle-twelve-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+---
+I’m implementing the phase-scoped company-operation snapshot seam. First I’m reading the active plan, feedback, mandatory framework files, and the current runtime/stdlib surfaces to pin down the exact contract before editing.
+
+The plan is explicit about the scoped seam: read-only summaries in `runtime/workspace.py`, an authoring helper in `stdlib/company.py`, export wiring, docs, and focused tests. I’m reading the existing workspace snapshot APIs and neighboring helper patterns now so the implementation stays additive and traceable.
+
+I’ve found the two key seams already in place: grouped run summaries in `runtime/workspace.py` and authoring-only JSON writers in `stdlib/portfolio.py`. Next I’m reading the lower-level helpers and existing tests so the new task/company summary seam matches current path validation, payload style, and non-mutation guarantees.
+
+I’ve confirmed the payload and helper conventions. I’m doing one last pass over the architecture/workflow baseline files the request pointed at, then I’ll start editing the new workspace summary function, the company helper, and the paired tests/docs in one batch.
+
+I’ve got the shape pinned down. I’m editing four surfaces now: `runtime/workspace.py` for read-only task summaries, new `stdlib/company.py` plus `stdlib/__init__.py` wiring, `docs/authoring.md`, and focused runtime/unit tests that lock the payload shape and non-mutation boundary.
+
+The core code is in. I’m freezing the contract with tests now: one runtime test for the read-only task summary surface, and one unit test for the authoring helper that proves path validation, filter normalization, bounded excerpts, and no `.autoloop` mutation.
+
+The seam, helper, and doc updates are patched in. I’m running targeted pytest coverage now against the touched runtime and stdlib surfaces before I update the phase notes and shared decisions.
+
+`python3` here doesn’t have `pytest` installed. I’m switching to the repo virtualenv runner so validation still hits the actual test environment instead of the system interpreter.
+
+I’ve got a clean targeted test pass. I’m finishing the task-local artifacts now: the phase implementation notes and one shared decision about how explicit task filters behave when the workflow/status slice is empty.
+
+Scope considered
+
+- Phase-local implementation only: the read-only company-operation snapshot seam, its stdlib helper/export, authoring docs, focused tests, and the required phase artifacts.
+- I stayed out of CLI changes, runtime-owned company scoring, automatic cycle execution, and unrelated dirty worktree changes.
+
+What I analyzed
+
+- The existing workspace/run-summary seams in `runtime/workspace.py`, the authoring-helper patterns in `stdlib`, and the current doc/test contracts around read-only snapshot helpers.
+- The active phase plan, shared decisions, and the required boundary that company-level policy must remain in workflow code and prompts.
+
+What I changed
+
+- Added a new task-level read-only summary surface in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py:124): `TaskRecord`, `list_task_records(...)`, `list_task_operation_summaries(...)`, bounded message excerpts, per-task workflow telemetry, and authoritative task source paths.
+- Added [stdlib/company.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/company.py:19) with `write_company_operation_snapshot(...)`, and exported it through `stdlib/__init__.py`.
+- Documented the helper boundary in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:238).
+- Added focused coverage in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:370) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:676), and updated the phase implementation notes plus shared decisions.
+
+Key findings / decisions
+
+- Explicit `task_ids` stay in scope even if the workflow/status slice yields zero matching runs, so company workflows can distinguish “no matching telemetry” from “task absent.”
+- When `task_ids` are not supplied, workflow/status filters narrow the snapshot to tasks with matching telemetry to keep the artifact bounded and relevant.
+- The seam remains read-only and workflow-local: it publishes repo-local `.autoloop` history under `ctx.workflow_folder` only, with no hidden prioritization or downstream execution.
+- Validation passed: `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py tests/unit/test_stdlib_and_extensions.py` -> `56 passed`.
+
+Open issues / next step
+
+- No open issues in this phase scope.
+- The next dependent phase can now implement `company_operation_to_recursive_improvement_cycle` against the new snapshot seam.
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbf21-4866-7802-92e3-0dabb147dfbd
+---
+I’m reviewing the phase-scoped company-operation snapshot seam against the active criteria and shared decisions first, then I’ll update the review artifacts with either concrete findings or an explicit clean pass.
+
+I’ve confirmed the review scope and decisions. I’m doing one independent targeted pytest pass now and a quick spot-check on the new runtime/helper contracts to decide whether there are any blocking regressions or just artifact updates.
+
+The independent test pass is clean and I’m not finding a behavioral or architectural regression in scope. I’m marking the phase criteria complete and writing an explicit clean-review note into the verifier feedback artifact now.
+
+Scope considered
+
+- Phase-local review of the company-operation snapshot seam only: `runtime/workspace.py`, `stdlib/company.py`, `stdlib/__init__.py`, `docs/authoring.md`, the focused runtime/unit tests, and the active phase artifacts.
+- I treated the accepted phase plan and shared decisions as authoritative and did not broaden into unrelated dirty files.
+
+What I analyzed
+
+- Intent fidelity against the phase contract: read-only task/company summaries, authoring-only helper wiring, docs boundary, and focused validation.
+- Regression surfaces around task/run state mutation, helper path safety, filter behavior, and reuse of existing run-summary contracts.
+
+What I reviewed
+
+- The implemented task summary seam and helper behavior in `runtime/workspace.py` and `stdlib/company.py`.
+- Export wiring in `stdlib/__init__.py`.
+- Authoring boundary text in `docs/authoring.md`.
+- Focused coverage in `tests/runtime/test_workspace_and_context.py` and `tests/unit/test_stdlib_and_extensions.py`.
+- Updated phase artifacts: `criteria.md`, `feedback.md`, and `implementation_notes.md`.
+
+Key findings / decisions
+
+- No blocking or non-blocking findings.
+- The implementation matches the accepted scope and the shared decisions, including the explicit-vs-implicit task filtering behavior recorded in `decisions.txt`.
+- Independent validation passed: `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py tests/unit/test_stdlib_and_extensions.py` -> `56 passed`.
+- I updated the active verifier artifacts so all criteria are checked and the feedback file records a clean review result.
+
+Open issues / next step
+
+- No open issues in this phase scope.
+- This phase is ready to hand off to the dependent workflow implementation phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

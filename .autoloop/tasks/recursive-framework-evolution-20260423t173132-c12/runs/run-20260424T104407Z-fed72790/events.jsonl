@@ -8,3 +8,6 @@
 {"ts": "2026-04-24T10:55:22.168641+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 8, "event_type": "phase_started", "phase_id": "company-operation-snapshot-seam", "phase_mode": "single"}
 {"ts": "2026-04-24T10:55:22.169474+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "company-operation-snapshot-seam"}
 {"ts": "2026-04-24T10:55:22.169546+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "company-operation-snapshot-seam"}
+{"ts": "2026-04-24T11:09:53.051381+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 11, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "company-operation-snapshot-seam"}
+{"ts": "2026-04-24T11:12:02.692388+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 12, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "company-operation-snapshot-seam"}
+{"ts": "2026-04-24T11:12:02.723336+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 13, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "company-operation-snapshot-seam"}
