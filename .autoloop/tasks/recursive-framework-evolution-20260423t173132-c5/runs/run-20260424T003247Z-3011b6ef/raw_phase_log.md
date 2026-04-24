@@ -558,3 +558,86 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+I’m addressing the verifier’s blocking contract drift in the parent front door. First I’m checking the touched workflow, its doc row, the runtime test coverage, and the phase notes so the fix stays local and doesn’t disturb the new building block.
+
+The decisions ledger already has a fresh header for this turn, so I can record any non-obvious fix detail there if needed. I’m reading the exact `publish_strategy` and compile-test sections now, then I’ll patch the workflow, the doc row, and the missing compile assertion together.
+
+I have the exact three surfaces to change. I’m patching them together now so the workflow contract, the doc artifact table, and the compile-time regression test all say the same thing.
+
+The contract fix is in place: the parent publish step now declares the adopted child artifacts it actually consumes, the workflow doc row matches that, and the compile test locks the full prerequisite set. I’m running a tight validation slice next, then I’ll update the phase notes and this turn’s decision entry.
+
+The code fix validated cleanly. I’m recording the non-obvious contract decision and trimming the implementation notes so the next turn inherits the exact reason for the change and the focused validation that passed.
+
+Scope considered
+- Phase-local fix for verifier finding `IMP-001`, limited to the reused front door contract in `task_to_workflow_strategy`, its workflow doc row, the targeted runtime test, and the required producer notes.
+
+What I analyzed
+- [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:187), [task_to_workflow_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_workflow_strategy.md:172), [test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py:51), and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:501) to confirm the mismatch between declared `requires` and the publish handler’s real inputs.
+- The phase artifacts [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/implementation_notes.md), [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/plan/plan.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/decisions.txt).
+
+What I changed
+- Added `candidate_route_posture`, `candidate_workflow_set`, `candidate_workflow_set_summary`, and `candidate_next_action` to `publish_strategy.requires` in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:187).
+- Updated the `publish_strategy` artifact-contract row in [task_to_workflow_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_workflow_strategy.md:182).
+- Added a compile-time assertion for the full `publish_strategy` prerequisite tuple in [test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py:91).
+- Recorded the follow-up fix in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/implementation_notes.md) and appended the non-obvious contract rule under the fresh turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/decisions.txt).
+
+Key findings / decisions
+- The fix is intentionally narrow: it does not change the parent strategy summary/receipt schema or the child-building-block boundary.
+- `publish_strategy` now advertises the same artifact inputs that `on_publish_strategy` already reads, so prerequisite enforcement, capability inspection output, and the workflow doc stay aligned.
+
+Open issues / next step
+- Validation passed: `.venv/bin/python -m py_compile workflows/task_to_workflow_strategy/workflow.py tests/runtime/test_task_to_workflow_strategy.py` and `.venv/bin/pytest -q tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_task_to_candidate_workflow_set.py` (`16 passed`).
+- No open implementer-side blocker remains. Next step is verifier re-review of `IMP-001`.
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+I’m re-checking the reviewer finding closure now. I’m focusing on the parent publish-step contract, the matching doc/test updates, and whether the prior blocking scenario is actually eliminated rather than just papered over.
+
+The original blocking issue is closed: the workflow definition, docs, and compile-time test all agree now, and the targeted runtime slice passed. I’m updating the reviewer artifacts to reflect a clean re-review and then I’ll close this verifier pass as complete.
+
+Scope considered
+- Phase-local re-review of the `task_to_candidate_workflow_set` change set, focused on the verifier-raised `IMP-001` regression risk in the parent `task_to_workflow_strategy` publish-step contract.
+
+What I analyzed
+- [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:187), [docs/workflows/task_to_workflow_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_workflow_strategy.md:176), and [tests/runtime/test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py:99) to confirm the publish-step contract, doc row, and compile-time guard now match.
+- Targeted validation: `.venv/bin/pytest -q tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_task_to_candidate_workflow_set.py` (`16 passed`).
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/criteria.md) to mark all gates complete.
+- Appended the re-review resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/feedback.md).
+
+Key findings / decisions
+- `IMP-001` is resolved. `publish_strategy.requires` now includes the adopted child candidate artifacts that `on_publish_strategy` actually reads, the workflow doc’s artifact-contract row matches that input set, and the runtime test file locks the full publish-step prerequisite tuple.
+- No new blocking or non-blocking findings remain in scope for this verifier pass.
+
+Open issues / next step
+- No open verifier-side issue remains for this phase. The phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
