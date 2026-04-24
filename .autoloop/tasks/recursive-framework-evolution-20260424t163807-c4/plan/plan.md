@@ -159,10 +159,12 @@ Adopt a compact prompt-contract style for the current workflow family and builde
 
 - Update the prompt-facing runtime tests so they assert the preserved contract content under the new compact structure.
 - Update recursive memory files:
+  - `.autoloop_recursive/framework_evolution_charter.md`
   - `.autoloop_recursive/framework_roadmap.md`
   - `.autoloop_recursive/framework_gap_ledger.md`
   - `.autoloop_recursive/workflow_candidate_ledger.md`
   - `.autoloop_recursive/validation_debt_ledger.md`
+- If the cycle does not change doctrine, record that explicitly in the charter rather than silently skipping the file.
 - Record the compaction metrics and any intentionally deferred prompt families in implementation closeout.
 
 ## Interfaces and compatibility constraints

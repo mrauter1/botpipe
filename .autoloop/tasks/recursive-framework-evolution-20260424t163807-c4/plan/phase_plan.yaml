@@ -92,8 +92,10 @@ phases:
   - Update runtime tests that pin prompt README and prompt-file structure for the
     scoped workflow family.
   - Run targeted proof for the affected workflow suites and tests/test_architecture_baseline_docs.py.
-  - Update framework_roadmap.md, framework_gap_ledger.md, workflow_candidate_ledger.md,
-    and validation_debt_ledger.md with the cycle outcome and remaining deferred debt.
+  - Update framework_evolution_charter.md, framework_roadmap.md, framework_gap_ledger.md,
+    workflow_candidate_ledger.md, and validation_debt_ledger.md with the cycle outcome
+    and remaining deferred debt, including an explicit no-doctrine-change charter
+    note when applicable.
   - Record files added/deleted, expected net line movement, and repeated prompt sections
     shortened in implementation closeout.
   out_of_scope:
@@ -112,8 +114,8 @@ phases:
   deliverables:
   - Updated runtime tests and baseline docs assertions.
   - Verified targeted test run covering the scoped workflow family.
-  - Updated recursive-memory ledgers describing the prompt compaction outcome and
-    deferred follow-on work.
+  - Updated recursive-memory ledgers, including framework_evolution_charter.md, describing
+    the prompt compaction outcome and deferred follow-on work.
   risks:
   - Tests may still encode the old verbose headings and need careful assertion updates
     rather than blunt deletions.
