@@ -392,7 +392,9 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
 
         summary_source = _resolve_input_path(repo_root, state.evaluation_summary_path, "evaluation_summary_path")
         findings_source = _resolve_input_path(repo_root, state.evaluation_findings_path, "evaluation_findings_path")
-        write_workflow_json(ctx, "baseline_evaluation_summary.json", _read_json(summary_source))
+        summary_payload = _read_json(summary_source)
+        _validate_evaluation_summary_selected_workflow(summary_payload, selected_workflow_name)
+        write_workflow_json(ctx, "baseline_evaluation_summary.json", summary_payload)
         _write_text(ctx.workflow_folder / "baseline_evaluation_findings.md", findings_source.read_text(encoding="utf-8"))
 
         if state.failure_modes_path is None:
@@ -561,7 +563,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             required_paths["baseline_failure_modes"],
             "baseline_failure_modes.md must be non-empty",
         )
-        _read_json(required_paths["baseline_evaluation_summary"])
+        baseline_evaluation_summary = _read_json(required_paths["baseline_evaluation_summary"])
         _require_non_empty_text_file(
             required_paths["refinement_verification_report"],
             "refinement_verification_report.md must be non-empty",
@@ -584,6 +586,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             authoring_snapshot,
             state.selected_workflow_reference,
         )
+        _validate_evaluation_summary_selected_workflow(baseline_evaluation_summary, selected_workflow_name)
         if state.selected_workflow_name is not None and state.selected_workflow_name != selected_workflow_name:
             raise ValueError("selected_workflow snapshots must match workflow state")
 
@@ -724,6 +727,18 @@ def _validated_selected_workflow_name(
     if not selected_workflow_reference.strip():
         raise ValueError("selected_workflow_reference must stay non-empty")
     return capability_selected_workflow_name
+
+
+def _validate_evaluation_summary_selected_workflow(
+    summary_payload: Mapping[str, Any],
+    selected_workflow_name: str,
+) -> None:
+    summary_selected_workflow_name = _require_text(
+        summary_payload.get("selected_workflow_name"),
+        "baseline_evaluation_summary.json must define non-empty selected_workflow_name",
+    )
+    if summary_selected_workflow_name != selected_workflow_name:
+        raise ValueError("baseline_evaluation_summary.json selected_workflow_name must match selected workflow")
 
 
 def _write_baseline_workflow_manifest(

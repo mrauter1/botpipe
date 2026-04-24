@@ -35,7 +35,7 @@ Parameters:
 
 - `selected_workflow` required
 - `task_title` required
-- `evaluation_summary_path` required
+- `evaluation_summary_path` required; the JSON must include `selected_workflow_name` matching `selected_workflow`
 - `evaluation_findings_path` required
 - `failure_modes_path` optional
 - `sponsor_role` optional
@@ -213,7 +213,7 @@ Payload models used by the package:
 - successful terminal publication of a baseline snapshot, candidate workflow surface, candidate manifest, and refinement receipt without mutating the authoritative selected workflow package
 - stable publication of `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, `baseline_workflow_manifest.json`, `candidate_workflow_manifest.json`, `evaluation_delta_report.md`, and `workflow_refinement_receipt.json`
 - proof that the candidate surface can be validated through an isolated overlay plus target-test command before later promotion
-- deterministic publish-step rejection of missing baseline evidence artifacts, selected-workflow/authoring-surface mismatches, baseline/candidate manifest drift, and candidate files outside the selected workflow boundary
+- deterministic publish-step rejection of missing baseline evidence artifacts, cross-workflow evaluation-summary drift, selected-workflow/authoring-surface mismatches, baseline/candidate manifest drift, and candidate files outside the selected workflow boundary
 
 ## Rework / replan / block / fail policy
 

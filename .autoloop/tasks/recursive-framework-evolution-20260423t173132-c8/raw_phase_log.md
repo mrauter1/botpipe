@@ -624,3 +624,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+I’ve got the reviewer finding scoped to a small contract fix: validate that the evaluation summary explicitly names the selected workflow, and re-check that field at publish time so drift can’t slip through later. I’m patching the workflow, adding a rejection test, and tightening the phase notes/decision ledger around that explicit input contract.
+
+I’m making the contract explicit in code, not just in the test: `evaluation_summary_path` now has to identify the same workflow the run is refining, and publish re-validates that copied summary so post-capture drift is still blocked.
+
+The fix is in. I’m rerunning the same phase proof set now to verify the new evaluation-summary contract closes the reviewer’s scenario without destabilizing the rest of the refinement workflow.
+
+The phase proof is green again with the new rejection case, so I’m updating the recorded validation count and the cycle 8 memory line to match the actual closeout run instead of leaving stale proof metadata behind.
+
+I updated the recorded proof metadata and phase notes to the new post-fix state. I’m rerunning the closeout set one more time so the code, tests, and recursive-memory counts all agree before I hand it back.
+
+Scope considered
+
+- Phase-local fix for reviewer finding `IMP-001` only.
+- I stayed within the refinement workflow package, its doc/test surface, the cycle-8 proof metadata, and the phase notes/decision ledger.
+
+What I analyzed
+
+- The reviewer feedback in `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/implement/phases/workflow-and-eval-to-refined-workflow-package/feedback.md`.
+- The evidence-boundary path in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py:370), especially capture and publish handling for `baseline_evaluation_summary.json`.
+- The existing runtime proof and cycle-8 baseline-doc assertions.
+
+What I changed
+
+- Added explicit validation that the evaluation summary declares the same workflow being refined, both during capture and again at publish time in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py:370).
+- Added a publish-time rejection test for cross-workflow evaluation-summary drift in [test_workflow_and_eval_to_refined_workflow_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py:569).
+- Updated the workflow doc, cycle-8 roadmap proof count, implementation notes, and the shared decisions ledger to reflect the tightened `evaluation_summary_path` contract.
+
+Key findings / decisions
+
+- `evaluation_summary_path` is now an explicit selected-workflow contract: the summary JSON must contain `selected_workflow_name` matching the resolved selected workflow.
+- I kept the revalidation at publish time so a mutated copied summary is still rejected after a valid capture step.
+- Targeted validation passed with `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py` (`48 passed`).
+
+Open issues / next step
+
+- No in-phase blocker remains from the reviewer feedback.
+- The verifier can re-run the phase review against the updated workflow/test/doc state.

@@ -42,6 +42,7 @@
 - `WorkflowRefinementEvaluationPayload`
 - `_write_baseline_workflow_manifest(...)`
 - `_write_candidate_workflow_manifest(...)`
+- `_validate_evaluation_summary_selected_workflow(...)`
 - `_validate_candidate_overlay(...)`
 - `_resolve_overlay_source_root(...)`
 - `_is_runnable_repo_root(...)`
@@ -70,6 +71,7 @@
 ## Intended Behavior Changes
 
 - Adds `workflow_and_eval_to_refined_workflow_package` as a reusable closed-loop refinement building block
+- Requires `evaluation_summary_path` JSON inputs to declare `selected_workflow_name` matching the resolved selected workflow and re-validates that copied summary at publication time
 - Adds deterministic publish-time candidate validation, including baseline/candidate manifest checks and isolated overlay compile/test proof
 - Records cycle 8 recursive-memory baseline so future cycles treat refinement publication as shipped rather than deferred
 
@@ -88,7 +90,7 @@
 ## Validation Performed
 
 - `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py`
-- Result: `47 passed`
+- Result: `48 passed`
 
 ## Deduplication / Centralization Decisions
 

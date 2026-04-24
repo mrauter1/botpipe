@@ -566,6 +566,26 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_missing_b
         )
 
 
+def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_evaluation_summary_workflow_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run = _run_successful_refinement_workflow(tmp_path, monkeypatch)
+    summary_path = run.workflow_dir / "baseline_evaluation_summary.json"
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    payload["selected_workflow_name"] = "incident_to_hardening_program"
+    summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="baseline_evaluation_summary.json selected_workflow_name must match selected workflow",
+    ):
+        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
+            run.result.state,
+            run.publish_context,
+        )
+
+
 def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authoring_surface_mismatch(
     tmp_path: Path,
     monkeypatch,
