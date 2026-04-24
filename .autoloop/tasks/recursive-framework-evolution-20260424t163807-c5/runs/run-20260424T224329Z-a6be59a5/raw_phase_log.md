@@ -343,3 +343,121 @@ No open issues from the test audit. The phase-local test coverage is adequate fo
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1c0-2c79-7de1-af57-5ec9077788ac
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc1c0-2c79-7de1-af57-5ec9077788ac
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1c0-2c79-7de1-af57-5ec9077788ac
+---
+I’m treating this as a phase-scoped proof and sync pass: first I’m reading the active plan, prior phase notes, and the repo surfaces named in the request so I can verify the exact touched workflow family and keep edits bounded.
+
+I’ve confirmed the prior phase already landed the prompt migration and tests; this phase is narrower. I’m reading the doctrine docs, the current recursive-memory ledgers, and the touched runtime suites now so I can decide whether any bounded wording update is actually needed or whether this is a proof-plus-memory closeout only.
+
+The doctrine docs already describe the compact prompt contract; I don’t see a clear contract drift yet, so I’m moving to proof and a tighter read of the recursive-memory tail sections. After that I’ll either keep `docs/authoring.md` untouched and record that explicitly, or make a narrowly justified wording fix.
+
+The targeted proof is running cleanly so far. I’ve also confirmed the current recursive-memory state already records the migration itself; what’s still missing is the explicit proof/docs/memory-sync closeout for this phase.
+
+I’ve got the proof result: the scoped pytest command passed in full. I’m updating only the phase-local notes, the decision ledger entry for the no-doc-drift call, and the recursive-memory closeout sections now; `docs/authoring.md` stays untouched unless I find a real doctrine mismatch while writing those notes.
+
+I have enough context to edit. The change is limited to recursive-memory closeout, the current phase’s implementation notes, and one explicit decision line saying `docs/authoring.md` was reviewed and intentionally left unchanged because the doctrine already matched the migrated prompts.
+
+The edits are in. I’m doing a quick verification pass on the updated closeout sections and the phase notes now, then I’ll summarize the bounded outcome and the remaining deferred debt.
+
+**Scope considered**
+
+Phase-scoped proof/docs/memory closeout for cycle 5 only: targeted proof, recursive-memory sync, phase notes, and decision logging. I reviewed the required repo surfaces, the migrated older-domain prompt family, [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), the active phase artifacts, and the touched runtime suites.
+
+**What I analyzed**
+
+I verified the four older-domain runtime suites and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), checked the current recursive-memory state under [.autoloop_recursive](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive), and confirmed the compact prompt doctrine in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) already matched the migrated prompts.
+
+**What I changed**
+
+I updated the cycle-5 closeout state in [framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md), [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md), [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md), [workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md), and [validation_debt_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/validation_debt_ledger.md). I also filled in the current phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/implement/phases/proof-docs-and-memory-sync/implementation_notes.md) and appended the no-doc-drift decision under the active header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/decisions.txt).
+
+**Key findings / decisions**
+
+`docs/authoring.md` needed no change; the compact prompt doctrine was already aligned, so I recorded an explicit no-doctrine-change outcome instead of editing docs redundantly. Targeted proof passed:
+
+```bash
+PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q \
+  tests/runtime/test_release_candidate_to_go_no_go.py \
+  tests/runtime/test_investigation_request_to_evidence_pack.py \
+  tests/runtime/test_security_finding_to_verified_remediation.py \
+  tests/runtime/test_incident_to_hardening_program.py \
+  tests/test_architecture_baseline_docs.py
+```
+
+Result: `102 passed`
+
+No workflow, CLI, runtime, provider, prompt-path, artifact, route, schema, or `ctx.invoke_workflow(...)` contract changed in this phase.
+
+**Open issues / next step**
+
+Cycle 5 is now closed as authoring-surface prompt compaction. The main deferred follow-on remains selected-workflow serializer convergence; I did not take that on in this phase.
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc1c0-2c79-7de1-af57-5ec9077788ac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc1c0-2c79-7de1-af57-5ec9077788ac
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1c0-2c79-7de1-af57-5ec9077788ac
+---
+I’m auditing the phase-local closeout now: first I’m reading the active criteria and feedback files, then I’m checking the phase diff, decision ledger, and the targeted pytest proof the implementation claims.
+
+The phase artifacts look coherent, and the active session file is present. I’m rerunning the scoped pytest command myself now so the review doesn’t rely only on the implementer’s notes.
+
+The scoped proof passed again, and the closeout edits stay within the intended architecture boundary. I’m marking the phase complete with no findings and updating the verifier-owned artifacts now.
+
+The verifier-owned artifacts are updated. I’m doing one last quick read to ensure the review state is internally consistent before I close with the canonical loop-control block.
+
+Scope considered
+
+Phase-local review of `proof-docs-and-memory-sync` only: the recursive-memory updates, phase notes, shared decision entry, acceptance criteria, and the scoped pytest proof for the four older-domain runtime suites plus `tests/test_architecture_baseline_docs.py`.
+
+What I analyzed
+
+I read the active request/phase contract, [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/implement/phases/proof-docs-and-memory-sync/implementation_notes.md), [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/decisions.txt), and the diffs for the cycle-5 recursive-memory closeout files. I also confirmed the active session file exists.
+
+What I reviewed
+
+I reran:
+
+```bash
+PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q \
+  tests/runtime/test_release_candidate_to_go_no_go.py \
+  tests/runtime/test_investigation_request_to_evidence_pack.py \
+  tests/runtime/test_security_finding_to_verified_remediation.py \
+  tests/runtime/test_incident_to_hardening_program.py \
+  tests/test_architecture_baseline_docs.py
+```
+
+Result: `102 passed`
+
+I then updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/implement/phases/proof-docs-and-memory-sync/criteria.md) to checked and recorded the review outcome in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/implement/phases/proof-docs-and-memory-sync/feedback.md).
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The phase stayed within scope, did not widen the runtime/provider/CLI contract, and correctly recorded the explicit no-doctrine-change outcome for `docs/authoring.md`.
+
+Open issues / next step
+
+No review issues remain for this phase. The deferred follow-on still reflected in recursive memory is selected-workflow serializer convergence.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
