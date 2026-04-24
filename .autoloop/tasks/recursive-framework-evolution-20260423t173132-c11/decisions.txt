@@ -18,3 +18,5 @@ Test coverage for the decomposition seam intentionally locks the no-`params.py` 
 <autoloop-decisions-header version="1" block_seq="6" owner="implementer" phase_id="workflow-package-to-building-blocks" pair="implement" turn_seq="2" run_id="run-20260424T091635Z-858b34e9" ts="2026-04-24T10:23:46.550613+00:00" />
 `publish_candidate_decomposition` now rescans `candidate_decomposition_surface/` and requires `candidate_decomposition_manifest.json` to enumerate the exact on-disk file set so hidden post-manifest files cannot bypass boundary validation.
 Every `doc_relative_path` and `runtime_test_relative_path` declared in `candidate_building_block_index.json` is now a required candidate artifact for publication, not merely an allowed path boundary.
+<autoloop-decisions-header version="1" block_seq="7" owner="test_author" phase_id="workflow-package-to-building-blocks" pair="test" turn_seq="1" run_id="run-20260424T091635Z-858b34e9" ts="2026-04-24T10:29:21.567882+00:00" />
+Test coverage for `workflow_package_to_composable_building_blocks` now locks actual alias resolution through `resolve_workflow_reference(...)` so AC-1 does not depend only on manifest alias strings.

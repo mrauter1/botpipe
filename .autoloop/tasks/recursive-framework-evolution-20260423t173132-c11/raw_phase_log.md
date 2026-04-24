@@ -621,3 +621,47 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+Reviewing the test-phase artifacts and the current workflow-specific runtime proof now. I’m checking whether the existing suite fully maps to the changed publish-time behavior, then I’ll either add the smallest missing regression or document that the suite already closes the risk.
+
+The current runtime suite is strong on publish-time failures, but AC-1 still relies on a manifest-alias assertion instead of a real loader resolution check. I’m adding that small deterministic gap-closer now and then I’ll update the test-phase artifacts around it.
+
+The extra coverage is in place. I’m rerunning the focused runtime suite now and then I’ll update the test feedback with the exact result so the phase artifacts stay self-contained.
+
+The focused suite passed with the new alias test. I’m making one small artifact update so the test-phase feedback records the exact rerun result instead of relying on my closeout summary.
+
+Scope considered
+- Phase-local test work for `workflow_package_to_composable_building_blocks`, limited to [tests/runtime/test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py), the active test-phase artifacts, and the shared decision ledger.
+- I did not widen into unrelated test suites or non-phase artifacts.
+
+What I analyzed
+- The current workflow-specific runtime proof, especially AC-1 coverage versus actual loader behavior.
+- The latest implementation decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt) and the current implementation-side notes to avoid duplicating or drifting from the publish-time validation work.
+- The empty phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/workflow-package-to-building-blocks/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/workflow-package-to-building-blocks/feedback.md).
+
+What I changed
+- Added a deterministic loader-level alias regression in [tests/runtime/test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py) so AC-1 now verifies both aliases through `resolve_workflow_reference(...)`, not just manifest alias presence.
+- Filled [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/workflow-package-to-building-blocks/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, flake controls, and known gaps.
+- Appended a concise test-phase update to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/workflow-package-to-building-blocks/feedback.md) and recorded the non-obvious alias-resolution decision under the current test-phase header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt).
+
+Key findings / decisions
+- The publish-time failure coverage added during the implement phase was already strong; the remaining material gap was AC-1 alias resolution as actual runtime behavior.
+- I kept the new test deterministic by using the existing module-cache isolation and direct loader resolution against the repo root.
+- I left `candidate_decomposition_manifest.json file_count` tampering as an explicit known gap in the strategy rather than adding more churn, because the adjacent manifest/file-set drift regressions already lock the higher-risk path.
+
+Open issues / next step
+- Validation passed: `python3 -m py_compile tests/runtime/test_workflow_package_to_composable_building_blocks.py` and `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` with `23 passed in 6.80s`.
+- No test-phase blocker remains in scope. The next step is the paired test-phase review/audit.

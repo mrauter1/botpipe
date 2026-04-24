@@ -84,6 +84,25 @@ def test_repo_workflows_namespace_discovers_workflow_package_to_composable_build
     )
 
 
+def test_workflow_package_to_composable_building_blocks_aliases_resolve_to_same_package(
+    monkeypatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    canonical = resolve_workflow_reference(REPO_ROOT, "workflow_package_to_composable_building_blocks")
+    hyphenated = resolve_workflow_reference(REPO_ROOT, "workflow-package-to-building-blocks")
+    decomposition = resolve_workflow_reference(REPO_ROOT, "workflow-decomposition-package")
+
+    assert canonical.package.package_name == "workflow_package_to_composable_building_blocks"
+    assert hyphenated.package.package_name == canonical.package.package_name
+    assert decomposition.package.package_name == canonical.package.package_name
+    assert canonical.package.workflow_name == "workflow_package_to_composable_building_blocks"
+    assert hyphenated.package.workflow_name == canonical.package.workflow_name
+    assert decomposition.package.workflow_name == canonical.package.workflow_name
+
+
 def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_control_contracts(
     monkeypatch,
 ) -> None:
