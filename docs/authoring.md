@@ -264,6 +264,41 @@ Validation helper boundary:
 - keep workflow-specific publication assertions, domain allow-lists, and artifact-family invariants in workflow code
 - the helpers only validate explicit workflow-local inputs and artifacts; they do not add runtime-owned routing, publication policy, or hidden execution
 
+For workflow `Parameters` models, reuse the shared Pydantic validator factories instead of copying the same `field_validator(...)` bodies into every `params.py`.
+
+```python
+from autoloop_v3.stdlib import (
+    deduped_string_list_fields,
+    optional_text_fields,
+    positive_int_fields,
+    required_text_fields,
+)
+
+
+class Parameters(BaseModel):
+    task_title: str
+    selected_workflow: str
+    sponsor_role: str | None = None
+    constraints: list[str] = Field(default_factory=list)
+    max_runs: int = 25
+
+    _required_text = required_text_fields(
+        "task_title",
+        "selected_workflow",
+        error_message="value must be non-empty",
+    )
+    _optional_text = optional_text_fields("sponsor_role")
+    _repeatable_strings = deduped_string_list_fields("constraints")
+    _positive_int = positive_int_fields("max_runs", error_message="max_runs must be a positive integer")
+```
+
+Parameter-model helper boundary:
+
+- generic `params.py` mechanics belong in stdlib rather than repeated local `field_validator(...)` loops
+- keep field lists explicit in the `Parameters` model so required, optional, repeatable, and bounded fields stay easy to read
+- keep workflow-specific identifier rules, literal pre-normalization, and order-sensitive output local when the shared seam would hide intent
+- these helpers do not change runtime-owned parameter coercion; `runtime/loader.py` still owns workflow-parameter validation and error surfacing
+
 ## Optional Portfolio Snapshot Helpers
 
 `stdlib/portfolio.py` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.

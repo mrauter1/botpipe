@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+try:
+    from autoloop_v3.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+except ImportError:  # pragma: no cover - direct repo execution fallback
+    from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+
+from pydantic import BaseModel, Field
 
 
 class Parameters(BaseModel):
@@ -18,37 +23,16 @@ class Parameters(BaseModel):
     constraints: list[str] = Field(default_factory=list)
     target_test_command: str = "pytest -q"
 
-    @field_validator(
+    _validate_required_text = required_text_fields(
         "selected_workflow",
         "task_title",
         "evaluation_summary_path",
         "evaluation_findings_path",
         "target_test_command",
+        error_message="value must be non-empty",
     )
-    @classmethod
-    def _validate_required_text(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("value must be non-empty")
-        return normalized
-
-    @field_validator("failure_modes_path", "sponsor_role", "desired_outcome")
-    @classmethod
-    def _normalize_optional_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
-
-    @field_validator("constraints")
-    @classmethod
-    def _normalize_repeatable_strings(cls, values: list[str]) -> list[str]:
-        normalized: list[str] = []
-        for value in values:
-            candidate = value.strip()
-            if candidate and candidate not in normalized:
-                normalized.append(candidate)
-        return normalized
+    _normalize_optional_text = optional_text_fields("failure_modes_path", "sponsor_role", "desired_outcome")
+    _normalize_repeatable_strings = deduped_string_list_fields("constraints")
 
 
 __all__ = ["Parameters"]

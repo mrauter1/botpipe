@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+try:
+    from autoloop_v3.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+except ImportError:  # pragma: no cover - direct repo execution fallback
+    from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+
+from pydantic import BaseModel, Field
 
 
 class Parameters(BaseModel):
@@ -14,39 +19,9 @@ class Parameters(BaseModel):
     release_owner: str | None = None
     evidence_paths: list[str] = Field(default_factory=list)
 
-    @field_validator("release_name")
-    @classmethod
-    def _validate_release_name(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("release_name must be non-empty")
-        return normalized
-
-    @field_validator("target_date", "release_owner")
-    @classmethod
-    def _normalize_optional_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
-
-    @field_validator("deployment_environment")
-    @classmethod
-    def _validate_environment(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("deployment_environment must be non-empty")
-        return normalized
-
-    @field_validator("evidence_paths")
-    @classmethod
-    def _normalize_evidence_paths(cls, values: list[str]) -> list[str]:
-        normalized: list[str] = []
-        for value in values:
-            path = value.strip()
-            if path and path not in normalized:
-                normalized.append(path)
-        return normalized
+    _validate_required_text = required_text_fields("release_name", "deployment_environment")
+    _normalize_optional_text = optional_text_fields("target_date", "release_owner")
+    _normalize_evidence_paths = deduped_string_list_fields("evidence_paths")
 
 
 __all__ = ["Parameters"]

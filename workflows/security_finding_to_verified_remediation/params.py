@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
+try:
+    from autoloop_v3.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+except ImportError:  # pragma: no cover - direct repo execution fallback
+    from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -22,13 +27,7 @@ class Parameters(BaseModel):
     evidence_paths: list[str] = Field(default_factory=list)
     deployment_constraints: list[str] = Field(default_factory=list)
 
-    @field_validator("finding_title")
-    @classmethod
-    def _validate_finding_title(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("finding_title must be non-empty")
-        return normalized
+    _validate_finding_title = required_text_fields("finding_title")
 
     @field_validator("finding_source", "severity", mode="before")
     @classmethod
@@ -40,23 +39,8 @@ class Parameters(BaseModel):
             raise ValueError("value must be non-empty")
         return normalized
 
-    @field_validator("affected_system", "sponsor_role")
-    @classmethod
-    def _normalize_optional_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
-
-    @field_validator("evidence_paths", "deployment_constraints")
-    @classmethod
-    def _normalize_repeatable_strings(cls, values: list[str]) -> list[str]:
-        normalized: list[str] = []
-        for value in values:
-            candidate = value.strip()
-            if candidate and candidate not in normalized:
-                normalized.append(candidate)
-        return normalized
+    _normalize_optional_text = optional_text_fields("affected_system", "sponsor_role")
+    _normalize_repeatable_strings = deduped_string_list_fields("evidence_paths", "deployment_constraints")
 
 
 __all__ = ["Parameters"]

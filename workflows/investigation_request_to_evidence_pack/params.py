@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
+try:
+    from autoloop_v3.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+except ImportError:  # pragma: no cover - direct repo execution fallback
+    from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -26,13 +31,7 @@ class Parameters(BaseModel):
     evidence_paths: list[str] = Field(default_factory=list)
     source_constraints: list[str] = Field(default_factory=list)
 
-    @field_validator("investigation_title")
-    @classmethod
-    def _validate_investigation_title(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("investigation_title must be non-empty")
-        return normalized
+    _validate_investigation_title = required_text_fields("investigation_title")
 
     @field_validator("investigation_kind", mode="before")
     @classmethod
@@ -44,23 +43,8 @@ class Parameters(BaseModel):
             raise ValueError("investigation_kind must be non-empty")
         return normalized
 
-    @field_validator("sponsor_role")
-    @classmethod
-    def _normalize_optional_text(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
-
-    @field_validator("evidence_paths", "source_constraints")
-    @classmethod
-    def _normalize_repeatable_strings(cls, values: list[str]) -> list[str]:
-        normalized: list[str] = []
-        for value in values:
-            candidate = value.strip()
-            if candidate and candidate not in normalized:
-                normalized.append(candidate)
-        return normalized
+    _normalize_optional_text = optional_text_fields("sponsor_role")
+    _normalize_repeatable_strings = deduped_string_list_fields("evidence_paths", "source_constraints")
 
 
 __all__ = ["Parameters"]

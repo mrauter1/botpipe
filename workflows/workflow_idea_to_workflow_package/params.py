@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
+try:
+    from autoloop_v3.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+except ImportError:  # pragma: no cover - direct repo execution fallback
+    from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -29,23 +34,8 @@ class Parameters(BaseModel):
             )
         return normalized
 
-    @field_validator("package_title")
-    @classmethod
-    def _normalize_package_title(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        normalized = value.strip()
-        return normalized or None
-
-    @field_validator("aliases")
-    @classmethod
-    def _normalize_aliases(cls, values: list[str]) -> list[str]:
-        normalized: list[str] = []
-        for value in values:
-            alias = value.strip()
-            if alias and alias not in normalized:
-                normalized.append(alias)
-        return normalized
+    _normalize_package_title = optional_text_fields("package_title")
+    _normalize_aliases = deduped_string_list_fields("aliases")
 
     @field_validator("authoring_shape", mode="before")
     @classmethod
@@ -55,13 +45,10 @@ class Parameters(BaseModel):
             raise ValueError("authoring_shape must be one of: single, flow_specs, package")
         return normalized
 
-    @field_validator("target_test_command")
-    @classmethod
-    def _validate_target_test_command(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("target_test_command must be non-empty")
-        return normalized
+    _validate_target_test_command = required_text_fields(
+        "target_test_command",
+        error_message="target_test_command must be non-empty",
+    )
 
 
 __all__ = ["Parameters"]
