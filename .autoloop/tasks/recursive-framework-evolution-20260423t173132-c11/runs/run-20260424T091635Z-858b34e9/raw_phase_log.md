@@ -182,3 +182,12 @@ The planning gate is clear. The next step is implementation against the approved
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=decomposition-surface-seam,workflow-package-to-building-blocks,recursive-memory-and-validation
+explicit=True
+current_phase_index=0
