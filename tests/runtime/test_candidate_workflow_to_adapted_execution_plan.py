@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
@@ -685,6 +686,57 @@ def test_candidate_workflow_to_adapted_execution_plan_package_needs_rework_paylo
         "severity",
         "sponsor_role",
     ]
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    (
+        "selected_workflow_parameters_supported",
+        "proposed_parameter_keys",
+        "ready_for_execution",
+    ),
+)
+def test_candidate_workflow_to_adapted_execution_plan_package_validator_rejects_missing_required_package_fields(
+    monkeypatch,
+    missing_field: str,
+) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
+    compiled = compile_workflow(workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan)
+    package_step = compiled.steps["package_adapted_execution_plan"]
+    payload = {
+        "summary": "The package boundary still holds, but the artifacts need local repair.",
+        "selected_workflow_name": "security_finding_to_verified_remediation",
+        "selected_workflow_entry_step": "bootstrap",
+        "selected_workflow_parameters_supported": True,
+        "proposed_parameter_keys": [
+            "affected_system",
+            "finding_source",
+            "finding_title",
+            "severity",
+            "sponsor_role",
+        ],
+        "expected_downstream_artifacts": [
+            "selected_remediation_plan",
+            "remediation_summary",
+            "security_remediation_package",
+        ],
+        "authoritative_artifacts": [
+            "adapted_execution_plan",
+            "adapted_execution_summary",
+            "adapted_execution_next_action",
+            "validated_workflow_parameters",
+        ],
+        "next_action": "Repair the package artifacts and rerun packaging.",
+        "ready_for_execution": False,
+    }
+    payload.pop(missing_field)
+
+    with pytest.raises(ValidationError, match=missing_field):
+        package_step.expected_output_validator(payload)
 
 
 def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_invalid_selected_workflow_reference(

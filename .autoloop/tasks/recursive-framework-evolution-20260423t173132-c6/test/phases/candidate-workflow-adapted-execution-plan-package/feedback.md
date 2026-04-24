@@ -6,3 +6,8 @@
 - Phase Directory Key: candidate-workflow-adapted-execution-plan-package
 - Phase Title: Adapted Execution Plan Package
 - Scope: phase-local authoritative verifier artifact
+
+- Added validator-level regression coverage in `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py` for missing required package-step payload fields (`selected_workflow_parameters_supported`, `proposed_parameter_keys`, `ready_for_execution`), alongside the existing non-ready callback and publish-boundary checks.
+- Validation:
+  `.venv/bin/pytest -q tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py` -> `14 passed`
+  `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` -> `68 passed`
