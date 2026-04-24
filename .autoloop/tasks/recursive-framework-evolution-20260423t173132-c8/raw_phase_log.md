@@ -214,3 +214,77 @@ phase_mode=single
 phase_ids=refinement-surface-seam,workflow-and-eval-to-refined-workflow-package,cycle-eight-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbdeb-41a9-7f82-b62f-6a5ccfd79c85
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbdeb-41a9-7f82-b62f-6a5ccfd79c85
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdeb-41a9-7f82-b62f-6a5ccfd79c85
+---
+I’m treating this as a phase-scoped implementation pass for the refinement-surface seam. First I’m reading the authoritative plan, feedback, decisions, and the relevant framework/stdlib files so I can keep the change narrow and avoid drifting outside the accepted scope.
+
+The plan and decisions confirm this phase is intentionally narrow: add an authoring-only selected-workflow snapshot seam without introducing runtime refinement behavior. I’m reading the existing stdlib helpers, workflow catalog/resolution code, and the authoring docs/tests now so the new helper reuses the same seams instead of inventing another path resolver.
+
+I’ve confirmed the existing pattern: authoring helpers are workflow-local writers that lean on shared catalog/loader seams. Next I’m reading `adaptation.py`, `portfolio.py`, and the loader/catalog code closely so the new refinement helper can reuse the same canonical resolution path and stay inside `ctx.workflow_folder`.
+
+I’ve got the existing helper pattern. Now I’m reading the exact phase acceptance text and the plan’s refinement-seam design notes so the implementation matches the approved boundary instead of freelancing on file shape or semantics.
+
+I’ve got enough context to edit safely. I’m checking the current worktree status now, then I’ll add the new helper, export it, and freeze the boundary in docs/tests with the smallest possible blast radius.
+
+I’m editing the narrow phase deliverables now. The code change is limited to one new stdlib helper plus the corresponding export, authoring-doc boundary, and unit coverage that proves the helper stays workflow-local and resolution-seam-driven.
+
+The seam is in place. I’m doing a quick readback of the edited files before running tests so I can catch any shape mistakes in the helper payload or brittle doc assertions before they turn into noisy failures.
+
+The edit shape looks consistent. I’m running targeted pytest now against the touched stdlib/doc surfaces so I can verify the new helper behavior, the authoring-doc assertions, and the baseline-doc regression surface before I update the phase notes.
+
+`pytest` isn’t on `PATH` in this environment. I’m retrying with `python3 -m pytest`, and if that still fails I’ll fall back to the repo’s available virtualenv or note the exact blocker rather than guessing at validation status.
+
+`python3` is present but the global interpreter has no `pytest` module. I’m locating the project’s virtualenv or test runner next; if none exists, I’ll still do a syntax-level check and call out the missing test dependency explicitly.
+
+The code and doc checks passed in the repo venv. I’m updating the phase-local notes and the current decisions block now so the handoff records the one non-obvious boundary: the new refinement helper is intentionally separate from the capability snapshot and stays read-only against the selected workflow.
+
+I’m doing one last read on the touched artifacts with line numbers so the close-out can point at the exact helper entrypoints and the recorded validation cleanly. After that I’ll stop with the required phase summary and loop-control block.
+
+Scope considered
+
+- Phase-local `refinement-surface-seam` only: `stdlib/refinement.py`, `stdlib/__init__.py`, [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:250), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:587), plus required phase notes/decision ledger updates.
+- Kept clear of CLI changes, runtime-owned refinement automation, and `workflow.toml` semantics.
+
+What I analyzed
+
+- Existing authoring-helper patterns in `stdlib/`, especially lifecycle/adaptation/evaluation seams.
+- Shared workflow resolution/catalog seams in `runtime/loader.py` and `core/workflow_catalog.py`.
+- Authoring-doc baseline expectations and the stdlib unit-test harness.
+- Dirty worktree state to avoid absorbing unrelated migration files.
+
+What I changed
+
+- Added [stdlib/refinement.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/refinement.py:18) with `write_selected_workflow_authoring_surface(...)`, which snapshots one selected workflow’s editable authoring surface under `ctx.workflow_folder` and stays read-only against the selected workflow.
+- Exported the helper from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:15).
+- Documented the helper boundary and non-goals in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:250).
+- Extended [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:57) with seam-boundary coverage, path-safety checks, optional-path behavior, and doc assertions.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/implement/phases/refinement-surface-seam/implementation_notes.md:10) and appended the non-obvious helper-boundary decision to `decisions.txt`.
+
+Key findings / decisions
+
+- The new helper reuses `resolve_workflow_reference(...)` and `discover_workflow_catalog(...)` directly rather than scraping the repo or widening manifests.
+- The authoring-surface artifact is intentionally separate from `selected_workflow_capability.json`; workflows that need both must call both helpers explicitly.
+- Validation passed with:
+- `.venv/bin/python -m pytest -q tests/unit/test_stdlib_and_extensions.py`
+- `.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`
+
+Open issues / next step
+
+- No open issues in this phase-local slice.
+- Next step is the downstream `workflow-and-eval-to-refined-workflow-package` phase, which can now consume `selected_workflow_authoring_surface.json` as the planned refinement input artifact.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

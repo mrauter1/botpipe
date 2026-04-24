@@ -247,6 +247,28 @@ Adaptation helper boundary:
 - portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics in workflow code and prompt templates
 - the helper does not import runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
 
+## Optional Refinement Surface Helpers
+
+`stdlib/refinement.py` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's editable authoring surface.
+
+```python
+from autoloop_v3.stdlib import write_selected_workflow_authoring_surface
+
+write_selected_workflow_authoring_surface(ctx, "release_candidate_to_go_no_go")
+```
+
+Refinement helper boundary:
+
+- the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
+- it reuses the shared workflow resolution and catalog seams instead of ad hoc repo scraping or `workflow.toml` expansion
+- it keeps the compiled selected-workflow contract separate from the editable selected-workflow surface; workflows that need both should call `write_selected_workflow_capability_snapshot(...)` and `write_selected_workflow_authoring_surface(...)` explicitly
+- it captures the selected workflow's `__init__.py`, `workflow.toml`, `workflow.py`, optional `params.py`, optional `contracts.py`, prompt files, asset files, linked workflow doc path, and the inferred `tests/runtime/test_<workflow>.py` path when present
+- it writes the canonical result to `selected_workflow_authoring_surface.json` by default
+- it does not mutate, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
+- it does not add CLI flags, new `workflow.toml` fields, or runtime-owned refinement automation
+- it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- prompt templates and workflow code still own refinement policy, baseline/candidate strategy, file copying, verification evidence, and promotion/rollback decisions
+
 ## Optional Evaluation Manifest Helpers
 
 `stdlib/evaluation.py` provides a narrow authoring-only seam for workflows that need to validate and canonicalize one workflow-local evaluation case manifest against one selected workflow.
