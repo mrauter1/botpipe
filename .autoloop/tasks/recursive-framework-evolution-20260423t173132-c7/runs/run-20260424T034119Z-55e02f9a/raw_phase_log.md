@@ -666,3 +666,109 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+---
+I’m treating this as a cycle-7 closeout pass: update the standing recursive-memory files, align baseline docs/tests with the shipped `workflow_to_eval_suite` plus the evaluation helper seam, then run the targeted pytest proof and record it in the phase notes.
+
+I’ve confirmed the repo is already mid-migration and very dirty outside this task, so I’m keeping scope narrow. Next I’m reading the current architecture/docs, the four standing memory files, the new workflow/framework artifacts, and the baseline test so the closeout updates match what actually shipped.
+
+I’ve verified the standing memory already contains cycle-7 language. The likely remaining work is tightening the architecture-baseline assertions to cover cycle 7 accurately, then recording the exact validation proof in the closeout artifacts.
+
+The previous phase already touched the memory files and baseline test, so I’m checking whether closeout still needs a cycle-7 assertion gap or just proof/notes alignment. After that I’ll patch only the files that are still missing the closeout contract.
+
+I’ve found that the baseline test already has explicit cycle-7 assertions. The remaining closeout work is now straightforward: confirm the current memory text still matches those assertions, run the targeted proof, then write the phase-local implementation notes with the exact validated command/result.
+
+I’ve narrowed the executable proof to the same three surfaces the cycle-7 baseline already documents: stdlib/helper validation, the new eval-suite workflow package, and the recursive-memory/baseline docs test. I’m running that exact targeted pytest command now so the closeout notes record a real result rather than inherited assumptions.
+
+The targeted proof is not clean yet. Failures showed up early in the closeout command, so I’m collecting the full traceback before changing anything; if the break is just stale baseline expectations I’ll patch those locally and rerun.
+
+The failures are real and narrow: three verifier prompts are missing the explicit `Write these artifacts` section required by the workflow’s own prompt-contract tests. I’m patching just those prompt files to make the verifier-side artifact handling explicit, then I’ll rerun the same proof command.
+
+I found a second closeout issue while tracing the failures: the documented cycle-7 proof count is stale. The current targeted suite has 77 tests, so after fixing the prompt contracts I’ll update the recorded proof/result and its baseline assertion to match the actual rerun.
+
+I’m making a minimal closeout patch now: add the missing verifier-side artifact-write sections, update the stale cycle-7 proof count from `69` to the current suite size, and record the same expectation in the baseline test. After that I’ll rerun the identical pytest command and finish the phase notes.
+
+The rerun is still surfacing the same three prompt-contract failures, which means the marker names likely still don’t match the exact test strings. I’m pulling the current prompt text and the exact trace again before making a second, tighter patch.
+
+The first patch fixed the missing write-handling sections; the same verifier prompts also lacked an explicit `Evidence requirements` section. I’m adding that exact section header now rather than loosening the tests, because the workflow doctrine requires the prompt contract itself to spell the evidence bar out.
+
+The targeted proof is clean now: `77 passed`. I’m finishing the closeout artifacts by recording the non-obvious regression fix and the exact validation result in the phase notes, without touching any unrelated migration work.
+
+I’ve kept the closeout edits constrained to the actual regressions the validation exposed. The last patch is just bookkeeping: append the non-obvious decision to `decisions.txt` and write the phase-local implementation notes with the exact `77 passed` proof.
+
+I’ve finished the closeout artifact updates. I’m doing one last scoped status check over the files I touched so the handoff is precise and doesn’t accidentally blur into the repo’s unrelated migration churn.
+
+Scope considered
+
+Kept this to cycle-7 closeout: standing recursive-memory accuracy, baseline-doc expectations, targeted pytest proof, and only the workflow-package regression surfaced by that proof.
+
+What I analyzed
+
+Reviewed the cycle-7 phase artifacts, current recursive memory, [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:64), [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:648), and the failing prompt-contract checks in `tests/runtime/test_workflow_to_eval_suite.py`, then reran the exact targeted proof command.
+
+What I changed
+
+Added the missing verifier-side `Write these artifacts` and `Evidence requirements` sections in [frame_verifier.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/prompts/frame_verifier.md:17), [design_verifier.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/prompts/design_verifier.md:22), and [package_verifier.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/prompts/package_verifier.md:26). Corrected the recorded cycle-7 proof result to `77 passed` in [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:64) and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:648). Recorded the closeout decision and validation in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt:19) and [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/implement/phases/cycle-seven-closeout/implementation_notes.md:10).
+
+Key findings / decisions
+
+The closeout blocker was not framework logic; it was that three shipped verifier prompts were still under-specifying their local artifact/evidence contract. I fixed the prompts rather than weakening the regression tests. The other standing memory files already satisfied AC-1, so only the roadmap proof count needed correction.
+
+Open issues / next step
+
+Targeted validation now passes: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` -> `77 passed`. In this broader migration worktree, [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:64) and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:648) still show as untracked, so that should be handled deliberately when bundling the final change set.
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+---
+I’m reviewing the cycle-7 closeout diff against the phase contract and shared decisions, then I’ll verify the scoped proof/result and update the phase review artifacts with either findings or a clean pass.
+
+The shared decisions and implementation notes are internally consistent. I’m now checking the actual cycle-7 baseline text and rerunning the scoped pytest proof myself, since that’s the acceptance gate that could still hide a regression.
+
+The scoped proof reran cleanly and the cycle-7 baseline files now agree with the updated result. I’m marking the review artifacts as complete with no blocking findings and recording the verification evidence in the feedback file.
+
+Scope considered
+
+Phase-local cycle-7 closeout only: the recursive-memory baseline, the closeout proof record, the prompt-contract fix for `workflow_to_eval_suite`, and the verifier-owned review artifacts.
+
+What I analyzed
+
+I reviewed the active phase contract, shared decisions, implementation notes, the cycle-7 baseline text in `.autoloop_recursive/`, and the scoped changed surfaces relevant to the closeout regression.
+
+What I reviewed
+
+I reran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` and confirmed `77 passed`. I also checked that the cycle-7 memory/test assertions now match that proof and that the prompt fix stayed within the existing runtime/provider boundary.
+
+Key findings / decisions
+
+No blocking findings. I updated `criteria.md` to all checked and appended one non-blocking verification record to `feedback.md` documenting the clean rerun and scope conformance.
+
+Open issues / next step
+
+No open issues in this phase scope. Review is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
