@@ -4,3 +4,7 @@
 {"ts": "2026-04-24T06:36:23.298407+00:00", "run_id": "run-20260424T062640Z-13174b0c", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T06:37:51.450471+00:00", "run_id": "run-20260424T062640Z-13174b0c", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T06:37:51.500376+00:00", "run_id": "run-20260424T062640Z-13174b0c", "seq": 6, "event_type": "pair_completed", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-24T06:37:51.599007+00:00", "run_id": "run-20260424T062640Z-13174b0c", "seq": 7, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["diagnostic-run-history-seam", "workflow-run-history-to-failure-modes", "cycle-nine-closeout"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-04-24T06:37:51.602413+00:00", "run_id": "run-20260424T062640Z-13174b0c", "seq": 8, "event_type": "phase_started", "phase_id": "diagnostic-run-history-seam", "phase_mode": "single"}
+{"ts": "2026-04-24T06:37:51.604356+00:00", "run_id": "run-20260424T062640Z-13174b0c", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "diagnostic-run-history-seam"}
+{"ts": "2026-04-24T06:37:51.604606+00:00", "run_id": "run-20260424T062640Z-13174b0c", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "diagnostic-run-history-seam"}

@@ -120,3 +120,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=diagnostic-run-history-seam,workflow-run-history-to-failure-modes,cycle-nine-closeout
+explicit=True
+current_phase_index=0
