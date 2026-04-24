@@ -665,3 +665,52 @@ Key findings / decisions
 Open issues / next step
 - Validation passed: `python3 -m py_compile tests/runtime/test_workflow_package_to_composable_building_blocks.py` and `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` with `23 passed in 6.80s`.
 - No test-phase blocker remains in scope. The next step is the paired test-phase review/audit.
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+Auditing the test-phase output now. I’m checking the updated runtime suite against the phase acceptance criteria and the shared decisions, then I’ll update the test audit artifacts only.
+
+The test map and the runtime file line up with the shared decisions so far. I’m rerunning the focused suite independently now, then I’ll either mark the phase complete or log the smallest concrete audit issue if something still slips through.
+
+No audit blocker remains after the independent rerun. I’m updating the auditor-owned criteria to complete and appending a short follow-up note to the test feedback rather than manufacturing a placeholder finding.
+
+Scope considered
+- Phase-local audit of the updated workflow-specific runtime tests and the test-phase artifacts for `workflow_package_to_composable_building_blocks`.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/workflow-package-to-building-blocks/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/workflow-package-to-building-blocks/feedback.md).
+
+What I analyzed
+- [tests/runtime/test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py), with emphasis on AC-1 alias resolution, AC-3 tampering coverage, and AC-4 fallback/block behavior.
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/test/phases/workflow-package-to-building-blocks/test_strategy.md) and the latest shared decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt).
+- Independent validation rerun:
+  - `python3 -m py_compile tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+  - Result: `23 passed in 6.59s`
+
+What I reviewed
+- Whether the test suite now enforces canonical discovery, actual alias resolution, terminal candidate publication, publish-time tampering rejection, and context-capture fallback/block paths.
+- Whether the test strategy accurately maps behavior coverage, preserved invariants, failure paths, and known gaps.
+- Whether the tests remain deterministic and aligned with the shared decision ledger.
+
+Key findings / decisions
+- No additional audit findings.
+- The added alias-resolution test closes the remaining AC-1 gap by verifying `resolve_workflow_reference(...)` behavior directly instead of relying on manifest alias strings alone.
+- The current suite provides adequate regression protection for the changed publish-time validation and the preserved candidate-only boundary.
+
+Open issues / next step
+- No test-phase audit blocker remains.
+- The next step is whatever downstream orchestration follows this completed test audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
