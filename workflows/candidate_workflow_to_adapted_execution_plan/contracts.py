@@ -33,12 +33,12 @@ class AdaptedExecutionPlanPayload(BaseModel):
     summary: str = Field(min_length=1)
     selected_workflow_name: str = Field(min_length=1)
     selected_workflow_entry_step: str = Field(min_length=1)
-    selected_workflow_parameters_supported: bool = False
-    proposed_parameter_keys: list[str] = Field(default_factory=list)
+    selected_workflow_parameters_supported: bool
+    proposed_parameter_keys: list[str]
     expected_downstream_artifacts: list[str] = Field(min_length=1)
     authoritative_artifacts: list[str] = Field(min_length=1)
     next_action: str = Field(min_length=1)
-    ready_for_execution: bool = False
+    ready_for_execution: bool
     replan_reason: str | None = None
 
 

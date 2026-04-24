@@ -560,3 +560,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbd4f-eb1f-7eb2-8d37-beb3e162171b
+---
+Addressing the reviewer finding now. I’m re-checking the package-step contract and deciding the narrowest safe fix before I touch code, then I’ll add regression coverage and refresh the phase notes.
+
+I’ve got the fix shape. The prompt already treats several package payload fields as mandatory, so I’m tightening the schema to match that contract instead of weakening the callback, and I’m adding coverage for both omission rejection and a real `needs_rework` package loop.
+
+I’m editing the contract and tests now. The fix is narrow: tighten the package-step payload schema to match the prompt/runtime contract, then lock that with a schema assertion and a non-ready callback regression test.
+
+The contract change is in and the focused suites are running clean. I’m waiting on the last targeted runtime slice, then I’ll update the decision ledger and implementation notes with the exact fix and validation surface.
+
+The new regression coverage increased the phase’s closeout proof count by one, so I’m updating the recorded cycle-6 proof rather than leaving the roadmap stale. I’m confirming the exact combined command/result first, then I’ll patch the memory/test pair and the phase notes together.
+
+I’m doing the final write pass now. Besides the contract/test fix itself, I’m updating the recorded cycle-6 closeout proof from `64 passed` to `65 passed` so the roadmap and baseline-doc test stay truthful after the new regression test landed.
+
+The final note/roadmap updates are in. I’m rerunning the exact cycle-6 closeout command once more on the final state so the recorded `65 passed` proof matches the repository, not just the intermediate fix state.
+
+Scope considered
+
+- The reviewer finding in [workflows/candidate_workflow_to_adapted_execution_plan/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/contracts.py), the package-step callback path in [workflows/candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py), the runtime proof in [tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py), and the cycle-6 roadmap/baseline-doc proof that changed when the new regression test landed.
+
+What I analyzed
+
+- Read the blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/implement/phases/candidate-workflow-adapted-execution-plan-package/feedback.md), the phase plan, the current package payload model, the package-step callback, and the existing runtime tests.
+- Confirmed the fix path should tighten the schema rather than weaken the callback, because the prompt already treats the package payload fields as mandatory and the runtime-injected contract should say the same.
+
+What I changed
+
+- Tightened [AdaptedExecutionPlanPayload](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/contracts.py:27) so `selected_workflow_parameters_supported`, `proposed_parameter_keys`, and `ready_for_execution` are required fields instead of defaulted optional ones.
+- Extended [tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py:49) to freeze those fields in the compiled package-step schema and to cover a `needs_rework` package outcome that now loops cleanly with an explicit payload.
+- Updated [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:55) and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:565) from `64 passed` to `65 passed`, then refreshed [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/implement/phases/candidate-workflow-adapted-execution-plan-package/implementation_notes.md) and appended the non-obvious fix decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/decisions.txt).
+
+Key findings / decisions
+
+- The safe fix was to align the machine contract with the existing prompt contract, not to special-case missing keys in `on_package_adapted_execution_plan(...)`.
+- Final validation passed with the exact frozen cycle-6 closeout command:
+  `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py`
+  Result: `65 passed in 1.82s`
+
+Open issues / next step
+
+- No open producer-side issues in this phase scope.
+- Ready for verifier re-review of the updated contract and regression coverage.
