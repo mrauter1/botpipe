@@ -1,4 +1,144 @@
 version: 1
 task_id: recursive-framework-evolution-20260423t173132-c5
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/runs/run-20260424T003247Z-3011b6ef/request.md
-phases: []
+phases:
+- phase_id: workflow-capability-snapshot-seam
+  title: Workflow Capability Snapshot Seam
+  objective: Add an additive workflow-capability inspection seam and authoring helper
+    that can publish workflow-local capability snapshots without changing the existing
+    lightweight discovery contract.
+  status: planned
+  in_scope:
+  - Preserve the current lightweight workflow catalog discovery behavior and add a
+    separate richer workflow-inspection surface.
+  - Expose an additive authoring helper that writes a workflow-local capability snapshot
+    artifact for portfolio workflows.
+  - Update docs and focused tests for the new inspection/helper boundary.
+  out_of_scope:
+  - Adding new workflow.toml fields.
+  - Runtime-owned workflow ranking, selection, adaptation, or execution.
+  - Recursive wrapper/template cleanup in recursive_autoloop.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Implementation preserves the current non-importing workflow catalog discovery
+      seam while adding one richer reusable inspection surface for workflow parameters
+      and compiled step contracts.
+  - id: AC-2
+    text: Portfolio workflows can publish a workflow-local capability snapshot artifact
+      without importing runtime-owned routing behavior or widening runtime-injected
+      control metadata.
+  - id: AC-3
+    text: Docs and focused tests make the additive capability-snapshot boundary explicit
+      and keep workflow.toml metadata-only.
+  deliverables:
+  - Pure workflow-capability inspection module or equivalent additive seam.
+  - Workflow-local capability snapshot helper and exports.
+  - Updated authoring documentation and inspection/helper-focused test coverage.
+  risks:
+  - Capability inspection can accidentally regress the lightweight discovery path
+    if imports or compilation leak into the baseline catalog seam.
+  - Helper design can accidentally centralize routing policy unless it stays artifact-only
+    and additive.
+  rollback:
+  - Revert the capability-inspection seam and helper while preserving the existing
+    lightweight catalog seam.
+  - Remove the additive documentation/tests if the seam cannot remain pure and additive.
+- phase_id: task-to-candidate-workflow-set-package
+  title: Task To Candidate Workflow Set Package
+  objective: Implement the new reusable building block that turns an arbitrary task
+    into a ranked workflow candidate set, fit-gap package, and machine-readable portfolio
+    posture.
+  status: planned
+  in_scope:
+  - Add the task_to_candidate_workflow_set workflow package, params model, contracts,
+    prompts, assets, and workflow docs.
+  - Use the new capability snapshot seam in a deterministic system step.
+  - Publish a stable candidate-workflow-set package, machine-readable summary, next-action
+    artifact, and deterministic receipt.
+  - Add runtime tests covering discovery, compilation, legal routes, and end-to-end
+    candidate-set publication.
+  out_of_scope:
+  - Automatically executing downstream workflows.
+  - Publishing the final run_existing/compose/adapt/create_new strategy package from
+    this building block.
+  - Implementing candidate_workflow_to_adapted_execution_plan in the same cycle.
+  dependencies:
+  - workflow-capability-snapshot-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: The workflow compares a strong candidate set, explicitly includes the builder
+      baseline when present, and publishes ranked candidates plus fit-gap reasoning
+      as durable artifacts.
+  - id: AC-2
+    text: The workflow definition, prompt templates, route contracts, and artifact
+      contract keep the boundary at candidate-set publication rather than final strategy
+      or hidden execution.
+  - id: AC-3
+    text: Runtime proof covers successful publication of the candidate-workflow-set
+      artifacts and summary, including a machine-readable readiness signal for downstream
+      strategy selection.
+  deliverables:
+  - workflows/task_to_candidate_workflow_set/ package with prompts, assets, contracts,
+    params, and workflow definition.
+  - docs/workflows/task_to_candidate_workflow_set.md.
+  - tests/runtime/test_task_to_candidate_workflow_set.py.
+  risks:
+  - The building block may collapse into a thin clone of task_to_workflow_strategy
+    unless the artifact contract and terminal boundary stay distinct.
+  - Candidate ranking can become non-reusable if the summary contract is not explicit
+    enough for downstream workflows to consume safely.
+  rollback:
+  - Remove the new workflow package, docs, and tests as one unit if it cannot ship
+    with a crisp reusable boundary.
+  - Keep the existing front door unchanged if the building block cannot reach a stable
+    terminal artifact contract.
+- phase_id: front-door-integration-memory-and-proof
+  title: Front Door Integration Memory And Proof
+  objective: Integrate the new building block into task_to_workflow_strategy, update
+    recursive memory to the cycle-5 baseline, and run targeted regression proof.
+  status: planned
+  in_scope:
+  - Update task_to_workflow_strategy to compose task_to_candidate_workflow_set and
+    adopt its artifacts explicitly.
+  - Refresh workflow docs/tests for the front-door composition and preserved terminal
+    strategy-only behavior.
+  - Update all four standing recursive memory files and the architecture-baseline
+    doc tests for the cycle-5 outcome.
+  - Run targeted regression validation across the new seam, the new building block,
+    and the previously shipped workflow portfolio.
+  out_of_scope:
+  - Automatic runtime routing or workflow execution from the front door.
+  - Manifest-schema changes or CLI migrations.
+  - Unrelated recursive_autoloop wrapper/template fixes.
+  dependencies:
+  - workflow-capability-snapshot-seam
+  - task-to-candidate-workflow-set-package
+  acceptance_criteria:
+  - id: AC-1
+    text: task_to_workflow_strategy reuses task_to_candidate_workflow_set through
+      explicit composition while preserving its existing terminal strategy-publication
+      contract.
+  - id: AC-2
+    text: Recursive memory records that the builder remained credible, task_to_candidate_workflow_set
+      shipped as the chosen addition, and the capability-snapshot seam shipped as
+      the paired framework improvement.
+  - id: AC-3
+    text: Targeted pytest coverage passes across the capability seam, the new building
+      block, the updated front door, and the previously shipped builder/evidence/security
+      portfolio surfaces.
+  deliverables:
+  - Updated task_to_workflow_strategy package, docs, and runtime tests.
+  - Updated .autoloop_recursive memory files.
+  - Updated tests/test_architecture_baseline_docs.py.
+  - Targeted pytest proof for cycle-5 closeout.
+  risks:
+  - Parent-child artifact adoption can break the current front-door flow unless child
+    summary validation and adopted artifact mapping stay explicit.
+  - Recursive memory can mislead later cycles if the shipped decision order and deferred
+    follow-ons are recorded imprecisely.
+  rollback:
+  - Revert the front-door composition and restore the current inlined candidate analysis
+    if the child-building-block path cannot preserve behavior.
+  - Revert cycle-5 recursive memory updates if the shipped implementation direction
+    changes before merge.

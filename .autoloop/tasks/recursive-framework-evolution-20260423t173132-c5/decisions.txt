@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T003247Z-3011b6ef" ts="2026-04-24T00:32:47.895289+00:00" />
+The authoritative repo-root equivalents of the stale request paths are `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `stdlib/`, and repo-root `workflows/`; the cycle-5 plan should not assume the retired `src/autoloop/...` layout exists.
+`workflow_idea_to_workflow_package` remains a credible workflow-builder baseline after direct code/doc/test inspection, so cycle 5 should choose a different addition unless implementation uncovers a material builder defect.
+Cycle 5 should ship `task_to_candidate_workflow_set` as the new reusable building block and pair it with an additive workflow-capability snapshot seam, not with `workflow.toml` expansion or runtime-owned routing.
+`task_to_workflow_strategy` should consume the new building block in the same change set so candidate retrieval stops being front-door-local logic and the new package ships with immediate reuse proof.
