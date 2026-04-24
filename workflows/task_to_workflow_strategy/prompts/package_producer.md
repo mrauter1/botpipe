@@ -20,6 +20,10 @@ Read these artifacts
 - `workflow_selection_criteria`
 - `workflow_candidate_matrix`
 - `workflow_gap_analysis`
+- `candidate_route_posture`
+- `candidate_workflow_set`
+- `candidate_workflow_set_summary`
+- `candidate_next_action`
 - `strategy_decision`
 
 Write these artifacts
@@ -32,9 +36,11 @@ Artifact handling
 - `workflow_strategy_package` must define:
 - the task trigger and sponsor,
 - the compared candidates,
+- the child portfolio posture,
 - the selected strategy route,
 - the recommended workflow names,
 - why the route won,
+- how the child candidate-workflow-set package shaped the final decision,
 - what evidence or parameters the downstream operator still needs,
 - why this workflow intentionally stops at packaging rather than hidden downstream execution.
 - `strategy_summary` must be valid JSON and define at least:
@@ -55,6 +61,7 @@ Expected outcome
 
 Evidence requirements
 - The package must preserve the selected route from `strategy_decision`.
+- The package must stay consistent with `candidate_workflow_set_summary`, including comparison candidates, builder baseline visibility, and portfolio posture.
 - The summary must still show at least three compared candidates and the builder baseline.
 - The next action must be concrete enough that another operator could run it immediately.
 

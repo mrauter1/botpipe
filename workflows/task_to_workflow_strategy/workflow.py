@@ -7,7 +7,12 @@ import json
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib import write_workflow_portfolio_snapshot
+    from autoloop_v3.stdlib import (
+        adopt_child_artifacts,
+        require_child_workflow_result,
+        run_child_workflow,
+        write_workflow_portfolio_snapshot,
+    )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -15,7 +20,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import write_workflow_portfolio_snapshot
+    from stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow, write_workflow_portfolio_snapshot
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -34,6 +39,7 @@ from .contracts import (
 
 _STRATEGY_ROUTES = frozenset({"run_existing", "compose", "adapt", "create_new"})
 _BUILDER_BASELINE = "workflow_idea_to_workflow_package"
+_PORTFOLIO_POSTURES = frozenset({"direct_fit", "compose_needed", "adapt_needed", "material_gap"})
 
 
 class TaskToWorkflowStrategy(Workflow):
@@ -70,6 +76,10 @@ class TaskToWorkflowStrategy(Workflow):
     workflow_selection_criteria = Artifact("{workflow_folder}/workflow_selection_criteria.md")
     workflow_candidate_matrix = Artifact("{workflow_folder}/workflow_candidate_matrix.md")
     workflow_gap_analysis = Artifact("{workflow_folder}/workflow_gap_analysis.md")
+    candidate_route_posture = Artifact("{workflow_folder}/candidate_route_posture.md")
+    candidate_workflow_set = Artifact("{workflow_folder}/candidate_workflow_set.md")
+    candidate_workflow_set_summary = Artifact("{workflow_folder}/candidate_workflow_set_summary.json")
+    candidate_next_action = Artifact("{workflow_folder}/candidate_next_action.md")
     strategy_decision = Artifact("{workflow_folder}/strategy_decision.md")
     workflow_strategy_package = Artifact("{workflow_folder}/workflow_strategy_package.md")
     strategy_summary = Artifact("{workflow_folder}/strategy_summary.json")
@@ -106,6 +116,24 @@ class TaskToWorkflowStrategy(Workflow):
         expected_output_schema=TaskFramingPayload,
         route_contracts=FRAME_TASK_ROUTE_CONTRACTS,
     )
+    build_candidate_workflow_set = SystemStep(
+        name="build_candidate_workflow_set",
+        requires=[
+            request,
+            invocation_contract,
+            workflow_portfolio_snapshot,
+            task_strategy_brief,
+            workflow_selection_criteria,
+        ],
+        produces={
+            "workflow_candidate_matrix": workflow_candidate_matrix,
+            "workflow_gap_analysis": workflow_gap_analysis,
+            "candidate_route_posture": candidate_route_posture,
+            "candidate_workflow_set": candidate_workflow_set,
+            "candidate_workflow_set_summary": candidate_workflow_set_summary,
+            "candidate_next_action": candidate_next_action,
+        },
+    )
     select_strategy = PairStep(
         name="select_strategy",
         session=selection_session,
@@ -117,12 +145,14 @@ class TaskToWorkflowStrategy(Workflow):
             workflow_portfolio_snapshot,
             task_strategy_brief,
             workflow_selection_criteria,
+            workflow_candidate_matrix,
+            workflow_gap_analysis,
+            candidate_route_posture,
+            candidate_workflow_set,
+            candidate_workflow_set_summary,
+            candidate_next_action,
         ],
-        produces={
-            "workflow_candidate_matrix": workflow_candidate_matrix,
-            "workflow_gap_analysis": workflow_gap_analysis,
-            "strategy_decision": strategy_decision,
-        },
+        produces={"strategy_decision": strategy_decision},
         expected_output_schema=StrategySelectionPayload,
         route_contracts=SELECT_STRATEGY_ROUTE_CONTRACTS,
     )
@@ -140,6 +170,10 @@ class TaskToWorkflowStrategy(Workflow):
             workflow_selection_criteria,
             workflow_candidate_matrix,
             workflow_gap_analysis,
+            candidate_route_posture,
+            candidate_workflow_set,
+            candidate_workflow_set_summary,
+            candidate_next_action,
             strategy_decision,
         ],
         produces={
@@ -172,10 +206,11 @@ class TaskToWorkflowStrategy(Workflow):
             bootstrap: {"inputs_prepared": capture_workflow_portfolio},
             capture_workflow_portfolio: {"portfolio_snapshotted": frame_task},
             frame_task: {
-                "task_framed": select_strategy,
+                "task_framed": build_candidate_workflow_set,
                 "needs_rework": frame_task,
                 "needs_replan": frame_task,
             },
+            build_candidate_workflow_set: {"candidate_workflow_set_built": select_strategy},
             select_strategy: {
                 "strategy_selected": package_strategy,
                 "needs_rework": select_strategy,
@@ -242,6 +277,52 @@ class TaskToWorkflowStrategy(Workflow):
         return state.model_copy(update={"framing_status": outcome.tag})
 
     @staticmethod
+    def on_build_candidate_workflow_set(state: State, ctx) -> tuple[State, Event]:
+        child_result = run_child_workflow(
+            ctx,
+            "task_to_candidate_workflow_set",
+            message=_read_request_text(ctx),
+            parameters={
+                "task_title": state.task_title,
+                "sponsor_role": state.sponsor_role,
+                "desired_outcome": state.desired_outcome,
+                "constraints": state.constraints,
+                "evidence_expectations": state.evidence_expectations,
+            },
+        )
+        child_last_event = None if child_result.last_event is None else child_result.last_event.tag
+        if child_result.status == "paused" and child_last_event in {"question", "blocked"}:
+            question = None if child_result.last_event is None else child_result.last_event.question
+            return state, Event(child_last_event, question=question)
+
+        require_child_workflow_result(
+            child_result,
+            status="success",
+            last_event="candidate_workflow_set_published",
+            required_artifacts=(
+                "workflow_candidate_matrix",
+                "workflow_gap_analysis",
+                "candidate_route_posture",
+                "candidate_workflow_set",
+                "candidate_workflow_set_summary",
+                "candidate_next_action",
+            ),
+        )
+        adopt_child_artifacts(
+            ctx,
+            child_result,
+            mapping={
+                "workflow_candidate_matrix": "workflow_candidate_matrix.md",
+                "workflow_gap_analysis": "workflow_gap_analysis.md",
+                "candidate_route_posture": "candidate_route_posture.md",
+                "candidate_workflow_set": "candidate_workflow_set.md",
+                "candidate_workflow_set_summary": "candidate_workflow_set_summary.json",
+                "candidate_next_action": "candidate_next_action.md",
+            },
+        )
+        return state, Event("candidate_workflow_set_built")
+
+    @staticmethod
     def on_select_strategy(state: State, outcome: Outcome, artifacts):
         del artifacts
         payload = outcome.payload
@@ -280,6 +361,10 @@ class TaskToWorkflowStrategy(Workflow):
             "workflow_portfolio_snapshot": workflow_folder / "workflow_portfolio_snapshot.json",
             "workflow_candidate_matrix": workflow_folder / "workflow_candidate_matrix.md",
             "workflow_gap_analysis": workflow_folder / "workflow_gap_analysis.md",
+            "candidate_route_posture": workflow_folder / "candidate_route_posture.md",
+            "candidate_workflow_set": workflow_folder / "candidate_workflow_set.md",
+            "candidate_workflow_set_summary": workflow_folder / "candidate_workflow_set_summary.json",
+            "candidate_next_action": workflow_folder / "candidate_next_action.md",
             "strategy_decision": workflow_folder / "strategy_decision.md",
             "workflow_strategy_package": workflow_folder / "workflow_strategy_package.md",
             "strategy_summary": workflow_folder / "strategy_summary.json",
@@ -346,6 +431,38 @@ class TaskToWorkflowStrategy(Workflow):
         ready_for_handoff = summary.get("ready_for_handoff")
         if ready_for_handoff is not True:
             raise ValueError("strategy_summary.json must confirm ready_for_handoff=true")
+
+        candidate_summary = _read_json(required_paths["candidate_workflow_set_summary"])
+        candidate_comparison_candidates = _require_string_list(
+            candidate_summary.get("comparison_candidates"),
+            "candidate_workflow_set_summary.json must define comparison_candidates",
+        )
+        if comparison_candidates != candidate_comparison_candidates:
+            raise ValueError(
+                "strategy_summary.json comparison_candidates must match candidate_workflow_set_summary.json"
+            )
+        candidate_recommended_workflows = _require_string_list(
+            candidate_summary.get("recommended_candidate_workflows"),
+            "candidate_workflow_set_summary.json must define recommended_candidate_workflows",
+        )
+        if not set(recommended_workflows).issubset(candidate_recommended_workflows):
+            raise ValueError(
+                "strategy_summary.json recommended_workflows must be drawn from candidate_workflow_set_summary.json"
+            )
+        candidate_portfolio_posture = _require_portfolio_posture(
+            candidate_summary.get("portfolio_posture"),
+            "candidate_workflow_set_summary.json must define a legal portfolio_posture",
+        )
+        expected_strategy = _strategy_for_portfolio_posture(candidate_portfolio_posture)
+        if selected_strategy != expected_strategy:
+            raise ValueError(
+                "strategy_summary.json selected_strategy must align with candidate_workflow_set_summary.json portfolio_posture"
+            )
+        child_ready = candidate_summary.get("ready_for_strategy_selection")
+        if child_ready is not True:
+            raise ValueError(
+                "candidate_workflow_set_summary.json must confirm ready_for_strategy_selection=true"
+            )
 
         if state.selected_strategy is not None and selected_strategy != state.selected_strategy:
             raise ValueError("strategy_summary.json selected_strategy must match workflow state")
@@ -423,11 +540,32 @@ def _require_strategy(value, error_message: str) -> str:
     return strategy
 
 
+def _require_portfolio_posture(value, error_message: str) -> str:
+    posture = _require_text(value, error_message)
+    if posture not in _PORTFOLIO_POSTURES:
+        raise ValueError(error_message)
+    return posture
+
+
 def _require_string_list(value, error_message: str) -> list[str]:
     normalized = _normalize_unique_strings(value)
     if not normalized:
         raise ValueError(error_message)
     return normalized
+
+
+def _strategy_for_portfolio_posture(portfolio_posture: str) -> str:
+    mapping = {
+        "direct_fit": "run_existing",
+        "compose_needed": "compose",
+        "adapt_needed": "adapt",
+        "material_gap": "create_new",
+    }
+    return mapping[portfolio_posture]
+
+
+def _read_request_text(ctx) -> str:
+    return (ctx.run_folder / "request.md").read_text(encoding="utf-8")
 
 
 def _read_json(path):

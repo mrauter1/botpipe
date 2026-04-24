@@ -65,17 +65,17 @@ FRAME_TASK_ROUTE_CONTRACTS = {
 
 SELECT_STRATEGY_ROUTE_CONTRACTS = {
     "strategy_selected": RouteContract(
-        summary="At least three candidate workflows or building blocks were compared, the workflow-builder baseline was considered, and one explicit strategy route was selected without running it.",
-        required_artifacts=("workflow_candidate_matrix", "workflow_gap_analysis", "strategy_decision"),
+        summary="The child candidate-workflow-set package was consumed explicitly, the workflow-builder baseline remained visible, and one explicit strategy route was selected without running it.",
+        required_artifacts=("strategy_decision",),
         work_item_effect="Locks the selected strategy route and recommended workflows so packaging can produce a durable handoff instead of hidden execution.",
     ),
     "needs_rework": RouteContract(
-        summary="The same strategy-selection boundary holds, but the candidate comparison, gap analysis, or route rationale needs local repair.",
-        required_artifacts=("workflow_candidate_matrix", "workflow_gap_analysis", "strategy_decision"),
+        summary="The same strategy-selection boundary holds, but the route rationale or its use of the child candidate package needs local repair.",
+        required_artifacts=("strategy_decision",),
         work_item_effect="Keeps portfolio selection local and reruns the same step for a clearer reuse-versus-rebuild decision.",
     ),
     "needs_replan": RouteContract(
-        summary="The framing, candidate set, or legal strategy route changed materially and the task must be reframed before selection continues.",
+        summary="The framing, child candidate set, or legal strategy route changed materially and the task must be reframed before selection continues.",
         required_artifacts=("task_strategy_brief", "workflow_selection_criteria"),
         work_item_effect="Returns the workflow to framing because the current portfolio comparison is no longer authoritative.",
     ),

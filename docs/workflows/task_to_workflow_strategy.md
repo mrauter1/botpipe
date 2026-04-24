@@ -1,6 +1,6 @@
 # `task_to_workflow_strategy`
 
-`task_to_workflow_strategy` is the front-door workflow for the current portfolio. It turns an arbitrary software-work request into a durable strategy package that explicitly chooses whether to run an existing workflow as-is, compose several workflows, adapt an existing workflow, or create a new workflow because the current portfolio is materially insufficient.
+`task_to_workflow_strategy` is the front-door workflow for the current portfolio. It turns an arbitrary software-work request into a durable strategy package that explicitly chooses whether to run an existing workflow as-is, compose several workflows, adapt an existing workflow, or create a new workflow because the current portfolio is materially insufficient. In cycle 5 it was updated to compose `task_to_candidate_workflow_set` so candidate retrieval and fit-gap analysis now land as a reusable child building block rather than front-door-local logic.
 
 ## Problem and value
 
@@ -46,8 +46,13 @@ Parameters:
 Selection rationale:
 
 - The builder baseline was reconsidered and remains strong enough not to dominate cycle 4 again.
-- `task_to_candidate_workflow_set` is a likely future extraction, but the higher-value move now is the end-to-end front door that actually chooses among reuse, composition, adaptation, or new authoring.
+- `task_to_candidate_workflow_set` was the likely next extraction after cycle 4, but cycle 5 has now shipped that extraction and the front door composes it directly.
 - `task_to_workflow_strategy` is the strongest current addition because the portfolio now has enough real workflows and building blocks to justify a durable router layer.
+
+Cycle 5 implementation note:
+
+- The previously deferred `task_to_candidate_workflow_set` extraction is now shipped and composed directly inside this workflow.
+- The front door still owns final route selection and terminal strategy packaging, but it no longer re-derives candidate retrieval locally.
 
 ## Framework improvement candidates considered
 
@@ -129,6 +134,7 @@ Turn an arbitrary software-work task into an explicit strategy package that choo
 - deterministic `bootstrap`
 - deterministic `capture_workflow_portfolio`
 - `workflow strategist` / `workflow critic`
+- deterministic `build_candidate_workflow_set` child-composition step
 - `portfolio strategist` / `strategy verifier`
 - `strategy packager` / `strategy package verifier`
 - deterministic `publish_strategy`
@@ -138,9 +144,10 @@ Turn an arbitrary software-work task into an explicit strategy package that choo
 1. `bootstrap`
 2. `capture_workflow_portfolio`
 3. `frame_task`
-4. `select_strategy`
-5. `package_strategy`
-6. `publish_strategy`
+4. `build_candidate_workflow_set`
+5. `select_strategy`
+6. `package_strategy`
+7. `publish_strategy`
 
 ### Route grammar
 
@@ -155,6 +162,7 @@ Application routes:
 - `inputs_prepared`
 - `portfolio_snapshotted`
 - `task_framed`
+- `candidate_workflow_set_built`
 - `strategy_selected`
 - `strategy_package_ready`
 - `needs_rework`
@@ -168,8 +176,9 @@ Application routes:
 | `bootstrap` | `request.md`, workflow params | `invocation_contract.json` | authoritative run-local input snapshot |
 | `capture_workflow_portfolio` | `request.md`, `invocation_contract.json` | `workflow_portfolio_snapshot.json` | authoritative snapshot of the current portfolio and linked workflow docs/code |
 | `frame_task` | request, invocation contract, portfolio snapshot, framework docs | `task_strategy_brief.md`, `workflow_selection_criteria.md` | authoritative framing package for strategy selection |
-| `select_strategy` | request, invocation contract, portfolio snapshot, framing artifacts | `workflow_candidate_matrix.md`, `workflow_gap_analysis.md`, `strategy_decision.md` | authoritative portfolio decision surface |
-| `package_strategy` | request, invocation contract, portfolio snapshot, checklist, framing and selection artifacts | `workflow_strategy_package.md`, `strategy_summary.json`, `strategy_next_action.md` | terminal handoff package and machine-readable summary |
+| `build_candidate_workflow_set` | request, invocation contract, portfolio snapshot, framing artifacts | adopted `workflow_candidate_matrix.md`, `workflow_gap_analysis.md`, `candidate_route_posture.md`, `candidate_workflow_set.md`, `candidate_workflow_set_summary.json`, `candidate_next_action.md` | authoritative child candidate-set package copied into the parent workflow folder |
+| `select_strategy` | request, invocation contract, portfolio snapshot, framing artifacts, adopted child candidate artifacts | `strategy_decision.md` | authoritative final route decision surface |
+| `package_strategy` | request, invocation contract, portfolio snapshot, checklist, framing artifacts, adopted child candidate artifacts, strategy decision | `workflow_strategy_package.md`, `strategy_summary.json`, `strategy_next_action.md` | terminal handoff package and machine-readable summary |
 | `publish_strategy` | portfolio snapshot, decision artifacts, package artifacts | `strategy_receipt.json` | deterministic terminal receipt proving the front-door workflow stopped at packaging |
 
 ### Runtime-injected control contract
@@ -190,9 +199,9 @@ Step payload models:
 
 - `prompts/frame_producer.md`: role `workflow strategist`; frames the task, sponsor, terminal outcome, and explicit selection criteria without choosing the route.
 - `prompts/frame_verifier.md`: role `workflow critic`; checks that the framing package is explicit enough to support portfolio comparison.
-- `prompts/select_producer.md`: role `workflow portfolio strategist`; compares at least three candidates, includes the builder baseline, and chooses one route without executing it.
-- `prompts/select_verifier.md`: role `strategy verifier`; checks that the comparison and route decision are explicit, legal, and justified.
-- `prompts/package_producer.md`: role `strategy packager`; writes the terminal strategy package, machine-readable summary, and next-action artifact.
+- `prompts/select_producer.md`: role `workflow portfolio strategist`; consumes the published child candidate-workflow-set package and chooses one final route without executing it.
+- `prompts/select_verifier.md`: role `strategy verifier`; checks that the child package was consumed explicitly and the final route decision is legal and justified.
+- `prompts/package_producer.md`: role `strategy packager`; writes the terminal strategy package, machine-readable summary, and next-action artifact while staying consistent with the adopted child candidate package.
 - `prompts/package_verifier.md`: role `strategy package verifier`; confirms the package is ready for deterministic publication and still stops at packaging rather than hidden execution.
 
 ## Verification and evidence contract
@@ -202,6 +211,7 @@ Step payload models:
 - Runtime proof must cover:
 - successful end-to-end publication of the strategy package and receipt
 - stable publication of `workflow_portfolio_snapshot.json`, `strategy_summary.json`, and `strategy_next_action.md`
+- explicit child publication of `task_to_candidate_workflow_set` plus parent-local adoption of the child candidate artifacts
 - proof that the workflow ends at strategy packaging rather than auto-running the selected downstream workflow
 - publication validation that rejects a strategy summary that omits the builder baseline from the compared candidates
 
@@ -216,12 +226,13 @@ Step payload models:
 
 - The workflow-builder remains the standing greenfield authoring path and is explicitly considered as the `create_new` baseline during strategy selection.
 - The workflow relies on the cycle-4 workflow-catalog seam instead of inventing runtime-owned routing or hidden prompt metadata.
-- Future cycles may extract narrower building blocks such as `task_to_candidate_workflow_set`, but this workflow remains the explicit front door until a stronger portfolio architecture supersedes it.
+- `task_to_candidate_workflow_set` now handles reusable candidate retrieval and fit-gap analysis, but this workflow remains the explicit front door until a stronger portfolio architecture supersedes it.
 
 ## Evidence
 
 - Package implementation: `workflows/task_to_workflow_strategy/`
-- Shared portfolio seam consumed: `core/workflow_catalog.py` and `stdlib/portfolio.py`
+- Shared portfolio seams consumed: `core/workflow_catalog.py`, `core/workflow_capabilities.py`, and `stdlib/portfolio.py`
+- Child building block consumed: `workflows/task_to_candidate_workflow_set/`
 - Workflow asset: `workflows/task_to_workflow_strategy/assets/strategy_package_checklist.md`
 - Workflow-specific proof: `tests/runtime/test_task_to_workflow_strategy.py`
-- The scripted tests prove workflow discovery, compilation, terminal strategy publication, and publication-side validation that the builder baseline stays part of the compared-candidate set.
+- The scripted tests prove workflow discovery, explicit child composition, terminal strategy publication, and publication-side validation that the builder baseline stays part of the compared-candidate set.
