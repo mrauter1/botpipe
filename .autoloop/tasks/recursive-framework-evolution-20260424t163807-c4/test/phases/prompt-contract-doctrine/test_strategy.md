@@ -6,3 +6,20 @@
 - Phase Directory Key: prompt-contract-doctrine
 - Phase Title: Define Compact Prompt Contract Style
 - Scope: phase-local producer artifact
+- Behaviors covered:
+  - `docs/authoring.md` exposes the compact prompt-contract doctrine and the explicit runtime-boundary sentence required by AC-1.
+  - Scoped `prompts/README.md` files share the standardized section layout required by AC-2.
+  - Runtime-facing README tests still pin the route and payload contract for the eval, diagnostics, governance, company, refinement, and decomposition families.
+  - Baseline docs tests now also pin route/payload table content for the builder and selected-workflow README families that do not have dedicated prompt README runtime tests.
+- Preserved invariants checked:
+  - runtime-injected control remains limited to `expected_output_schema`, `available_routes`, and `route_contracts`
+  - no new runtime prompt abstraction or template engine is encoded in docs/tests
+- Edge cases:
+  - README regressions that keep headings but drop route tables, payload tables, or reserved-route reminders
+  - authoring-doc regressions that remove the prompt-vs-README boundary while leaving the section title in place
+- Failure paths:
+  - missing shared README sections
+  - missing route/payload tables in any scoped README
+  - missing compact prompt-contract doctrine markers in `docs/authoring.md`
+- Known gaps:
+  - prompt body compaction remains intentionally untested here because the phase kept prompt body wording out of scope

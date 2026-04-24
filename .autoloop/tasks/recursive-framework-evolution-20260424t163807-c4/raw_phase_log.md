@@ -323,3 +323,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc17a-80ae-75e2-9480-bb9099f81383
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc17a-80ae-75e2-9480-bb9099f81383
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc17a-80ae-75e2-9480-bb9099f81383
+---
+I’m reviewing the prompt-contract phase from the test surface outward: current prompt README tests, the new baseline-doc assertions, and the phase-local test artifacts. Then I’ll decide whether the repo needs any additional regression coverage beyond what the implementation already added.
+
+The current test surface already covers the new doctrine and five README families. I’m adding one more baseline-doc assertion so the four remaining scoped README families are pinned on route/payload table content too, not just section headings.
+
+I’ve added the missing cross-family baseline assertion and updated the phase test artifacts. I’m running the baseline docs suite now, since that’s the only repository test file I changed in this turn.
+
+Scope considered
+
+- Prompt-contract-doctrine phase only.
+- Existing prompt README tests, the baseline docs suite, scoped README files for regression analysis, and the phase-local test artifacts.
+
+What I analyzed
+
+- The new compact prompt-contract doctrine in `docs/authoring.md`.
+- The standardized `prompts/README.md` structure across the builder, selected-workflow, governance, company-level, refinement, and decomposition families.
+- Current test coverage split: dedicated runtime prompt README assertions for six families and baseline-doc coverage for all scoped README files.
+
+What I changed
+
+- Added one baseline regression test in `tests/test_architecture_baseline_docs.py` to require shared route/payload table markers across all scoped prompt READMEs.
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-contract-doctrine/test_strategy.md` with a behavior-to-coverage map, preserved invariants, edge cases, failure paths, and known gaps.
+- Appended a concise test-addition note to `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-contract-doctrine/feedback.md`.
+- Appended one test-scope decision under the current turn header in `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/decisions.txt`.
+
+Key findings / decisions
+
+- The implementation already had good prompt-facing coverage for six workflow families; the remaining gap was that four scoped README families were only pinned on section headings, not route/payload table content.
+- I closed that gap with one deterministic baseline-doc assertion instead of adding more duplicated family-specific tests.
+- Validation run: `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` with `26 passed`.
+
+Open issues / next step
+
+- No blocking test gaps remain for this phase’s scope.
+- Prompt body compaction remains intentionally out of scope; current coverage stays focused on doctrine and README-boundary regression protection.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

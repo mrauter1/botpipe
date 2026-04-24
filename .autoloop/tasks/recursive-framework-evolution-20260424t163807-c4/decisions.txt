@@ -7,3 +7,5 @@ Framework_evolution_charter.md remains an explicit closeout artifact in cycle 4;
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="prompt-contract-doctrine" pair="implement" turn_seq="1" run_id="run-20260424T214122Z-85956296" ts="2026-04-24T21:52:03.695844+00:00" />
 Keep this phase docs-and-README scoped: standardize the compact prompt-contract doctrine and workflow-local `prompts/README.md` sections now, but defer prompt body rewrites to a later phase.
 Use one shared README shape across the scoped workflow family (`Shared README Boundary`, `Keep In Each Prompt`, `Step Surface`, `Route Surface`, `Verifier Payloads`) so family-wide reminders do not pressure another runtime or stdlib abstraction.
+<autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="prompt-contract-doctrine" pair="test" turn_seq="1" run_id="run-20260424T214122Z-85956296" ts="2026-04-24T22:09:59.826692+00:00" />
+Add baseline-doc coverage for shared route/payload table markers across all scoped prompt READMEs so the builder and selected-workflow families are pinned even where no dedicated runtime prompt README test exists.
