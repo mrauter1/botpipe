@@ -1,0 +1,12 @@
+{
+  "mode": "persistent",
+  "provider": "codex",
+  "session_id": null,
+  "thread_id": null,
+  "provider_metadata": {},
+  "model_override": null,
+  "effort_override": null,
+  "pending_clarification_note": null,
+  "created_at": "2026-04-24T10:44:07.949734+00:00",
+  "last_used_at": null
+}
