@@ -14,13 +14,13 @@
       "cycle-nine-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "workflow-run-history-to-failure-modes"
+    "current_phase_index": 2,
+    "current_phase_id": "cycle-nine-closeout"
   },
   "phase_status": {
     "diagnostic-run-history-seam": "completed",
-    "workflow-run-history-to-failure-modes": "in_progress",
-    "cycle-nine-closeout": "planned"
+    "workflow-run-history-to-failure-modes": "completed",
+    "cycle-nine-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260424T062640Z-13174b0c",
       "status": "in_progress",
       "ts": "2026-04-24T06:53:43.531275+00:00"
+    },
+    {
+      "phase_id": "workflow-run-history-to-failure-modes",
+      "run_id": "run-20260424T062640Z-13174b0c",
+      "status": "completed",
+      "ts": "2026-04-24T07:28:06.011072+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "cycle-nine-closeout",
+      "run_id": "run-20260424T062640Z-13174b0c",
+      "status": "in_progress",
+      "ts": "2026-04-24T07:28:06.015446+00:00"
     }
   ]
 }
