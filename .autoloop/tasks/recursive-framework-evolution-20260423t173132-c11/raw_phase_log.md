@@ -463,3 +463,62 @@ Key findings / decisions
 Open issues / next step
 - Validation passed: `python3 -m py_compile workflows/workflow_package_to_composable_building_blocks/workflow.py workflows/workflow_package_to_composable_building_blocks/contracts.py workflows/workflow_package_to_composable_building_blocks/params.py tests/runtime/test_workflow_package_to_composable_building_blocks.py` and `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` (`20 passed in 5.17s`).
 - I did not run the full repository test suite. The next logical follow-on is either a company-level recursive learner above governance/decomposition or a migration candidate that consumes the new decomposition layer.
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+I’m reviewing the phase-local implementation only: the new decomposition workflow package, its doc/test proof, and the phase artifacts. I’ll inspect the changed surfaces against the acceptance criteria, decisions ledger, and likely regression seams before I write findings.
+
+Reviewing the implementation against the phase contract now. I’ll inspect the changed workflow package, its tests/docs, and the phase artifacts, then update `criteria.md` and `feedback.md` with any concrete findings only if they materially affect acceptance or safety.
+
+I’ve confirmed the phase artifact state and the decision ledger. Next I’m reading the workflow implementation and the runtime proof directly to check the acceptance gates against actual behavior rather than relying on the implement summary.
+
+The workflow structure and tests line up with the phase contract so far. I’m in the publication helpers now, where the likely regression risks live: manifest derivation, boundary enforcement, and the isolated overlay validation path.
+
+I’ve read the publication path and prompt contracts. The remaining checks are around real runtime behavior at the edges: alias resolution, publish validation against tampering, and whether any acceptance-critical cases are untested or implemented inconsistently.
+
+I found one area worth probing directly rather than reasoning abstractly: whether publication validates the actual `candidate_decomposition_surface/` directory or only the manifest snapshot. If it trusts only the manifest, an undeclared file added after manifest generation could bypass the boundary check.
+
+I found a second publish-side blind spot worth verifying. The building-block index declares package, doc, and runtime-test paths, but the current validation only constrains where added files may live; it may not require the declared doc/test files to actually exist in the candidate overlay.
+
+I have two concrete publication bugs, both in the candidate-surface validation path. I’m pulling exact line references now so the feedback is actionable and minimal rather than speculative.
+
+I have the review outcome. I’m only updating the verifier-owned phase artifacts now: one criteria file and one feedback file, with exact references and minimal fix directions.
+
+Scope considered
+- Phase-local review of `workflow_package_to_composable_building_blocks`, its docs/tests/prompts, and the verifier-owned phase artifacts only.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/workflow-package-to-building-blocks/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/workflow-package-to-building-blocks/feedback.md).
+
+What I analyzed
+- `workflows/workflow_package_to_composable_building_blocks/workflow.py`, `contracts.py`, `params.py`, `workflow.toml`, prompt templates, and the workflow doc.
+- `tests/runtime/test_workflow_package_to_composable_building_blocks.py` plus the phase notes and decision ledger.
+- Validation rerun: `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` passed with `20 passed in 4.83s`.
+- Two targeted ad hoc publication repros against the shipped helper path.
+
+What I reviewed
+- AC-1 through AC-4, with focus on publish-time boundary enforcement, candidate-only guarantees, and artifact completeness.
+- Whether the implementation’s publish path matches the prompt/doc contract for declared building-block docs and runtime tests.
+- Whether the runtime proof actually covers the acceptance-critical tampering cases.
+
+Key findings / decisions
+- `IMP-001` blocking: [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py:1269) validates only the manifest snapshot and never rescans the real `candidate_decomposition_surface/`. I reproduced a case where an extra out-of-boundary file was added after manifest generation and publication still returned `candidate_decomposition_published`.
+- `IMP-002` blocking: [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py:1175) does not require the declared `doc_relative_path` and `runtime_test_relative_path` to exist in the candidate overlay. With a narrower `target_test_command`, publication still succeeded after removing both declared files.
+- Review status is `INCOMPLETE`. The phase criteria remain unchecked except `Technical Debt / Simplicity`.
+
+Open issues / next step
+- Tighten publish-time validation so it compares the manifest against the actual candidate surface and requires every declared doc/test path to exist.
+- Add runtime regressions for both tampering cases, then rerun the workflow-specific runtime suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
