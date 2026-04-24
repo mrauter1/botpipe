@@ -14,13 +14,13 @@
       "cycle-eight-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "cycle-eight-closeout"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "refinement-surface-seam": "completed",
     "workflow-and-eval-to-refined-workflow-package": "completed",
-    "cycle-eight-closeout": "in_progress"
+    "cycle-eight-closeout": "completed"
   },
   "phase_history": [
     {
@@ -54,6 +54,13 @@
       "run_id": "run-20260424T045554Z-27198177",
       "status": "in_progress",
       "ts": "2026-04-24T06:18:11.819174+00:00"
+    },
+    {
+      "phase_id": "cycle-eight-closeout",
+      "run_id": "run-20260424T045554Z-27198177",
+      "status": "completed",
+      "ts": "2026-04-24T06:26:40.054395+00:00",
+      "pair": "test"
     }
   ]
 }
