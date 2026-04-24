@@ -731,6 +731,24 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_identity
         )
 
 
+def test_workflow_package_to_composable_building_blocks_publish_rejects_authoritative_source_drift(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run = _run_successful_decomposition_workflow(tmp_path, monkeypatch, include_evidence_paths=True)
+    authoritative_prompt = tmp_path / PARENT_PROMPT_RELATIVE_PATH
+    authoritative_prompt.write_text(authoritative_prompt.read_text(encoding="utf-8") + "\nDrift.\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="authoritative selected workflow file changed during decomposition publication",
+    ):
+        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
+            run.result.state,
+            run.publish_context,
+        )
+
+
 def test_workflow_package_to_composable_building_blocks_publish_rejects_candidate_files_outside_allowed_boundary(
     tmp_path: Path,
     monkeypatch,

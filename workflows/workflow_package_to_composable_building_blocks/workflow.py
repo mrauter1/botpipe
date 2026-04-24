@@ -3,13 +3,8 @@
 from __future__ import annotations
 
 import json
-import shlex
 import shutil
-import subprocess
-import sys
-import tempfile
 from collections.abc import Mapping
-from contextlib import contextmanager
 from functools import partial
 from hashlib import sha256
 from pathlib import Path
@@ -18,9 +13,10 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.core.compiler import compile_workflow
-    from autoloop_v3.runtime.loader import resolve_workflow_reference
     from autoloop_v3.stdlib import (
+        derive_candidate_surface_manifest,
+        materialize_baseline_surface,
+        normalize_candidate_surface_boundary,
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
@@ -28,6 +24,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        validate_authoritative_surface_sources_unchanged,
+        validate_candidate_surface_overlay,
         write_selected_workflow_decomposition_surface,
     )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
@@ -38,9 +36,10 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_workflow_json,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from core.compiler import compile_workflow
-    from runtime.loader import resolve_workflow_reference
     from stdlib import (
+        derive_candidate_surface_manifest,
+        materialize_baseline_surface,
+        normalize_candidate_surface_boundary,
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
@@ -48,6 +47,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        validate_authoritative_surface_sources_unchanged,
+        validate_candidate_surface_overlay,
         write_selected_workflow_decomposition_surface,
     )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
@@ -745,34 +746,11 @@ def _decomposition_surface_boundary(
         decomposition_surface.get("selected_workflow_authoring_surface"),
         "selected_workflow_decomposition_surface.json must define selected_workflow_authoring_surface as a JSON object",
     )
-
-    package_dir = Path(
-        _require_text(
-            authoring_surface.get("package_dir"),
-            "selected_workflow_decomposition_surface.json must define selected_workflow_authoring_surface.package_dir",
-        )
-    ).resolve()
-    try:
-        parent_package_root_relative_path = package_dir.relative_to(repo_root).as_posix()
-    except ValueError as exc:
-        raise ValueError("selected_workflow_decomposition_surface.json package_dir must stay under the repo root") from exc
-
-    baseline_relative_paths: list[str] = []
-    for raw_path in _require_string_list(
-        authoring_surface.get("editable_paths"),
-        "selected_workflow_decomposition_surface.json must define non-empty editable_paths",
-    ):
-        path = Path(raw_path).resolve()
-        if not path.is_file():
-            raise FileNotFoundError(f"selected_workflow_decomposition_surface.json path does not exist: {path}")
-        try:
-            relative_path = path.relative_to(repo_root).as_posix()
-        except ValueError as exc:
-            raise ValueError(
-                "selected_workflow_decomposition_surface.json editable_paths must stay under the repo root"
-            ) from exc
-        if relative_path not in baseline_relative_paths:
-            baseline_relative_paths.append(relative_path)
+    normalized_boundary = normalize_candidate_surface_boundary(
+        repo_root,
+        authoring_surface,
+        error_prefix="selected_workflow_decomposition_surface.json",
+    )
 
     return {
         "selected_workflow_name": _require_text(
@@ -783,18 +761,10 @@ def _decomposition_surface_boundary(
             identity.get("package_name"),
             "selected_workflow_decomposition_surface.json must define selected_workflow_identity.package_name",
         ),
-        "parent_package_root_relative_path": parent_package_root_relative_path,
-        "parent_doc_relative_path": _optional_repo_relative_path(
-            repo_root,
-            authoring_surface.get("doc_path"),
-            "selected_workflow_decomposition_surface.json doc_path must stay under the repo root",
-        ),
-        "parent_runtime_test_relative_path": _optional_repo_relative_path(
-            repo_root,
-            authoring_surface.get("runtime_test_path"),
-            "selected_workflow_decomposition_surface.json runtime_test_path must stay under the repo root",
-        ),
-        "baseline_relative_paths": sorted(baseline_relative_paths),
+        "parent_package_root_relative_path": normalized_boundary["package_root_relative_path"],
+        "parent_doc_relative_path": normalized_boundary["doc_relative_path"],
+        "parent_runtime_test_relative_path": normalized_boundary["runtime_test_relative_path"],
+        "baseline_relative_paths": normalized_boundary["baseline_relative_paths"],
     }
 
 
@@ -805,31 +775,16 @@ def _write_baseline_parent_manifest(
     selected_workflow_name: str,
     boundary: Mapping[str, Any],
 ) -> dict[str, Any]:
-    baseline_root = ctx.workflow_folder / "baseline_parent_workflow_surface"
-    candidate_root = ctx.workflow_folder / "candidate_decomposition_surface"
-    shutil.rmtree(baseline_root, ignore_errors=True)
-    shutil.rmtree(candidate_root, ignore_errors=True)
-
-    files: list[dict[str, Any]] = []
-    for relative_path in _require_string_list(
-        boundary.get("baseline_relative_paths"),
-        "baseline boundary must define non-empty baseline_relative_paths",
-    ):
-        source_path = repo_root / relative_path
-        target_path = baseline_root / relative_path
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, target_path)
-        digest = _sha256_file(source_path)
-        files.append(
-            {
-                "relative_path": relative_path,
-                "source_path": str(source_path),
-                "surface_path": str(target_path),
-                "surface_sha256": digest,
-                "authoritative_source_sha256": digest,
-                "size_bytes": source_path.stat().st_size,
-            }
-        )
+    surface_manifest = materialize_baseline_surface(
+        workflow_folder=ctx.workflow_folder,
+        repo_root=repo_root,
+        baseline_relative_paths=_require_string_list(
+            boundary.get("baseline_relative_paths"),
+            "baseline boundary must define non-empty baseline_relative_paths",
+        ),
+        baseline_dir_name="baseline_parent_workflow_surface",
+        candidate_dir_name="candidate_decomposition_surface",
+    )
 
     manifest = {
         "surface_kind": "baseline_parent",
@@ -847,13 +802,7 @@ def _write_baseline_parent_manifest(
             boundary.get("parent_runtime_test_relative_path")
         ),
         "repo_root": str(repo_root),
-        "surface_root": str(baseline_root),
-        "relative_paths": _require_string_list(
-            boundary.get("baseline_relative_paths"),
-            "baseline boundary must define non-empty baseline_relative_paths",
-        ),
-        "file_count": len(files),
-        "files": files,
+        **surface_manifest,
     }
     write_workflow_json(ctx, "baseline_parent_manifest.json", manifest)
     return manifest
@@ -941,18 +890,6 @@ def _write_candidate_decomposition_manifest(
     selected_workflow_name: str,
     max_candidate_building_blocks: int,
 ) -> dict[str, Any]:
-    candidate_root = workflow_folder / "candidate_decomposition_surface"
-    if not candidate_root.is_dir():
-        raise FileNotFoundError(f"candidate decomposition surface was not written at {candidate_root}")
-
-    baseline_files = _manifest_file_map(
-        baseline_manifest,
-        "baseline_parent_manifest.json must define files as a JSON array of objects with relative_path",
-    )
-    baseline_relative_paths = _require_string_list(
-        baseline_manifest.get("relative_paths"),
-        "baseline_parent_manifest.json must define non-empty relative_paths",
-    )
     boundary = {
         "parent_package_name": _require_text(
             baseline_manifest.get("parent_package_name"),
@@ -979,35 +916,13 @@ def _write_candidate_decomposition_manifest(
         boundary=boundary,
         max_candidate_building_blocks=max_candidate_building_blocks,
     )
-
-    candidate_relative_paths = _surface_relative_paths(candidate_root)
-    if not candidate_relative_paths:
-        raise ValueError("candidate_decomposition_surface must contain at least one file")
-
-    files: list[dict[str, Any]] = []
-    changed_relative_paths: list[str] = []
-    added_relative_paths: list[str] = []
-    for relative_path in candidate_relative_paths:
-        surface_path = candidate_root / relative_path
-        digest = _sha256_file(surface_path)
-        baseline_entry = baseline_files.get(relative_path)
-        changed_from_baseline = baseline_entry is None or digest != _require_text(
-            baseline_entry.get("surface_sha256"),
-            "baseline_parent_manifest.json file entries must define non-empty surface_sha256",
-        )
-        if baseline_entry is None:
-            added_relative_paths.append(relative_path)
-        if changed_from_baseline:
-            changed_relative_paths.append(relative_path)
-        files.append(
-            {
-                "relative_path": relative_path,
-                "surface_path": str(surface_path),
-                "surface_sha256": digest,
-                "size_bytes": surface_path.stat().st_size,
-                "changed_from_baseline": changed_from_baseline,
-            }
-        )
+    surface_manifest = derive_candidate_surface_manifest(
+        workflow_folder=workflow_folder,
+        baseline_manifest=baseline_manifest,
+        candidate_dir_name="candidate_decomposition_surface",
+        baseline_manifest_label="baseline_parent_manifest.json",
+        candidate_manifest_label="candidate_decomposition_manifest.json",
+    )
 
     manifest = {
         "surface_kind": "candidate_decomposition",
@@ -1016,19 +931,9 @@ def _write_candidate_decomposition_manifest(
         "parent_package_root_relative_path": boundary["parent_package_root_relative_path"],
         "parent_doc_relative_path": boundary["parent_doc_relative_path"],
         "parent_runtime_test_relative_path": boundary["parent_runtime_test_relative_path"],
-        "repo_root": _require_text(
-            baseline_manifest.get("repo_root"),
-            "baseline_parent_manifest.json must define non-empty repo_root",
-        ),
-        "surface_root": str(candidate_root),
-        "baseline_relative_paths": baseline_relative_paths,
-        "relative_paths": candidate_relative_paths,
-        "file_count": len(candidate_relative_paths),
-        "changed_relative_paths": changed_relative_paths,
-        "added_relative_paths": added_relative_paths,
+        **surface_manifest,
         "building_block_names": declared_building_blocks["building_block_names"],
         "building_block_package_roots": declared_building_blocks["allowed_package_roots"],
-        "files": files,
     }
     target_path = workflow_folder / "candidate_decomposition_manifest.json"
     target_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1171,22 +1076,12 @@ def _validate_baseline_parent_manifest(
 
 
 def _validate_authoritative_files_unchanged(baseline_manifest: Mapping[str, Any], repo_root: Path) -> None:
-    for relative_path, entry in _manifest_file_map(
+    validate_authoritative_surface_sources_unchanged(
         baseline_manifest,
-        "baseline_parent_manifest.json must define files as a JSON array of objects with relative_path",
-    ).items():
-        source_path = repo_root / relative_path
-        if not source_path.exists():
-            raise FileNotFoundError(f"authoritative selected workflow file is missing: {source_path}")
-        current_digest = _sha256_file(source_path)
-        expected_digest = _require_text(
-            entry.get("authoritative_source_sha256"),
-            "baseline_parent_manifest.json file entries must define non-empty authoritative_source_sha256",
-        )
-        if current_digest != expected_digest:
-            raise ValueError(
-                f"authoritative selected workflow file changed during decomposition publication: {relative_path}"
-            )
+        repo_root,
+        baseline_manifest_label="baseline_parent_manifest.json",
+        drift_error_prefix="authoritative selected workflow file changed during decomposition publication",
+    )
 
 
 def _validate_building_block_index(
@@ -1439,112 +1334,30 @@ def _validate_candidate_overlay(
     candidate_manifest: Mapping[str, Any],
     target_test_command: str,
 ) -> dict[str, Any]:
-    candidate_root = Path(
-        _require_text(
-            candidate_manifest.get("surface_root"),
-            "candidate_decomposition_manifest.json must define non-empty surface_root",
-        )
+    overlay_validation = validate_candidate_surface_overlay(
+        repo_root=repo_root,
+        workflow_names=[selected_workflow_name, *building_block_names],
+        candidate_manifest=candidate_manifest,
+        target_test_command=target_test_command,
+        candidate_manifest_label="candidate_decomposition_manifest.json",
+        overlay_failure_prefix="overlay validation command failed for candidate decomposition surface",
+        overlay_temp_prefix="workflow_decomposition_overlay_",
     )
-    command = _require_text(target_test_command, "target_test_command must stay non-empty")
-    command_args = shlex.split(command)
-    if command_args and command_args[0] == "pytest":
-        command_args = [sys.executable, "-m", "pytest", *command_args[1:]]
-    overlay_source_root = _resolve_overlay_source_root(repo_root)
-
-    with tempfile.TemporaryDirectory(prefix="workflow_decomposition_overlay_") as tmp_dir:
-        overlay_root = Path(tmp_dir) / overlay_source_root.name
-        shutil.copytree(
-            overlay_source_root,
-            overlay_root,
-            ignore=shutil.ignore_patterns(
-                ".autoloop",
-                ".git",
-                ".pytest_cache",
-                "__pycache__",
-                "*.pyc",
-                ".mypy_cache",
-                ".ruff_cache",
-                ".venv",
-            ),
-        )
-        repo_venv = overlay_source_root / ".venv"
-        overlay_venv = overlay_root / ".venv"
-        if repo_venv.exists() and not overlay_venv.exists():
-            overlay_venv.symlink_to(repo_venv, target_is_directory=True)
-
-        for relative_path in _require_string_list(
-            candidate_manifest.get("relative_paths"),
-            "candidate_decomposition_manifest.json must define non-empty relative_paths",
-        ):
-            source_path = candidate_root / relative_path
-            target_path = overlay_root / relative_path
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_path, target_path)
-
-        compiled_workflow_names: list[str] = []
-        with _preserved_workflow_modules():
-            for workflow_name in [selected_workflow_name, *building_block_names]:
-                resolved = resolve_workflow_reference(overlay_root, workflow_name)
-                compiled = compile_workflow(resolved.workflow_cls)
-                compiled_workflow_names.append(compiled.workflow_name)
-
-        completed = subprocess.run(
-            command_args,
-            cwd=overlay_root,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if completed.returncode != 0:
-            raise ValueError(
-                "overlay validation command failed for candidate decomposition surface: "
-                f"{command}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
-            )
-        return {
-            "compiled_workflow_names": compiled_workflow_names,
-            "test_command": command,
-            "test_returncode": completed.returncode,
-        }
-
-
-def _resolve_overlay_source_root(repo_root: Path) -> Path:
-    if _is_runnable_repo_root(repo_root):
-        return repo_root
-    try:
-        import autoloop_v3
-    except ImportError as exc:  # pragma: no cover - defensive fallback for broken test/runtime setup
-        raise ValueError(
-            "publish-time overlay validation requires a runnable repo root or an importable autoloop_v3 package"
-        ) from exc
-
-    package_root = Path(autoloop_v3.__file__).resolve().parent
-    if not _is_runnable_repo_root(package_root):
-        raise ValueError(f"autoloop_v3 package root is not runnable for overlay validation: {package_root}")
-    return package_root
-
-
-def _is_runnable_repo_root(path: Path) -> bool:
-    return (
-        path.is_dir()
-        and (path / "__init__.py").is_file()
-        and (path / "core").is_dir()
-        and (path / "runtime").is_dir()
-        and (path / "tests" / "conftest.py").is_file()
+    compiled_workflow_names = _require_string_list(
+        overlay_validation.get("compiled_workflow_names"),
+        "overlay validation must define non-empty compiled_workflow_names",
     )
-
-
-@contextmanager
-def _preserved_workflow_modules():
-    preserved = {
-        name: module for name, module in sys.modules.items() if name == "workflows" or name.startswith("workflows.")
+    test_returncode = overlay_validation.get("test_returncode")
+    if not isinstance(test_returncode, int) or test_returncode < 0:
+        raise ValueError("overlay validation must define non-negative integer test_returncode")
+    return {
+        "compiled_workflow_names": compiled_workflow_names,
+        "test_command": _require_text(
+            overlay_validation.get("test_command"),
+            "overlay validation must define non-empty test_command",
+        ),
+        "test_returncode": test_returncode,
     }
-    try:
-        yield
-    finally:
-        for name in tuple(sys.modules):
-            if name == "workflows" or name.startswith("workflows."):
-                sys.modules.pop(name, None)
-        sys.modules.update(preserved)
 
 
 def _resolve_input_path(repo_root: Path, raw_value: str, field_name: str) -> Path:
@@ -1598,17 +1411,6 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(65536), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def _optional_repo_relative_path(repo_root: Path, raw_value: Any, error_message: str) -> str | None:
-    normalized = _normalize_optional_text(raw_value)
-    if normalized is None:
-        return None
-    path = Path(normalized).resolve()
-    try:
-        return path.relative_to(repo_root).as_posix()
-    except ValueError as exc:
-        raise ValueError(error_message) from exc
 
 
 def _require_repo_relative_path(value: Any, *, prefix: str, error_message: str) -> str:

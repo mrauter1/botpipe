@@ -464,3 +464,80 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1e2-4332-7dd3-8493-2aaba416ebf4
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc1e2-4332-7dd3-8493-2aaba416ebf4
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1e2-4332-7dd3-8493-2aaba416ebf4
+---
+I’m auditing the repository and phase artifacts first so I can pin down the exact duplicated refinement/decomposition surface work before editing. I’ll inspect the active feedback, prior seam work, the touched workflows, the shared helper seam, and the targeted tests/docs/memory files, then implement only the migration scoped by this phase.
+
+I’ve confirmed the phase is the migration step after the shared seam landed. Now I’m reading the refinement/decomposition workflows, the new `candidate_surfaces` seam, targeted tests, docs, and recursive-memory files so I can migrate only the duplicated mechanical helpers and preserve the workflow-local policy checks.
+
+The workflow cores confirm the migration target: both files still carry their own baseline/candidate/overlay helper tails. I’m locating the exact duplicated helper boundaries now so I can replace them with the shared seam without touching the workflow-specific evidence and receipt logic.
+
+The duplicated areas are confirmed: baseline boundary derivation, manifest writing, authoritative-drift checks, and overlay validation are still local in both workflows. I’m checking the helper exports and the specific runtime assertions around publication behavior so the migration preserves the exact artifact and receipt contract those tests expect.
+
+I’ve got the boundary now. Next step is to patch the two workflows so their manifest capture and overlay validation delegate to `stdlib.candidate_surfaces`, while keeping the refinement evaluation-summary checks and decomposition building-block policy local. After that I’ll update the targeted runtime tests and the phase notes/memory files.
+
+I’m patching the refinement workflow first. The edit is limited to replacing its local baseline/candidate/overlay mechanics with calls into `stdlib.candidate_surfaces`, while preserving the receipt payload, artifact names, and domain-specific publication checks exactly as they are today.
+
+The first patch missed a couple of exact line anchors in the refinement file. I’m reloading the current sections and applying a narrower patch so I only touch the migrated helper blocks and the import surface.
+
+The refinement workflow now delegates its baseline/candidate capture and overlay validation to the shared seam while keeping its publication policy local. I’m applying the same migration to decomposition next, with the same constraint: shared mechanics only, decomposition evidence and building-block policy remain local.
+
+I’ve finished the workflow migration. I’m updating the runtime tests now to pin the shared-seam behavior on the real workflows by checking publish-time authoritative-source drift rejection in both refinement and decomposition, in addition to the existing receipt and boundary assertions.
+
+The code changes are in. I’m running the scoped proof now: the two runtime suites that cover receipt publication, boundary rejection, and the new authoritative-drift rejection, plus the architecture-doc baseline test to make sure the docs/memory edits I’ll add next don’t drift from repo expectations.
+
+The doc baseline already passed. The two runtime suites are still running, and so far both are clean through the early test batches. I’m waiting on the final results before I update the phase notes and recursive-memory ledgers.
+
+The scoped proof passed: `23` refinement tests, `24` decomposition tests, and `27` architecture-doc baseline tests. I’m doing the closeout edits now: implementation notes, the phase decision log, and the recursive-memory ledgers/charter so the migration is recorded with the required audit, rationale, and debt accounting.
+
+The migration is complete and recorded. I’m doing one last pass over the targeted diff so I can close out with exact scope, what changed, and the practical line-count impact instead of hand-waving it.
+
+I have the tracked diff numbers now. I’m tightening the implementation notes to record the actual scoped net line change instead of leaving that as a qualitative note.
+
+Scope considered
+
+- Phase-local workflow migration for refinement/decomposition candidate-publication mechanics.
+- Audited the active phase artifacts, [workflow_and_eval_to_refined_workflow_package/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py), [workflow_package_to_composable_building_blocks/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py), `stdlib/candidate_surfaces.py`, targeted runtime tests, `docs/architecture.md`, `docs/authoring.md`, and the required `.autoloop_recursive/*` memory files.
+- Kept unrelated dirty files out of scope.
+
+What I analyzed
+
+- The duplicated helper tails in both workflows: boundary normalization, baseline surface copy, candidate-manifest derivation, authoritative-source drift checks, and isolated overlay validation.
+- The workflow-local validation that needed to stay local: refinement evaluation-summary/capability checks, decomposition evidence capture, building-block index validation, allowed-path policy, and receipt shaping.
+- The targeted runtime assertions that pin artifact names, route names, receipt keys, and overlay-validation payloads.
+
+What I changed
+
+- Migrated both workflows to use `stdlib.candidate_surfaces` for the shared mechanical publication work while preserving existing receipt/artifact contracts.
+- Added one runtime regression test to each suite for publish-time authoritative-source drift rejection:
+  - [test_workflow_and_eval_to_refined_workflow_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py)
+  - [test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py)
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/refinement-decomposition-migration/implementation_notes.md), [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/decisions.txt), and the required `.autoloop_recursive` charter/roadmap/gap/debt ledgers.
+- Tracked scoped diff across code/tests: `289` insertions, `503` deletions, net `-214` lines.
+
+Key findings / decisions
+
+- Cycle mode stayed `consolidate`; no new workflow was necessary.
+- The shared seam now owns only mechanical baseline/candidate/overlay behavior. Workflow-local policy remains explicit in the workflow files.
+- Artifact names, route names, receipt keys, prompt paths, CLI behavior, and `ctx.invoke_workflow(...)` compatibility were preserved.
+- Validation passed:
+  - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`: `23 passed`
+  - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`: `24 passed`
+  - `tests/test_architecture_baseline_docs.py`: `27 passed`
+
+Open issues / next step
+
+- No in-scope blocker remains.
+- Deferred debt stays narrow: if a third candidate-publication workflow appears, reuse `stdlib/candidate_surfaces` again before adding another local helper tail.

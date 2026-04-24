@@ -694,6 +694,24 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_candidate
         )
 
 
+def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authoritative_source_drift(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run = _run_successful_refinement_workflow(tmp_path, monkeypatch)
+    authoritative_prompt = tmp_path / PROMPT_RELATIVE_PATH
+    authoritative_prompt.write_text(authoritative_prompt.read_text(encoding="utf-8") + "\nDrift.\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="authoritative selected workflow file changed during refinement publication",
+    ):
+        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
+            run.result.state,
+            run.publish_context,
+        )
+
+
 def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_candidate_files_outside_selected_boundary(
     tmp_path: Path,
     monkeypatch,
