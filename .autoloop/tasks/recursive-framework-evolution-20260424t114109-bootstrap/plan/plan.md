@@ -29,6 +29,38 @@
 - Extend `workflow.json`, `run.json`, and child-run metadata with workflow origin details: `reference`, `source_path`, `class_name`, `authoring_shape`, `manifest_path`.
 - Update the unnamed workflow fallback so compilation/runtime identity defaults to snake_case class name when `name` is absent.
 
+## Parameter resolution contract
+
+- Parameter resolution order is fixed and must be implemented/tested in this order:
+- `WorkflowClass.Parameters`, if present.
+- Module-level `Parameters` in the executable flow module (`flow.py`, `workflow.py`, or single-file workflow module).
+- Package-exported `Parameters` when the workflow is being resolved/imported as a package.
+- Existing legacy package convention, preserving current mature-package behavior (`params.py` / current package convention support).
+- No parameters.
+- `specs.py` remains ordinary Python. If `flow.py` imports `Parameters` from `specs.py`, that is satisfied through the first two branches above; the runtime must not scan or special-case `specs.py`.
+
+## Deep inspection contract
+
+- Deep inspection must report the compiled and authoring surfaces the request names, not only a subset.
+- Required compiled/deep fields:
+- workflow class
+- workflow name
+- state model
+- parameters model if present
+- steps
+- artifacts
+- sessions
+- transitions
+- route contracts
+- expected output schemas
+- prompt paths
+- source path
+- package folder / package dir
+- manifest path if present
+- authoring shape
+- inferred optional support-file paths (`spec_paths`, `prompt_paths`, `asset_paths`, `doc_paths`, `test_paths`)
+- Portfolio/adaptation/refinement/decomposition helper payloads must treat missing required deep-inspection fields as regressions, because they depend on the same contract.
+
 ## Resolution and discovery rules
 
 - Named resolution order: manifest catalog entry, inferred `workflows/<name>/flow.py`, inferred `workflows/<name>/workflow.py`, inferred `workflows/<name>.py`.
@@ -39,7 +71,7 @@
 
 ## Phase 1: Resolver Foundation And Contract Tests
 
-- Add tests for single-file workflows, multi-class ambiguity, path/module/class refs, explicit workflow-directory refs, `flow.py` packages without `workflow.toml`, prompt resolution, parameter resolution order, and strict root shim invariants.
+- Add tests for single-file workflows, multi-class ambiguity, path/module/class refs, explicit workflow-directory refs, `flow.py` packages without `workflow.toml`, prompt resolution, the exact five-branch parameter resolution order, and strict root shim invariants.
 - Introduce isolated import/reference helpers and refactor `runtime.loader.resolve_workflow_reference(...)` to handle names, aliases, file refs, directory refs, module refs, and imported classes through one path.
 - Update `runtime.runner`, `runtime.workspace`, `core.context`, and related tests so execution uses the resolved reference/package directory, persists origin metadata, and exposes `ctx.root`.
 - Preserve existing package workflows, aliases, `ctx.invoke_workflow(...)`, and package-local prompt resolution.
@@ -47,8 +79,9 @@
 ## Phase 2: Shallow Discovery, Deep Inspection, And Helper Migration
 
 - Refactor `core.workflow_catalog` to scan manifests plus inferred `flow.py`, `workflow.py`, and top-level `*.py` under `workflows/` without importing modules or requiring `workflows/__init__.py`.
-- Refactor `core.workflow_capabilities` to deep-inspect via the unified resolver instead of `workflows.<pkg>.workflow` imports, including path-based deep inspection and generalized parameter lookup order.
+- Refactor `core.workflow_capabilities` to deep-inspect via the unified resolver instead of `workflows.<pkg>.workflow` imports, including path-based deep inspection and the exact parameter lookup order: `WorkflowClass.Parameters`, flow-module `Parameters`, package-exported `Parameters`, existing legacy package convention, then none.
 - Update stdlib helper seams (`portfolio`, `adaptation`, `refinement`, `decomposition`, `evaluation`, `company`, `diagnostics`) to use `ctx.root`, tolerate absent manifest/spec/docs/prompts/assets/tests, and emit authoring-shape-aware payloads.
+- Expand the deep-inspection/capability contract and tests so it explicitly reports state model, parameters model, steps, artifacts, sessions, transitions, route contracts, expected output schemas, prompt paths, source path, package folder, manifest path when present, authoring shape, and optional support-file paths.
 - Keep manifest validation metadata-only and reject semantic fields such as `steps`, `transitions`, `prompts`, `sessions`, `parameters`, `artifacts`, and `route_contracts`.
 
 ## Phase 3: Authoring Helpers, Scaffold, And Builder Migration
@@ -71,6 +104,7 @@
 - Existing `workflow.py` + `workflow.toml` packages remain runnable and discoverable.
 - `workflow.toml` stays optional for execution and metadata-only when present.
 - `specs.py` remains ordinary Python and is never scanned or required by the runtime.
+- Existing parameter discovery behavior for mature packages must be preserved through the explicit precedence order; this is a compatibility surface, not an implementation detail.
 - `workflows list` must surface manifest and inferred workflows without import side effects.
 - `workflows show` and execution may import/compile.
 - Resume/log/run-history commands continue to key off canonical `workflow_name`; origin metadata provides traceability for path-based runs.
@@ -79,9 +113,11 @@
 ## Regression controls
 
 - Add negative tests for manifest semantic-field rejection, multi-class ambiguity, duplicate named candidates, origin/name collisions, missing prompt files, and path-escape protection in JSON helper writers.
+- Add positive coverage for all five parameter-resolution branches so existing module-level, package-exported, and legacy-package parameter discovery cannot regress silently.
 - Validate that `ctx.invoke_workflow(...)` and stdlib composition helpers can still invoke existing package workflows and new file-based workflows through the same resolver.
 - Keep shallow discovery import-free by testing with sentinel files that would raise on import.
 - Verify run metadata, child-run records, and workflow-local snapshot helpers all persist the same canonical `workflow_name` while preserving origin details.
+- Verify deep inspection and capability payloads include the full required compiled surface: state model, parameters model, steps, artifacts, sessions, transitions, route contracts, expected output schemas, prompt paths, and optional support-file paths.
 - Confirm new stdlib helpers reduce repeated validation/route boilerplate without adding runtime-owned routing or manifest semantics.
 
 ## Risk register
@@ -96,6 +132,7 @@
 
 - Single-file, flow/specs, and legacy `workflow.py` workflows all compile and run.
 - Shallow discovery lists manifest and inferred workflows without import side effects.
-- Deep inspection exposes steps, parameters, routes, prompts, and optional support-file paths for every supported authoring shape.
+- Parameter resolution follows the explicit precedence order and preserves current mature-package compatibility.
+- Deep inspection exposes workflow class, workflow name, state model, parameters model, steps, artifacts, sessions, transitions, route contracts, expected output schemas, prompt paths, source path, package folder, manifest path when present, authoring shape, and optional support-file paths for every supported authoring shape.
 - `autoloop init workflow` and the builder generate the requested shapes with the correct defaults.
 - Docs/templates no longer claim `workflow.py`, `workflow.toml`, `prompts/`, and `assets/` are mandatory minimums.

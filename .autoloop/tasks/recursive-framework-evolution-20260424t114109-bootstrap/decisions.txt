@@ -4,3 +4,6 @@ Canonical docs for this slice are `docs/architecture.md`, `docs/authoring.md`, a
 Stdlib helpers that need repository discovery must read the real repo root from runtime context (`ctx.root`) instead of inferring it from `package_folder`.
 If two different workflow origins would resolve to the same canonical `workflow_name` within one task/workspace, resolution must fail clearly instead of merging histories.
 Keep `workflows list` shallow and import-free; keep `workflows show` compatibility-conscious instead of forcing a shallow-by-default behavior change without evidence it is safe.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260424T144110Z-aa024541" ts="2026-04-24T14:52:44.667706+00:00" />
+Parameter resolution precedence for this slice is fixed: `WorkflowClass.Parameters`, executable-flow-module `Parameters`, package-exported `Parameters`, existing legacy package convention, then no parameters.
+Deep inspection is not complete unless it reports workflow class, workflow name, state model, parameters model, steps, artifacts, sessions, transitions, route contracts, expected output schemas, prompt paths, source path, package folder, manifest path when present, authoring shape, and optional support-file paths.

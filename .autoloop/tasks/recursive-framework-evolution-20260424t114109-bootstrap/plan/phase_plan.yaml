@@ -10,8 +10,8 @@ phases:
   status: planned
   in_scope:
   - Add tests and fixtures for single-file workflows, flow.py packages, explicit file
-    refs, explicit directory refs, module/class refs, ambiguity errors, and prompt-resolution
-    behavior.
+    refs, explicit directory refs, module/class refs, ambiguity errors, prompt-resolution
+    behavior, and the exact five-branch parameter-resolution order.
   - Introduce the internal workflow-reference/origin model plus isolated import helpers
     used by runtime resolution.
   - Refactor runtime loader, runner, workspace metadata, and context so execution
@@ -59,9 +59,15 @@ phases:
   - Refactor core.workflow_catalog to scan manifests plus inferred flow.py, workflow.py,
     and top-level .py workflows without importing modules.
   - Refactor core.workflow_capabilities to deep-inspect through the unified resolver,
-    including generalized parameter lookup order and non-package path inspection.
+    including the exact parameter lookup order (WorkflowClass.Parameters, flow-module
+    Parameters, package-exported Parameters, existing legacy package convention, none)
+    and non-package path inspection.
   - Update stdlib helper seams to use ctx.root and tolerate optional manifest/spec/doc/prompt/asset/test
     surfaces.
+  - Expand the deep-inspection payload so it explicitly includes workflow class, workflow
+    name, state model, parameters model, steps, artifacts, sessions, transitions,
+    route contracts, expected output schemas, prompt paths, source path, package folder,
+    manifest path when present, authoring shape, and optional support-file paths.
   - Preserve metadata-only workflow.toml validation and add negative tests for semantic
     manifest fields.
   out_of_scope:
@@ -75,18 +81,22 @@ phases:
     text: workflows list discovers manifest-backed and inferred workflows without
       importing workflow modules.
   - id: AC-2
-    text: Deep inspection reports steps, parameters, prompts, route contracts, source
-      path, package dir, authoring shape, and optional support-file paths for each
-      supported shape.
+    text: Deep inspection reports workflow class, workflow name, state model, parameters
+      model, steps, artifacts, sessions, transitions, route contracts, expected output
+      schemas, prompt paths, source path, package folder, manifest path when present,
+      authoring shape, and optional support-file paths for each supported shape.
   - id: AC-3
     text: Portfolio/adaptation/refinement/decomposition/company/evaluation/diagnostics
       helpers work for package and single-file workflows without inferring repo roots
       from package-folder layout.
   - id: AC-4
-    text: workflow.toml continues to reject semantic fields and remains metadata-only.
+    text: workflow.toml continues to reject semantic fields and remains metadata-only,
+      and parameter resolution follows the explicit five-branch precedence without
+      regressing existing mature-package workflows.
   deliverables:
   - Generalized catalog and capability inspection seams.
-  - Updated stdlib helper payload schemas and consumer tests.
+  - Updated stdlib helper payload schemas and consumer tests plus full deep-inspection
+    regression coverage.
   - Manifest-validation regression coverage.
   risks:
   - Helper JSON schema drift can break in-repo workflows and tests that parse legacy
