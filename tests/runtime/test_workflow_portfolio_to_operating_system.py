@@ -906,6 +906,31 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_hidden_downstrea
         workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
 
 
+def test_workflow_portfolio_to_operating_system_publish_allows_explicit_negative_guardrails(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_portfolio_operating_system_test_context(
+        tmp_path,
+        monkeypatch,
+        summary_override={
+            "next_action": "Keep downstream execution explicit and do not auto-run follow-on workflows from this package.",
+        },
+        next_actions_text=(
+            "# Portfolio Next Actions\n\n"
+            "Boundary: operating_system_publication_only.\n"
+            "1. Keep downstream execution explicit and do not auto-run follow-on workflows from this package.\n"
+            "2. Hand this package to workflow_and_eval_to_refined_workflow_package for task_to_workflow_strategy.\n"
+        ),
+    )
+
+    next_state, event = workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+
+    assert event.tag == "portfolio_operating_system_published"
+    assert next_state.published is True
+    assert (ctx.workflow_folder / "portfolio_operating_system_receipt.json").exists()
+
+
 def _produce_governance_frame(request) -> str:
     request.artifacts.portfolio_governance_brief.write_text(
         "\n".join(
