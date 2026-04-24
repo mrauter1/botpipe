@@ -191,3 +191,112 @@ phase_mode=single
 phase_ids=decomposition-surface-seam,workflow-package-to-building-blocks,recursive-memory-and-validation
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbed5-64e5-7eb2-bf89-06e5ac9332db
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbed5-64e5-7eb2-bf89-06e5ac9332db
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbed5-64e5-7eb2-bf89-06e5ac9332db
+---
+I’m implementing the phase-scoped decomposition helper. First I’m reading the phase artifacts, mandatory framework files, and the existing stdlib/test surfaces to pin the current contracts before editing.
+
+The phase artifacts are mostly stubs, and the plan already narrows this to an additive authoring seam. Next I’m tracing the existing authoring helpers, workflow discovery/compiler code, and the target docs/tests so the new helper matches repository patterns instead of inventing a new contract.
+
+I found the current seam pattern: each cycle added a narrow stdlib helper plus a doc section and a baseline-doc assertion. I’m drilling into `stdlib/refinement.py`, `core/workflow_capabilities.py`, and the test fixtures now so the decomposition helper composes those exact seams instead of duplicating resolution logic.
+
+I have enough context to edit safely. Plan:
+1. Add `stdlib/decomposition.py` by composing the existing selected-workflow resolution, catalog, and compiled-capability seams into one JSON decomposition surface.
+2. Export it through `stdlib/__init__.py` and document the additive boundary in `docs/authoring.md`.
+3. Extend unit tests and baseline-doc assertions for payload shape, path behavior, and the “authoring-only, not runtime-owned” contract.
+4. Update the phase implementation notes and append any non-obvious implementation decision under this turn’s decisions header, then run the targeted tests.
+
+I’ve pinned the helper shape and test contract. I’m editing `stdlib`, the authoring doc, and the targeted tests now; the payload will expose one selected workflow’s identity, editable surface, repo-relative path metadata, and compiled step/route topology without widening runtime behavior.
+
+The helper file and docs section are in place. I’m patching the test file in smaller slices now because the local test file has drifted enough that a big apply-patch chunk didn’t anchor cleanly.
+
+The test surface is patched. I’m doing a quick pass over the new helper and the inserted assertions before running the targeted suite, mainly to catch contract mismatches in path normalization or prompt metadata.
+
+I found one small cleanup before test execution: the new helper was still formatting parameter types with its own local utility. I’m switching that to the existing capability formatter so the decomposition surface stays aligned with the established selected-workflow payloads.
+
+I’m on validation now with the narrow suite for this phase: the stdlib helper tests and the baseline authoring-doc assertions. If anything breaks, I’ll tighten the payload or wording rather than broadening scope.
+
+The code and docs are green. I’m writing the phase notes and one non-obvious decision into the run ledger now so the next turn inherits the contract instead of rediscovering it from the diff.
+
+Validation is done. I’m checking the touched-file status one last time because this repository has a noisy worktree, and I want the closeout to distinguish the phase files I changed from the unrelated repo state.
+
+**Scope considered**
+- Phase-local `decomposition-surface-seam` only: additive authoring helper, stdlib export, authoring docs, targeted unit/doc tests, and phase notes/decision ledger.
+
+**What I analyzed**
+- Existing helper patterns in [stdlib/refinement.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/refinement.py), [stdlib/adaptation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/adaptation.py), [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py), [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- The phase artifacts and shared decisions ledger to keep the change strictly additive and outside runtime-owned control contracts.
+
+**What I changed**
+- Added [stdlib/decomposition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/decomposition.py) with `write_selected_workflow_decomposition_surface(...)`.
+- Exported it from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py).
+- Documented the read-only boundary in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- Added contract coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) and baseline-doc coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/decomposition-surface-seam/implementation_notes.md) and appended the phase decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt).
+
+**Key findings / decisions**
+- The helper publishes one workflow-local JSON artifact combining selected workflow identity, editable surface paths, repo-relative path metadata, and compiled step/route topology.
+- I kept it as a standalone seam instead of widening `write_selected_workflow_authoring_surface(...)`, which preserves the refinement boundary and avoids changing runtime or manifest contracts.
+- Validation passed: `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/test_architecture_baseline_docs.py` with `77 passed in 0.93s`.
+
+**Open issues / next step**
+- No open issues in this phase slice.
+- The next phase can consume `write_selected_workflow_decomposition_surface(...)` from the decomposition workflow package without adding runtime-owned automation.
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbed5-64e5-7eb2-bf89-06e5ac9332db
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbed5-64e5-7eb2-bf89-06e5ac9332db
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbed5-64e5-7eb2-bf89-06e5ac9332db
+---
+I’m reviewing the phase-scoped implementation only: the new decomposition helper, its docs/tests, and the phase artifacts. First I’m reading the changed surfaces plus the verifier-owned criteria and feedback files so I can audit contract coverage before I write findings.
+
+I’ve finished the first pass. I’m checking for regression and drift risks now, especially where the new helper may have duplicated existing refinement logic or made assumptions about prompt/path shapes that weren’t explicit in the phase plan.
+
+I haven’t found a correctness break so far. I’m rerunning the targeted verifier suite myself now; if it stays green, the remaining question is whether the helper’s duplicated surface-gathering logic rises to a formal technical-debt finding or is acceptable within this narrow phase slice.
+
+The verifier rerun passed. I’m closing the phase artifacts now: criteria will be fully checked, and feedback will record an explicit no-findings result with the validation command I reran.
+
+Scope considered
+- Phase-local `decomposition-surface-seam` only: [stdlib/decomposition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/decomposition.py), [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), and the active phase artifacts under `.autoloop/tasks/.../decomposition-surface-seam/`.
+
+What I analyzed
+- The shared decisions ledger, implementation notes, helper implementation, export surface, authoring-doc boundary text, and the decomposition-specific unit and baseline-doc assertions.
+- Regression and architecture-conformance risks around runtime widening, manifest changes, path handling, and helper contract shape.
+
+What I reviewed
+- AC-1: helper writes one workflow-local JSON artifact combining identity, authoring surface paths, and compiled step/route metadata.
+- AC-2: docs describe the helper as additive, read-only, and outside runtime-owned control contracts.
+- AC-3: unit and baseline-doc coverage exist and pass.
+- Verifier rerun: `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/test_architecture_baseline_docs.py` with `77 passed in 0.72s`.
+
+Key findings / decisions
+- No blocking or non-blocking findings.
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/decomposition-surface-seam/criteria.md) was updated with all boxes checked.
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/decomposition-surface-seam/feedback.md) was updated with an explicit no-findings review outcome and the verifier validation record.
+
+Open issues / next step
+- No open issues in this phase slice.
+- This phase is ready to move forward.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

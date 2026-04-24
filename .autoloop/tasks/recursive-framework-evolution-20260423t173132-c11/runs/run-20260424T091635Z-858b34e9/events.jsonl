@@ -11,3 +11,6 @@
 {"ts": "2026-04-24T09:32:28.886671+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 11, "event_type": "phase_started", "phase_id": "decomposition-surface-seam", "phase_mode": "single"}
 {"ts": "2026-04-24T09:32:28.888643+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "decomposition-surface-seam"}
 {"ts": "2026-04-24T09:32:28.888881+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "decomposition-surface-seam"}
+{"ts": "2026-04-24T09:44:25.544055+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "decomposition-surface-seam"}
+{"ts": "2026-04-24T09:46:48.338202+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "decomposition-surface-seam"}
+{"ts": "2026-04-24T09:46:48.368444+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 16, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "decomposition-surface-seam"}
