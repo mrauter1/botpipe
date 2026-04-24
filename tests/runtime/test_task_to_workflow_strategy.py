@@ -54,6 +54,7 @@ def test_task_to_workflow_strategy_package_compiles_with_explicit_control_contra
     _clear_workflow_modules()
 
     workflow_pkg = importlib.import_module("workflows.task_to_workflow_strategy")
+    contracts_pkg = importlib.import_module("workflows.task_to_workflow_strategy.contracts")
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.TaskToWorkflowStrategy)
     compiled = compile_workflow(resolved.workflow_cls)
 
@@ -94,7 +95,19 @@ def test_task_to_workflow_strategy_package_compiles_with_explicit_control_contra
         "strategy_summary",
         "strategy_next_action",
     ]
+    expected_package_payload_fields = {
+        "summary",
+        "selected_strategy",
+        "recommended_workflows",
+        "authoritative_artifacts",
+        "next_action",
+        "ready_for_handoff",
+        "replan_reason",
+    }
+    assert set(contracts_pkg.StrategyPackagePayload.model_fields) == expected_package_payload_fields
     assert package_step.expected_output_schema is not None
+    assert package_step.expected_output_schema["title"] == "StrategyPackagePayload"
+    assert set(package_step.expected_output_schema["properties"]) == expected_package_payload_fields
 
     publish_step = compiled.steps["publish_strategy"]
     assert publish_step.requires == (
