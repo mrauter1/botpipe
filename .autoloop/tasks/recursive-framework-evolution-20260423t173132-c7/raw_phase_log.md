@@ -362,3 +362,71 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+I’m treating this as a phase-scoped implementation: ship `workflow_to_eval_suite`, wire the required runtime validation/proof, and update the phase memory artifacts without widening scope. I’m starting by reading the phase contract, reviewer artifacts, mandatory framework files, and existing workflow patterns so the changes fit the repository’s current design.
+
+The repo has already moved to the newer `core/` / `runtime/` / `stdlib/` / `workflows/` layout, and the worktree is broadly dirty from that migration, so I’m keeping the blast radius tight. Next I’m checking the current workflow authoring patterns, the new evaluation helper seam, and whether `workflow_to_eval_suite` already has partial scaffolding that needs completion instead of rework.
+
+I’ve confirmed the helper seam already exists in `stdlib/evaluation.py`, and the missing work is the actual `workflow_to_eval_suite` package plus its publication-time checks and docs/tests. I’m reading the existing workflow package patterns and the standing memory/test baselines now so the new package lands in the same shape as the prior cycles.
+
+The remaining work is clear enough to move from exploration to implementation. I’m going to add the new `workflow_to_eval_suite` package end to end, wire deterministic publication checks around the existing evaluation helper seam, then update the workflow doc, runtime proof, recursive-memory files, and the baseline-doc test so the cycle-7 state is explicit and testable.
+
+Plan:
+1. Add `workflows/workflow_to_eval_suite/` with params, contracts, prompts, checklist asset, manifest, and workflow logic.
+2. Implement publish-time validation in that workflow on top of `write_validated_eval_case_manifest(...)`, including summary-drift and category-coverage checks.
+3. Add `docs/workflows/workflow_to_eval_suite.md` with the required decision records and explicit workflow contract.
+4. Add `tests/runtime/test_workflow_to_eval_suite.py` covering discovery, compilation, terminal publication, and publish-side rejection cases.
+5. Update `.autoloop_recursive/*.md`, phase `implementation_notes.md`, and the baseline-doc test to record cycle 7 closeout without touching unrelated migration files.
+
+I’m at the edit point now. The first patch will add the new workflow package files and keep the logic aligned with the existing adaptation-building-block pattern so discovery, compilation, and publication all stay explicit in workflow code rather than hidden in the runtime.
+
+The package scaffold is in place now: params, control contracts, prompts, checklist asset, and workflow logic are added, with the publish step validating the selected-workflow snapshot, canonicalized eval manifest, and summary alignment. I’m moving to the proof and documentation layer next so the package is exercised the same way the earlier building blocks were.
+
+I’ve started the package-side validation logic around the helper seam, so the next patch is the proof layer: the workflow doc with the required decision records and a scripted runtime test that exercises both the happy path and the publish-side failure modes.
+
+The first runtime pass only hit one issue: the fake provider’s artifact handles don’t accept an `encoding=` argument. I’m trimming those writes to the repository’s existing test pattern and rerunning the targeted proof before I touch the recursive-memory layer.
+
+I’ve got the new workflow proving out in isolation. The remaining edits are the cycle-7 bookkeeping layer: recursive memory, the baseline-doc assertions that lock those memories in place, and the phase notes/decision log so later turns inherit the shipped package and its chosen seam instead of drifting back to the cycle-6 state.
+
+The package and memory updates are in place. I’m running the targeted closeout validation now against the shared stdlib tests, the new runtime proof, and the recursive-memory baseline checks so I can lock the final proof string to the actual result instead of guessing it.
+
+The code and proof are settled. I’m updating the phase notes and the shared decisions ledger now so later phases inherit the non-obvious publish-time rules from this package instead of having to rediscover them from the runtime test.
+
+**Scope considered**
+- Phase-local implementation for `workflow_to_eval_suite`, its doc/runtime proof, cycle-7 recursive-memory updates, and the required phase notes/decision log.
+- I kept scope out of unrelated migration churn and did not change `task_to_workflow_strategy`, `candidate_workflow_to_adapted_execution_plan`, the CLI, or runtime-owned evaluation execution.
+
+**What I analyzed**
+- Existing authoring and package patterns in `docs/architecture.md`, `docs/authoring.md`, `stdlib/evaluation.py`, and [candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py:1).
+- Current recursive-memory baselines in `.autoloop_recursive/` and the lock tests in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+- The earlier evaluation-helper seam phase to make sure this package consumes the shared seam instead of re-implementing it.
+
+**What I changed**
+- Added the new workflow package under [workflows/workflow_to_eval_suite/](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py:1) with params, typed pair-step contracts, explicit prompts, checklist asset, manifest, and publish-time validation.
+- Added the workflow decision/contract doc at [docs/workflows/workflow_to_eval_suite.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_to_eval_suite.md:1).
+- Added runtime proof and publish-side failure coverage in [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:1).
+- Updated `.autoloop_recursive/framework_evolution_charter.md`, `.autoloop_recursive/framework_roadmap.md`, `.autoloop_recursive/framework_gap_ledger.md`, and `.autoloop_recursive/workflow_candidate_ledger.md` for cycle 7, and extended [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1) to lock that state.
+- Updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/implement/phases/workflow-to-eval-suite-package/implementation_notes.md:1) and appended the non-obvious publish rules to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt:1).
+
+**Key findings / decisions**
+- `workflow_to_eval_suite` now publishes a suite package, summary, validated eval-case manifest, and receipt without executing the selected workflow.
+- Publish-time validation is intentionally authoritative: it reuses `write_validated_eval_case_manifest(...)`, then rejects summary drift against the canonicalized manifest.
+- Full suite publication is workflow-owned policy, so the package enforces benchmark, edge, and adversarial coverage even though manifest-shape validation lives in the shared stdlib seam.
+- Validation passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` and the result was `69 passed`.
+
+**Open issues / next step**
+- No open issues in this phase scope.
+- The next obvious portfolio move is `workflow_and_eval_to_refined_workflow_package`, which the recursive-memory files now record as the clearest deferred follow-on.
