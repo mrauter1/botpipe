@@ -117,12 +117,17 @@ def write_workflow_capability_snapshot(
 def _catalog_entry_payload(entry) -> dict[str, object]:
     return {
         "aliases": list(entry.aliases),
+        "authoring_shape": entry.authoring_shape,
         "description": entry.description,
         "doc_path": None if entry.doc_path is None else str(entry.doc_path),
-        "manifest_path": str(entry.manifest_path),
+        "doc_paths": [str(path) for path in entry.doc_paths],
+        "manifest_path": None if entry.manifest_path is None else str(entry.manifest_path),
         "package_dir": str(entry.package_dir),
         "package_name": entry.package_name,
         "params_path": None if entry.params_path is None else str(entry.params_path),
+        "source_path": str(entry.source_path),
+        "spec_paths": [str(path) for path in entry.spec_paths],
+        "test_paths": [str(path) for path in entry.test_paths],
         "title": entry.title,
         "workflow_name": entry.workflow_name,
         "workflow_path": str(entry.workflow_path),

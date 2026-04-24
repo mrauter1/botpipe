@@ -6,18 +6,22 @@ from pathlib import Path
 from typing import Any
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.compiler import compile_workflow
     from ..core.workflow_capabilities import (
+        WorkflowArtifactCapability,
         WorkflowStepCapability,
         annotation_display_name,
+        inspect_workflow_reference,
         workflow_parameter_fields,
     )
-    from ..core.workflow_catalog import discover_workflow_catalog
     from ..runtime.loader import resolve_workflow_reference
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.compiler import compile_workflow
-    from core.workflow_capabilities import WorkflowStepCapability, annotation_display_name, workflow_parameter_fields
-    from core.workflow_catalog import discover_workflow_catalog
+    from core.workflow_capabilities import (
+        WorkflowArtifactCapability,
+        WorkflowStepCapability,
+        annotation_display_name,
+        inspect_workflow_reference,
+        workflow_parameter_fields,
+    )
     from runtime.loader import resolve_workflow_reference
 
 from .lifecycle import write_workflow_json
@@ -32,33 +36,39 @@ def write_selected_workflow_decomposition_surface(
 
     repo_root = _repo_root_from_context(ctx)
     resolved = resolve_workflow_reference(repo_root, workflow)
-    catalog_entry = _selected_workflow_catalog_entry(repo_root, resolved.package.package_name)
-    package_dir = catalog_entry.package_dir
-    package_init_path = package_dir / "__init__.py"
-    prompt_paths = _descendant_file_paths(package_dir / "prompts")
-    asset_paths = _descendant_file_paths(package_dir / "assets")
-    contracts_path = _optional_file(package_dir / "contracts.py")
-    runtime_test_path = _optional_file(repo_root / "tests" / "runtime" / f"test_{resolved.package.workflow_name}.py")
+    capability = inspect_workflow_reference(repo_root, resolved.workflow_cls)
+    package_dir = capability.package_dir
+    package_init_path = None if capability.package_init_path is None else str(capability.package_init_path)
+    prompt_paths = [str(path) for path in capability.prompt_paths]
+    asset_paths = [str(path) for path in capability.asset_paths]
+    contracts_path = None if capability.contracts_path is None else str(capability.contracts_path)
+    runtime_test_path = _runtime_test_path(capability.test_paths)
+    manifest_path = None if capability.manifest_path is None else str(capability.manifest_path)
+    params_path = None if capability.params_path is None else str(capability.params_path)
+    doc_path = None if capability.doc_path is None else str(capability.doc_path)
+    spec_paths = [str(path) for path in capability.spec_paths]
+    test_paths = [str(path) for path in capability.test_paths]
     editable_paths = sorted(
         {
-            str(package_init_path),
-            str(catalog_entry.manifest_path),
-            str(catalog_entry.workflow_path),
-            *prompt_paths,
-            *asset_paths,
             *(
                 path
                 for path in (
-                    None if catalog_entry.params_path is None else str(catalog_entry.params_path),
+                    str(capability.workflow_path),
+                    package_init_path,
+                    manifest_path,
+                    params_path,
                     contracts_path,
-                    None if catalog_entry.doc_path is None else str(catalog_entry.doc_path),
+                    doc_path,
                     runtime_test_path,
+                    *spec_paths,
+                    *prompt_paths,
+                    *asset_paths,
+                    *test_paths,
                 )
                 if path is not None
             ),
         }
     )
-    compiled = compile_workflow(resolved.workflow_cls)
 
     return write_workflow_json(
         ctx,
@@ -72,34 +82,33 @@ def write_selected_workflow_decomposition_surface(
                     "asset_paths_repo_relative": [_repo_relative(repo_root, path) for path in asset_paths],
                     "contracts_path": contracts_path,
                     "contracts_path_repo_relative": _optional_repo_relative(repo_root, contracts_path),
-                    "doc_path": None if catalog_entry.doc_path is None else str(catalog_entry.doc_path),
-                    "doc_path_repo_relative": _optional_repo_relative(
-                        repo_root,
-                        None if catalog_entry.doc_path is None else str(catalog_entry.doc_path),
-                    ),
+                    "doc_path": doc_path,
+                    "doc_path_repo_relative": _optional_repo_relative(repo_root, doc_path),
                     "editable_paths": editable_paths,
                     "editable_paths_repo_relative": [_repo_relative(repo_root, path) for path in editable_paths],
-                    "manifest_path": str(catalog_entry.manifest_path),
-                    "manifest_path_repo_relative": _repo_relative(repo_root, catalog_entry.manifest_path),
+                    "manifest_path": manifest_path,
+                    "manifest_path_repo_relative": _optional_repo_relative(repo_root, manifest_path),
                     "package_dir": str(package_dir),
-                    "package_dir_repo_relative": _repo_relative(repo_root, package_dir),
-                    "package_init_path": str(package_init_path),
-                    "package_init_path_repo_relative": _repo_relative(repo_root, package_init_path),
-                    "params_path": None if catalog_entry.params_path is None else str(catalog_entry.params_path),
-                    "params_path_repo_relative": _optional_repo_relative(
-                        repo_root,
-                        None if catalog_entry.params_path is None else str(catalog_entry.params_path),
-                    ),
+                    "package_dir_repo_relative": _optional_repo_relative(repo_root, package_dir),
+                    "package_init_path": package_init_path,
+                    "package_init_path_repo_relative": _optional_repo_relative(repo_root, package_init_path),
+                    "params_path": params_path,
+                    "params_path_repo_relative": _optional_repo_relative(repo_root, params_path),
                     "prompt_paths": prompt_paths,
                     "prompt_paths_repo_relative": [_repo_relative(repo_root, path) for path in prompt_paths],
                     "runtime_test_path": runtime_test_path,
                     "runtime_test_path_repo_relative": _optional_repo_relative(repo_root, runtime_test_path),
-                    "workflow_path": str(catalog_entry.workflow_path),
-                    "workflow_path_repo_relative": _repo_relative(repo_root, catalog_entry.workflow_path),
+                    "spec_paths": spec_paths,
+                    "spec_paths_repo_relative": [_repo_relative(repo_root, path) for path in spec_paths],
+                    "test_paths": test_paths,
+                    "test_paths_repo_relative": [_repo_relative(repo_root, path) for path in test_paths],
+                    "workflow_path": str(capability.workflow_path),
+                    "workflow_path_repo_relative": _optional_repo_relative(repo_root, capability.workflow_path),
                 },
                 "selected_workflow_compiled_surface": {
-                    "entry_step_name": compiled.entry_step_name,
-                    "global_routes": dict(compiled.global_routes),
+                    "artifacts": [_artifact_payload(artifact) for artifact in capability.artifacts],
+                    "entry_step_name": capability.entry_step_name,
+                    "global_routes": dict(capability.global_transitions),
                     "parameters": [
                         {
                             "default": field.default,
@@ -111,23 +120,25 @@ def write_selected_workflow_decomposition_surface(
                         for field in workflow_parameter_fields(resolved.parameters_cls)
                     ],
                     "parameters_supported": resolved.parameters_cls is not None,
-                    "step_count": len(compiled.steps),
+                    "sessions": list(capability.sessions),
+                    "state_model": capability.state_model,
+                    "step_count": len(capability.steps),
                     "steps": [
                         _compiled_step_payload(
                             repo_root,
                             package_dir,
-                            step=_compiled_step_capability(compiled.steps[step_name]),
-                            route_targets=compiled.routes.get(step_name, {}),
+                            step=step,
+                            route_targets=capability.transitions.get(step.name, {}),
                         )
-                        for step_name in compiled.steps
+                        for step in capability.steps
                     ],
                 },
                 "selected_workflow_identity": {
-                    "aliases": list(catalog_entry.aliases),
-                    "description": catalog_entry.description,
-                    "package_name": catalog_entry.package_name,
-                    "title": catalog_entry.title,
-                    "workflow_class": resolved.workflow_cls.__name__,
+                    "aliases": list(capability.aliases),
+                    "description": capability.description,
+                    "package_name": capability.package_name,
+                    "title": capability.title,
+                    "workflow_class": capability.workflow_class,
                     "workflow_name": resolved.package.workflow_name,
                 },
             },
@@ -135,22 +146,6 @@ def write_selected_workflow_decomposition_surface(
             "task_id": ctx.task_id,
             "workflow_name": ctx.workflow_name,
         },
-    )
-
-
-def _compiled_step_capability(step) -> WorkflowStepCapability:
-    return WorkflowStepCapability(
-        name=step.name,
-        kind=step.kind,
-        session_name=step.session_name,
-        requires=step.requires,
-        produces=step.produces,
-        log_artifacts=step.log_artifacts,
-        available_routes=step.available_routes,
-        expected_output_schema=step.expected_output_schema,
-        route_contracts={route_name: dict(contract) for route_name, contract in step.route_contracts.items()},
-        producer_prompt=_prompt_path(step.producer_prompt),
-        verifier_prompt=_prompt_path(step.verifier_prompt),
     )
 
 
@@ -179,34 +174,26 @@ def _compiled_step_payload(
     }
 
 
+def _artifact_payload(artifact: WorkflowArtifactCapability) -> dict[str, Any]:
+    return {
+        "name": artifact.name,
+        "producer_steps": list(artifact.producer_steps),
+        "template": artifact.template,
+        "workflow_level": artifact.workflow_level,
+    }
+
+
 def _prompt_repo_relative(repo_root: Path, package_dir: Path, prompt_path: str | None) -> str | None:
     if prompt_path is None:
         return None
-    return _repo_relative(repo_root, package_dir / prompt_path)
+    return _optional_repo_relative(repo_root, package_dir / prompt_path)
 
 
-def _selected_workflow_catalog_entry(repo_root: Path, package_name: str):
-    catalog_entry = next(
-        (
-            entry
-            for entry in discover_workflow_catalog(repo_root)
-            if entry.package_name == package_name
-        ),
-        None,
-    )
-    if catalog_entry is None:
-        raise LookupError(f"workflow package {package_name!r} was not found in the workflow catalog")
-    return catalog_entry
-
-
-def _descendant_file_paths(root: Path) -> list[str]:
-    if not root.is_dir():
-        return []
-    return [str(path) for path in sorted(path for path in root.rglob("*") if path.is_file())]
-
-
-def _optional_file(path: Path) -> str | None:
-    return str(path) if path.is_file() else None
+def _runtime_test_path(test_paths: tuple[Path, ...]) -> str | None:
+    for path in test_paths:
+        if path.name.startswith("test_"):
+            return str(path)
+    return None
 
 
 def _optional_repo_relative(repo_root: Path, path: str | Path | None) -> str | None:
@@ -216,12 +203,11 @@ def _optional_repo_relative(repo_root: Path, path: str | Path | None) -> str | N
 
 
 def _repo_relative(repo_root: Path, path: str | Path) -> str:
-    return Path(path).resolve().relative_to(repo_root).as_posix()
-
-def _prompt_path(prompt: Any) -> str | None:
-    if prompt is None:
-        return None
-    return getattr(prompt, "path", prompt)
+    resolved = Path(path).resolve()
+    try:
+        return resolved.relative_to(repo_root).as_posix()
+    except ValueError:
+        return str(resolved)
 
 
 def _repo_root_from_context(ctx) -> Path:

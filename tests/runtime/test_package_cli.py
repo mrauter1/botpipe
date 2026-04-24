@@ -238,8 +238,13 @@ class Parameters(BaseModel):
     payload = json.loads(captured.out)
     assert payload["name"] == "review"
     assert payload["aliases"] == ["reviewer"]
+    assert payload["authoring_shape"] == "manifest_package"
+    assert payload["source_path"] == str(tmp_path / "workflows" / "review_workflow" / "workflow.py")
+    assert payload["manifest_path"] == str(tmp_path / "workflows" / "review_workflow" / "workflow.toml")
     assert payload["parameters_supported"] is True
     assert payload["workflow_class"] == "ReviewWorkflow"
+    assert payload["state_model"].endswith("ReviewWorkflow.State")
+    assert payload["transitions"] == {"global": {}, "steps": {"bootstrap": {"ready": "SUCCESS"}}}
     assert payload["parameters"] == [
         {"default": "strict", "name": "mode", "repeated": False, "required": False, "type": "str"},
         {"default": [], "name": "reviewers", "repeated": True, "required": False, "type": "list[str]"},
@@ -295,6 +300,49 @@ def test_cli_workflow_resolution_prefers_canonical_names_and_rejects_ambiguous_a
     assert "reviewer" in ambiguous_captured.err
 
 
+def test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imports(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "manifest_review",
+        workflow_name="manifest_review",
+        class_name="ManifestReviewWorkflow",
+        aliases=("manifest_alias",),
+    )
+    single_file = tmp_path / "workflows" / "single_review.py"
+    single_file.write_text(
+        'raise AssertionError("single-file workflow should not import during list")\n',
+        encoding="utf-8",
+    )
+
+    exit_code = cli.main(["workflows", "list", "--root", str(tmp_path)])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload == [
+        {
+            "aliases": ["manifest_alias"],
+            "authoring_shape": "manifest_package",
+            "description": "Workflow test package.",
+            "manifest_present": True,
+            "name": "manifest_review",
+            "source_path": str(tmp_path / "workflows" / "manifest_review" / "workflow.py"),
+            "title": "Manifest Review",
+        },
+        {
+            "aliases": [],
+            "authoring_shape": "single_file",
+            "description": None,
+            "manifest_present": False,
+            "name": "single_review",
+            "source_path": str(single_file),
+            "title": "Single Review",
+        },
+    ]
+
+
 def test_cli_serializes_typed_workflow_parameters_as_json_safe_values(
     tmp_path: Path,
     capsys,
@@ -340,6 +388,7 @@ class Parameters(BaseModel):
         },
         {"default": "strict", "name": "mode", "repeated": False, "required": False, "type": "ReviewMode"},
     ]
+    assert show_payload["parameters_model"].endswith("Parameters")
 
     run_exit = cli.main(
         [

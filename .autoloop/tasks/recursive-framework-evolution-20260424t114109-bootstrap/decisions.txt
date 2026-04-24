@@ -11,3 +11,6 @@ Deep inspection is not complete unless it reports workflow class, workflow name,
 Explicit `flow.py` and `workflow.py` path/directory refs are loaded through isolated synthetic package modules so sibling relative imports like `from .specs import Parameters` work without requiring `__init__.py`.
 Workflow-origin collision protection compares persisted source/manifest/class/shape metadata rather than the raw reference string so the same origin can be resumed through different equivalent refs without false conflicts.
 `ctx.root` is now the canonical repo-root signal for runtime and stdlib helpers; manual contexts still infer a sensible root from `workflows/<name>` package layouts when no explicit root is passed.
+<autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="catalog-and-helper-migration" pair="implement" turn_seq="1" run_id="run-20260424T144110Z-aa024541" ts="2026-04-24T15:27:30.191375+00:00" />
+Shallow catalog discovery now rejects duplicate canonical workflow names but allows duplicate aliases; alias ambiguity remains a resolver-time concern so `workflows list` can stay import-free.
+Deep inspection now unions compiled prompt references with shallow prompt-folder discovery so authoring-surface helpers keep non-executed prompt files without losing the exact prompt paths used by compiled steps.

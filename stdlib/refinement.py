@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
+    from ..core.workflow_capabilities import inspect_workflow_reference
     from ..runtime.loader import resolve_workflow_reference
-    from ..core.workflow_catalog import discover_workflow_catalog
 except ImportError:  # pragma: no cover - direct repo-root import fallback
+    from core.workflow_capabilities import inspect_workflow_reference
     from runtime.loader import resolve_workflow_reference
-    from core.workflow_catalog import discover_workflow_catalog
 
 from .lifecycle import write_workflow_json
 
@@ -24,33 +24,40 @@ def write_selected_workflow_authoring_surface(
 
     repo_root = _repo_root_from_context(ctx)
     resolved = resolve_workflow_reference(repo_root, workflow)
-    catalog_entry = _selected_workflow_catalog_entry(repo_root, resolved.package.package_name)
-    package_dir = catalog_entry.package_dir
-    prompt_paths = _descendant_file_paths(package_dir / "prompts")
-    asset_paths = _descendant_file_paths(package_dir / "assets")
-    runtime_test_path = _optional_file(repo_root / "tests" / "runtime" / f"test_{resolved.package.workflow_name}.py")
-    package_init_path = package_dir / "__init__.py"
-    contracts_path = _optional_file(package_dir / "contracts.py")
-
-    surface_paths = sorted(
+    capability = inspect_workflow_reference(repo_root, resolved.workflow_cls)
+    package_dir = capability.package_dir
+    prompt_paths = [str(path) for path in capability.prompt_paths]
+    asset_paths = [str(path) for path in capability.asset_paths]
+    runtime_test_path = _runtime_test_path(capability.test_paths)
+    package_init_path = None if capability.package_init_path is None else str(capability.package_init_path)
+    contracts_path = None if capability.contracts_path is None else str(capability.contracts_path)
+    doc_path = None if capability.doc_path is None else str(capability.doc_path)
+    manifest_path = None if capability.manifest_path is None else str(capability.manifest_path)
+    params_path = None if capability.params_path is None else str(capability.params_path)
+    spec_paths = [str(path) for path in capability.spec_paths]
+    test_paths = [str(path) for path in capability.test_paths]
+    editable_paths = sorted(
         {
-            str(package_init_path),
-            str(catalog_entry.manifest_path),
-            str(catalog_entry.workflow_path),
-            *prompt_paths,
-            *asset_paths,
+            str(capability.source_path),
             *(
                 path
                 for path in (
-                    None if catalog_entry.params_path is None else str(catalog_entry.params_path),
+                    manifest_path,
+                    package_init_path,
+                    params_path,
                     contracts_path,
-                    None if catalog_entry.doc_path is None else str(catalog_entry.doc_path),
+                    doc_path,
                     runtime_test_path,
+                    *spec_paths,
+                    *prompt_paths,
+                    *asset_paths,
+                    *test_paths,
                 )
                 if path is not None
             ),
         }
     )
+
     return write_workflow_json(
         ctx,
         relative_path,
@@ -60,17 +67,19 @@ def write_selected_workflow_authoring_surface(
             "selected_workflow_authoring_surface": {
                 "asset_paths": asset_paths,
                 "contracts_path": contracts_path,
-                "doc_path": None if catalog_entry.doc_path is None else str(catalog_entry.doc_path),
-                "editable_paths": surface_paths,
-                "manifest_path": str(catalog_entry.manifest_path),
+                "doc_path": doc_path,
+                "editable_paths": editable_paths,
+                "manifest_path": manifest_path,
                 "package_dir": str(package_dir),
-                "package_init_path": str(package_init_path),
-                "package_name": catalog_entry.package_name,
-                "params_path": None if catalog_entry.params_path is None else str(catalog_entry.params_path),
+                "package_init_path": package_init_path,
+                "package_name": capability.package_name,
+                "params_path": params_path,
                 "prompt_paths": prompt_paths,
                 "runtime_test_path": runtime_test_path,
+                "spec_paths": spec_paths,
+                "test_paths": test_paths,
                 "workflow_name": resolved.package.workflow_name,
-                "workflow_path": str(catalog_entry.workflow_path),
+                "workflow_path": str(capability.workflow_path),
             },
             "selected_workflow_name": resolved.package.workflow_name,
             "task_id": ctx.task_id,
@@ -79,28 +88,11 @@ def write_selected_workflow_authoring_surface(
     )
 
 
-def _selected_workflow_catalog_entry(repo_root: Path, package_name: str):
-    catalog_entry = next(
-        (
-            entry
-            for entry in discover_workflow_catalog(repo_root)
-            if entry.package_name == package_name
-        ),
-        None,
-    )
-    if catalog_entry is None:
-        raise LookupError(f"workflow package {package_name!r} was not found in the workflow catalog")
-    return catalog_entry
-
-
-def _descendant_file_paths(root: Path) -> list[str]:
-    if not root.is_dir():
-        return []
-    return [str(path) for path in sorted(path for path in root.rglob("*") if path.is_file())]
-
-
-def _optional_file(path: Path) -> str | None:
-    return str(path) if path.is_file() else None
+def _runtime_test_path(test_paths: tuple[Path, ...]) -> str | None:
+    for path in test_paths:
+        if path.name.startswith("test_"):
+            return str(path)
+    return None
 
 
 def _repo_root_from_context(ctx) -> Path:
