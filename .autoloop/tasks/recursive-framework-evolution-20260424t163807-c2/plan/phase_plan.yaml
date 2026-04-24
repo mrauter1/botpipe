@@ -55,6 +55,8 @@ phases:
   - Update unit and runtime coverage for the shared helper changes and migrated workflows.
   - Adjust docs/authoring.md only as needed to reflect the completed validation-boundary
     cleanup.
+  - Review and update .autoloop_recursive/framework_evolution_charter.md, or record
+    an explicit no-op alignment outcome if the charter remains correct.
   - Update framework_roadmap.md, framework_gap_ledger.md, workflow_candidate_ledger.md,
     and validation_debt_ledger.md.
   - Record the boilerplate and readability deltas for this cycle.
@@ -70,15 +72,16 @@ phases:
     text: Targeted unit and runtime suites cover the migrated helper behavior and
       the touched workflow publication paths.
   - id: AC-2
-    text: Recursive-memory files explicitly mark the old domain validation wave as
-      resolved or narrowed and record any remaining deferred debt.
+    text: Recursive-memory files, including framework_evolution_charter.md, explicitly
+      record the old domain validation wave as resolved or narrowed and note any remaining
+      deferred debt or no-op doctrine confirmation.
   - id: AC-3
     text: The cycle closeout records that no CLI, runtime-routing, or workflow-artifact
       compatibility contract changed.
   deliverables:
   - Updated targeted tests and closeout proof notes.
   - Aligned authoring documentation.
-  - Updated recursive-memory ledgers and roadmap entries.
+  - Updated recursive-memory charter, ledgers, and roadmap entries.
   risks:
   - Tests may miss a publish-path regression if the negative-path coverage is not
     updated alongside the helper migration.

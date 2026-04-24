@@ -90,3 +90,28 @@ The plan needs one correction before it is complete: add `.autoloop_recursive/fr
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dc132-e4d5-7b41-b16c-0c56bfd79ae4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dc132-e4d5-7b41-b16c-0c56bfd79ae4
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc132-e4d5-7b41-b16c-0c56bfd79ae4
+---
+I’m addressing the verifier’s single blocking issue directly. The fix is narrow: make the standing-memory obligation for `.autoloop_recursive/framework_evolution_charter.md` explicit in the plan and machine-readable phase contract, without changing the cycle direction or widening scope.
+
+I’ve confirmed the runtime created a new planner decision block for this turn, so I can record the correction cleanly. I’m updating the narrative plan, the phase contract, the feedback log, and the new decisions block together, then I’ll re-parse the YAML.
+
+The patch missed because the YAML text no longer matches exactly line-for-line. I’m reopening the current sections and applying a narrower edit against the live content.
+
+The blocker fix is in place. I’m running the required YAML parse again and checking the touched sections so the turn closes with a clean machine-readable plan and the feedback trail reflects exactly what changed.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/plan/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/decisions.txt) to close the verifier’s blocking issue.
+
+The plan now explicitly covers `.autoloop_recursive/framework_evolution_charter.md` in the recursive-memory sync milestone and in phase 2 acceptance criteria/deliverables, with a clear rule that implementation must either update the charter or record an explicit no-op doctrine-alignment outcome. `phase_plan.yaml` was re-parsed successfully with `python3` and `yaml.safe_load`.

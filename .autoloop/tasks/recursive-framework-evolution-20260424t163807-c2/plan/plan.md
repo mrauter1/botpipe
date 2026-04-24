@@ -104,10 +104,12 @@ Finish the validation-consolidation wave for the older domain workflow family:
 - Update tests to cover any newly shared generic helper behavior and the migrated workflow paths.
 - Update `docs/authoring.md` only as needed to reflect the completed migration and keep the workflow/runtime/provider boundary crisp.
 - Update recursive memory files:
+  - `.autoloop_recursive/framework_evolution_charter.md`
   - `.autoloop_recursive/framework_roadmap.md`
   - `.autoloop_recursive/framework_gap_ledger.md`
   - `.autoloop_recursive/workflow_candidate_ledger.md`
   - `.autoloop_recursive/validation_debt_ledger.md`
+- If the charter doctrine itself remains correct, record that explicit no-op alignment outcome rather than silently skipping the charter.
 - Record boilerplate reduction and remaining deferred debt in the implementation closeout.
 
 ## Interfaces and compatibility constraints
