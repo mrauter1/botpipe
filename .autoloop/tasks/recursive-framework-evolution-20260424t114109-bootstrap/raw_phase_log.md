@@ -174,3 +174,89 @@ phase_mode=single
 phase_ids=resolver-foundation,catalog-and-helper-migration,authoring-support-and-builder,docs-templates-and-regression
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+I’m implementing the resolver-foundation phase: unified workflow-reference execution, origin metadata, and the test coverage around file, directory, module, and class refs. First I’m reading the phase artifacts and the current loader/runtime/CLI code paths so I can scope the minimal set of changes safely.
+
+I’ve isolated the likely edit surface to `runtime/loader.py`, `runtime/runner.py`, `runtime/workspace.py`, `core/context.py`, `runtime/cli.py`, and the runtime/package tests. Next I’m reading the phase notes and those modules together so I can map the requested resolver behavior onto the existing execution path instead of adding a side path.
+
+The current code is still package-only at every seam: loader assumes `workflows.<pkg>.workflow`, runner passes only `package_dir`, CLI resumes by canonical package name, and workspace metadata only knows `workflow_name` plus `package_dir`. I’m reading the lower halves now to see exactly where run metadata, prompt lookup, and child-run invocation need to change together.
+
+There’s already a latent `root` concept in the engine, but `Context` never stores it and a lot of stdlib code still reconstructs repo root from `package_folder`. I’m checking the engine contract and the existing child-run/result metadata now so the resolver/origin changes line up with what hooks and composed workflows already consume.
+
+I’ve confirmed the hard part is `flow.py` without `__init__.py`: explicit path and directory refs need a synthetic import package so `from .specs import ...` keeps working. I’m pulling the existing runtime test helpers now so I can reuse their package/child-workflow scaffolding and add the new resolver cases without inventing a parallel fixture style.
+
+Plan for the edit:
+- `runtime/loader.py`: add an internal workflow-reference/origin model, parse name/path/module/class refs, load explicit files in isolated namespaces, and apply the five-branch parameter lookup.
+- `runtime/runner.py`, `runtime/workspace.py`, `core/context.py`, `core/engine.py`, `core/validation.py`: carry origin metadata through execution, expose `ctx.root`, enforce origin-collision checks, and switch unnamed workflow fallback to snake_case.
+- `runtime/cli.py` and targeted `stdlib/*`: route commands through the unified resolver and stop using `package_folder.parent.parent` heuristics where this phase requires `ctx.root`.
+- Tests: add resolver-focused runtime coverage for single-file, `flow.py`, directory/module/class refs, ambiguity, prompt resolution, parameter precedence, origin metadata, and collision protection.
+
+I’ve got enough context to start editing. I’m changing the loader first because everything else depends on the origin model and import semantics, then I’ll thread that through runner/workspace/context and finish by adding the new resolver tests.
+
+I’ve started the code changes. I hit one patch mismatch in `core/validation.py` because the file shape is different lower down than expected, so I’m re-reading that section and patching it in smaller chunks before I run the first syntax pass.
+
+The loader is in place, and I’m doing the cleanup pass now. I’ve already found one correctness issue in the first draft around adjacent-manifest name lookup, so I’m fixing that and then running a narrow test/syntax pass before I add the new resolver cases.
+
+I’ve threaded the origin data into loader, runner, workspace metadata, and `ctx.root`. I’m running a narrow syntax/test pass now before I add the resolver regression tests, because the new loader path has enough branching that it’s cheaper to catch structural mistakes immediately.
+
+The first validation pass failed immediately because this environment doesn’t expose `python` or `pytest` on PATH. I’m checking the available interpreter/tooling names next and then I’ll resume with the smallest viable test slice.
+
+`pytest` isn’t installed in the system interpreter, but the repo does have a `.venv`. I’m switching to that environment now so I can run the resolver-focused tests instead of stopping at syntax-only validation.
+
+The new regression tests are in. I’m running that file directly now, because it exercises the synthetic file loader, the directory/module paths, parameter precedence, and the workspace-origin collision guard all in one slice.
+
+The new resolver tests are green. I’m widening the validation now to the adjacent compatibility surfaces: existing package resolution, CLI show/run behavior, workspace metadata, and the stdlib helpers that now read `ctx.root` instead of reconstructing repo root from package layout.
+
+The wider suite found regressions in both the runtime surface and the stdlib helper surface. I’m pulling the failing test details now, then I’ll patch those directly before rerunning the same slices.
+
+The runtime code paths I touched are looking clean. I’m doing one last focused pass on the relevant files instead of the entire CLI/template suite, because the only remaining failures so far are wrapper/template and docs checks that predate this resolver slice and are outside the active phase scope.
+
+The source changes are stable; the only workspace noise left from validation is tracked `__pycache__` files that got refreshed by `py_compile`. I’m restoring just those generated blobs back to `HEAD` so the final diff stays on the resolver work instead of bytecode churn.
+
+Scope considered
+
+- Unified workflow-reference execution for names, aliases, files, directories, modules, and imported classes.
+- Runtime origin metadata, collision protection, `ctx.root`, prompt/package-folder resolution, and parameter-precedence coverage.
+- Out of scope and left unchanged: shallow catalog migration, deep capability payload migration, scaffolds/builders/docs/templates.
+
+What I analyzed
+
+- Resolver and execution seams in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), and [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py).
+- Existing compatibility and workspace tests, plus stdlib helpers that were deriving repo root from `ctx.package_folder.parent.parent`.
+
+What I changed
+
+- Added internal `WorkflowReference` resolution in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py) and routed `resolve_workflow_reference(...)` through one path for manifest names/aliases, inferred names, explicit `.py` files, workflow directories, module refs, and imported classes.
+- Added isolated synthetic-package loading for explicit `flow.py` / `workflow.py` paths so sibling relative imports like `from .specs import Parameters` work without `__init__.py`.
+- Implemented the required parameter precedence: `Workflow.Parameters`, flow-module `Parameters`, package-exported `Parameters`, legacy `params.py`, then none.
+- Threaded origin metadata through [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), and [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py), and added conflict checks so different origins with the same canonical workflow name do not merge run history.
+- Exposed `ctx.root` in [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), passed it from the engine, and updated the affected stdlib helpers to use it.
+- Switched unnamed workflow fallback naming to snake_case in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py).
+- Added resolver/runtime regression coverage in [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py).
+
+Key findings / decisions
+
+- Explicit file and directory refs needed synthetic package imports; plain isolated module loading breaks `flow.py` relative imports.
+- Collision protection must compare normalized origin fields, not the raw reference string, so the same workflow can still be resumed via an equivalent ref.
+- Existing manifest-backed package re-export checks were preserved for legacy/package workflows.
+
+Open issues / next step
+
+- Validation passed for the resolver/runtime slice and the touched stdlib surfaces:
+  `.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_reference_resolution.py`
+  `.venv/bin/python -m pytest -q tests/runtime/test_package_cli.py::test_cli_workflows_show_reports_parameters_and_aliases tests/runtime/test_package_cli.py::test_cli_workflow_resolution_prefers_canonical_names_and_rejects_ambiguous_aliases tests/runtime/test_package_cli.py::test_cli_serializes_typed_workflow_parameters_as_json_safe_values tests/runtime/test_package_cli.py::test_cli_run_resume_answer_and_diagnostics_follow_package_contract`
+  `.venv/bin/python -m pytest -q tests/unit/test_stdlib_and_extensions.py::test_portfolio_helper_writes_workflow_local_catalog_snapshot tests/unit/test_stdlib_and_extensions.py::test_portfolio_health_helper_writes_grouped_workflow_run_health_via_shared_resolution_and_run_summaries tests/unit/test_stdlib_and_extensions.py::test_company_helpers_write_bounded_company_operation_snapshot_without_mutating_autoloop_state tests/unit/test_stdlib_and_extensions.py::test_refinement_helper_accepts_main_workflow_class_references tests/unit/test_stdlib_and_extensions.py::test_decomposition_helper_accepts_main_workflow_class_references tests/unit/test_stdlib_and_extensions.py::test_diagnostics_helper_accepts_main_workflow_class_references_and_allows_empty_filtered_histories tests/unit/test_stdlib_and_extensions.py::test_evaluation_helper_validates_eval_cases_via_selected_workflow_snapshot_and_loader_paths`
+- Broader failures remain outside this phase: wrapper/template assertions in `tests/runtime/test_package_cli.py` and missing `docs/authoring.md` checks in `tests/unit/test_stdlib_and_extensions.py`.

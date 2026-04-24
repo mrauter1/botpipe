@@ -215,7 +215,7 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _repo_root_from_context(ctx) -> Path:
-    return ctx.package_folder.resolve().parent.parent
+    return ctx.root.resolve()
 
 
 __all__ = ["write_validated_eval_case_manifest"]

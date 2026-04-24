@@ -134,7 +134,7 @@ def _prompt_path(prompt: Any) -> str | None:
 
 
 def _repo_root_from_context(ctx) -> Path:
-    return ctx.package_folder.resolve().parent.parent
+    return ctx.root.resolve()
 
 
 __all__ = [
