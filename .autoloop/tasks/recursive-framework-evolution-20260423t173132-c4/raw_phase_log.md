@@ -497,3 +497,70 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbcc8-9c91-7800-8f91-37b8c288141b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbcc8-9c91-7800-8f91-37b8c288141b
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcc8-9c91-7800-8f91-37b8c288141b
+---
+I’m checking the strategy-package tests and the phase-local test artifacts first so I can decide whether the shipped coverage already closes the risk surface or whether a small additional regression test is still warranted.
+
+I’m verifying the phase-local test surface for `task_to_workflow_strategy`, then I’ll tighten any missing route-specific regression coverage and update the required test artifacts.
+
+I’ve confirmed the existing tests already cover the main happy path and one terminal failure path. I’m checking the publish-time route invariants now; if one is still unpinned by tests, I’ll add a minimal regression test before updating the phase test artifacts.
+
+The existing repo test already pins the builder-baseline failure path. I’m comparing against other phase `test_strategy.md` patterns so the phase artifact stays consistent instead of inventing a new format ad hoc.
+
+I found one publish-time invariant that is meaningful and not directly pinned yet: `compose` must name at least two downstream workflows. I’m adding a minimal direct regression test for that terminal check, then I’ll update the phase test artifact files to match the actual coverage.
+
+I’ve added the route-specific failure test. Next I’m recording the exact behavior map in the phase-local test artifacts and, if needed, a single shared test decision so later turns don’t quietly drop the publish-boundary invariants.
+
+I’m keeping the shared decision update minimal: one line to lock the terminal publish-boundary invariants that are easy to regress during later workflow refactors. After that I’ll run the focused suite and write the test-phase feedback with the actual result.
+
+The focused runtime slice passed cleanly. I’m doing one quick hygiene pass on the touched files and then I’ll write the phase feedback with the exact coverage/result summary.
+
+Scope considered
+
+- Phase-local `task-to-workflow-strategy-package` test work only: `tests/runtime/test_task_to_workflow_strategy.py`, the active test artifacts under `.autoloop/tasks/.../test/phases/task-to-workflow-strategy-package/`, and the phase-relevant shared decisions ledger.
+- I kept scope out of downstream workflow execution and out of later closeout work.
+
+What I analyzed
+
+- The new workflow’s terminal validation in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py), especially `on_publish_strategy(...)`.
+- Existing runtime coverage in [test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py).
+- The phase-local artifact requirements in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/test/phases/task-to-workflow-strategy-package/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/test/phases/task-to-workflow-strategy-package/feedback.md).
+- The phase-relevant intent and invariants already recorded in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/decisions.txt).
+
+What I changed
+
+- Added a direct regression test in [test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py) to ensure `publish_strategy` rejects `compose` summaries that name only one downstream workflow.
+- Refactored the direct publish-boundary tests to share one deterministic setup helper, keeping the terminal validation fixture path consistent.
+- Filled out [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/test/phases/task-to-workflow-strategy-package/test_strategy.md) with the explicit behavior-to-test coverage map, invariants, failure paths, flake controls, and known gap.
+- Appended the test-phase summary and validation result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/test/phases/task-to-workflow-strategy-package/feedback.md).
+- Added one test-author decision entry to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/decisions.txt) locking publish-boundary invariants at `on_publish_strategy(...)`.
+
+Key findings / decisions
+
+- The existing suite already covered discovery, compilation/control contracts, parameter normalization, happy-path publication, and builder-baseline failure.
+- The missing high-value gap was route-specific terminal validation for `compose`, so I pinned that directly at the publish boundary instead of through a longer workflow run.
+- Validation passed:
+  `.venv/bin/pytest -q tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_compatibility_runtime.py`
+  Result: `28 passed in 0.41s`
+- `git diff --check` on the touched files passed cleanly.
+
+Open issues / next step
+
+- No blocker in this phase scope.
+- The only noted gap is optional future direct failure coverage for `create_new` requiring `workflow_idea_to_workflow_package` in `recommended_workflows`; it is documented in `test_strategy.md` and is not required to satisfy this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

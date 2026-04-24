@@ -491,6 +491,74 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_summary_without_buil
     tmp_path: Path,
     monkeypatch,
 ) -> None:
+    workflow_pkg, state, ctx = _make_publish_strategy_test_context(
+        tmp_path,
+        monkeypatch,
+        strategy_summary={
+            "authoritative_artifacts": [
+                "workflow_strategy_package",
+                "strategy_summary",
+                "strategy_next_action",
+            ],
+            "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+            "builder_considered": True,
+            "comparison_candidates": [
+                "security_finding_to_verified_remediation",
+                "investigation_request_to_evidence_pack",
+                "incident_to_hardening_program",
+            ],
+            "create_new_required": False,
+            "next_action": "Run security_finding_to_verified_remediation next.",
+            "ready_for_handoff": True,
+            "recommended_workflows": ["security_finding_to_verified_remediation"],
+            "rejected_routes": ["compose", "adapt", "create_new"],
+            "selected_strategy": "run_existing",
+        },
+    )
+
+    with pytest.raises(ValueError, match="builder baseline"):
+        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+
+
+def test_task_to_workflow_strategy_publish_strategy_rejects_compose_summary_with_only_one_workflow(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_strategy_test_context(
+        tmp_path,
+        monkeypatch,
+        strategy_summary={
+            "authoritative_artifacts": [
+                "workflow_strategy_package",
+                "strategy_summary",
+                "strategy_next_action",
+            ],
+            "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+            "builder_considered": True,
+            "comparison_candidates": [
+                "security_finding_to_verified_remediation",
+                "investigation_request_to_evidence_pack",
+                "workflow_idea_to_workflow_package",
+            ],
+            "create_new_required": False,
+            "next_action": "Compose the evidence pack and remediation workflow next.",
+            "ready_for_handoff": True,
+            "recommended_workflows": ["security_finding_to_verified_remediation"],
+            "rejected_routes": ["run_existing", "adapt", "create_new"],
+            "selected_strategy": "compose",
+        },
+    )
+
+    with pytest.raises(ValueError, match="at least two workflows for compose"):
+        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+
+
+def _make_publish_strategy_test_context(
+    tmp_path: Path,
+    monkeypatch,
+    *,
+    strategy_summary: dict[str, object],
+) -> tuple[object, object, Context]:
     monkeypatch.syspath_prepend(str(REPO_ROOT))
     importlib.invalidate_caches()
     _clear_workflow_modules()
@@ -513,31 +581,7 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_summary_without_buil
         (workflow_folder / name).write_text("{}\n" if name.endswith(".json") else "# Placeholder\n", encoding="utf-8")
 
     (workflow_folder / "strategy_summary.json").write_text(
-        json.dumps(
-            {
-                "authoritative_artifacts": [
-                    "workflow_strategy_package",
-                    "strategy_summary",
-                    "strategy_next_action",
-                ],
-                "builder_baseline_workflow": "workflow_idea_to_workflow_package",
-                "builder_considered": True,
-                "comparison_candidates": [
-                    "security_finding_to_verified_remediation",
-                    "investigation_request_to_evidence_pack",
-                    "incident_to_hardening_program",
-                ],
-                "create_new_required": False,
-                "next_action": "Run security_finding_to_verified_remediation next.",
-                "ready_for_handoff": True,
-                "recommended_workflows": ["security_finding_to_verified_remediation"],
-                "rejected_routes": ["compose", "adapt", "create_new"],
-                "selected_strategy": "run_existing",
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
+        json.dumps(strategy_summary, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
@@ -545,8 +589,8 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_summary_without_buil
         task_title="Admin impersonation privilege escalation response",
         sponsor_role="security engineering",
         desired_outcome="Choose the best existing workflow strategy for verified remediation work.",
-        selected_strategy="run_existing",
-        recommended_workflows=["security_finding_to_verified_remediation"],
+        selected_strategy=strategy_summary["selected_strategy"],
+        recommended_workflows=list(strategy_summary["recommended_workflows"]),
     )
     ctx = Context(
         task_id="task-to-workflow-strategy-task",
@@ -559,9 +603,7 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_summary_without_buil
         state=state,
         session_store=InMemorySessionStore(),
     )
-
-    with pytest.raises(ValueError, match="builder baseline"):
-        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+    return workflow_pkg, state, ctx
 
 
 def _install_repo_task_to_workflow_strategy_package(root: Path) -> None:
