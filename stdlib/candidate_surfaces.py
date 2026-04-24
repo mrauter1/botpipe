@@ -88,6 +88,13 @@ def materialize_baseline_surface(
         list(baseline_relative_paths),
         "baseline_relative_paths must define non-empty repo-relative paths",
     )
+    normalized_relative_paths = [
+        _require_repo_relative_path(
+            relative_path,
+            "baseline_relative_paths entries must stay repo-relative",
+        )
+        for relative_path in normalized_relative_paths
+    ]
     baseline_root = workflow_folder / _require_text(
         baseline_dir_name,
         "baseline_dir_name must be non-empty",
@@ -209,7 +216,11 @@ def validate_authoritative_surface_sources_unchanged(
         baseline_manifest,
         f"{baseline_manifest_label} must define files as a JSON array of objects with relative_path",
     ).items():
-        source_path = repo_root / relative_path
+        safe_relative_path = _require_repo_relative_path(
+            relative_path,
+            f"{baseline_manifest_label} relative_path entries must stay repo-relative",
+        )
+        source_path = repo_root / safe_relative_path
         if not source_path.exists():
             raise FileNotFoundError(f"authoritative selected workflow file is missing: {source_path}")
         current_digest = _sha256_file(source_path)
@@ -273,10 +284,14 @@ def validate_candidate_surface_overlay(
             candidate_manifest.get("relative_paths"),
             f"{candidate_manifest_label} must define non-empty relative_paths",
         ):
-            source_path = candidate_root / relative_path
+            safe_relative_path = _require_repo_relative_path(
+                relative_path,
+                f"{candidate_manifest_label} relative_paths entries must stay repo-relative",
+            )
+            source_path = candidate_root / safe_relative_path
             if not source_path.is_file():
                 raise FileNotFoundError(f"candidate surface file is missing: {source_path}")
-            target_path = overlay_root / relative_path
+            target_path = overlay_root / safe_relative_path
             target_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_path, target_path)
 
@@ -342,6 +357,17 @@ def _surface_relative_paths(root: Path) -> list[str]:
     if not root.is_dir():
         raise FileNotFoundError(f"candidate surface is missing: {root}")
     return sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file())
+
+
+def _require_repo_relative_path(value: Any, error_message: str) -> str:
+    relative_path = _require_text(value, error_message)
+    path = Path(relative_path)
+    if path.is_absolute() or ".." in path.parts:
+        raise ValueError(error_message)
+    normalized = path.as_posix()
+    if normalized in {"", "."}:
+        raise ValueError(error_message)
+    return normalized
 
 
 def _resolve_overlay_source_root(repo_root: Path) -> Path:

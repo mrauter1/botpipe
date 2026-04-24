@@ -40,6 +40,7 @@
   - `validate_candidate_surface_overlay(...)`
 - Exported via `stdlib.__init__`
 - Added focused unit tests for boundary normalization, baseline/candidate manifest derivation, authoritative-source drift rejection, and overlay fallback/command normalization
+- Added shared repo-relative path hardening for baseline/drift/overlay copy inputs plus negative unit tests for parent traversal and absolute-path rejection
 
 ## Checklist mapping
 
@@ -59,10 +60,12 @@
 - No `workflow.toml` semantic change
 - No workflow route-name, artifact-name, or receipt-shape change
 - No hidden runtime-owned publication, decomposition, or refinement policy
+- Repo-relative path safety now stays centralized inside the shared seam for baseline and overlay copy inputs
 
 ## Intended behavior changes
 
 - The repo now has one shared authoring-only helper seam for the repeated mechanical candidate-surface publication operations
+- The shared seam now also rejects absolute-path and parent-traversal inputs before reading from `repo_root` or copying into overlay roots
 
 ## Known non-changes
 
@@ -77,6 +80,7 @@
 ## Deduplication / centralization decisions
 
 - `stdlib/candidate_surfaces.py` owns only generic boundary, copy, diff, digest, drift-check, and overlay mechanics
+- `stdlib/candidate_surfaces.py` also owns generic repo-relative path hardening for baseline/drift/overlay copy inputs
 - Workflow-specific evidence validation, selected-workflow identity checks, allowed-path policy, building-block index rules, and publication receipts remain workflow-local
 
 ## Validation performed
@@ -84,6 +88,9 @@
 - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py -k 'candidate_surface or stdlib_modules_remain_pure_authoring_helpers'`
 - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`
 - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py::test_workflow_and_eval_to_refined_workflow_package_compiles_with_explicit_control_contracts tests/runtime/test_workflow_package_to_composable_building_blocks.py::test_workflow_package_to_composable_building_blocks_compiles_with_explicit_control_contracts`
+- Focused candidate-surface slice: `9 passed`
+- Full stdlib/extensions unit suite: `67 passed`
+- Targeted refinement/decomposition compile checks: `2 passed`
 
 ## Boilerplate / clarity accounting for this phase
 

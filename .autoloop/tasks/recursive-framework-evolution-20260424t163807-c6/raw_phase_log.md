@@ -278,3 +278,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+---
+I’m addressing the reviewer’s blocking path-safety finding inside the shared seam only. I’ll harden the new helper against absolute and parent-traversal paths, extend the focused unit coverage for those failure modes, and then refresh the phase notes.
+
+I’m making the safety fix in the shared helper now. The change is to centralize one repo-relative path guard and apply it to every baseline/overlay copy path that currently trusts manifest inputs, then I’ll add the negative tests the reviewer asked for.
+
+The path guard and the negative tests are in. I’m rerunning the focused candidate-surface slice first, then the full stdlib unit suite and the same workflow compile smoke checks as before.
+
+I’ve verified the fix with the focused and full unit coverage plus the two workflow compile checks. I’m updating the phase notes to reflect the new path-hardening decision and the expanded validation results.
+
+Scope considered
+- Phase-local fix only: [stdlib/candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/candidate_surfaces.py:1), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:2060), and the active phase notes under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/shared-candidate-surface-seam/`.
+- No workflow, CLI, runtime, or `workflow.toml` contract changes.
+
+What I analyzed
+- The reviewer’s blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/shared-candidate-surface-seam/feedback.md:10).
+- Every place the new seam joined caller-supplied `relative_path` values into `repo_root`, `candidate_root`, or `overlay_root`.
+- Regression surface for the stdlib export/import path and the two affected workflow compile paths.
+
+What I changed
+- Added a shared repo-relative path guard in [stdlib/candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/candidate_surfaces.py:362) and applied it to:
+  - baseline copy inputs in [materialize_baseline_surface(...)](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/candidate_surfaces.py:77)
+  - authoritative-drift source checks in [validate_authoritative_surface_sources_unchanged(...)](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/candidate_surfaces.py:206)
+  - overlay copy inputs in [validate_candidate_surface_overlay(...)](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/candidate_surfaces.py:235)
+- Added negative unit coverage for absolute-path and parent-traversal rejection in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:2213) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:2303).
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/shared-candidate-surface-seam/implementation_notes.md:1) and appended the phase decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/decisions.txt:13).
+
+Key findings / decisions
+- The shared seam now owns repo-relative path hardening for baseline-copy, drift-check, and overlay-copy inputs, which resolves the reviewer’s blocking safety gap without widening workflow-local policy.
+- Validation passed:
+  - focused candidate-surface slice: `9 passed`
+  - full `tests/unit/test_stdlib_and_extensions.py`: `67 passed`
+  - targeted refinement/decomposition compile checks: `2 passed`
+
+Open issues / next step
+- No additional implementation issues found in phase scope after the fix.
+- Next step is reviewer re-check of this phase so `criteria.md` and `feedback.md` can be cleared.
