@@ -148,6 +148,140 @@ def test_workflow_to_eval_suite_package_docs_capture_decision_records() -> None:
         assert required in text
 
 
+def test_workflow_to_eval_suite_prompt_readme_lists_route_grammar_and_runtime_boundary() -> None:
+    text = (REPO_ROOT / "workflows" / "workflow_to_eval_suite" / "prompts" / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "Reserved routes:",
+        "- `question`",
+        "- `blocked`",
+        "- `failed`",
+        "Application routes:",
+        "- `evaluation_target_framed`",
+        "- `eval_cases_designed`",
+        "- `workflow_eval_suite_ready`",
+        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+    ):
+        assert required in text
+
+
+@pytest.mark.parametrize(
+    ("prompt_name", "required_markers"),
+    (
+        (
+            "frame_producer.md",
+            (
+                "Read these artifacts",
+                "Write these artifacts",
+                "Evidence requirements",
+                "Route guidance for the verifier",
+                "Forbidden",
+                "`evaluation_request_brief`",
+                "`evaluation_dimensions`",
+                "`evaluation_target_framed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "Reserved routes are only",
+            ),
+        ),
+        (
+            "frame_verifier.md",
+            (
+                "Read these artifacts",
+                "Artifact checks",
+                "Route guidance",
+                "Payload requirements",
+                "Forbidden",
+                "`evaluation_target_framed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "Use reserved routes only",
+            ),
+        ),
+        (
+            "design_producer.md",
+            (
+                "Read these artifacts",
+                "Write these artifacts",
+                "Evidence requirements",
+                "Route guidance for the verifier",
+                "Forbidden",
+                "`benchmark_case_matrix`",
+                "`edge_case_matrix`",
+                "`adversarial_case_matrix`",
+                "`eval_case_manifest`",
+                "`eval_rubric`",
+                "`eval_cases_designed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "Reserved routes are only",
+            ),
+        ),
+        (
+            "design_verifier.md",
+            (
+                "Read these artifacts",
+                "Artifact checks",
+                "Route guidance",
+                "Payload requirements",
+                "Forbidden",
+                "`eval_cases_designed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "Use reserved routes only",
+            ),
+        ),
+        (
+            "package_producer.md",
+            (
+                "Read these artifacts",
+                "Write these artifacts",
+                "Evidence requirements",
+                "Route guidance for the verifier",
+                "Forbidden",
+                "`workflow_eval_suite`",
+                "`workflow_eval_suite_summary`",
+                "`workflow_eval_next_action`",
+                "`validated_eval_case_manifest.json`",
+                "`eval_rubric.md`",
+                "`workflow_eval_suite_ready`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "Reserved routes are only",
+            ),
+        ),
+        (
+            "package_verifier.md",
+            (
+                "Read these artifacts",
+                "Artifact checks",
+                "Route guidance",
+                "Payload requirements",
+                "Forbidden",
+                "`workflow_eval_suite_ready`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`validated_eval_case_manifest.json`",
+                "`eval_rubric.md`",
+                "Use reserved routes only",
+            ),
+        ),
+    ),
+)
+def test_workflow_to_eval_suite_prompts_keep_step_local_contracts_explicit(
+    prompt_name: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    text = (REPO_ROOT / "workflows" / "workflow_to_eval_suite" / "prompts" / prompt_name).read_text(
+        encoding="utf-8"
+    )
+
+    for marker in required_markers:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+
 def test_workflow_to_eval_suite_package_rejects_blank_selected_workflow(tmp_path: Path) -> None:
     _install_repo_workflow_to_eval_suite_package(tmp_path)
     parameters_cls = resolve_workflow_reference(tmp_path, "workflow_to_eval_suite").parameters_cls

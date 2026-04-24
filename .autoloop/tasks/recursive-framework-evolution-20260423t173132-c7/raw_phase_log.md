@@ -476,3 +476,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+I’m treating this as a phase-local test audit and refinement pass: I’ll inspect the new workflow package and the runtime proof that landed with implementation, look for meaningful coverage gaps against AC-1 through AC-4 and the shared decisions ledger, and then update only the test-phase artifacts plus any request-relevant repository tests if a gap is worth closing.
+
+I’m reviewing the shipped `workflow_to_eval_suite` coverage and phase artifacts now. First step is to inspect the existing runtime tests and prompt package to decide whether a small regression test is still missing or whether this turn should just formalize coverage in the phase test artifacts.
+
+I’ve confirmed the repo already has broad runtime coverage for discovery, typed contracts, publish-time validation, and the no-auto-run boundary. I’m checking one remaining gap now: whether prompt-contract completeness from AC-4 is only documented or also locked by a regression test.
+
+The main coverage gap is real and narrow: AC-4 is strongly implemented, but there isn’t a regression test that would fail if a prompt lost its explicit read/write/route/evidence/forbidden contract. I’m looking for an existing prompt-test pattern now; if there isn’t one, I’ll add a small targeted assertion in the runtime test module and then update the phase test artifacts.
+
+I found a narrow test worth adding: lock the prompt-template contract itself so AC-4 can’t silently regress if a future edit drops explicit reads, writes, route guidance, evidence, or forbidden-action sections. I’m patching that into the runtime test module now, then I’ll update the phase test strategy and feedback artifacts and rerun the targeted test slice.
+
+The test changes are in. I’ve kept them narrow: one README route-grammar lock and one prompt-contract parametrized lock, with no runtime behavior changes. Running the targeted validation slice now to catch any prompt-marker mismatches before I close out the phase artifacts.
+
+Scope considered
+- Phase-local test work for `workflow_to_eval_suite`: runtime test coverage, test-phase artifacts, and the shared decision note for this test turn.
+- I kept scope out of unrelated repo churn and did not touch auditor-owned `criteria.md`.
+
+What I analyzed
+- The shipped `workflow_to_eval_suite` package, its prompt bundle, and the existing runtime coverage in [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:1).
+- The active phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/feedback.md:1), and the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt:1).
+- The remaining gap against AC-4: prompt-contract explicitness was implemented, but not yet locked by a regression test.
+
+What I changed
+- Added prompt-contract regression coverage in [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:148):
+  - one test locks the prompt README’s reserved/application route grammar and narrow runtime boundary
+  - one parametrized test locks each producer/verifier prompt’s explicit contract markers for reads, writes or payloads, route guidance, evidence/forbidden sections, and step-local artifact names
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/test_strategy.md:1) with an explicit AC-to-test coverage map, preserved invariants, edge/failure paths, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/feedback.md:1).
+- Appended the non-obvious test-scoping decision under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt:1).
+
+Key findings / decisions
+- The existing runtime tests already covered AC-1 through AC-3 well; the meaningful missing lock was AC-4 prompt-template regressions.
+- Validation passed with `.venv/bin/pytest -q tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py tests/unit/test_stdlib_and_extensions.py`.
+- Result: `76 passed in 1.06s`.
+
+Open issues / next step
+- No open issues in this phase-local test scope.
