@@ -4,3 +4,7 @@
 {"ts": "2026-04-24T19:43:14.552431+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T19:44:13.029555+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T19:44:13.097038+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 6, "event_type": "pair_completed", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-24T19:44:13.182488+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 7, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["shared-workflow-validation-seam", "workflow-validation-migrations-and-closeout"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-04-24T19:44:13.184278+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 8, "event_type": "phase_started", "phase_id": "shared-workflow-validation-seam", "phase_mode": "single"}
+{"ts": "2026-04-24T19:44:13.184884+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "shared-workflow-validation-seam"}
+{"ts": "2026-04-24T19:44:13.184961+00:00", "run_id": "run-20260424T193807Z-9f2bcebf", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "shared-workflow-validation-seam"}

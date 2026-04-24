@@ -90,3 +90,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=shared-workflow-validation-seam,workflow-validation-migrations-and-closeout
+explicit=True
+current_phase_index=0
