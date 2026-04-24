@@ -151,20 +151,29 @@ def test_workflow_run_history_to_failure_modes_package_docs_capture_decision_rec
         assert required in text
 
 
-def test_workflow_run_history_to_failure_modes_prompt_readme_lists_route_grammar_and_runtime_boundary() -> None:
+def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT / "workflows" / "workflow_run_history_to_failure_modes" / "prompts" / "README.md"
     ).read_text(encoding="utf-8")
 
     for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
         "Reserved routes:",
-        "- `question`",
-        "- `blocked`",
-        "- `failed`",
+        "`question`",
+        "`blocked`",
+        "`failed`",
         "Application routes:",
-        "- `diagnostic_scope_framed`",
-        "- `failure_modes_mapped`",
-        "- `improvement_pressure_packaged`",
+        "`diagnostic_scope_framed`",
+        "`failure_modes_mapped`",
+        "`improvement_pressure_packaged`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "`frame_producer.md` / `frame_verifier.md`",
+        "ImprovementPressurePayload",
         "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
     ):
         assert required in text

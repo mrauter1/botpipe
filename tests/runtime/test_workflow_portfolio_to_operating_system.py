@@ -144,20 +144,29 @@ def test_workflow_portfolio_to_operating_system_docs_capture_decision_records() 
         assert required in text
 
 
-def test_workflow_portfolio_to_operating_system_prompt_readme_lists_route_grammar_and_runtime_boundary() -> None:
+def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT / "workflows" / "workflow_portfolio_to_operating_system" / "prompts" / "README.md"
     ).read_text(encoding="utf-8")
 
     for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
         "Reserved routes:",
-        "- `question`",
-        "- `blocked`",
-        "- `failed`",
+        "`question`",
+        "`blocked`",
+        "`failed`",
         "Application routes:",
-        "- `portfolio_governance_framed`",
-        "- `portfolio_operating_model_analyzed`",
-        "- `portfolio_operating_system_ready`",
+        "`portfolio_governance_framed`",
+        "`portfolio_operating_model_analyzed`",
+        "`portfolio_operating_system_ready`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "`frame_producer.md` / `frame_verifier.md`",
+        "PortfolioOperatingSystemPayload",
         "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
     ):
         assert required in text

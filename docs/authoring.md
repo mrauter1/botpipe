@@ -172,6 +172,40 @@ Concrete runtime adapters live under `runtime/providers/`, but that package is f
 
 For `PairStep` verifiers and `LLMStep` prompts, treat the provider-facing completion contract as strict JSON. The runtime now validates verifier and single-LLM outcomes locally, so prompts should ask for one JSON object matching the declared routes and payload contract rather than free-form prose.
 
+## Compact Prompt Contract Style
+
+Keep prompt families explicit without repeating the same boilerplate in every file.
+
+Use `prompts/README.md` once per workflow package for the family-wide contract:
+
+- the shared runtime/provider boundary reminder
+- reserved-route baseline and any family-wide route summary
+- a compact step-to-artifact map
+- verifier payload model names
+- family-wide publication-boundary reminders that apply to every prompt in the package
+
+Keep each prompt file focused on the current step:
+
+- step role and purpose
+- current work-item boundary
+- exact artifacts to read, write, or leave untouched
+- step-specific evidence requirements
+- step-specific route reminders and forbidden actions
+
+Prompt files should not re-explain family-wide notes when the same wording already lives in `prompts/README.md`.
+
+Prompt-style rules:
+
+- keep provider-facing operational guidance in prompt files, not runtime-only metadata
+- keep the runtime-injected contract narrow; the runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`
+- The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- prefer compact artifact tables when they shorten the prompt materially, such as `Artifact | Read/Write | Purpose | Handling`
+- keep route guidance concise and local to the decision the current step must justify
+- do not restate machine-readable route contracts verbatim when the runtime already injects them
+- do not introduce a prompt template engine, shared runtime prompt renderer, or hidden prompt abstraction just to remove repeated prose
+
+`prompts/README.md` is a workflow-local documentation seam, not a runtime input. Shared prompt text belongs there before it belongs in runtime behavior.
+
 ## Prompt And Artifact Resolution
 
 Relative prompts and bundled assets resolve from the executable workflow container, never from the current working directory.

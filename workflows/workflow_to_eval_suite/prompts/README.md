@@ -1,19 +1,30 @@
 # `workflow_to_eval_suite` Prompts
 
-- `frame_producer.md`: frames one selected workflow plus evaluation intent as an explicit evaluation-authoring problem.
-- `frame_verifier.md`: checks that the evaluation target and acceptance dimensions are explicit enough for case and rubric design.
-- `design_producer.md`: authors benchmark, edge, and adversarial case coverage plus the proposed eval-case manifest and rubric.
-- `design_verifier.md`: checks that the case coverage, manifest, and rubric are coherent and packaging-ready.
-- `package_producer.md`: packages the terminal eval-suite document, machine-readable summary, and next-action artifact.
-- `package_verifier.md`: confirms the terminal suite package is aligned and ready for deterministic publication of the validated manifest and receipt.
+## Shared README Boundary
 
-## Step To Artifact Map
+- This README keeps the family-wide prompt contract in one place so individual prompt files can stay step-local.
+- Prompt files still own the step role, purpose, current work-item boundary, exact artifact read/write set, and any evidence or route guidance that changes the local decision.
+- Keep provider-facing operational guidance in prompt files, but keep repeated family-wide reminders here.
+- The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Provider prose is control metadata unless it is written into a declared artifact.
+- Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.
 
-- `frame_evaluation_target` writes `evaluation_request_brief` and `evaluation_dimensions`.
-- `design_eval_cases` writes `benchmark_case_matrix`, `edge_case_matrix`, `adversarial_case_matrix`, `eval_case_manifest`, and `eval_rubric`.
-- `package_workflow_eval_suite` writes `workflow_eval_suite`, `workflow_eval_suite_summary`, and `workflow_eval_next_action`.
+## Keep In Each Prompt
 
-## Route Grammar
+- role and step name
+- step purpose and current work-item boundary
+- exact artifacts to read, write, or leave untouched
+- step-specific evidence requirements, route reminders, and forbidden actions
+
+## Step Surface
+
+| Step | Prompt pair | Writes | Step-complete route |
+| --- | --- | --- | --- |
+| `frame_evaluation_target` | `frame_producer.md` / `frame_verifier.md` | `evaluation_request_brief`, `evaluation_dimensions` | `evaluation_target_framed` |
+| `design_eval_cases` | `design_producer.md` / `design_verifier.md` | `benchmark_case_matrix`, `edge_case_matrix`, `adversarial_case_matrix`, `eval_case_manifest`, `eval_rubric` | `eval_cases_designed` |
+| `package_workflow_eval_suite` | `package_producer.md` / `package_verifier.md` | `workflow_eval_suite`, `workflow_eval_suite_summary`, `workflow_eval_next_action` | `workflow_eval_suite_ready` |
+
+## Route Surface
 
 Reserved routes:
 
@@ -32,13 +43,10 @@ Application routes:
 - `needs_replan`
 - `workflow_eval_suite_published`
 
-## Verifier JSON Expectations
+## Verifier Payloads
 
-- `frame_verifier.md` returns `EvaluationTargetFramingPayload`.
-- `design_verifier.md` returns `EvalCaseDesignPayload`.
-- `package_verifier.md` returns `WorkflowEvalSuitePayload`.
-
-## Runtime Boundary
-
-Prompt templates carry the provider-facing operational guidance.
-The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.
+| Step | Payload |
+| --- | --- |
+| `frame_evaluation_target` | `EvaluationTargetFramingPayload` |
+| `design_eval_cases` | `EvalCaseDesignPayload` |
+| `package_workflow_eval_suite` | `WorkflowEvalSuitePayload` |

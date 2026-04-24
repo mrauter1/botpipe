@@ -4,3 +4,6 @@ Keep this cycle doc-and-prompt local only; do not add runtime prompt injection, 
 If implementation scope needs trimming, prioritize the current workflow family above the older domain prompts so proof stays concentrated on the prompt suites that already pin this surface.
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260424T214122Z-85956296" ts="2026-04-24T21:49:45.206529+00:00" />
 Framework_evolution_charter.md remains an explicit closeout artifact in cycle 4; if prompt compaction does not change doctrine, the implementation must still record a no-doctrine-change charter note instead of silently skipping the file.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="prompt-contract-doctrine" pair="implement" turn_seq="1" run_id="run-20260424T214122Z-85956296" ts="2026-04-24T21:52:03.695844+00:00" />
+Keep this phase docs-and-README scoped: standardize the compact prompt-contract doctrine and workflow-local `prompts/README.md` sections now, but defer prompt body rewrites to a later phase.
+Use one shared README shape across the scoped workflow family (`Shared README Boundary`, `Keep In Each Prompt`, `Step Surface`, `Route Surface`, `Verifier Payloads`) so family-wide reminders do not pressure another runtime or stdlib abstraction.

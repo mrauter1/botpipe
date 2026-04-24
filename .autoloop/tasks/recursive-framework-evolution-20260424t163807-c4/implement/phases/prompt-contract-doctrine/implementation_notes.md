@@ -6,3 +6,41 @@
 - Phase Directory Key: prompt-contract-doctrine
 - Phase Title: Define Compact Prompt Contract Style
 - Scope: phase-local producer artifact
+- Files changed:
+  - `docs/authoring.md`
+  - scoped `workflows/*/prompts/README.md` files for the builder, selected-workflow, governance, and company-level families
+  - prompt-facing tests in `tests/runtime/` plus `tests/test_architecture_baseline_docs.py`
+  - recursive-memory files under `.autoloop_recursive/`
+  - `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/decisions.txt`
+- Symbols touched:
+  - doc section `Compact Prompt Contract Style`
+  - README sections `Shared README Boundary`, `Keep In Each Prompt`, `Step Surface`, `Route Surface`, `Verifier Payloads`
+- Checklist mapping:
+  - compact prompt doctrine in `docs/authoring.md`: done
+  - standardized scoped prompt READMEs: done
+  - prompt-facing proof for new README contract: done
+  - recursive-memory sync: done
+- Audit summary:
+  - most relevant existing surfaces: `task_to_workflow_strategy/prompts`, `workflow_and_eval_to_refined_workflow_package/prompts`, `workflow_package_to_composable_building_blocks/prompts`
+  - repeated patterns: duplicated runtime-boundary footers, repeated route summaries, repeated step-to-artifact summaries, repeated verifier payload notes
+  - simplification opportunity: move family-wide prompt reminders into `prompts/README.md` once per package and keep prompt files step-local
+  - new workflow necessity: none
+  - cycle decision: authoring-surface cleanup through docs and README standardization only
+- Assumptions:
+  - this phase is docs-and-README scoped even though later cycle work may compact prompt bodies against the new boundary
+- Preserved invariants:
+  - no CLI, runtime, provider, route-contract, workflow-topology, artifact-name, or prompt-path behavior changed
+  - no new workflow package, no root authoring primitive, and no runtime prompt abstraction were added
+- Intended behavior changes:
+  - docs now define what belongs in each prompt versus `prompts/README.md`
+  - scoped prompt README files now share one compact contract shape
+- Known non-changes:
+  - prompt body wording remains unchanged in this phase
+  - older domain workflow prompt families remain deferred
+- Expected side effects:
+  - future prompt cleanup can remove repeated package-level reminders without changing runtime behavior
+  - prompt-facing tests now pin the standardized README contract instead of the older README wording
+- Validation performed:
+  - `.venv/bin/pytest -q tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+- Deduplication / centralization decisions:
+  - centralized repeated prompt-family boundary text into standardized workflow-local `prompts/README.md` sections rather than another runtime or stdlib seam

@@ -219,7 +219,7 @@ def test_workflow_package_to_composable_building_blocks_docs_capture_decision_re
         assert required in text
 
 
-def test_workflow_package_to_composable_building_blocks_prompt_readme_lists_route_grammar_and_runtime_boundary() -> None:
+def test_workflow_package_to_composable_building_blocks_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT
         / "workflows"
@@ -229,15 +229,24 @@ def test_workflow_package_to_composable_building_blocks_prompt_readme_lists_rout
     ).read_text(encoding="utf-8")
 
     for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
         "Reserved routes:",
-        "- `question`",
-        "- `blocked`",
-        "- `failed`",
+        "`question`",
+        "`blocked`",
+        "`failed`",
         "Application routes:",
-        "- `decomposition_request_framed`",
-        "- `decomposition_plan_designed`",
-        "- `candidate_decomposition_built`",
-        "- `candidate_decomposition_evaluated`",
+        "`decomposition_request_framed`",
+        "`decomposition_plan_designed`",
+        "`candidate_decomposition_built`",
+        "`candidate_decomposition_evaluated`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "`frame_producer.md` / `frame_verifier.md`",
+        "CandidateDecompositionEvaluationPayload",
         "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
     ):
         assert required in text

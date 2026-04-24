@@ -179,7 +179,7 @@ def test_company_operation_to_recursive_improvement_cycle_docs_capture_decision_
         assert required in text
 
 
-def test_company_operation_to_recursive_improvement_cycle_prompt_readme_lists_route_grammar_and_runtime_boundary() -> None:
+def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_shared_contract_sections() -> None:
     text = (
         REPO_ROOT
         / "workflows"
@@ -189,14 +189,23 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_lists_ro
     ).read_text(encoding="utf-8")
 
     for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
         "Reserved routes:",
-        "- `question`",
-        "- `blocked`",
-        "- `failed`",
+        "`question`",
+        "`blocked`",
+        "`failed`",
         "Application routes:",
-        "- `company_operation_framed`",
-        "- `recursive_improvement_pressures_analyzed`",
-        "- `recursive_improvement_cycle_ready`",
+        "`company_operation_framed`",
+        "`recursive_improvement_pressures_analyzed`",
+        "`recursive_improvement_cycle_ready`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "`frame_producer.md` / `frame_verifier.md`",
+        "RecursiveImprovementCyclePayload",
         "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
     ):
         assert required in text

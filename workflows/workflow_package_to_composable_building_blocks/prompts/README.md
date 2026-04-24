@@ -1,23 +1,31 @@
 # `workflow_package_to_composable_building_blocks` Prompts
 
-- `frame_producer.md`: frames one selected workflow plus decomposition evidence as an explicit extraction request.
-- `frame_verifier.md`: checks that the decomposition boundary and acceptance surface are explicit enough for planning.
-- `design_producer.md`: designs the extraction strategy, building-block interfaces, parent rewrite plan, and regression guardrails.
-- `design_verifier.md`: checks that the decomposition plan is concrete, bounded, and still candidate-only.
-- `implement_producer.md`: builds the candidate decomposition surface and declared building-block index without mutating the authoritative selected workflow package.
-- `implement_verifier.md`: checks that the candidate surface and build artifacts are explicit enough for deterministic manifest derivation and evaluation.
-- `evaluate_producer.md`: writes the decomposition verification report, migration guide, promotion record, and rollback plan.
-- `evaluate_verifier.md`: checks that the evaluation package is publication-ready and still stops before promotion.
+## Shared README Boundary
 
-## Step To Artifact Map
+- This README keeps the family-wide prompt contract in one place so individual prompt files can stay step-local.
+- Prompt files still own the step role, purpose, current work-item boundary, exact artifact read/write set, and any evidence or route guidance that changes the local decision.
+- Keep provider-facing operational guidance in prompt files, but keep repeated family-wide reminders here.
+- The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Provider prose is control metadata unless it is written into a declared artifact.
+- Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.
 
-- `frame_decomposition_request` writes `decomposition_request_brief` and `decomposition_acceptance_criteria`.
-- `design_decomposition_plan` writes `extraction_strategy`, `building_block_interface_contracts`, `parent_rewrite_plan`, and `regression_guardrails`.
-- `implement_candidate_decomposition` writes `candidate_decomposition_surface`, `candidate_building_block_index`, `decomposition_build_report`, and `candidate_diff_summary`.
-- `implement_candidate_decomposition` also leads to deterministic publication of `candidate_decomposition_manifest.json` from the candidate surface and declared building-block index after verification.
-- `evaluate_candidate_decomposition` writes `decomposition_verification_report`, `composition_migration_guide`, `promotion_record`, and `rollback_plan`.
+## Keep In Each Prompt
 
-## Route Grammar
+- role and step name
+- step purpose and current work-item boundary
+- exact artifacts to read, write, or leave untouched
+- step-specific evidence requirements, route reminders, and forbidden actions
+
+## Step Surface
+
+| Step | Prompt pair | Writes | Step-complete route |
+| --- | --- | --- | --- |
+| `frame_decomposition_request` | `frame_producer.md` / `frame_verifier.md` | `decomposition_request_brief`, `decomposition_acceptance_criteria` | `decomposition_request_framed` |
+| `design_decomposition_plan` | `design_producer.md` / `design_verifier.md` | `extraction_strategy`, `building_block_interface_contracts`, `parent_rewrite_plan`, `regression_guardrails` | `decomposition_plan_designed` |
+| `implement_candidate_decomposition` | `implement_producer.md` / `implement_verifier.md` | `candidate_decomposition_surface`, `candidate_building_block_index`, `decomposition_build_report`, `candidate_diff_summary` | `candidate_decomposition_built` |
+| `evaluate_candidate_decomposition` | `evaluate_producer.md` / `evaluate_verifier.md` | `decomposition_verification_report`, `composition_migration_guide`, `promotion_record`, `rollback_plan` | `candidate_decomposition_evaluated` |
+
+## Route Surface
 
 Reserved routes:
 
@@ -37,14 +45,11 @@ Application routes:
 - `needs_rework`
 - `needs_replan`
 
-## Verifier JSON Expectations
+## Verifier Payloads
 
-- `frame_verifier.md` returns `DecompositionRequestFramingPayload`.
-- `design_verifier.md` returns `DecompositionPlanPayload`.
-- `implement_verifier.md` returns `CandidateDecompositionBuildPayload`.
-- `evaluate_verifier.md` returns `CandidateDecompositionEvaluationPayload`.
-
-## Runtime Boundary
-
-Prompt templates carry the provider-facing operational guidance.
-The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.
+| Step | Payload |
+| --- | --- |
+| `frame_decomposition_request` | `DecompositionRequestFramingPayload` |
+| `design_decomposition_plan` | `DecompositionPlanPayload` |
+| `implement_candidate_decomposition` | `CandidateDecompositionBuildPayload` |
+| `evaluate_candidate_decomposition` | `CandidateDecompositionEvaluationPayload` |
