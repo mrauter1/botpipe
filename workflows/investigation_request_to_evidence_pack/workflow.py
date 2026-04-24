@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_non_empty_string,
+        require_non_negative_int,
+        require_string_list,
+    )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -14,6 +20,14 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_non_empty_string,
+        require_non_negative_int,
+        require_string_list,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -165,14 +179,15 @@ class InvestigationRequestToEvidencePack(Workflow):
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
         payload = dict(ctx.workflow_params)
-        investigation_title = _require_text(
+        investigation_title = require_non_empty_string(
             payload.get("investigation_title"),
-            "investigation_request_to_evidence_pack requires workflow parameter 'investigation_title'",
+            error_message="investigation_request_to_evidence_pack requires workflow parameter 'investigation_title'",
+            coerce=True,
         )
         investigation_kind = _normalize_investigation_kind(payload.get("investigation_kind"))
-        sponsor_role = _normalize_optional_text(payload.get("sponsor_role"))
-        evidence_paths = _normalize_unique_strings(payload.get("evidence_paths"))
-        source_constraints = _normalize_unique_strings(payload.get("source_constraints"))
+        sponsor_role = normalize_optional_string(payload.get("sponsor_role"))
+        evidence_paths = normalize_unique_strings(payload.get("evidence_paths"), allow_scalar=True)
+        source_constraints = normalize_unique_strings(payload.get("source_constraints"), allow_scalar=True)
 
         next_state = state.model_copy(
             update={
@@ -236,25 +251,38 @@ class InvestigationRequestToEvidencePack(Workflow):
             if not artifact_path.exists():
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
-        summary = _read_json(required_paths["evidence_pack_summary"])
-        summary_kind = _require_text(
+        summary = read_json_object(required_paths["evidence_pack_summary"])
+        summary_kind = require_non_empty_string(
             summary.get("investigation_kind"),
-            "evidence_pack_summary.json must define a non-empty investigation_kind",
+            error_message="evidence_pack_summary.json must define a non-empty investigation_kind",
+            coerce=True,
         )
         if summary_kind != state.investigation_kind:
             raise ValueError("evidence_pack_summary.json investigation_kind must match workflow state")
 
-        authoritative_artifacts = _require_string_list(
+        authoritative_artifacts = require_string_list(
             summary.get("authoritative_artifacts"),
             "evidence_pack_summary.json must define non-empty authoritative_artifacts",
         )
         ready_for_downstream_assessment = summary.get("ready_for_downstream_assessment")
         if not isinstance(ready_for_downstream_assessment, bool):
             raise ValueError("evidence_pack_summary.json must define boolean ready_for_downstream_assessment")
-        source_count = _require_non_negative_int(summary, "source_count")
-        finding_count = _require_non_negative_int(summary, "finding_count")
-        unresolved_gap_count = _require_non_negative_int(summary, "unresolved_gap_count")
-        key_findings = _normalize_string_list(summary.get("key_findings"))
+        source_count = require_non_negative_int(
+            summary.get("source_count"),
+            "evidence_pack_summary.json must define non-negative source_count",
+        )
+        finding_count = require_non_negative_int(
+            summary.get("finding_count"),
+            "evidence_pack_summary.json must define non-negative finding_count",
+        )
+        unresolved_gap_count = require_non_negative_int(
+            summary.get("unresolved_gap_count"),
+            "evidence_pack_summary.json must define non-negative unresolved_gap_count",
+        )
+        key_findings = require_string_list(
+            summary.get("key_findings"),
+            "evidence_pack_summary.json must define non-empty key_findings",
+        )
 
         write_publication_receipt(
             ctx,
@@ -286,79 +314,15 @@ class InvestigationRequestToEvidencePack(Workflow):
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
-def _require_text(value, error_message: str) -> str:
-    if value is None:
-        raise ValueError(error_message)
-    normalized = str(value).strip()
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
-
-
-def _normalize_optional_text(value) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
-def _normalize_unique_strings(raw_value) -> list[str]:
-    if raw_value is None:
-        return []
-    if isinstance(raw_value, list):
-        candidates = raw_value
-    else:
-        candidates = [raw_value]
-    normalized: list[str] = []
-    for value in candidates:
-        candidate = str(value).strip()
-        if candidate and candidate not in normalized:
-            normalized.append(candidate)
-    return normalized
-
-
 def _normalize_investigation_kind(value) -> str:
-    normalized = _require_text(
+    normalized = require_non_empty_string(
         value,
-        "investigation_request_to_evidence_pack requires workflow parameter 'investigation_kind'",
+        error_message="investigation_request_to_evidence_pack requires workflow parameter 'investigation_kind'",
+        coerce=True,
     )
     if normalized not in _INVESTIGATION_KINDS:
         supported = ", ".join(sorted(_INVESTIGATION_KINDS))
         raise ValueError(f"investigation_kind must be one of: {supported}")
-    return normalized
-
-
-def _read_json(path) -> dict[str, object]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError(f"expected a JSON object in {path}")
-    return raw
-
-
-def _require_non_negative_int(payload: dict[str, object], field_name: str) -> int:
-    value = payload.get(field_name)
-    if not isinstance(value, int) or value < 0:
-        raise ValueError(f"evidence_pack_summary.json must define non-negative {field_name}")
-    return value
-
-
-def _require_string_list(value, error_message: str) -> list[str]:
-    normalized = _normalize_string_list(value)
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
-
-
-def _normalize_string_list(value) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    normalized: list[str] = []
-    for item in value:
-        if not isinstance(item, str):
-            return []
-        candidate = item.strip()
-        if candidate:
-            normalized.append(candidate)
     return normalized
 
 

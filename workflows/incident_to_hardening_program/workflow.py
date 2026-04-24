@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_non_empty_string,
+        require_non_negative_int,
+    )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -14,6 +19,13 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_non_empty_string,
+        require_non_negative_int,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -225,18 +237,20 @@ class IncidentToHardeningProgram(Workflow):
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
         payload = dict(ctx.workflow_params)
-        incident_title = str(payload.get("incident_title") or "").strip()
-        if not incident_title:
-            raise ValueError("incident_to_hardening_program requires workflow parameter 'incident_title'")
+        incident_title = require_non_empty_string(
+            payload.get("incident_title"),
+            error_message="incident_to_hardening_program requires workflow parameter 'incident_title'",
+            coerce=True,
+        )
 
         next_state = state.model_copy(
             update={
                 "incident_title": incident_title,
-                "incident_window": _normalize_optional_text(payload.get("incident_window")),
-                "affected_system": _normalize_optional_text(payload.get("affected_system")),
-                "severity": _normalize_optional_text(payload.get("severity")),
-                "incident_commander": _normalize_optional_text(payload.get("incident_commander")),
-                "evidence_paths": _normalize_evidence_paths(payload.get("evidence_paths")),
+                "incident_window": normalize_optional_string(payload.get("incident_window")),
+                "affected_system": normalize_optional_string(payload.get("affected_system")),
+                "severity": normalize_optional_string(payload.get("severity")),
+                "incident_commander": normalize_optional_string(payload.get("incident_commander")),
+                "evidence_paths": normalize_unique_strings(payload.get("evidence_paths"), allow_scalar=True),
                 "framing_status": None,
                 "evidence_status": None,
                 "analysis_status": None,
@@ -314,16 +328,21 @@ class IncidentToHardeningProgram(Workflow):
             if not artifact_path.exists():
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
-        summary = _read_json(summary_path)
-        recommended_posture = summary.get("recommended_posture")
-        primary_hypothesis = summary.get("primary_hypothesis")
-        backlog_items = summary.get("hardening_backlog_items")
-        if not isinstance(recommended_posture, str) or not recommended_posture.strip():
-            raise ValueError("incident_summary.json must define a non-empty recommended_posture")
-        if not isinstance(primary_hypothesis, str) or not primary_hypothesis.strip():
-            raise ValueError("incident_summary.json must define a non-empty primary_hypothesis")
-        if not isinstance(backlog_items, int) or backlog_items < 0:
-            raise ValueError("incident_summary.json must define a non-negative hardening_backlog_items")
+        summary = read_json_object(summary_path)
+        recommended_posture = require_non_empty_string(
+            summary.get("recommended_posture"),
+            error_message="incident_summary.json must define a non-empty recommended_posture",
+            coerce=True,
+        )
+        primary_hypothesis = require_non_empty_string(
+            summary.get("primary_hypothesis"),
+            error_message="incident_summary.json must define a non-empty primary_hypothesis",
+            coerce=True,
+        )
+        backlog_items = require_non_negative_int(
+            summary.get("hardening_backlog_items"),
+            "incident_summary.json must define a non-negative hardening_backlog_items",
+        )
 
         write_publication_receipt(
             ctx,
@@ -352,32 +371,4 @@ class IncidentToHardeningProgram(Workflow):
         ), Event("incident_package_published")
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
-
-
-def _normalize_optional_text(value) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
-def _normalize_evidence_paths(raw_value) -> list[str]:
-    if raw_value is None:
-        return []
-    if isinstance(raw_value, list):
-        candidates = raw_value
-    else:
-        candidates = [raw_value]
-    normalized: list[str] = []
-    for value in candidates:
-        path = str(value).strip()
-        if path and path not in normalized:
-            normalized.append(path)
-    return normalized
-
-
-def _read_json(path) -> dict[str, object]:
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 __all__ = ["IncidentToHardeningProgram"]

@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover - direct repo-root import fallback
     from runtime.workspace import list_workflow_run_summaries
 
 from .lifecycle import write_workflow_json
+from .validation import require_non_empty_string
 
 
 def write_workflow_portfolio_snapshot(
@@ -192,18 +193,18 @@ def _normalized_filters(statuses: str | Iterable[str] | None) -> list[str] | Non
         raw_values = (statuses,)
     else:
         raw_values = statuses
-    normalized = sorted({_require_text(value, "statuses entries must be non-empty strings") for value in raw_values})
+    normalized = sorted(
+        {
+            require_non_empty_string(
+                value,
+                error_message="statuses entries must be non-empty strings",
+                coerce=False,
+            )
+            for value in raw_values
+        }
+    )
     if not normalized:
         raise ValueError("statuses must contain at least one non-empty string when provided")
-    return normalized
-
-
-def _require_text(value: Any, message: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(message)
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError(message)
     return normalized
 
 

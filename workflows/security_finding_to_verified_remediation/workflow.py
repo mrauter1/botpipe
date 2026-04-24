@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
+    from autoloop_v3.stdlib import (
+        adopt_child_artifacts,
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_child_workflow_result,
+        require_non_empty_string,
+        require_non_negative_int,
+        require_string_list,
+        run_child_workflow,
+    )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -15,7 +23,17 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
+    from stdlib import (
+        adopt_child_artifacts,
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_child_workflow_result,
+        require_non_empty_string,
+        require_non_negative_int,
+        require_string_list,
+        run_child_workflow,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -222,24 +240,29 @@ class SecurityFindingToVerifiedRemediation(Workflow):
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
         payload = dict(ctx.workflow_params)
-        finding_title = _require_text(
+        finding_title = require_non_empty_string(
             payload.get("finding_title"),
-            "security_finding_to_verified_remediation requires workflow parameter 'finding_title'",
+            error_message="security_finding_to_verified_remediation requires workflow parameter 'finding_title'",
+            coerce=True,
         )
-        finding_source = _require_text(
+        finding_source = require_non_empty_string(
             payload.get("finding_source"),
-            "security_finding_to_verified_remediation requires workflow parameter 'finding_source'",
+            error_message="security_finding_to_verified_remediation requires workflow parameter 'finding_source'",
+            coerce=True,
         )
-        severity = _normalize_optional_text(payload.get("severity")) or "unknown"
+        severity = normalize_optional_string(payload.get("severity")) or "unknown"
         next_state = state.model_copy(
             update={
                 "finding_title": finding_title,
                 "finding_source": finding_source,
                 "severity": severity,
-                "affected_system": _normalize_optional_text(payload.get("affected_system")),
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "evidence_paths": _normalize_unique_strings(payload.get("evidence_paths")),
-                "deployment_constraints": _normalize_unique_strings(payload.get("deployment_constraints")),
+                "affected_system": normalize_optional_string(payload.get("affected_system")),
+                "sponsor_role": normalize_optional_string(payload.get("sponsor_role")),
+                "evidence_paths": normalize_unique_strings(payload.get("evidence_paths"), allow_scalar=True),
+                "deployment_constraints": normalize_unique_strings(
+                    payload.get("deployment_constraints"),
+                    allow_scalar=True,
+                ),
                 "evidence_pack_status": None,
                 "evidence_pack_child_run_id": None,
                 "ready_for_downstream_assessment": False,
@@ -305,7 +328,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "evidence_pack_receipt",
             ),
         )
-        summary = _read_json(child.output_artifacts["evidence_pack_summary"])
+        summary = read_json_object(child.output_artifacts["evidence_pack_summary"])
         if summary.get("investigation_kind") != "security_remediation":
             raise ValueError("adopted security_evidence_pack_summary.json must report investigation_kind=security_remediation")
         ready_for_downstream_assessment = summary.get("ready_for_downstream_assessment")
@@ -394,25 +417,31 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             if not artifact_path.exists():
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
-        evidence_summary = _read_json(required_paths["security_evidence_pack_summary"])
+        evidence_summary = read_json_object(required_paths["security_evidence_pack_summary"])
         if evidence_summary.get("investigation_kind") != "security_remediation":
             raise ValueError("security_evidence_pack_summary.json must define investigation_kind=security_remediation")
-        source_count = _require_non_negative_int(evidence_summary, "source_count", "security_evidence_pack_summary.json")
-        finding_count = _require_non_negative_int(evidence_summary, "finding_count", "security_evidence_pack_summary.json")
-        unresolved_gap_count = _require_non_negative_int(
-            evidence_summary,
-            "unresolved_gap_count",
-            "security_evidence_pack_summary.json",
+        source_count = require_non_negative_int(
+            evidence_summary.get("source_count"),
+            "security_evidence_pack_summary.json must define non-negative source_count",
         )
-        key_findings = _require_string_list(
+        finding_count = require_non_negative_int(
+            evidence_summary.get("finding_count"),
+            "security_evidence_pack_summary.json must define non-negative finding_count",
+        )
+        unresolved_gap_count = require_non_negative_int(
+            evidence_summary.get("unresolved_gap_count"),
+            "security_evidence_pack_summary.json must define non-negative unresolved_gap_count",
+        )
+        key_findings = require_string_list(
             evidence_summary.get("key_findings"),
             "security_evidence_pack_summary.json must define non-empty key_findings",
         )
 
-        summary = _read_json(required_paths["remediation_summary"])
-        selected_remediation = _require_text(
+        summary = read_json_object(required_paths["remediation_summary"])
+        selected_remediation = require_non_empty_string(
             summary.get("selected_remediation"),
-            "remediation_summary.json must define a non-empty selected_remediation",
+            error_message="remediation_summary.json must define a non-empty selected_remediation",
+            coerce=True,
         )
         verification_ready = summary.get("verification_ready")
         rollout_ready = summary.get("rollout_ready")
@@ -420,7 +449,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             raise ValueError("remediation_summary.json must define boolean verification_ready")
         if not isinstance(rollout_ready, bool):
             raise ValueError("remediation_summary.json must define boolean rollout_ready")
-        authoritative_artifacts = _require_string_list(
+        authoritative_artifacts = require_string_list(
             summary.get("authoritative_artifacts"),
             "remediation_summary.json must define non-empty authoritative_artifacts",
         )
@@ -465,71 +494,6 @@ def _child_message(state: SecurityFindingToVerifiedRemediation.State) -> str:
     if state.affected_system:
         return f'Assemble the evidence pack for the security finding "{state.finding_title}" affecting {state.affected_system}.'
     return f'Assemble the evidence pack for the security finding "{state.finding_title}".'
-
-
-def _require_text(value, error_message: str) -> str:
-    if value is None:
-        raise ValueError(error_message)
-    normalized = str(value).strip()
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
-
-
-def _normalize_optional_text(value) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
-def _normalize_unique_strings(raw_value) -> list[str]:
-    if raw_value is None:
-        return []
-    if isinstance(raw_value, list):
-        candidates = raw_value
-    else:
-        candidates = [raw_value]
-    normalized: list[str] = []
-    for value in candidates:
-        candidate = str(value).strip()
-        if candidate and candidate not in normalized:
-            normalized.append(candidate)
-    return normalized
-
-
-def _read_json(path) -> dict[str, object]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError(f"expected a JSON object in {path}")
-    return raw
-
-
-def _require_non_negative_int(payload: dict[str, object], field_name: str, file_name: str) -> int:
-    value = payload.get(field_name)
-    if not isinstance(value, int) or value < 0:
-        raise ValueError(f"{file_name} must define non-negative {field_name}")
-    return value
-
-
-def _require_string_list(value, error_message: str) -> list[str]:
-    normalized = _normalize_string_list(value)
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
-
-
-def _normalize_string_list(value) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    normalized: list[str] = []
-    for item in value:
-        if not isinstance(item, str):
-            return []
-        candidate = item.strip()
-        if candidate:
-            normalized.append(candidate)
-    return normalized
 
 
 __all__ = ["SecurityFindingToVerifiedRemediation"]

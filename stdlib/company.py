@@ -14,6 +14,7 @@ except ImportError:  # pragma: no cover - direct repo-root import fallback
     from runtime.workspace import list_task_operation_summaries
 
 from .lifecycle import write_workflow_json
+from .validation import require_non_empty_string
 
 
 def write_company_operation_snapshot(
@@ -92,18 +93,18 @@ def _normalized_text_filters(values: str | Iterable[str] | None, *, field_name: 
         raw_values = (values,)
     else:
         raw_values = values
-    normalized = sorted({_require_text(value, f"{field_name} entries must be non-empty strings") for value in raw_values})
+    normalized = sorted(
+        {
+            require_non_empty_string(
+                value,
+                error_message=f"{field_name} entries must be non-empty strings",
+                coerce=False,
+            )
+            for value in raw_values
+        }
+    )
     if not normalized:
         raise ValueError(f"{field_name} must contain at least one non-empty string when provided")
-    return normalized
-
-
-def _require_text(value: Any, message: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(message)
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError(message)
     return normalized
 
 

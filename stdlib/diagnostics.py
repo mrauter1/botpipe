@@ -15,6 +15,7 @@ except ImportError:  # pragma: no cover - direct repo-root import fallback
     from runtime.workspace import list_run_records
 
 from .lifecycle import write_workflow_json
+from .validation import require_non_empty_string
 
 
 def write_selected_workflow_run_history_snapshot(
@@ -109,7 +110,16 @@ def _normalize_statuses(statuses: str | Iterable[str] | None) -> list[str] | Non
         raw_statuses = (statuses,)
     else:
         raw_statuses = statuses
-    normalized = sorted({_require_text(status, "statuses entries must be non-empty strings") for status in raw_statuses})
+    normalized = sorted(
+        {
+            require_non_empty_string(
+                status,
+                error_message="statuses entries must be non-empty strings",
+                coerce=False,
+            )
+            for status in raw_statuses
+        }
+    )
     if not normalized:
         raise ValueError("statuses must contain at least one non-empty string when provided")
     return normalized
@@ -160,15 +170,6 @@ def _optional_text(path: Path) -> str | None:
 
 def _optional_text_value(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
-
-
-def _require_text(value: Any, message: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(message)
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError(message)
-    return normalized
 
 
 def _repo_root_from_context(ctx) -> Path:

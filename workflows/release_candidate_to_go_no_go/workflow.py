@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_non_empty_string,
+    )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -14,6 +18,12 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_non_empty_string,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -213,14 +223,16 @@ class ReleaseCandidateToGoNoGo(Workflow):
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
         payload = dict(ctx.workflow_params)
-        release_name = str(payload.get("release_name") or "").strip()
-        if not release_name:
-            raise ValueError("release_candidate_to_go_no_go requires workflow parameter 'release_name'")
+        release_name = require_non_empty_string(
+            payload.get("release_name"),
+            error_message="release_candidate_to_go_no_go requires workflow parameter 'release_name'",
+            coerce=True,
+        )
 
-        target_date = _normalize_optional_text(payload.get("target_date"))
-        deployment_environment = str(payload.get("deployment_environment") or "production").strip() or "production"
-        release_owner = _normalize_optional_text(payload.get("release_owner"))
-        evidence_paths = _normalize_evidence_paths(payload.get("evidence_paths"))
+        target_date = normalize_optional_string(payload.get("target_date"))
+        deployment_environment = normalize_optional_string(payload.get("deployment_environment")) or "production"
+        release_owner = normalize_optional_string(payload.get("release_owner"))
+        evidence_paths = normalize_unique_strings(payload.get("evidence_paths"), allow_scalar=True)
 
         next_state = state.model_copy(
             update={
@@ -291,10 +303,12 @@ class ReleaseCandidateToGoNoGo(Workflow):
             if not artifact_path.exists():
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
-        summary = _read_json(summary_path)
-        recommended_decision = summary.get("recommended_decision")
-        if not isinstance(recommended_decision, str) or not recommended_decision.strip():
-            raise ValueError("decision_summary.json must define a non-empty recommended_decision")
+        summary = read_json_object(summary_path)
+        recommended_decision = require_non_empty_string(
+            summary.get("recommended_decision"),
+            error_message="decision_summary.json must define a non-empty recommended_decision",
+            coerce=True,
+        )
 
         write_publication_receipt(
             ctx,
@@ -318,35 +332,6 @@ class ReleaseCandidateToGoNoGo(Workflow):
         )
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
-
-
-def _normalize_optional_text(value) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
-def _normalize_evidence_paths(raw_value) -> list[str]:
-    if raw_value is None:
-        return []
-    if isinstance(raw_value, list):
-        candidates = raw_value
-    else:
-        candidates = [raw_value]
-    normalized: list[str] = []
-    for value in candidates:
-        path = str(value).strip()
-        if path and path not in normalized:
-            normalized.append(path)
-    return normalized
-
-
-def _read_json(path) -> dict:
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError(f"expected a JSON object in {path}")
-    return raw
 
 
 __all__ = ["ReleaseCandidateToGoNoGo"]

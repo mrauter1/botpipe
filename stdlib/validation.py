@@ -190,6 +190,22 @@ def require_positive_int(
     return value
 
 
+def require_non_negative_int(
+    value: Any,
+    error_message: str | None = None,
+    *,
+    field_name: str = "value",
+    allow_bool: bool = False,
+) -> int:
+    """Return one non-negative integer or raise ``ValueError``."""
+
+    if isinstance(value, bool) and not allow_bool:
+        raise ValueError(error_message or f"{field_name} must be a non-negative integer")
+    if not isinstance(value, int) or value < 0:
+        raise ValueError(error_message or f"{field_name} must be a non-negative integer")
+    return value
+
+
 def require_mapping(
     value: Any,
     error_message: str | None = None,
@@ -281,6 +297,7 @@ __all__ = [
     "read_model_file",
     "require_mapping",
     "require_mapping_list",
+    "require_non_negative_int",
     "require_non_empty_string",
     "require_positive_int",
     "require_string_list",
