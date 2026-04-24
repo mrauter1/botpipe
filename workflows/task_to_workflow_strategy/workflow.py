@@ -39,6 +39,7 @@ from .contracts import (
 
 _STRATEGY_ROUTES = frozenset({"run_existing", "compose", "adapt", "create_new"})
 _BUILDER_BASELINE = "workflow_idea_to_workflow_package"
+_ADAPTATION_BUILDING_BLOCK = "candidate_workflow_to_adapted_execution_plan"
 _PORTFOLIO_POSTURES = frozenset({"direct_fit", "compose_needed", "adapt_needed", "material_gap"})
 
 
@@ -422,6 +423,8 @@ class TaskToWorkflowStrategy(Workflow):
             )
         if selected_strategy == "compose" and len(recommended_workflows) < 2:
             raise ValueError("strategy_summary.json must recommend at least two workflows for compose")
+        if selected_strategy == "adapt" and len(recommended_workflows) != 1:
+            raise ValueError("strategy_summary.json must recommend exactly one workflow for adapt")
 
         authoritative_artifacts = _require_string_list(
             summary.get("authoritative_artifacts"),
@@ -435,6 +438,26 @@ class TaskToWorkflowStrategy(Workflow):
         ready_for_handoff = summary.get("ready_for_handoff")
         if ready_for_handoff is not True:
             raise ValueError("strategy_summary.json must confirm ready_for_handoff=true")
+
+        workflow_strategy_package_text = _read_text(required_paths["workflow_strategy_package"])
+        strategy_next_action_text = _read_text(required_paths["strategy_next_action"])
+        if selected_strategy == "adapt":
+            selected_workflow = recommended_workflows[0]
+            _require_concrete_adapt_handoff(
+                "workflow_strategy_package.md",
+                workflow_strategy_package_text,
+                selected_workflow,
+            )
+            _require_concrete_adapt_handoff(
+                "strategy_summary.json next_action",
+                next_action,
+                selected_workflow,
+            )
+            _require_concrete_adapt_handoff(
+                "strategy_next_action.md",
+                strategy_next_action_text,
+                selected_workflow,
+            )
 
         candidate_summary = _read_json(required_paths["candidate_workflow_set_summary"])
         candidate_comparison_candidates = _require_string_list(
@@ -572,5 +595,20 @@ def _read_request_text(ctx) -> str:
     return (ctx.run_folder / "request.md").read_text(encoding="utf-8")
 
 
+def _read_text(path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
 def _read_json(path):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _require_concrete_adapt_handoff(surface_name: str, text: str, selected_workflow: str) -> None:
+    if _ADAPTATION_BUILDING_BLOCK not in text:
+        raise ValueError(
+            f"{surface_name} must name {_ADAPTATION_BUILDING_BLOCK} when selected_strategy is adapt"
+        )
+    if selected_workflow not in text:
+        raise ValueError(
+            f"{surface_name} must name the selected workflow when selected_strategy is adapt"
+        )

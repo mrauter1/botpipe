@@ -55,6 +55,7 @@ Artifact handling
 - `rejected_routes`
 - `next_action`
 - `ready_for_handoff`
+- If `selected_strategy` is `adapt`, keep the existing `strategy_summary.json` field set unchanged and make the handoff concrete through the existing `next_action` field rather than new summary keys.
 - `strategy_next_action` must state exactly what should happen next, which workflow or authoring path should be invoked, and which task-specific facts should be carried forward.
 - If `selected_strategy` is `adapt`, `strategy_next_action` must direct the operator to run `candidate_workflow_to_adapted_execution_plan` and pass the chosen workflow plus current task context through the existing message and workflow-parameter surfaces.
 

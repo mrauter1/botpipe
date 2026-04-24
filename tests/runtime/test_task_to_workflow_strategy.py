@@ -736,6 +736,437 @@ def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_
     assert (run_dir / "run.json").exists()
 
 
+def test_task_to_workflow_strategy_runs_and_publishes_concrete_adapt_handoff_without_widening_summary_fields(
+    tmp_path: Path,
+) -> None:
+    _install_repo_task_to_workflow_strategy_package(tmp_path)
+
+    expected_next_action = (
+        "Run candidate_workflow_to_adapted_execution_plan for security_finding_to_verified_remediation "
+        "using the task title, sponsor role, constraints, and evidence expectations captured in this strategy package."
+    )
+
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: (
+                request.artifacts.task_strategy_brief.write_text(
+                    "\n".join(
+                        (
+                            "# Task Strategy Brief",
+                            "",
+                            "Task: respond to the admin impersonation privilege-escalation finding with a stricter remediation posture.",
+                            "Sponsor: security engineering.",
+                            "Desired outcome: choose the strongest workflow strategy for a durable adaptation handoff.",
+                            "Terminal need: a validated execution-ready handoff without auto-running the selected workflow.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                request.artifacts.workflow_selection_criteria.write_text(
+                    "\n".join(
+                        (
+                            "# Workflow Selection Criteria",
+                            "",
+                            "- Prefer adaptation when an existing end-to-end workflow is close but still needs task-specific execution shaping.",
+                            "- Keep the front door at strategy publication rather than downstream execution.",
+                            "- Keep the workflow-builder baseline visible before claiming a create-new gap.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                "framed task\n",
+            )[2],
+            lambda request: (
+                request.artifacts.candidate_request_brief.write_text(
+                    "\n".join(
+                        (
+                            "# Candidate Request Brief",
+                            "",
+                            "Task: respond to the admin impersonation privilege-escalation finding with a stricter remediation posture.",
+                            "Sponsor: security engineering.",
+                            "Desired outcome: publish a ranked candidate-workflow set for strategy selection.",
+                            "Terminal need: preserve reuse over rebuild while keeping execution explicit.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                request.artifacts.candidate_selection_criteria.write_text(
+                    "\n".join(
+                        (
+                            "# Candidate Selection Criteria",
+                            "",
+                            "- Prefer an end-to-end workflow when it already closes the task boundary.",
+                            "- Choose adaptation when the leading workflow is credible but needs a task-specific execution plan.",
+                            "- Keep builder pressure visible only after at least three candidates are compared.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                "child candidate request framed\n",
+            )[2],
+            lambda request: (
+                request.artifacts.workflow_candidate_matrix.write_text(
+                    "\n".join(
+                        (
+                            "# Workflow Candidate Matrix",
+                            "",
+                            "| Candidate | What it solves | Fit | Gaps | Best route if chosen | Decision |",
+                            "| --- | --- | --- | --- | --- | --- |",
+                            "| `security_finding_to_verified_remediation` | End-to-end remediation and closure packaging | Strong | Needs a tighter task-specific execution plan for this finding | `adapt` | winner |",
+                            "| `investigation_request_to_evidence_pack` | Evidence assembly only | Partial | Stops before remediation and closure | `compose` | loses because a durable remediation handoff would still be missing |",
+                            "| `workflow_idea_to_workflow_package` | Builder baseline for greenfield authoring | Weak | No material gap exists because a close workflow already exists | `create_new` | loses because adaptation is credible |",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                request.artifacts.workflow_gap_analysis.write_text(
+                    "\n".join(
+                        (
+                            "# Workflow Gap Analysis",
+                            "",
+                            "- The current portfolio already contains an end-to-end workflow for verified remediation work.",
+                            "- Running that workflow as-is would skip the task-specific execution shaping this case needs.",
+                            "- Composition alone is still too narrow because the terminal need is a concrete adapted execution handoff.",
+                            "- `create_new` is not justified because the builder baseline reveals no durable fit gap.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                request.artifacts.candidate_route_posture.write_text(
+                    "\n".join(
+                        (
+                            "# Candidate Route Posture",
+                            "",
+                            "Ranked candidates:",
+                            "1. `security_finding_to_verified_remediation`",
+                            "2. `investigation_request_to_evidence_pack`",
+                            "3. `workflow_idea_to_workflow_package`",
+                            "",
+                            "Portfolio posture: `adapt_needed`.",
+                            "Downstream strategy selection should choose an explicit adaptation handoff rather than auto-running the leading workflow.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                "child candidate workflows analyzed\n",
+            )[3],
+            lambda request: (
+                request.artifacts.candidate_workflow_set.write_text(
+                    "\n".join(
+                        (
+                            "# Candidate Workflow Set",
+                            "",
+                            "Leading posture: `adapt_needed`.",
+                            "Ranked candidates:",
+                            "1. `security_finding_to_verified_remediation`",
+                            "2. `investigation_request_to_evidence_pack`",
+                            "3. `workflow_idea_to_workflow_package`",
+                            "",
+                            "Why the winner matters: it already owns the remediation boundary, but this task still needs a concrete adaptation handoff before execution.",
+                            "This building block stops at candidate-set publication so the front door can choose the final route explicitly.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                request.artifacts.candidate_workflow_set_summary.write_text(
+                    json.dumps(
+                        {
+                            "authoritative_artifacts": [
+                                "candidate_workflow_set",
+                                "candidate_workflow_set_summary",
+                                "candidate_next_action",
+                            ],
+                            "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+                            "builder_considered": True,
+                            "comparison_candidates": [
+                                "security_finding_to_verified_remediation",
+                                "investigation_request_to_evidence_pack",
+                                "workflow_idea_to_workflow_package",
+                            ],
+                            "next_action": "Use this candidate package to choose the final workflow strategy without redoing candidate retrieval.",
+                            "portfolio_posture": "adapt_needed",
+                            "ranked_candidates": [
+                                "security_finding_to_verified_remediation",
+                                "investigation_request_to_evidence_pack",
+                                "workflow_idea_to_workflow_package",
+                            ],
+                            "ready_for_strategy_selection": True,
+                            "recommended_candidate_workflows": ["security_finding_to_verified_remediation"],
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n"
+                ),
+                request.artifacts.candidate_next_action.write_text(
+                    "\n".join(
+                        (
+                            "# Candidate Next Action",
+                            "",
+                            "1. Use the candidate-workflow-set package to choose the final run_existing/compose/adapt/create_new route.",
+                            "2. Preserve the leading `security_finding_to_verified_remediation` recommendation.",
+                            "3. Keep downstream execution explicit; the next layer should choose whether to adapt rather than auto-run the workflow.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                "child candidate workflow set packaged\n",
+            )[3],
+            lambda request: (
+                request.artifacts.strategy_decision.write_text(
+                    "\n".join(
+                        (
+                            "# Strategy Decision",
+                            "",
+                            "Selected strategy: `adapt`.",
+                            "Recommended workflow: `security_finding_to_verified_remediation`.",
+                            "Rejected routes: `run_existing`, `compose`, and `create_new`.",
+                            "The child candidate-workflow-set package showed an `adapt_needed` posture, so the concrete downstream handoff is `candidate_workflow_to_adapted_execution_plan`, not direct workflow execution.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                "selected strategy\n",
+            )[1],
+            lambda request: (
+                request.artifacts.workflow_strategy_package.write_text(
+                    "\n".join(
+                        (
+                            "# Workflow Strategy Package",
+                            "",
+                            "Selected route: `adapt`.",
+                            "Recommended workflow: `security_finding_to_verified_remediation`.",
+                            "Child candidate posture: `adapt_needed`.",
+                            "Why it won: the existing remediation workflow already owns the problem boundary but this case needs a task-specific execution plan before the workflow runs.",
+                            "Concrete next building block: run `candidate_workflow_to_adapted_execution_plan` for `security_finding_to_verified_remediation` using the task facts captured in this strategy package.",
+                            "Carry forward: task title, sponsor role, constraints, evidence expectations, and the finding-specific context from the incoming request.",
+                            "No downstream workflow was executed in this run; this package is the terminal handoff artifact.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                request.artifacts.strategy_summary.write_text(
+                    json.dumps(
+                        {
+                            "authoritative_artifacts": [
+                                "workflow_strategy_package",
+                                "strategy_summary",
+                                "strategy_next_action",
+                            ],
+                            "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+                            "builder_considered": True,
+                            "comparison_candidates": [
+                                "security_finding_to_verified_remediation",
+                                "investigation_request_to_evidence_pack",
+                                "workflow_idea_to_workflow_package",
+                            ],
+                            "create_new_required": False,
+                            "next_action": expected_next_action,
+                            "ready_for_handoff": True,
+                            "recommended_workflows": ["security_finding_to_verified_remediation"],
+                            "rejected_routes": ["run_existing", "compose", "create_new"],
+                            "selected_strategy": "adapt",
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n"
+                ),
+                request.artifacts.strategy_next_action.write_text(
+                    "\n".join(
+                        (
+                            "# Strategy Next Action",
+                            "",
+                            "1. Run `candidate_workflow_to_adapted_execution_plan`.",
+                            "2. Pass `security_finding_to_verified_remediation` as the selected workflow to adapt.",
+                            "3. Carry forward the task title, sponsor role, constraints, evidence expectations, and the finding-specific context from this strategy package.",
+                            "4. Do not run `security_finding_to_verified_remediation` directly from this front-door workflow.",
+                            "",
+                        )
+                    )
+                    + "\n"
+                ),
+                "packaged strategy\n",
+            )[3],
+        ],
+        verifier_turns=[
+            Outcome(
+                raw_output="task framed\n",
+                tag="task_framed",
+                payload={
+                    "summary": "The task trigger, terminal outcome, and selection criteria are explicit.",
+                    "authoritative_artifacts": [
+                        "task_strategy_brief",
+                        "workflow_selection_criteria",
+                    ],
+                    "decision_axes": ["terminal outcome", "portfolio fit", "adaptation need"],
+                },
+            ),
+            Outcome(
+                raw_output="child candidate request framed\n",
+                tag="candidate_request_framed",
+                payload={
+                    "summary": "The child candidate request and selection criteria are explicit.",
+                    "authoritative_artifacts": [
+                        "candidate_request_brief",
+                        "candidate_selection_criteria",
+                    ],
+                    "decision_axes": ["terminal outcome", "portfolio fit", "adaptation need"],
+                },
+            ),
+            Outcome(
+                raw_output="child candidate workflows analyzed\n",
+                tag="candidate_workflows_analyzed",
+                payload={
+                    "summary": "The current portfolio comparison supports an adaptation-needed posture.",
+                    "compared_workflows": [
+                        "security_finding_to_verified_remediation",
+                        "investigation_request_to_evidence_pack",
+                        "workflow_idea_to_workflow_package",
+                    ],
+                    "ranked_candidates": [
+                        "security_finding_to_verified_remediation",
+                        "investigation_request_to_evidence_pack",
+                        "workflow_idea_to_workflow_package",
+                    ],
+                    "portfolio_posture": "adapt_needed",
+                    "builder_considered": True,
+                },
+            ),
+            Outcome(
+                raw_output="child candidate workflow set ready\n",
+                tag="candidate_workflow_set_ready",
+                payload={
+                    "summary": "The child candidate-workflow-set package, summary, and next action are aligned.",
+                    "comparison_candidates": [
+                        "security_finding_to_verified_remediation",
+                        "investigation_request_to_evidence_pack",
+                        "workflow_idea_to_workflow_package",
+                    ],
+                    "ranked_candidates": [
+                        "security_finding_to_verified_remediation",
+                        "investigation_request_to_evidence_pack",
+                        "workflow_idea_to_workflow_package",
+                    ],
+                    "recommended_candidate_workflows": ["security_finding_to_verified_remediation"],
+                    "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+                    "builder_considered": True,
+                    "portfolio_posture": "adapt_needed",
+                    "authoritative_artifacts": [
+                        "candidate_workflow_set",
+                        "candidate_workflow_set_summary",
+                        "candidate_next_action",
+                    ],
+                    "next_action": "Use this candidate package to choose the final workflow strategy without redoing candidate retrieval.",
+                    "ready_for_strategy_selection": True,
+                },
+            ),
+            Outcome(
+                raw_output="strategy selected\n",
+                tag="strategy_selected",
+                payload={
+                    "summary": "The child candidate package supports an explicit adaptation handoff for the existing security remediation workflow.",
+                    "compared_workflows": [
+                        "security_finding_to_verified_remediation",
+                        "investigation_request_to_evidence_pack",
+                        "workflow_idea_to_workflow_package",
+                    ],
+                    "selected_strategy": "adapt",
+                    "recommended_workflows": ["security_finding_to_verified_remediation"],
+                    "builder_considered": True,
+                    "rejected_routes": ["run_existing", "compose", "create_new"],
+                },
+            ),
+            Outcome(
+                raw_output="strategy package ready\n",
+                tag="strategy_package_ready",
+                payload={
+                    "summary": "The adapt handoff is concrete, uses the existing summary field set, and stays at strategy publication.",
+                    "selected_strategy": "adapt",
+                    "recommended_workflows": ["security_finding_to_verified_remediation"],
+                    "authoritative_artifacts": [
+                        "workflow_strategy_package",
+                        "strategy_summary",
+                        "strategy_next_action",
+                    ],
+                    "next_action": expected_next_action,
+                    "ready_for_handoff": True,
+                },
+            ),
+        ],
+    )
+
+    result = run_workflow_package(
+        "task_to_workflow_strategy",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-to-workflow-strategy-adapt-task",
+            message="Pentest found a privilege-escalation variant that needs a stricter remediation execution plan.",
+            workflow_params={
+                "task_title": "Admin impersonation privilege escalation adaptation plan",
+                "sponsor_role": "security engineering",
+                "desired_outcome": "Choose the best workflow strategy for an explicit adaptation handoff.",
+                "constraints": [
+                    "Prefer adaptation over new authoring when the existing workflow is close.",
+                    "Keep the front door at strategy publication.",
+                ],
+                "evidence_expectations": [
+                    "Need a durable adapted execution handoff.",
+                    "Keep downstream workflow execution explicit.",
+                ],
+            },
+        ),
+    )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "task-to-workflow-strategy-adapt-task"
+    workflow_dir = task_dir / "wf_task_to_workflow_strategy"
+    strategy_summary = json.loads((workflow_dir / "strategy_summary.json").read_text(encoding="utf-8"))
+    strategy_receipt = json.loads((workflow_dir / "strategy_receipt.json").read_text(encoding="utf-8"))
+    workflow_strategy_package = (workflow_dir / "workflow_strategy_package.md").read_text(encoding="utf-8")
+    strategy_next_action = (workflow_dir / "strategy_next_action.md").read_text(encoding="utf-8")
+
+    assert result.terminal == "SUCCESS"
+    assert strategy_summary == {
+        "authoritative_artifacts": [
+            "workflow_strategy_package",
+            "strategy_summary",
+            "strategy_next_action",
+        ],
+        "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+        "builder_considered": True,
+        "comparison_candidates": [
+            "security_finding_to_verified_remediation",
+            "investigation_request_to_evidence_pack",
+            "workflow_idea_to_workflow_package",
+        ],
+        "create_new_required": False,
+        "next_action": expected_next_action,
+        "ready_for_handoff": True,
+        "recommended_workflows": ["security_finding_to_verified_remediation"],
+        "rejected_routes": ["run_existing", "compose", "create_new"],
+        "selected_strategy": "adapt",
+    }
+    assert "candidate_workflow_to_adapted_execution_plan" in workflow_strategy_package
+    assert "security_finding_to_verified_remediation" in workflow_strategy_package
+    assert "candidate_workflow_to_adapted_execution_plan" in strategy_next_action
+    assert "security_finding_to_verified_remediation" in strategy_next_action
+    assert strategy_receipt["next_action"] == expected_next_action
+    assert not (task_dir / "wf_candidate_workflow_to_adapted_execution_plan").exists()
+    assert not (task_dir / "wf_security_finding_to_verified_remediation").exists()
+
+
 def test_task_to_workflow_strategy_publish_strategy_rejects_summary_without_builder_baseline(
     tmp_path: Path,
     monkeypatch,
@@ -802,12 +1233,129 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_compose_summary_with
         workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
 
 
+@pytest.mark.parametrize(
+    ("workflow_strategy_package_text", "summary_next_action", "strategy_next_action_text", "match"),
+    [
+        (
+            "\n".join(
+                (
+                    "# Workflow Strategy Package",
+                    "",
+                    "Selected route: `adapt`.",
+                    "Recommended workflow: `security_finding_to_verified_remediation`.",
+                    "Keep the downstream handoff explicit.",
+                    "",
+                )
+            )
+            + "\n",
+            "Run candidate_workflow_to_adapted_execution_plan for security_finding_to_verified_remediation using the captured task context.",
+            "\n".join(
+                (
+                    "# Strategy Next Action",
+                    "",
+                    "1. Run `candidate_workflow_to_adapted_execution_plan`.",
+                    "2. Pass `security_finding_to_verified_remediation` as the selected workflow.",
+                    "",
+                )
+            )
+            + "\n",
+            "workflow_strategy_package\\.md must name candidate_workflow_to_adapted_execution_plan",
+        ),
+        (
+            "\n".join(
+                (
+                    "# Workflow Strategy Package",
+                    "",
+                    "Run `candidate_workflow_to_adapted_execution_plan` for `security_finding_to_verified_remediation`.",
+                    "",
+                )
+            )
+            + "\n",
+            "Run candidate_workflow_to_adapted_execution_plan using the captured task context.",
+            "\n".join(
+                (
+                    "# Strategy Next Action",
+                    "",
+                    "1. Run `candidate_workflow_to_adapted_execution_plan`.",
+                    "2. Pass `security_finding_to_verified_remediation` as the selected workflow.",
+                    "",
+                )
+            )
+            + "\n",
+            "strategy_summary\\.json next_action must name the selected workflow",
+        ),
+        (
+            "\n".join(
+                (
+                    "# Workflow Strategy Package",
+                    "",
+                    "Run `candidate_workflow_to_adapted_execution_plan` for `security_finding_to_verified_remediation`.",
+                    "",
+                )
+            )
+            + "\n",
+            "Run candidate_workflow_to_adapted_execution_plan for security_finding_to_verified_remediation using the captured task context.",
+            "\n".join(
+                (
+                    "# Strategy Next Action",
+                    "",
+                    "1. Pass `security_finding_to_verified_remediation` as the selected workflow.",
+                    "2. Keep downstream execution explicit.",
+                    "",
+                )
+            )
+            + "\n",
+            "strategy_next_action\\.md must name candidate_workflow_to_adapted_execution_plan",
+        ),
+    ],
+)
+def test_task_to_workflow_strategy_publish_strategy_rejects_non_concrete_adapt_handoff(
+    tmp_path: Path,
+    monkeypatch,
+    workflow_strategy_package_text: str,
+    summary_next_action: str,
+    strategy_next_action_text: str,
+    match: str,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_strategy_test_context(
+        tmp_path,
+        monkeypatch,
+        strategy_summary={
+            "authoritative_artifacts": [
+                "workflow_strategy_package",
+                "strategy_summary",
+                "strategy_next_action",
+            ],
+            "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+            "builder_considered": True,
+            "comparison_candidates": [
+                "security_finding_to_verified_remediation",
+                "investigation_request_to_evidence_pack",
+                "workflow_idea_to_workflow_package",
+            ],
+            "create_new_required": False,
+            "next_action": summary_next_action,
+            "ready_for_handoff": True,
+            "recommended_workflows": ["security_finding_to_verified_remediation"],
+            "rejected_routes": ["run_existing", "compose", "create_new"],
+            "selected_strategy": "adapt",
+        },
+        workflow_strategy_package_text=workflow_strategy_package_text,
+        strategy_next_action_text=strategy_next_action_text,
+    )
+
+    with pytest.raises(ValueError, match=match):
+        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+
+
 def _make_publish_strategy_test_context(
     tmp_path: Path,
     monkeypatch,
     *,
     strategy_summary: dict[str, object],
     candidate_workflow_set_summary: dict[str, object] | None = None,
+    workflow_strategy_package_text: str | None = None,
+    strategy_next_action_text: str | None = None,
 ) -> tuple[object, object, Context]:
     monkeypatch.syspath_prepend(str(REPO_ROOT))
     importlib.invalidate_caches()
@@ -828,10 +1376,17 @@ def _make_publish_strategy_test_context(
         "candidate_workflow_set.md",
         "candidate_next_action.md",
         "strategy_decision.md",
-        "workflow_strategy_package.md",
-        "strategy_next_action.md",
     ):
         (workflow_folder / name).write_text("{}\n" if name.endswith(".json") else "# Placeholder\n", encoding="utf-8")
+
+    (workflow_folder / "workflow_strategy_package.md").write_text(
+        workflow_strategy_package_text or "# Placeholder\n",
+        encoding="utf-8",
+    )
+    (workflow_folder / "strategy_next_action.md").write_text(
+        strategy_next_action_text or "# Placeholder\n",
+        encoding="utf-8",
+    )
 
     if candidate_workflow_set_summary is None:
         posture = {

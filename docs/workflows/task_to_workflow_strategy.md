@@ -37,7 +37,7 @@ Parameters:
 
 Cycle 6 adaptation handoff note:
 
-- When the selected route is `adapt`, this workflow now uses the existing `workflow_strategy_package.md` and `strategy_next_action.md` artifacts to point explicitly to `candidate_workflow_to_adapted_execution_plan`.
+- When the selected route is `adapt`, this workflow now uses the existing `workflow_strategy_package.md`, the existing `strategy_summary.json` `next_action` field, and `strategy_next_action.md` to point explicitly to `candidate_workflow_to_adapted_execution_plan`.
 - `strategy_summary.json` stays on the same field set; the handoff became more concrete only through the existing human-facing package and next-action surfaces.
 
 ## Candidate additions considered
@@ -219,6 +219,7 @@ Step payload models:
 - explicit child publication of `task_to_candidate_workflow_set` plus parent-local adoption of the child candidate artifacts
 - proof that the workflow ends at strategy packaging rather than auto-running the selected downstream workflow
 - publication validation that rejects a strategy summary that omits the builder baseline from the compared candidates
+- runtime proof that an `adapt` decision keeps the `strategy_summary.json` field set unchanged while naming `candidate_workflow_to_adapted_execution_plan` through `workflow_strategy_package.md`, `strategy_summary.json` `next_action`, and `strategy_next_action.md`
 
 ## Rework / replan / block / fail policy
 
