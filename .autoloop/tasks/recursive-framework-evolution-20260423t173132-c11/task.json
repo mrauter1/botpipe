@@ -14,12 +14,12 @@
       "recursive-memory-and-validation"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "decomposition-surface-seam"
+    "current_phase_index": 1,
+    "current_phase_id": "workflow-package-to-building-blocks"
   },
   "phase_status": {
-    "decomposition-surface-seam": "in_progress",
-    "workflow-package-to-building-blocks": "planned",
+    "decomposition-surface-seam": "completed",
+    "workflow-package-to-building-blocks": "in_progress",
     "recursive-memory-and-validation": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260424T091635Z-858b34e9",
       "status": "in_progress",
       "ts": "2026-04-24T09:32:28.885471+00:00"
+    },
+    {
+      "phase_id": "decomposition-surface-seam",
+      "run_id": "run-20260424T091635Z-858b34e9",
+      "status": "completed",
+      "ts": "2026-04-24T09:49:54.900187+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "workflow-package-to-building-blocks",
+      "run_id": "run-20260424T091635Z-858b34e9",
+      "status": "in_progress",
+      "ts": "2026-04-24T09:49:54.905191+00:00"
     }
   ]
 }
