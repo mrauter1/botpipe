@@ -13,12 +13,12 @@
       "proof-docs-and-memory-sync"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "proof-docs-and-memory-sync"
+    "current_phase_index": 2,
+    "current_phase_id": null
   },
   "phase_status": {
     "older-domain-prompt-surface-migration": "completed",
-    "proof-docs-and-memory-sync": "in_progress"
+    "proof-docs-and-memory-sync": "completed"
   },
   "phase_history": [
     {
@@ -39,6 +39,13 @@
       "run_id": "run-20260424T224329Z-a6be59a5",
       "status": "in_progress",
       "ts": "2026-04-24T23:08:09.607952+00:00"
+    },
+    {
+      "phase_id": "proof-docs-and-memory-sync",
+      "run_id": "run-20260424T224329Z-a6be59a5",
+      "status": "completed",
+      "ts": "2026-04-24T23:15:45.081371+00:00",
+      "pair": "test"
     }
   ]
 }
