@@ -6,3 +6,5 @@
 - Phase Directory Key: diagnostic-run-history-seam
 - Phase Title: Diagnostic Run-History Seam
 - Scope: phase-local authoritative verifier artifact
+
+- `TEST-001` | Added edge-case coverage for helper-level empty filtered histories and main workflow class references, and mapped the phase-local behavior coverage in `test_strategy.md`.

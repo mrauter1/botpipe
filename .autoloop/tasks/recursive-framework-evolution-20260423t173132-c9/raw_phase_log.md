@@ -244,3 +244,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe35-86a7-7a60-bcce-e40261d3e4e7
+---
+I’m checking the phase-local seam from a test-author perspective now: what behavior is already covered, what edge/failure paths remain untested, and what the test-phase artifacts need to say about that coverage.
+
+I found one worthwhile gap to close in the repo tests: the shared decision that empty filtered histories are valid at the helper layer is not frozen yet. I’m adding a focused unit test for that edge case, then I’ll update the phase-local test strategy, feedback, and decision note to reflect the added coverage.
+
+The repo test is in. I’m updating the phase-local test artifacts now so the coverage map and feedback line up with the actual behavior being frozen, especially the empty-history edge case from the shared decisions ledger.
+
+I’ve updated the phase-local test artifacts. I’m rerunning the targeted proof now to make sure the new edge-case test and the existing runtime regression surface still pass together.
+
+The targeted proof passed with the added edge-case test. I’m doing a quick final read of the updated test-phase artifacts so the written strategy and feedback match the shipped coverage exactly, then I’ll close out.
+
+Scope considered
+- Phase-local test scope only: the diagnostic run-history seam, its existing repo test coverage in `tests/unit/test_stdlib_and_extensions.py`, and the required test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/test/phases/diagnostic-run-history-seam/`.
+- I did not expand into CLI, workflow-package, or runtime-owned diagnostics testing because those remain out of phase scope.
+
+What I analyzed
+- The active phase contract, acceptance criteria, and shared decisions ledger.
+- The existing diagnostics helper coverage already added in `tests/unit/test_stdlib_and_extensions.py`.
+- The remaining regression gap around the explicit decision that empty filtered histories are valid at the helper layer.
+
+What I changed
+- Added `test_diagnostics_helper_accepts_main_workflow_class_references_and_allows_empty_filtered_histories` to `tests/unit/test_stdlib_and_extensions.py`.
+- Updated `test_strategy.md` with a behavior-to-test coverage map, preserved invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise summary entry to the phase-local `feedback.md`.
+- Appended one shared decision note under the current test-author header in `decisions.txt` to freeze the empty-history helper behavior.
+
+Key findings / decisions
+- The new test freezes two important edge behaviors together: shared resolver support for main workflow class references, and explicit empty snapshots when status filters match no runs.
+- Ordering remains deterministic because the diagnostics fixtures use explicit `created_at` / `updated_at` timestamps.
+- Targeted proof passed:
+  - `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`
+  - `.venv/bin/pytest -q tests/runtime/test_workspace_and_context.py`
+
+Open issues / next step
+- No open test-phase issues for this seam.
+- The only deliberate gap left un-frozen is malformed legacy `events.jsonl` / `children.jsonl` / `parent.json` corruption handling, because the active phase contract did not define a public policy for that case.
