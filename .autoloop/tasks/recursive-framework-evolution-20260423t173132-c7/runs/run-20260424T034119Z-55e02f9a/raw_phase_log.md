@@ -270,3 +270,95 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+---
+I’m treating this as a phase-local test hardening pass for the new evaluation helper seam. I’ll audit the helper and the already-added unit coverage, look for any meaningful regression gap, then update the test strategy and phase feedback with an explicit behavior-to-test map.
+
+The existing unit coverage is solid, but there are still a couple of manifest-shape branches that aren’t locked yet. I’m adding one small failure-path test for missing/empty `cases` and non-mapping `workflow_parameters`, then I’ll rerun the same deterministic unit/docs suite.
+
+The added failure-path test passed, so the coverage now exercises the helper’s remaining manifest-shape branches without widening phase scope. I’m recording that coverage map and the phase-local testing decision now.
+
+Scope considered
+- Phase-local `evaluation-helper-seam` test scope only: `tests/unit/test_stdlib_and_extensions.py`, `docs/authoring.md`, `stdlib/evaluation.py`, and the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/evaluation-helper-seam/`.
+
+What I analyzed
+- The new helper implementation and its acceptance criteria.
+- The existing unit coverage already added for happy-path validation, shared-seam reuse, path safety, and doc-boundary assertions.
+- The shared decisions ledger to keep testing aligned with the authoring-only boundary.
+
+What I changed
+- Added one focused unit test in `tests/unit/test_stdlib_and_extensions.py` to cover missing/non-array/empty `cases` manifests and non-mapping per-case `workflow_parameters`.
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/evaluation-helper-seam/test_strategy.md` with an explicit behavior-to-test coverage map, known gaps, and flake-risk notes.
+- Appended a concise summary to `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/evaluation-helper-seam/feedback.md`.
+- Appended one phase-local test decision to `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt`.
+
+Key findings / decisions
+- Coverage now locks the remaining manifest-shape failure paths without widening into out-of-scope runtime evaluation behavior.
+- The test strategy intentionally stays at the unit/docs boundary because the phase is authoring-only and runtime-owned evaluation execution is explicitly out of scope.
+- Validation passed: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` and `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`.
+
+Open issues / next step
+- No blocking issue remains in this phase-local test scope.
+- Later phases can build runtime/workflow-package coverage on top of this helper seam when `workflow_to_eval_suite` itself lands.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbda2-dee3-7e63-b553-4284ccb6f9f4
+---
+I’m auditing the phase-local test surface only: the new eval-helper unit coverage plus the test strategy and feedback artifacts. I’ll verify the changed tests against the helper’s actual behavior and the accepted phase boundary, rerun the targeted checks, and then update the test audit artifacts based on any real coverage gap I find.
+
+The remaining question is whether there’s any material missed-regression risk beyond what the test author already called out as a low-priority gap. I’m running the same deterministic unit/docs commands myself now to confirm the audited surface matches the recorded strategy.
+
+The audited surface is consistent with the stated strategy and the tests pass independently. I’m recording this as a clean audit pass rather than manufacturing a coverage concern that isn’t material to the phase contract.
+
+Scope considered
+- Phase-local test audit scope only: the evaluation-helper unit coverage in `tests/unit/test_stdlib_and_extensions.py` plus the active audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/evaluation-helper-seam/`.
+
+What I analyzed
+- The accepted phase contract and shared decisions for the authoring-only evaluation helper seam.
+- The helper behavior in `stdlib/evaluation.py`, the added unit tests, and the recorded test strategy/feedback.
+
+What I reviewed
+- Coverage depth for happy path, preserved invariants, failure paths, and deterministic behavior.
+- Independent validation via `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` and `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`.
+- Updated audit artifacts:
+  - `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/evaluation-helper-seam/criteria.md`
+  - `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/evaluation-helper-seam/feedback.md`
+
+Key findings / decisions
+- No blocking or non-blocking coverage defects were identified.
+- The tests appropriately stay at the unit/docs boundary, which matches the explicit out-of-scope exclusion for runtime-owned evaluation execution.
+- Audit criteria were marked complete and feedback was appended as `TST-000` with no actionable findings.
+
+Open issues / next step
+- No open issue remains in this phase-local test audit.
+- Later phases can add runtime/workflow-package coverage when `workflow_to_eval_suite` itself is introduced.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
