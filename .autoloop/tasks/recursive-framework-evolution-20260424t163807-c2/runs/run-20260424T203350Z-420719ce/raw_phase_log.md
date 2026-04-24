@@ -165,3 +165,130 @@ phase_mode=single
 phase_ids=shared-validation-migration,proof-docs-and-memory-sync
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+I’m treating this as a constrained consolidation pass: inspect the phase artifacts, audit the current validation seams across the repo, then migrate the four named workflows to shared generic validators without changing their artifact or route contracts.
+
+I’ve got the phase plan and constraints. Next I’m reading the existing shared validation seam, the four target workflows, adjacent stdlib helpers, and the tests that pin their contracts so I can migrate only the generic mechanics.
+
+The older workflows do still carry local generic helper tails, and the stdlib snapshot helpers repeat the same string-filter normalization. I’m drilling into the exact helper overlap and the existing unit/runtime tests before editing so the migration stays behavior-preserving.
+
+I have the overlap mapped now. One pass remains before edits: compare against the already-migrated workflow family so I reuse the same validation seam shape and avoid inventing a second style.
+
+I’ve compared against the already-migrated family. The older workflows can move to the same import-and-alias pattern, with one likely stdlib addition for non-negative integers and optional direct reuse in the snapshot helpers.
+
+I’ve got the edit set scoped: one additive helper in `stdlib/validation.py`, direct seam reuse in the three snapshot helpers, and removal of the copied validator tails from the four older workflows. I’m patching those files now, then I’ll update tests and the phase notes.
+
+I’m editing the shared seam and workflow imports together so the migration stays coherent: add the missing generic integer helper once, then delete the copied validator tails instead of leaving half-migrated files behind.
+
+The seam is in place and the local validator tails are gone from the four workflows. I’m updating the focused unit coverage for the new non-negative integer helper, then I’ll run the targeted suites and sync the recursive-memory notes.
+
+The first validation attempt hit an environment detail only: `python` and `pytest` aren’t on `PATH` here. I’m rerunning the same targeted proof against the repo’s virtualenv instead of broadening scope.
+
+The files compile cleanly. The targeted unit and runtime suites are running now; I’m waiting on the final result before I update the recursive-memory ledgers and phase notes.
+
+The code path is validated now. I’m computing the exact blast radius and line-count deltas, then I’ll write the implementation notes and recursive-memory updates so the next cycle inherits the migration cleanly instead of rediscovering it.
+
+I’m writing the durable cycle record now: the recursive-memory ledgers, the phase implementation notes, and the turn decision lines. That will capture both the resolved validation debt and the intentionally deferred `params.py` cleanup.
+
+The implementation record is updated. I’m doing one last sanity pass on the touched files and collecting the final line-count numbers for the closeout summary.
+
+Scope considered
+
+- Mandatory audit surface: `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, `.autoloop_recursive/`, plus the phase plan, criteria, decisions, and implementation notes.
+- Change scope stayed inside the approved consolidation slice: shared validation seam, four older domain workflows, direct-reuse snapshot helpers, targeted tests, and recursive-memory/phase notes.
+- No new workflow, CLI, runtime routing, or `ctx.invoke_workflow(...)` behavior was added or changed.
+
+What I analyzed
+
+- Shared validation baseline in [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py) and the already-migrated workflow family for style/contract parity.
+- The four target workflows: [investigation_request_to_evidence_pack/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/investigation_request_to_evidence_pack/workflow.py), [security_finding_to_verified_remediation/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py), [release_candidate_to_go_no_go/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py), [incident_to_hardening_program/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/incident_to_hardening_program/workflow.py).
+- Direct seam-reuse candidates in [stdlib/company.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/company.py), [stdlib/diagnostics.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/diagnostics.py), and [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py).
+- Targeted unit/runtime proof coverage for the touched contracts.
+
+What I changed
+
+- Added `require_non_negative_int(...)` to [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py) and exported it through [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py).
+- Replaced duplicated filter normalization in the three snapshot helpers with shared `require_non_empty_string(..., coerce=False)`.
+- Migrated the four older domain workflows to shared generic validators for bootstrap/publication mechanics and deleted their copied validator tails. Domain-specific publish checks stayed local.
+- Updated focused unit coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+- Updated recursive-memory/phase records: [framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md), [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md), [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md), [workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md), [validation_debt_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/validation_debt_ledger.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/implement/phases/shared-validation-migration/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/decisions.txt).
+
+Key findings / decisions
+
+- Cycle mode remained `consolidate`; no new workflow was necessary.
+- Shared generic validation now covers the last older-domain wave: non-empty string, optional string, repeatable string normalization, JSON-object reads, string-list checks, and non-negative integers.
+- Workflows migrated to shared helpers: `investigation_request_to_evidence_pack`, `security_finding_to_verified_remediation`, `release_candidate_to_go_no_go`, `incident_to_hardening_program`.
+- Repeated validation idioms removed: copied `_require_text`, `_normalize_optional_text`, `_normalize_unique_strings`, `_read_json`, local non-negative integer helpers, and snapshot filter `_require_text` copies.
+- Files added: `0`. Files deleted: `0`. Tracked diff for the touched slice is net `-3` lines overall; the workflow/stdlib code itself shrank, with notes/decision updates offsetting deletions.
+- Validation passed: `./.venv/bin/python -m py_compile ...` and `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py` -> `123 passed`.
+
+Open issues / next step
+
+- Remaining deferred validation debt is now primarily repeated `params.py` validator normalization across workflow parameter models; I recorded that in the validation debt ledger instead of broadening this phase.
+- Portfolio-shape debt remains unchanged: whether `release_candidate_to_go_no_go` and `incident_to_hardening_program` should later adopt existing building blocks is still a separate decision.
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+I’m reviewing only the phase-local artifacts and the implementation diff against the approved consolidation scope. First step is to verify the touched workflow publication checks against their pre-migration behavior, then I’ll record criteria and findings in the phase artifacts.
+
+I found one material regression in the migrated publish paths: two workflows now coerce non-string summary fields that previously had to be real strings. I’m recording that as a blocking finding and marking the phase artifacts accordingly.
+
+Scope considered
+
+- Phase-local review of the shared-validation migration against the accepted plan, criteria, implementation notes, and shared decisions.
+- Changed implementation surface reviewed: `stdlib/validation.py`, `stdlib/__init__.py`, `stdlib/company.py`, `stdlib/diagnostics.py`, `stdlib/portfolio.py`, and the four target workflow `workflow.py` files.
+- Regression analysis focused on publish-time invariants, bootstrap normalization, and direct-reuse snapshot-helper cleanup.
+
+What I analyzed
+
+- The migration diff for the shared seam and the four older domain workflows.
+- The current publish handlers in `release_candidate_to_go_no_go` and `incident_to_hardening_program` against their previous pre-migration behavior.
+- Targeted runtime tests to see which invariants are already covered and which regression remained untested.
+- Phase artifacts updated by implementation, including `implementation_notes.md`, `criteria.md`, and `decisions.txt`.
+
+What I reviewed
+
+- Acceptance criteria AC-1 through AC-3.
+- Whether the shared helper additions stayed additive and bounded.
+- Whether workflow-local generic validators were replaced without weakening domain-specific publish checks.
+- Whether the optional snapshot-helper cleanup stayed a direct seam reuse.
+
+Key findings / decisions
+
+- One blocking finding recorded in `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/implement/phases/shared-validation-migration/feedback.md` as `IMP-001`.
+- The regression is in `workflows/release_candidate_to_go_no_go/workflow.py:on_publish_decision` and `workflows/incident_to_hardening_program/workflow.py:on_publish_incident_package`.
+- Those handlers now use `require_non_empty_string(..., coerce=True)` for summary fields that previously required actual strings, so non-string JSON values can now be coerced and published instead of rejected.
+- I updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/implement/phases/shared-validation-migration/criteria.md` to leave correctness, behavioral safety, and compatibility unchecked, while marking simplicity and maintainability as satisfied.
+
+Open issues / next step
+
+- Fix `IMP-001` by keeping the shared seam but switching those publication-only fields to non-coercive validation (`coerce=False` or equivalent shared non-coercing helper usage).
+- After that fix, rerun the same targeted unit/runtime proof and re-review the phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
