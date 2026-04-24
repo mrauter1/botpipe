@@ -1,4 +1,115 @@
 version: 1
 task_id: recursive-framework-evolution-20260424t163807-c6
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/runs/run-20260424T231545Z-4bd3affc/request.md
-phases: []
+phases:
+- phase_id: shared-candidate-surface-seam
+  title: Shared Candidate Surface Seam
+  objective: Extract one additive authoring-only stdlib helper seam for baseline/candidate
+    surface copying, manifest diff support, and isolated overlay validation.
+  status: planned
+  in_scope:
+  - Add stdlib/candidate_surfaces.py for shared candidate-surface publication mechanics.
+  - Export the new helper seam through stdlib/__init__.py.
+  - Add focused unit coverage for shared boundary, manifest, digest, and overlay behaviors.
+  out_of_scope:
+  - Any CLI or runtime contract change.
+  - Any workflow.toml semantic expansion.
+  - Any domain-specific refinement or decomposition policy migration into runtime
+    code.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: A shared stdlib helper exists for the repeated baseline/candidate surface
+      mechanics without owning workflow-specific evidence or receipt policy.
+  - id: AC-2
+    text: Unit tests cover boundary normalization, candidate diff derivation, authoritative-source
+      immutability checks, and overlay validation behavior.
+  deliverables:
+  - stdlib/candidate_surfaces.py
+  - updated stdlib/__init__.py exports
+  - updated unit tests for the shared seam
+  risks:
+  - Over-generalizing the seam could make refinement and decomposition harder to trace.
+  - Overlay-validation refactors could accidentally change repo-root fallback semantics.
+  rollback:
+  - Remove the new stdlib helper module and restore duplicated local helpers if the
+    seam obscures workflow intent.
+  - Revert stdlib export changes and unit coverage additions tied only to the new
+    seam.
+- phase_id: refinement-decomposition-migration
+  title: Workflow Migration
+  objective: Migrate the refinement and decomposition workflows to the shared candidate-surface
+    seam while preserving current artifact names, route names, and receipt payloads.
+  status: planned
+  in_scope:
+  - Refactor workflow_and_eval_to_refined_workflow_package to use the shared seam
+    for mechanical baseline/candidate overlay work.
+  - Refactor workflow_package_to_composable_building_blocks to use the shared seam
+    for the same mechanical surface work.
+  - Keep evaluation-summary checks, evidence capture, building-block index validation,
+    and receipt shaping workflow-local.
+  - Update targeted runtime tests to prove unchanged publication behavior and boundary
+    rejections.
+  out_of_scope:
+  - Changing prompt paths, prompt roles, or route grammar.
+  - Changing refinement evidence contracts or decomposition building-block policy.
+  - Adding any new workflow package.
+  dependencies:
+  - shared-candidate-surface-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: Both workflows consume the shared candidate-surface seam and remove the
+      duplicated mechanical helper tails.
+  - id: AC-2
+    text: Runtime tests still prove unchanged artifact publication, boundary validation,
+      and isolated overlay validation outcomes.
+  deliverables:
+  - updated refinement workflow implementation
+  - updated decomposition workflow implementation
+  - updated runtime tests for both workflows
+  risks:
+  - Artifact-schema drift could break existing workflow receipts or manifest expectations.
+  - Shared helper adoption could accidentally remove a decomposition-only boundary
+    check.
+  rollback:
+  - Restore the previous workflow-local helper implementations if artifact or receipt
+    compatibility breaks.
+  - Revert only the workflow callers while leaving the shared seam unreferenced if
+    needed for later reuse.
+- phase_id: proof-docs-memory-closeout
+  title: Proof And Closeout
+  objective: Document the new seam only where necessary, run targeted proof, and sync
+    recursive memory and cycle accounting.
+  status: planned
+  in_scope:
+  - Update docs/authoring.md if the new shared seam needs authoring guidance.
+  - Update the framework roadmap, gap ledger, workflow candidate ledger, and validation
+    debt ledger.
+  - Run targeted unit/runtime/docs proof and record actual boilerplate-reduction metrics.
+  out_of_scope:
+  - Broad documentation rewrites unrelated to the shared candidate-surface seam.
+  - Untargeted full-suite test expansion beyond the affected surfaces.
+  dependencies:
+  - refinement-decomposition-migration
+  acceptance_criteria:
+  - id: AC-1
+    text: Authoring docs and recursive memory explicitly record the consolidation
+      outcome, boundary, and any deferred debt.
+  - id: AC-2
+    text: Targeted proof passes for the shared seam, both migrated workflows, and
+      baseline architecture docs.
+  - id: AC-3
+    text: The cycle records files added, files deleted, net line change, repeated
+      idioms removed, and workflows simplified.
+  deliverables:
+  - updated docs and recursive memory files
+  - targeted proof results
+  - recorded cycle closeout metrics
+  risks:
+  - Documentation may overstate the seam and imply runtime ownership that does not
+    exist.
+  - Closeout may miss explicit recording of deferred domain-specific validation debt.
+  rollback:
+  - Revert doc and memory edits if they drift from the implemented seam.
+  - Keep the code change but rerun closeout with corrected metrics if proof reporting
+    is incomplete.
