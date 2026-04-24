@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T034119Z-55e02f9a" ts="2026-04-24T03:41:19.414583+00:00" />
+The request snapshot's mandatory inspection paths are stale; cycle 7 should use the current repo-root equivalents `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `stdlib/`, and `workflows/`.
+`workflow_idea_to_workflow_package` remains credible enough that cycle 7 should ship `workflow_to_eval_suite` instead of another builder-first package.
+Cycle 7 framework work should stay authoring-only: add an evaluation helper seam under `stdlib/` and do not widen `workflow.toml`, the CLI, or runtime-owned routing/evaluation machinery.
+Cycle 7 implementation must avoid absorbing unrelated dirty migration files from the broader repo-layout change; keep scope to the new eval building block, paired helper seam, tests/docs, and required recursive-memory updates.
