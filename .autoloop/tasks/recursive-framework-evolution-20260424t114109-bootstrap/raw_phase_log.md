@@ -1313,3 +1313,77 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/runs/run-20260424T144110Z-aa024541/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=2 | thread_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=2 | thread_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+---
+I’m handling the docs/templates/regression phase. First I’m reading the active phase artifacts, the current docs/template surfaces, and the relevant CLI/help/test files to see what still assumes the old mandatory package layout.
+
+I’ve confirmed the earlier phases already moved resolver/catalog/builder behavior. Next I’m locating the remaining package-only wording and the doc-baseline expectations that still need to be aligned with the new authoring model.
+
+I’ve got the main doc surfaces. Now I’m checking the recursive template copy and the CLI help/assertion layer, because AC-2 includes both wrapper-facing wording and help/baseline tests.
+
+The recursive templates are mostly aligned, but the live `.autoloop_recursive` baseline files are still stale and will trip the baseline-doc tests. I’m reading the remaining assertions and then I’ll patch docs/templates/baselines together so the wording stays consistent.
+
+The current `docs/authoring.md` is still missing some baseline phrases around composition helpers and recursive memory, so I’ll patch both content and the recursive-memory baselines instead of only changing the tests.
+
+The biggest remaining mismatch is between the refreshed runtime and the stale recursive-memory baseline: tests still encode “wrapper drift remains” expectations even though the wrapper/templates were already fixed. I’m updating both the prose and those assertions to the current state, rather than preserving stale failure conditions.
+
+I’m doing one more pass through `docs/workflows/` for workflow-specific authoring claims. The main risk is leaving the builder or recursive-governance docs describing the old package minimum after the top-level docs change.
+
+Plan for this slice:
+
+1. Refresh the canonical prose where it still encodes the old package-only doctrine, including the recursive-memory baseline files that tests read directly.
+2. Update the baseline-doc assertions to reflect the current fixed wrapper/template state and the flexible authoring doctrine instead of preserving stale “known drift” expectations.
+3. Run targeted doc/CLI suites first, then the full test suite, and fix any regressions before closing the phase.
+
+I’m patching the canonical docs, the recursive-memory baseline files, and the baseline-doc test expectations in one pass. The goal is to make the prose and the assertions agree on the current flow-first contract instead of freezing stale wrapper-drift language.
+
+The prose changes are in. I’m checking the diff for the touched docs/tests now, then I’ll run the targeted doc/CLI suites before attempting the full regression pass.
+
+The targeted doc and CLI regression slice is clean. I’m moving to the full suite now so any drift outside the docs surface gets caught before I close the phase.
+
+The full suite hit an early failure. I’m pulling the failing test output now and will patch the regression before rerunning the suite.
+
+The full suite exposed three regression leftovers from earlier slices, not from the docs copy itself: two tests still assume old resolver/workflow-name behavior, and the strictness scan is picking up legacy-token mentions in active prompt text. I’m fixing those now so the suite can close cleanly.
+
+I found the strictness failure source: it’s overmatching legitimate internal/provider-native `thread_id` handling and a few prompt lines that used the exact retired path token only as a warning example. I’m tightening that now instead of weakening the public-surface guardrail.
+
+The regression fixes are clean in isolation. I’m rerunning the full suite now to confirm there’s no remaining drift anywhere else.
+
+I’ve got a clean full pass. I’m writing the phase notes and the non-obvious decisions now so the run artifacts match the implemented state before I close out.
+
+I’ve finished the artifact updates as well. I’m doing one last status check on the files touched in this turn so the closeout can be precise and scoped.
+
+Scope considered
+- Canonical docs in [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md) and [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), recursive-memory baselines in [.autoloop_recursive/framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md) and [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md), relevant prompt/test surfaces, and full-suite regression fallout.
+- Unrelated dirty files outside this slice were not pulled into scope.
+
+What I analyzed
+- The active phase artifacts, current docs/template wording, [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), and the full-suite failures after the doc updates.
+- Recursive template/baseline drift versus the now-shipped flow-first resolver/catalog/builder behavior.
+
+What I changed
+- Updated [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md) and [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) to state explicitly that single-file workflows, `flow.py` plus optional `specs.py`, and mature packages are all supported, while `workflow.toml` stays metadata-only.
+- Refreshed [.autoloop_recursive/framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md) and [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md) so current seams/milestones no longer describe wrapper/template drift as active debt.
+- Updated [docs/workflows/security_finding_to_verified_remediation.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/security_finding_to_verified_remediation.md) and four workflow prompt files to remove package-only/retired-layout wording.
+- Aligned regression tests with shipped behavior in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py), and [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py).
+- Recorded the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/docs-templates-and-regression/implementation_notes.md) and appended the non-obvious decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/decisions.txt).
+
+Key findings / decisions
+- The docs/templates slice was correct after patching, but the full suite exposed stale expectations from earlier resolver/runtime changes; those were fixed in the same turn so closeout is real, not partial.
+- Strictness coverage stays enforced on public surfaces; the only allowance added is for provider-native internal `thread_id` handling inside runtime provider internals/tests.
+- Validation passed with `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py tests/runtime/test_package_cli.py` and then `.venv/bin/pytest -q` with final result `481 passed`.
+
+Open issues / next step
+- No in-phase blockers remain. The docs/templates/regression slice is complete and the full test suite passes.

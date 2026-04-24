@@ -36,7 +36,7 @@ Expected outcome
 Evidence requirements
 - The comparison must explicitly include the workflow-builder.
 - The brief must explain why the chosen addition matters, who would sponsor it, why Autoloop is a fit, and what terminal outcome it should produce.
-- The artifacts must stay consistent with the current repository architecture and not rely on stale `src/autoloop/...` paths.
+- The artifacts must stay consistent with the current repository architecture and not rely on retired pre-greenfield source-tree paths.
 
 Route guidance for the verifier
 - `candidate_selected`: the comparison is complete, explicit, and supports one choice.

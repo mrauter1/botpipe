@@ -421,7 +421,7 @@ class FileReleaseReview(Workflow):
         encoding="utf-8",
     )
 
-    with pytest.raises(WorkflowDiscoveryError, match="is ambiguous across"):
+    with pytest.raises(WorkflowDiscoveryError, match="duplicate workflow name 'release_review'"):
         resolve_workflow_reference(tmp_path, "release_review")
 
 

@@ -31,7 +31,7 @@ Expected outcome
 - Leave the workflow with an authoritative framing package that downstream evidence work can use without guessing the release boundary or success criteria.
 
 Evidence requirements
-- Use the current repository layout and current framework docs; do not rely on stale `src/autoloop/...` paths.
+- Use the current repository layout and current framework docs; do not rely on retired pre-greenfield source-tree paths.
 - Make missing evidence explicit instead of inventing it.
 - Keep release framing concrete enough that another operator could gather evidence from the brief and criteria alone.
 

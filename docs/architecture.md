@@ -18,45 +18,62 @@ The public authoring contract does not point workflow authors at internal module
 - `workflow`
 - `workflow.primitives`
 
-## Workflow Packages
+## Workflow Surfaces
 
-Repo-root `workflows/` is a regular Python package reserved for actual workflow packages. Each workflow package is also a regular package and must include:
+Repo-root `workflows/` remains the common discovery root, but the framework no longer requires one package minimum shape. A workflow may be authored as:
 
-- `__init__.py`
-- `workflow.py`
-- `workflow.toml`
-- `prompts/`
-- `assets/`
+- a single Python file such as `workflows/release_review.py`
+- a flow-first package such as `workflows/release_review/flow.py` plus optional `specs.py`
+- a mature package such as `workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `prompts/`, `assets/`, docs, and tests
 
-Minimum structure:
+Recommended serious-workflow shape:
 
 ```text
 workflows/
-  __init__.py
-  child_workflow/
+  release_review/
+    flow.py
+    specs.py
+```
+
+`flow.py` plus `specs.py` is the recommended serious-workflow shape, but it is not required.
+
+Supported mature package shape:
+
+```text
+workflows/
+  release_review/
     __init__.py
+    flow.py or workflow.py
+    specs.py
     workflow.toml
-    workflow.py
     prompts/
     assets/
 ```
 
-Workflow packages are both runnable entrypoints and reusable building blocks. Package `__init__.py` must re-export the main workflow class so direct imports remain first-class:
+Legacy `workflow.py` packages remain supported. A single Python file is also a first-class runnable entrypoint. The framework does not enforce one folder structure for execution.
+
+Workflow packages are still reusable building blocks. When a package uses `__init__.py`, it should re-export the main workflow class so direct imports remain first-class:
 
 ```python
 from workflows.autoloop_v1 import AutoloopV1
 ```
 
-`workflow.toml` is metadata-only discovery input. It is limited to human-facing fields such as `name`, `title`, `description`, and `aliases`. It does not define topology, prompts, transitions, parameters, or execution semantics.
+`workflow.toml` is optional for execution and metadata-only when present. It is limited to human-facing fields such as `name`, `title`, `description`, and `aliases`. It does not define topology, prompts, transitions, parameters, route policy, artifacts, or execution semantics.
 
-Workflow discovery scans `<root>/workflows/*/workflow.toml`, then loads the main workflow class from `workflows.<package>.workflow`.
-That lightweight discovery seam stays metadata-only. Richer importing inspection of workflow parameters and compiled step contracts belongs to a separate capability-inspection seam and does not widen `workflow.toml`.
+Shallow workflow discovery stays import-free and scans:
+
+- `<root>/workflows/*/workflow.toml`
+- `<root>/workflows/*/flow.py`
+- `<root>/workflows/*/workflow.py`
+- `<root>/workflows/*.py`
+
+Deep inspection and execution may import and compile workflow modules. That richer seam reports compiled step contracts, parameters, prompt paths, support-file paths, and source metadata without widening `workflow.toml`.
 
 ## CLI Contract
 
 The public executable name is `autoloop`.
 
-The CLI is package-based only:
+The CLI remains message-first and workflow-reference oriented:
 
 ```bash
 autoloop workflows list
@@ -73,7 +90,16 @@ autoloop logs <workflow> <task-id> [--run-id <run-id>] [--events|--trace|--raw]
 autoloop init workflow <name>
 ```
 
-There is no public raw execution mode. The CLI does not accept raw workflow files, module paths, class names, `autoloop exec`, `--class-name`, or legacy request/intent flags.
+Workflow references may be names, files, modules, or explicit classes:
+
+```bash
+autoloop run release_review task-1 --message "Review this release"
+autoloop run workflows/release_review.py task-1 --message "Review this release"
+autoloop run workflows/release_review/flow.py:ReleaseReview task-1 --message "Review this release"
+autoloop run workflows.release_review.flow:ReleaseReview task-1 --message "Review this release"
+```
+
+There is no public raw execution mode. File and module refs resolve through the same workflow runtime path as named workflows rather than bypassing the engine.
 
 `autoloop run` is message-first and accepts repeatable workflow-specific parameters through `-wf <name> <value>`.
 
@@ -172,7 +198,7 @@ The task `request.md` is the latest rendered request snapshot for the task. Each
 
 ## Recursive Operation
 
-Recursive automation under `recursive_autoloop/` assumes the package CLI only.
+Recursive automation under `recursive_autoloop/` keeps the public name-first package/message-oriented wrapper contract.
 
 - Wrapper start commands use `autoloop run <workflow> <task-id> --root ... --message ...`
 - Wrapper resume commands use `autoloop resume <workflow> <task-id> --root ...`

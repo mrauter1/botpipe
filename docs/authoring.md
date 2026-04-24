@@ -23,34 +23,58 @@ from workflow.primitives import Event, Outcome, Checkpoint, ResolvedArtifacts
 
 Keep the root surface strict: do not import engine internals, compiler helpers, or compatibility modules from `workflow`.
 
-## Package Contract
+## Workflow Shapes
 
-Workflow packages live under repo-root `workflows/` and are ordinary Python packages.
+Workflows commonly live under repo-root `workflows/`, but the runtime no longer requires one folder shape.
 
-Each package must include:
+Supported authoring forms:
 
-- `__init__.py`
-- `workflow.py`
-- `workflow.toml`
-- `prompts/`
-- `assets/`
+- single Python file such as `workflows/release_review.py`
+- flow-first package such as `workflows/release_review/flow.py` plus optional `specs.py`
+- mature package such as `workflows/release_review/flow.py` or `workflow.py` plus optional `workflow.toml`, `prompts/`, `assets/`, docs, and tests
 
-Package `__init__.py` must re-export the main workflow class:
+Recommended serious-workflow shape:
+
+```text
+workflows/
+  release_review/
+    flow.py
+    specs.py
+```
+
+`flow.py` plus `specs.py` is the recommended serious-workflow shape, but it is not required.
+
+Single-file workflow:
+
+```text
+workflows/
+  release_review.py
+```
+
+Compatible mature package:
+
+```text
+workflows/
+  release_review/
+    __init__.py
+    flow.py or workflow.py
+    specs.py
+    workflow.toml
+    prompts/
+    assets/
+```
+
+`specs.py` is ordinary Python, not a runtime convention. Use it to keep `flow.py` readable when the workflow grows. The runtime does not enforce one folder structure beyond resolving the workflow reference you asked it to run.
+
+When a package uses `__init__.py`, it should re-export the main workflow class:
 
 ```python
-from .workflow import ChildWorkflow
+from .flow import ChildWorkflow
 
 __all__ = ["ChildWorkflow"]
 ```
 
-If the workflow defines workflow-specific parameters, the package may also re-export `Parameters`:
-
-```python
-from .workflow import ChildWorkflow
-from .params import Parameters
-
-__all__ = ["ChildWorkflow", "Parameters"]
-```
+Legacy packages may continue to re-export from `.workflow` instead. If the workflow defines workflow-specific parameters, the package may also re-export `Parameters`.
 
 ## Workflow Parameters
 
@@ -63,7 +87,14 @@ autoloop run review task-42 \
   -wf reviewer security
 ```
 
-If a workflow supports parameters, export a `Parameters` model from the package. The runtime validates and coerces `-wf` values through that model before execution starts.
+If a workflow supports parameters, expose a `Parameters` model through one of the supported resolution points. Resolution order is:
+
+1. `Workflow.Parameters`
+2. module-level `Parameters` in the executable flow module
+3. package-exported `Parameters`
+4. legacy package conventions such as `params.py`
+
+The runtime validates and coerces `-wf` values through that model before execution starts. `specs.py` is never scanned specially; if you want it involved, import from it explicitly.
 
 ## Step Control Contracts
 
@@ -143,7 +174,7 @@ For `PairStep` verifiers and `LLMStep` prompts, treat the provider-facing comple
 
 ## Prompt And Artifact Resolution
 
-Relative prompts and bundled assets resolve from the workflow package root, never from the current working directory.
+Relative prompts and bundled assets resolve from the executable workflow container, never from the current working directory.
 
 ```python
 Prompt("prompts/ask.md")
@@ -151,6 +182,12 @@ Artifact("{run_folder}/request.md")
 Artifact("{workflow_folder}/notes.md")
 Artifact("{package_folder}/assets/template.txt")
 ```
+
+`package_folder` means:
+
+- the parent directory of a single-file workflow
+- the containing directory of `flow.py`
+- the containing directory of `workflow.py`
 
 Available runtime placeholders include:
 
@@ -161,7 +198,7 @@ Available runtime placeholders include:
 - `workflow_name`
 - `state.*`
 
-`package_folder` is read-only package content. Mutable artifacts must never be written into the workflow package directory.
+`package_folder` is read-only workflow-adjacent source content. Mutable artifacts must never be written into the workflow source directory.
 
 ## Message Model
 
@@ -219,7 +256,7 @@ write_workflow_portfolio_health_snapshot(ctx, statuses=["paused", "failed"], max
 Portfolio snapshot boundary:
 
 - the helper writes `workflow_portfolio_snapshot.json` under `ctx.workflow_folder` by default
-- it uses the shared workflow catalog seam to capture workflow metadata plus linked code/doc paths from `workflows/*/workflow.toml`, `workflow.py`, optional `params.py`, and `docs/workflows/<package>.md` when present
+- it uses the shared workflow catalog seam to capture manifest metadata plus inferred source paths such as `flow.py`, `workflow.py`, top-level single-file workflows, optional `specs.py`, prompts, assets, docs, and tests when present
 - it does not add new `workflow.toml` fields and preserves the metadata-only manifest doctrine
 - it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
 - it does not import runtime-owned routing behavior into workflow packages; portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics
@@ -309,7 +346,7 @@ Refinement helper boundary:
 - the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
 - it reuses the shared workflow resolution and catalog seams instead of ad hoc repo scraping or `workflow.toml` expansion
 - it keeps the compiled selected-workflow contract separate from the editable selected-workflow surface; workflows that need both should call `write_selected_workflow_capability_snapshot(...)` and `write_selected_workflow_authoring_surface(...)` explicitly
-- it captures the selected workflow's `__init__.py`, `workflow.toml`, `workflow.py`, optional `params.py`, optional `contracts.py`, prompt files, asset files, linked workflow doc path, and the inferred `tests/runtime/test_<workflow>.py` path when present
+- it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional legacy support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
 - it writes the canonical result to `selected_workflow_authoring_surface.json` by default
 - it does not mutate, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
 - it does not add CLI flags, new `workflow.toml` fields, or runtime-owned refinement automation
@@ -329,10 +366,10 @@ write_selected_workflow_decomposition_surface(ctx, "release_candidate_to_go_no_g
 Decomposition helper boundary:
 
 - the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
-- it is additive and read-only: it snapshots existing package/compiler data and does not mutate selected workflow files
+- it is additive and read-only: it snapshots existing workflow/compiler data and does not mutate selected workflow files
 - it reuses the shared workflow resolution, catalog, and compiler seams instead of ad hoc repo scraping or `workflow.toml` expansion
 - it combines selected workflow identity, editable authoring surface paths, repo-root-relative path metadata, and compiled step/route topology in one artifact
-- it captures the selected workflow's `__init__.py`, `workflow.toml`, `workflow.py`, optional `params.py`, optional `contracts.py`, prompt files, asset files, linked workflow doc path, and the inferred `tests/runtime/test_<workflow>.py` path when present
+- it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional legacy support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
 - compiled step summaries include session names, required/provided/log artifacts, available routes, route contracts, local route targets, and package-relative plus repo-relative prompt paths
 - it writes the canonical result to `selected_workflow_decomposition_surface.json` by default
 - it does not mutate, auto-decompose, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
@@ -485,11 +522,12 @@ Composition helper boundary:
 - parent workflows still own explicit `question` and `blocked` routing for child runs; the validation helper does not propagate or translate those routes automatically
 - parent workflows still own which child artifacts are adopted, where they land, and whether overwriting those parent-local files is acceptable
 
-## Recursive And Package-Only Guidance
+## Recursive And Workflow-Reference Guidance
 
-If a workflow, template, or recursive harness emits Autoloop instructions, keep them package-CLI-only and repo-layout-accurate:
+If a workflow, template, or recursive harness emits Autoloop instructions, keep them workflow-reference-aware and repo-layout-accurate:
 
 - `autoloop run <workflow> <task-id> --root ... --message ...`
 - `autoloop resume <workflow> <task-id> --root ...`
 - `autoloop answer <workflow> <task-id> --root ... --answer ...`
+- explicit file or module refs are allowed when the operator needs them, but recursive wrappers should keep their stable name-first contract unless they have a reason to pin an origin directly
 - refer readers to `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, and `.autoloop_recursive/`

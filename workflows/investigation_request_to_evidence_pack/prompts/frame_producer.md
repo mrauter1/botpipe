@@ -31,7 +31,7 @@ Expected outcome
 - Leave the workflow with an authoritative framing package that downstream evidence work can use without guessing the investigation boundary, consumer need, or evidence surface.
 
 Evidence requirements
-- Use the current repository layout and current framework docs; do not rely on stale `src/autoloop/...` paths.
+- Use the current repository layout and current framework docs; do not rely on retired pre-greenfield source-tree paths.
 - Make missing evidence explicit instead of inventing it.
 - Keep the framing concrete enough that another operator could gather evidence from the brief, objectives, and intake register alone.
 

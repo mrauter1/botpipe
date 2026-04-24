@@ -238,7 +238,7 @@ Step payload models:
 
 ## Recursive self-improvement policy
 
-- The workflow follows the builder-era package doctrine and uses the cycle-3 child-result helper seam without widening runtime behavior.
+- The workflow follows the standing flow-first authoring doctrine and uses the cycle-3 child-result helper seam without widening runtime behavior.
 - Candidate improvements to prompts or artifact contracts remain evidence-gated through workflow-local tests and the standing recursive memory ledgers.
 - The workflow does not hide portfolio or routing policy inside the runtime; a future `task_to_workflow_strategy` workflow remains the explicit portfolio-level follow-up.
 
