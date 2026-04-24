@@ -9,3 +9,5 @@ The refinement receipt and promotion record must describe candidate-to-baseline 
 Candidate verification should use a deterministic isolated overlay or equivalent temp-copy validation path so the candidate remains distinct from the baseline while still proving compile/test feasibility.
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="refinement-surface-seam" pair="implement" turn_seq="1" run_id="run-20260424T045554Z-27198177" ts="2026-04-24T05:16:44.496376+00:00" />
 `write_selected_workflow_authoring_surface(...)` remains a separate authoring-surface artifact and does not implicitly rewrite `selected_workflow_capability.json`; refinement workflows that need both views must call both helpers explicitly.
+<autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="refinement-surface-seam" pair="test" turn_seq="1" run_id="run-20260424T045554Z-27198177" ts="2026-04-24T05:26:19.244636+00:00" />
+Refinement-seam test coverage now pins both alias and main-workflow-class references so future helper refactors cannot silently narrow the shared workflow-resolution contract.

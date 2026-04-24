@@ -350,3 +350,60 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbdeb-41a9-7f82-b62f-6a5ccfd79c85
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbdeb-41a9-7f82-b62f-6a5ccfd79c85
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdeb-41a9-7f82-b62f-6a5ccfd79c85
+---
+I’m treating this as the phase-local test pass for the new refinement helper. First I’m reading the current test-phase artifacts, the shared decisions, and the implemented helper/tests so I can decide whether the existing coverage is sufficient or whether a targeted regression test is still missing.
+
+The existing tests cover alias resolution, path safety, optional files, and the doc boundary. The main gap I still see is class-reference resolution: the helper is supposed to ride the shared workflow resolver, so I’m adding one regression test that passes the selected workflow’s main class instead of a string alias.
+
+I’ve added the class-reference regression test. I’m rerunning the targeted proof now, including the authoring baseline doc suite, so the phase artifacts record actual passing coverage rather than just the intended map.
+
+The expanded proof passed. I’m updating the phase-local test strategy, the test feedback summary, and the current decisions block now so later phases inherit the exact behavior-to-test map and the extra class-reference guardrail.
+
+I’ve written the phase-local test artifacts. I’m doing one quick readback of the new regression test and the updated strategy/feedback files so the close-out reflects the exact coverage we now have.
+
+Scope considered
+
+- Phase-local `refinement-surface-seam` only.
+- Focused on the new authoring-only refinement helper, its existing unit/doc coverage, and the required phase-local test artifacts.
+- Kept unrelated dirty files out of scope.
+
+What I analyzed
+
+- The implemented behavior in `stdlib/refinement.py` and the current regression surface in `tests/unit/test_stdlib_and_extensions.py`.
+- Shared-resolution expectations from `decisions.txt`, especially the requirement that the helper stay separate from `selected_workflow_capability.json`.
+- Existing happy-path, edge-case, and failure-path coverage to identify the remaining gap.
+
+What I changed
+
+- Added one targeted regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:759) to prove `write_selected_workflow_authoring_surface(...)` accepts the selected workflow’s main exported class reference, not just string aliases.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/test/phases/refinement-surface-seam/test_strategy.md) with the behavior-to-test coverage map, preserved invariants, edge cases, failure paths, validation run, and known gaps.
+- Appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/test/phases/refinement-surface-seam/feedback.md) and recorded the non-obvious test decision in `decisions.txt`.
+
+Key findings / decisions
+
+- The remaining useful regression gap was class-reference resolution; alias/path-safety/optional-surface/doc-boundary coverage already existed.
+- Validation passed:
+- `.venv/bin/python -m pytest -q tests/unit/test_stdlib_and_extensions.py`
+- `.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py`
+
+Open issues / next step
+
+- No open issues in this phase-local test slice.
+- The seam now has explicit coverage for alias and main-class resolution, plus the existing failure-path and doc-boundary checks.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
