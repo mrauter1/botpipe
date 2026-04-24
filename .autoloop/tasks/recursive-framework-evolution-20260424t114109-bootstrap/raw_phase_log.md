@@ -316,3 +316,62 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+I’m addressing the two blocking reviewer findings in the loader: bare-name path shadowing and missing package-export `Parameters` precedence for explicit package paths. I’m re-reading the current resolver branches and then I’ll patch the smallest central fix so names, path refs, and parameter lookup stay aligned instead of diverging by entry path.
+
+I’ve got the minimal shape of the fix: tighten path detection to syntax-only, and derive a real package module name for explicit `flow.py` / `workflow.py` paths when they sit under an importable package tree. I’m patching that centrally in the loader and then extending the resolver tests to lock both regressions down.
+
+The loader fix is in and the regressions are covered explicitly. I’m rerunning the resolver test file first, then the broader compatibility/runtime slices that were already green, to make sure the package/module and path behaviors still line up after the change.
+
+The blocking cases are fixed and the relevant test slices are green again. I’m updating the phase notes with the reviewer follow-up and validation details, then I’ll stop with the status and the remaining out-of-scope test caveat only.
+
+I’m verifying the reviewer findings against the current resolver changes and the phase artifacts, then I’ll close this turn with the exact implementation summary if the slice is consistent.
+
+I’ve confirmed the phase artifacts and the targeted diff. I’m checking the resolver implementation directly now to make sure the reviewer findings are actually addressed in code, not just in tests.
+
+The resolver code matches the intended fixes: bare names are now syntax-routed, and explicit package paths derive a package module before parameter lookup. I’m doing one last sanity check on the package-module helper and the updated implementation notes.
+
+Scope considered
+
+- Resolver-foundation scope only: unified workflow-reference execution, explicit path/module/class handling, origin metadata, `ctx.root`, and the reviewer’s two blocking findings.
+- I did not broaden into shallow catalog migration, capability payload migration, scaffolds/builders, or docs/template work.
+
+What I analyzed
+
+- The reviewer findings in [.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/feedback.md).
+- Resolver flow and parameter precedence in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py).
+- Phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/implementation_notes.md).
+
+What I changed
+
+- Fixed bare-name routing in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py) so only syntactically path-like refs are treated as paths. Bare names now go through canonical workflow-name resolution even if an unrelated repo-root path exists.
+- Fixed explicit package-path parameter resolution in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py) by deriving the real package module for `flow.py` / `workflow.py` / `__init__.py` under an importable package tree, so package-exported `Parameters` are honored before legacy `params.py`.
+- Added regression coverage in [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py) for both reviewer repros.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/implementation_notes.md) to map the fixes and validation.
+
+Key findings / decisions
+
+- The safe fix for `IMP-001` was to make path detection syntax-based only; checking filesystem existence at repo root is what caused canonical-name shadowing.
+- The safe fix for `IMP-002` was to reuse the same parameter-precedence logic for explicit package paths by supplying a derived package module when the path sits in a real package tree.
+- I did not append new shared decisions this turn; the changes were local follow-through on reviewer findings.
+
+Open issues / next step
+
+- Validation passed for the resolver/runtime slice:
+  - `python3 -m py_compile runtime/loader.py tests/runtime/test_workflow_reference_resolution.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py`
+  - targeted CLI and stdlib regression tests listed in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/implementation_notes.md)
+- Next step is verifier review to clear `IMP-001` and `IMP-002` and mark the phase criteria complete if no further regressions are found.

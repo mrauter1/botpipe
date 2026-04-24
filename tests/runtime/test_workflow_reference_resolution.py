@@ -204,6 +204,45 @@ class ReleaseReview(Workflow):
     assert context_payload["workflow_params"] == {"mode": "strict"}
 
 
+def test_bare_workflow_names_are_not_shadowed_by_unrelated_repo_paths(tmp_path: Path) -> None:
+    workflows_root = tmp_path / "workflows"
+    workflows_root.mkdir(parents=True, exist_ok=True)
+    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    workflows_root.joinpath("demo.py").write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+
+
+class DemoWorkflow(Workflow):
+    name = "demo"
+
+    class State(BaseModel):
+        done: bool = False
+
+    start = SystemStep(name="start")
+    entry = start
+    transitions = {start: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_start(state: State, ctx):
+        return state.model_copy(update={"done": True}), Event("done")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "demo").mkdir(parents=True, exist_ok=True)
+
+    resolved = resolve_workflow_reference(tmp_path, "demo")
+
+    assert resolved.reference.source_path == workflows_root / "demo.py"
+    assert resolved.reference.workflow_name == "demo"
+
+
 def test_module_and_class_references_run_through_the_same_resolver_path(tmp_path: Path) -> None:
     workflows_root = tmp_path / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)
@@ -519,6 +558,73 @@ class NoParamsWorkflow(Workflow):
     assert legacy_params.parameters_cls is not None
     assert legacy_params.parameters_cls.__module__.startswith("_autoloop_dynamic_")
     assert no_params.parameters_cls is None
+
+
+def test_explicit_package_paths_prefer_package_exported_parameters_before_legacy_params(tmp_path: Path) -> None:
+    workflows_root = tmp_path / "workflows"
+    workflows_root.mkdir(parents=True, exist_ok=True)
+    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+
+    package_dir = workflows_root / "package_path_params"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    package_dir.joinpath("__init__.py").write_text(
+        "from .workflow import PackagePathParamsWorkflow\nfrom .specs import Parameters\n__all__ = ['PackagePathParamsWorkflow', 'Parameters']\n",
+        encoding="utf-8",
+    )
+    package_dir.joinpath("specs.py").write_text(
+        """
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "package"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    package_dir.joinpath("params.py").write_text(
+        """
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "legacy"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    package_dir.joinpath("workflow.py").write_text(
+        """
+from __future__ import annotations
+
+from pydantic import BaseModel
+
+from workflow import SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+
+
+class PackagePathParamsWorkflow(Workflow):
+    name = "package_path_params"
+
+    class State(BaseModel):
+        done: bool = False
+
+    start = SystemStep(name="start")
+    entry = start
+    transitions = {start: {"done": SUCCESS}}
+
+    @staticmethod
+    def on_start(state: State, ctx):
+        return state.model_copy(update={"done": True}), Event("done")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    resolved = resolve_workflow_reference(tmp_path, "workflows/package_path_params")
+
+    assert resolved.parameters_cls is not None
+    assert resolved.parameters_cls.__module__ == "workflows.package_path_params.specs"
 
 
 def test_workflow_origin_collisions_fail_before_run_history_is_merged(tmp_path: Path) -> None:

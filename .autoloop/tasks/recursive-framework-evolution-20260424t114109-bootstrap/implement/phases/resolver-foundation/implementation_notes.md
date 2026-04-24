@@ -45,7 +45,7 @@
 
 ## Checklist mapping
 
-- Plan item 1: added resolver/runtime regression coverage for single-file, directory, module/class, ambiguity, prompt scope, parameter precedence, and origin collisions.
+- Plan item 1: added resolver/runtime regression coverage for single-file, directory, module/class, ambiguity, prompt scope, parameter precedence, origin collisions, bare-name shadowing, and explicit package-path parameter precedence.
 - Plan items 2-6: implemented unified workflow-reference resolution, isolated file imports, prompt/package-folder propagation, parameter precedence, and snake_case fallback naming.
 - Plan item 7: not addressed in this phase; shallow catalog discovery migration remains deferred.
 - Plan item 8: not addressed in this phase; deep inspection/capability payload migration remains deferred.
@@ -61,7 +61,9 @@
 ## Intended behavior changes
 
 - `autoloop` execution now resolves names, aliases, explicit `.py` files, workflow directories, module refs, and imported workflow classes through one loader path.
+- Bare canonical names are no longer reinterpreted as explicit path refs just because an unrelated repo-root path happens to exist.
 - Explicit `flow.py` / `workflow.py` path loads support sibling relative imports without requiring `__init__.py`.
+- Explicit package-path refs now honor package-exported `Parameters` before falling back to legacy `params.py` when the path sits under a real importable package tree.
 - Runtime metadata now persists workflow origin details under `workflow`.
 - Unnamed workflow fallback identity is now snake_case rather than raw class name.
 - Runtime/stdlib callers can use `ctx.root` instead of inferring repo root from package layout.
@@ -80,8 +82,7 @@
 ## Validation performed
 
 - `python3 -m py_compile runtime/loader.py runtime/runner.py runtime/workspace.py runtime/cli.py core/context.py core/engine.py core/validation.py stdlib/portfolio.py stdlib/company.py stdlib/adaptation.py stdlib/decomposition.py stdlib/evaluation.py stdlib/diagnostics.py stdlib/refinement.py runtime/__init__.py tests/runtime/test_workflow_reference_resolution.py`
-- `.venv/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py`
-- `.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_reference_resolution.py`
+- `.venv/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py`
 - `.venv/bin/python -m pytest -q tests/runtime/test_package_cli.py::test_cli_workflows_show_reports_parameters_and_aliases tests/runtime/test_package_cli.py::test_cli_workflow_resolution_prefers_canonical_names_and_rejects_ambiguous_aliases tests/runtime/test_package_cli.py::test_cli_serializes_typed_workflow_parameters_as_json_safe_values tests/runtime/test_package_cli.py::test_cli_run_resume_answer_and_diagnostics_follow_package_contract`
 - `.venv/bin/python -m pytest -q tests/unit/test_stdlib_and_extensions.py::test_portfolio_helper_writes_workflow_local_catalog_snapshot tests/unit/test_stdlib_and_extensions.py::test_portfolio_health_helper_writes_grouped_workflow_run_health_via_shared_resolution_and_run_summaries tests/unit/test_stdlib_and_extensions.py::test_company_helpers_write_bounded_company_operation_snapshot_without_mutating_autoloop_state tests/unit/test_stdlib_and_extensions.py::test_refinement_helper_accepts_main_workflow_class_references tests/unit/test_stdlib_and_extensions.py::test_decomposition_helper_accepts_main_workflow_class_references tests/unit/test_stdlib_and_extensions.py::test_diagnostics_helper_accepts_main_workflow_class_references_and_allows_empty_filtered_histories tests/unit/test_stdlib_and_extensions.py::test_evaluation_helper_validates_eval_cases_via_selected_workflow_snapshot_and_loader_paths`
 - Broader full-file runs for `tests/runtime/test_package_cli.py` and `tests/unit/test_stdlib_and_extensions.py -k 'portfolio or diagnostics or evaluation or decomposition or refinement or adaptation or company'` still hit pre-existing wrapper/template and missing-doc failures outside this phase slice.
