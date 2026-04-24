@@ -1056,3 +1056,59 @@ Next step is to fix `IMP-001` by converting the non-object JSON shape error into
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc03c-ae90-7b21-9311-e900a8d9475c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc03c-ae90-7b21-9311-e900a8d9475c
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc03c-ae90-7b21-9311-e900a8d9475c
+---
+I’m addressing the reviewer’s blocking helper regression first. I’ll patch `validate_model_file(...)` so all invalid-shape paths produce a `ValidationReport`, then rerun the targeted helper/scaffold/builder tests and refresh the phase notes.
+
+The fix is narrow and phase-local: keep the validation logic centralized in `stdlib/validation.py`, convert the non-object JSON shape error into a reported issue, and add a test that would have failed on the current implementation.
+
+I’ve patched the helper seam and added coverage for the missing invalid-shape case. Running the same targeted helper/scaffold/builder suite now to confirm the fix didn’t disturb the rest of the phase.
+
+The fix exposed one exception-ordering issue: `pydantic.ValidationError` is being caught by the new `ValueError` branch. I’m tightening that ordering and rerunning the same suite.
+
+The blocking review item is fixed and the targeted phase suite is back to green. I’m recording the helper-contract decision and refreshing the implementation notes so the next turn has the exact validation/reporting behavior and the remaining out-of-phase doc/template concern documented.
+
+Scope considered
+
+Phase-local reviewer feedback for `authoring-support-and-builder`, limited to the new stdlib validation seam and its targeted regression surface.
+
+What I analyzed
+
+I read the reviewer feedback in the active phase artifacts, rechecked `stdlib/validation.py`, and reproduced the reported failure mode for `validate_model_file(...)` on valid JSON that is not a JSON object.
+
+What I changed
+
+I fixed `validate_model_file(...)` in [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py) so non-object JSON now returns a `ValidationReport` issue instead of raising. I also added coverage for that path in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), and updated the phase notes plus shared decision ledger to record the contract.
+
+Key findings / decisions
+
+The blocking reviewer finding `IMP-001` was valid: the new helper API was still exception-driven for one invalid-shape path. That is now fixed centrally in the validation seam, and the targeted phase suite passes again:
+
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_package_cli.py tests/runtime/test_workflow_builder_package.py`
+
+Result: `79 passed`.
+
+Open issues / next step
+
+The reviewer’s non-blocking scope note about the broader recursive wrapper/template/docs edits remains deferred. The wider out-of-phase failure in `tests/test_architecture_baseline_docs.py` is still not addressed in this phase.
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=run_state | thread_id=019dbff0-05c9-7992-acea-8abd773e2384
+---
+workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
+pairs=plan,implement,test
+request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/runs/run-20260424T144110Z-aa024541/request.md
+session_mode=persistent
