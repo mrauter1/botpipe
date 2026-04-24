@@ -89,3 +89,142 @@ phase_mode=single
 phase_ids=older-domain-prompt-surface-migration,proof-docs-and-memory-sync
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+I’m treating this as the `older-domain-prompt-surface-migration` phase: inspect the required repo surfaces, confirm the current prompt/test shape for the four older domain workflows, then make the prompt and assertion updates with behavior held constant.
+
+I’m gathering the repository-wide context the phase requires before editing, with attention on prompt packages, docs, tests, and the active phase artifacts so the changes stay phase-scoped.
+
+The repo audit confirms this is an `authoring-surface` cleanup, not a workflow addition. Next I’m comparing the target older-domain prompts against an already-migrated compact family and the runtime tests that pin those contracts.
+
+I’ve confirmed the target gap: the four older domain families are still on the old prompt scaffold, while the compact contract is already established elsewhere. I’m pulling the remaining prompt bodies and existing prompt-shape assertions so the rewrite stays mechanically consistent and testable.
+
+I have the target prompt inventory and the test pattern to reuse. Next I’m lifting the existing prompt-shape helper style from the migrated runtime suites, then I’ll rewrite the four prompt families in one pass so the assertions and prompt text land together.
+
+The implementation shape is clear now: rewrite the prompt markdown to the same compact contract markers already pinned in other suites, then extend the four domain runtime suites and the shared README baseline list to reject regressions. After that I’ll sync the phase notes and recursive memory with a no-doctrine-change closeout.
+
+I’m at the edit boundary now. Before patching, I’m pulling the exact payload model names and prompt-step mapping from the four workflow contracts so the new READMEs stay mechanically aligned with the compiled surfaces.
+
+I’m editing the prompt markdown now. The first patch rewrites the release and investigation families into the compact README-plus-step-contract form while keeping prompt paths, artifact names, and routes unchanged.
+
+I’ve finished the release and investigation prompt families. The next patch applies the same compact contract to the security and incident families, including the composition-aware security README.
+
+The prompt text is in place. I’m patching the runtime suites and baseline-doc test now so the repo explicitly enforces the new README sections, compact contract markers, and removal of the legacy scaffolding.
+
+The source edits are complete. I’m running targeted validation now: first a structural grep for lingering legacy scaffold markers, then the four domain suites plus the baseline docs suite.
+
+The prompt files themselves are clean; the only remaining legacy marker strings are the negative test constants. The targeted pytest run is still in progress, and I’m polling for completion before updating the phase artifacts and recursive memory.
+
+The proof is green: `98 passed` across the four domain runtime suites and the shared baseline docs suite. I’m finishing the documentation side now by recording the cycle audit/closeout in the phase notes, shared decisions, and recursive memory ledgers.
+
+I’m on the last edit pass: recording the non-obvious implementation decision, the audit/checklist mapping, and the recursive-memory closeout so later turns don’t drift back to the legacy prompt shape.
+
+The recursive-memory and phase artifacts are patched. I’m doing one final verification pass after those updates so the closeout reflects the actual tested state, then I’ll summarize scope, changes, and any remaining deferred debt.
+
+I have the final numbers now: no files were added or deleted, the targeted diff is `+1180/-590` net because the cycle adds prompt-shape assertions and required phase/memory documentation on top of the prompt rewrite itself. I’m making that explicit in the phase notes so the closeout satisfies the cycle accounting requirements.
+
+**Scope considered**
+
+`docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, all workflow packages under `workflows/`, relevant runtime/baseline tests, `.autoloop_recursive/`, the cycle plan, feedback, decisions, and the active phase notes. The implementation stayed phase-scoped to the four older domain prompt families plus prompt-facing tests and required memory/note updates.
+
+**What I analyzed**
+
+I compared the legacy prompt surfaces in `release_candidate_to_go_no_go`, `investigation_request_to_evidence_pack`, `security_finding_to_verified_remediation`, and `incident_to_hardening_program` against the already-migrated compact family used by newer workflows. I also checked each workflow’s prompt paths, step names, artifact names, routes, and payload models so the migration would be prompt-only and behavior-preserving.
+
+**What I changed**
+
+I rewrote the 4 `prompts/README.md` files and all 26 step prompt files in those four packages to the compact contract shape: `Step Contract`, `Artifact Contract`, `Output Requirements`, `Evidence`, `Routes`, and `Forbidden`, with artifact tables replacing the old scaffold. I added prompt-shape assertions to the four domain runtime suites, extended [`tests/test_architecture_baseline_docs.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), and updated the phase notes, decisions ledger, and recursive memory files.
+
+Files added: `0`. Files deleted: `0`. Targeted diff net: `+1180` (`1770` added, `590` deleted). That increase is mostly prompt-shape regression tests plus required phase/memory accounting; workflow/runtime code did not expand.
+
+**Key findings / decisions**
+
+Cycle mode remained `authoring-surface`. No new workflow was necessary; the higher-leverage move was finishing prompt-surface convergence across the older domain family. I preserved prompt file paths, workflow topology, artifact names, route names, payload schemas, CLI/runtime/provider behavior, and `ctx.invoke_workflow(...)`. The only non-obvious implementation choice was to keep the security README explicitly composition-aware by listing `compose_evidence_pack` as a system step with no prompt files rather than pretending it was prompt-driven.
+
+Validation passed with:
+
+```bash
+PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q \
+  tests/runtime/test_release_candidate_to_go_no_go.py \
+  tests/runtime/test_investigation_request_to_evidence_pack.py \
+  tests/runtime/test_security_finding_to_verified_remediation.py \
+  tests/runtime/test_incident_to_hardening_program.py \
+  tests/test_architecture_baseline_docs.py
+```
+
+Result: `98 passed in 1.34s`.
+
+**Open issues / next step**
+
+No blocking issues from this phase. The main deferred authoring-surface item is selected-workflow serializer convergence; older-domain prompt-family compaction is now closed.
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+I’m reviewing the phase-local implementation against the accepted scope: prompt markdown, prompt-facing tests, and the active phase artifacts only. I’ll inspect the changed prompt families and validation coverage, then update `criteria.md` and `feedback.md` with any findings before issuing the loop-control result.
+
+I don’t see a user-code diff against `HEAD`, so I’m treating the current workspace contents as the review surface and verifying the prompt families directly. I’m running structural checks over the four prompt packages and reading the new prompt-shape assertions to confirm the implementation actually matches the phase contract.
+
+The structural checks line up with the phase contract so far: all four README files expose the shared sections, all 26 prompt bodies have the compact markers, and the legacy scaffold strings are absent from the prompt packages themselves. I’m waiting on the verification suite to finish before I mark the criteria and finalize the review result.
+
+Scope considered
+
+The review stayed phase-scoped to the four older-domain prompt packages, the four touched runtime suites, `tests/test_architecture_baseline_docs.py`, and the phase-local artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/implement/phases/older-domain-prompt-surface-migration/`. I also checked the shared decisions ledger for scope and invariants.
+
+What I analyzed
+
+I verified the current prompt families directly because there was no outstanding user-code diff against `HEAD` to review. I checked that the four `prompts/README.md` files now expose the shared README sections, that all 26 prompt bodies use the compact section contract, that legacy scaffold markers are absent from the prompt packages, and that the new prompt-shape assertions preserve the existing prompt paths, artifact names, routes, and workflow behavior surface.
+
+What I reviewed
+
+I reviewed the rewritten prompt markdown for:
+`release_candidate_to_go_no_go`, `investigation_request_to_evidence_pack`, `security_finding_to_verified_remediation`, and `incident_to_hardening_program`.
+
+I reviewed the new prompt-facing assertions in:
+`tests/runtime/test_release_candidate_to_go_no_go.py`
+`tests/runtime/test_investigation_request_to_evidence_pack.py`
+`tests/runtime/test_security_finding_to_verified_remediation.py`
+`tests/runtime/test_incident_to_hardening_program.py`
+`tests/test_architecture_baseline_docs.py`
+
+I also re-ran the targeted proof:
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py`
+Result: `98 passed in 1.34s`.
+
+Key findings / decisions
+
+No blocking or non-blocking findings.
+
+I updated:
+`criteria.md` with all boxes checked
+`feedback.md` with an explicit no-findings review outcome
+
+Open issues / next step
+
+No open issues from review. The phase is complete as implemented and verified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

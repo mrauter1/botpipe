@@ -169,3 +169,62 @@ Result: `98 passed in 1.34s`.
 **Open issues / next step**
 
 No blocking issues from this phase. The main deferred authoring-surface item is selected-workflow serializer convergence; older-domain prompt-family compaction is now closed.
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+I’m reviewing the phase-local implementation against the accepted scope: prompt markdown, prompt-facing tests, and the active phase artifacts only. I’ll inspect the changed prompt families and validation coverage, then update `criteria.md` and `feedback.md` with any findings before issuing the loop-control result.
+
+I don’t see a user-code diff against `HEAD`, so I’m treating the current workspace contents as the review surface and verifying the prompt families directly. I’m running structural checks over the four prompt packages and reading the new prompt-shape assertions to confirm the implementation actually matches the phase contract.
+
+The structural checks line up with the phase contract so far: all four README files expose the shared sections, all 26 prompt bodies have the compact markers, and the legacy scaffold strings are absent from the prompt packages themselves. I’m waiting on the verification suite to finish before I mark the criteria and finalize the review result.
+
+Scope considered
+
+The review stayed phase-scoped to the four older-domain prompt packages, the four touched runtime suites, `tests/test_architecture_baseline_docs.py`, and the phase-local artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/implement/phases/older-domain-prompt-surface-migration/`. I also checked the shared decisions ledger for scope and invariants.
+
+What I analyzed
+
+I verified the current prompt families directly because there was no outstanding user-code diff against `HEAD` to review. I checked that the four `prompts/README.md` files now expose the shared README sections, that all 26 prompt bodies use the compact section contract, that legacy scaffold markers are absent from the prompt packages, and that the new prompt-shape assertions preserve the existing prompt paths, artifact names, routes, and workflow behavior surface.
+
+What I reviewed
+
+I reviewed the rewritten prompt markdown for:
+`release_candidate_to_go_no_go`, `investigation_request_to_evidence_pack`, `security_finding_to_verified_remediation`, and `incident_to_hardening_program`.
+
+I reviewed the new prompt-facing assertions in:
+`tests/runtime/test_release_candidate_to_go_no_go.py`
+`tests/runtime/test_investigation_request_to_evidence_pack.py`
+`tests/runtime/test_security_finding_to_verified_remediation.py`
+`tests/runtime/test_incident_to_hardening_program.py`
+`tests/test_architecture_baseline_docs.py`
+
+I also re-ran the targeted proof:
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py`
+Result: `98 passed in 1.34s`.
+
+Key findings / decisions
+
+No blocking or non-blocking findings.
+
+I updated:
+`criteria.md` with all boxes checked
+`feedback.md` with an explicit no-findings review outcome
+
+Open issues / next step
+
+No open issues from review. The phase is complete as implemented and verified.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
