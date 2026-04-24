@@ -365,3 +365,66 @@ Open issues / next step
 
 - No blocker for this phase.
 - One known gap remains documented in `test_strategy.md`: no dedicated class-reference test for selected workflows yet.
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd44-99f1-7231-a996-937280403ada
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbd44-99f1-7231-a996-937280403ada
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd44-99f1-7231-a996-937280403ada
+---
+I’m auditing the phase-local test work against the acceptance criteria and the shared decisions ledger. First I’m reading the current test strategy, feedback, and the relevant repo tests so I can decide whether the added coverage is sufficient or whether there are any blocking gaps before I update the audit artifacts.
+
+The remaining question is whether the documented class-reference route needs a dedicated phase-local test or whether it is already covered elsewhere in the suite. I’m checking the repo for existing class-reference coverage before deciding whether that noted gap is audit-worthy or already protected indirectly.
+
+The documented class-reference route is already protected elsewhere through `resolve_workflow_reference(...)` runtime tests, so it doesn’t leave a material uncovered regression here. I’m running the targeted validation commands now and, assuming they stay green, I’ll mark the audit as complete with no findings.
+
+I’ve finished the audit pass and the targeted test runs are green. I’m updating the phase audit artifacts now: all criteria boxes will reflect the passing state, and the feedback file will record that this audit found no blocking or non-blocking gaps in reviewed scope.
+
+I’ve updated the audit artifacts. I’m doing one last readback of `criteria.md` and `feedback.md` so the final summary matches exactly what was recorded, then I’ll close with the required loop-control block.
+
+Scope considered
+
+- Phase-local audit only for the selected-workflow adaptation seam test work.
+- I limited file edits to the audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/selected-workflow-adaptation-seam/`.
+
+What I analyzed
+
+- The active test strategy, current feedback, and shared decisions ledger.
+- The seam-specific unit coverage in `tests/unit/test_stdlib_and_extensions.py`.
+- Existing repo coverage for workflow-class resolution to assess whether the noted class-reference gap was already protected elsewhere.
+
+What I reviewed
+
+- Acceptance-criteria coverage for:
+- workflow-local path guards
+- selected-workflow resolution behavior
+- delegation to the shared loader coercion path
+- failure-path coverage for unknown parameters
+- Reliability and flake risk:
+- all reviewed tests use local temp directories and deterministic filesystem-only fixtures
+- no timing, network, or nondeterministic ordering dependencies were introduced
+- Validation evidence:
+- `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` -> `25 passed`
+- `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` -> `18 passed`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The documented class-reference route is already materially protected by existing runtime loader tests, so the phase-local test gap noted in `test_strategy.md` is not an audit blocker for this seam.
+
+Open issues / next step
+
+- No open issues in reviewed scope.
+- Audit artifacts were updated to mark the phase as passing and to record that no audit findings were raised.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

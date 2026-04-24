@@ -315,3 +315,116 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbd44-99f1-7231-a996-937280403ada
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbd44-99f1-7231-a996-937280403ada
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd44-99f1-7231-a996-937280403ada
+---
+I’m validating the selected-workflow adaptation seam from the test-author side. First I’m reading the active test artifacts and the current repo tests around this seam so I can decide whether the existing coverage is enough or whether one more targeted regression test is needed before I update the phase strategy and feedback files.
+
+I found one useful gap worth closing: the current seam tests prove the happy path and delegation spy, but they don’t exercise the shared loader’s failure semantics through the helper. I’m adding one targeted failure-path test for unknown workflow parameters, then I’ll update the phase test strategy, append the summary feedback, and record the non-obvious test decision under this turn’s header.
+
+The new failure-path test is in. I’m running the same targeted validation set now to confirm the added expectation matches the shared loader behavior and that the doc baseline still passes after the strategy/feedback updates.
+
+Scope considered
+
+- Phase-local test work for the selected-workflow adaptation seam only.
+- Repository test coverage relevant to `stdlib/adaptation.py`, plus the required phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/selected-workflow-adaptation-seam/`.
+
+What I analyzed
+
+- The new helper behavior in `stdlib/adaptation.py`.
+- Existing seam coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+- Shared loader validation behavior in `runtime/loader.py`.
+- The active decisions ledger and the blank phase test artifacts.
+
+What I changed
+
+- Added one failure-path regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) to assert `write_validated_workflow_parameters(...)` preserves the shared `WorkflowParameterError` for unknown workflow parameters.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/selected-workflow-adaptation-seam/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, failure paths, validation run, and known gap.
+- Appended the test-summary line to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/selected-workflow-adaptation-seam/feedback.md).
+- Appended one non-obvious test decision under this turn’s header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/decisions.txt).
+
+Key findings / decisions
+
+- The added failure-path test closes the main remaining gap in AC-2 by checking shared loader error semantics, not just the happy-path delegation spy.
+- Targeted validation is green:
+- `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` -> `25 passed`
+- `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` -> `18 passed`
+
+Open issues / next step
+
+- No blocker for this phase.
+- One known gap remains documented in `test_strategy.md`: no dedicated class-reference test for selected workflows yet.
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd44-99f1-7231-a996-937280403ada
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbd44-99f1-7231-a996-937280403ada
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd44-99f1-7231-a996-937280403ada
+---
+I’m auditing the phase-local test work against the acceptance criteria and the shared decisions ledger. First I’m reading the current test strategy, feedback, and the relevant repo tests so I can decide whether the added coverage is sufficient or whether there are any blocking gaps before I update the audit artifacts.
+
+The remaining question is whether the documented class-reference route needs a dedicated phase-local test or whether it is already covered elsewhere in the suite. I’m checking the repo for existing class-reference coverage before deciding whether that noted gap is audit-worthy or already protected indirectly.
+
+The documented class-reference route is already protected elsewhere through `resolve_workflow_reference(...)` runtime tests, so it doesn’t leave a material uncovered regression here. I’m running the targeted validation commands now and, assuming they stay green, I’ll mark the audit as complete with no findings.
+
+I’ve finished the audit pass and the targeted test runs are green. I’m updating the phase audit artifacts now: all criteria boxes will reflect the passing state, and the feedback file will record that this audit found no blocking or non-blocking gaps in reviewed scope.
+
+I’ve updated the audit artifacts. I’m doing one last readback of `criteria.md` and `feedback.md` so the final summary matches exactly what was recorded, then I’ll close with the required loop-control block.
+
+Scope considered
+
+- Phase-local audit only for the selected-workflow adaptation seam test work.
+- I limited file edits to the audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/selected-workflow-adaptation-seam/`.
+
+What I analyzed
+
+- The active test strategy, current feedback, and shared decisions ledger.
+- The seam-specific unit coverage in `tests/unit/test_stdlib_and_extensions.py`.
+- Existing repo coverage for workflow-class resolution to assess whether the noted class-reference gap was already protected elsewhere.
+
+What I reviewed
+
+- Acceptance-criteria coverage for:
+- workflow-local path guards
+- selected-workflow resolution behavior
+- delegation to the shared loader coercion path
+- failure-path coverage for unknown parameters
+- Reliability and flake risk:
+- all reviewed tests use local temp directories and deterministic filesystem-only fixtures
+- no timing, network, or nondeterministic ordering dependencies were introduced
+- Validation evidence:
+- `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` -> `25 passed`
+- `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` -> `18 passed`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The documented class-reference route is already materially protected by existing runtime loader tests, so the phase-local test gap noted in `test_strategy.md` is not an audit blocker for this seam.
+
+Open issues / next step
+
+- No open issues in reviewed scope.
+- Audit artifacts were updated to mark the phase as passing and to record that no audit findings were raised.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
