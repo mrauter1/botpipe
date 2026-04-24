@@ -99,6 +99,17 @@ def test_task_to_candidate_workflow_set_package_compiles_with_explicit_control_c
     ]
     assert package_step.expected_output_schema is not None
 
+    publish_step = compiled.steps["publish_candidate_workflow_set"]
+    assert publish_step.requires == (
+        "workflow_capability_snapshot",
+        "workflow_candidate_matrix",
+        "workflow_gap_analysis",
+        "candidate_route_posture",
+        "candidate_workflow_set",
+        "candidate_workflow_set_summary",
+        "candidate_next_action",
+    )
+
 
 def test_task_to_candidate_workflow_set_package_docs_capture_decision_records() -> None:
     text = (REPO_ROOT / "docs" / "workflows" / "task_to_candidate_workflow_set.md").read_text(encoding="utf-8")
@@ -592,6 +603,42 @@ def test_task_to_candidate_workflow_set_publish_rejects_compose_posture_with_onl
     )
 
     with pytest.raises(ValueError, match="at least two workflows when portfolio_posture is compose_needed"):
+        workflow_pkg.TaskToCandidateWorkflowSet.on_publish_candidate_workflow_set(state, ctx)
+
+
+def test_task_to_candidate_workflow_set_publish_rejects_summary_without_strategy_ready_signal(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_candidate_workflow_set_test_context(
+        tmp_path,
+        monkeypatch,
+        candidate_summary={
+            "authoritative_artifacts": [
+                "candidate_workflow_set",
+                "candidate_workflow_set_summary",
+                "candidate_next_action",
+            ],
+            "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+            "builder_considered": True,
+            "comparison_candidates": [
+                "security_finding_to_verified_remediation",
+                "investigation_request_to_evidence_pack",
+                "workflow_idea_to_workflow_package",
+            ],
+            "next_action": "Pass the candidate set to task_to_workflow_strategy next.",
+            "portfolio_posture": "direct_fit",
+            "ranked_candidates": [
+                "security_finding_to_verified_remediation",
+                "investigation_request_to_evidence_pack",
+                "workflow_idea_to_workflow_package",
+            ],
+            "ready_for_strategy_selection": False,
+            "recommended_candidate_workflows": ["security_finding_to_verified_remediation"],
+        },
+    )
+
+    with pytest.raises(ValueError, match="ready_for_strategy_selection=true"):
         workflow_pkg.TaskToCandidateWorkflowSet.on_publish_candidate_workflow_set(state, ctx)
 
 
