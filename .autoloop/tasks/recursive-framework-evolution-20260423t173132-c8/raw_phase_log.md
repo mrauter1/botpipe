@@ -569,3 +569,58 @@ Open issues / next step
 - No in-phase blocker remains.
 - Targeted validation passed with `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py` (`47 passed`).
 - I did not run the full repo suite.
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+I’m reviewing the phase-local implementation against the active acceptance criteria, the shared decisions ledger, and the changed workflow/doc/test surfaces. I’ll inspect the new refinement package, verify the claimed proof path, then update the phase criteria and feedback artifacts only.
+
+I’ve finished the artifact/decision review and I’m doing a code-path audit now: workflow contracts, publish-time validation, and the test coverage around the success path and rejection cases. If I find anything outside the implemented acceptance surface, I’ll call it out as explicitly out-of-scope.
+
+The workflow/package review is consistent so far, and I’m running the targeted proof set independently now. After that I’ll either write findings or mark the phase clean and update the verifier-owned artifacts.
+
+I found one contract hole worth checking carefully before I write the verdict: the workflow validates the selected workflow against its baseline/candidate surfaces, but I haven’t seen the same validation applied to the supplied evaluation summary itself. I’m confirming whether the implementation ever rejects cross-workflow evidence drift or whether that gap is real.
+
+I found one blocking contract gap and I’m recording it in the verifier artifacts now. After that I’ll leave the phase `INCOMPLETE` so the next implementation turn can close the evidence-boundary validation hole instead of silently carrying it forward.
+
+Scope considered
+
+- Phase-local review only for `workflow-and-eval-to-refined-workflow-package`.
+- I limited writes to the verifier-owned phase artifacts: `criteria.md` and `feedback.md`.
+
+What I analyzed
+
+- The shared decisions ledger, active phase contract, implementation notes, and the new refinement workflow package under `workflows/workflow_and_eval_to_refined_workflow_package/`.
+- The workflow’s capture, publish, manifest-validation, and overlay-validation paths, plus the cycle 8 recursive-memory and baseline-doc updates.
+
+What I reviewed
+
+- Workflow contracts, params, route contracts, and publish-time validation logic.
+- Runtime proof coverage in `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`.
+- Baseline-doc proof in `tests/test_architecture_baseline_docs.py`.
+- Independent targeted validation: `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py` (`47 passed`).
+
+Key findings / decisions
+
+- I recorded one blocking finding in `feedback.md` as `IMP-001`.
+- The workflow never validates that `baseline_evaluation_summary.json` actually belongs to the selected workflow, so it can publish a refinement receipt for workflow A using evaluation evidence from workflow B.
+- I left the phase criteria incomplete to reflect that contract hole.
+
+Open issues / next step
+
+- Fix `IMP-001` by validating the evaluation summary’s selected-workflow identifier against the resolved selected workflow before publication, and add a rejection test for cross-workflow evidence drift.
+- After that, rerun the targeted proof set and update the verifier artifacts again.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
