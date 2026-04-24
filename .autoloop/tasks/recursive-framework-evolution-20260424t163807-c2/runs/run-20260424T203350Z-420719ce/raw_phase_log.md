@@ -506,3 +506,125 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+---
+I’m auditing the repository and the phase artifacts first so I can prove the earlier validation consolidation, align the docs and recursive memory, and keep this phase scoped to tests plus closeout records.
+
+I’ve confirmed the earlier migration landed. Next I’m checking the current tests, docs, and recursive-memory state so this phase can prove the change and record the remaining debt precisely without reopening scope.
+
+The remaining work looks like closeout, not more migration. I’m filling the one missing ledger read and checking whether the targeted proof already covers the shared helper and the touched publication paths or if one more test is needed.
+
+I’m down to two likely edits: a small authoring-doc correction for the new non-negative-int helper and the phase closeout artifacts that state the compatibility contract stayed frozen. After that I’ll run the targeted proof suite for this phase.
+
+I found one concrete mismatch: `docs/authoring.md` still describes the validation seam as only “positive-int” even though cycle 14 added `require_non_negative_int(...)`. I’m patching that doc plus the cycle-memory closeout notes so the recorded proof matches the actual consolidation boundary and frozen compatibility contract.
+
+I’ve patched the remaining documentation and recursive-memory drift. Next step is the proof run: targeted unit tests, the four migrated workflow runtime suites, and the baseline docs test that guards the authoring/memory contract.
+
+The proof run is still in flight. I’m waiting on the targeted suites before I write the phase notes and the final compatibility statement.
+
+The proof suite passed cleanly. I’m writing the phase closeout artifacts now: one implementation note entry, one decision-line for future turns, and a small roadmap update so the recorded evidence matches the 151-test proof run.
+
+I updated the closeout notes after the successful run, so I’m rerunning the same targeted suite once more to make sure the final recorded proof and the guarded docs/memory tests still agree.
+
+I’ve finished the implementation work. I’m pulling a compact diff summary so the closeout can report the documentation-only footprint and the unchanged compatibility boundary accurately.
+
+**Scope considered**
+
+- Audited the phase artifacts, `docs/architecture.md`, `docs/authoring.md`, `stdlib/validation.py`, the four migrated domain workflows, targeted unit/runtime tests, and the recursive-memory files under `.autoloop_recursive/`.
+
+**What I analyzed**
+
+- Verified the shared-validation migration had already landed in code and tests.
+- Found the remaining drift in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:244): the validation seam still described only positive-int validation and did not name `require_non_negative_int(...)`.
+- Confirmed the targeted runtime suites already exercise the migrated publication paths for `investigation_request_to_evidence_pack`, `security_finding_to_verified_remediation`, `release_candidate_to_go_no_go`, and `incident_to_hardening_program`.
+
+**What I changed**
+
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:244) to document the shared non-negative-int helper and the correct validation boundary.
+- Updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:183) so the doc contract now guards that helper explicitly.
+- Updated the cycle-14 closeout notes in `.autoloop_recursive/framework_evolution_charter.md`, `framework_roadmap.md`, `framework_gap_ledger.md`, `workflow_candidate_ledger.md`, and `validation_debt_ledger.md`.
+- Wrote the phase closeout in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/implement/phases/proof-docs-and-memory-sync/implementation_notes.md:1) and appended the matching decision entry in `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/decisions.txt`.
+- Files added: `0`
+- Files deleted: `0`
+- Tracked diff footprint in this phase: `+60 / -2`
+
+**Key findings / decisions**
+
+- Cycle mode remains `consolidate`; no new workflow was necessary.
+- The migration closeout is documentation-only in this phase. No CLI behavior, runtime routing, `ctx.invoke_workflow(...)` composition, or workflow artifact contract changed.
+- Remaining deferred validation debt is now the repeated `workflows/*/params.py` validator normalization.
+- Validation passed: `151 passed` via `tests/unit/test_validation.py`, `tests/unit/test_stdlib_and_extensions.py`, the four migrated workflow runtime suites, and `tests/test_architecture_baseline_docs.py`.
+
+**Open issues / next step**
+
+- No blocking issues in this phase.
+- Highest-leverage follow-on remains authoring-surface cleanup for repeated `params.py` validators, with prompt compaction still deferred behind that.
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+---
+I’m reviewing the implementation against the phase contract first: changed docs/memory/test surfaces, the recorded proof run, and the phase notes/decisions. Then I’ll mark criteria and append any findings in the phase feedback artifact.
+
+The proof suite is rerunning cleanly so far. While that finishes I’m spot-checking the authoring-doc section and the cycle-14 memory entries directly to make sure the recorded closeout actually matches the implementation notes.
+
+The implementation matches the phase contract as written. I’m marking the criteria complete and recording an explicit no-findings review result in the phase feedback artifact.
+
+Scope considered
+
+- Phase-local review of the proof/docs closeout for `proof-docs-and-memory-sync`.
+- Request/plan/decisions alignment, the phase implementation notes, `docs/authoring.md`, the recursive-memory files under `.autoloop_recursive/`, and the verifier-owned phase artifacts.
+
+What I analyzed
+
+- The accepted phase contract and the shared decisions ledger.
+- The closeout edits that document the shared validation seam, the cycle-14 memory updates, and the explicit compatibility freeze.
+- The recorded and rerun targeted proof command.
+
+What I reviewed
+
+- [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:244)
+- [framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md:78)
+- [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:133)
+- [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md:336)
+- [workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md:418)
+- [validation_debt_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/validation_debt_ledger.md:35)
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/implement/phases/proof-docs-and-memory-sync/implementation_notes.md:1)
+- Reran `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py` and got `151 passed in 2.31s`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The implementation satisfies AC-1 through AC-3: targeted proof passes, the recursive-memory files record the resolved migration plus deferred `params.py` debt, and the closeout explicitly records no CLI, runtime-routing, or workflow-artifact compatibility change.
+- I updated the verifier-owned artifacts only: all criteria boxes are checked and the feedback file now records the no-findings review result plus the rerun proof command.
+
+Open issues / next step
+
+- No open issues for this phase.
+- Phase can advance as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
