@@ -18,3 +18,7 @@
 - IMP-001 | resolved | `stdlib.validation.validate_model_file(...)` now converts non-object JSON into a `ValidationIssue` inside the returned `ValidationReport`, and `tests/unit/test_stdlib_and_extensions.py` covers the array-shaped JSON case directly. Verification: `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_package_cli.py tests/runtime/test_workflow_builder_package.py` passed with `79 passed in 1.73s`.
 
 - IMP-002 | non-blocking | Scope note remains unchanged. It does not block this phase after the targeted acceptance-surface validation passed, but the broader recursive wrapper/template/docs drift should still be handled in a later dedicated slice.
+
+## Final Review Status
+
+- No blocking findings remain for the active phase. `IMP-001` is resolved in code and covered by targeted regression tests; `IMP-002` remains advisory only and does not prevent phase completion.
