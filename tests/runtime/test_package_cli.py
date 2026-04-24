@@ -821,6 +821,14 @@ def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
     if shape == "package":
         assert (tmp_path / "workflows" / "child_workflow" / "prompts" / "README.md").exists()
         assert (tmp_path / "workflows" / "child_workflow" / "assets" / ".gitkeep").exists()
+    elif shape == "flow-specs":
+        package_dir = tmp_path / "workflows" / "child_workflow"
+        assert not (package_dir / "__init__.py").exists()
+        assert not (package_dir / "workflow.toml").exists()
+        assert not (package_dir / "prompts").exists()
+        assert not (package_dir / "assets").exists()
+    else:
+        assert not (tmp_path / "workflows" / "child_workflow").exists()
 
     compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)
     assert compiled.workflow_name == "child_workflow"

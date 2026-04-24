@@ -130,6 +130,22 @@ def test_workflow_builder_package_rejects_invalid_package_name(tmp_path: Path) -
         )
 
 
+def test_workflow_builder_package_accepts_cli_style_flow_specs_parameter(tmp_path: Path) -> None:
+    _install_repo_workflow_builder_package(tmp_path)
+    parameters_cls = resolve_workflow_reference(tmp_path, "workflow_idea_to_workflow_package").parameters_cls
+
+    parameters = coerce_workflow_parameter_mapping(
+        parameters_cls,
+        {
+            "package_name": "release_candidate_to_go_no_go",
+            "workflow_kind": "end_to_end",
+            "authoring_shape": "flow-specs",
+        },
+    )
+
+    assert parameters["authoring_shape"] == "flow_specs"
+
+
 @pytest.mark.parametrize(
     ("authoring_shape", "expected_source"),
     [
@@ -393,7 +409,10 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(
             assert (generated_pkg_dir / "prompts" / "README.md").exists()
             assert (generated_pkg_dir / "assets" / ".gitkeep").exists()
         else:
+            assert not (generated_pkg_dir / "__init__.py").exists()
             assert not (generated_pkg_dir / "workflow.toml").exists()
+            assert not (generated_pkg_dir / "prompts").exists()
+            assert not (generated_pkg_dir / "assets").exists()
 
     compiled_generated = compile_workflow(resolve_workflow_reference(tmp_path, generated_name).workflow_cls)
     assert compiled_generated.workflow_name == generated_name

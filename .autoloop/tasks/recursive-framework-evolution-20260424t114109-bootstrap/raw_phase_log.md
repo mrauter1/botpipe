@@ -1198,3 +1198,60 @@ Phase review is complete. The only remaining follow-up is the deferred non-block
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc03c-ae90-7b21-9311-e900a8d9475c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc03c-ae90-7b21-9311-e900a8d9475c
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc03c-ae90-7b21-9311-e900a8d9475c
+---
+I’m mapping the implemented behavior to the existing test surface first, then I’ll add any missing deterministic coverage and update the phase test artifacts with an explicit coverage map.
+
+I’ve got the main test surfaces loaded. I’m checking whether the scaffold default and each generated builder shape already have direct assertions, or whether there’s still a gap worth closing in this phase.
+
+The existing suite already covers the three main shapes. I’m looking for a narrow gap now, likely around shape-specific clutter defaults or validation normalization, so any new test stays phase-local and useful.
+
+There’s one useful regression gap: the phase doctrine says “no package-only clutter unless the chosen shape needs it,” but the current assertions mostly check presence, not absence. I’m adding narrow negative-assertion coverage for scaffold and builder outputs, plus the hyphenated `flow-specs` parameter normalization seam that bridges CLI spelling to builder internals.
+
+I’m making a small test-only change set now: add negative assertions so non-package shapes stay uncluttered, and add a builder-parameter normalization test for the CLI-facing `flow-specs` spelling.
+
+The new tests are in place. I’m waiting on the targeted runtime suite now so I can record the exact coverage and result in the phase artifacts without guessing.
+
+The targeted runtime suite passed. I’m updating the phase test artifacts now with the behavior-to-coverage map and a concise summary of the new regression checks.
+
+Scope considered
+
+Phase-local test authoring for `authoring-support-and-builder`, focused on the new scaffold shapes, builder output shapes, and the stdlib/helper behavior already introduced by the implementation slice.
+
+What I analyzed
+
+I reviewed the active phase contract, the current runtime test coverage in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) and [tests/runtime/test_workflow_builder_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_builder_package.py), plus the existing helper coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py). I specifically checked for remaining gaps around “no package-only clutter unless the chosen shape needs it” and the CLI-to-builder `flow-specs` spelling seam.
+
+What I changed
+
+I added two narrow runtime regressions:
+- In [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), non-package scaffold shapes now assert absence of `__init__.py`, `workflow.toml`, `prompts/`, and `assets/`, while `single` also asserts no package directory is created.
+- In [tests/runtime/test_workflow_builder_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_builder_package.py), the builder now has explicit coverage for CLI-style `flow-specs` normalization to internal `flow_specs`, and non-package generated outputs now assert absence of package-only support files.
+
+I also updated the phase artifacts:
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/authoring-support-and-builder/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/authoring-support-and-builder/feedback.md)
+
+Key findings / decisions
+
+The main remaining regression risk was negative coverage, not positive coverage: the suite already proved the shapes worked, but it was still weak on proving that non-package shapes stay uncluttered. I kept the additions deterministic and phase-local, and I did not widen into the out-of-scope recursive-template/docs baseline drift.
+
+Validation:
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_package_cli.py tests/runtime/test_workflow_builder_package.py`
+Result: `26 passed in 1.17s`
+
+Open issues / next step
+
+The active phase test artifacts are now populated and the targeted runtime acceptance surface is covered. The next step is auditor review of the updated test strategy and the added runtime regressions.

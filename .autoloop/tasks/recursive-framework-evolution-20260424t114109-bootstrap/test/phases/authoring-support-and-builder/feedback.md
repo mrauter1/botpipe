@@ -6,3 +6,9 @@
 - Phase Directory Key: authoring-support-and-builder
 - Phase Title: Authoring Support And Builder
 - Scope: phase-local authoritative verifier artifact
+
+## Additions
+
+- Added runtime regression coverage in `tests/runtime/test_package_cli.py` to assert `autoloop init workflow` does not create package-only clutter for `single` and `flow-specs` shapes.
+- Added runtime regression coverage in `tests/runtime/test_workflow_builder_package.py` for CLI-style `flow-specs` parameter normalization and for absence of package-only support files in non-package builder outputs.
+- Validation run: `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_package_cli.py tests/runtime/test_workflow_builder_package.py` -> `26 passed in 1.17s`.
