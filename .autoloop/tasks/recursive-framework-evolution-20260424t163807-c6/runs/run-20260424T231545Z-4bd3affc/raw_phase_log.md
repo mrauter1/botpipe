@@ -169,3 +169,112 @@ phase_mode=single
 phase_ids=shared-candidate-surface-seam,refinement-decomposition-migration,proof-docs-memory-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+---
+I’m auditing the repository and the phase artifacts first so the change stays inside the approved seam. I’ll identify the existing candidate-surface mechanics, the repeated validation patterns around them, and then implement the shared stdlib helper plus focused tests.
+
+The duplicated seam is concentrated where the plan said it would be: refinement and decomposition carry near-identical publication helpers. I’m reading the authoring docs, the two workflow files, and the existing stdlib seams now so the extraction stays narrow and doesn’t leak policy into runtime.
+
+The core flow matches the plan: the actual duplication sits in the long helper tails beneath the publish/capture handlers, not in the step topology. I’m isolating those helper blocks now so the new stdlib seam only absorbs the mechanical baseline/candidate overlay work and leaves workflow-specific assertions in place.
+
+I’ve finished the mandatory repo-wide orientation and the relevant recursive memory read. The remaining work is phase-local: implement the shared candidate-surface helper, switch the two workflows to it without changing receipts or runtime contracts, and extend focused unit coverage around the shared boundary, manifest, digest, and overlay behaviors.
+
+I’ve narrowed the implementation shape. The helper will stay generic and authoring-only: it will normalize editable boundaries, materialize baseline/candidate surface manifests, enforce authoritative-source immutability, and run isolated overlay validation, but it will not own refinement-only or decomposition-only policy.
+
+I’m editing the shared seam now. The code change is limited to `stdlib/` plus focused unit coverage, and I’m keeping the API mechanical so later workflow migration can preserve existing publication receipts and workflow-local policy.
+
+The shared helper and its focused tests are in place. I’m running the targeted unit slice now to catch API or import mistakes before I touch the phase notes.
+
+The first test run found two local test issues, not helper logic: the new tests were missing `shutil` and `sys` imports. I’m fixing that and rerunning the same focused slice.
+
+The focused candidate-surface slice is green. I’m running the full stdlib/extensions unit suite next because `stdlib/__init__.py` changed and I want export-surface regressions caught now, not in a later phase.
+
+The export surface is stable across the full stdlib unit suite. I’m doing one more narrow runtime check on the refinement and decomposition workflow imports so the new stdlib module doesn’t accidentally change their compile path.
+
+I’m updating the phase notes and decision ledger now. I’m keeping the recorded decision explicit: this phase adds the shared mechanical seam only, and the workflow migrations, docs sync, and recursive memory updates stay deferred to later scoped phases.
+
+**Scope considered**
+- Mandatory repo-wide audit completed across `docs/`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, and `.autoloop_recursive/`.
+- Phase-local implementation stayed inside the approved seam: shared candidate-surface mechanics only.
+
+**What I analyzed**
+- The duplicated publication helper tails in [workflow_and_eval_to_refined_workflow_package/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py:764) and [workflow_package_to_composable_building_blocks/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py:732).
+- Existing selected-workflow seams in [stdlib/refinement.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/refinement.py:1) and [stdlib/decomposition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/decomposition.py:1).
+- Export surface and unit coverage in [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:4) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:12).
+
+**What I changed**
+- Added [stdlib/candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/candidate_surfaces.py:1) with five shared authoring-only helpers:
+  - `normalize_candidate_surface_boundary(...)`
+  - `materialize_baseline_surface(...)`
+  - `derive_candidate_surface_manifest(...)`
+  - `validate_authoritative_surface_sources_unchanged(...)`
+  - `validate_candidate_surface_overlay(...)`
+- Exported the new seam from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:4).
+- Added focused unit coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:2070).
+- Updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/shared-candidate-surface-seam/implementation_notes.md:1) and appended the phase decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/decisions.txt:10).
+
+**Key findings / decisions**
+- The highest-leverage duplication is mechanical, not policy-level, so the shared seam deliberately does not own refinement-specific evidence rules, decomposition-specific building-block policy, receipts, or workflow-local validation semantics.
+- I kept workflow files unchanged in this phase. That preserves current artifact names, receipts, and error behavior until the later migration phase swaps the duplicated helper tails over.
+- Validation passed:
+  - `tests/unit/test_stdlib_and_extensions.py` -> `63 passed`
+  - targeted workflow compile checks for refinement/decomposition -> `2 passed`
+
+**Open issues / next step**
+- Phase 2 still needs to migrate the two workflow packages onto the new seam and delete the duplicated helper tails.
+- Docs and `.autoloop_recursive/*` memory sync were intentionally deferred because this run is phase-local and scoped to the shared helper seam only.
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1d0-d8e1-7c80-8ade-67a2ba3bb8f7
+---
+I’m auditing the phase-local implementation against the acceptance criteria and the shared decisions now. I’ll verify the helper seam, inspect regression risks in the generic file-copy/overlay logic, and then write the criteria and feedback artifacts only.
+
+I found one blocking safety issue in the new shared helper seam: it centralizes baseline and overlay copying without centralizing repo-relative path hardening. I’m recording that in the phase feedback and leaving the criteria unchecked accordingly.
+
+Scope considered
+- Phase-local review only: [stdlib/candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/candidate_surfaces.py:1), [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:1), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:2060), and the active phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/shared-candidate-surface-seam/`.
+- Broader repo context used only for dependency and doctrine checks against the shared decisions and the existing workflow-local helper patterns.
+
+What I analyzed
+- The new shared seam API and its mechanical responsibilities for boundary normalization, baseline copy, candidate diff derivation, authoritative-source immutability, and overlay validation.
+- The phase contract, acceptance criteria, and the implementer’s phase note that workflow migration is intentionally deferred.
+- The unit coverage added for the new seam.
+
+What I reviewed
+- Criteria updated in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/shared-candidate-surface-seam/criteria.md:1).
+- Findings appended in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/shared-candidate-surface-seam/feedback.md:1).
+- One blocking finding recorded: `IMP-001`.
+
+Key findings / decisions
+- `IMP-001` is blocking: the new shared helper trusts caller-supplied repo-relative paths in `materialize_baseline_surface(...)` and `validate_candidate_surface_overlay(...)` without rejecting absolute paths or `..` traversal. That means the central seam can read or copy files outside the intended repo/overlay boundary if a future caller passes a malformed manifest or boundary list.
+- Because that bug is in the new shared abstraction itself, I left all criteria unchecked and marked the phase `INCOMPLETE`.
+
+Open issues / next step
+- Add one shared repo-relative path normalizer inside `stdlib/candidate_surfaces.py`, use it before every source/target join in baseline and overlay copy operations, and add negative unit tests for absolute-path and parent-traversal inputs.
+- After that fix, rerun the focused stdlib unit coverage and re-review this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
