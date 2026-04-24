@@ -566,6 +566,47 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_missing_b
         )
 
 
+def test_workflow_and_eval_to_refined_workflow_package_rejects_source_evaluation_summary_workflow_mismatch(
+    tmp_path: Path,
+) -> None:
+    _install_repo_workflow_and_eval_to_refined_workflow_package(tmp_path)
+    evidence_paths = _write_refinement_evidence(tmp_path)
+    summary_path = tmp_path / evidence_paths["evaluation_summary_path"]
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    payload["selected_workflow_name"] = "incident_to_hardening_program"
+    summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    provider = ScriptedLLMProvider(producer_turns=[], verifier_turns=[])
+
+    with pytest.raises(
+        ValueError,
+        match="baseline_evaluation_summary.json selected_workflow_name must match selected workflow",
+    ):
+        run_workflow_package(
+            "workflow_and_eval_to_refined_workflow_package",
+            provider=provider,
+            options=RunnerOptions(
+                root=tmp_path,
+                task_id=TASK_ID,
+                message="Refine the release go/no-go workflow from the latest evaluation evidence.",
+                workflow_params={
+                    "selected_workflow": "release_candidate_to_go_no_go",
+                    "task_title": "Release go/no-go refinement from evaluation evidence",
+                    "evaluation_summary_path": evidence_paths["evaluation_summary_path"],
+                    "evaluation_findings_path": evidence_paths["evaluation_findings_path"],
+                    "failure_modes_path": evidence_paths["failure_modes_path"],
+                    "sponsor_role": "engineering productivity",
+                    "desired_outcome": "Publish a verified refinement candidate package for the selected workflow.",
+                    "constraints": [
+                        "Keep runtime control narrow.",
+                        "Stop at candidate publication before promotion.",
+                    ],
+                    "target_test_command": TARGET_TEST_COMMAND,
+                },
+            ),
+        )
+
+
 def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_evaluation_summary_workflow_mismatch(
     tmp_path: Path,
     monkeypatch,

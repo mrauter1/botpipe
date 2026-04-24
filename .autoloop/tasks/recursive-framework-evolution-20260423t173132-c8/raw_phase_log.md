@@ -726,3 +726,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdf6-d3ed-7071-92e2-6b8c0d1148fc
+---
+I’m auditing the phase’s current proof surface and then I’ll add any missing regression coverage around the new evaluation-summary contract. After that I’ll update the test-strategy and test feedback artifacts so the behavior-to-test map reflects the shipped workflow state.
+
+The current proof only pins the publish-time drift case for the summary contract. I’m adding one more deterministic regression test for the initial input path so future refactors can’t accidentally stop validating the summary before the workflow even enters the pair steps.
+
+I’ve added the input-side mismatch regression test. I’m running the targeted phase proof now, then I’ll write the strategy/feedback artifacts with the final behavior-to-test map from the passing set rather than from the draft plan.
+
+The code proof is clean. I’m writing the phase-local test strategy and feedback now, and I’m also recording the non-obvious coverage decision in the shared ledger: the summary-workflow contract is pinned both before capture and after capture drift, not just at one boundary.
+
+Scope considered
+
+- Phase-local test work for `workflow-and-eval-to-refined-workflow-package`.
+- I focused on the changed runtime proof surface, plus the required `test_strategy.md` and test feedback artifacts.
+
+What I analyzed
+
+- The current regression surface in `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`.
+- The new evaluation-summary contract in the refinement workflow and the shared decisions ledger.
+- The existing happy-path and publish-time failure-path coverage to identify the remaining gap.
+
+What I changed
+
+- Added a new deterministic runtime regression test in [test_workflow_and_eval_to_refined_workflow_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py) that rejects a mismatched `evaluation_summary_path` input before the workflow reaches the pair steps.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/test/phases/workflow-and-eval-to-refined-workflow-package/test_strategy.md) with an explicit behavior-to-test map, invariants, failure paths, stabilization notes, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/test/phases/workflow-and-eval-to-refined-workflow-package/feedback.md) and recorded the coverage decision in `decisions.txt`.
+
+Key findings / decisions
+
+- The key added regression guard is boundary duplication: the selected-workflow check is now pinned both when the source summary is first consumed and when the copied baseline summary is later published.
+- This closes the remaining proof gap around cross-workflow evaluation evidence drift.
+- Targeted validation passed with `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py` (`49 passed`).
+
+Open issues / next step
+
+- No in-phase test blocker remains.
+- Known gaps remain only in the explicitly out-of-scope areas: auto-running evaluation suites, sibling candidate workflow packages, and in-place promotion of the authoritative selected workflow package.
