@@ -343,3 +343,81 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe44-0d20-78c2-8dd9-ec5ac71f7cfa
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbe44-0d20-78c2-8dd9-ec5ac71f7cfa
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe44-0d20-78c2-8dd9-ec5ac71f7cfa
+---
+I’m implementing the approved `workflow_run_history_to_failure_modes` phase, starting with the required framework/workflow inspection plus the phase plan, feedback, and existing workflow patterns so the change fits current contracts cleanly.
+
+The original mandatory doc paths are stale in this checkout, and the accepted plan already points to the repo-root equivalents. I’m reading the current runtime, workflow, and existing diagnostic/builder packages next so I can fit the new workflow into the migrated layout rather than the old `src/` tree.
+
+I’ve confirmed the existing framework seam already added the run-history snapshot helper. The next pass is over the workflow authoring patterns and neighboring packages so I can reuse the same step structure, publish hooks, and typed verifier contracts instead of inventing a one-off design.
+
+I have the package pattern now: each reusable workflow ships a typed `Parameters` model, three pair steps with explicit verifier payloads, a deterministic publish step that validates workflow-local artifacts, a prompt README, a workflow doc, and a scripted runtime proof. I’m pulling the phase-specific checklist and a couple of nearby docs/prompts so the new package matches those conventions exactly.
+
+The phase split is clear now: this turn should only ship the new workflow package, its doc, and the runtime proof. Recursive memory and baseline-test updates belong to the later `cycle-nine-closeout` phase, so I’m keeping those out of scope unless I hit a dependency that truly forces them in.
+
+Plan for this phase:
+
+1. Author `workflows/workflow_run_history_to_failure_modes/` with params, contracts, prompts, asset, workflow logic, and deterministic publish validation.
+2. Add `docs/workflows/workflow_run_history_to_failure_modes.md` with the required decision records, route grammar, artifact contract, and runtime-boundary notes.
+3. Add `tests/runtime/test_workflow_run_history_to_failure_modes.py` covering discovery, compile-time control contracts, prompt/doc contract markers, scripted runtime publication, and publish-time rejection cases.
+4. Run targeted pytest for the new runtime proof plus any directly affected helper surface, then update phase notes and this turn’s decision block.
+
+I’ve finished the design pass and I’m moving into edits now. The package will follow the established six-step pattern: deterministic bootstrap/context capture, three typed pair steps for framing, failure-mode mapping, and improvement packaging, then a publish step that validates the workflow-local artifacts and boundary before writing the receipt.
+
+The package skeleton and publish validator are in place. I’m adding the workflow decision/contract doc now, then I’ll wire the runtime proof around the exact artifact names and publish-time failure cases the phase contract calls out.
+
+I’m on the proof now. The runtime test is doing two jobs: proving the new workflow publishes the expected diagnostic artifacts from mixed run history, and freezing the publish-time rejection behavior so the boundary stays explicit in later cycles.
+
+The package, prompts, doc, and proof are all written. I’m running the new runtime test first to shake out any contract mismatches before I touch phase notes or the decision ledger.
+
+The first run exposed a test-harness mismatch rather than a workflow-contract problem: artifact handles inside the scripted provider wrapper don’t accept the `Path`-style `encoding=` keyword. I’m tightening those producer helpers to the runtime artifact API and rerunning the proof.
+
+The new proof is green. I’m running the existing stdlib helper coverage once as a regression check, since this workflow depends directly on the run-history snapshot seam shipped in the previous phase.
+
+The code path is stable now. I’m recording the phase-local implementation notes and the few non-obvious decisions that later turns would need to preserve, then I’ll do one last diff review before closing out.
+
+I’ve updated the phase-local notes and decision block. I’m doing one last diff scan now to make sure the change set stayed phase-scoped and that I’m not accidentally pulling the cycle-nine closeout work into this turn.
+
+Scope considered
+
+Phase-local only: the new `workflow_run_history_to_failure_modes` package, its workflow doc, its runtime proof, and this phase’s implementation records. I kept the existing dirty tree and the later cycle-nine closeout work out of scope.
+
+What I analyzed
+
+I reviewed the current package-based workflow architecture, the authoring/runtime boundary docs, the new run-history snapshot seam, and neighboring workflow packages to match the established pattern for typed pair-step contracts, prompt-local SOPs, and deterministic publish validation.
+
+What I changed
+
+Added the new workflow package at [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py:1) with params, contracts, prompts, checklist asset, and publish-time validation.
+
+Added the workflow decision/contract doc at [workflow_run_history_to_failure_modes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_run_history_to_failure_modes.md:1).
+
+Added the scripted runtime proof at [test_workflow_run_history_to_failure_modes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_history_to_failure_modes.py:1).
+
+Updated the phase notes and this turn’s decision block in the authoritative task artifacts.
+
+Key findings / decisions
+
+The workflow reuses the previously shipped `write_selected_workflow_capability_snapshot(...)` and `write_selected_workflow_run_history_snapshot(...)` seams rather than adding any new runtime-owned diagnostics behavior.
+
+Publication is explicitly bounded at `diagnostic_publication_only`. The publish step rejects empty filtered history, selected-workflow mismatches, missing diagnostic artifacts, and machine-readable packages that imply hidden downstream execution.
+
+Validation passed:
+`.venv/bin/pytest -q tests/runtime/test_workflow_run_history_to_failure_modes.py`
+`.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`
+
+Open issues / next step
+
+The later `cycle-nine-closeout` phase still needs to update `.autoloop_recursive/*` and the architecture-baseline doc tests to record cycle 9 as the new baseline.
