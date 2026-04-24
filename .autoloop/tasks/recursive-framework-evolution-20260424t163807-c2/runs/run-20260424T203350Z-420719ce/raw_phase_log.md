@@ -628,3 +628,108 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+---
+I’m reviewing the test-relevant changes first: the targeted unit/runtime suites that already landed, the authoring-doc guard, and the phase artifacts for this test pass. Then I’ll decide whether any additional repo test coverage is still missing before updating the test strategy and feedback.
+
+The existing helper and runtime coverage is already strong. The gap I still see is a regression guard for the cycle-14 recursive-memory closeout itself, so I’m adding one baseline docs test rather than churning the runtime suites again.
+
+I added the missing regression guard for the cycle-14 closeout records. Next I’m rerunning the targeted proof suite so the phase artifacts can point to one authoritative passing command.
+
+The updated proof suite passed. I’m writing the phase strategy and feedback now with an explicit coverage map, the extra cycle-14 memory guard, and the exact passing command.
+
+Scope considered
+
+- The phase-local proof/docs sync scope for cycle 14: shared-helper unit coverage, the four migrated workflow runtime suites, the authoring-doc guard, and the recursive-memory closeout records.
+- The active test artifacts: `test_strategy.md`, `feedback.md`, and the shared decisions ledger.
+
+What I analyzed
+
+- Existing targeted coverage in `tests/unit/test_validation.py`, `tests/unit/test_stdlib_and_extensions.py`, and the four migrated workflow runtime suites.
+- The implementation-phase closeout notes and the cycle-14 memory edits in `.autoloop_recursive/`.
+- The remaining regression gap: there was no baseline docs test that locked the cycle-14 proof/docs closeout itself, including the compatibility-freeze wording and the deferred `params.py` debt.
+
+What I changed
+
+- Added `tests/test_architecture_baseline_docs.py::test_recursive_memory_records_cycle_fourteen_proof_and_remaining_validation_debt` to guard the cycle-14 charter/roadmap/ledger closeout.
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/test/phases/proof-docs-and-memory-sync/test_strategy.md` with an explicit behavior-to-coverage map, invariants, failure paths, flake controls, and known gaps.
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/test/phases/proof-docs-and-memory-sync/feedback.md` with the added test and the passing proof command.
+- Appended the non-obvious test decision to `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/decisions.txt`.
+
+Key findings / decisions
+
+- I did not add more runtime tests because the helper and publication-path coverage already existed and was passing; the missing regression guard was the recursive-memory closeout itself.
+- The new baseline docs test guards AC-2 and AC-3 directly: it checks the cycle-14 proof/docs sync, the unchanged compatibility contract, the resolved old validation wave, and the remaining deferred `params.py` debt.
+- Validation passed with:
+  `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py`
+  Result: `152 passed in 2.34s`
+
+Open issues / next step
+
+- No blocking test gaps remain for this phase.
+- The next deferred authoring-surface test target is still the repeated `workflows/*/params.py` validator normalization when that cycle is taken on.
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc14a-50cd-7ae3-925a-c2ad3fdc5e3a
+---
+I’m auditing the test-phase output against the phase contract now: the new baseline docs test, the targeted proof command, the strategy coverage map, and the shared decisions. Then I’ll mark the audit criteria and append any findings in the phase feedback artifact.
+
+The targeted suite is still running cleanly. I’m waiting on the rerun to confirm the stated `152 passed` result before I mark the audit criteria and record the no-findings outcome.
+
+The audit matches the claimed result. I’m marking the test-phase criteria complete and appending an explicit no-findings audit result to the phase feedback file.
+
+Scope considered
+
+- The phase-local test output for `proof-docs-and-memory-sync`: the updated baseline docs test, the existing targeted unit/runtime suites, the test strategy, the test feedback artifact, and the shared decisions ledger.
+- The request-relevant preserved invariants: no CLI, runtime-routing, `ctx.invoke_workflow(...)`, or workflow-artifact contract change.
+
+What I analyzed
+
+- The new regression guard in `tests/test_architecture_baseline_docs.py` for the cycle-14 proof/docs closeout.
+- The strategy’s behavior-to-coverage map, edge cases, failure paths, and flake controls.
+- The exact targeted proof command and its claimed `152 passed` result.
+
+What I reviewed
+
+- [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:430)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/test/phases/proof-docs-and-memory-sync/test_strategy.md:1)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/test/phases/proof-docs-and-memory-sync/feedback.md:1)
+- Reran `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py` and confirmed `152 passed in 2.21s`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The tests cover the phase contract adequately: shared-helper behavior, the four migrated workflow publication paths, the authoring-doc boundary, and the cycle-14 recursive-memory closeout plus deferred `params.py` debt.
+- The tests remain deterministic and do not normalize any unconfirmed behavior break.
+
+Open issues / next step
+
+- No open issues for this phase.
+- The test phase can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
