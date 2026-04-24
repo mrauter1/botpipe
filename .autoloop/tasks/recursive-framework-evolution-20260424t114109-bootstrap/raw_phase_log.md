@@ -805,3 +805,69 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+---
+I’m reviewing the changed test surface and the helper coverage gaps before I add anything. The main thing I want to verify is whether phase scope still lacks regression tests for the remaining helper consumers, not just the core catalog/capability paths.
+
+The obvious remaining coverage gap is the other helper consumers named in AC-3. The existing test file already exercises `company`, `diagnostics`, and `evaluation`, but I want to confirm whether any of them actually pin single-file workflow references, because that’s the highest-risk preserved behavior left.
+
+I found the gap: the phase already tests `portfolio`, `adaptation`, `refinement`, and `decomposition` against single-file/inferred shapes, but `company`, `diagnostics`, and `evaluation` only pin package workflows. I’m adding focused single-file reference tests for those three helper seams and keeping them small by reusing the existing lifecycle/run-history helpers.
+
+I’m adding three focused tests rather than broadening the whole suite: one each for `company`, `diagnostics`, and `evaluation` with explicit single-file workflow paths. That covers the remaining AC-3 helper seams without pulling in the out-of-scope doc/template failures.
+
+The test file has drifted a bit from the snippets I was patching against. I’m pulling the exact nearby blocks and then I’ll land the same tests with smaller hunks to avoid churning unrelated sections.
+
+I landed the first test, but I also created an accidental placeholder file in `/tmp` while patching. I’m deleting that immediately and then finishing the remaining test additions.
+
+The three helper tests are in. I’m running the targeted subset plus a syntax check now; if anything is off, I’ll keep it local to this test file instead of touching the implementation.
+
+The new tests passed, including adjacent existing helper checks. I’m writing the phase strategy/feedback now so the auditor sees the exact behavior-to-test map rather than just a list of commands.
+
+Scope considered
+
+- Phase-local test work for `catalog-and-helper-migration`.
+- Added regression coverage only for request-relevant helper seams and updated the phase test artifacts.
+- No scaffold/builder/docs template work.
+
+What I analyzed
+
+- Existing runtime coverage in `tests/runtime/test_compatibility_runtime.py`.
+- Existing helper coverage in `tests/unit/test_stdlib_and_extensions.py`.
+- Remaining AC-3 helper seams in `stdlib/company.py`, `stdlib/diagnostics.py`, and `stdlib/evaluation.py`.
+- Phase artifacts `test_strategy.md` and `feedback.md`.
+
+What I changed
+
+- Added three focused tests in `tests/unit/test_stdlib_and_extensions.py`:
+  - `test_company_helper_accepts_single_file_workflow_references`
+  - `test_diagnostics_helper_accepts_single_file_workflow_references`
+  - `test_evaluation_helper_accepts_single_file_workflow_references`
+- Added `_write_single_file_runtime_workflow(...)` test helper to keep those cases deterministic and consistent.
+- Updated `.autoloop/.../test_strategy.md` with an explicit behavior-to-test coverage map.
+- Appended a concise summary of the new coverage to `.autoloop/.../feedback.md`.
+
+Key findings / decisions
+
+- The main remaining coverage gap was AC-3 for helper consumers beyond `portfolio`/`adaptation`/`refinement`/`decomposition`.
+- Single-file workflow references now have direct test coverage across `company`, `diagnostics`, and `evaluation`, which is the highest-risk preserved behavior in this phase.
+- Validation passed:
+  - `python3 -m py_compile tests/unit/test_stdlib_and_extensions.py`
+  - `.venv/bin/python -m pytest -q tests/unit/test_stdlib_and_extensions.py::test_company_helper_accepts_single_file_workflow_references tests/unit/test_stdlib_and_extensions.py::test_diagnostics_helper_accepts_single_file_workflow_references tests/unit/test_stdlib_and_extensions.py::test_evaluation_helper_accepts_single_file_workflow_references`
+  - `.venv/bin/python -m pytest -q tests/unit/test_stdlib_and_extensions.py::test_company_helpers_write_bounded_company_operation_snapshot_without_mutating_autoloop_state tests/unit/test_stdlib_and_extensions.py::test_diagnostics_helper_snapshots_selected_workflow_run_history_via_shared_resolution_and_run_discovery tests/unit/test_stdlib_and_extensions.py::test_evaluation_helper_validates_eval_cases_via_selected_workflow_snapshot_and_loader_paths tests/unit/test_stdlib_and_extensions.py::test_adaptation_helpers_accept_single_file_workflow_references`
+
+Open issues / next step
+
+- Out-of-scope doc/template assertions remain for later phases.
+- This phase’s helper coverage is now materially stronger for non-package workflow origins, and it is ready for audit.
