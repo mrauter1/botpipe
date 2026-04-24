@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T214122Z-85956296" ts="2026-04-24T21:41:22.813424+00:00" />
+Cycle 4 planning chooses prompt-contract compaction across the current builder, selected-workflow, governance, and company-level workflow family because prompt duplication now outweighs any missing-workflow gap after the validation and params cleanup waves.
+Keep this cycle doc-and-prompt local only; do not add runtime prompt injection, a shared prompt renderer, new root authoring primitives, or a new workflow package for this cleanup.
+If implementation scope needs trimming, prioritize the current workflow family above the older domain prompts so proof stays concentrated on the prompt suites that already pin this surface.

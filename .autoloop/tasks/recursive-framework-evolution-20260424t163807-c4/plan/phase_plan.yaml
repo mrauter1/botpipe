@@ -1,4 +1,126 @@
 version: 1
 task_id: recursive-framework-evolution-20260424t163807-c4
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/runs/run-20260424T214122Z-85956296/request.md
-phases: []
+phases:
+- phase_id: prompt-contract-doctrine
+  title: Define Compact Prompt Contract Style
+  objective: Freeze the compact prompt-contract doctrine and the shared README boundary
+    for the current workflow family without changing runtime behavior.
+  status: planned
+  in_scope:
+  - Update docs/authoring.md with the compact prompt-contract doctrine, including
+    which instructions stay in each prompt and which family-wide notes should live
+    once in prompts/README.md.
+  - Standardize the prompt README contract for the builder, selected-workflow, governance,
+    and company-level workflow families.
+  - Keep the runtime/provider boundary explicit while avoiding any new runtime prompt
+    abstraction or template engine.
+  out_of_scope:
+  - CLI, runtime, provider, route-contract, or workflow topology changes.
+  - Prompt rewrites for older domain workflows outside the scoped family.
+  - Any new workflow package or root workflow authoring primitive.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: docs/authoring.md defines a compact prompt-contract style that preserves
+      artifact-first and route-safe guidance without widening the runtime-injected
+      contract.
+  - id: AC-2
+    text: The scoped workflow prompt READMEs carry the shared family-level contract
+      so the same runtime-boundary reminder does not need to be restated in every
+      prompt.
+  deliverables:
+  - Updated compact prompt-authoring doctrine in docs/authoring.md.
+  - Standardized prompts/README.md files for the scoped workflow family.
+  risks:
+  - README consolidation could remove a rule that only existed in one prompt unless
+    each family is reviewed against its current tests.
+  - Over-compaction could accidentally weaken provider-facing instructions if step-specific
+    boundaries are not kept explicit.
+  rollback:
+  - Revert docs/authoring.md and the scoped prompt README files together if the compact
+    contract boundary proves unclear.
+  - Keep runtime and workflow code untouched while this doctrine phase is validated.
+- phase_id: prompt-surface-migration
+  title: Migrate Prompt Files
+  objective: Rewrite the scoped prompt files into the compact contract style while
+    preserving artifact names, route intent, and step boundaries.
+  status: planned
+  in_scope:
+  - Rewrite prompt markdown for workflow_idea_to_workflow_package, task_to_candidate_workflow_set,
+    task_to_workflow_strategy, candidate_workflow_to_adapted_execution_plan, workflow_to_eval_suite,
+    workflow_run_history_to_failure_modes, workflow_portfolio_to_operating_system,
+    company_operation_to_recursive_improvement_cycle, workflow_and_eval_to_refined_workflow_package,
+    and workflow_package_to_composable_building_blocks.
+  - Replace repeated artifact read/write bullet blocks with compact tables where they
+    materially shorten the prompt.
+  - Keep verifier evidence expectations, forbidden actions, and route boundaries explicit
+    under the new structure.
+  out_of_scope:
+  - Changing prompt file paths, step names, artifact names, or workflow transitions.
+  - Introducing shared prompt rendering machinery or runtime-injected prose.
+  - Prompt compaction for the older domain workflow family unless a trivial wording
+    sync is mechanically safe.
+  dependencies:
+  - prompt-contract-doctrine
+  acceptance_criteria:
+  - id: AC-1
+    text: All scoped prompt files keep the same artifact contract and route semantics,
+      but no longer rely on the older repeated scaffolding style.
+  - id: AC-2
+    text: The scoped workflow family uses a visibly consistent prompt structure that
+      is shorter to author and easier to scan.
+  deliverables:
+  - Updated prompt markdown files for the scoped workflow family.
+  - A reduced prompt boilerplate surface with repeated boundary text moved out of
+    individual prompts where safe.
+  risks:
+  - Large file count increases the chance of inconsistent style or missed step-specific
+    constraints.
+  - Existing runtime tests may fail until their prompt-shape assertions are updated
+    in lockstep.
+  rollback:
+  - Revert prompt markdown and README changes together if the new structure weakens
+    any step contract.
+  - Avoid partial family migration without an explicit deferral note.
+- phase_id: proof-docs-memory-closeout
+  title: Proof And Memory Sync
+  objective: Update prompt-facing tests, validate the scoped workflow family, and
+    sync recursive memory with the prompt-authoring consolidation outcome.
+  status: planned
+  in_scope:
+  - Update runtime tests that pin prompt README and prompt-file structure for the
+    scoped workflow family.
+  - Run targeted proof for the affected workflow suites and tests/test_architecture_baseline_docs.py.
+  - Update framework_roadmap.md, framework_gap_ledger.md, workflow_candidate_ledger.md,
+    and validation_debt_ledger.md with the cycle outcome and remaining deferred debt.
+  - Record files added/deleted, expected net line movement, and repeated prompt sections
+    shortened in implementation closeout.
+  out_of_scope:
+  - Claiming any CLI, runtime, provider, or ctx.invoke_workflow compatibility change.
+  - Editing verifier-owned criteria.md.
+  - Adding a new workflow or a new runtime-owned prompt control surface.
+  dependencies:
+  - prompt-surface-migration
+  acceptance_criteria:
+  - id: AC-1
+    text: The targeted prompt-facing runtime suites and tests/test_architecture_baseline_docs.py
+      pass against the compact prompt surface.
+  - id: AC-2
+    text: Recursive memory records this cycle as prompt-authoring compaction with
+      no new workflow and no CLI/runtime/provider contract change.
+  deliverables:
+  - Updated runtime tests and baseline docs assertions.
+  - Verified targeted test run covering the scoped workflow family.
+  - Updated recursive-memory ledgers describing the prompt compaction outcome and
+    deferred follow-on work.
+  risks:
+  - Tests may still encode the old verbose headings and need careful assertion updates
+    rather than blunt deletions.
+  - Recursive memory could drift if it frames the cycle as a runtime change instead
+    of an authoring-surface cleanup.
+  rollback:
+  - Revert test and memory updates together with prompt changes if proof shows contract
+    loss or confusing prompt regressions.
+  - Do not land prompt compaction without passing prompt-facing proof for the scoped
+    family.
