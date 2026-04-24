@@ -557,3 +557,101 @@ Follow-up debt is limited to adding the same prompt-marker assertions to `test_w
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+---
+The review surfaced one concrete regression-risk gap in the test surface: four migrated workflow families still don’t pin the new prompt-body markers. I’m updating those suites now, then I’ll sync the phase test strategy and feedback artifacts to match the added coverage.
+
+The four front-door suites don’t currently test either the workflow-local prompt README shape or the migrated prompt-body headings. I’m adding lightweight contract checks that pin the new surface without overfitting to prompt prose or forcing identical optional sections across every file.
+
+I have the current prompt surfaces and README payload names in hand. The test shape is straightforward: one README contract test plus one prompt-body contract test per front-door suite, with shared common markers and suite-local route/artifact markers.
+
+The new assertions are in place. I’m running the four touched runtime suites first to catch any over-specific marker strings before I update the phase artifacts and closeout notes.
+
+The focused suites passed cleanly. I’m running the full scoped prompt-surface test slice now so the phase closeout reflects both the newly added front-door coverage and the already-migrated later-family coverage.
+
+Scope considered
+
+Phase-local prompt-surface migration only. I focused on the four front-door workflow families the reviewer flagged as still lacking prompt-body regression coverage: `workflow_idea_to_workflow_package`, `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, and `candidate_workflow_to_adapted_execution_plan`.
+
+What I analyzed
+
+I checked the active session state, the shared decisions ledger, the reviewer feedback, the existing prompt-facing runtime suites, and the already-updated later-family suites to match their testing style where it fit. I also inspected the current README payload tables and migrated prompt files so the new assertions pin the real compact contract surface rather than inventing a stricter one.
+
+What I changed
+
+I added README contract tests and prompt-body contract tests to:
+- `tests/runtime/test_workflow_builder_package.py`
+- `tests/runtime/test_task_to_candidate_workflow_set.py`
+- `tests/runtime/test_task_to_workflow_strategy.py`
+- `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
+
+The new assertions pin the shared README sections, the common prompt-body section/table markers, suite-local route and artifact markers, and absence of legacy `Read these artifacts` / `Write these artifacts` scaffolding. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-surface-migration/test_strategy.md), appended the test closeout to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-surface-migration/feedback.md), and recorded the non-obvious test boundary in `decisions.txt`.
+
+Key findings / decisions
+
+The main decision was to pin the common migrated prompt surface without forcing optional `## Evidence` headings in prompts where evidence expectations are still explicit under artifact checks or route guidance. Validation passed on both the focused slice and the full scoped prompt-surface slice:
+- Focused: `75 passed`
+- Full scoped slice plus baseline docs: `238 passed`
+
+Open issues / next step
+
+No blocking test gaps remain inside this phase scope. Older domain workflow prompt families are still out of scope and remain the next prompt-surface coverage expansion if the cycle continues.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+---
+Auditing the test-phase output now. I’m checking the four newly covered runtime suites against the phase contract, the shared decisions, and the recorded validation so I can decide whether any coverage or reliability gaps remain.
+
+The audit artifacts are still blank, so the remaining question is only whether the new assertions are appropriately scoped or too brittle. I’m spot-reviewing the added test shape now before I finalize the criteria and feedback.
+
+The added coverage is appropriately scoped and deterministic: it pins the migrated markdown contract without normalizing a behavior break or overreaching into runtime behavior. I’m marking the audit complete and recording that no additional findings were needed.
+
+Scope considered
+
+Phase-local audit of the `prompt-surface-migration` test work only. I reviewed the newly added front-door prompt coverage, the phase test strategy and feedback artifacts, the active session state, and the shared decisions that constrain how this prompt-surface work may be tested.
+
+What I analyzed
+
+I checked the four newly updated runtime suites against the phase objective and the reviewer-raised coverage gap, then compared their new assertions to the existing later-family prompt tests to see whether they were appropriately scoped, deterministic, and still aligned with the compact-contract doctrine. I also verified the recorded validation evidence and the explicit decision not to force optional `## Evidence` headings where evidence remains explicit through artifact checks or route guidance.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-surface-migration/criteria.md) to mark all audit gates satisfied and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-surface-migration/feedback.md).
+
+Key findings / decisions
+
+No blocking findings. The added tests close the previously identified front-door coverage gap, stay deterministic, and protect against the material prompt-surface regressions for this phase: loss of shared README contract sections, reintroduction of legacy scaffolding headings, and silent loss of step-local route or artifact markers.
+
+Open issues / next step
+
+No additional audit action is required inside this phase scope. Any further work would be out-of-scope expansion into the older domain workflow prompt family.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
