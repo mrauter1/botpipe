@@ -217,3 +217,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc105-7609-7b32-a756-5cfc9c07fdfa
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc105-7609-7b32-a756-5cfc9c07fdfa
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc105-7609-7b32-a756-5cfc9c07fdfa
+---
+I’m checking the changed helper seam and the current unit coverage first, then I’ll add only the missing regression tests that matter for future workflow migrations and document that coverage in the phase test artifacts.
+
+The highest-value gaps are around the compatibility hooks, not the happy paths. I’m adding coverage for custom error-message preservation, stricter list normalization modes, and the explicit bool opt-in on `require_positive_int(...)` so future workflow migrations can’t silently drift.
+
+The new coverage is in and syntactically clean. I’m updating the phase test artifacts now so the specific regression surfaces and the environment limits are explicit for the auditor.
+
+Scope considered
+
+- Phase-local test scope only: [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), and the test-phase artifacts under [.autoloop/tasks/recursive-framework-evolution-20260424t163807-c1/test/phases/shared-workflow-validation-seam](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c1/test/phases/shared-workflow-validation-seam).
+- I also checked the shared decisions and the implemented helper seam in [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py).
+
+What I analyzed
+
+- The new validation helpers against the copied workflow-local patterns they are meant to replace.
+- Existing added tests to find the remaining regression surfaces.
+- The compatibility hooks called out in the shared decisions: custom `error_message` propagation and `allow_bool=True` on `require_positive_int(...)`.
+
+What I changed
+
+- Expanded [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) with stricter regression coverage for:
+  `normalize_optional_string(...)` custom messages, `normalize_unique_strings(...)` order-preserving dedupe, `allow_none=False`, and `item_error_message` propagation.
+- Expanded [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) with coverage for the explicit `allow_bool=True` opt-in and mapping-list item failures routed through custom messages.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c1/test/phases/shared-workflow-validation-seam/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c1/test/phases/shared-workflow-validation-seam/feedback.md), and appended one test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c1/decisions.txt).
+
+Key findings / decisions
+
+- The biggest remaining test risk was not the happy path; it was silent drift in migration-compatibility behavior. The added tests now freeze those hooks explicitly.
+- Static validation passed with `python3 -m py_compile tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py`.
+
+Open issues / next step
+
+- `pytest` is not installed in this environment, and `pydantic` is unavailable for bare import-level smoke, so I could not run the unit suite here.
+- The next step is to execute the targeted unit tests in a dependency-complete environment so the new coverage runs, not just compiles.
