@@ -36,3 +36,7 @@
 {"ts": "2026-04-24T04:44:00.843347+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "workflow-to-eval-suite-package"}
 {"ts": "2026-04-24T04:45:35.264445+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "workflow-to-eval-suite-package"}
 {"ts": "2026-04-24T04:45:35.290616+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "workflow-to-eval-suite-package"}
+{"ts": "2026-04-24T04:45:35.348868+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 39, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-to-eval-suite-package", "phase_mode": "single"}
+{"ts": "2026-04-24T04:45:35.352997+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 40, "event_type": "phase_started", "phase_id": "cycle-seven-closeout", "phase_mode": "single"}
+{"ts": "2026-04-24T04:45:35.353962+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 41, "event_type": "pair_started", "pair": "implement", "phase_id": "cycle-seven-closeout"}
+{"ts": "2026-04-24T04:45:35.354068+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 42, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "cycle-seven-closeout"}

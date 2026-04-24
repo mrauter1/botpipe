@@ -14,13 +14,13 @@
       "cycle-seven-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "workflow-to-eval-suite-package"
+    "current_phase_index": 2,
+    "current_phase_id": "cycle-seven-closeout"
   },
   "phase_status": {
     "evaluation-helper-seam": "completed",
-    "workflow-to-eval-suite-package": "in_progress",
-    "cycle-seven-closeout": "planned"
+    "workflow-to-eval-suite-package": "completed",
+    "cycle-seven-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260424T034119Z-55e02f9a",
       "status": "in_progress",
       "ts": "2026-04-24T04:12:39.698953+00:00"
+    },
+    {
+      "phase_id": "workflow-to-eval-suite-package",
+      "run_id": "run-20260424T034119Z-55e02f9a",
+      "status": "completed",
+      "ts": "2026-04-24T04:45:35.347622+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "cycle-seven-closeout",
+      "run_id": "run-20260424T034119Z-55e02f9a",
+      "status": "in_progress",
+      "ts": "2026-04-24T04:45:35.352144+00:00"
     }
   ]
 }
