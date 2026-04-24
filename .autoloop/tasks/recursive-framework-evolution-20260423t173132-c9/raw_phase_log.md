@@ -566,3 +566,68 @@ No open test-audit issues remain for this phase-local scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe63-85bf-7412-b196-9aaebdfbe2a4
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbe63-85bf-7412-b196-9aaebdfbe2a4
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe63-85bf-7412-b196-9aaebdfbe2a4
+---
+I’m treating this as a scoped cycle-9 closeout: update the four standing memory files, refresh the baseline doc tests to match the shipped workflow and seam decisions, then run the targeted pytest proof. I’ll inspect the phase artifacts, current recursive-memory state, and the existing baseline assertions before editing anything.
+
+The repo is mid-migration and dirty well beyond this phase, so I’m keeping scope tight to the recursive-memory files, the architecture-baseline assertions, and the closeout notes. Next I’m reading the current memory ledgers, the baseline-doc tests, and the prior cycle-9 phase notes so the closeout reflects what actually shipped.
+
+I’ve confirmed the earlier cycle-9 phases already shipped the new workflow and the run-history seam; the closeout now needs to roll those facts into the standing memory and freeze them in the baseline-doc tests. I’m reading the rest of the baseline test file to see exactly where the cycle-9 assertions need to be added rather than guessing at the existing structure.
+
+The baseline test file currently stops at cycle 8, so the closeout needs one new set of cycle-9 assertions plus the deferred-status checks flipped to reflect that `workflow_run_history_to_failure_modes` is now shipped. I’m pulling the cycle-9 plan details and any existing helper/workflow test names from the repo so the proof command and memory updates line up with actual coverage.
+
+I have the exact proof surfaces now: helper seam, run-history workflow, builder/refinement regressions, and baseline docs. Before editing, I’m locating the cycle-8 tail sections in each standing-memory file so I can extend them cleanly into cycle 9 without disturbing the earlier baselines.
+
+I’ve reached the point where the remaining work is mechanical but exact-string sensitive: the recursive-memory files need cycle-9 sections added, the older status tests need to stop asserting that run-history diagnostics are still deferred, and the closeout notes need the final pytest proof recorded verbatim. I’m editing those files together so the memory text and baseline assertions stay in lockstep.
+
+The closeout text is in place; next I’m running the planned six-test proof to see whether the new cycle-9 strings match the actual shipped state or need adjustment. If the pass count or any exact assertion is off, I’ll correct the memory/docs and rerun before finalizing.
+
+The targeted proof is still running. I’ve already seen the early suites pass, and I’m waiting for the exact final count so the roadmap and baseline test stay truthful down to the string literal.
+
+The proof passed cleanly, but the total is `122 passed`, not the provisional `126` I wrote into the closeout text. I’m correcting the exact-string count now, then I’ll update the phase notes and decision ledger so the recorded baseline matches the actual run.
+
+I’ve corrected the proof count to the actual result. I’m rerunning the same six-test command once more so the final state includes a clean confirmation after the closeout text and assertions were updated.
+
+The code path work is done; I’m finishing the phase bookkeeping now. That means freezing the non-obvious closeout decisions under this turn’s decision header and updating the phase implementation notes with the exact validation command/result, without touching anything outside the phase scope.
+
+The phase artifacts are updated now. I’m doing one last scoped review of the diff and the new cycle-9 sections to make sure the closeout only touched the intended files and that the final recorded proof line says `122 passed` everywhere it should.
+
+The scoped review looks consistent. One quirk of this checkout is that the active package-layout tree is largely untracked relative to the old git history, so I’m checking status on just the touched phase files to report the result accurately rather than pretending it’s a clean tracked diff.
+
+Scope considered
+
+- Limited to cycle-9 closeout state: the four `.autoloop_recursive` memory files, [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/implement/phases/cycle-nine-closeout/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/decisions.txt).
+- Left runtime/workflow code and `recursive_autoloop/` untouched.
+
+What I analyzed
+
+- The cycle-9 plan, prior phase implementation notes and feedback, the current recursive-memory baseline through cycle 8, and the exact-string baseline-doc tests.
+
+What I changed
+
+- Added cycle-9 baseline/outcome/closeout entries to `.autoloop_recursive/framework_evolution_charter.md`, `.autoloop_recursive/framework_roadmap.md`, `.autoloop_recursive/framework_gap_ledger.md`, and `.autoloop_recursive/workflow_candidate_ledger.md`.
+- Promoted `workflow_run_history_to_failure_modes` from deferred to shipped and moved the next deferred follow-on to `workflow_portfolio_to_operating_system`.
+- Extended [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) with cycle-9 assertions and updated the deferred-status checks so run-history diagnostics are no longer treated as deferred.
+- Recorded the exact closeout proof and bookkeeping in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/implement/phases/cycle-nine-closeout/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/decisions.txt).
+
+Key findings / decisions
+
+- The authoritative cycle-9 closeout proof is the planned six-test subset, and the exact recorded result is `122 passed`.
+- This checkout still shows the recursive-memory files and `tests/test_architecture_baseline_docs.py` as untracked relative to the older git layout; I kept scope inside those active paths and did not touch unrelated migration debris.
+
+Open issues / next step
+
+- `workflow_portfolio_to_operating_system` remains the clearest deferred follow-on.
+- Validation passed: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py` -> `122 passed in 7.62s`.
