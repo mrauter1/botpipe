@@ -205,3 +205,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=refinement-surface-seam,workflow-and-eval-to-refined-workflow-package,cycle-eight-closeout
+explicit=True
+current_phase_index=0
