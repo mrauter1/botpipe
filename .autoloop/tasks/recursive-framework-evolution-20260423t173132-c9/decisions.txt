@@ -16,3 +16,5 @@ The test phase freezes two publish-boundary guards as regressions: `diagnostic_n
 <autoloop-decisions-header version="1" block_seq="6" owner="implementer" phase_id="cycle-nine-closeout" pair="implement" turn_seq="1" run_id="run-20260424T062640Z-13174b0c" ts="2026-04-24T07:28:06.081466+00:00" />
 Cycle 9 closeout freezes `workflow_run_history_to_failure_modes` as shipped in recursive memory and exact-string baseline tests; current deferred-idea assertions must now point at `workflow_portfolio_to_operating_system` instead of leaving run-history diagnostics deferred.
 The authoritative cycle-9 closeout proof remains the six-test subset from `plan/plan.md`, and the recorded exact result is `122 passed`.
+<autoloop-decisions-header version="1" block_seq="7" owner="test_author" phase_id="cycle-nine-closeout" pair="test" turn_seq="1" run_id="run-20260424T062640Z-13174b0c" ts="2026-04-24T07:38:10.104154+00:00" />
+Cycle 9 closeout test coverage freezes the exact `122 passed` proof string and rejects the earlier provisional `126 passed` count so roadmap drift is caught immediately.
