@@ -337,3 +337,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+---
+I’m checking the existing phase-local test artifacts first, then I’ll add one more boundary-focused regression test so the lightweight snapshot and the richer importing snapshot are explicitly separated under failure conditions as well as happy paths.
+
+The current coverage already has the happy paths. I’m adding the missing failure-path assertion now: lightweight portfolio snapshots must still succeed when a workflow package is not importable, while the rich capability snapshot should fail because it intentionally imports.
+
+The new test is in place. I’m running the focused suite around the capability seam again before I write the phase-local strategy and feedback artifacts.
+
+The regression surface is clean. I’m writing the coverage map now, including the new failure-path distinction between the lightweight non-importing snapshot and the richer importing capability snapshot.
+
+I’ve finished the phase-local test work. I’m pulling the exact line references for the new regression test and the updated test artifacts so the close-out stays concrete.
+
+Scope considered
+
+- Phase-local `workflow-capability-snapshot-seam` only.
+- Changed seam/tests plus adjacent regression surface: rich inspection, lightweight portfolio snapshot, front-door workflow preservation, and docs baseline coverage.
+
+What I analyzed
+
+- Existing capability-seam coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:185) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:193).
+- The phase intent and preserved invariants recorded in the shared decisions and implementation notes.
+- The test-phase artifacts in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/test/phases/workflow-capability-snapshot-seam/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/test/phases/workflow-capability-snapshot-seam/feedback.md:1).
+
+What I changed
+
+- Added one failure-path regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:351) that proves the boundary explicitly: lightweight portfolio snapshots stay non-importing and still work on broken workflow packages, while capability snapshots fail because they intentionally import.
+- Updated the phase-local coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/test/phases/workflow-capability-snapshot-seam/test_strategy.md:10).
+- Appended the test-phase summary in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/test/phases/workflow-capability-snapshot-seam/feedback.md:10).
+
+Key findings / decisions
+
+- The existing happy-path coverage was already solid; the missing gap was the failure-path distinction between the lightweight non-importing seam and the richer importing seam.
+- The focused suite passed after the added regression test:
+  `.venv/bin/pytest -q tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py`
+  Result: `68 passed`.
+
+Open issues / next step
+
+- No open test blocker from this phase-local slice.
+- The next phase can consume the new capability snapshot seam with better confidence that it will not accidentally collapse the original lightweight discovery/snapshot behavior.
