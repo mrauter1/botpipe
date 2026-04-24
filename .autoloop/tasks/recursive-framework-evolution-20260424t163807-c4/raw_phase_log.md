@@ -375,3 +375,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc17a-80ae-75e2-9480-bb9099f81383
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc17a-80ae-75e2-9480-bb9099f81383
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc17a-80ae-75e2-9480-bb9099f81383
+---
+I’m auditing the phase-local test work against the prompt-contract phase scope, the shared decisions, and the new test surface that was added for the README contract. Then I’ll update only the test audit artifacts under `.autoloop/tasks/.../test/`.
+
+I’m not seeing a material coverage or reliability gap in the added test work. I’m marking the audit criteria complete and recording a no-findings audit entry in the phase feedback artifact.
+
+Scope considered
+
+- Phase-local test audit for `prompt-contract-doctrine`.
+- The new baseline-doc assertion in `tests/test_architecture_baseline_docs.py`, the existing prompt README tests it complements, the scoped README surfaces, the shared decisions, and the phase-local `test_strategy.md` / `feedback.md`.
+
+What I analyzed
+
+- The prompt-contract phase scope and acceptance criteria.
+- The added coverage for shared README route/payload table markers across all scoped prompt READMEs.
+- The stated preserved invariants: docs-and-README scope only, narrow runtime-injected contract, and no prompt-body rewrites in this phase.
+
+What I reviewed
+
+- Coverage quality: whether the added baseline-doc assertion closes the remaining README-family coverage gap.
+- Regression protection: whether the tests would fail if the shared README contract tables or reserved-route reminders were removed.
+- Edge and failure paths: whether missing sections, route tables, payload tables, and doctrine markers are covered.
+- Reliability: whether the tests rely only on deterministic file content checks and avoid timing/order/environment flake.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings beyond a recorded no-findings audit note.
+- I updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-contract-doctrine/criteria.md` to mark all audit criteria satisfied.
+- I appended a stable no-findings audit entry to `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/prompt-contract-doctrine/feedback.md`.
+
+Open issues / next step
+
+- No test-audit action remains for this phase.
+- Later phases can add prompt-body assertions if prompt-body compaction is brought into scope; this phase’s coverage is correctly limited to doctrine and README-boundary regressions.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
