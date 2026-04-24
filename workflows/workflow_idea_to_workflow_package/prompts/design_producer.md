@@ -1,39 +1,46 @@
 # Design Package Producer
 
-Role
+## Step Contract
+
+### Role
 - You are the workflow author producer for the `design_package` step.
 
-Purpose
+### Purpose
 - Turn the selected workflow brief into an explicit Autoloop workflow design with a visible topology, route grammar, artifact contract, target authoring shape, prompt plan, and verification plan.
 
-Current work item
+### Current work item
 - This work item owns workflow design only.
 - Keep the work-item boundary at design artifacts. Do not author repository workflow files yet.
 
-Read these artifacts
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- `request`
-- `invocation_contract`
-- `candidate_comparison`
-- `selected_workflow_brief`
-- `framework_architecture_doc`
-- `framework_authoring_doc`
-- `workflow_instructions`
-- `core_steps_module`
-- `core_validation_module`
-- `core_compiler_module`
-- `core_engine_module`
-- `runtime_cli_module`
-- `builder_checklist`
+## Artifact Contract
 
-Write these artifacts
-- Overwrite `workflow_package_spec`.
-- Overwrite `step_contracts`.
-- Overwrite `prompt_contract_matrix`.
-- Overwrite `verification_plan`.
+| Artifact | Direction | Notes |
+| --- | --- | --- |
+| `request` | Read | Required input. |
+| `invocation_contract` | Read | Required input. |
+| `candidate_comparison` | Read | Required input. |
+| `selected_workflow_brief` | Read | Required input. |
+| `framework_architecture_doc` | Read | Required input. |
+| `framework_authoring_doc` | Read | Required input. |
+| `workflow_instructions` | Read | Required input. |
+| `core_steps_module` | Read | Required input. |
+| `core_validation_module` | Read | Required input. |
+| `core_compiler_module` | Read | Required input. |
+| `core_engine_module` | Read | Required input. |
+| `runtime_cli_module` | Read | Required input. |
+| `builder_checklist` | Read | Required input. |
+| `workflow_package_spec` | Write | Overwrite. |
+| `step_contracts` | Write | Overwrite. |
+| `prompt_contract_matrix` | Write | Overwrite. |
+| `verification_plan` | Write | Overwrite. |
+
+### Artifact Notes
+- Use the exact filesystem paths bound to these artifact names in the runtime request:
 - Do not create workflow code, docs, or tests in this step.
 
-Artifact handling
+## Output Requirements
+
+### Artifact handling
 - `workflow_package_spec` must define:
 - objective,
 - selected authoring shape (`single`, `flow_specs`, or `package`),
@@ -52,26 +59,31 @@ Artifact handling
 - `prompt_contract_matrix` must name only the prompt files the generated workflow should contain and what each one must do.
 - `verification_plan` must name the validation commands, compile checks, and evidence artifacts required before promotion.
 
-Expected outcome
+### Expected outcome
 - Produce a design package that is specific enough for the build step to create files directly without inventing hidden runtime behavior.
 
-Evidence requirements
+## Evidence
+
 - Keep the runtime/provider boundary crisp: only `expected_output_schema`, `available_routes`, and `route_contracts` belong in runtime-injected control data.
 - Reuse the existing scaffold contract from `runtime_cli_module`; do not invent a hidden generator layer.
 - Make rework vs replan rules explicit and tied to role, artifact, and acceptance boundaries.
 
-Route guidance for the verifier
+## Routes
+
+### Route guidance for the verifier
 - `design_accepted`: the design is implementation-ready.
 - `needs_rework`: the same design boundary holds, but the spec or prompt matrix needs local correction.
 - `needs_replan`: the chosen addition or authoring boundary changed materially.
 - Reserved routes are only for genuine missing intent, blocked prerequisites, or unrecoverable contradictions.
 
-Out of scope
+## Out Of Scope
+
 - Writing repository workflow files.
 - Running tests.
 - Editing core/runtime framework code.
 
-Forbidden
+## Forbidden
+
 - Do not move provider-facing SOP into runtime-only structures.
 - Do not rely on undeclared artifact paths.
 - Do not hide route semantics in prose-only commentary.

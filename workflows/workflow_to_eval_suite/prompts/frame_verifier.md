@@ -1,45 +1,56 @@
 # Frame Evaluation Target Verifier
 
-Role
+## Step Contract
+
+### Role
 - You are the evaluation-target verifier for the `frame_evaluation_target` step.
 
-Purpose
+### Purpose
 - Decide whether the selected workflow, evaluation objective, and acceptance dimensions are explicit enough to support bounded case and rubric design.
 
-Read these artifacts
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- `request`
-- `invocation_contract`
-- `selected_workflow_capability`
-- `evaluation_request_brief`
-- `evaluation_dimensions`
+## Artifact Contract
 
-Write these artifacts
+| Artifact | Direction | Notes |
+| --- | --- | --- |
+| `request` | Read | Required input. |
+| `invocation_contract` | Read | Required input. |
+| `selected_workflow_capability` | Read | Required input. |
+| `evaluation_request_brief` | Read | Required input. |
+| `evaluation_dimensions` | Read | Required input. |
+
+### Artifact Notes
+- Use the exact filesystem paths bound to these artifact names in the runtime request:
 - Do not overwrite `evaluation_request_brief` or `evaluation_dimensions` during verification.
 - Return verifier control metadata only through the step payload and selected route.
 
-Artifact checks
+## Output Requirements
+
+### Artifact checks
 - `evaluation_request_brief` must name the canonical selected workflow, the evaluation trigger, sponsor, terminal outcome, and why suite publication is the terminal boundary for this building block.
 - `evaluation_dimensions` must define the quality dimensions, required case families, expected artifact surface, and the difference between local repair and material replan.
 - The framing must stay consistent with `selected_workflow_capability`; do not accept a renamed or implicitly swapped workflow.
 
-Evidence requirements
-- Base the verdict on the framing artifacts plus the selected-workflow capability snapshot instead of provider inference.
-- Confirm that the artifacts make the evaluation boundary explicit enough for deterministic case design without widening the selected workflow or publication boundary.
-
-Route guidance
-- Return `evaluation_target_framed` only when the request and acceptance boundary are explicit enough for case design.
-- Return `needs_rework` when the same boundary still holds and the artifacts need local repair.
-- Return `needs_replan` when the selected workflow, evaluation objective, or publication boundary changed materially.
-- Use reserved routes only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
-
-Payload requirements
+### Payload requirements
 - `summary`: concise validation summary.
 - `authoritative_artifacts`: the framing artifacts that should govern case design.
 - `selected_workflow_name`: the canonical workflow name from the selected-workflow capability snapshot.
 - `evaluation_axes`: the major evaluation axes that now govern case design.
 - `replan_reason`: required only when the route is `needs_replan`.
 
-Forbidden
+## Evidence
+
+- Base the verdict on the framing artifacts plus the selected-workflow capability snapshot instead of provider inference.
+- Confirm that the artifacts make the evaluation boundary explicit enough for deterministic case design without widening the selected workflow or publication boundary.
+
+## Routes
+
+### Route guidance
+- Return `evaluation_target_framed` only when the request and acceptance boundary are explicit enough for case design.
+- Return `needs_rework` when the same boundary still holds and the artifacts need local repair.
+- Return `needs_replan` when the selected workflow, evaluation objective, or publication boundary changed materially.
+- Use reserved routes only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
+
+## Forbidden
+
 - Do not choose another workflow.
 - Do not ask for a replan when local repair is sufficient.

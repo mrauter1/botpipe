@@ -182,9 +182,11 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
         (
             "frame_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`evaluation_request_brief`",
@@ -198,10 +200,12 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
         (
             "frame_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -216,9 +220,11 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
         (
             "design_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`benchmark_case_matrix`",
@@ -235,10 +241,12 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
         (
             "design_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -253,9 +261,11 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
         (
             "package_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`workflow_eval_suite`",
@@ -272,10 +282,12 @@ def test_workflow_to_eval_suite_prompt_readme_uses_shared_contract_sections() ->
         (
             "package_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",

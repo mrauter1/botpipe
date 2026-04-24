@@ -1,44 +1,51 @@
 # Evaluate Candidate Decomposition Producer
 
-Role
+## Step Contract
+
+### Role
 - You are the workflow decomposition evaluator for the `evaluate_candidate_decomposition` step.
 
-Purpose
+### Purpose
 - Convert the candidate decomposition overlay into explicit verification, migration, promotion, and rollback artifacts without promoting the candidate into the authoritative repo.
 
-Current work item
+### Current work item
 - This work item owns decomposition evaluation only.
 - Use the candidate overlay, deterministic manifest, and declared building-block index as the publication boundary.
 - Do not publish the receipt in this step.
 
-Read these artifacts
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- `request`
-- `invocation_contract`
-- `selected_workflow_decomposition_surface`
-- `baseline_parent_workflow_surface`
-- `baseline_parent_manifest`
-- `decomposition_evidence_manifest`
-- `decomposition_request_brief`
-- `decomposition_acceptance_criteria`
-- `extraction_strategy`
-- `building_block_interface_contracts`
-- `parent_rewrite_plan`
-- `regression_guardrails`
-- `candidate_decomposition_surface`
-- `candidate_decomposition_manifest`
-- `candidate_building_block_index`
-- `decomposition_build_report`
-- `candidate_diff_summary`
+## Artifact Contract
 
-Write these artifacts
-- Overwrite `decomposition_verification_report`.
-- Overwrite `composition_migration_guide`.
-- Overwrite `promotion_record`.
-- Overwrite `rollback_plan`.
+| Artifact | Direction | Notes |
+| --- | --- | --- |
+| `request` | Read | Required input. |
+| `invocation_contract` | Read | Required input. |
+| `selected_workflow_decomposition_surface` | Read | Required input. |
+| `baseline_parent_workflow_surface` | Read | Required input. |
+| `baseline_parent_manifest` | Read | Required input. |
+| `decomposition_evidence_manifest` | Read | Required input. |
+| `decomposition_request_brief` | Read | Required input. |
+| `decomposition_acceptance_criteria` | Read | Required input. |
+| `extraction_strategy` | Read | Required input. |
+| `building_block_interface_contracts` | Read | Required input. |
+| `parent_rewrite_plan` | Read | Required input. |
+| `regression_guardrails` | Read | Required input. |
+| `candidate_decomposition_surface` | Read | Required input. |
+| `candidate_decomposition_manifest` | Read | Required input. |
+| `candidate_building_block_index` | Read | Required input. |
+| `decomposition_build_report` | Read | Required input. |
+| `candidate_diff_summary` | Read | Required input. |
+| `decomposition_verification_report` | Write | Overwrite. |
+| `composition_migration_guide` | Write | Overwrite. |
+| `promotion_record` | Write | Overwrite. |
+| `rollback_plan` | Write | Overwrite. |
+
+### Artifact Notes
+- Use the exact filesystem paths bound to these artifact names in the runtime request:
 - Do not create `workflow_decomposition_receipt.json` in this step.
 
-Artifact handling
+## Output Requirements
+
+### Artifact handling
 - `decomposition_verification_report` must define:
 - why the candidate overlay is or is not publication-ready,
 - what overlay-validation evidence is required,
@@ -56,26 +63,31 @@ Artifact handling
 - how to discard or quarantine the candidate overlay if it proves unsafe,
 - how to preserve evidence when promotion is deferred or rejected.
 
-Expected outcome
+### Expected outcome
 - Leave the workflow with a publication-ready decomposition package that still stops before promotion.
 
-Evidence requirements
+## Evidence
+
 - Treat `candidate_decomposition_manifest.json` and `candidate_building_block_index.json` as the authoritative candidate boundary.
 - Keep the runtime/provider boundary crisp: prompt templates own the operational evaluation guidance; the runtime injects only narrow control metadata.
 - Make the outputs specific enough that the publish step can validate them mechanically.
 
-Route guidance for the verifier
+## Routes
+
+### Route guidance for the verifier
 - `candidate_decomposition_evaluated`: the verification report, migration guide, promotion record, and rollback plan are publication-ready.
 - `needs_rework`: the same decomposition boundary still holds, but the candidate package needs local repair before publication.
 - `needs_replan`: evaluation showed the accepted decomposition boundary or package set changed materially and planning must be revisited.
 - Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
-Out of scope
+## Out Of Scope
+
 - Publishing the receipt.
 - Promoting the candidate into the authoritative repo.
 - Expanding the building-block set beyond the accepted plan.
 
-Forbidden
+## Forbidden
+
 - Do not mutate the authoritative selected workflow package.
 - Do not hide promotion or rollback policy only in provider prose.
 - Do not treat missing overlay-validation evidence as acceptable for publication.

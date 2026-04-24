@@ -178,9 +178,11 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
         (
             "frame_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`workflow_portfolio_health_snapshot`",
@@ -195,10 +197,12 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
         (
             "frame_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -213,9 +217,11 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
         (
             "analyze_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`workflow_lifecycle_matrix`",
@@ -230,10 +236,12 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
         (
             "analyze_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -248,9 +256,11 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
         (
             "package_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`workflow_portfolio_operating_system`",
@@ -267,10 +277,12 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
         (
             "package_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",

@@ -1,35 +1,42 @@
 # Package Portfolio Operating System Producer
 
-Role
+## Step Contract
+
+### Role
 - You are the portfolio operating-system packager for the `package_portfolio_operating_system` step.
 
-Purpose
+### Purpose
 - Turn the lifecycle analysis into a terminal governance package, a machine-readable summary, and explicit next actions that stop at operating-system publication.
 
-Current work item
+### Current work item
 - This work item owns governance packaging only.
 - Keep the boundary at publication-ready governance artifacts and explicit next actions. Do not execute downstream workflows in this step.
 
-Read these artifacts
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- `request`
-- `invocation_contract`
-- `workflow_capability_snapshot`
-- `workflow_portfolio_health_snapshot`
-- `portfolio_operating_system_checklist`
-- `portfolio_governance_brief`
-- `portfolio_decision_criteria`
-- `workflow_lifecycle_matrix`
-- `portfolio_gap_analysis`
-- `portfolio_change_candidates`
+## Artifact Contract
 
-Write these artifacts
-- Overwrite `workflow_portfolio_operating_system`.
-- Overwrite `portfolio_operating_summary`.
-- Overwrite `portfolio_next_actions`.
+| Artifact | Direction | Notes |
+| --- | --- | --- |
+| `request` | Read | Required input. |
+| `invocation_contract` | Read | Required input. |
+| `workflow_capability_snapshot` | Read | Required input. |
+| `workflow_portfolio_health_snapshot` | Read | Required input. |
+| `portfolio_operating_system_checklist` | Read | Required input. |
+| `portfolio_governance_brief` | Read | Required input. |
+| `portfolio_decision_criteria` | Read | Required input. |
+| `workflow_lifecycle_matrix` | Read | Required input. |
+| `portfolio_gap_analysis` | Read | Required input. |
+| `portfolio_change_candidates` | Read | Required input. |
+| `workflow_portfolio_operating_system` | Write | Overwrite. |
+| `portfolio_operating_summary` | Write | Overwrite. |
+| `portfolio_next_actions` | Write | Overwrite. |
+
+### Artifact Notes
+- Use the exact filesystem paths bound to these artifact names in the runtime request:
 - Do not create `portfolio_operating_system_receipt.json` in this step.
 
-Artifact handling
+## Output Requirements
+
+### Artifact handling
 - `workflow_portfolio_operating_system` must be markdown and include explicit sections for:
 - `## Keep`
 - `## Refine`
@@ -52,26 +59,31 @@ Artifact handling
 - `workflow_name`.
 - `portfolio_next_actions` must make the next human or workflow handoff explicit while keeping the boundary at recommendations only.
 
-Expected outcome
+### Expected outcome
 - Leave the workflow with a publication-ready governance package that another operator or workflow can consume without re-reading the raw portfolio evidence.
 
-Evidence requirements
+## Evidence
+
 - Keep the package aligned with `workflow_lifecycle_matrix` and `portfolio_change_candidates`.
 - Make create-next, merge, and retire decisions explicit even when the answer is "none this cycle".
 - Keep the boundary explicit: this workflow publishes governance and next actions only.
 
-Route guidance for the verifier
+## Routes
+
+### Route guidance for the verifier
 - `portfolio_operating_system_ready`: the governance package, JSON summary, and next-actions artifact are aligned and ready for deterministic publication.
 - `needs_rework`: the same packaging boundary still holds, but one or more packaging artifacts need local repair.
 - `needs_replan`: the package no longer matches the analyzed operating model and lifecycle analysis must be revisited.
 - Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
-Out of scope
+## Out Of Scope
+
 - Executing the next workflow.
 - Mutating workflow packages.
 - Writing the publication receipt.
 
-Forbidden
+## Forbidden
+
 - Do not create `portfolio_operating_system_receipt.json` in this step.
 - Do not imply automatic downstream execution.
 - Do not replace explicit artifacts with prose-only recommendations.

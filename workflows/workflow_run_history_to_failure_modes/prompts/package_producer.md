@@ -1,36 +1,43 @@
 # Package Improvement Pressure Producer
 
-Role
+## Step Contract
+
+### Role
 - You are the improvement strategist for the `package_improvement_pressure` step.
 
-Purpose
+### Purpose
 - Turn the mapped failure modes and recurring weak points into a ranked improvement package, a machine-readable summary, and explicit next actions that stop at diagnostic publication.
 
-Current work item
+### Current work item
 - This work item owns improvement packaging only.
 - Keep the boundary at ranked opportunities, explicit next actions, and the terminal diagnostic package for this building block.
 - Do not auto-run refinement, portfolio governance, or selected-workflow execution in this step.
 
-Read these artifacts
-- Use the exact filesystem paths bound to these artifact names in the runtime request:
-- `request`
-- `invocation_contract`
-- `selected_workflow_capability`
-- `selected_workflow_run_history`
-- `failure_mode_diagnostic_checklist`
-- `diagnostic_scope_brief`
-- `run_history_scope`
-- `failure_mode_map`
-- `failure_mode_manifest`
-- `recurring_weak_points`
+## Artifact Contract
 
-Write these artifacts
-- Overwrite `improvement_opportunities`.
-- Overwrite `improvement_opportunities_summary`.
-- Overwrite `diagnostic_next_actions`.
+| Artifact | Direction | Notes |
+| --- | --- | --- |
+| `request` | Read | Required input. |
+| `invocation_contract` | Read | Required input. |
+| `selected_workflow_capability` | Read | Required input. |
+| `selected_workflow_run_history` | Read | Required input. |
+| `failure_mode_diagnostic_checklist` | Read | Required input. |
+| `diagnostic_scope_brief` | Read | Required input. |
+| `run_history_scope` | Read | Required input. |
+| `failure_mode_map` | Read | Required input. |
+| `failure_mode_manifest` | Read | Required input. |
+| `recurring_weak_points` | Read | Required input. |
+| `improvement_opportunities` | Write | Overwrite. |
+| `improvement_opportunities_summary` | Write | Overwrite. |
+| `diagnostic_next_actions` | Write | Overwrite. |
+
+### Artifact Notes
+- Use the exact filesystem paths bound to these artifact names in the runtime request:
 - Do not create `failure_mode_diagnostic_receipt.json` in this step.
 
-Artifact handling
+## Output Requirements
+
+### Artifact handling
 - `improvement_opportunities` must rank the concrete opportunities by priority, link them to the failure modes they address, and explain expected impact.
 - `improvement_opportunities_summary` must be valid JSON and define:
 - `selected_workflow_name`,
@@ -45,26 +52,31 @@ Artifact handling
 - `workflow_name`.
 - `diagnostic_next_actions` must state that this workflow stops at diagnostic publication and recommend explicit downstream options without implying hidden runtime execution.
 
-Expected outcome
+### Expected outcome
 - Leave the workflow with a publication-ready improvement package that another operator or workflow can consume without re-reading the raw run history.
 
-Evidence requirements
+## Evidence
+
 - Rank opportunities from the mapped failure modes and recurring weak points, not from generic best practices.
 - Tie every opportunity to explicit failure-mode IDs and evidence-backed leverage.
 - Keep the boundary explicit: this workflow publishes diagnostics and next actions only.
 
-Route guidance for the verifier
+## Routes
+
+### Route guidance for the verifier
 - `improvement_pressure_packaged`: the ranked package, machine-readable summary, and next-action artifact are aligned and ready for publication.
 - `needs_rework`: the same packaging boundary still holds, but the package artifacts need local repair.
 - `needs_replan`: the ranked package no longer matches the mapped failure surface and the workflow must revisit failure-mode mapping.
 - Reserved routes are only for true intent gaps, missing prerequisites, or irreconcilable contradictions.
 
-Out of scope
+## Out Of Scope
+
 - Executing the next workflow.
 - Mutating the selected workflow package.
 - Writing the publication receipt.
 
-Forbidden
+## Forbidden
+
 - Do not create `failure_mode_diagnostic_receipt.json` in this step.
 - Do not imply automatic downstream execution.
 - Do not replace explicit artifacts with prose-only recommendations.

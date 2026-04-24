@@ -6,3 +6,59 @@
 - Phase Directory Key: prompt-surface-migration
 - Phase Title: Migrate Prompt Files
 - Scope: phase-local producer artifact
+- Files changed:
+  - scoped prompt bodies under:
+    - `workflows/workflow_idea_to_workflow_package/prompts/*.md`
+    - `workflows/task_to_candidate_workflow_set/prompts/*.md`
+    - `workflows/task_to_workflow_strategy/prompts/*.md`
+    - `workflows/candidate_workflow_to_adapted_execution_plan/prompts/*.md`
+    - `workflows/workflow_to_eval_suite/prompts/*.md`
+    - `workflows/workflow_run_history_to_failure_modes/prompts/*.md`
+    - `workflows/workflow_portfolio_to_operating_system/prompts/*.md`
+    - `workflows/company_operation_to_recursive_improvement_cycle/prompts/*.md`
+    - `workflows/workflow_and_eval_to_refined_workflow_package/prompts/*.md`
+    - `workflows/workflow_package_to_composable_building_blocks/prompts/*.md`
+  - prompt-facing runtime tests:
+    - `tests/runtime/test_workflow_to_eval_suite.py`
+    - `tests/runtime/test_workflow_run_history_to_failure_modes.py`
+    - `tests/runtime/test_workflow_portfolio_to_operating_system.py`
+    - `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py`
+    - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
+    - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+  - recursive-memory ledgers under `.autoloop_recursive/`
+  - `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/decisions.txt`
+- Symbols touched:
+  - prompt section headings `## Step Contract`, `## Artifact Contract`, `## Output Requirements`, `## Evidence`, `## Routes`, `## Out Of Scope`, `## Forbidden`
+  - prompt-local artifact table surface `| Artifact | Direction | Notes |`
+- Checklist mapping:
+  - migrate scoped prompt markdown to the compact contract shape: done
+  - update prompt-facing proof to pin the new prompt-body contract: done
+  - recursive-memory sync for the phase outcome: done
+- Audit summary:
+  - most relevant existing surfaces: `task_to_workflow_strategy/prompts`, `workflow_and_eval_to_refined_workflow_package/prompts`, `workflow_package_to_composable_building_blocks/prompts`
+  - repeated patterns: the scoped family still repeated `Read these artifacts`, `Write these artifacts`, long step-local guardrail blocks, and verifier section scaffolding with only artifact names swapped
+  - simplification opportunity: keep step-local guidance explicit, but move the repeated section shape to a single prompt-body contract and replace artifact bullet lists with compact tables
+  - new workflow necessity: none
+  - cycle decision: authoring-surface cleanup only; rewrite prompt bodies and tests without runtime changes
+- Assumptions:
+  - the wrapper-injected session path `runs/run-20260424T214122Z-85956296/sessions/phases/prompt-surface-migration.json` was absent, so execution relied on the phase contract, plan, feedback, decisions ledger, and repo state as the authoritative inputs
+- Preserved invariants:
+  - no prompt file paths, step names, artifact names, route names, workflow transitions, CLI behavior, runtime/provider boundary, or `ctx.invoke_workflow(...)` behavior changed
+  - no runtime prompt renderer, prompt template engine, or root authoring primitive was added
+- Intended behavior changes:
+  - 66 scoped prompt bodies now use the same compact step-local section contract
+  - repeated `Read these artifacts` / `Write these artifacts` scaffolding is replaced by prompt-local artifact tables plus shared section headings
+  - prompt-facing tests now assert the new section/table markers while preserving artifact, route, and verifier-boundary checks
+- Known non-changes:
+  - workflow-local `prompts/README.md` shape from the earlier phase stayed unchanged
+  - older domain workflow prompt families remain deferred
+  - no docs under `docs/workflows/` were rewritten in this phase
+- Expected side effects:
+  - scoped prompt files are shorter and easier to scan without losing artifact names, route boundaries, or verifier payload expectations
+  - follow-on prompt cleanup can target older domain workflows against the same section contract without re-litigating runtime behavior
+- Validation performed:
+  - `rg` checks confirmed zero remaining `Read these artifacts` / `Write these artifacts` headings in the scoped prompt family after migration
+  - `.venv/bin/pytest -q tests/runtime/test_workflow_builder_package.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py` (`208 passed`)
+- Deduplication / centralization decisions:
+  - standardized the prompt-body surface at the markdown level instead of adding shared rendering/runtime machinery
+  - kept package-level shared reminders in workflow-local READMEs and step-local provider guidance in prompt files

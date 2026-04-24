@@ -185,9 +185,11 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
         (
             "frame_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`selected_workflow_run_history`",
@@ -202,10 +204,12 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
         (
             "frame_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -220,9 +224,11 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
         (
             "analyze_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`failure_mode_map`",
@@ -237,10 +243,12 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
         (
             "analyze_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -255,9 +263,11 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
         (
             "package_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`improvement_opportunities`",
@@ -273,10 +283,12 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
         (
             "package_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",

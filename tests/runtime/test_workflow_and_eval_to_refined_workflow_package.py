@@ -211,9 +211,11 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         (
             "frame_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`refinement_request_brief`",
@@ -227,10 +229,12 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         (
             "frame_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -245,9 +249,11 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         (
             "design_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`refinement_strategy`",
@@ -262,10 +268,12 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         (
             "design_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -280,9 +288,11 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         (
             "implement_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`candidate_workflow_surface`",
@@ -298,10 +308,12 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         (
             "implement_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -317,9 +329,11 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         (
             "evaluate_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`refinement_verification_report`",
@@ -336,10 +350,12 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         (
             "evaluate_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",

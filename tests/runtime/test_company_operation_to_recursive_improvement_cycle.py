@@ -217,9 +217,11 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
         (
             "frame_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`company_operation_snapshot`",
@@ -234,10 +236,12 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
         (
             "frame_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -252,9 +256,11 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
         (
             "analyze_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`company_pressure_map`",
@@ -269,10 +275,12 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
         (
             "analyze_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -287,9 +295,11 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
         (
             "package_producer.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
-                "Evidence requirements",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
+                "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
                 "`recursive_improvement_cycle`",
@@ -306,10 +316,12 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
         (
             "package_verifier.md",
             (
-                "Read these artifacts",
-                "Write these artifacts",
+                "## Step Contract",
+                "## Artifact Contract",
+                "| Artifact | Direction | Notes |",
+                "## Output Requirements",
                 "Artifact checks",
-                "Evidence requirements",
+                "## Evidence",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
