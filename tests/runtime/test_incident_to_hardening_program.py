@@ -178,6 +178,22 @@ def test_incident_hardening_prompt_readme_uses_shared_contract_sections() -> Non
         assert required in text
 
 
+def test_incident_hardening_prompt_inventory_matches_expected_contract_surface() -> None:
+    prompt_dir = REPO_ROOT / "workflows" / "incident_to_hardening_program" / "prompts"
+
+    assert sorted(path.name for path in prompt_dir.glob("*.md")) == [
+        "README.md",
+        "analysis_producer.md",
+        "analysis_verifier.md",
+        "evidence_producer.md",
+        "evidence_verifier.md",
+        "frame_producer.md",
+        "frame_verifier.md",
+        "program_producer.md",
+        "program_verifier.md",
+    ]
+
+
 @pytest.mark.parametrize(
     ("prompt_name", "required_markers"),
     (

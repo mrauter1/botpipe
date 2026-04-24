@@ -174,6 +174,22 @@ def test_release_go_no_go_prompt_readme_uses_shared_contract_sections() -> None:
         assert required in text
 
 
+def test_release_go_no_go_prompt_inventory_matches_expected_contract_surface() -> None:
+    prompt_dir = REPO_ROOT / "workflows" / "release_candidate_to_go_no_go" / "prompts"
+
+    assert sorted(path.name for path in prompt_dir.glob("*.md")) == [
+        "README.md",
+        "assessment_producer.md",
+        "assessment_verifier.md",
+        "evidence_producer.md",
+        "evidence_verifier.md",
+        "frame_producer.md",
+        "frame_verifier.md",
+        "package_producer.md",
+        "package_verifier.md",
+    ]
+
+
 @pytest.mark.parametrize(
     ("prompt_name", "required_markers"),
     (

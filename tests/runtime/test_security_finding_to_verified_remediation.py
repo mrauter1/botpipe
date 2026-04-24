@@ -181,6 +181,20 @@ def test_security_remediation_prompt_readme_uses_shared_contract_sections() -> N
         assert required in text
 
 
+def test_security_remediation_prompt_inventory_matches_expected_contract_surface() -> None:
+    prompt_dir = REPO_ROOT / "workflows" / "security_finding_to_verified_remediation" / "prompts"
+
+    assert sorted(path.name for path in prompt_dir.glob("*.md")) == [
+        "README.md",
+        "assessment_producer.md",
+        "assessment_verifier.md",
+        "closure_producer.md",
+        "closure_verifier.md",
+        "remediation_producer.md",
+        "remediation_verifier.md",
+    ]
+
+
 @pytest.mark.parametrize(
     ("prompt_name", "required_markers"),
     (

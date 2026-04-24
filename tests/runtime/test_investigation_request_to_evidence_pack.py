@@ -175,6 +175,18 @@ def test_investigation_evidence_pack_prompt_readme_uses_shared_contract_sections
         assert required in text
 
 
+def test_investigation_evidence_pack_prompt_inventory_matches_expected_contract_surface() -> None:
+    prompt_dir = REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack" / "prompts"
+
+    assert sorted(path.name for path in prompt_dir.glob("*.md")) == [
+        "README.md",
+        "evidence_producer.md",
+        "evidence_verifier.md",
+        "frame_producer.md",
+        "frame_verifier.md",
+    ]
+
+
 @pytest.mark.parametrize(
     ("prompt_name", "required_markers"),
     (

@@ -228,3 +228,60 @@ No open issues from review. The phase is complete as implemented and verified.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1b0-3b68-7791-8fa5-9d7059f89485
+---
+I’m treating this as the test-phase closeout for the prompt-surface migration: inspect the current prompt-facing coverage, look for any remaining regression gaps around the four older domain families, then update `test_strategy.md` and the phase feedback with the exact coverage map and any additions.
+
+The current prompt-shape assertions are good, but they don’t pin the prompt-file inventory itself. I’m adding one deterministic inventory test per touched runtime suite so future prompt-file additions/removals in these packages can’t slip past the phase coverage map.
+
+I added inventory assertions for the four prompt directories so the test phase now covers both prompt shape and prompt-file surface drift. I’m re-running the targeted suite before I write the phase test strategy and feedback summary.
+
+The targeted proof is green at `102 passed`. I’m recording the non-obvious test decision and the behavior-to-test map now so the phase artifacts reflect the exact regression surface these tests cover.
+
+Scope considered
+
+The test pass stayed phase-scoped to the four older-domain prompt families, their touched runtime suites, `tests/test_architecture_baseline_docs.py`, the shared decisions ledger, and the test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/test/phases/older-domain-prompt-surface-migration/`.
+
+What I analyzed
+
+I checked the current prompt-surface assertions already added in the four runtime suites, looked for remaining regression gaps against the accepted scope, and confirmed the shared README coverage in the baseline docs suite. The main uncovered risk was prompt-file inventory drift: future additions/removals in those prompt directories could bypass the new compact-contract assertions.
+
+What I changed
+
+I added one deterministic prompt-inventory test to each touched runtime suite:
+`tests/runtime/test_release_candidate_to_go_no_go.py`
+`tests/runtime/test_investigation_request_to_evidence_pack.py`
+`tests/runtime/test_security_finding_to_verified_remediation.py`
+`tests/runtime/test_incident_to_hardening_program.py`
+
+I also updated:
+`/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/test/phases/older-domain-prompt-surface-migration/test_strategy.md`
+`/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/test/phases/older-domain-prompt-surface-migration/feedback.md`
+
+and appended one test-phase decision to:
+`/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c5/decisions.txt`
+
+Key findings / decisions
+
+The non-obvious test decision was to pin exact prompt-file inventories per touched package rather than snapshotting full prompt prose. That catches path drift, silent prompt additions, and silent prompt removals while keeping the tests deterministic and non-brittle.
+
+Validation run:
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_incident_to_hardening_program.py tests/test_architecture_baseline_docs.py`
+
+Result: `102 passed`
+
+Open issues / next step
+
+No open issues from the test pass. Coverage now pins shared README sections, compact prompt markers, legacy scaffold removal, and prompt-file inventory for the four older-domain workflow families.

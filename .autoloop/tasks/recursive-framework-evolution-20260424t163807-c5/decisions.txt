@@ -4,3 +4,5 @@ Keep prompt file paths, step names, artifact names, route names, receipt filenam
 Treat selected-workflow serializer convergence as explicitly deferred follow-on work unless prompt migration reveals a blocking inconsistency that cannot be handled locally.
 <autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="older-domain-prompt-surface-migration" pair="implement" turn_seq="1" run_id="run-20260424T224329Z-a6be59a5" ts="2026-04-24T22:50:44.901315+00:00" />
 Keep the security-family README composition-aware by listing `compose_evidence_pack` as an explicit system step with no prompt files while standardizing only the prompt-owned README sections, prompt body markers, and prompt-facing tests.
+<autoloop-decisions-header version="1" block_seq="3" owner="test_author" phase_id="older-domain-prompt-surface-migration" pair="test" turn_seq="1" run_id="run-20260424T224329Z-a6be59a5" ts="2026-04-24T23:05:28.230320+00:00" />
+Pin exact prompt-file inventories in the four older-domain runtime suites so later prompt additions, removals, or path drift cannot bypass the compact-contract assertions while still avoiding brittle full-text snapshots.
