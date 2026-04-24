@@ -13,6 +13,7 @@ class Parameters(BaseModel):
     package_name: str
     package_title: str | None = None
     workflow_kind: Literal["end_to_end", "building_block"]
+    authoring_shape: Literal["single", "flow_specs", "package"] = "flow_specs"
     aliases: list[str] = Field(default_factory=list)
     target_test_command: str = "pytest"
 
@@ -44,6 +45,14 @@ class Parameters(BaseModel):
             alias = value.strip()
             if alias and alias not in normalized:
                 normalized.append(alias)
+        return normalized
+
+    @field_validator("authoring_shape", mode="before")
+    @classmethod
+    def _normalize_authoring_shape(cls, value: str) -> str:
+        normalized = str(value or "").strip().replace("-", "_")
+        if normalized not in {"single", "flow_specs", "package"}:
+            raise ValueError("authoring_shape must be one of: single, flow_specs, package")
         return normalized
 
     @field_validator("target_test_command")

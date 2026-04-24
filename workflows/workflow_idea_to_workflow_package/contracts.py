@@ -93,17 +93,12 @@ DESIGN_PACKAGE_ROUTE_CONTRACTS = {
 
 BUILD_PACKAGE_ROUTE_CONTRACTS = {
     "package_built": {
-        "summary": "The target package, prompt assets, docs, tests, and build report were written in the repository.",
+        "summary": "The target workflow shape and its declared support files were written in the repository.",
         "required_artifacts": [
-            "generated_package_root",
-            "generated_init",
-            "generated_workflow",
-            "generated_manifest",
-            "generated_prompts_dir",
-            "generated_assets_dir",
+            "generated_layout",
             "build_report",
         ],
-        "state_effect": "Promotes the candidate implementation to evaluation.",
+        "state_effect": "Promotes the generated workflow surface to evaluation.",
     },
     "needs_rework": {
         "summary": "The same accepted design still holds, but the generated files or build evidence need local repair.",
@@ -119,7 +114,7 @@ BUILD_PACKAGE_ROUTE_CONTRACTS = {
 
 EVALUATE_PACKAGE_ROUTE_CONTRACTS = {
     "evaluation_passed": {
-        "summary": "Verification evidence, promotion evidence, and rollback evidence all exist and support publication.",
+        "summary": "Verification evidence, publication evidence, and rollback evidence all exist and support publication.",
         "required_artifacts": [
             "verification_report",
             "promotion_record",

@@ -130,7 +130,19 @@ def test_workflow_builder_package_rejects_invalid_package_name(tmp_path: Path) -
         )
 
 
-def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("authoring_shape", "expected_source"),
+    [
+        ("single", "workflows/release_candidate_to_go_no_go.py"),
+        ("flow_specs", "workflows/release_candidate_to_go_no_go/flow.py"),
+        ("package", "workflows/release_candidate_to_go_no_go/flow.py"),
+    ],
+)
+def test_workflow_builder_package_runs_and_generates_a_compilable_package(
+    tmp_path: Path,
+    authoring_shape: str,
+    expected_source: str,
+) -> None:
     _install_repo_workflow_builder_package(tmp_path)
     generated_name = "release_candidate_to_go_no_go"
 
@@ -172,6 +184,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                             "# Workflow Package Spec",
                             "",
                             "Objective: build a release-readiness workflow package.",
+                            f"Authoring shape: {authoring_shape}.",
                             "Control flow: bootstrap -> review -> verify -> publish.",
                             "Runtime control contract: only expected_output_schema, available_routes, and route_contracts.",
                             "",
@@ -187,8 +200,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                         (
                             "# Prompt Contract Matrix",
                             "",
-                            "- `prompts/review_release_producer.md`",
-                            "- `prompts/review_release_verifier.md`",
+                            f"- authoring shape: `{authoring_shape}`",
                             "",
                         )
                     )
@@ -208,7 +220,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                 ),
                 "designed package\n",
             )[4],
-            lambda request: _write_generated_package(request, generated_name),
+            lambda request: _write_generated_workflow(request, generated_name, authoring_shape),
             lambda request: (
                 request.artifacts.verification_report.write_text(
                     "\n".join(
@@ -216,7 +228,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                             "# Verification Report",
                             "",
                             "- Verified workflow discovery and compilation.",
-                            "- Verified package-specific test file exists.",
+                            f"- Verified the generated `{authoring_shape}` workflow surface exists.",
                             "",
                         )
                     )
@@ -227,7 +239,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                         (
                             "# Promotion Record",
                             "",
-                            f"Promote `{generated_name}` because the package structure, prompts, docs, and tests exist.",
+                            f"Promote `{generated_name}` because the selected `{authoring_shape}` workflow surface compiles.",
                             "",
                         )
                     )
@@ -238,9 +250,8 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                         (
                             "# Rollback Plan",
                             "",
-                            f"- Remove `workflows/{generated_name}`.",
-                            f"- Remove `docs/workflows/{generated_name}.md`.",
-                            f"- Remove `tests/runtime/test_{generated_name}.py`.",
+                            f"- Remove `{expected_source}`.",
+                            "- Revert any optional support files recorded in `generated_layout.json`.",
                             "",
                         )
                     )
@@ -271,10 +282,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                         "prompt_contract_matrix",
                         "verification_plan",
                     ],
-                    "prompt_files": [
-                        "prompts/review_release_producer.md",
-                        "prompts/review_release_verifier.md",
-                    ],
+                    "prompt_files": [],
                     "next_action": "build_package",
                 },
             ),
@@ -282,18 +290,13 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                 raw_output="package built\n",
                 tag="package_built",
                 payload={
-                    "summary": "Generated the target package, docs, tests, and build report.",
+                    "summary": "Generated the requested workflow shape and build evidence.",
                     "changed_paths": [
-                        f"workflows/{generated_name}/workflow.py",
-                        f"workflows/{generated_name}/workflow.toml",
-                        f"docs/workflows/{generated_name}.md",
-                        f"tests/runtime/test_{generated_name}.py",
+                        expected_source,
+                        f".autoloop/tasks/workflow-builder-task/wf_workflow_idea_to_workflow_package/generated_layout.json",
                     ],
                     "evidence_artifacts": [
-                        "generated_workflow",
-                        "generated_manifest",
-                        "generated_doc",
-                        "generated_test",
+                        "generated_layout",
                         "build_report",
                     ],
                 },
@@ -328,6 +331,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
                 "package_name": generated_name,
                 "package_title": "Release Candidate To Go No Go",
                 "workflow_kind": "end_to_end",
+                "authoring_shape": authoring_shape,
                 "aliases": ["release-go-no-go"],
                 "target_test_command": "pytest -q",
             },
@@ -350,6 +354,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
     assert (workflow_dir / "publish_receipt.json").exists()
     assert invocation_contract == {
         "aliases": ["release-go-no-go"],
+        "authoring_shape": authoring_shape,
         "message": "We need a workflow for release readiness reviews.\n",
         "package_name": generated_name,
         "package_title": "Release Candidate To Go No Go",
@@ -369,12 +374,26 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
         "workflow_name": "workflow_idea_to_workflow_package",
     }
 
-    generated_pkg_dir = tmp_path / "workflows" / generated_name
-    assert generated_pkg_dir.is_dir()
-    assert (generated_pkg_dir / "workflow.py").exists()
-    assert (generated_pkg_dir / "prompts" / "review_release_producer.md").exists()
-    assert (tmp_path / "docs" / "workflows" / f"{generated_name}.md").exists()
-    assert (tmp_path / "tests" / "runtime" / f"test_{generated_name}.py").exists()
+    assert (workflow_dir / "generated_layout.json").exists()
+    generated_layout = json.loads((workflow_dir / "generated_layout.json").read_text(encoding="utf-8"))
+    assert generated_layout["authoring_shape"] == authoring_shape
+    assert expected_source in generated_layout["created_paths"]
+
+    if authoring_shape == "single":
+        assert (tmp_path / "workflows" / f"{generated_name}.py").exists()
+        assert not (tmp_path / "workflows" / generated_name).exists()
+    else:
+        generated_pkg_dir = tmp_path / "workflows" / generated_name
+        assert generated_pkg_dir.is_dir()
+        assert (generated_pkg_dir / "flow.py").exists()
+        assert (generated_pkg_dir / "specs.py").exists()
+        if authoring_shape == "package":
+            assert (generated_pkg_dir / "__init__.py").exists()
+            assert (generated_pkg_dir / "workflow.toml").exists()
+            assert (generated_pkg_dir / "prompts" / "README.md").exists()
+            assert (generated_pkg_dir / "assets" / ".gitkeep").exists()
+        else:
+            assert not (generated_pkg_dir / "workflow.toml").exists()
 
     compiled_generated = compile_workflow(resolve_workflow_reference(tmp_path, generated_name).workflow_cls)
     assert compiled_generated.workflow_name == generated_name
@@ -398,16 +417,11 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(tmp_pa
         "failed",
     )
     assert provider.calls[5].route_contracts["package_built"]["required_artifacts"] == [
-        "generated_package_root",
-        "generated_init",
-        "generated_workflow",
-        "generated_manifest",
-        "generated_prompts_dir",
-        "generated_assets_dir",
+        "generated_layout",
         "build_report",
     ]
     assert provider.calls[5].route_contracts["package_built"]["work_item_effect"] == (
-        "Promotes the candidate implementation to evaluation."
+        "Promotes the generated workflow surface to evaluation."
     )
     assert (run_dir / "run.json").exists()
 
@@ -444,121 +458,135 @@ def _install_repo_workflow_builder_package(root: Path) -> None:
     shutil.copy2(REPO_ROOT / "runtime" / "cli.py", root / "runtime" / "cli.py")
 
 
-def _write_generated_package(request, package_name: str) -> str:
+def _write_generated_workflow(request, package_name: str, authoring_shape: str) -> str:
     class_name = _workflow_class_name(package_name)
-    request.artifacts.generated_package_root.path.mkdir(parents=True, exist_ok=True)
-    request.artifacts.generated_prompts_dir.path.mkdir(parents=True, exist_ok=True)
-    request.artifacts.generated_assets_dir.path.mkdir(parents=True, exist_ok=True)
-    request.artifacts.generated_init.write_text(
-        f'from .params import Parameters\nfrom .workflow import {class_name}\n\n__all__ = ["Parameters", "{class_name}"]\n'
-    )
-    request.artifacts.generated_params.write_text(
-        "\n".join(
-            (
-                "from pydantic import BaseModel",
-                "",
-                "",
-                "class Parameters(BaseModel):",
-                '    mode: str = "strict"',
+    created_paths: list[str] = []
+
+    def _record(path: Path) -> None:
+        created_paths.append(str(path.resolve().relative_to(request.context.root.resolve())))
+
+    if authoring_shape == "single":
+        request.artifacts.generated_single_file.write_text(
+            "\n".join(
+                (
+                    "from __future__ import annotations",
+                    "",
+                    "from pydantic import BaseModel",
+                    "",
+                    "from workflow import GLOBAL, SUCCESS, SystemStep, Workflow",
+                    "from workflow.primitives import Event",
+                    "",
+                    "",
+                    f"class {class_name}(Workflow):",
+                    f'    name = "{package_name}"',
+                    "",
+                    "    class State(BaseModel):",
+                    "        ready: bool = False",
+                    "",
+                    '    bootstrap = SystemStep(name="bootstrap")',
+                    "    entry = bootstrap",
+                    "    transitions = {",
+                    "        GLOBAL: {},",
+                    '        bootstrap: {"ready": SUCCESS},',
+                    "    }",
+                    "",
+                    "    @staticmethod",
+                    "    def on_bootstrap(state: State, ctx):",
+                    '        return state.model_copy(update={"ready": True}), Event("ready")',
+                )
             )
+            + "\n"
         )
-        + "\n"
-    )
-    request.artifacts.generated_contracts.write_text(
-        "\n".join(
-            (
-                "from pydantic import BaseModel",
-                "",
-                "",
-                "class ReviewPayload(BaseModel):",
-                "    summary: str",
+        _record(request.artifacts.generated_single_file.path)
+    else:
+        request.artifacts.generated_package_root.path.mkdir(parents=True, exist_ok=True)
+        request.artifacts.generated_flow.write_text(
+            "\n".join(
+                (
+                    "from __future__ import annotations",
+                    "",
+                    "from workflow import GLOBAL, SUCCESS, SystemStep, Workflow",
+                    "from workflow.primitives import Event",
+                    "",
+                    "from .specs import State",
+                    "",
+                    "",
+                    f"class {class_name}(Workflow):",
+                    f'    name = "{package_name}"',
+                    "    State = State",
+                    "",
+                    '    bootstrap = SystemStep(name="bootstrap")',
+                    "    entry = bootstrap",
+                    "    transitions = {",
+                    "        GLOBAL: {},",
+                    '        bootstrap: {"ready": SUCCESS},',
+                    "    }",
+                    "",
+                    "    @staticmethod",
+                    "    def on_bootstrap(state: State, ctx):",
+                    '        return state.model_copy(update={"ready": True}), Event("ready")',
+                )
             )
+            + "\n"
         )
-        + "\n"
-    )
-    request.artifacts.generated_workflow.write_text(
-        "\n".join(
-            (
-                "from __future__ import annotations",
-                "",
-                "from pydantic import BaseModel",
-                "",
-                "from workflow import GLOBAL, SUCCESS, SystemStep, Workflow",
-                "from workflow.primitives import Event",
-                "",
-                "",
-                f"class {class_name}(Workflow):",
-                f'    name = "{package_name}"',
-                "",
-                "    class State(BaseModel):",
-                "        ready: bool = False",
-                "",
-                '    bootstrap = SystemStep(name="bootstrap")',
-                "    entry = bootstrap",
-                "    transitions = {",
-                "        GLOBAL: {},",
-                '        bootstrap: {"ready": SUCCESS},',
-                "    }",
-                "",
-                "    @staticmethod",
-                "    def on_bootstrap(state: State, ctx):",
-                '        return state.model_copy(update={"ready": True}), Event("ready")',
+        request.artifacts.generated_specs.write_text(
+            "\n".join(
+                (
+                    "from __future__ import annotations",
+                    "",
+                    "from pydantic import BaseModel",
+                    "",
+                    "",
+                    "class State(BaseModel):",
+                    "    ready: bool = False",
+                )
             )
+            + "\n"
         )
-        + "\n"
-    )
-    request.artifacts.generated_manifest.write_text(
-        "\n".join(
-            (
-                f'name = "{package_name}"',
-                f'title = "{package_name.replace("_", " ").title()}"',
-                'description = "Generated release-readiness workflow package."',
-                'aliases = ["release-go-no-go"]',
+        _record(request.artifacts.generated_flow.path)
+        _record(request.artifacts.generated_specs.path)
+
+        if authoring_shape == "package":
+            request.artifacts.generated_prompts_dir.path.mkdir(parents=True, exist_ok=True)
+            request.artifacts.generated_assets_dir.path.mkdir(parents=True, exist_ok=True)
+            request.artifacts.generated_init.write_text(
+                f'from .flow import {class_name}\n\n__all__ = ["{class_name}"]\n'
             )
-        )
-        + "\n"
-    )
-    request.artifacts.generated_prompt_index.write_text(
-        "\n".join(
-            (
-                "# Generated Prompts",
-                "",
-                "- `review_release_producer.md`",
-                "- `review_release_verifier.md`",
-                "",
+            request.artifacts.generated_manifest.write_text(
+                "\n".join(
+                    (
+                        f'name = "{package_name}"',
+                        f'title = "{package_name.replace("_", " ").title()}"',
+                        'description = "Generated release-readiness workflow."',
+                        'aliases = ["release-go-no-go"]',
+                    )
+                )
+                + "\n"
             )
-        )
-        + "\n"
-    )
-    (request.artifacts.generated_prompts_dir.path / "review_release_producer.md").write_text(
-        "Review the release candidate and draft the evidence package.\n",
-        encoding="utf-8",
-    )
-    (request.artifacts.generated_prompts_dir.path / "review_release_verifier.md").write_text(
-        "Verify the release review artifacts and choose the next route.\n",
-        encoding="utf-8",
-    )
-    (request.artifacts.generated_assets_dir.path / ".gitkeep").write_text("", encoding="utf-8")
-    request.artifacts.generated_doc.write_text(
-        "\n".join(
-            (
-                f"# `{package_name}`",
-                "",
-                "Generated by the workflow-builder integration test.",
-                "",
+            request.artifacts.generated_prompt_index.write_text(
+                "\n".join(
+                    (
+                        "# Generated Prompts",
+                        "",
+                        "- Add prompt files here when the workflow design needs them.",
+                        "",
+                    )
+                )
+                + "\n"
             )
-        )
-        + "\n"
-    )
-    request.artifacts.generated_test.write_text(
-        "\n".join(
-            (
-                "from __future__ import annotations",
-                "",
-                "",
-                "def test_generated_workflow_package_placeholder() -> None:",
-                "    assert True",
-            )
+            (request.artifacts.generated_assets_dir.path / ".gitkeep").write_text("", encoding="utf-8")
+            _record(request.artifacts.generated_init.path)
+            _record(request.artifacts.generated_manifest.path)
+            _record(request.artifacts.generated_prompt_index.path)
+            _record(request.artifacts.generated_assets_dir.path / ".gitkeep")
+
+    request.artifacts.generated_layout.write_text(
+        json.dumps(
+            {
+                "authoring_shape": authoring_shape,
+                "created_paths": sorted(created_paths),
+            },
+            indent=2,
         )
         + "\n"
     )
@@ -567,12 +595,10 @@ def _write_generated_package(request, package_name: str) -> str:
             (
                 "# Build Report",
                 "",
-                f"- Created `workflows/{package_name}` with scaffold files.",
-                f"- Created `docs/workflows/{package_name}.md`.",
-                f"- Created `tests/runtime/test_{package_name}.py`.",
-                "- Created generated prompt files and a prompt index.",
-                "",
-            )
+                f"- Generated `{authoring_shape}` workflow surface for `{package_name}`.",
+                *[f"- Created `{path}`." for path in sorted(created_paths)],
+                f"- Wrote `{request.artifacts.generated_layout.path.relative_to(request.context.root)}`.",
+                )
         )
         + "\n"
     )

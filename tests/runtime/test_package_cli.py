@@ -8,7 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.runtime import cli
+from autoloop_v3.runtime.loader import resolve_workflow_reference
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -783,30 +785,62 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
     assert "unknown workflow parameter 'unknown'" in unknown_captured.err
 
 
-def test_cli_init_workflow_scaffolds_package_and_rejects_duplicates(
+@pytest.mark.parametrize(
+    ("shape", "expected_relpaths"),
+    [
+        ("single", ("workflows/child_workflow.py",)),
+        ("flow-specs", ("workflows/child_workflow/flow.py", "workflows/child_workflow/specs.py")),
+        (
+            "package",
+            (
+                "workflows/child_workflow/flow.py",
+                "workflows/child_workflow/specs.py",
+                "workflows/child_workflow/__init__.py",
+                "workflows/child_workflow/workflow.toml",
+            ),
+        ),
+    ],
+)
+def test_cli_init_workflow_scaffolds_supported_shapes_and_rejects_duplicates(
     tmp_path: Path,
     capsys,
+    shape: str,
+    expected_relpaths: tuple[str, ...],
 ) -> None:
+    exit_code = cli.main(["init", "workflow", "child_workflow", "--shape", shape, "--root", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert payload["name"] == "child_workflow"
+    assert payload["workflow_class"] == "ChildWorkflow"
+    assert payload["shape"] == shape
+    for relative_path in expected_relpaths:
+        assert (tmp_path / relative_path).exists()
+
+    if shape == "package":
+        assert (tmp_path / "workflows" / "child_workflow" / "prompts" / "README.md").exists()
+        assert (tmp_path / "workflows" / "child_workflow" / "assets" / ".gitkeep").exists()
+
+    compiled = compile_workflow(resolve_workflow_reference(tmp_path, "child_workflow").workflow_cls)
+    assert compiled.workflow_name == "child_workflow"
+
+    duplicate_exit = cli.main(["init", "workflow", "child_workflow", "--shape", shape, "--root", str(tmp_path)])
+    duplicate = capsys.readouterr()
+
+    assert duplicate_exit == cli.EXIT_USAGE_ERROR
+    assert "already exists" in duplicate.err
+
+
+def test_cli_init_workflow_defaults_to_flow_specs_shape(tmp_path: Path, capsys) -> None:
     exit_code = cli.main(["init", "workflow", "child_workflow", "--root", str(tmp_path)])
     captured = capsys.readouterr()
 
     assert exit_code == 0
     payload = json.loads(captured.out)
-    package_dir = tmp_path / "workflows" / "child_workflow"
-    assert payload["name"] == "child_workflow"
-    assert payload["workflow_class"] == "ChildWorkflow"
-    assert package_dir.is_dir()
-    assert (package_dir / "__init__.py").exists()
-    assert (package_dir / "workflow.py").exists()
-    assert (package_dir / "workflow.toml").exists()
-    assert (package_dir / "prompts" / "README.md").exists()
-    assert (package_dir / "assets" / ".gitkeep").exists()
-
-    duplicate_exit = cli.main(["init", "workflow", "child_workflow", "--root", str(tmp_path)])
-    duplicate = capsys.readouterr()
-
-    assert duplicate_exit == cli.EXIT_USAGE_ERROR
-    assert "already exists" in duplicate.err
+    assert payload["shape"] == "flow-specs"
+    assert (tmp_path / "workflows" / "child_workflow" / "flow.py").exists()
+    assert (tmp_path / "workflows" / "child_workflow" / "specs.py").exists()
 
 
 def test_recursive_wrapper_targets_the_package_cli_contract() -> None:

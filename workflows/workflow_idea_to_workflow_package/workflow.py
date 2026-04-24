@@ -39,6 +39,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         package_name: str = ""
         package_title: str | None = None
         workflow_kind: str = ""
+        authoring_shape: str = "flow_specs"
         aliases: list[str] = Field(default_factory=list)
         target_test_command: str = "pytest"
         selected_candidate: str | None = None
@@ -82,14 +83,15 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
     publish_receipt = Artifact("{workflow_folder}/publish_receipt.json")
 
     generated_package_root = Artifact("{package_folder}/../{state.package_name}")
+    generated_single_file = Artifact("{package_folder}/../{state.package_name}.py")
+    generated_flow = Artifact("{package_folder}/../{state.package_name}/flow.py")
+    generated_specs = Artifact("{package_folder}/../{state.package_name}/specs.py")
     generated_init = Artifact("{package_folder}/../{state.package_name}/__init__.py")
-    generated_params = Artifact("{package_folder}/../{state.package_name}/params.py")
-    generated_contracts = Artifact("{package_folder}/../{state.package_name}/contracts.py")
-    generated_workflow = Artifact("{package_folder}/../{state.package_name}/workflow.py")
     generated_manifest = Artifact("{package_folder}/../{state.package_name}/workflow.toml")
     generated_prompts_dir = Artifact("{package_folder}/../{state.package_name}/prompts")
     generated_assets_dir = Artifact("{package_folder}/../{state.package_name}/assets")
     generated_prompt_index = Artifact("{package_folder}/../{state.package_name}/prompts/README.md")
+    generated_layout = Artifact("{workflow_folder}/generated_layout.json")
     generated_doc = Artifact("{package_folder}/../../docs/workflows/{state.package_name}.md")
     generated_test = Artifact("{package_folder}/../../tests/runtime/test_{state.package_name}.py")
 
@@ -170,14 +172,15 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         ],
         produces={
             "generated_package_root": generated_package_root,
+            "generated_single_file": generated_single_file,
+            "generated_flow": generated_flow,
+            "generated_specs": generated_specs,
             "generated_init": generated_init,
-            "generated_params": generated_params,
-            "generated_contracts": generated_contracts,
-            "generated_workflow": generated_workflow,
             "generated_manifest": generated_manifest,
             "generated_prompts_dir": generated_prompts_dir,
             "generated_assets_dir": generated_assets_dir,
             "generated_prompt_index": generated_prompt_index,
+            "generated_layout": generated_layout,
             "generated_doc": generated_doc,
             "generated_test": generated_test,
             "build_report": build_report,
@@ -198,17 +201,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             prompt_contract_matrix,
             verification_plan,
             build_report,
-            generated_package_root,
-            generated_init,
-            generated_params,
-            generated_contracts,
-            generated_workflow,
-            generated_manifest,
-            generated_prompts_dir,
-            generated_assets_dir,
-            generated_prompt_index,
-            generated_doc,
-            generated_test,
+            generated_layout,
         ],
         produces={
             "verification_report": verification_report,
@@ -269,6 +262,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
                 "package_name": package_name,
                 "package_title": payload.get("package_title"),
                 "workflow_kind": workflow_kind,
+                "authoring_shape": str(payload.get("authoring_shape") or "flow_specs").strip() or "flow_specs",
                 "aliases": list(payload.get("aliases") or []),
                 "target_test_command": str(payload.get("target_test_command") or "pytest").strip() or "pytest",
                 "selected_candidate": None,
@@ -286,6 +280,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
                 "package_name": next_state.package_name,
                 "package_title": next_state.package_title,
                 "workflow_kind": next_state.workflow_kind,
+                "authoring_shape": next_state.authoring_shape,
                 "aliases": next_state.aliases,
                 "target_test_command": next_state.target_test_command,
             },
