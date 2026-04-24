@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from functools import partial
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -18,6 +19,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        require_unique_values,
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
     )
@@ -37,6 +39,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        require_unique_values,
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
     )
@@ -639,34 +642,12 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
-def _require_text(value: Any, error_message: str) -> str:
-    return require_non_empty_string(value, error_message=error_message, coerce=True)
-
-
-def _normalize_optional_text(value: Any) -> str | None:
-    return normalize_optional_string(value)
-
-
-def _normalize_unique_strings(raw_value: Any) -> list[str]:
-    return normalize_unique_strings(raw_value, allow_scalar=True)
-
-
-def _require_string_list(value: Any, error_message: str) -> list[str]:
-    return require_string_list(
-        value,
-        error_message=error_message,
-        allow_scalar=True,
-        dedupe=True,
-        coerce=True,
-    )
-
-
-def _require_positive_int(value: Any, error_message: str) -> int:
-    return require_positive_int(value, error_message=error_message)
-
-
-def _read_json(path):
-    return read_json_object(path)
+_require_text = partial(require_non_empty_string, coerce=True)
+_normalize_optional_text = normalize_optional_string
+_normalize_unique_strings = partial(normalize_unique_strings, allow_scalar=True)
+_require_string_list = partial(require_string_list, allow_scalar=True, dedupe=True, coerce=True)
+_require_positive_int = require_positive_int
+_read_json = read_json_object
 
 
 def _read_required_text(path, error_message: str) -> str:
@@ -676,12 +657,8 @@ def _read_required_text(path, error_message: str) -> str:
     return text
 
 
-def _require_mapping(value: Any, error_message: str) -> dict[str, Any]:
-    return require_mapping(value, error_message=error_message)
-
-
-def _require_mapping_list(value: Any, error_message: str, *, min_length: int = 1) -> list[dict[str, Any]]:
-    return require_mapping_list(value, error_message=error_message, min_length=min_length)
+_require_mapping = require_mapping
+_require_mapping_list = require_mapping_list
 
 
 def _require_count_mapping(value: Any, error_message: str) -> dict[str, int]:
@@ -725,7 +702,10 @@ def _extract_portfolio_workflow_names(health_payload: Mapping[str, Any]) -> list
             "workflow_portfolio_health_snapshot.json workflow entries must define workflow_name",
         )
         names.append(workflow_name)
-    _ensure_unique_strings(names, "workflow_portfolio_health_snapshot.json scoped workflow names must be unique")
+    require_unique_values(
+        names,
+        error_message="workflow_portfolio_health_snapshot.json scoped workflow names must be unique",
+    )
     return names
 
 
@@ -832,11 +812,6 @@ def _count_lifecycle_postures(lifecycle_postures: Mapping[str, str]) -> dict[str
     for posture in lifecycle_postures.values():
         counts[posture] = counts.get(posture, 0) + 1
     return dict(sorted(counts.items()))
-
-
-def _ensure_unique_strings(values: list[str], error_message: str) -> None:
-    if len(values) != len(set(values)):
-        raise ValueError(error_message)
 
 
 def _contains_hidden_execution_signal(text: str) -> bool:

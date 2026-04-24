@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from functools import partial
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -266,7 +267,9 @@ class WorkflowRunHistoryToFailureModes(Workflow):
                 "max_runs": max_runs,
                 "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
                 "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "constraints": _normalize_unique_strings(payload.get("constraints")),
+                "constraints": normalize_unique_strings(payload.get("constraints"))
+                if isinstance(payload.get("constraints"), list)
+                else [],
                 "framing_status": None,
                 "mapping_status": None,
                 "packaging_status": None,
@@ -564,9 +567,9 @@ class WorkflowRunHistoryToFailureModes(Workflow):
                 raise ValueError("selected_workflow_run_history.json request_text must be a string when present")
             evidence_run_ids.append(run_id)
 
-        _ensure_unique_strings(
+        require_unique_values(
             evidence_run_ids,
-            "selected_workflow_run_history.json evidence run IDs must be unique",
+            error_message="selected_workflow_run_history.json evidence run IDs must be unique",
         )
         if state.evidence_run_ids and evidence_run_ids != state.evidence_run_ids:
             raise ValueError("selected_workflow_run_history.json evidence run IDs must match workflow state")
@@ -602,16 +605,19 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             manifest.get("failure_mode_ids"),
             "failure_mode_manifest.json must define non-empty failure_mode_ids",
         )
-        _ensure_unique_strings(manifest_failure_mode_ids, "failure_mode_manifest.json failure_mode_ids must be unique")
+        require_unique_values(
+            manifest_failure_mode_ids,
+            error_message="failure_mode_manifest.json failure_mode_ids must be unique",
+        )
         if state.failure_mode_ids and manifest_failure_mode_ids != state.failure_mode_ids:
             raise ValueError("failure_mode_manifest.json failure_mode_ids must match workflow state")
         manifest_recurring_weak_point_ids = _require_string_list(
             manifest.get("recurring_weak_point_ids"),
             "failure_mode_manifest.json must define non-empty recurring_weak_point_ids",
         )
-        _ensure_unique_strings(
+        require_unique_values(
             manifest_recurring_weak_point_ids,
-            "failure_mode_manifest.json recurring_weak_point_ids must be unique",
+            error_message="failure_mode_manifest.json recurring_weak_point_ids must be unique",
         )
         if state.recurring_weak_point_ids and manifest_recurring_weak_point_ids != state.recurring_weak_point_ids:
             raise ValueError("failure_mode_manifest.json recurring_weak_point_ids must match workflow state")
@@ -709,9 +715,9 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             improvement_summary.get("ranked_opportunity_ids"),
             "improvement_opportunities.json must define non-empty ranked_opportunity_ids",
         )
-        _ensure_unique_strings(
+        require_unique_values(
             ranked_opportunity_ids,
-            "improvement_opportunities.json ranked_opportunity_ids must be unique",
+            error_message="improvement_opportunities.json ranked_opportunity_ids must be unique",
         )
         if state.ranked_opportunity_ids and ranked_opportunity_ids != state.ranked_opportunity_ids:
             raise ValueError("improvement_opportunities.json ranked_opportunity_ids must match workflow state")
@@ -860,43 +866,19 @@ class WorkflowRunHistoryToFailureModes(Workflow):
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
-def _require_text(value: Any, error_message: str) -> str:
-    return require_non_empty_string(value, error_message=error_message, coerce=True)
-
-
-def _normalize_optional_text(value: Any) -> str | None:
-    return normalize_optional_string(value)
-
-
-def _normalize_unique_strings(values: Any) -> list[str]:
-    if not isinstance(values, list):
-        return []
-    return normalize_unique_strings(values)
+_require_text = partial(require_non_empty_string, coerce=True)
+_normalize_optional_text = normalize_optional_string
+_require_positive_int = require_positive_int
+_require_string_list = partial(require_string_list, coerce=True)
+_require_mapping = require_mapping
+_require_mapping_list = require_mapping_list
+_read_json = read_json_object
 
 
 def _normalize_status_filters(values: Any) -> list[str]:
-    return sorted(_normalize_unique_strings(values))
-
-
-def _require_positive_int(value: Any, error_message: str) -> int:
-    return require_positive_int(value, error_message=error_message)
-
-
-def _require_string_list(value: Any, error_message: str, *, min_length: int = 1) -> list[str]:
-    return require_string_list(
-        value,
-        error_message=error_message,
-        min_length=min_length,
-        coerce=True,
-    )
-
-
-def _require_mapping(value: Any, error_message: str) -> dict[str, Any]:
-    return require_mapping(value, error_message=error_message)
-
-
-def _require_mapping_list(value: Any, error_message: str, *, min_length: int = 1) -> list[dict[str, Any]]:
-    return require_mapping_list(value, error_message=error_message, min_length=min_length)
+    if not isinstance(values, list):
+        return []
+    return sorted(normalize_unique_strings(values))
 
 
 def _extract_history_run_ids(value: Any, *, allow_empty: bool) -> list[str]:
@@ -920,24 +902,11 @@ def _extract_history_run_ids(value: Any, *, allow_empty: bool) -> list[str]:
             )
         )
     return run_ids
-
-
-def _read_json(path) -> dict[str, Any]:
-    return read_json_object(path)
-
-
 def _read_required_text(path, error_message: str) -> str:
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         raise ValueError(error_message)
     return text
-
-
-def _ensure_unique_strings(values: list[str], error_message: str) -> None:
-    try:
-        require_unique_values(values)
-    except ValueError as exc:
-        raise ValueError(error_message) from exc
 
 
 __all__ = ["WorkflowRunHistoryToFailureModes"]

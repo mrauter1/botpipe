@@ -10,6 +10,7 @@ import sys
 import tempfile
 from collections.abc import Mapping
 from contextlib import contextmanager
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -353,7 +354,9 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 "failure_modes_path": _normalize_optional_text(payload.get("failure_modes_path")),
                 "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
                 "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "constraints": _normalize_unique_strings(payload.get("constraints")),
+                "constraints": normalize_unique_strings(payload.get("constraints"))
+                if isinstance(payload.get("constraints"), list)
+                else [],
                 "target_test_command": target_test_command,
                 "framing_status": None,
                 "planning_status": None,
@@ -1313,8 +1316,7 @@ def _manifest_file_map(manifest: Mapping[str, Any], error_message: str) -> dict[
     return result
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    return read_json_object(path)
+_read_json = read_json_object
 
 
 def _write_text(path: Path, content: str) -> None:
@@ -1337,33 +1339,8 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _require_text(value: Any, error_message: str) -> str:
-    return require_non_empty_string(value, error_message=error_message, coerce=True)
-
-
-def _normalize_optional_text(value: Any) -> str | None:
-    return normalize_optional_string(value)
-
-
-def _normalize_unique_strings(values: Any) -> list[str]:
-    if not isinstance(values, list):
-        return []
-    return normalize_unique_strings(values)
-
-
-def _require_string_list(value: Any, error_message: str, *, min_length: int = 1) -> list[str]:
-    return require_string_list(
-        value,
-        error_message=error_message,
-        min_length=min_length,
-        dedupe=True,
-        coerce=True,
-    )
-
-
-def _require_positive_int(value: Any, error_message: str) -> int:
-    return require_positive_int(value, error_message=error_message)
-
-
-def _require_mapping(value: Any, error_message: str) -> dict[str, Any]:
-    return require_mapping(value, error_message=error_message)
+_require_text = partial(require_non_empty_string, coerce=True)
+_normalize_optional_text = normalize_optional_string
+_require_string_list = partial(require_string_list, dedupe=True, coerce=True)
+_require_positive_int = require_positive_int
+_require_mapping = require_mapping

@@ -10,6 +10,7 @@ import sys
 import tempfile
 from collections.abc import Mapping
 from contextlib import contextmanager
+from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -1581,8 +1582,7 @@ def _path_under_repo_or_none(repo_root: Path, path: Path) -> str | None:
         return None
 
 
-def _read_json(path: Path) -> dict[str, Any]:
-    return read_json_object(path)
+_read_json = read_json_object
 
 
 def _require_non_empty_text_file(path: Path, error_message: str) -> str:
@@ -1622,38 +1622,17 @@ def _require_repo_relative_path(value: Any, *, prefix: str, error_message: str) 
     return normalized
 
 
-def _require_text(value: Any, error_message: str) -> str:
-    return require_non_empty_string(value, error_message=error_message)
-
-
-def _normalize_optional_text(value: Any) -> str | None:
-    return normalize_optional_string(value, error_message="expected string or null", coerce=False)
-
-
-def _normalize_unique_strings(values: Any) -> list[str]:
-    return normalize_unique_strings(
-        values,
-        error_message="expected a list of strings",
-        item_error_message="list entries must be non-empty strings",
-        coerce=False,
-    )
-
-
-def _require_string_list(value: Any, error_message: str, *, min_length: int = 1) -> list[str]:
-    return require_string_list(
-        value,
-        error_message=error_message,
-        min_length=min_length,
-        sort_output=True,
-    )
-
-
-def _require_positive_int(value: Any, error_message: str) -> int:
-    return require_positive_int(value, error_message=error_message)
-
-
-def _require_mapping(value: Any, error_message: str) -> dict[str, Any]:
-    return require_mapping(value, error_message=error_message)
+_require_text = require_non_empty_string
+_normalize_optional_text = partial(normalize_optional_string, error_message="expected string or null", coerce=False)
+_normalize_unique_strings = partial(
+    normalize_unique_strings,
+    error_message="expected a list of strings",
+    item_error_message="list entries must be non-empty strings",
+    coerce=False,
+)
+_require_string_list = partial(require_string_list, sort_output=True)
+_require_positive_int = require_positive_int
+_require_mapping = require_mapping
 
 
 __all__ = ["WorkflowPackageToComposableBuildingBlocks"]

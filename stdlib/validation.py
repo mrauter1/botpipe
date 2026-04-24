@@ -37,9 +37,9 @@ class ValidationReport:
 
 def require_non_empty_string(
     value: Any,
+    error_message: str | None = None,
     *,
     field_name: str = "value",
-    error_message: str | None = None,
     coerce: bool = False,
 ) -> str:
     """Return one stripped non-empty string or raise ``ValueError``."""
@@ -112,11 +112,11 @@ def normalize_unique_strings(
 
 def require_string_list(
     value: Any,
+    error_message: str | None = None,
     *,
     field_name: str = "value",
     unique: bool = False,
     min_length: int = 1,
-    error_message: str | None = None,
     allow_scalar: bool = False,
     coerce: bool = False,
     dedupe: bool = False,
@@ -154,7 +154,12 @@ def require_string_list(
     return normalized
 
 
-def require_unique_values(values: list[str], *, field_name: str = "value") -> list[str]:
+def require_unique_values(
+    values: list[str],
+    *,
+    field_name: str = "value",
+    error_message: str | None = None,
+) -> list[str]:
     """Return values unchanged when unique or raise ``ValueError``."""
 
     seen: set[str] = set()
@@ -165,15 +170,15 @@ def require_unique_values(values: list[str], *, field_name: str = "value") -> li
         seen.add(value)
     if duplicates:
         repeated = ", ".join(repr(value) for value in duplicates)
-        raise ValueError(f"{field_name} must not repeat values: {repeated}")
+        raise ValueError(error_message or f"{field_name} must not repeat values: {repeated}")
     return values
 
 
 def require_positive_int(
     value: Any,
+    error_message: str | None = None,
     *,
     field_name: str = "value",
-    error_message: str | None = None,
     allow_bool: bool = False,
 ) -> int:
     """Return one positive integer or raise ``ValueError``."""
@@ -187,9 +192,9 @@ def require_positive_int(
 
 def require_mapping(
     value: Any,
+    error_message: str | None = None,
     *,
     field_name: str = "value",
-    error_message: str | None = None,
 ) -> dict[str, Any]:
     """Return one string-keyed mapping or raise ``ValueError``."""
 
@@ -200,9 +205,9 @@ def require_mapping(
 
 def require_mapping_list(
     value: Any,
+    error_message: str | None = None,
     *,
     field_name: str = "value",
-    error_message: str | None = None,
     min_length: int = 1,
 ) -> list[dict[str, Any]]:
     """Return one mapping list or raise ``ValueError``."""
