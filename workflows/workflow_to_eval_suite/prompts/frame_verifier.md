@@ -14,10 +14,18 @@ Read these artifacts
 - `evaluation_request_brief`
 - `evaluation_dimensions`
 
+Write these artifacts
+- Do not overwrite `evaluation_request_brief` or `evaluation_dimensions` during verification.
+- Return verifier control metadata only through the step payload and selected route.
+
 Artifact checks
 - `evaluation_request_brief` must name the canonical selected workflow, the evaluation trigger, sponsor, terminal outcome, and why suite publication is the terminal boundary for this building block.
 - `evaluation_dimensions` must define the quality dimensions, required case families, expected artifact surface, and the difference between local repair and material replan.
 - The framing must stay consistent with `selected_workflow_capability`; do not accept a renamed or implicitly swapped workflow.
+
+Evidence requirements
+- Base the verdict on the framing artifacts plus the selected-workflow capability snapshot instead of provider inference.
+- Confirm that the artifacts make the evaluation boundary explicit enough for deterministic case design without widening the selected workflow or publication boundary.
 
 Route guidance
 - Return `evaluation_target_framed` only when the request and acceptance boundary are explicit enough for case design.

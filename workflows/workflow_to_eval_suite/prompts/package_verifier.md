@@ -23,11 +23,20 @@ Read these artifacts
 - `workflow_eval_suite_summary`
 - `workflow_eval_next_action`
 
+Write these artifacts
+- Do not overwrite `workflow_eval_suite`, `workflow_eval_suite_summary`, or `workflow_eval_next_action` during verification.
+- Do not create `validated_eval_case_manifest.json` or `workflow_eval_suite_receipt.json` in this step.
+- Return verifier control metadata only through the step payload and selected route.
+
 Artifact checks
 - `workflow_eval_suite` must keep the selected workflow fixed and explain how the published suite should be used later without implying that evaluation already ran.
 - `workflow_eval_suite_summary` must be valid JSON that names the selected workflow, entry step, parameter support, case count, case ids, case kinds, covered expected artifacts, authoritative artifacts, next action, and readiness signal.
 - `workflow_eval_next_action` must tell the next operator how to continue and must refer to `validated_eval_case_manifest.json` and `eval_rubric.md`.
 - The package must still stop at suite publication rather than selected-workflow execution.
+
+Evidence requirements
+- Base the verdict on the package artifacts, upstream design artifacts, and selected-workflow capability snapshot instead of implied workflow behavior.
+- Confirm that the suite package is publication-safe, machine-readable, and still leaves manifest validation and receipt publication to the next deterministic step.
 
 Route guidance
 - Return `workflow_eval_suite_ready` only when the suite package, summary, and next-action artifact are aligned and publication-safe.
