@@ -233,3 +233,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T210746Z-c526aa99 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc158-d020-70f1-836a-78d4971583b6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc158-d020-70f1-836a-78d4971583b6
+
+
+---
+run_id=run-20260424T210746Z-c526aa99 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc158-d020-70f1-836a-78d4971583b6
+---
+I’m reviewing the shipped seam and its current proof, then I’ll tighten any missing regression coverage and update the phase test artifacts with an explicit behavior-to-test map.
+
+The main remaining proof gap is multi-field reuse. The helpers are designed to replace `@field_validator("a", "b", ...)` blocks across the `params.py` family, so I’m adding one targeted unit test that exercises shared descriptors across multiple fields instead of only single-field assignments.
+
+I’ve added the missing multi-field regression case. Now I’m running the focused unit proof again so the updated strategy and feedback can reference the final green set rather than the earlier implement-phase run.
+
+The rerun is almost finished. This pass is only the focused unit layer because the phase still stops at the helper seam itself; no workflow parameter models were migrated yet.
+
+The updated proof is green. I’m documenting the behavior map, the exact test additions, and the test-scope decision that unit proof is sufficient for this phase because no `workflows/*/params.py` migration happened yet.
+
+Scope considered
+- Phase-local test work for the shared parameter-validator seam only.
+- Changed behavior under `stdlib/validation.py` and `stdlib/__init__.py`, plus adjacent unit proof surfaces in `tests/unit/`.
+
+What I analyzed
+- The accepted phase contract and shared decisions ledger.
+- The new helper-factory API and the existing implement-phase unit coverage.
+- The main regression gap for this seam: multi-field reuse matching the repeated `@field_validator("a", "b", ...)` pattern across `workflows/*/params.py`.
+
+What I changed
+- Added a focused multi-field regression test in [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:819) that exercises shared required-text, optional-text, deduped-list, and positive-int validators across multiple fields.
+- Updated the phase test map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c3/test/phases/shared-parameter-validator-seam/test_strategy.md:1).
+- Appended the phase test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c3/test/phases/shared-parameter-validator-seam/feedback.md:1).
+- Recorded the test-scope decision in `decisions.txt`.
+
+Key findings / decisions
+- Focused unit proof is sufficient for this phase because no `workflows/*/params.py` migration happened yet.
+- The added test closes the main remaining gap by proving one descriptor can be reused across multiple fields without changing normalization or error-message behavior.
+- Validation run passed: `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py` -> `91 passed`.
+
+Open issues / next step
+- Runtime workflow suites should be rerun when the later migration phase actually swaps existing `Parameters` models onto these helpers.
+- `docs/authoring.md` still needs a real adoption example once that migration lands.
