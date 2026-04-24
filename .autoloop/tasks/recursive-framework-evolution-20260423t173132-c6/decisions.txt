@@ -1,0 +1,6 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T015723Z-b21e6db6" ts="2026-04-24T01:57:23.380388+00:00" />
+The request's mandatory inspection paths are stale; cycle 6 planning and implementation should target the current repo-root equivalents under docs/, core/, runtime/, stdlib/, and workflows/ rather than resurrecting src/autoloop/... paths.
+`workflow_idea_to_workflow_package` remains the credible workflow-builder baseline for cycle 6 because the package, decision-record doc, and runtime proof already exist; the higher-priority gap is the missing reusable adaptation layer.
+Cycle 6 should ship `candidate_workflow_to_adapted_execution_plan` as the reusable building block that turns a chosen workflow plus task context into an execution-ready adapted plan with validated parameters.
+The paired framework slice should stay additive and authoring-only: selected-workflow contract snapshot plus deterministic workflow-parameter validation helpers, not runtime-owned auto-adaptation and not `workflow.toml` expansion.
+`task_to_workflow_strategy` should remain the front door and only hand off the `adapt` route more concretely to the new building block; it must not absorb adaptation planning or auto-run the selected workflow.

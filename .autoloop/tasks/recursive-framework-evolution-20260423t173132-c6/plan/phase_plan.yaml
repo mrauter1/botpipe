@@ -1,4 +1,132 @@
 version: 1
 task_id: recursive-framework-evolution-20260423t173132-c6
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/runs/run-20260424T015723Z-b21e6db6/request.md
-phases: []
+phases:
+- phase_id: selected-workflow-adaptation-seam
+  title: Selected Workflow Adaptation Seam
+  objective: Add the smallest reusable authoring seam needed to snapshot one selected
+    workflow contract and validate proposed workflow parameters without widening runtime-owned
+    routing behavior.
+  status: planned
+  in_scope:
+  - Add an additive stdlib helper module for selected-workflow contract snapshots
+    and validated workflow-parameter artifacts.
+  - Export the new helper surface and document its authoring boundary.
+  - Extend unit coverage for path locality, workflow resolution, and parameter validation
+    reuse.
+  out_of_scope:
+  - Changing CLI syntax.
+  - Expanding workflow.toml.
+  - Adding runtime-owned auto-adaptation.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The new helper surface writes only workflow-local artifacts under ctx.workflow_folder
+      and rejects path escape attempts.
+  - id: AC-2
+    text: Workflow-parameter validation delegates to the existing workflow parameter
+      coercion path instead of re-implementing schema logic.
+  - id: AC-3
+    text: docs/authoring.md and unit tests describe the seam as additive and authoring-only.
+  deliverables:
+  - stdlib/adaptation.py
+  - stdlib/__init__.py
+  - docs/authoring.md
+  - tests/unit/test_stdlib_and_extensions.py
+  risks:
+  - A second parameter-validation code path would create long-term drift against CLI
+    behavior.
+  - Selected-workflow inspection could accidentally become a hidden runtime contract
+    if it is implemented outside stdlib authoring helpers.
+  rollback:
+  - Revert the new stdlib helper/export/doc/test changes as one slice if validation
+    semantics drift from the runtime loader.
+- phase_id: candidate-workflow-adapted-execution-plan-package
+  title: Adapted Execution Plan Package
+  objective: Ship candidate_workflow_to_adapted_execution_plan as a reusable building
+    block that turns a chosen workflow and task context into a published, execution-ready
+    adapted plan with validated parameters.
+  status: planned
+  in_scope:
+  - Add the new workflow package under workflows/candidate_workflow_to_adapted_execution_plan/.
+  - Implement params, contracts, prompts, asset checklist, workflow logic, publish-time
+    validation, docs, and runtime proof.
+  - Publish a validated workflow-parameter artifact and deterministic receipt as part
+    of the terminal contract.
+  out_of_scope:
+  - Auto-running the selected workflow after planning.
+  - Mutating the selected workflow package at run time.
+  - Introducing provider-facing packet abstractions outside prompt templates.
+  dependencies:
+  - selected-workflow-adaptation-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: Workflow discovery and compilation succeed for candidate_workflow_to_adapted_execution_plan
+      from the repo root.
+  - id: AC-2
+    text: A scripted runtime test proves end-to-end publication of the plan, summary,
+      next-action artifact, validated workflow parameters, and receipt.
+  - id: AC-3
+    text: Publish-time validation rejects invalid selected workflows, invalid proposed
+      parameter payloads, missing authoritative artifacts, and summary drift.
+  deliverables:
+  - workflows/candidate_workflow_to_adapted_execution_plan/__init__.py
+  - workflows/candidate_workflow_to_adapted_execution_plan/params.py
+  - workflows/candidate_workflow_to_adapted_execution_plan/contracts.py
+  - workflows/candidate_workflow_to_adapted_execution_plan/workflow.py
+  - workflows/candidate_workflow_to_adapted_execution_plan/workflow.toml
+  - workflows/candidate_workflow_to_adapted_execution_plan/prompts/
+  - workflows/candidate_workflow_to_adapted_execution_plan/assets/adapted_execution_plan_checklist.md
+  - docs/workflows/candidate_workflow_to_adapted_execution_plan.md
+  - tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py
+  risks:
+  - The package could collapse into a prose-only memo if the validated-parameter artifact
+    is not treated as authoritative.
+  - The workflow could blur the line between adaptation planning and execution if
+    the publish contract is not enforced.
+  rollback:
+  - Remove the new workflow package, workflow doc, and runtime test together if the
+    package cannot stay publication-only and artifact-first.
+- phase_id: portfolio-handoff-docs-and-closeout
+  title: Portfolio Handoff And Closeout
+  objective: Align the front-door adapt-route handoff, recursive memory, and baseline
+    docs/tests with the newly shipped adaptation layer.
+  status: planned
+  in_scope:
+  - Update task_to_workflow_strategy prompts/docs/tests so adapt-route handoff points
+    to the new building block.
+  - Update recursive memory files with cycle-6 outcomes, gap updates, and the next
+    deferred portfolio gap.
+  - Update architecture/doc baseline tests and plan for targeted closeout verification.
+  out_of_scope:
+  - Changing the package-only CLI contract.
+  - Claiming recursive_autoloop wrapper/template parity.
+  - Adding hidden downstream execution to the front door.
+  dependencies:
+  - candidate-workflow-adapted-execution-plan-package
+  acceptance_criteria:
+  - id: AC-1
+    text: The front-door adapt route names candidate_workflow_to_adapted_execution_plan
+      as the concrete next step without auto-running it.
+  - id: AC-2
+    text: Recursive memory records the new adaptation layer, its helper seam, and
+      a coherent next deferred gap.
+  - id: AC-3
+    text: tests/test_architecture_baseline_docs.py reflects cycle-6 closeout without
+      introducing stale-path or recursive-wrapper claims.
+  deliverables:
+  - workflows/task_to_workflow_strategy/prompts/
+  - docs/workflows/task_to_workflow_strategy.md
+  - .autoloop_recursive/framework_evolution_charter.md
+  - .autoloop_recursive/framework_roadmap.md
+  - .autoloop_recursive/framework_gap_ledger.md
+  - .autoloop_recursive/workflow_candidate_ledger.md
+  - tests/runtime/test_task_to_workflow_strategy.py
+  - tests/test_architecture_baseline_docs.py
+  risks:
+  - Strategy handoff wording could drift from the actual new workflow interface.
+  - Recursive memory could claim more proof or scope than the implementation actually
+    ships.
+  rollback:
+  - Revert the front-door doc/prompt/test updates and recursive-memory changes together
+    if the new workflow contract is not stable enough for closeout.
