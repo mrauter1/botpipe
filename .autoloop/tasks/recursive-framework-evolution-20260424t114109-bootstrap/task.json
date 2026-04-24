@@ -15,14 +15,14 @@
       "docs-templates-and-regression"
     ],
     "explicit": true,
-    "current_phase_index": 3,
-    "current_phase_id": "docs-templates-and-regression"
+    "current_phase_index": 4,
+    "current_phase_id": null
   },
   "phase_status": {
     "resolver-foundation": "completed",
     "catalog-and-helper-migration": "completed",
     "authoring-support-and-builder": "completed",
-    "docs-templates-and-regression": "in_progress"
+    "docs-templates-and-regression": "completed"
   },
   "phase_history": [
     {
@@ -69,6 +69,13 @@
       "run_id": "run-20260424T144110Z-aa024541",
       "status": "in_progress",
       "ts": "2026-04-24T17:26:46.402552+00:00"
+    },
+    {
+      "phase_id": "docs-templates-and-regression",
+      "run_id": "run-20260424T144110Z-aa024541",
+      "status": "completed",
+      "ts": "2026-04-24T19:02:53.729209+00:00",
+      "pair": "test"
     }
   ]
 }
