@@ -49,3 +49,4 @@
 {"ts": "2026-04-24T10:43:01.377774+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 49, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "recursive-memory-and-validation"}
 {"ts": "2026-04-24T10:44:07.408614+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 50, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "recursive-memory-and-validation"}
 {"ts": "2026-04-24T10:44:07.440157+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 51, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "recursive-memory-and-validation"}
+{"ts": "2026-04-24T10:44:07.510418+00:00", "run_id": "run-20260424T091635Z-858b34e9", "seq": 52, "event_type": "phase_completed", "pair": "test", "phase_id": "recursive-memory-and-validation", "phase_mode": "single"}
