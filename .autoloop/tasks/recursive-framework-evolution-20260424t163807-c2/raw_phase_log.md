@@ -239,3 +239,56 @@ Open issues / next step
 
 - Remaining deferred validation debt is now primarily repeated `params.py` validator normalization across workflow parameter models; I recorded that in the validation debt ledger instead of broadening this phase.
 - Portfolio-shape debt remains unchanged: whether `release_candidate_to_go_no_go` and `incident_to_hardening_program` should later adopt existing building blocks is still a separate decision.
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+I’m reviewing only the phase-local artifacts and the implementation diff against the approved consolidation scope. First step is to verify the touched workflow publication checks against their pre-migration behavior, then I’ll record criteria and findings in the phase artifacts.
+
+I found one material regression in the migrated publish paths: two workflows now coerce non-string summary fields that previously had to be real strings. I’m recording that as a blocking finding and marking the phase artifacts accordingly.
+
+Scope considered
+
+- Phase-local review of the shared-validation migration against the accepted plan, criteria, implementation notes, and shared decisions.
+- Changed implementation surface reviewed: `stdlib/validation.py`, `stdlib/__init__.py`, `stdlib/company.py`, `stdlib/diagnostics.py`, `stdlib/portfolio.py`, and the four target workflow `workflow.py` files.
+- Regression analysis focused on publish-time invariants, bootstrap normalization, and direct-reuse snapshot-helper cleanup.
+
+What I analyzed
+
+- The migration diff for the shared seam and the four older domain workflows.
+- The current publish handlers in `release_candidate_to_go_no_go` and `incident_to_hardening_program` against their previous pre-migration behavior.
+- Targeted runtime tests to see which invariants are already covered and which regression remained untested.
+- Phase artifacts updated by implementation, including `implementation_notes.md`, `criteria.md`, and `decisions.txt`.
+
+What I reviewed
+
+- Acceptance criteria AC-1 through AC-3.
+- Whether the shared helper additions stayed additive and bounded.
+- Whether workflow-local generic validators were replaced without weakening domain-specific publish checks.
+- Whether the optional snapshot-helper cleanup stayed a direct seam reuse.
+
+Key findings / decisions
+
+- One blocking finding recorded in `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/implement/phases/shared-validation-migration/feedback.md` as `IMP-001`.
+- The regression is in `workflows/release_candidate_to_go_no_go/workflow.py:on_publish_decision` and `workflows/incident_to_hardening_program/workflow.py:on_publish_incident_package`.
+- Those handlers now use `require_non_empty_string(..., coerce=True)` for summary fields that previously required actual strings, so non-string JSON values can now be coerced and published instead of rejected.
+- I updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/implement/phases/shared-validation-migration/criteria.md` to leave correctness, behavioral safety, and compatibility unchecked, while marking simplicity and maintainability as satisfied.
+
+Open issues / next step
+
+- Fix `IMP-001` by keeping the shared seam but switching those publication-only fields to non-coercive validation (`coerce=False` or equivalent shared non-coercing helper usage).
+- After that fix, rerun the same targeted unit/runtime proof and re-review the phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
