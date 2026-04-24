@@ -439,3 +439,122 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+I’m implementing the `task_to_candidate_workflow_set` phase deliverable and first gathering the authoritative phase artifacts plus the required framework/workflow files so I can fit the new package to existing patterns without widening scope unnecessarily.
+
+I’ve confirmed the cycle plan already translated the stale `src/autoloop/...` paths to the repo-root layout and that the capability-snapshot seam landed earlier in this run. Next I’m reading the live framework surfaces and existing workflow packages to wire the new building block into the current runtime rather than the retired layout in the request template.
+
+I’ve got the live seams now: the new capability snapshot helper is already present, and the main remaining work is packaging the new building block plus composing it back into `task_to_workflow_strategy` without breaking its existing artifact contract. I’m reading the current prompt/test patterns next so the new workflow matches the repository’s authoring style and the strategy workflow can adopt child artifacts cleanly.
+
+I’ve narrowed the implementation shape: the new package will own framing, capability capture, candidate analysis, and publication; the existing strategy workflow will consume it as a child and keep only the final route selection and packaging layers. I’m pulling the prior seam notes plus the current strategy workflow’s remaining details now so I can make the composition change without drifting from the already-shipped contracts.
+
+Plan from here:
+
+1. Add `workflows/task_to_candidate_workflow_set/` with params, contracts, prompts, assets, runtime validation, docs, and direct runtime proof on top of `write_workflow_capability_snapshot(...)`.
+2. Refactor `task_to_workflow_strategy` to compose that new building block explicitly, adopt its child artifacts into the existing parent-local filenames where required, and keep the front door’s final strategy package/receipt contract intact.
+3. Update recursive memory and architecture-baseline tests so cycle 5 records the shipped candidate-set building block and the new capability-snapshot seam instead of leaving them deferred.
+4. Run the targeted pytest slice that covers the new workflow, the updated strategy workflow, capability inspection, stdlib helpers, and recursive-memory baselines, then write phase notes and decisions with the actual validation result.
+
+I’m starting the code edits now: first the new workflow package and its tests/docs, then the strategy workflow composition layer, then the recursive-memory updates and phase notes.
+
+The new building block package is in place. I’m wiring the direct runtime proof now, then I’ll update the front door to consume it and align the recursive memory/test baselines with the shipped cycle-5 state.
+
+The runtime proofs are mostly wired now. I’m on the documentation and recursive-memory pass next, because the current strategy doc and roadmap still describe `task_to_candidate_workflow_set` as deferred and the architecture-baseline tests will keep failing until that historical record is advanced to cycle 5.
+
+I’m updating the recursive memory now. The main change is shifting cycle 5 from “candidate retrieval is deferred” to “candidate retrieval shipped, adaptation planning is the next deferred layer,” and I’ll sync the architecture-baseline tests to that new state right after.
+
+I’ve finished the main code and docs edits and I’m switching to validation now. First pass is syntax and import sanity on the touched workflow/test modules, then the targeted pytest slice so I can fix any contract drift before I update the phase notes and decision ledger.
+
+The syntax pass cleared, and the targeted pytest slice is in progress. I’ve already got the first batch of tests passing, so I’m waiting on the rest of the workflow/runtime/memory coverage before I close out the notes and decision log.
+
+The targeted pytest slice passed cleanly (`102 passed`). I’m doing the last repository-owned bookkeeping now: the phase implementation notes, the shared decisions block for the non-obvious contracts, and the final plan status update before I summarize the outcome.
+
+The closeout checks still pass after the memory and note updates. I’m doing one last scoped status pass over the touched files, then I’ll mark the plan complete and give you the concise change summary with the validation results.
+
+I found one bit of validation noise: `py_compile` touched tracked `__pycache__` artifacts and created new cache files under the new package. I’m cleaning just those generated bytecode artifacts out of the working set so the final diff stays limited to the source/docs/test changes.
+
+**Scope considered**
+- Phase-local cycle-5 implementation for `task_to_candidate_workflow_set`, its immediate reuse inside the front door, and the required recursive-memory/doc/test updates tied to that shipped state.
+
+**What I analyzed**
+- The live repo-root workflow/runtime surfaces, the earlier cycle-5 capability-snapshot seam, current workflow package patterns, [task_to_workflow_strategy](</home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py>), and the recursive-memory baselines under [.autoloop_recursive](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md>).
+
+**What I changed**
+- Added the new reusable building block at [workflows/task_to_candidate_workflow_set/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_candidate_workflow_set/workflow.py) with params/contracts/prompts/assets, publication validation, docs at [docs/workflows/task_to_candidate_workflow_set.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_candidate_workflow_set.md), and direct runtime proof at [tests/runtime/test_task_to_candidate_workflow_set.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_candidate_workflow_set.py).
+- Updated [task_to_workflow_strategy](</home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py>) to invoke the new child workflow explicitly, adopt the child candidate artifacts into the parent workflow folder, and preserve the existing `strategy_summary.json` and `strategy_receipt.json` contracts while validating selected-route vs child-posture alignment.
+- Advanced the recursive memory files and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) to record cycle 5 as shipped, and updated the phase notes at [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/implementation_notes.md>).
+
+**Key findings / decisions**
+- Candidate retrieval stayed workflow-owned and artifact-first; I did not add runtime-owned ranking/selection machinery or widen `workflow.toml`.
+- The front door still owns final route choice and terminal strategy packaging; the new building block stops at candidate-set publication with `ready_for_strategy_selection=true`.
+- The next deferred portfolio layer is `candidate_workflow_to_adapted_execution_plan`.
+
+**Open issues / next step**
+- Validation passed: targeted slice `102 passed`, then a post-note spot check `34 passed`.
+- No open blocker in this phase. The next obvious follow-on is the adaptation-plan building block on top of the shipped candidate-set layer.
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+I’m reviewing the phase-local implementation against the active contract now. First I’m reading the reviewer-owned criteria/feedback artifacts and the touched workflow/test/docs surfaces so I can decide whether the phase is complete or whether there are blocking correctness or contract issues.
+
+Reviewing the shipped workflow package and the parent strategy integration now. I’m checking artifact contracts against actual step behavior, then I’ll update the reviewer artifacts with either a clean pass or concrete findings.
+
+I’ve narrowed one likely contract issue in the parent workflow and I’m verifying whether it’s real or already covered elsewhere. I’m checking the publish step, docs, and tests together so the feedback is anchored to the actual acceptance criteria.
+
+The candidate-set package itself looks disciplined. I’m checking whether the parent workflow’s compiled step contract still matches what its publish code actually reads, because that’s the kind of drift that passes happy-path tests but breaks the explicit-contract doctrine.
+
+I hit a path mismatch in the local layout while checking runtime enforcement, so I’m locating the actual compiler/runner sources before I lock the severity. The parent workflow issue still looks real; I’m making sure the failure mode is stated precisely.
+
+I’ve confirmed the engine actually enforces `step.requires`, so this isn’t just a doc nit. I’m running one small compile-time check now to capture the exact publish-step prerequisite set before I write the finding.
+
+`python` isn’t on PATH here. I’m switching to `python3` for the final confirmation and then I’ll update the reviewer artifacts.
+
+I’ve got one blocking finding and no need to widen scope further. I’m updating the phase feedback now; the criteria gates stay unmet because the parent publish step’s declared inputs don’t match what the runtime actually consumes.
+
+Scope considered
+- Phase-local verifier scope for `task-to-candidate-workflow-set-package`: the new `task_to_candidate_workflow_set` package, its immediate reuse in `task_to_workflow_strategy`, and the reviewer-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/`.
+
+What I analyzed
+- `workflows/task_to_candidate_workflow_set/workflow.py`, `contracts.py`, `docs/workflows/task_to_candidate_workflow_set.md`, and `tests/runtime/test_task_to_candidate_workflow_set.py`.
+- `workflows/task_to_workflow_strategy/workflow.py`, `docs/workflows/task_to_workflow_strategy.md`, and `tests/runtime/test_task_to_workflow_strategy.py`.
+- `core/compiler.py` and `core/engine.py` to confirm how declared `requires` are compiled, published, and enforced at runtime.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/criteria.md) to keep all gates unmet and record that a blocking finding remains.
+- Appended `IMP-001` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/feedback.md).
+
+Key findings / decisions
+- `IMP-001` is blocking: [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:187) declares `publish_strategy.requires` without the adopted child candidate artifacts, but [on_publish_strategy](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:358) still reads them. Because [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:501) enforces only the declared `requires`, the compiled/capability contract can say the step is runnable while the handler later crashes on missing adopted child artifacts. The same incomplete read set is documented at [docs/workflows/task_to_workflow_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_workflow_strategy.md:182).
+- No second blocking issue was necessary to hold the phase; this contract drift alone is enough to keep the verifier result incomplete.
+
+Open issues / next step
+- Add `candidate_route_posture`, `candidate_workflow_set`, `candidate_workflow_set_summary`, and `candidate_next_action` to `publish_strategy.requires`, align the `publish_strategy` artifact-contract doc row, and add a compile-time assertion in `tests/runtime/test_task_to_workflow_strategy.py` for the full publish-step prerequisite set.
+- Re-run verifier after that fix.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
