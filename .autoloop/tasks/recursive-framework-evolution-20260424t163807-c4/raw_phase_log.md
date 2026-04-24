@@ -809,3 +809,54 @@ Result: `239 passed in 22.76s`.
 Open issues / next step
 
 No test blocker remains for this phase. The remaining deferred work is still product-side authoring cleanup, not additional proof coverage for the scoped compact prompt family.
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc19f-dbc0-7971-be53-0c4f55322089
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc19f-dbc0-7971-be53-0c4f55322089
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc19f-dbc0-7971-be53-0c4f55322089
+---
+I’m auditing the new coverage against the phase contract now. I’ll verify that the added baseline-doc assertion actually closes the recursive-memory gap, confirm the scoped proof stays green, and then update only the test audit artifacts.
+
+I found no obvious coverage hole in the new assertion itself. I’m rerunning the scoped proof once under audit so the decision to mark this phase complete is based on an independent pass, not just the producer report.
+
+The audit proof is running against the same scoped command the producer recorded. If it stays green, I’ll close this with no blocking findings and mark the audit criteria complete.
+
+The audit rerun passed cleanly. I’m updating the test audit artifacts now: all criteria boxes will be checked, and the feedback log will record a no-findings audit entry with the independent `239 passed` proof result.
+
+Scope considered
+
+The active phase test artifacts, the shared decisions ledger, the changed baseline-doc test in `tests/test_architecture_baseline_docs.py`, and the scoped prompt-facing runtime suites plus `tests/test_architecture_baseline_docs.py`. I did not broaden into unrelated dirty files.
+
+What I analyzed
+
+I checked the phase strategy and feedback against the actual repository test change, reviewed the new cycle-4 recursive-memory assertion in the baseline docs suite, and verified it matched the decisions ledger and the phase acceptance criteria.
+
+What I reviewed
+
+I independently reran the scoped proof:
+`.venv/bin/pytest -q tests/runtime/test_workflow_builder_package.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+Result: `239 passed in 22.26s`.
+
+I updated the audit artifacts:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/proof-docs-memory-closeout/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/test/phases/proof-docs-memory-closeout/feedback.md)
+
+Key findings / decisions
+
+No blocking findings. The added baseline-doc regression test closes the remaining AC-2 gap by pinning the cycle-4 recursive-memory closeout notes, while the existing scoped runtime suites continue to cover the compact prompt README/prompt-body surface for AC-1.
+
+Open issues / next step
+
+No test-audit blocker remains for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
