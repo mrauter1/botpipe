@@ -474,3 +474,50 @@ No open review issues remain for this phase-local verifier scope.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe44-0d20-78c2-8dd9-ec5ac71f7cfa
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbe44-0d20-78c2-8dd9-ec5ac71f7cfa
+
+
+---
+run_id=run-20260424T062640Z-13174b0c | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe44-0d20-78c2-8dd9-ec5ac71f7cfa
+---
+I’m checking the phase-local test surface for `workflow_run_history_to_failure_modes`, including the new runtime proof and the shared decisions ledger, to decide whether the existing coverage is sufficient or whether I need to add missing regression cases.
+
+I found a concrete gap worth freezing in tests: the implementation already guards against textual hidden downstream execution in `diagnostic_next_actions.md`, but the current proof doesn’t lock that behavior. I’m adding a focused negative-path test for that guard and one for the terminal authoritative-artifact set.
+
+I’m patching the runtime proof and the phase-local test artifacts now. The additions stay inside the existing failure-path harness so they cover the diagnostic-publication boundary without broadening the test surface.
+
+The new regression cases are in place. I’m rerunning the targeted suite now to confirm they pass and that the phase-local artifact updates still reflect the actual coverage.
+
+The test run is clean. I’m doing a final readback of the updated phase-local artifacts so the closeout matches what was actually added and validated.
+
+Scope considered
+
+Phase-local test scope for `workflow_run_history_to_failure_modes`: [test_workflow_run_history_to_failure_modes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_history_to_failure_modes.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/test/phases/workflow-run-history-to-failure-modes/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/test/phases/workflow-run-history-to-failure-modes/feedback.md), and the current-turn entry in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/decisions.txt). I only broadened into the shipped runtime test harness already in scope for regression analysis.
+
+What I analyzed
+
+I reviewed the active phase contract, the existing runtime proof, the publish-time validation logic for the terminal diagnostic package, and the shared decisions ledger. The main uncovered regression risk was that the implementation already guarded against implicit downstream auto-execution phrasing and incomplete terminal authoritative-artifact sets, but the tests did not yet freeze those behaviors.
+
+What I changed
+
+Added two focused failure-path tests in [test_workflow_run_history_to_failure_modes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_history_to_failure_modes.py): one rejects incomplete `authoritative_artifacts` in `improvement_opportunities.json`, and one rejects hidden downstream auto-execution phrasing in `diagnostic_next_actions.md`. Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/test/phases/workflow-run-history-to-failure-modes/test_strategy.md) with an explicit AC-to-test coverage map, preserved invariants, edge cases, and flake controls, and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/test/phases/workflow-run-history-to-failure-modes/feedback.md). I also appended one shared test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c9/decisions.txt).
+
+Key findings / decisions
+
+The existing suite was already strong on discovery, compilation, happy-path publication, and several rejection paths, so I kept the additions narrow and deterministic inside the current publish-context fixture. Validation passed with `.venv/bin/pytest -q tests/runtime/test_workflow_run_history_to_failure_modes.py` and `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py`; results were `20 passed` and `37 passed`.
+
+Open issues / next step
+
+No open test-author issues remain in this phase-local scope. The auditor can review the added AC-3 regression coverage and the updated coverage map.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

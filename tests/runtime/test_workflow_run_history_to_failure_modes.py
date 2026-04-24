@@ -1201,6 +1201,57 @@ def test_workflow_run_history_to_failure_modes_publish_rejects_hidden_downstream
         workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
 
 
+def test_workflow_run_history_to_failure_modes_publish_rejects_incomplete_authoritative_artifacts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_failure_modes_test_context(
+        tmp_path,
+        monkeypatch,
+        summary_overrides={
+            "authoritative_artifacts": [
+                "improvement_opportunities",
+                "improvement_opportunities_summary",
+                "failure_mode_map",
+                "failure_mode_manifest",
+                "recurring_weak_points",
+            ]
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="improvement_opportunities.json authoritative_artifacts must include",
+    ):
+        workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
+
+
+def test_workflow_run_history_to_failure_modes_publish_rejects_hidden_downstream_execution_text(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_failure_modes_test_context(tmp_path, monkeypatch)
+    (ctx.workflow_folder / "diagnostic_next_actions.md").write_text(
+        "\n".join(
+            (
+                "# Diagnostic Next Actions",
+                "",
+                "- Publication boundary: `diagnostic_publication_only`.",
+                "- Automatically run `workflow_and_eval_to_refined_workflow_package` next.",
+                "",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="diagnostic_next_actions.md must not imply hidden downstream execution",
+    ):
+        workflow_pkg.WorkflowRunHistoryToFailureModes.on_publish_failure_mode_package(state, ctx)
+
+
 def _produce_frame_scope(request) -> str:
     run_ids = _captured_run_ids(request)
     request.artifacts.diagnostic_scope_brief.write_text(

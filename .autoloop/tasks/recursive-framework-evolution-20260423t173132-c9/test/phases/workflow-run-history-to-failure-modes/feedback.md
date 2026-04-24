@@ -6,3 +6,5 @@
 - Phase Directory Key: workflow-run-history-to-failure-modes
 - Phase Title: Workflow Run History To Failure Modes
 - Scope: phase-local authoritative verifier artifact
+
+- Added runtime regression coverage for two terminal-package guards: incomplete `authoritative_artifacts` in `improvement_opportunities.json` and hidden downstream auto-execution phrasing in `diagnostic_next_actions.md`. Updated `test_strategy.md` with the AC-to-test coverage map and stabilization notes.
