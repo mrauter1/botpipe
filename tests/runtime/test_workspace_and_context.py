@@ -514,6 +514,82 @@ def test_list_task_operation_summaries_publish_bounded_task_history_and_filtered
         list_task_operation_summaries(tmp_path, max_messages_per_task=0)
 
 
+def test_list_task_operation_summaries_keep_explicit_task_ids_even_when_filtered_telemetry_is_empty(
+    tmp_path: Path,
+) -> None:
+    task_one_dir = _write_task_operation_record(
+        tmp_path,
+        task_id="task-1",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:04:00+00:00",
+        request_text="Release recovery task.\n",
+        messages=[
+            (
+                "2026-04-24T06:03:00+00:00",
+                "Need owner confirmation for the release recovery path.",
+            ),
+        ],
+    )
+    task_two_dir = _write_task_operation_record(
+        tmp_path,
+        task_id="task-2",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:05:00+00:00",
+        request_text="Incident review task.\n",
+        messages=[
+            (
+                "2026-04-24T06:05:00+00:00",
+                "Waiting for incident commander confirmation.",
+            ),
+        ],
+    )
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-1",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-success",
+        status="success",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:04:00+00:00",
+        request_text="Release recovery task.\n",
+    )
+
+    summaries = list_task_operation_summaries(
+        tmp_path,
+        task_ids=["task-1", "task-2"],
+        workflow_names=["incident_to_hardening_program"],
+        statuses=["paused"],
+        max_runs_per_workflow=1,
+        max_messages_per_task=1,
+    )
+
+    assert len(summaries) == 2
+    assert [summary["task_id"] for summary in summaries] == ["task-2", "task-1"]
+    assert summaries[0]["source_paths"] == {
+        "messages_file": str(task_two_dir / "messages.jsonl"),
+        "request_file": str(task_two_dir / "request.md"),
+        "task_dir": str(task_two_dir),
+        "task_meta_file": str(task_two_dir / "task.json"),
+    }
+    assert summaries[1]["source_paths"] == {
+        "messages_file": str(task_one_dir / "messages.jsonl"),
+        "request_file": str(task_one_dir / "request.md"),
+        "task_dir": str(task_one_dir),
+        "task_meta_file": str(task_one_dir / "task.json"),
+    }
+    for summary in summaries:
+        assert summary["workflow_run_summaries"] == [
+            {
+                "latest_run_id": None,
+                "latest_updated_at": None,
+                "recent_runs": [],
+                "run_count": 0,
+                "status_counts": {},
+                "workflow_name": "incident_to_hardening_program",
+            }
+        ]
+
+
 def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_records_child_metadata(tmp_path: Path) -> None:
     _write_child_success_workflow_package(tmp_path)
     _write_parent_class_invoker_workflow_package(tmp_path)
