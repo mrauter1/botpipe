@@ -352,3 +352,91 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbf34-d777-7852-a92c-35d79d6f8e0b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbf34-d777-7852-a92c-35d79d6f8e0b
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbf34-d777-7852-a92c-35d79d6f8e0b
+---
+I’m implementing the `company_operation_to_recursive_improvement_cycle` phase deliverable and first I’m reading the phase artifacts, mandatory framework files, and existing workflow patterns so the changes stay inside the approved scope and match current contracts.
+
+The repository shape has drifted from the request snapshot: there is no `src/autoloop/...` tree here, and the active implementation lives under `workflows/`, `docs/workflows/`, and the phase artifact directories. I’m reading the phase plan, current workflow packages, and the snapshot-helper seam next so the new workflow fits the actual codebase rather than the stale path references.
+
+I’ve confirmed the plan artifact already chose this workflow and the new company snapshot seam landed in a prior phase. Now I’m mapping the current workflow/package conventions and the new helper contracts so the implementation can stay explicit, typed, and testable without widening runtime scope.
+
+I’ve got the reference workflow shape now: deterministic bootstrap/capture/publish steps around three typed pair steps, plus workflow-local publication validation. I’m pulling the rest of that implementation and the sibling workflow tests so I can mirror the existing runtime-proof style instead of inventing a new one.
+
+Plan for the implementation:
+1. Add `workflows/company_operation_to_recursive_improvement_cycle/` by following the existing portfolio-governance package shape, but scoped to company-operation framing, recursive-improvement analysis, and cycle packaging.
+2. Reuse the new company snapshot helper plus capability/portfolio-health helpers in a deterministic capture step, then implement publish-time validation that rejects missing snapshots, unknown focus references, summary drift, invalid priority categories, and hidden downstream execution.
+3. Add workflow docs, prompt README/templates, checklist asset, and runtime tests that prove discovery/compilation, successful publication, filter handling, and the required rejection cases.
+4. Update the phase implementation notes, shared decisions block, and the `.autoloop_recursive/` roadmap/gap/candidate memory so later cycles inherit the new baseline.
+
+I’m at the implementation point now. The remaining work is mostly patterned: a new workflow package with company-specific state and validation, then tests mirroring the existing portfolio-governance proof but extended to company snapshots and recursive-improvement categories.
+
+I’ve finished the design choices and I’m writing the new workflow package now: typed params/contracts, deterministic snapshot capture, publish-side validation, and the step prompts/assets that keep the provider contract explicit.
+
+The workflow package is in place. I’m adding the workflow doc and the runtime proof next so I can exercise the publish path before I touch the standing recursive-memory files and test expectations.
+
+The workflow, prompts, and runtime proof are written. I’m running the focused workflow test file now to catch contract or publication issues before I update the recursive-memory baselines and the phase notes.
+
+The first test pass caught two real issues: the capture step was comparing status filters against the helper’s normalized sorted order, and the package verifier prompt was missing the explicit publication-boundary marker. I’m fixing those directly in the workflow package now.
+
+The new workflow proof is passing in isolation. I’m updating the standing recursive-memory files and the baseline-doc tests now so cycle 12 becomes the new recorded default instead of leaving the company learner marked as deferred.
+
+I’ve finished the workflow package and runtime proof. I’m updating the recursive memory/docs assertions and phase notes now, then I’ll run the targeted regression slice.
+
+The standing memory files already carry the cycle-12 baseline and the architecture baseline assertions are in place. I’m checking the remaining deltas, then I’ll write the phase notes and shared decisions before the final test pass.
+
+I’ve confirmed the cycle-12 recursive-memory and architecture-baseline changes are already in the workspace. The remaining repo noise is unrelated; I’m only touching this phase’s notes and decision ledger before rerunning the scoped validation set.
+
+I’m extracting the exact symbols I touched so the phase notes are precise, then I’ll run the scoped regression slice and record the result.
+
+The scoped closeout suite is running now. Once I have the exact pass count, I’ll write the phase note and decision block against the verified result instead of the earlier partial proof.
+
+I have the exact closeout proof now: the targeted suite passed cleanly. I’m patching the roadmap assertion, phase notes, and the cycle-12 decision block with that verified result and the two non-obvious publication rules that matter for later turns.
+
+The first patch failed on patch formatting, not on content. I’m applying the same edits as smaller hunks to avoid touching anything outside the intended files.
+
+The bookkeeping patches are in. I’m rerunning the same closeout suite after those note/assertion updates so the recorded `162 passed` result reflects the final workspace state.
+
+The closeout suite still passes after the note/assertion updates: `162 passed`. I’m doing one last readback of the phase note and decision block, then I’ll summarize the scope, analysis, and remaining repo noise separately from this phase.
+
+Scope considered
+
+- Scoped to the phase deliverables for `company_operation_to_recursive_improvement_cycle`, its workflow-local docs/tests, the required `.autoloop_recursive/` memory updates, and this phase’s `implementation_notes.md` / `decisions.txt`.
+- I ignored unrelated dirty deletions and untracked migration noise elsewhere in the repo.
+
+What I analyzed
+
+- The cycle-12 request, plan, phase artifacts, and the existing patterns in portfolio-governance, decomposition, builder, and snapshot-seam workflows.
+- The new company snapshot seam dependency, the cycle-12 workflow package, the recursive-memory files, and the baseline-doc assertions in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+
+What I changed
+
+- Shipped the new workflow package under [workflows/company_operation_to_recursive_improvement_cycle/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/workflow.py) with typed contracts, params, prompts, assets, explicit publish validation, and publication-only terminal behavior.
+- Added workflow-local documentation in [docs/workflows/company_operation_to_recursive_improvement_cycle.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/company_operation_to_recursive_improvement_cycle.md) and runtime proof coverage in [tests/runtime/test_company_operation_to_recursive_improvement_cycle.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_company_operation_to_recursive_improvement_cycle.py).
+- Updated the recursive memory files, recorded the cycle-12 closeout proof count in [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md), and completed the phase note plus the latest decision block.
+
+Key findings / decisions
+
+- `workflow_idea_to_workflow_package` remains a credible builder baseline, so cycle 12 correctly shipped the higher-order company learner instead of another builder-first package.
+- The workflow reuses the earlier company snapshot seam as-is; it does not widen runtime behavior.
+- Publish validation is intentionally workflow-local: `recursive_improvement_candidates.json` is authoritative, summary/next-action drift is rejected, and hidden downstream execution language is blocked.
+- Requested status filters are validated against the snapshot’s canonicalized values because the snapshot helper sorts and deduplicates them before publication.
+- Validation passed:
+  - workflow-specific runtime proof: `24 passed`
+  - targeted closeout suite: `162 passed`
+
+Open issues / next step
+
+- No in-phase blockers remain.
+- The main deferred follow-on is the next workflow/addition already captured in recursive memory: reusable assessment/remediation building blocks plus explicit handoff patterns from the new company learner to eval/refinement/governance/decomposition workflows.

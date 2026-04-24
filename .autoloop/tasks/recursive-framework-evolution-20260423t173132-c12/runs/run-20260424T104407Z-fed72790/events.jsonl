@@ -21,3 +21,5 @@
 {"ts": "2026-04-24T11:16:43.954614+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 21, "event_type": "phase_started", "phase_id": "company-operation-to-recursive-improvement-cycle", "phase_mode": "single"}
 {"ts": "2026-04-24T11:16:43.955787+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 22, "event_type": "pair_started", "pair": "implement", "phase_id": "company-operation-to-recursive-improvement-cycle"}
 {"ts": "2026-04-24T11:16:43.955913+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 23, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "company-operation-to-recursive-improvement-cycle"}
+{"ts": "2026-04-24T11:50:17.624590+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 24, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "company-operation-to-recursive-improvement-cycle"}
+{"ts": "2026-04-24T11:52:35.589844+00:00", "run_id": "run-20260424T104407Z-fed72790", "seq": 25, "event_type": "run_finished", "status": "interrupted", "exit_code": 130}
