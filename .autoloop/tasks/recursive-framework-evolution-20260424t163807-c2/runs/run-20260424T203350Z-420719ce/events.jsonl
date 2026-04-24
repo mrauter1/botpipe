@@ -23,3 +23,7 @@
 {"ts": "2026-04-24T20:58:40.303927+00:00", "run_id": "run-20260424T203350Z-420719ce", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-validation-migration"}
 {"ts": "2026-04-24T20:59:25.539019+00:00", "run_id": "run-20260424T203350Z-420719ce", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-validation-migration"}
 {"ts": "2026-04-24T20:59:25.599327+00:00", "run_id": "run-20260424T203350Z-420719ce", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "shared-validation-migration"}
+{"ts": "2026-04-24T20:59:25.659738+00:00", "run_id": "run-20260424T203350Z-420719ce", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "shared-validation-migration", "phase_mode": "single"}
+{"ts": "2026-04-24T20:59:25.664465+00:00", "run_id": "run-20260424T203350Z-420719ce", "seq": 27, "event_type": "phase_started", "phase_id": "proof-docs-and-memory-sync", "phase_mode": "single"}
+{"ts": "2026-04-24T20:59:25.665346+00:00", "run_id": "run-20260424T203350Z-420719ce", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "proof-docs-and-memory-sync"}
+{"ts": "2026-04-24T20:59:25.665415+00:00", "run_id": "run-20260424T203350Z-420719ce", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "proof-docs-and-memory-sync"}

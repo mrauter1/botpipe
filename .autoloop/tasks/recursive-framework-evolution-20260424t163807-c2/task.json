@@ -13,12 +13,12 @@
       "proof-docs-and-memory-sync"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "shared-validation-migration"
+    "current_phase_index": 1,
+    "current_phase_id": "proof-docs-and-memory-sync"
   },
   "phase_status": {
-    "shared-validation-migration": "in_progress",
-    "proof-docs-and-memory-sync": "planned"
+    "shared-validation-migration": "completed",
+    "proof-docs-and-memory-sync": "in_progress"
   },
   "phase_history": [
     {
@@ -26,6 +26,19 @@
       "run_id": "run-20260424T203350Z-420719ce",
       "status": "in_progress",
       "ts": "2026-04-24T20:42:28.772089+00:00"
+    },
+    {
+      "phase_id": "shared-validation-migration",
+      "run_id": "run-20260424T203350Z-420719ce",
+      "status": "completed",
+      "ts": "2026-04-24T20:59:25.659340+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-and-memory-sync",
+      "run_id": "run-20260424T203350Z-420719ce",
+      "status": "in_progress",
+      "ts": "2026-04-24T20:59:25.662113+00:00"
     }
   ]
 }
