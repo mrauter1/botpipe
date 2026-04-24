@@ -156,3 +156,12 @@ The planning artifacts are complete from the verifier perspective. The next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=shared-validation-migration,proof-docs-and-memory-sync
+explicit=True
+current_phase_index=0
