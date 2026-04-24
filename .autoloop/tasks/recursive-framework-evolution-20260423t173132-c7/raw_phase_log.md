@@ -430,3 +430,49 @@ The code and proof are settled. I’m updating the phase notes and the shared de
 **Open issues / next step**
 - No open issues in this phase scope.
 - The next obvious portfolio move is `workflow_and_eval_to_refined_workflow_package`, which the recursive-memory files now record as the clearest deferred follow-on.
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+I’m reviewing the phase-local implementation against the requested scope, the cycle decisions ledger, and the phase acceptance criteria. I’ll inspect the new workflow package, the publish-time validation path, the runtime proof, and the recursive-memory updates, then I’ll update the phase criteria and feedback artifacts only.
+
+The implementation notes line up with the phase contract. I’m reading the actual package and proof files now rather than trusting the note summary, with most focus on publish-time validation, typed control contracts, and whether the scripted proof really exercises the intended no-auto-run boundary.
+
+The package shape and prompt contracts look consistent. I’m rerunning the same targeted validation surface the implementer recorded so I can judge the criteria on actual evidence rather than on the diff alone.
+
+The verification pass is clean: the targeted tests pass, the package stays inside the requested scope, and I haven’t found a blocking correctness, safety, or maintenance issue in the new workflow or its phase-local docs/tests. I’m marking the criteria complete and recording a no-findings review note in the phase feedback artifact.
+
+Scope considered
+- Phase-local review of the new `workflow_to_eval_suite` package, its doc/runtime proof, the cycle-7 recursive-memory updates, and the phase-local implementation artifacts.
+- I kept review scope out of unrelated dirty migration files.
+
+What I analyzed
+- The authoritative request/phase contract, the shared decisions ledger, the phase implementation notes, and the new files under `workflows/workflow_to_eval_suite/`, `docs/workflows/workflow_to_eval_suite.md`, `tests/runtime/test_workflow_to_eval_suite.py`, `.autoloop_recursive/`, and `tests/test_architecture_baseline_docs.py`.
+- The publish-time validation path in `workflow_to_eval_suite/workflow.py`, especially selected-workflow contract capture, validated-manifest publication, summary-drift checks, and the no-auto-run boundary.
+
+What I reviewed
+- Prompt-contract completeness against AC-4: required reads, required writes, legal routes, evidence expectations, and forbidden actions are explicit in each producer/verifier prompt.
+- Typed control contracts against AC-1 and AC-3: the pair steps expose schemas and route contracts, and publish-time validation covers malformed case kinds, duplicate ids, invalid case parameters, unknown expected artifacts, and summary drift.
+- Runtime proof against AC-2: I reran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` and it passed with `69 passed`.
+
+Key findings / decisions
+- No blocking findings.
+- I updated `criteria.md` with all checkboxes checked.
+- I appended a no-findings review entry (`IMP-000`, non-blocking) to `feedback.md`.
+
+Open issues / next step
+- No open review issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
