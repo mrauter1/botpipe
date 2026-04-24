@@ -4,3 +4,7 @@
 {"ts": "2026-04-24T21:13:51.809741+00:00", "run_id": "run-20260424T210746Z-c526aa99", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T21:15:15.569612+00:00", "run_id": "run-20260424T210746Z-c526aa99", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T21:15:15.636561+00:00", "run_id": "run-20260424T210746Z-c526aa99", "seq": 6, "event_type": "pair_completed", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-24T21:15:15.711880+00:00", "run_id": "run-20260424T210746Z-c526aa99", "seq": 7, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["shared-parameter-validator-seam", "params-model-migrations-and-closeout"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-04-24T21:15:15.713289+00:00", "run_id": "run-20260424T210746Z-c526aa99", "seq": 8, "event_type": "phase_started", "phase_id": "shared-parameter-validator-seam", "phase_mode": "single"}
+{"ts": "2026-04-24T21:15:15.713856+00:00", "run_id": "run-20260424T210746Z-c526aa99", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "shared-parameter-validator-seam"}
+{"ts": "2026-04-24T21:15:15.713926+00:00", "run_id": "run-20260424T210746Z-c526aa99", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "shared-parameter-validator-seam"}
