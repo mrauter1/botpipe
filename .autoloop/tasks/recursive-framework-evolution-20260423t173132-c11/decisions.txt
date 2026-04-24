@@ -3,3 +3,7 @@ Mandatory stale request paths were mapped to the live package-root layout: docs/
 workflow_idea_to_workflow_package remains credible enough that cycle 11 should ship workflow_package_to_composable_building_blocks instead of another builder-first workflow.
 Cycle 11 should publish a candidate decomposition overlay and receipt rather than mutating the authoritative selected workflow package in place.
 The paired framework improvement should be an additive authoring-only write_selected_workflow_decomposition_surface(...) seam; do not widen workflow.toml or add runtime-owned decomposition automation.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260424T091635Z-858b34e9" ts="2026-04-24T09:28:30.739894+00:00" />
+Cycle 11 plan must include explicit verification/evidence, rework/replan/block/fail, and recursive self-improvement policy sections for workflow_package_to_composable_building_blocks.
+Overlay validation should stay local to workflow_package_to_composable_building_blocks unless duplication proves a minimal shared helper is unavoidable; if extracted, rerun refinement regression proof.
+When evidence_paths are omitted, request.md is the fallback authoritative context; unreadable evidence paths must route capture_decomposition_context to blocked.

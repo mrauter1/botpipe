@@ -106,3 +106,32 @@ The producer should revise `plan.md` to add the missing required workflow-policy
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dbec6-da58-71c0-862b-eb8f4b750be1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dbec6-da58-71c0-862b-eb8f4b750be1
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbec6-da58-71c0-862b-eb8f4b750be1
+---
+I’m handling the verifier pass now: patch the plan to close the blocking gap, tighten the non-blocking ambiguities, then refresh feedback and this turn’s decision block without changing implementation code.
+
+I’m patching the plan now to close the verifier gap directly in the workflow contract, not by adding more abstraction. The fixes are explicit policy sections plus two tighter implementation rules: local overlay validation by default, and deterministic fallback/error handling for `evidence_paths`.
+
+The YAML patch missed because the file was normalized on the earlier parse/readback. I’m reopening just the phase-2 block and patching against the current formatting so the machine-readable plan stays aligned with the narrative fix.
+
+I’m updating the shared decisions block for this turn now. The additions are only the non-obvious policy clarifications that the verifier said future turns could otherwise drift on.
+
+The fixes are in. I’m re-reading the changed sections and re-validating the phase YAML now so the updated plan is internally consistent before I hand it back to the verifier.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt).
+
+The plan now closes the verifier gap by adding explicit `Verification and evidence contract`, `Rework / replan / block / fail policy`, and `Recursive self-improvement policy` sections for `workflow_package_to_composable_building_blocks`. It also makes two narrower decisions explicit: overlay validation stays local by default unless a minimal shared helper is clearly required, and `request.md` is the fallback authoritative context when `evidence_paths` is omitted while unreadable evidence paths route `capture_decomposition_context` to `blocked`.
+
+`phase_plan.yaml` was updated to reflect those same rules in phase 2 and revalidated locally with `python3` plus `yaml.safe_load`. No implementation code was changed on this turn.

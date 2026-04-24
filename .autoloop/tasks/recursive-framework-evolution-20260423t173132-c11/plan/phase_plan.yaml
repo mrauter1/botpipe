@@ -48,6 +48,8 @@ phases:
   - Create the new workflow package under `workflows/workflow_package_to_composable_building_blocks/`.
   - Define the parameter model, route contracts, prompt templates, checklist asset,
     and publish-time validation logic.
+  - Keep overlay validation local by default; extract a shared helper only if duplication
+    proves unavoidable and pair that with refinement regression proof.
   - Publish a workflow doc and workflow-specific runtime test proving discovery, compilation,
     terminal candidate publication, and rejection of invalid overlays.
   out_of_scope:
@@ -67,6 +69,10 @@ phases:
   - id: AC-3
     text: Publish-time validation rejects hidden execution, identity drift, and candidate
       files outside the allowed repo-relative boundary.
+  - id: AC-4
+    text: When `evidence_paths` are omitted the workflow records `request.md` as the
+      fallback authoritative context, and unreadable evidence paths route to `blocked`
+      during context capture.
   deliverables:
   - workflows/workflow_package_to_composable_building_blocks/
   - docs/workflows/workflow_package_to_composable_building_blocks.md

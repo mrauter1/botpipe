@@ -160,6 +160,33 @@ Planned payload models:
 - `target_test_command` optional, default `pytest -q`
 - `max_candidate_building_blocks` optional, default `3`
 
+### Verification and evidence contract
+
+- Workflow discovery must prove the package is discoverable by canonical name and alias and compiles with explicit pair-step control contracts.
+- `capture_decomposition_context` must always write `decomposition_evidence_manifest.json`:
+  - when `evidence_paths` are supplied, the manifest must list the copied evidence artifacts and their source paths
+  - when no `evidence_paths` are supplied, the manifest must record `request.md` as the fallback authoritative context
+  - when a supplied evidence path cannot be read, the step must route to `blocked` rather than silently dropping the missing evidence
+- `implement_candidate_decomposition` must produce a candidate overlay that includes:
+  - a rewritten parent workflow surface
+  - at least one extracted building-block package
+  - the associated docs/test footprint captured by `candidate_decomposition_manifest.json` and `candidate_building_block_index.json`
+- `evaluate_candidate_decomposition` must produce `decomposition_verification_report.md`, `composition_migration_guide.md`, `promotion_record.md`, and `rollback_plan.md` before `publish_candidate_decomposition` can issue the receipt.
+- Overlay validation should stay local to this workflow by default. Only extract a minimal shared helper if duplication proves unavoidable, and if that happens rerun `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` alongside the primary targeted suite.
+
+### Rework / replan / block / fail policy
+
+- `needs_rework`: use when the selected workflow, extracted building-block set, and accepted decomposition boundary still hold, but the current framing, plan, overlay, or verification artifacts need local repair.
+- `needs_replan`: use when the selected workflow, extraction boundary, parent-rewrite strategy, package set, artifact graph, or acceptance surface changed materially enough that the current work item no longer fits.
+- `blocked`: use when required inputs cannot be captured or validated without external intervention, including unreadable `evidence_paths`, an unresolved selected-workflow reference, or a missing baseline artifact needed to preserve the candidate-only boundary.
+- `failed`: use when the workflow reaches an irreconcilable contradiction that local repair cannot address, such as a candidate overlay that cannot satisfy the declared decomposition boundary without violating the preserved invariants.
+
+### Recursive self-improvement policy
+
+- The workflow may propose extracted building blocks, parent rewrites, and follow-on framework changes, but they must stay inside the candidate overlay plus evaluation artifacts for this run.
+- The authoritative selected workflow package must remain unchanged during this workflow; promotion stays explicit and evidence-gated through `promotion_record.md`, `rollback_plan.md`, and `workflow_decomposition_receipt.json`.
+- Any follow-on shared abstraction beyond the chosen decomposition-surface helper must remain minimal, justified by demonstrated duplication, and paired with regression proof against the existing refinement workflow before adoption.
+
 ## Framework improvement decision
 
 ### Framework improvement candidates considered
@@ -240,6 +267,7 @@ Planned payload models:
   - checklist asset
 - Create `docs/workflows/workflow_package_to_composable_building_blocks.md`.
 - Create `tests/runtime/test_workflow_package_to_composable_building_blocks.py`.
+- Keep overlay validation local to the new workflow by default; only extract a minimal shared helper if duplication proves unavoidable, and rerun refinement regression proof if that happens.
 
 ### Phase 3: recursive-memory-and-validation
 
@@ -274,6 +302,7 @@ Planned payload models:
   - selected workflow and candidate manifest identities match
   - at least one extracted building-block package is present and discoverable in the candidate overlay
   - parent rewrite remains explicit
+  - `request.md` becomes the authoritative fallback context when no `evidence_paths` are supplied, and unreadable evidence paths route to `blocked`
   - hidden downstream execution or promotion language is rejected
 
 ## Risk register
