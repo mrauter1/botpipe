@@ -1,4 +1,89 @@
 version: 1
 task_id: recursive-framework-evolution-20260424t163807-c2
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/runs/run-20260424T203350Z-420719ce/request.md
-phases: []
+phases:
+- phase_id: shared-validation-migration
+  title: Migrate Older Domain Validation
+  objective: Finish the shared-validation migration wave for the four older domain
+    workflows while preserving their existing artifact contracts, routes, and publication
+    behavior.
+  status: planned
+  in_scope:
+  - Extend stdlib/validation.py only for generic mechanics still missing from the
+    shared seam.
+  - Replace workflow-local generic validators in investigation_request_to_evidence_pack,
+    security_finding_to_verified_remediation, release_candidate_to_go_no_go, and incident_to_hardening_program.
+  - Optionally replace duplicated filter normalization in stdlib/company.py, stdlib/diagnostics.py,
+    and stdlib/portfolio.py when it is a direct reuse of the same seam.
+  out_of_scope:
+  - Adding or retiring workflows.
+  - Changing CLI behavior, runtime routing, or ctx.invoke_workflow composition semantics.
+  - Introducing a new public root authoring abstraction or new workflow.toml semantics.
+  - Broad params.py deduplication or prompt-template redesign.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The four older domain workflows consume shared generic validation helpers
+      instead of file-local copies for string/list/JSON/object/int mechanics.
+  - id: AC-2
+    text: All touched workflows preserve their existing artifact names, route names,
+      publication receipt filenames, and domain-specific publish invariants.
+  - id: AC-3
+    text: Any stdlib snapshot-helper cleanup is limited to direct seam reuse and does
+      not add a new abstraction surface.
+  deliverables:
+  - Updated stdlib/validation.py shared helper surface.
+  - Migrated workflow.py files for the four older domain workflows.
+  - Any bounded stdlib snapshot-helper cleanup that reuses the same validation seam.
+  risks:
+  - Shared helper behavior could drift from the older workflows' accepted valid shapes
+    or tested error messages.
+  - Over-migration could move domain-specific publication semantics into stdlib.
+  - Snapshot-helper cleanup could widen scope if it requires new abstractions.
+  rollback:
+  - Revert shared-helper additions and the four workflow migrations together if publish-time
+    or runtime behavior drifts.
+  - Revert bounded stdlib snapshot-helper cleanup independently if it adds churn without
+    clear leverage.
+- phase_id: proof-docs-and-memory-sync
+  title: Prove And Record Consolidation
+  objective: Prove the migration through targeted tests, keep authoring docs aligned,
+    and update recursive-memory records so later cycles do not rediscover the same
+    debt.
+  status: planned
+  in_scope:
+  - Update unit and runtime coverage for the shared helper changes and migrated workflows.
+  - Adjust docs/authoring.md only as needed to reflect the completed validation-boundary
+    cleanup.
+  - Update framework_roadmap.md, framework_gap_ledger.md, workflow_candidate_ledger.md,
+    and validation_debt_ledger.md.
+  - Record the boilerplate and readability deltas for this cycle.
+  out_of_scope:
+  - Changing docs/architecture.md unless implementation reveals a real architectural
+    contract change.
+  - Adding new workflows, building blocks, or runtime-owned policy.
+  - Retrofitting unrelated workflow docs for wording-only cleanup.
+  dependencies:
+  - shared-validation-migration
+  acceptance_criteria:
+  - id: AC-1
+    text: Targeted unit and runtime suites cover the migrated helper behavior and
+      the touched workflow publication paths.
+  - id: AC-2
+    text: Recursive-memory files explicitly mark the old domain validation wave as
+      resolved or narrowed and record any remaining deferred debt.
+  - id: AC-3
+    text: The cycle closeout records that no CLI, runtime-routing, or workflow-artifact
+      compatibility contract changed.
+  deliverables:
+  - Updated targeted tests and closeout proof notes.
+  - Aligned authoring documentation.
+  - Updated recursive-memory ledgers and roadmap entries.
+  risks:
+  - Tests may miss a publish-path regression if the negative-path coverage is not
+    updated alongside the helper migration.
+  - Recursive-memory updates may drift from the actual implementation if they are
+    written before proof is complete.
+  rollback:
+  - Revert doc and memory updates if implementation or proof changes the chosen scope.
+  - Do not mark the validation debt resolved until targeted proof passes.

@@ -8,3 +8,44 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/runs/run-20260424T203350Z-420719ce/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019dc132-e4d5-7b41-b16c-0c56bfd79ae4
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dc132-e4d5-7b41-b16c-0c56bfd79ae4
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc132-e4d5-7b41-b16c-0c56bfd79ae4
+---
+I’m treating this as a planning turn for cycle 2, with the request snapshot and raw log as the authority. I’ll audit the repository and current recursive memory first, identify the highest-leverage consolidation or authoring-surface target, then update the plan artifacts and append any durable decisions.
+
+I’ve confirmed there are no clarifications beyond the initial request, and the current plan artifacts are effectively empty. The next step is narrowing the actual architectural pressure in code: which workflow families still carry duplicated validation or serializer tails, and whether the best plan is consolidation versus authoring-surface work.
+
+The code pressure is visible now. The newer portfolio/governance workflows already lean on `stdlib.validation`, while the older domain workflows and a few stdlib snapshot helpers still carry local copies of string/list/JSON validation, which matches the open debt recorded in `.autoloop_recursive/validation_debt_ledger.md`.
+
+Two consolidation candidates stand out. One is the explicit open debt: older domain workflows still duplicate workflow-local JSON/string/list validation in their `workflow.py` files. The other is smaller but real authoring-surface duplication in many `params.py` models and a few stdlib snapshot helpers that still repeat the same filter normalization logic.
+
+I have enough context to lock the direction. The plan will stay in `consolidate` mode, centered on the already-recorded domain-workflow validation debt, with a secondary bounded cleanup for duplicated snapshot-filter validation only if it stays strictly local and doesn’t compete with the main migration.
+
+I’m moving from audit into artifact updates now. The plan will explicitly reject a new workflow for this cycle, record the mandatory pre-change audit in `plan.md`, and keep the implementation surface narrow: shared validation migration first, documentation/memory sync second, with regression proof tied to the affected workflows and helpers.
+
+I’m writing the plan artifacts now. The implementation plan will explicitly bind the regression surface to the four older domain workflows and keep everything else as compatibility constraints or deferred follow-on work.
+
+The plan files are written. I’m doing the consistency pass now, and the first check is the machine-readable phase file because the runtime requires it to parse cleanly.
+
+The only consistency issue was a duplicate `phases` key from the first write. I’ve corrected that and am running the required local YAML parse now.
+
+The YAML is structurally corrected; the only parse failure was environment-related because `python` is absent here. I’m rerunning the required `yaml.safe_load` check with `python3`.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c2/decisions.txt). The plan stays in `consolidate` mode and explicitly rejects adding a workflow this cycle.
+
+The chosen implementation slice is the old-domain validation migration: finish moving generic validation out of `investigation_request_to_evidence_pack`, `security_finding_to_verified_remediation`, `release_candidate_to_go_no_go`, and `incident_to_hardening_program` into `stdlib/validation.py`, with only bounded reuse in `stdlib/company.py`, `stdlib/diagnostics.py`, and `stdlib/portfolio.py` if it stays mechanical. The phase plan is split into:
+- `shared-validation-migration`
+- `proof-docs-and-memory-sync`
+
+Compatibility guards are called out in the plan: no CLI changes, no runtime routing changes, no new root authoring surface, and no artifact/route/receipt contract drift. `phase_plan.yaml` was parsed locally with `python3` and `yaml.safe_load` successfully.
