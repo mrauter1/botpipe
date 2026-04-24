@@ -685,3 +685,104 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+---
+I’m treating this as a regression-proof pass over the phase’s current test surface. First I’m checking what the implementation and reviewer already added, then I’ll tighten any material gap and update the test-phase artifacts with an explicit coverage map.
+
+The reviewer fix added a new preserved invariant that still needs a regression lock: negative guardrails like “do not auto-run” should stay allowed. I’m adding that focused test now, then I’ll update the phase test strategy and test feedback with the explicit coverage map.
+
+I added the missing preserved-behavior lock so the validator can reject hidden execution without overblocking explicit “do not auto-run” guardrails. I’m running the focused subset first, then the combined phase proof.
+
+The test surface is green. I’m recording the behavior-to-test coverage map and the test-phase feedback now, and I’ll also append the one non-obvious test decision under this turn’s test-author header.
+
+Scope considered
+- Phase-local test work for `workflow_portfolio_to_operating_system`, focused on the hidden-execution validation change and its regression surface.
+- Updated the repo test file [tests/runtime/test_workflow_portfolio_to_operating_system.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_portfolio_to_operating_system.py:875), the phase test strategy, the test feedback artifact, and the shared decisions ledger.
+- Left auditor-owned `criteria.md` untouched.
+
+What I analyzed
+- The hardened publish validator in [workflows/workflow_portfolio_to_operating_system/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/workflow.py:63) and the decision that it must reject queue/launch/automatic phrasing without rejecting explicit negative guardrails.
+- Existing runtime proof coverage in [tests/runtime/test_workflow_portfolio_to_operating_system.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_portfolio_to_operating_system.py:850).
+- The active test-phase artifacts and the latest shared decisions block for this turn.
+
+What I changed
+- Added a preserved-behavior regression test so explicit negative guardrails such as `do not auto-run` still publish successfully while the hidden-execution rejection remains strict.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/workflow-portfolio-to-operating-system/test_strategy.md:1) with a behavior-to-test coverage map, invariants, edge cases, failure paths, known gaps, and stabilization notes.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/workflow-portfolio-to-operating-system/feedback.md:1).
+- Appended a non-obvious test decision under the test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/decisions.txt:1).
+
+Key findings / decisions
+- The material uncovered gap after the reviewer fix was preserved-behavior coverage: without a negative-guardrail test, the new validator could later regress into false positives.
+- The test surface now locks both sides of the contract:
+- reject hidden-execution variants in next-actions text and summary `next_action`
+- allow explicit negative guardrails that keep downstream execution manual
+- Validation passed:
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py -k hidden_downstream`
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py tests/test_architecture_baseline_docs.py`
+
+Open issues / next step
+- No open issue remains in the phase-local test scope.
+- Next step is the test-auditor review of the updated strategy and proof surface.
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe8e-1e00-7502-9dbe-16c3663b7e8f
+---
+I’m auditing the phase-local test surface against the accepted behavior and the shared decisions first. Then I’ll either record a blocking gap in the test artifacts or clear the criteria and append a concise audit note.
+
+The strategy and feedback line up with the shared decisions. I’m checking the exact test surface and rerunning the targeted suites once from the auditor side before I clear the criteria.
+
+The current test surface covers the changed behavior, the preserved boundary, and the reviewer-driven guardrail case without introducing flake risk. I’m clearing the audit criteria and appending a concise no-finding audit note so the artifact state matches the passing review.
+
+Scope considered
+- Phase-local audit of the `workflow_portfolio_to_operating_system` test surface, with emphasis on the hidden-execution validation changes and the preserved-behavior guardrail case.
+- Reviewed the repo test file, the phase test strategy, the phase feedback artifact, and the shared decisions relevant to this workflow.
+- No unrelated repository areas were pulled into scope.
+
+What I analyzed
+- [tests/runtime/test_workflow_portfolio_to_operating_system.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_portfolio_to_operating_system.py:850), especially the queue/launch/automatic rejection cases and the explicit negative-guardrail acceptance case.
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/workflow-portfolio-to-operating-system/test_strategy.md:1) for coverage mapping, invariants, gaps, and flake controls.
+- The shared decisions block requiring tests to lock both sides of the hidden-execution boundary.
+
+What I reviewed
+- Coverage quality against AC-1 through AC-4 and the reviewer-driven follow-up around hidden downstream execution.
+- Regression protection for both failure-path rejection and preserved-behavior acceptance.
+- Reliability and determinism through the targeted test runs:
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py -k hidden_downstream`
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py tests/test_architecture_baseline_docs.py`
+
+Key findings / decisions
+- No blocking audit findings.
+- The test surface now protects both sides of the boundary that matters here:
+- hidden automation phrasing is rejected
+- explicit negative guardrails like `do not auto-run` remain allowed
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/workflow-portfolio-to-operating-system/criteria.md:1) to all checked and appended a concise audit note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/workflow-portfolio-to-operating-system/feedback.md:1).
+
+Open issues / next step
+- No open issue remains in the phase-local test audit scope.
+- The test artifacts are ready to advance with the current implementation and proof surface.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
