@@ -46,3 +46,4 @@
 {"ts": "2026-04-24T22:42:06.535513+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 46, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "proof-docs-memory-closeout"}
 {"ts": "2026-04-24T22:43:28.595644+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 47, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "proof-docs-memory-closeout"}
 {"ts": "2026-04-24T22:43:28.632848+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 48, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "proof-docs-memory-closeout"}
+{"ts": "2026-04-24T22:43:28.697719+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 49, "event_type": "phase_completed", "pair": "test", "phase_id": "proof-docs-memory-closeout", "phase_mode": "single"}
