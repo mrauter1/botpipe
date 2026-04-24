@@ -844,3 +844,112 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+---
+I’m treating this as a focused regression-test pass for the phase: confirm the current front-door composition and recursive-memory outcome are already covered, then add only the extra test pressure needed to keep the cycle-5 proof record from drifting again. I’m starting by reading the test-phase artifacts and the existing doc/runtime tests so I can target a real gap instead of churning unrelated coverage.
+
+The live gap is narrow: the cycle-5 docs test now checks the new `103 passed` string, but it would still tolerate the stale `102 passed` lingering in the same outcome section. I’m tightening that regression guard, then I’ll document the coverage map in the phase artifacts and rerun the phase proof.
+
+I’ve tightened the only meaningful missing guard: the docs test now catches a split-brain cycle-5 outcome section instead of only checking for the new string. I’m rerunning the full targeted closeout suite now so the phase artifact can point at the same authoritative proof surface as the implementation and review passes.
+
+The tightened docs guard didn’t disturb the suite so far; the targeted closeout run is still all green dots. I’m waiting for the final result so the test strategy and feedback can cite the exact post-change proof rather than a cached earlier run.
+
+The targeted proof finished green at `103 passed in 1.63s`. I’m doing a quick line-number pass on the tightened test and the phase test artifacts so the closeout summary can point at the exact additions.
+
+Scope considered
+
+- Phase-local test work for `front-door-integration-memory-and-proof`.
+- Focused on cycle-5 closeout regression coverage: preserved front-door composition behavior, recursive-memory outcome docs, and the targeted proof command.
+
+What I analyzed
+
+- Existing runtime coverage in `tests/runtime/test_task_to_workflow_strategy.py`.
+- Existing cycle-5 memory/docs coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:496).
+- The shared decisions ledger and the current cycle-5 roadmap entry.
+
+What I changed
+
+- Tightened [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:500) so the cycle-5 assertion is scoped to the `Cycle 5 Outcome` section, requires `103 passed`, and rejects stale `102 passed` drift in that same section.
+- Updated the phase test coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/test/phases/front-door-integration-memory-and-proof/test_strategy.md:10).
+- Appended the test-phase summary in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/test/phases/front-door-integration-memory-and-proof/feedback.md:10).
+- Recorded the non-obvious test decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/decisions.txt:23).
+
+Key findings / decisions
+
+- The only real remaining gap was split-brain doc coverage: the prior assertion accepted the new `103 passed` string but would not have caught the stale `102 passed` lingering in the same cycle-5 outcome section.
+- I kept the change narrow and deterministic instead of adding runtime-coupled counting logic to the test suite.
+- Validation passed with the authoritative closeout command: `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/test_architecture_baseline_docs.py` -> `103 passed in 1.63s`.
+
+Open issues / next step
+
+- No in-scope open issues remain.
+- `recursive_autoloop/` wrapper/template parity stays intentionally out of scope for this phase.
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd2c-ccbd-7ab2-9387-554b9f849904
+---
+I’m auditing the phase-local test work: verify that the tightened cycle-5 docs test actually improves regression protection, confirm it stays aligned with the shared decisions and acceptance criteria, and then update only the auditor-owned test artifacts. I’ll start by reading the current test artifacts, the changed test, and the latest decisions before deciding whether there are any blocking coverage gaps.
+
+The changed test is aligned with the shared decisions and its scope is appropriately narrow: it tightens drift detection without changing behavior expectations. I’m rerunning the phase’s authoritative targeted pytest set now so the audit can confirm the added guard is reliable in the full closeout surface, not just by static inspection.
+
+The targeted closeout suite is still green so far; no flake or ordering signal has surfaced from the tightened docs assertion. I’m waiting for the final result before I mark the auditor criteria complete and record the no-findings audit note.
+
+The full targeted suite passed at `103 passed in 1.67s`, and I found no blocking or non-blocking audit defects in the phase-local test work. I’m updating the auditor-owned criteria and feedback to reflect a complete, no-findings test audit.
+
+I’ve written the auditor-owned artifacts. I’m doing a quick readback of `criteria.md` and `feedback.md` so the audit result is internally consistent before I close the phase as complete.
+
+Scope considered
+
+- Phase-local audit of the `front-door-integration-memory-and-proof` test work only.
+- Reviewed the tightened cycle-5 docs regression test, the phase test strategy/feedback artifacts, the shared decisions, and the authoritative closeout pytest surface.
+
+What I analyzed
+
+- `tests/test_architecture_baseline_docs.py`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/test/phases/front-door-integration-memory-and-proof/test_strategy.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/test/phases/front-door-integration-memory-and-proof/feedback.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/decisions.txt`
+
+What I reviewed
+
+- Coverage quality: the added assertion now targets the `Cycle 5 Outcome` section directly and catches stale split-brain proof-count drift.
+- Regression protection and failure paths: the test fails if the accepted closeout command moves, if the cycle-5 count changes incorrectly, or if `102 passed` lingers in the same outcome section.
+- Reliability: the test remains deterministic string/section validation with no timing, ordering, or environment-sensitive behavior.
+- Behavioral intent: the test encodes only the confirmed cycle-5 proof record from the shared decisions and producer validation.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Revalidated the full phase closeout suite: `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/test_architecture_baseline_docs.py` -> `103 passed in 1.67s`.
+- Updated the auditor-owned `criteria.md` and `feedback.md` to reflect a complete, no-findings audit.
+
+Open issues / next step
+
+- No in-scope open issues remain for this test phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
