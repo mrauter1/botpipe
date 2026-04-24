@@ -437,3 +437,102 @@ No open review blockers. This phase is ready to close.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T210746Z-c526aa99 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc163-9ada-7761-ad6c-2bc9add068c3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc163-9ada-7761-ad6c-2bc9add068c3
+
+
+---
+run_id=run-20260424T210746Z-c526aa99 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc163-9ada-7761-ad6c-2bc9add068c3
+---
+I’m checking the current proof surface first so I only add tests where the phase-local migration actually increased regression risk. The main gap here is direct parameter-model coverage for the few validators that intentionally stayed local and for the repo-root import fallback the migrated `params.py` files now rely on.
+
+I found two useful gaps worth covering directly in tests instead of only relying on the broad suite run: one builder-parameter test for the workflow-specific local exceptions that stayed inline, and one loader-level parameter-coercion test for the positive-int failure paths now routed through the shared seam. I’m adding those with the smallest possible surface.
+
+I’ve added two focused regression tests: one for the builder package’s remaining local parameter rules, and one loader-level parametrized test that preserves the positive-int failure messages now routed through the shared seam. I’m rerunning the full targeted proof set so the phase still closes on the same acceptance surface, not just the new tests.
+
+The suite is underway cleanly. Once it finishes, I’ll write the behavior-to-coverage map into the phase test strategy and record the added tests plus proof result in the test feedback artifact.
+
+The expanded targeted suite is green with the two new regression tests included. I’m recording the exact behavior-to-coverage map and the proof result in the phase test artifacts now.
+
+Scope considered
+
+Phase-local test work for `params-model-migrations-and-closeout`: the migrated `workflows/*/params.py` behavior, adjacent loader coercion risk, the targeted runtime/unit proof surface, and the required phase-local test artifacts.
+
+What I analyzed
+
+I reviewed the existing parameter-model tests across the builder, domain, portfolio, adaptation, evaluation, refinement, diagnostics, governance, decomposition, and company-operation families to find gaps introduced by the shared validator migration. The two material gaps were direct coverage for the workflow-builder package’s remaining local parameter rules and loader-level failure coverage for helper-routed positive-int fields.
+
+What I changed
+
+- Added `tests/runtime/test_workflow_builder_package.py::test_workflow_builder_package_normalizes_optional_title_aliases_and_target_command`
+- Added `tests/unit/test_stdlib_and_extensions.py::test_repo_workflow_parameter_models_preserve_positive_int_failures`
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c3/test/phases/params-model-migrations-and-closeout/test_strategy.md` with the behavior-to-coverage map
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c3/test/phases/params-model-migrations-and-closeout/feedback.md` with the added tests and proof result
+
+Key findings / decisions
+
+The focused additions keep coverage tight and phase-local:
+- the builder runtime test pins the workflow-specific parameter rules that intentionally stayed inline
+- the unit test pins positive-int failure messages for workflows now routed through the shared seam
+
+I re-ran the full targeted proof surface for this phase and it passed: `340 passed`.
+
+Open issues / next step
+
+No blocking test gaps remain for this phase. The test artifacts are updated and the phase is ready for audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260424T210746Z-c526aa99 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc163-9ada-7761-ad6c-2bc9add068c3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc163-9ada-7761-ad6c-2bc9add068c3
+
+
+---
+run_id=run-20260424T210746Z-c526aa99 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc163-9ada-7761-ad6c-2bc9add068c3
+---
+I’m auditing the phase-local test additions against the migration scope, the shared decisions ledger, and the targeted proof surface. I’ll verify that the new tests actually pin the risky preserved behaviors, that the coverage map matches what was added, and then I’ll update the audit artifacts.
+
+The phase-local test additions match the migration risk and the stated decisions, and the full targeted proof stayed green. I’m marking the audit criteria complete and recording a no-findings verdict in the phase feedback artifact.
+
+Scope considered
+
+Phase-local audit of the `params-model-migrations-and-closeout` test work: the added tests, the updated phase test strategy and feedback artifacts, the shared decisions ledger, and the targeted proof result.
+
+What I analyzed
+
+I checked whether the new tests cover the materially risky preserved behaviors from the parameter-model migration: workflow-specific local exceptions, helper-routed positive-int failure paths, and the documented closeout baseline. I also checked that the coverage map in `test_strategy.md` matches the actual tests that were added and re-run.
+
+What I reviewed
+
+- `tests/runtime/test_workflow_builder_package.py`
+- `tests/unit/test_stdlib_and_extensions.py`
+- `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c3/test/phases/params-model-migrations-and-closeout/test_strategy.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c3/test/phases/params-model-migrations-and-closeout/feedback.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c3/decisions.txt`
+
+Key findings / decisions
+
+No blocking or non-blocking findings in scoped test audit. The added tests are targeted, deterministic, and aligned with the decisions ledger. The phase-local criteria are now fully checked.
+
+Open issues / next step
+
+No audit blockers remain. The test phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
