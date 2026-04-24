@@ -159,6 +159,59 @@ Planned payload models:
 - `EvalCaseDesignPayload`
 - `WorkflowEvalSuitePayload`
 
+### Planned step prompt contracts
+
+- `prompts/frame_producer.md`
+- Role: `workflow evaluation framer`
+- Required reads: `request.md`, `invocation_contract.json`, `selected_workflow_capability.json`, `docs/architecture.md`, and `docs/authoring.md`
+- Required writes: `evaluation_request_brief.md` and `evaluation_dimensions.md`
+- Legal routes: `evaluation_target_framed`, `needs_rework`, `needs_replan`, `question`, `blocked`, `failed`
+- Evidence expectation: make the selected workflow's quality surface, target users/sponsors, benchmark dimensions, and failure modes explicit enough for case design without guesswork
+- Forbidden/out of scope: do not design cases yet, do not edit the selected workflow, do not invent runtime-owned metadata, and do not leave artifact ownership or route choice implicit
+
+- `prompts/frame_verifier.md`
+- Role: `evaluation-target verifier`
+- Required reads: the same framing inputs plus `evaluation_request_brief.md` and `evaluation_dimensions.md`
+- Required writes: verifier control metadata only through `EvaluationTargetFramingPayload`; leave workflow artifacts untouched unless local repair is requested through `needs_rework`
+- Legal routes: `evaluation_target_framed`, `needs_rework`, `needs_replan`, `question`, `blocked`, `failed`
+- Evidence expectation: confirm the framing artifacts are authoritative, evaluation-ready, and explicit about acceptance dimensions, downstream artifact expectations, and why the same work-item boundary still holds or does not hold
+- Forbidden/out of scope: do not author new benchmark/rubric content, do not move provider-facing guidance into runtime-only metadata, and do not approve framing that leaves required reads/writes or route choice ambiguous
+
+- `prompts/design_producer.md`
+- Role: `workflow evaluation designer`
+- Required reads: `request.md`, `invocation_contract.json`, `selected_workflow_capability.json`, `evaluation_request_brief.md`, and `evaluation_dimensions.md`
+- Required writes: `benchmark_case_matrix.md`, `edge_case_matrix.md`, `adversarial_case_matrix.md`, `eval_case_manifest.json`, and `eval_rubric.md`
+- Legal routes: `eval_cases_designed`, `needs_rework`, `needs_replan`, `question`, `blocked`, `failed`
+- Evidence expectation: publish categorized case coverage, expected artifacts, pass/fail logic, and a proposed manifest that the publish step can validate mechanically
+- Forbidden/out of scope: do not package the terminal suite yet, do not execute the selected workflow, do not leave case ids, case kinds, or expected artifacts implicit, and do not rely on undeclared workflow parameters
+
+- `prompts/design_verifier.md`
+- Role: `eval-design verifier`
+- Required reads: the design-step inputs plus all five design artifacts written by the producer
+- Required writes: verifier control metadata only through `EvalCaseDesignPayload`; leave the case/rubric artifacts intact unless local repair is requested through `needs_rework`
+- Legal routes: `eval_cases_designed`, `needs_rework`, `needs_replan`, `question`, `blocked`, `failed`
+- Evidence expectation: confirm benchmark, edge, and adversarial coverage exists, the rubric is usable, the proposed manifest is coherent, and any replan decision is tied to a material evaluation-boundary change
+- Forbidden/out of scope: do not collapse category coverage into generic prose, do not skip explicit evidence for route choice, and do not approve a manifest that still hides artifact expectations or parameter assumptions
+
+- `prompts/package_producer.md`
+- Role: `eval-suite packager`
+- Required reads: `request.md`, `invocation_contract.json`, `selected_workflow_capability.json`, `assets/eval_suite_checklist.md`, `evaluation_request_brief.md`, `evaluation_dimensions.md`, `benchmark_case_matrix.md`, `edge_case_matrix.md`, `adversarial_case_matrix.md`, `eval_case_manifest.json`, and `eval_rubric.md`
+- Required writes: `workflow_eval_suite.md`, `workflow_eval_suite_summary.json`, and `workflow_eval_next_action.md`
+- Legal routes: `workflow_eval_suite_ready`, `needs_rework`, `needs_replan`, `question`, `blocked`, `failed`
+- Evidence expectation: produce a terminal suite package that names the authoritative artifacts, summarizes coverage, explains how to use the validated manifest after publication, and stops explicitly at suite publication
+- Forbidden/out of scope: do not auto-run the selected workflow, do not write the validated manifest or receipt directly, and do not claim publication readiness unless the suite package, summary, and next action all agree
+
+- `prompts/package_verifier.md`
+- Role: `eval-suite verifier`
+- Required reads: the packaging-step inputs plus `workflow_eval_suite.md`, `workflow_eval_suite_summary.json`, and `workflow_eval_next_action.md`
+- Required writes: verifier control metadata only through `WorkflowEvalSuitePayload`; leave package artifacts intact unless local repair is requested through `needs_rework`
+- Legal routes: `workflow_eval_suite_ready`, `needs_rework`, `needs_replan`, `question`, `blocked`, `failed`
+- Evidence expectation: confirm the package is ready for deterministic publication, the summary identifies authoritative artifacts and next action clearly, and any replan decision is tied to a material mismatch between the suite package and the designed evaluation surface
+- Forbidden/out of scope: do not silently validate malformed manifests, do not invent publish-step behavior inside the prompt, and do not approve a package that leaves artifact handling, legal routes, or downstream use implicit
+
+- `prompts/README.md`
+- Required contents: one concise index of the six prompts, the step-to-artifact map, reserved/application route grammar, verifier JSON expectations, and the rule that prompt templates carry provider-facing operational guidance while the runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`
+
 ### Prompt/package expectations
 
 - Prompt files: `prompts/frame_producer.md`, `prompts/frame_verifier.md`, `prompts/design_producer.md`, `prompts/design_verifier.md`, `prompts/package_producer.md`, `prompts/package_verifier.md`, and `prompts/README.md`
@@ -272,11 +325,12 @@ Planned payload models:
 ### Phase 2: `workflow_to_eval_suite`
 
 - Add the new workflow package under `workflows/workflow_to_eval_suite/`.
-- Implement params, contracts, prompts, checklist asset, workflow logic, publication validation, docs, and runtime tests.
+- Implement params, contracts, explicit per-step prompt templates, checklist asset, workflow logic, publication validation, docs, and runtime tests.
 - Publication validation must reject malformed case kinds, duplicate case ids, invalid per-case workflow parameters, unknown expected artifacts, missing authoritative artifacts, or mismatches between the summary and validated eval-case manifest.
 - Acceptance:
 - workflow discovery and compilation work from the repo root
 - scripted runtime proof publishes the terminal suite, summary, next action, validated eval-case manifest, and receipt
+- each producer/verifier prompt makes required reads, required writes, legal routes, evidence expectations, and forbidden actions explicit for its step-local work item
 - workflow stops at suite publication and does not auto-run the selected workflow
 
 ### Phase 3: Recursive memory and regression proof

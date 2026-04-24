@@ -46,8 +46,8 @@ phases:
   status: planned
   in_scope:
   - Add the workflow package under `workflows/workflow_to_eval_suite/`.
-  - Implement params, contracts, prompts, checklist asset, workflow logic, and publish-time
-    validation.
+  - Implement params, contracts, explicit per-step prompt templates, checklist asset,
+    workflow logic, and publish-time validation.
   - Add the workflow decision/contract doc under `docs/workflows/workflow_to_eval_suite.md`.
   - Add runtime proof in `tests/runtime/test_workflow_to_eval_suite.py`.
   out_of_scope:
@@ -67,6 +67,10 @@ phases:
     text: Publish-time validation rejects malformed case kinds, duplicate case ids,
       invalid per-case workflow parameters, unknown expected artifacts, and summary
       drift.
+  - id: AC-4
+    text: Each producer/verifier prompt makes required reads, required writes, legal
+      routes, evidence expectations, and forbidden actions explicit for its step-local
+      work item.
   deliverables:
   - '`workflows/workflow_to_eval_suite/`'
   - '`docs/workflows/workflow_to_eval_suite.md`'

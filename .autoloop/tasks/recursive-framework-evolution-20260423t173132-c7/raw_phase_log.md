@@ -84,3 +84,28 @@ The producer needs to expand the chosen-addition section so each prompt file has
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dbd93-e6bd-75c1-9e14-6e0ff7b7a310
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dbd93-e6bd-75c1-9e14-6e0ff7b7a310
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbd93-e6bd-75c1-9e14-6e0ff7b7a310
+---
+I’m fixing the verifier’s single blocking gap now. I’ll tighten the plan so the new workflow has explicit per-step prompt contracts, then I’ll align the phase YAML and feedback entry so the implementation handoff is complete.
+
+I’ve got the correction scoped: add a per-prompt contract section for the three pair steps, tighten phase-2 acceptance around prompt doctrine, and record that prompt filenames alone are insufficient. I’m applying that now and then I’ll re-parse the YAML.
+
+The first patch attempt failed on context matching, not on the plan change itself. I’m reapplying it in smaller chunks so I only touch the exact sections that need tightening.
+
+The plan is updated. I’m re-checking the exact prompt-contract section and reparsing the phase YAML now so the revised handoff stays internally consistent before I stop.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt) to address `PLAN-001`.
+
+The plan now makes `workflow_to_eval_suite` implementation-ready at the prompt level: each producer/verifier prompt has explicit required reads, required writes, legal routes, evidence expectations, and forbidden actions, and phase 2 now carries that prompt-contract requirement in the machine-readable acceptance criteria. I re-parsed `phase_plan.yaml` successfully with `/usr/bin/python3` and `yaml.safe_load`.
