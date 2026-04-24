@@ -41,3 +41,46 @@ The YAML file itself looks structurally sound, but the first parse attempt faile
 Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt). The plan keeps the builder as a credible baseline, selects `workflow_to_eval_suite` as the cycle-7 addition, and pairs it with a narrow authoring-only evaluation helper seam instead of widening `workflow.toml`, the CLI, or runtime-owned routing/eval behavior.
 
 `phase_plan.yaml` now defines 3 phases: the evaluation helper seam, the `workflow_to_eval_suite` package, and recursive-memory/closeout proof. I also parsed the YAML successfully with `/usr/bin/python3` and `yaml.safe_load`; `.venv/bin/python` in this repo does not have `PyYAML`.
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd93-e6bd-75c1-9e14-6e0ff7b7a310
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dbd93-e6bd-75c1-9e14-6e0ff7b7a310
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd93-e6bd-75c1-9e14-6e0ff7b7a310
+---
+I’m verifying the generated plan against the request and the current repo state now. I’ll audit the narrative plan, the phase YAML, the criteria checklist, the feedback history, and the shared decisions ledger before I write any verifier findings.
+
+I’ve got one material gap in the plan and I’m confirming whether there are any others before I write verifier feedback. The main thing I’m checking is whether the narrative is concrete enough on prompt-template obligations, because the request is strict about step-local prompt contracts.
+
+I found one blocking gap: the plan names the prompt files but never turns the request’s prompt-template doctrine into an implementation-ready per-step prompt contract. I’m updating the verifier artifacts now with that finding and the criteria state it implies.
+
+Scope considered
+
+Verified the cycle-7 planning artifacts against the immutable request snapshot, the raw log, the shared decisions ledger, and the current repo-root workflow/framework layout. I treated the stale `src/autoloop/...` paths as historical names because the producer already grounded the plan in the current repo structure and recorded that decision.
+
+What I analyzed
+
+I checked intent coverage for the chosen addition, the paired framework improvement, the required decision-record content, regression controls, rollback/validation planning, recursive-memory updates, and the phase decomposition quality. I also re-validated that `phase_plan.yaml` parses with `yaml.safe_load`.
+
+What I reviewed
+
+Reviewed [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt). I updated `criteria.md` and appended the verifier finding to `feedback.md`.
+
+Key findings / decisions
+
+`PLAN-001` is blocking. The plan names the prompt files but does not make the step-local prompt templates implementation-ready, even though the request explicitly requires explicit step prompt templates with artifact read/write handling and route instructions. That leaves a material gap in intent fidelity, behavioral safety, and completeness.
+
+Open issues / next step
+
+The producer needs to expand the chosen-addition section so each prompt file has a concrete prompt contract: required reads, required writes, legal routes, evidence expectations, and explicit out-of-scope/forbidden guidance. Until that is added, the plan should remain incomplete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
