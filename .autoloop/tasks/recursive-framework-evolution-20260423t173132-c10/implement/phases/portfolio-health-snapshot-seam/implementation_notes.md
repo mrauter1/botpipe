@@ -47,6 +47,7 @@
 
 - Portfolio workflows can now publish `workflow_portfolio_health_snapshot.json` with grouped per-workflow run counts, status counts, and bounded recent-run excerpts.
 - Requested/current workflows with zero matching runs are represented explicitly with zero counts.
+- `write_workflow_portfolio_health_snapshot(...)` now accepts one-shot `statuses` iterables safely by normalizing once and reusing that materialized value.
 
 ## Known non-changes
 
@@ -62,7 +63,9 @@
 
 - `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py`
 - `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/python - <<'PY' ... write_workflow_portfolio_health_snapshot(..., statuses=(status for status in ['paused', 'failed'])) ... PY`
 
 ## Deduplication / centralization
 
 - Centralized grouped run-summary filtering/excerpt logic in `runtime/workspace.py` so the stdlib helper reuses the existing read-only run-record seam instead of re-implementing workspace traversal.
+- Materialized and reused normalized `statuses` once inside `write_workflow_portfolio_health_snapshot(...)` so the helper no longer re-consumes one-shot iterables across multiple paths.

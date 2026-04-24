@@ -55,13 +55,14 @@ def write_workflow_portfolio_health_snapshot(
     repo_root = _repo_root_from_context(ctx)
     catalog = discover_workflow_catalog(repo_root)
     selected_workflow_names = _resolve_selected_workflow_names(repo_root, workflows)
+    normalized_statuses = _normalized_filters(statuses)
     selected_catalog = tuple(
         entry for entry in catalog if selected_workflow_names is None or entry.workflow_name in selected_workflow_names
     )
     run_summaries = list_workflow_run_summaries(
         repo_root,
         workflow_names=selected_workflow_names,
-        statuses=statuses,
+        statuses=normalized_statuses,
         max_runs_per_workflow=max_runs_per_workflow,
     )
     summary_by_name = {entry["workflow_name"]: entry for entry in run_summaries}
@@ -77,7 +78,7 @@ def write_workflow_portfolio_health_snapshot(
             "workflow_portfolio_health": {
                 "max_runs_per_workflow": max_runs_per_workflow,
                 "selected_workflow_names": None if selected_workflow_names is None else list(selected_workflow_names),
-                "statuses": _normalized_filters(statuses),
+                "statuses": normalized_statuses,
                 "workflow_count": len(selected_catalog),
                 "workflows": [
                     _workflow_health_payload(
