@@ -714,3 +714,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbf0c-d357-7290-8daf-21864bde7c76
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbf0c-d357-7290-8daf-21864bde7c76
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbf0c-d357-7290-8daf-21864bde7c76
+---
+I’m treating this as the phase-local memory-and-validation slice: first I’ll inspect the active phase artifacts, the shared decisions/plan, and the cycle-11 workflow/test surfaces so the edits stay aligned with the approved implementation.
+
+I’ve confirmed the task-global plan and shared decisions. Next I’m reading the cycle-11 workflow and the current recursive memory/test baselines so I can update only the scoped records and proofs this phase owns.
+
+The recursive memory files already contain cycle-11 content, but the baseline-doc test still looks anchored to cycle-1 memory. I’m checking the rest of that test file and the new workflow’s docs/tests to decide the smallest assertion update that proves the cycle-11 baseline cleanly.
+
+I’ve narrowed the likely code changes to the recursive-memory files, the baseline-doc assertions, and the phase notes. I’m checking the cycle-11 sections and the phase criteria now so the test additions and proof command match the acceptance gate exactly.
+
+The remaining work is concrete now: update the cycle-11 memory closeout records, extend the baseline-doc tests for cycle-11 status/proof expectations, then run the primary proof suite and record whether the conditional refinement regression stays unnecessary.
+
+I’m editing the cycle-11 closeout records now. The changes are limited to the four recursive-memory files, the baseline-doc test file, and the phase-local notes/decision log so the proof surface matches the approved scope.
+
+The memory closeout text and cycle-11 assertions are in place. I’m running the primary proof suite now; if the decomposition validation stayed local as designed, there should be no need to add the conditional refinement regression run.
+
+The suite is still running. I’m waiting on the full result so I can record the exact closeout evidence and final pass count in the memory files and phase notes.
+
+The primary suite exposed one real regression surface: several older baseline-doc tests still assumed the decomposition workflow was deferred globally. I’m updating those historical status tests so they reflect the current deferred-ideas list while keeping each cycle’s candidate-entry assertions intact.
+
+I’m correcting the outdated deferred-ideas expectations now. The historical cycle-entry checks stay unchanged; only the current global deferred-list assertions are being brought in line with cycle 11’s shipped state.
+
+The only failures were the stale global-deferred assertions. Those are fixed; I’m rerunning the primary suite to capture the final pass result for the closeout record.
+
+I have the final proof result now: `104 passed`. I’m recording that exact evidence, the reason the conditional refinement suite was skipped, and the phase-local implementation notes before I close out.
+
+I’ve recorded the exact `104 passed` evidence and the conditional-suite rationale. I’m rerunning the same primary suite once more to verify the final recorded state matches the assertions after those note updates.
+
+The scope is complete and the proof suite is clean. I’m doing one last pass over the diff and line anchors so the closeout can point you to the exact cycle-11 memory/test updates and the final validation evidence.
+
+**Scope considered**
+- Phase-local closeout only: recursive memory, baseline-doc assertions, shared decisions, and phase notes.
+- I did not touch workflow/runtime implementation or verifier-owned criteria.
+
+**What I analyzed**
+- The active phase plan, shared decisions, prior phase notes, current cycle-11 memory sections, and the baseline-doc suite in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:955).
+
+**What I changed**
+- Updated cycle-11 closeout records in [framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md:147), [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:94), [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md:276), and [workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md:307).
+- Added cycle-11 baseline/status/closeout-proof coverage and fixed stale deferred-list expectations in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:955).
+- Recorded the non-obvious validation decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt:24) and the phase summary in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/recursive-memory-and-validation/implementation_notes.md:1).
+
+**Key findings / decisions**
+- Primary proof suite passed: `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py` with `104 passed`.
+- The only regression I hit was stale baseline-doc expectations that still treated `workflow_package_to_composable_building_blocks` as globally deferred; those now correctly treat `company_operation_to_recursive_improvement_cycle` as the active deferred workflow.
+- The conditional refinement regression suite was not run because decomposition overlay validation remained workflow-local and no shared helper was extracted.
+
+**Open issues / next step**
+- No blocking issues in this phase.
+- The next deferred portfolio follow-on remains `company_operation_to_recursive_improvement_cycle`; recursive wrapper/template cleanup remains untouched and separately deferred.
