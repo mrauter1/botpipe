@@ -168,3 +168,12 @@ No verifier-side open issues remain. The plan is complete and ready for implemen
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=selected-workflow-adaptation-seam,candidate-workflow-adapted-execution-plan-package,portfolio-handoff-docs-and-closeout
+explicit=True
+current_phase_index=0
