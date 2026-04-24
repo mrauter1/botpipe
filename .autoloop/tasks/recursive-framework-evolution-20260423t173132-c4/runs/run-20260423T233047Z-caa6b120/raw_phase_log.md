@@ -624,3 +624,122 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+---
+I’m handling the phase-scoped closeout work: update the cycle-4 recursive memory, extend the baseline-doc test coverage for that new state, and run targeted regression validation against the seam and shipped workflows. I’m starting by reading the active phase artifacts, shared decisions, plan, and the relevant framework/workflow files so I can keep the edits inside the approved scope.
+
+The plan and prior phases are consistent: cycle 4 already shipped the catalog seam and the new `task_to_workflow_strategy` workflow, so this pass is a closeout and regression-proofing pass rather than new feature design. I’m reading the standing memory, the architecture-baseline test, and the prior phase notes now to align the memory updates and validate which regression surfaces need to be exercised.
+
+I’ve isolated the remaining work: encode the cycle-4 baseline in memory and the architecture-baseline test without pulling unrelated dirty files into scope. I’m reading the current `task_to_workflow_strategy` workflow docs and the rest of the baseline test now so the memory strings match what already shipped instead of inventing new wording.
+
+The baseline test currently freezes cycles 1 through 3 only, so cycle 4 needs a new explicit section rather than a loose string tweak. I’m checking whether the recursive-memory files are tracked in this worktree and then I’ll patch only the cycle-4 closeout material plus the phase notes and decision block.
+
+I’ve got the exact cycle-4 baseline shape. Next I’m patching the standing memory and the architecture-baseline test together so the closeout state is both documented and mechanically frozen before I run the regression suite.
+
+The memory baseline and the doc-freeze test are patched. I’m doing a quick focused run on `tests/test_architecture_baseline_docs.py` first to catch any string drift before I spend time on the wider regression set.
+
+The baseline-doc pass is clean. The broader regression run is in flight now against the seam, the new front door, and the builder/evidence/security portfolio surfaces; I’m waiting on the final result before I patch the closeout notes and decisions with the exact validation proof.
+
+The regression suite is clean: `88 passed` across the exact seam/front-door/builder/evidence/security/baseline-doc surfaces this phase asked for. I’m patching the closeout implementation notes, filling the final decision entries under the existing turn header, and replacing the temporary pass-count placeholder in the roadmap now.
+
+The closeout notes and decision ledger are patched. I’m running the targeted regression suite one more time against the final state so the recorded `88 passed` proof matches the files exactly as they now stand.
+
+Scope considered
+
+- Phase-local closeout only: cycle-4 recursive memory, the architecture-baseline doc freeze, the phase notes/decision ledger, and targeted regression proof.
+- I kept unrelated dirty files and the known `recursive_autoloop/` wrapper drift out of scope.
+
+What I analyzed
+
+- The standing memory files in [.autoloop_recursive/framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md:81), [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:30), [.autoloop_recursive/framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md:107), and [.autoloop_recursive/workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md:103).
+- The cycle-4 front-door workflow and docs in [docs/workflows/task_to_workflow_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_workflow_strategy.md:1) and [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:1).
+- The existing baseline-doc freeze and workflow regression surfaces in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:301) plus the builder/evidence/security/front-door runtime tests.
+
+What I changed
+
+- Added the cycle-4 baseline and closeout state to the four standing memory files so they now record: builder still credible, `task_to_workflow_strategy` shipped, and the catalog/snapshot seam shipped as the paired framework improvement.
+- Updated the roadmap’s current seams, active milestones, and deferred ideas so the next follow-ons are `task_to_candidate_workflow_set` and `candidate_workflow_to_adapted_execution_plan` instead of the already-shipped front door. See [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md:38).
+- Extended the baseline-doc freeze with cycle-4 assertions and deferred-status checks in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:301).
+- Recorded the phase-local implementation notes and turn decisions in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/implement/phases/closeout-memory-and-regression-proof/implementation_notes.md:1) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/decisions.txt:16).
+
+Key findings / decisions
+
+- Cycle 4 now has an explicit recorded baseline: the builder stayed credible, `task_to_workflow_strategy` became the shipped portfolio front door, and `core.workflow_catalog` plus `write_workflow_portfolio_snapshot(...)` are the standing portfolio seam.
+- I kept `tests/runtime/test_package_cli.py` out of the regression proof because the wrapper/template drift is still an explicitly deferred gap and this phase was not authorized to fix it.
+- Validation passed:
+  - `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+  - `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py`
+  - Result: `88 passed`
+
+Open issues / next step
+
+- No blocker in this phase scope.
+- Known deferred follow-ons remain reusable candidate retrieval/adaptation and the separate `recursive_autoloop/` package-CLI cleanup.
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+---
+I’m reviewing only the phase-local closeout work: the recursive-memory updates, the baseline-doc freeze, and the targeted regression proof. I’m reading the phase artifacts, the shared decisions, and the exact diffs first, then I’ll validate the acceptance criteria before updating `criteria.md` and `feedback.md`.
+
+I have the producer notes and decision context. I’m checking the actual cycle-4 memory/test content now and re-running the targeted pytest proof myself so the review verdict rests on the final filesystem state, not just the producer’s summary.
+
+The review is clean so far. I’ve verified the cycle-4 memory and test additions against the accepted decisions, and the targeted pytest suite is still running against the final state to confirm the producer didn’t only test an intermediate snapshot.
+
+I’ve finished the audit: no blocking issues surfaced, and the re-run of the exact targeted regression set still passed on the final state. I’m marking the criteria complete and appending the review result to the phase feedback now.
+
+The review artifacts are updated. I’m doing a final readback of `criteria.md` and `feedback.md` so the completion signal reflects the exact recorded verdict and nothing is left unchecked.
+
+Scope considered
+
+- Phase-local `closeout-memory-and-regression-proof` only: the four `.autoloop_recursive/` memory files, `tests/test_architecture_baseline_docs.py`, the phase notes, and the shared decisions/phase artifacts.
+- I excluded unrelated dirty files, wrapper/template cleanup, CLI migrations, manifest-schema changes, and workflow retrofits.
+
+What I analyzed
+
+- The accepted phase contract, the producer’s implementation notes, the shared decisions ledger, and the final cycle-4 memory/test content.
+- The updated cycle-4 sections in `.autoloop_recursive/` and the new baseline-freeze assertions in `tests/test_architecture_baseline_docs.py`.
+- The targeted regression suite required by AC-3.
+
+What I reviewed
+
+- Intent fidelity against AC-1/AC-2/AC-3 and the cycle-4 decisions that the builder remains credible, `task_to_workflow_strategy` ships as the addition, and the catalog/snapshot seam ships as the paired framework improvement.
+- Safety and scope discipline: no non-task code was changed in this verifier turn, and the producer closeout avoided out-of-scope wrapper work.
+- Validation proof: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` -> `88 passed`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- `criteria.md` is now fully checked.
+- `feedback.md` records the no-findings audit result as `IMP-001`.
+
+Open issues / next step
+
+- No open review blockers in this phase scope.
+- Known deferred work remains the separate `recursive_autoloop/` wrapper/template cleanup, which stayed correctly out of scope here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
