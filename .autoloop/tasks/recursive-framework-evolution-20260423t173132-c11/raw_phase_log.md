@@ -571,3 +571,53 @@ Key findings / decisions
 Open issues / next step
 - Validation passed: `python3 -m py_compile workflows/workflow_package_to_composable_building_blocks/workflow.py tests/runtime/test_workflow_package_to_composable_building_blocks.py` and `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` with `22 passed in 6.49s`.
 - No open implement-side blockers remain in this phase scope. The next step is verifier rerun against the updated workflow package and phase artifacts.
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+Reviewing the follow-up implementation now. I’m checking the patched publish-time validation against the original findings, rerunning the workflow-specific proof, and then I’ll update only the verifier-owned phase artifacts.
+
+The patched validation path is addressing the two prior holes directly. I’m rerunning the workflow-specific proof independently now and checking that the new decision lines match the local behavior rather than just the implement notes.
+
+I’m at the artifact update step. There are no remaining blocking findings after the rerun, so I’m marking the criteria complete and appending a short follow-up note to the feedback log rather than inventing a placeholder issue.
+
+Scope considered
+- Phase-local follow-up review of the updated `workflow_package_to_composable_building_blocks` publish-time validation, its workflow-specific tests, and the verifier-owned phase artifacts.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/workflow-package-to-building-blocks/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/workflow-package-to-building-blocks/feedback.md).
+
+What I analyzed
+- The patched manifest/publication helpers in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py:920).
+- The new regression coverage in [test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py:718).
+- The updated implementation notes and the latest turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt).
+
+What I reviewed
+- Whether the prior blockers `IMP-001` and `IMP-002` are actually closed by behavior, not just by notes.
+- Acceptance coverage for AC-1 through AC-4, especially publish-time rejection of hidden candidate files and incomplete declared building-block artifacts.
+- Independent validation rerun:
+  - `python3 -m py_compile workflows/workflow_package_to_composable_building_blocks/workflow.py tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+  - Result: `22 passed in 6.69s`
+
+Key findings / decisions
+- No additional findings.
+- `IMP-001` is resolved: publication now rescans the actual `candidate_decomposition_surface/` and requires manifest/file-set agreement before publishing.
+- `IMP-002` is resolved: publication now requires every declared `doc_relative_path` and `runtime_test_relative_path` to exist in the candidate overlay, and the targeted regression proves that case fails even with a narrower test command.
+- All criteria are now checked complete.
+
+Open issues / next step
+- No phase-local review blockers remain.
+- The next step is whatever the orchestrator schedules after this verifier completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
