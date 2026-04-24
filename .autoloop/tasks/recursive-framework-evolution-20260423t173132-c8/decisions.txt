@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T045554Z-27198177" ts="2026-04-24T04:55:54.923481+00:00" />
+In this checkout, `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `stdlib/`, and repo-root `workflows/` are the authoritative replacements for the stale `src/autoloop/...` request paths.
+`workflow_idea_to_workflow_package` remains the credible builder baseline, so cycle 8 should prioritize `workflow_and_eval_to_refined_workflow_package` over another builder-first addition.
+The paired framework slice should be a narrow authoring-only selected-workflow authoring-surface snapshot seam, not runtime-owned refinement automation and not `workflow.toml` expansion.
+The refinement workflow should accept explicit evaluation evidence artifact paths and refine the selected workflow in place with rollback evidence, rather than auto-discovering or auto-running evaluation.

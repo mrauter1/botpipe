@@ -1,4 +1,132 @@
 version: 1
 task_id: recursive-framework-evolution-20260423t173132-c8
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/runs/run-20260424T045554Z-27198177/request.md
-phases: []
+phases:
+- phase_id: refinement-surface-seam
+  title: Refinement Surface Seam
+  objective: Add a narrow authoring-only helper for snapshotting one selected workflow's
+    editable authoring surface under the current workflow folder.
+  status: planned
+  in_scope:
+  - Add `stdlib/refinement.py` with selected-workflow authoring-surface snapshot support.
+  - Export the new helper from `stdlib/__init__.py`.
+  - Document the helper boundary in `docs/authoring.md`.
+  - Extend helper coverage in `tests/unit/test_stdlib_and_extensions.py`.
+  out_of_scope:
+  - CLI changes.
+  - Runtime-owned refinement automation.
+  - New `workflow.toml` semantics.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The helper writes only under `ctx.workflow_folder` and does not mutate or
+      auto-run the selected workflow.
+  - id: AC-2
+    text: The helper reuses shared workflow resolution and catalog seams instead of
+      ad hoc repo scraping or manifest expansion.
+  - id: AC-3
+    text: Authoring docs and unit tests freeze the helper boundary and its non-goals,
+      including prompt/runtime separation.
+  deliverables:
+  - '`stdlib/refinement.py`'
+  - '`stdlib/__init__.py`'
+  - '`docs/authoring.md`'
+  - '`tests/unit/test_stdlib_and_extensions.py`'
+  risks:
+  - The helper may become too broad and start owning workflow-editing policy that
+    should remain visible in workflow code.
+  - Authoring-surface discovery may drift from the real selected package layout if
+    it does not stay tied to shared resolution/catalog seams.
+  rollback:
+  - Revert the new stdlib helper, export, authoring-doc updates, and helper-specific
+    unit tests together.
+- phase_id: workflow-and-eval-to-refined-workflow-package
+  title: Workflow And Eval To Refined Workflow Package
+  objective: Ship `workflow_and_eval_to_refined_workflow_package` as a reusable closed-loop
+    refinement building block that turns selected-workflow evaluation evidence into
+    an in-place refined package plus promotion and rollback artifacts.
+  status: planned
+  in_scope:
+  - Add the workflow package under `workflows/workflow_and_eval_to_refined_workflow_package/`.
+  - Implement params, contracts, explicit per-step prompt templates, checklist asset,
+    workflow logic, and publish-time validation.
+  - Add the workflow decision/contract doc under `docs/workflows/workflow_and_eval_to_refined_workflow_package.md`.
+  - Add runtime proof in `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`.
+  out_of_scope:
+  - Auto-running evaluation suites or portfolio routing workflows.
+  - Creating sibling candidate workflow packages.
+  - Public CLI or runtime-contract changes.
+  dependencies:
+  - refinement-surface-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: Workflow discovery and compilation succeed from the repo root and expose
+      explicit typed control contracts on the four pair steps.
+  - id: AC-2
+    text: A scripted runtime proof refines an existing selected workflow package in
+      an isolated temp repo copy and publishes the refinement receipt plus verification
+      artifacts.
+  - id: AC-3
+    text: Publish-time validation rejects missing evidence inputs, selected-workflow/authoring-surface
+      mismatches, manifest or summary drift, and refinement outputs that do not stay
+      scoped to the selected workflow boundary.
+  - id: AC-4
+    text: Each producer/verifier prompt makes required reads, required writes, legal
+      routes, evidence expectations, and forbidden actions explicit for its step-local
+      work item.
+  deliverables:
+  - '`workflows/workflow_and_eval_to_refined_workflow_package/`'
+  - '`docs/workflows/workflow_and_eval_to_refined_workflow_package.md`'
+  - '`tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`'
+  risks:
+  - In-place refinement may blur package boundaries unless the changed-file manifest
+    and publish checks stay explicit.
+  - The verification step may over-claim improvement unless it is anchored to supplied
+    baseline evidence plus concrete compile/test proof.
+  rollback:
+  - Remove the new workflow package, workflow doc, and runtime test together if terminal
+    refinement publication proof does not hold.
+- phase_id: cycle-eight-closeout
+  title: Cycle Eight Closeout
+  objective: Update recursive memory and exact-string baseline tests so cycle 8 becomes
+    the new explicit recursive framework baseline.
+  status: planned
+  in_scope:
+  - Update `.autoloop_recursive/framework_evolution_charter.md`.
+  - Update `.autoloop_recursive/framework_roadmap.md`.
+  - Update `.autoloop_recursive/framework_gap_ledger.md`.
+  - Update `.autoloop_recursive/workflow_candidate_ledger.md`.
+  - Update `tests/test_architecture_baseline_docs.py` and any cycle-closeout expectations
+    affected by the new helper/workflow baseline.
+  - Run targeted pytest proof for the helper seam, builder/eval regression surfaces,
+    the new refinement workflow, and the baseline docs.
+  out_of_scope:
+  - '`recursive_autoloop/` wrapper/template cleanup.'
+  - Runtime-owned refinement execution.
+  - Compatibility shims for the stale `src/autoloop/...` request paths.
+  dependencies:
+  - refinement-surface-seam
+  - workflow-and-eval-to-refined-workflow-package
+  acceptance_criteria:
+  - id: AC-1
+    text: The four standing recursive-memory files record that the builder stayed
+      credible, `workflow_and_eval_to_refined_workflow_package` shipped, and the refinement-surface
+      seam is the chosen framework improvement.
+  - id: AC-2
+    text: Architecture-baseline docs/tests and any closeout-proof assertions describe
+      cycle 8 accurately.
+  - id: AC-3
+    text: Targeted pytest proof passes without widening runtime/provider control surfaces
+      or changing public CLI/runtime contracts.
+  deliverables:
+  - Updated `.autoloop_recursive/*.md` standing memory files
+  - '`tests/test_architecture_baseline_docs.py`'
+  - Recorded targeted validation command/result in cycle-8 closeout docs
+  risks:
+  - Recursive memory or baseline tests may drift from the actual shipped behavior
+    if updated separately from code and proof.
+  - Cycle-closeout assertions may miss the new helper boundary unless docs and tests
+    are updated together.
+  rollback:
+  - Revert cycle-8 memory and baseline-test updates if they claim behavior or proof
+    the implementation does not actually ship.
