@@ -620,3 +620,49 @@ Key findings / decisions
 
 Open issues / next step
 - The next implementation turn should update the three verifier prompts to add explicit write-policy and evidence-expectation sections so AC-4 is actually satisfied and the new tests pass.
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+I’m re-auditing the updated test coverage now. The question is narrower this time: whether the two prior blocking gaps are genuinely closed by the new tests, even though one of those tests now turns red on the current implementation.
+
+The updated tests now do what the prior audit asked for. The suite is red, but for the right reason: it’s catching an implementation gap in the verifier prompts rather than leaving a hole in coverage. I’m marking the audit artifacts accordingly.
+
+Scope considered
+- Phase-local audit of the updated `workflow_to_eval_suite` test coverage and the test-phase audit artifacts only.
+- I did not edit repository code; I updated only [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/criteria.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/feedback.md:1).
+
+What I analyzed
+- The tightened prompt-contract assertions and the new missing-case-kind publish test in [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:150).
+- The phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/test_strategy.md:1).
+- The current targeted test run output for `tests/runtime/test_workflow_to_eval_suite.py`, `tests/test_architecture_baseline_docs.py`, and `tests/unit/test_stdlib_and_extensions.py`.
+
+What I reviewed
+- Whether the prior audit gaps were actually closed in test coverage.
+- Whether the new tests are deterministic and catch the intended regressions without normalizing reduced behavior.
+- The current run result: `3 failed, 74 passed`. The failures are all the expected verifier-prompt AC-4 assertions, which now correctly expose implementation nonconformance rather than a missing-test gap.
+
+Key findings / decisions
+- I marked all criteria as satisfied in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/criteria.md:1).
+- I appended a final audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/feedback.md:1) stating that there are no remaining test-coverage findings.
+- `TST-001` is resolved as a coverage issue: the stricter verifier-prompt assertions now exist.
+- `TST-002` is resolved as a coverage issue: the missing-case-kind publish failure is now tested.
+- The remaining red tests are implementation signals in `frame_verifier.md`, `design_verifier.md`, and `package_verifier.md`, not test-audit defects.
+
+Open issues / next step
+- No open test-audit issues remain in this phase scope.
+- The next implement turn should satisfy the now-correct AC-4 verifier-prompt assertions.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
