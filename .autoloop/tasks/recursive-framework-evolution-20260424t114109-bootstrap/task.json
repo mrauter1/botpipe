@@ -15,13 +15,13 @@
       "docs-templates-and-regression"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "catalog-and-helper-migration"
+    "current_phase_index": 2,
+    "current_phase_id": "authoring-support-and-builder"
   },
   "phase_status": {
     "resolver-foundation": "completed",
-    "catalog-and-helper-migration": "in_progress",
-    "authoring-support-and-builder": "planned",
+    "catalog-and-helper-migration": "completed",
+    "authoring-support-and-builder": "in_progress",
     "docs-templates-and-regression": "planned"
   },
   "phase_history": [
@@ -43,6 +43,19 @@
       "run_id": "run-20260424T144110Z-aa024541",
       "status": "in_progress",
       "ts": "2026-04-24T15:27:30.110696+00:00"
+    },
+    {
+      "phase_id": "catalog-and-helper-migration",
+      "run_id": "run-20260424T144110Z-aa024541",
+      "status": "completed",
+      "ts": "2026-04-24T16:04:54.911456+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "authoring-support-and-builder",
+      "run_id": "run-20260424T144110Z-aa024541",
+      "status": "in_progress",
+      "ts": "2026-04-24T16:04:54.916602+00:00"
     }
   ]
 }
