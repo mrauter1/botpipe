@@ -90,3 +90,12 @@ No open verifier blockers. The plan is ready for implementation work on the port
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=portfolio-health-snapshot-seam,workflow-portfolio-to-operating-system,cycle-ten-closeout
+explicit=True
+current_phase_index=0
