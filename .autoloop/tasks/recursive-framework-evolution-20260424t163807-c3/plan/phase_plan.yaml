@@ -1,4 +1,99 @@
 version: 1
 task_id: recursive-framework-evolution-20260424t163807-c3
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c3/runs/run-20260424T210746Z-c526aa99/request.md
-phases: []
+phases:
+- phase_id: shared-parameter-validator-seam
+  title: Shared Parameter Validator Seam
+  objective: Add one additive stdlib helper seam for repeated Pydantic parameter-model
+    validators without changing runtime-owned parameter coercion behavior.
+  status: planned
+  in_scope:
+  - Extend `stdlib/validation.py` with additive helper factories or helper-wired validator
+    callables for required text, optional text, deduped string lists, and positive
+    integers.
+  - Re-export the new helper surface from `stdlib/__init__.py`.
+  - Freeze helper behavior with focused unit coverage before broad workflow migration.
+  out_of_scope:
+  - Changing CLI syntax, runtime routing, or `runtime/loader.py` ownership of workflow-parameter
+    coercion.
+  - Adding a new public root authoring surface or a new `stdlib/params.py` module.
+  - Adding or retiring workflows.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The shared helper seam remains additive under stdlib and does not widen
+      runtime-owned parameter policy or the root `workflow` import surface.
+  - id: AC-2
+    text: The helper API covers the repeated validator shapes currently copied across
+      the workflow `params.py` family while keeping field names explicit in each model.
+  - id: AC-3
+    text: Unit coverage freezes helper behavior closely enough to migrate existing
+      workflow parameter models without silent coercion drift.
+  deliverables:
+  - Updated `stdlib/validation.py` helper surface.
+  - Updated `stdlib/__init__.py` exports.
+  - Focused unit-test coverage for the new validator helpers.
+  risks:
+  - Helper-generated validators could change validation wording or acceptance behavior
+    that current workflow tests rely on.
+  - An over-broad helper API could make parameter models harder to read instead of
+    clearer.
+  rollback:
+  - Revert the additive stdlib helper changes and their unit-test updates together
+    if they do not preserve the intended parameter-model semantics.
+- phase_id: params-model-migrations-and-closeout
+  title: Migrate Params Models And Close Out
+  objective: Replace repeated validator boilerplate across the workflow portfolio's
+    `params.py` files, then prove and record the consolidation without changing workflow
+    contracts.
+  status: planned
+  in_scope:
+  - Migrate the `params.py` files for workflow_idea_to_workflow_package, release_candidate_to_go_no_go,
+    incident_to_hardening_program, investigation_request_to_evidence_pack, security_finding_to_verified_remediation,
+    task_to_candidate_workflow_set, task_to_workflow_strategy, candidate_workflow_to_adapted_execution_plan,
+    workflow_to_eval_suite, workflow_run_history_to_failure_modes, workflow_portfolio_to_operating_system,
+    company_operation_to_recursive_improvement_cycle, workflow_and_eval_to_refined_workflow_package,
+    and workflow_package_to_composable_building_blocks.
+  - Keep workflow-specific identifier, literal-normalization, and order-sensitive
+    validation inline where the shared seam would be less clear.
+  - Update `docs/authoring.md`, targeted runtime suites, and the recursive-memory
+    files to record the new consolidation baseline.
+  - Record the boilerplate-reduction budget and any intentionally deferred parameter-validation
+    edge cases in closeout artifacts.
+  out_of_scope:
+  - Prompt-template compression as the primary deliverable for this cycle.
+  - Any new workflow package, new runtime-owned validation automation, or `workflow.toml`
+    semantic change.
+  - Broad cleanup of unrelated helper modules outside the parameter-model scope.
+  dependencies:
+  - shared-parameter-validator-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: The touched workflow parameter models preserve existing parameter names,
+      defaults, repeatability, and intended normalization behavior while using shared
+      stdlib helpers for the generic cases.
+  - id: AC-2
+    text: Targeted runtime suites continue to pass across the builder, domain, portfolio,
+      evaluation, refinement, diagnostics, governance, decomposition, and company-operation
+      workflow families.
+  - id: AC-3
+    text: Docs and recursive-memory files explicitly record that cycle 3 chose authoring-surface
+      consolidation over a new workflow and that generic `params.py` validator mechanics
+      now belong in stdlib.
+  deliverables:
+  - Migrated `workflows/*/params.py` files across the full current workflow portfolio.
+  - Updated `docs/authoring.md`.
+  - Updated targeted runtime tests and any needed unit coverage.
+  - Updated recursive-memory roadmap, gap ledger, candidate ledger, and validation
+    debt ledger entries.
+  risks:
+  - Partial migration would leave two competing generic parameter-validation idioms
+    in the repository.
+  - Workflow-specific validators could be over-abstracted, hiding important local
+    semantics.
+  - Status sorting, enum pre-normalization, or package-name validation could drift
+    if forced through generic helpers.
+  rollback:
+  - Revert the `params.py` migrations together if targeted proof shows contract drift.
+  - Revert docs and recursive-memory updates independently if implementation scope
+    changes before closeout.
