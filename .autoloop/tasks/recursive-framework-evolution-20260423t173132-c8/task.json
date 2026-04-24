@@ -14,13 +14,13 @@
       "cycle-eight-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "workflow-and-eval-to-refined-workflow-package"
+    "current_phase_index": 2,
+    "current_phase_id": "cycle-eight-closeout"
   },
   "phase_status": {
     "refinement-surface-seam": "completed",
-    "workflow-and-eval-to-refined-workflow-package": "in_progress",
-    "cycle-eight-closeout": "planned"
+    "workflow-and-eval-to-refined-workflow-package": "completed",
+    "cycle-eight-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260424T045554Z-27198177",
       "status": "in_progress",
       "ts": "2026-04-24T05:29:22.705825+00:00"
+    },
+    {
+      "phase_id": "workflow-and-eval-to-refined-workflow-package",
+      "run_id": "run-20260424T045554Z-27198177",
+      "status": "completed",
+      "ts": "2026-04-24T06:18:11.814626+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "cycle-eight-closeout",
+      "run_id": "run-20260424T045554Z-27198177",
+      "status": "in_progress",
+      "ts": "2026-04-24T06:18:11.819174+00:00"
     }
   ]
 }
