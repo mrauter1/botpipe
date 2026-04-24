@@ -71,13 +71,14 @@ phases:
       baseline when present, and publishes ranked candidates plus fit-gap reasoning
       as durable artifacts.
   - id: AC-2
-    text: The workflow definition, prompt templates, route contracts, and artifact
-      contract keep the boundary at candidate-set publication rather than final strategy
-      or hidden execution.
+    text: The workflow definition, prompts, route contracts, and plan/docs make the
+      building block's deterministic responsibilities, provider-owned cognition, work-item
+      boundaries, artifact contract, and runtime-injected control contract explicit
+      while keeping the boundary at candidate-set publication.
   - id: AC-3
     text: Runtime proof covers successful publication of the candidate-workflow-set
       artifacts and summary, including a machine-readable readiness signal for downstream
-      strategy selection.
+      strategy selection and publication-side validation of that readiness contract.
   deliverables:
   - workflows/task_to_candidate_workflow_set/ package with prompts, assets, contracts,
     params, and workflow definition.
@@ -101,6 +102,9 @@ phases:
   in_scope:
   - Update task_to_workflow_strategy to compose task_to_candidate_workflow_set and
     adopt its artifacts explicitly.
+  - Preserve the current task_to_workflow_strategy parent-local artifact names, strategy_summary.json
+    field contract, and publish-time validations while moving candidate analysis behind
+    child composition.
   - Refresh workflow docs/tests for the front-door composition and preserved terminal
     strategy-only behavior.
   - Update all four standing recursive memory files and the architecture-baseline
@@ -117,7 +121,8 @@ phases:
   acceptance_criteria:
   - id: AC-1
     text: task_to_workflow_strategy reuses task_to_candidate_workflow_set through
-      explicit composition while preserving its existing terminal strategy-publication
+      explicit composition while preserving its current parent-local artifact names,
+      strategy_summary.json schema, publish-time validations, and terminal strategy-publication
       contract.
   - id: AC-2
     text: Recursive memory records that the builder remained credible, task_to_candidate_workflow_set
@@ -128,7 +133,8 @@ phases:
       block, the updated front door, and the previously shipped builder/evidence/security
       portfolio surfaces.
   deliverables:
-  - Updated task_to_workflow_strategy package, docs, and runtime tests.
+  - Updated task_to_workflow_strategy package, docs, and runtime tests with preserved
+    terminal artifact/schema validations.
   - Updated .autoloop_recursive memory files.
   - Updated tests/test_architecture_baseline_docs.py.
   - Targeted pytest proof for cycle-5 closeout.

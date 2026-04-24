@@ -158,7 +158,7 @@ Planned workflow shape:
 - pair step `frame_candidate_request`
   - writes `candidate_request_brief.md` and `candidate_selection_criteria.md`
 - pair step `analyze_candidate_workflows`
-  - writes `workflow_candidate_matrix.md`, `workflow_gap_analysis.md`, and a route/posture rationale artifact
+  - writes `workflow_candidate_matrix.md`, `workflow_gap_analysis.md`, and `candidate_route_posture.md`
 - pair step `package_candidate_workflow_set`
   - writes `candidate_workflow_set.md`, `candidate_workflow_set_summary.json`, and `candidate_next_action.md`
 - system step `publish_candidate_workflow_set`
@@ -202,6 +202,112 @@ Prompt-template requirements:
 - The analysis prompts must require at least three compared candidates when the portfolio size permits and must explicitly include `workflow_idea_to_workflow_package` as the builder baseline when it exists.
 - The building block must stop at candidate-set publication; it must not auto-run downstream workflows or collapse into final route execution.
 
+Explicit workflow contract for `task_to_candidate_workflow_set`:
+
+### Objective
+
+Turn an arbitrary software-work task into a reusable candidate-workflow-set package that ranks current portfolio options, explains fit gaps, and publishes a machine-readable downstream handoff artifact without choosing or executing the final front-door route.
+
+### Global deterministic workflow responsibilities
+
+- Bootstrap the authoritative invocation contract from workflow parameters and the run request.
+- Capture a deterministic workflow-capability snapshot through the new additive inspection seam.
+- Hold request framing, candidate analysis, and candidate-set packaging as separate work items.
+- Keep runtime-injected control data narrow and mechanical: `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Publish a deterministic receipt only after the candidate-set package, machine-readable summary, and next-action artifact all exist and pass validation.
+
+### Provider-owned cognitive responsibilities
+
+- Frame the task as a candidate-retrieval and fit-gap problem.
+- Inspect the capability snapshot, linked docs, and linked workflow code when needed to compare candidates credibly.
+- Rank candidates, explain why they win or lose, and state the current portfolio posture without burying policy in runtime machinery.
+- Package a reusable downstream handoff artifact another workflow or operator can consume directly.
+
+### Work-item boundary doctrine
+
+- `capture_workflow_capabilities`: deterministic capability snapshot capture only.
+- `frame_candidate_request`: task framing, sponsor context, desired outcome, and candidate-selection criteria only.
+- `analyze_candidate_workflows`: candidate comparison, fit-gap analysis, and portfolio-posture determination only.
+- `package_candidate_workflow_set`: terminal candidate-set package, machine-readable summary, and next-action artifact only.
+- `needs_rework`: the same work-item boundary still holds and needs local repair only.
+- `needs_replan`: the task framing, candidate universe, or portfolio-posture boundary changed materially and earlier work must be revisited.
+
+### Role topology
+
+- deterministic `bootstrap`
+- deterministic `capture_workflow_capabilities`
+- `candidate-set strategist` / `candidate-set critic`
+- `portfolio analyst` / `portfolio analysis verifier`
+- `candidate-set packager` / `candidate-set package verifier`
+- deterministic `publish_candidate_workflow_set`
+
+### Control flow as explicit procedure
+
+1. `bootstrap`
+2. `capture_workflow_capabilities`
+3. `frame_candidate_request`
+4. `analyze_candidate_workflows`
+5. `package_candidate_workflow_set`
+6. `publish_candidate_workflow_set`
+
+### Artifact contract
+
+| Step | Required reads | Required writes | Authority / downstream use |
+| --- | --- | --- | --- |
+| `bootstrap` | `request.md`, workflow params | `invocation_contract.json` | authoritative run-local input snapshot |
+| `capture_workflow_capabilities` | `request.md`, `invocation_contract.json` | `workflow_capability_snapshot.json` | authoritative capability surface for candidate comparison and later adaptation workflows |
+| `frame_candidate_request` | request, invocation contract, capability snapshot, framework docs | `candidate_request_brief.md`, `candidate_selection_criteria.md` | authoritative framing package for candidate analysis |
+| `analyze_candidate_workflows` | request, invocation contract, capability snapshot, framing artifacts | `workflow_candidate_matrix.md`, `workflow_gap_analysis.md`, `candidate_route_posture.md` | authoritative candidate comparison and portfolio-posture surface |
+| `package_candidate_workflow_set` | request, invocation contract, capability snapshot, framing and analysis artifacts, checklist | `candidate_workflow_set.md`, `candidate_workflow_set_summary.json`, `candidate_next_action.md` | reusable downstream handoff package and machine-readable summary |
+| `publish_candidate_workflow_set` | capability snapshot, analysis artifacts, candidate-set package artifacts | `candidate_workflow_set_receipt.json` | deterministic terminal receipt proving the workflow stopped at candidate-set publication |
+
+### Runtime-injected control contract
+
+The runtime injects only:
+
+- `expected_output_schema`
+- `available_routes`
+- `route_contracts`
+
+Step payload models:
+
+- `frame_candidate_request` -> `CandidateRequestFramingPayload`
+- `analyze_candidate_workflows` -> `CandidateWorkflowAnalysisPayload`
+- `package_candidate_workflow_set` -> `CandidateWorkflowSetPayload`
+
+### Step prompt templates
+
+- `prompts/frame_producer.md`: role `candidate-set strategist`; frames the task, sponsor, desired outcome, and explicit comparison criteria without ranking candidates yet.
+- `prompts/frame_verifier.md`: role `candidate-set critic`; checks that the framing package is explicit enough to support portfolio comparison and downstream reuse.
+- `prompts/analyze_producer.md`: role `portfolio analyst`; compares at least three candidates when the portfolio size permits, includes the builder baseline when present, and writes the matrix, gap analysis, and posture artifact without choosing the final front-door route.
+- `prompts/analyze_verifier.md`: role `portfolio analysis verifier`; checks that the candidate comparison, fit-gap reasoning, and posture are explicit, legal, and reusable.
+- `prompts/package_producer.md`: role `candidate-set packager`; writes the terminal candidate-set package, the machine-readable summary, and the next-action artifact without triggering downstream execution.
+- `prompts/package_verifier.md`: role `candidate-set package verifier`; confirms the package is ready for deterministic publication and still stops at candidate-set publication rather than hidden strategy execution.
+
+### Verification and evidence contract
+
+- Workflow discovery must find the package by canonical name and alias.
+- Compilation must expose the typed route contracts for the three pair steps.
+- Runtime proof must cover:
+  - successful end-to-end publication of the candidate-set package and receipt
+  - stable publication of `workflow_capability_snapshot.json`, `candidate_workflow_set_summary.json`, and `candidate_next_action.md`
+  - proof that the builder baseline is considered when present in the portfolio
+  - proof that the workflow ends at candidate-set publication rather than auto-running a downstream workflow or silently collapsing into the front door
+  - publication validation that rejects a summary that is not ready for downstream strategy selection
+
+### Rework / replan / block / fail policy
+
+- `needs_rework`: local repair inside the same framing, analysis, or packaging boundary.
+- `needs_replan`: the task framing, candidate universe, or portfolio-posture boundary changed materially enough that the workflow must move backward.
+- `blocked`: missing prerequisite facts, capability snapshot failures, or repository facts prevent a credible candidate-set package.
+- `failed`: irreconcilable contradictions make the current candidate-set package non-credible.
+
+### Recursive self-improvement policy
+
+- `workflow_idea_to_workflow_package` remains the standing greenfield authoring path and must remain explicit in candidate comparison when present.
+- The capability snapshot seam remains additive and evidence-oriented; it must not accumulate runtime-owned ranking or adaptation policy.
+- The candidate-set package is expected to become a durable upstream artifact for later workflows such as `candidate_workflow_to_adapted_execution_plan`, with promotion controlled by tests, docs, and recursive-memory closeout rather than prompt-only convention.
+
 ### Phase 3: front-door integration, recursive memory, and regression proof
 
 Target files:
@@ -219,13 +325,48 @@ Target files:
 
 Planned integration shape:
 
-- Replace the front door's inlined candidate comparison work with an explicit child-workflow composition step that invokes `task_to_candidate_workflow_set`.
+- Preserve `task_to_workflow_strategy` as the explicit front door and replace only its inlined candidate comparison work with an explicit child-workflow composition step that invokes `task_to_candidate_workflow_set`.
+- Keep the front door's deterministic `capture_workflow_portfolio` step so `workflow_portfolio_snapshot.json` remains a first-class parent artifact and the parent receipt contract stays intact.
 - Use the existing composition helpers to:
   - run the child workflow
   - require successful child completion and the expected terminal route
   - validate the child summary indicates readiness for downstream strategy selection
   - adopt the child artifacts needed by `task_to_workflow_strategy`
 - Keep `task_to_workflow_strategy` responsible for the final route decision and terminal strategy package so the front door remains the explicit policy owner.
+
+Front-door compatibility contract:
+
+- The parent workflow must continue publishing these parent-local artifacts by the same names unless a later clarified request explicitly authorizes a break:
+  - `workflow_portfolio_snapshot.json`
+  - `task_strategy_brief.md`
+  - `workflow_selection_criteria.md`
+  - `workflow_candidate_matrix.md`
+  - `workflow_gap_analysis.md`
+  - `strategy_decision.md`
+  - `workflow_strategy_package.md`
+  - `strategy_summary.json`
+  - `strategy_next_action.md`
+  - `strategy_receipt.json`
+- `task_to_candidate_workflow_set` may become the source of `workflow_candidate_matrix.md`, `workflow_gap_analysis.md`, and an adopted candidate-posture artifact, but those parent artifact names and their workflow-local availability must remain stable.
+- `strategy_summary.json` must preserve the current field contract:
+  - `authoritative_artifacts`
+  - `builder_baseline_workflow`
+  - `builder_considered`
+  - `comparison_candidates`
+  - `create_new_required`
+  - `next_action`
+  - `ready_for_handoff`
+  - `recommended_workflows`
+  - `rejected_routes`
+  - `selected_strategy`
+- `strategy_receipt.json` must continue to reference the parent-local `workflow_portfolio_snapshot`, `workflow_strategy_package`, `strategy_summary`, and `strategy_next_action` artifact paths.
+- Publication validation in `task_to_workflow_strategy` must preserve the current safety checks:
+  - reject a strategy summary that omits the builder baseline from `comparison_candidates`
+  - reject `compose` summaries that name fewer than two recommended workflows
+- The front door must continue ending at strategy publication only:
+  - no downstream selected workflow is auto-run
+  - the presence of the candidate-set child run must not change the terminal contract of the parent run
+  - current parent-local tests/docs/receipts remain the regression baseline unless a later explicit clarification authorizes a break
 
 Required closeout content:
 
@@ -239,7 +380,7 @@ Required closeout content:
 - No CLI syntax change is planned.
 - No `workflow.toml` schema change is planned.
 - The existing lightweight workflow-catalog discovery contract should remain intact; richer workflow inspection must be additive and isolated to a separate seam/helper.
-- `task_to_workflow_strategy` must preserve its terminal behavior of publishing a strategy package without auto-running the selected workflow, even after it composes the new child building block.
+- `task_to_workflow_strategy` must preserve its current parent-local artifact names, `strategy_summary.json` field contract, `strategy_receipt.json` references, builder-baseline validation, compose-route validation, and terminal strategy-only behavior even after it composes the new child building block.
 - Existing builder, evidence-pack, security, and front-door tests remain regression gates because cycle 5 touches shared portfolio authoring seams and modifies the current front door.
 
 ## Validation plan
