@@ -241,7 +241,7 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 
 ## Optional Validation Helpers
 
-`stdlib/validation.py` provides a small opt-in helper seam for generic workflow-local JSON, string, list, mapping, and positive-int validation.
+`stdlib/validation.py` provides a small opt-in helper seam for generic workflow-local JSON, string, list, mapping, non-negative-int, and positive-int validation.
 
 ```python
 from autoloop_v3.stdlib import (
@@ -250,6 +250,7 @@ from autoloop_v3.stdlib import (
     read_json_object,
     require_mapping,
     require_mapping_list,
+    require_non_negative_int,
     require_non_empty_string,
     require_positive_int,
     require_string_list,
@@ -259,7 +260,7 @@ from autoloop_v3.stdlib import (
 Validation helper boundary:
 
 - generic validation belongs in stdlib rather than copied workflow-local helper tails
-- use these helpers for shared JSON-object reads, non-empty string checks, string-list normalization, mapping checks, duplicate guards, and positive-int validation
+- use these helpers for shared JSON-object reads, non-empty string checks, string-list normalization, mapping checks, duplicate guards, non-negative-int validation, and positive-int validation
 - keep workflow-specific publication assertions, domain allow-lists, and artifact-family invariants in workflow code
 - the helpers only validate explicit workflow-local inputs and artifacts; they do not add runtime-owned routing, publication policy, or hidden execution
 
