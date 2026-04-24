@@ -21,3 +21,4 @@ Scaffold CLI shape spelling stays user-facing as `flow-specs`, while builder/run
 Canonical `docs/` and `Workflow_Instructions.md` were restored from `legacy_docs/` because the shipped builder workflow and its tests already resolve those canonical paths; broader prose refresh remains deferred to the docs phase.
 Recursive wrapper/template edits in this slice were limited to package-CLI contract strings and authoring-surface reminders required by existing package-CLI tests; recursive-memory baseline document refresh remains out of phase.
 `stdlib.validation.validate_model_file(...)` now treats non-object JSON as a reportable validation issue instead of raising, so every invalid-shape path returns a `ValidationReport` consistently.
+<autoloop-decisions-header version="1" block_seq="7" owner="implementer" phase_id="docs-templates-and-regression" pair="implement" turn_seq="1" run_id="run-20260424T144110Z-aa024541" ts="2026-04-24T17:26:46.470884+00:00" />
