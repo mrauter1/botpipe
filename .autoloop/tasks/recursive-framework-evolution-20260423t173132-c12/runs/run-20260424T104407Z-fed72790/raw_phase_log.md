@@ -121,3 +121,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T104407Z-fed72790 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=company-operation-snapshot-seam,company-operation-to-recursive-improvement-cycle,cycle-twelve-closeout
+explicit=True
+current_phase_index=0
