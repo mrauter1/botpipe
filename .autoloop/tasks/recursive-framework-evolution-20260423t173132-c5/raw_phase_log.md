@@ -505,3 +505,56 @@ I found one bit of validation noise: `py_compile` touched tracked `__pycache__` 
 **Open issues / next step**
 - Validation passed: targeted slice `102 passed`, then a post-note spot check `34 passed`.
 - No open blocker in this phase. The next obvious follow-on is the adaptation-plan building block on top of the shipped candidate-set layer.
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd08-0c88-78f0-9577-c0fa12a84d0b
+---
+I’m reviewing the phase-local implementation against the active contract now. First I’m reading the reviewer-owned criteria/feedback artifacts and the touched workflow/test/docs surfaces so I can decide whether the phase is complete or whether there are blocking correctness or contract issues.
+
+Reviewing the shipped workflow package and the parent strategy integration now. I’m checking artifact contracts against actual step behavior, then I’ll update the reviewer artifacts with either a clean pass or concrete findings.
+
+I’ve narrowed one likely contract issue in the parent workflow and I’m verifying whether it’s real or already covered elsewhere. I’m checking the publish step, docs, and tests together so the feedback is anchored to the actual acceptance criteria.
+
+The candidate-set package itself looks disciplined. I’m checking whether the parent workflow’s compiled step contract still matches what its publish code actually reads, because that’s the kind of drift that passes happy-path tests but breaks the explicit-contract doctrine.
+
+I hit a path mismatch in the local layout while checking runtime enforcement, so I’m locating the actual compiler/runner sources before I lock the severity. The parent workflow issue still looks real; I’m making sure the failure mode is stated precisely.
+
+I’ve confirmed the engine actually enforces `step.requires`, so this isn’t just a doc nit. I’m running one small compile-time check now to capture the exact publish-step prerequisite set before I write the finding.
+
+`python` isn’t on PATH here. I’m switching to `python3` for the final confirmation and then I’ll update the reviewer artifacts.
+
+I’ve got one blocking finding and no need to widen scope further. I’m updating the phase feedback now; the criteria gates stay unmet because the parent publish step’s declared inputs don’t match what the runtime actually consumes.
+
+Scope considered
+- Phase-local verifier scope for `task-to-candidate-workflow-set-package`: the new `task_to_candidate_workflow_set` package, its immediate reuse in `task_to_workflow_strategy`, and the reviewer-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/`.
+
+What I analyzed
+- `workflows/task_to_candidate_workflow_set/workflow.py`, `contracts.py`, `docs/workflows/task_to_candidate_workflow_set.md`, and `tests/runtime/test_task_to_candidate_workflow_set.py`.
+- `workflows/task_to_workflow_strategy/workflow.py`, `docs/workflows/task_to_workflow_strategy.md`, and `tests/runtime/test_task_to_workflow_strategy.py`.
+- `core/compiler.py` and `core/engine.py` to confirm how declared `requires` are compiled, published, and enforced at runtime.
+
+What I reviewed
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/criteria.md) to keep all gates unmet and record that a blocking finding remains.
+- Appended `IMP-001` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/task-to-candidate-workflow-set-package/feedback.md).
+
+Key findings / decisions
+- `IMP-001` is blocking: [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:187) declares `publish_strategy.requires` without the adopted child candidate artifacts, but [on_publish_strategy](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:358) still reads them. Because [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:501) enforces only the declared `requires`, the compiled/capability contract can say the step is runnable while the handler later crashes on missing adopted child artifacts. The same incomplete read set is documented at [docs/workflows/task_to_workflow_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_workflow_strategy.md:182).
+- No second blocking issue was necessary to hold the phase; this contract drift alone is enough to keep the verifier result incomplete.
+
+Open issues / next step
+- Add `candidate_route_posture`, `candidate_workflow_set`, `candidate_workflow_set_summary`, and `candidate_next_action` to `publish_strategy.requires`, align the `publish_strategy` artifact-contract doc row, and add a compile-time assertion in `tests/runtime/test_task_to_workflow_strategy.py` for the full publish-step prerequisite set.
+- Re-run verifier after that fix.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
