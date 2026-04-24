@@ -209,3 +209,131 @@ phase_mode=single
 phase_ids=workflow-capability-snapshot-seam,task-to-candidate-workflow-set-package,front-door-integration-memory-and-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+---
+I’m starting by reading the mandatory framework files, the phase artifacts, and the current workflow definitions so I can pin down the existing discovery seam before touching code.
+
+The request’s path list is stale relative to this repo layout, and the planner already recorded the repo-root equivalents. I’m switching to those equivalents now and tracing the current workflow catalog, compiler, runtime loader, and portfolio helpers before designing the additive seam.
+
+I’ve confirmed the current seam: lightweight discovery is pure `workflow.toml` metadata, and the only richer surface today is the CLI’s importing `show` path. Next I’m reading the front-door workflow and the existing tests so the new inspection/helper seam stays additive and doesn’t break the catalog contract.
+
+I’ve narrowed the scope to the active phase contract: additive inspection and snapshot helper only, not the later candidate-set workflow. I’m checking the plan checklist and the existing export surfaces now so I can implement the seam once and keep the runtime/catalog behavior unchanged.
+
+I have the seam shape now: keep catalog discovery metadata-only, add a separate importing inspection API plus a richer workflow-local snapshot helper that serializes parameters and compiled step contracts. I’m checking the prompt/artifact types before editing so the snapshot format can stay strictly reflective instead of inventing new runtime policy.
+
+I’ve finished the design pass. I’m editing the pure inspection module first, then wiring the authoring helper/export path and the focused tests around the narrow-vs-rich snapshot boundary.
+
+The core inspection module and the snapshot helper are in. I’m checking the wiring now for any import drift or shape mismatch before I touch docs and tests.
+
+I’ve verified the new code compiles structurally except for the environment using `.venv/bin/python` instead of `python`. I’m updating the docs now to make the narrow catalog seam versus the richer capability seam explicit, then I’ll add the focused tests.
+
+The code paths are wired. I’m running compile checks and the focused test set now, including the existing front-door workflow test to catch any regression in the original portfolio snapshot helper.
+
+Two tests failed in the focused suite. I’m reading the failure output now and will fix the mismatch before updating the phase notes.
+
+The failures were just error-type translation drift from the new loader path. I’ve restored the runtime-facing `WorkflowDiscoveryError` behavior and am rerunning the same focused suite.
+
+The focused suite is clean. I’m doing one pass over the diff now, then I’ll update the phase notes and the shared decision block with the specific seam and invariants that need to survive later phases.
+
+I’ve got the code and tests settled. I’m writing the phase-local notes now with the preserved invariants and the one-way decisions that later phases need to honor.
+
+I’m pulling exact line references from the touched files now so the close-out can point at the seam and helper surfaces directly instead of listing a changelog.
+
+I removed one leftover unused import from the loader after the shared inspection refactor. Running a final quick compile check now.
+
+Scope considered
+
+- Phase-local `workflow-capability-snapshot-seam` only: additive inspection/helper work, not the later `task_to_candidate_workflow_set` workflow package.
+- Preserved the existing lightweight discovery contract and the current `workflow_portfolio_snapshot.json` shape.
+
+What I analyzed
+
+- The current metadata-only catalog seam in [core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_catalog.py:1), runtime resolution in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py:1), and the existing portfolio helper in [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py:1).
+- Existing front-door workflow expectations via [tests/runtime/test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py:1) so the original portfolio snapshot seam stayed unchanged.
+
+What I changed
+
+- Added the richer importing inspection seam in [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py:1) and runtime re-export/wrapping in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py:146) plus [runtime/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/__init__.py:1).
+- Added `write_workflow_capability_snapshot(...)` beside the existing lightweight helper in [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py:17) and exported it from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:1).
+- Documented the narrow-vs-rich boundary in [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md:50) and [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:205).
+- Added focused coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:185) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:251).
+- Updated phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c5/implement/phases/workflow-capability-snapshot-seam/implementation_notes.md:1).
+
+Key findings / decisions
+
+- `discover_workflow_catalog(...)` remains the metadata-only non-importing seam.
+- Rich capability inspection now imports workflow packages only when explicitly requested and serializes existing narrow control metadata rather than inventing new runtime policy.
+- Runtime-facing resolution still translates shared inspection failures back to `WorkflowDiscoveryError`.
+
+Open issues / next step
+
+- No open defect from this phase-local slice.
+- Natural next phase step is to consume `write_workflow_capability_snapshot(...)` from the later portfolio workflow/building-block work instead of widening `workflow.toml`.
+
+Validation performed
+
+- `.venv/bin/python -m py_compile core/workflow_capabilities.py runtime/loader.py runtime/cli.py runtime/__init__.py stdlib/portfolio.py stdlib/__init__.py tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py`
+- `.venv/bin/pytest -q tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` with `67 passed`
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+
+
+---
+run_id=run-20260424T003247Z-3011b6ef | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcf5-fcb5-7630-9ba6-3fd70abe26a1
+---
+I’m reviewing the phase-local implementation against the active criteria, decisions, and the touched runtime/stdlib seams first, then I’ll update the verifier artifacts with any findings and checkbox status.
+
+I’ve finished the audit. The new inspection seam stays additive, the original catalog snapshot contract is intact, and the focused validation covers the regression surface I’d expect for this phase. I’m marking the criteria complete and recording that this pass found no review findings.
+
+Scope considered
+
+- Phase-local `workflow-capability-snapshot-seam` only.
+- Request snapshot, active phase contract, shared decisions, implementation notes, touched code/docs/tests, and the focused validation surface.
+
+What I analyzed
+
+- The new rich inspection seam in `core/workflow_capabilities.py`.
+- Runtime integration in `runtime/loader.py` and authoring helper usage in `stdlib/portfolio.py`.
+- The doc boundary in `docs/architecture.md` and `docs/authoring.md`.
+- Focused tests in `tests/runtime/test_compatibility_runtime.py` and `tests/unit/test_stdlib_and_extensions.py`.
+
+What I reviewed
+
+- Whether `discover_workflow_catalog(...)` stayed metadata-only and non-importing.
+- Whether the new capability snapshot helper stayed additive and avoided runtime-owned ranking/routing behavior.
+- Whether the existing lightweight portfolio snapshot contract and front-door workflow expectations remained intact.
+- Whether the focused validation was credible for the touched regression surface.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` with all boxes checked and recorded the clean verifier result in `feedback.md`.
+
+Open issues / next step
+
+- No open issues from this verifier pass.
+- Next phase work can build on the new capability snapshot seam without revisiting this phase-local implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
