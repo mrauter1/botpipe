@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T224329Z-a6be59a5" ts="2026-04-24T22:43:29.309126+00:00" />
+Choose `authoring-surface` mode for cycle 5; the highest-leverage remaining debt is older-domain prompt-family compaction, not a new workflow or serializer refactor.
+Keep prompt file paths, step names, artifact names, route names, receipt filenames, CLI behavior, runtime/provider contracts, and `ctx.invoke_workflow(...)` behavior unchanged; scope is prompt markdown, prompt READMEs, prompt-facing tests, and recursive-memory/docs alignment only.
+Treat selected-workflow serializer convergence as explicitly deferred follow-on work unless prompt migration reveals a blocking inconsistency that cannot be handled locally.
