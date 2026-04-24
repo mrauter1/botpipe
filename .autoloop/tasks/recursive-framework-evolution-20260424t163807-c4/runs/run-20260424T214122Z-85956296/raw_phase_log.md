@@ -163,3 +163,163 @@ phase_mode=single
 phase_ids=prompt-contract-doctrine,prompt-surface-migration,proof-docs-memory-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc17a-80ae-75e2-9480-bb9099f81383
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc17a-80ae-75e2-9480-bb9099f81383
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc17a-80ae-75e2-9480-bb9099f81383
+---
+I’m treating this as a scoped authoring-surface/consolidation pass around prompt-contract doctrine. First I’m auditing the repository and the phase artifacts to identify the relevant workflow families, existing prompt README patterns, and where `docs/authoring.md` currently draws the runtime/provider boundary.
+
+The repo-wide inventory is in hand. Next I’m reading the prompt-facing docs, the scoped workflow prompt READMEs, and the recursive-memory ledgers to pin the exact doctrine and avoid widening the phase beyond the current workflow family.
+
+I have the README baseline. Now I’m checking the actual prompt bodies and the prompt-related tests, because the main risk here is removing a constraint that the tests or downstream steps still depend on.
+
+The current tests are pinning exact headings and repeated README wording, which matches the plan’s risk note. I’m locating every prompt-specific assertion and the prompt section in `docs/authoring.md` so I can rewrite the doctrine and loosen the tests only where the contract is intentionally changing.
+
+I’ve narrowed the phase to docs, prompt READMEs, and the tests that pin those surfaces. Before I edit, I’m checking the ends of the recursive-memory files and the active prompt README assertions so I can update the required ledgers without colliding with unrelated history.
+
+I’ve decided to keep this phase strictly docs-and-README scoped. Prompt body rewrites stay deferred; the only test changes should be the assertions that currently expect the old README wording and the new baseline checks for the standardized README contract.
+
+I’m filling in the shared README contract now. I need the exact verifier payload class names for each workflow family, so I’m pulling those from the workflow contracts instead of guessing and drifting the docs.
+
+The remaining open piece is the recursive-memory sync. I’m checking the gap ledger separately because the earlier tail output truncated the most recent entries, and I need the new prompt-contract note to land in the right section instead of creating duplicate history.
+
+I have the final edit set: one authoring-doc section, ten README normalizations, one baseline-doc test to cover all scoped READMEs, and five targeted README test updates. I’m opening the exact test blocks now so the patch changes only the pinned assertions, not unrelated runtime behavior.
+
+I’m filling the step tables from the prompt files themselves rather than paraphrasing from memory. The goal is for the new README surfaces to be authoritative enough that future prompt cleanup can remove the duplicated family-wide footers safely.
+
+I’m editing now. The patch is limited to `docs/authoring.md`, the scoped `prompts/README.md` files, the prompt-facing tests, the recursive-memory ledgers, `implementation_notes.md`, and the current turn’s `decisions.txt` block.
+
+The first patch failed on a context mismatch in the roadmap tail, so I’m splitting the edit into smaller patches. The implementation scope is unchanged; I’m just making the file updates in narrower chunks to avoid colliding with nearby repo history.
+
+The docs, READMEs, and tests are in place. I’m finishing the required closeout artifacts now: the recursive-memory sync, this phase’s implementation notes, and the current turn’s decision block.
+
+I’m doing a quick consistency pass before running tests: checking the standardized README route names against the workflow declarations and then running only the prompt-facing suites touched by this phase.
+
+I found two README route labels that were off by one from the workflow declarations: `portfolio_snapshotted` and `workflow_capabilities_captured`. I’m correcting those before the test run so the README contract stays authoritative rather than merely stylistic.
+
+The targeted suites are running clean so far. I’m waiting for the full result and then I’ll do one last diff/stat pass for the closeout metrics and scope summary.
+
+One baseline-doc assertion is failing on an exact sentence match, not on the doctrine itself. I’m tightening the authoring-doc wording to include the canonical runtime-boundary sentence verbatim, then I’ll rerun the same targeted suites.
+
+The targeted validation is green. I’m collecting the final diff stats and whitespace check now so the closeout can report the actual scope reduction and note that the phase stayed docs-and-README local.
+
+I have the final scope metrics. One repo-state caveat: `.autoloop_recursive/` and `tests/test_architecture_baseline_docs.py` are currently outside the tracked git baseline in this workspace, so their updates won’t appear in `git diff --stat` even though the task-required edits are present locally.
+
+Scope considered
+
+- Repo audit of the prompt-facing surfaces the phase called out: `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, relevant tests, `.autoloop_recursive/`, and the phase artifacts.
+- Change scope stayed docs-and-README local. No CLI, runtime, provider, workflow-topology, artifact, or prompt-path behavior changed.
+
+What I analyzed
+
+- Most relevant existing surfaces: `task_to_workflow_strategy/prompts/`, `workflow_and_eval_to_refined_workflow_package/prompts/`, and `workflow_package_to_composable_building_blocks/prompts/`.
+- Repeated patterns: duplicated runtime-boundary footers, repeated route summaries, repeated step-to-artifact summaries, and repeated verifier-payload notes across the builder, selected-workflow, governance, and company-level families.
+- New workflow necessity: none. This was clearly an `authoring-surface` pass, not an expansion pass.
+
+What I changed
+
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) with a new `Compact Prompt Contract Style` section that freezes what belongs in each prompt versus once in `prompts/README.md`.
+- Standardized the scoped prompt READMEs to one shared shape:
+  - `Shared README Boundary`
+  - `Keep In Each Prompt`
+  - `Step Surface`
+  - `Route Surface`
+  - `Verifier Payloads`
+- Applied that README contract to:
+  - `task_to_workflow_strategy`
+  - `task_to_candidate_workflow_set`
+  - `candidate_workflow_to_adapted_execution_plan`
+  - `workflow_to_eval_suite`
+  - `workflow_run_history_to_failure_modes`
+  - `workflow_portfolio_to_operating_system`
+  - `company_operation_to_recursive_improvement_cycle`
+  - `workflow_idea_to_workflow_package`
+  - `workflow_and_eval_to_refined_workflow_package`
+  - `workflow_package_to_composable_building_blocks`
+- Updated the prompt-facing test assertions and added baseline coverage for the standardized README contract.
+- Updated the required recursive-memory files plus this phase’s `implementation_notes.md` and current-turn `decisions.txt`.
+
+Key findings / decisions
+
+- Primary cycle mode: `authoring-surface`.
+- Chosen improvement: freeze the compact prompt-contract doctrine and standardize package-level prompt README boundaries. Higher leverage than a new workflow because it reduces future prompt duplication across existing serious workflow families.
+- Files added: `0`.
+- Files deleted: `0`.
+- Tracked diff for the edited tracked files: `545` insertions, `195` deletions, net `+350`.
+- Repeated validation idioms removed: `0`.
+- Repeated prompt sections removed or shortened: prompt-body repetition was intentionally deferred; this phase centralized the family-wide contract at the README level instead.
+- Workflows changed to use shared helpers: `0`.
+- New helper functions introduced: `0`.
+- Old workflow-local validation blocks replaced: `0`.
+- Core readability after: the scoped workflow families now expose one obvious package-level prompt contract without adding runtime prompt machinery.
+- Validation passed: `.venv/bin/pytest -q tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py` with `162 passed`.
+
+Open issues / next step
+
+- Prompt bodies still repeat some family-wide reminders; that compaction is now easier because the README boundary is frozen.
+- Older domain workflow prompt families were intentionally left untouched in this phase.
+- Repo-state note: `.autoloop_recursive/` and `tests/test_architecture_baseline_docs.py` are outside the tracked git baseline in this workspace, but the required local updates are present.
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc17a-80ae-75e2-9480-bb9099f81383
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc17a-80ae-75e2-9480-bb9099f81383
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc17a-80ae-75e2-9480-bb9099f81383
+---
+I’m reviewing the phase-local implementation against the phase contract and acceptance criteria first, then I’ll update the phase criteria and feedback artifacts only inside `.autoloop/tasks/...`.
+
+`git diff` is not giving me a useful tracked patch surface in this workspace, so I’m reviewing the changed files directly. I’m checking the new doctrine text, a sample across each prompt family, and the updated tests to verify the phase stayed within the requested boundary.
+
+I’m not seeing a correctness, safety, or scope violation in the implementation. I’m marking the criteria complete and recording a no-findings review note in the phase feedback artifact.
+
+Scope considered
+
+- Phase-local review of the prompt-contract-doctrine implementation against the active phase contract, acceptance criteria, implementation notes, and shared decisions.
+- Direct inspection of the changed doctrine/readme/test surfaces and the phase-local artifacts only; no non-task code was edited.
+
+What I analyzed
+
+- `docs/authoring.md` compact prompt-contract doctrine.
+- Standardized `prompts/README.md` files across the builder, selected-workflow, governance, and company-level families.
+- Prompt-facing tests in `tests/runtime/` and baseline coverage in `tests/test_architecture_baseline_docs.py`.
+- Phase-local notes in `implementation_notes.md` and the relevant shared decisions in `decisions.txt`.
+
+What I reviewed
+
+- Intent fidelity: the change stayed docs-and-README scoped and did not widen runtime behavior.
+- Safety: no CLI, runtime, provider, route-contract, workflow-topology, or prompt-path behavior changes were introduced.
+- Conformance: the new README structure carries the shared family-level contract and keeps the runtime/provider boundary explicit.
+- Validation: the recorded targeted pytest command matches the touched prompt-facing surfaces and the implementation’s claimed scope.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings beyond a recorded no-findings review note.
+- I updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/implement/phases/prompt-contract-doctrine/criteria.md` to mark all review criteria satisfied.
+- I appended a stable no-findings entry to `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/implement/phases/prompt-contract-doctrine/feedback.md`.
+
+Open issues / next step
+
+- No reviewer action remains for this phase.
+- The next implementation phase can build on the frozen README boundary if prompt-body compaction is scheduled later.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
