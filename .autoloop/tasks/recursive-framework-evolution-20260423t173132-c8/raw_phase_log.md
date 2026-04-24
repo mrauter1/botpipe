@@ -929,3 +929,48 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe23-85f9-7881-a1c5-05054118b90b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbe23-85f9-7881-a1c5-05054118b90b
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe23-85f9-7881-a1c5-05054118b90b
+---
+I’m treating this as a test-phase closeout pass: verify the cycle-8 baseline assertions cover the broadened proof surface, decide whether any additional repo test refinement is needed, then update the phase-local test strategy and feedback with the coverage map and results.
+
+The baseline-doc test already covers the broadened cycle-8 proof positively. I’m adding one small regression guard now: assert the old narrow `48 passed` closeout proof is absent from the cycle-8 outcome, then I’ll document that coverage in the phase-local strategy and feedback artifacts.
+
+The added stale-proof guard was too broad because the old two-test command is a suffix of the new five-test command. I’m tightening it to reject the exact old cycle-8 proof string, then I’ll rerun the full required suite and write the phase artifacts.
+
+Scope considered
+
+- Phase-local cycle-8 closeout testing only: [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), the required targeted pytest proof, and the phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/test/phases/cycle-eight-closeout/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/test/phases/cycle-eight-closeout/feedback.md).
+- `recursive_autoloop/` cleanup and runtime-owned refinement behavior remained out of scope.
+
+What I analyzed
+
+- The cycle-8 baseline assertions already added in the repo, the current recursive-memory closeout strings, and the shared decisions ledger.
+- The required regression set for the refinement helper seam, workflow-builder package, eval-suite building block, refinement workflow, and baseline docs.
+
+What I changed
+
+- Tightened [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) so cycle 8 rejects the stale narrow two-test / `48 passed` proof record, not just the new five-test / `112 passed` record.
+- Appended a closeout test decision under the current cycle-8 test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/decisions.txt).
+- Filled in the phase-local [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/test/phases/cycle-eight-closeout/test_strategy.md) coverage map and appended the test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/test/phases/cycle-eight-closeout/feedback.md).
+
+Key findings / decisions
+
+- The only test refinement needed was a negative guard against the old cycle-8 closeout proof string; the first attempt was too broad because the old two-test command is a suffix of the new command, so I narrowed it to the exact stale proof string.
+- Validation passed with `./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py`.
+- Result: `112 passed`.
+
+Open issues / next step
+
+- No open test-phase issues in scope. Wrapper/template cleanup remains explicitly deferred.
