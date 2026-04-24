@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T074057Z-3b578ba2" ts="2026-04-24T07:40:57.663760+00:00" />
+The request snapshot's stale `src/autoloop/...` inspection paths map to repo-root `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `stdlib/`, and `workflows/` in this checkout.
+`workflow_idea_to_workflow_package` remains the credible builder baseline for cycle 10, so the planned addition is `workflow_portfolio_to_operating_system` rather than another builder-first workflow.
+Cycle 10's framework slice should be a narrow read-only portfolio health snapshot seam; do not widen `workflow.toml`, add runtime-owned governance scoring, or add hidden downstream execution.
+`workflow_portfolio_to_operating_system` must stop at governance package publication plus explicit next actions and must not auto-run builder, refinement, diagnostics, decomposition, merge, or retirement workflows.

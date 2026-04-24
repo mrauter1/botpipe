@@ -1,4 +1,139 @@
 version: 1
 task_id: recursive-framework-evolution-20260423t173132-c10
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/runs/run-20260424T074057Z-3b578ba2/request.md
-phases: []
+phases:
+- phase_id: portfolio-health-snapshot-seam
+  title: Portfolio Health Snapshot Seam
+  objective: Add a narrow read-only portfolio run-health snapshot seam that governance
+    workflows can publish under the workflow folder.
+  status: planned
+  in_scope:
+  - Add shared grouped portfolio run-summary logic on top of existing read-only run
+    records.
+  - Extend `stdlib/portfolio.py` with `write_workflow_portfolio_health_snapshot(...)`.
+  - Export the new helper from `stdlib/__init__.py`.
+  - Document the helper boundary in `docs/authoring.md`.
+  - Add helper coverage in `tests/unit/test_stdlib_and_extensions.py` and any targeted
+    workspace summary tests.
+  out_of_scope:
+  - CLI changes.
+  - Runtime-owned governance scoring or automatic recommendations.
+  - New `workflow.toml` fields or static lifecycle metadata.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The helper writes only under `ctx.workflow_folder` and does not mutate `.autoloop`
+      run state or workflow packages.
+  - id: AC-2
+    text: The helper reuses shared workflow resolution and read-only run discovery
+      while publishing grouped per-workflow run counts and recent-run excerpts with
+      deterministic filtering.
+  - id: AC-3
+    text: Authoring docs and unit/runtime tests freeze the helper boundary and its
+      non-goals, including no governance scoring or hidden downstream execution.
+  deliverables:
+  - runtime/workspace.py
+  - stdlib/portfolio.py
+  - stdlib/__init__.py
+  - docs/authoring.md
+  - tests/unit/test_stdlib_and_extensions.py
+  - tests/runtime/test_workspace_and_context.py
+  risks:
+  - The helper may become too broad and start owning governance policy that should
+    remain visible in workflow code and prompts.
+  - Portfolio run-health capture may drift from the real workspace contract if it
+    bypasses shared run-record seams.
+  rollback:
+  - Revert the additive run-summary logic, new stdlib helper/export, authoring-doc
+    updates, and helper-specific tests together.
+- phase_id: workflow-portfolio-to-operating-system
+  title: Workflow Portfolio To Operating System
+  objective: Ship `workflow_portfolio_to_operating_system` as an end-to-end governance
+    workflow that turns portfolio evidence into explicit lifecycle recommendations
+    and next actions.
+  status: planned
+  in_scope:
+  - Add the workflow package under `workflows/workflow_portfolio_to_operating_system/`.
+  - Implement params, contracts, explicit prompt templates, checklist asset, workflow
+    logic, and publish-side validation.
+  - Add the workflow decision/contract doc under `docs/workflows/workflow_portfolio_to_operating_system.md`.
+  - Add runtime proof in `tests/runtime/test_workflow_portfolio_to_operating_system.py`.
+  out_of_scope:
+  - Auto-running builder, refinement, diagnostics, decomposition, merge, or retirement
+    workflows.
+  - Mutating authoritative workflow packages.
+  - Public CLI or runtime-contract changes.
+  dependencies:
+  - portfolio-health-snapshot-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: Workflow discovery and compilation succeed from the repo root and expose
+      explicit typed control contracts on the three pair steps.
+  - id: AC-2
+    text: A scripted runtime proof publishes the capability snapshot, health snapshot,
+      lifecycle matrix, governance package, next actions, and deterministic receipt
+      from mixed portfolio evidence.
+  - id: AC-3
+    text: Publish-time validation rejects missing capability or health artifacts,
+      unknown focus-workflow references, summary drift, invalid lifecycle postures,
+      and outputs that imply hidden downstream execution.
+  - id: AC-4
+    text: Each producer/verifier prompt makes required reads, required writes, legal
+      routes, evidence expectations, and forbidden actions explicit for its step-local
+      work item.
+  deliverables:
+  - workflows/workflow_portfolio_to_operating_system/
+  - docs/workflows/workflow_portfolio_to_operating_system.md
+  - tests/runtime/test_workflow_portfolio_to_operating_system.py
+  risks:
+  - Portfolio analysis may collapse into generic prioritization prose unless the lifecycle
+    matrix and change-candidate artifacts stay explicit.
+  - Governance packaging may blur into hidden execution unless the workflow stops
+    at next-action publication and receipt validation.
+  rollback:
+  - Remove the new workflow package, workflow doc, and runtime test together if terminal
+    governance publication proof does not hold.
+- phase_id: cycle-ten-closeout
+  title: Cycle Ten Closeout
+  objective: Update recursive memory, architecture-baseline docs/tests, and targeted
+    proof so cycle 10 becomes the new explicit recursive framework baseline.
+  status: planned
+  in_scope:
+  - Update `.autoloop_recursive/framework_evolution_charter.md`.
+  - Update `.autoloop_recursive/framework_roadmap.md`.
+  - Update `.autoloop_recursive/framework_gap_ledger.md`.
+  - Update `.autoloop_recursive/workflow_candidate_ledger.md`.
+  - Update `tests/test_architecture_baseline_docs.py` and any cycle-closeout expectations
+    affected by the new helper/workflow baseline.
+  - Run targeted pytest proof for the helper seam, workspace summary regression, new
+    governance workflow, and recursive-memory baseline docs.
+  out_of_scope:
+  - '`recursive_autoloop/` wrapper/template cleanup.'
+  - Runtime-owned governance automation.
+  - Compatibility shims for the stale `src/autoloop/...` request paths.
+  dependencies:
+  - portfolio-health-snapshot-seam
+  - workflow-portfolio-to-operating-system
+  acceptance_criteria:
+  - id: AC-1
+    text: The four standing recursive-memory files record that the builder stayed
+      credible, `workflow_portfolio_to_operating_system` shipped, and the portfolio
+      health snapshot seam is the chosen framework improvement.
+  - id: AC-2
+    text: Architecture-baseline docs/tests and any closeout-proof assertions describe
+      cycle 10 accurately.
+  - id: AC-3
+    text: Targeted pytest proof passes without widening runtime/provider control surfaces
+      or changing public CLI/runtime contracts.
+  deliverables:
+  - Updated `.autoloop_recursive/*.md` standing memory files
+  - tests/test_architecture_baseline_docs.py
+  - Recorded targeted validation command/result in cycle-10 closeout docs
+  risks:
+  - Recursive memory or baseline tests may drift from the actual shipped behavior
+    if updated separately from code and proof.
+  - Cycle-closeout assertions may miss the new helper boundary unless docs and tests
+    are updated together.
+  rollback:
+  - Revert cycle-10 memory and baseline-test updates if they claim behavior or proof
+    the implementation does not actually ship.
