@@ -221,6 +221,26 @@ Portfolio snapshot boundary:
 - portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics in workflow code and prompt templates
 - the helper does not import runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
 
+## Optional Workflow Capability Snapshot Helpers
+
+`stdlib/portfolio.py` also provides an opt-in helper for portfolio workflows that need richer importing inspection of workflow parameters and compiled step contracts while keeping the lightweight catalog seam unchanged.
+
+```python
+from autoloop_v3.stdlib import write_workflow_capability_snapshot
+
+write_workflow_capability_snapshot(ctx)
+```
+
+Capability snapshot boundary:
+
+- the helper writes `workflow_capability_snapshot.json` under `ctx.workflow_folder` by default
+- it uses the separate capability-inspection seam to capture catalog metadata plus normalized workflow parameters and compiled step summaries
+- compiled step summaries include the declared artifact surface, available routes, route contracts, prompt paths, and whether a typed output schema exists
+- it does not add new `workflow.toml` fields and does not change the lightweight non-importing catalog discovery contract
+- it reuses only the existing narrow runtime-injected control metadata: `expected_output_schema`, `available_routes`, and `route_contracts`
+- it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
+- portfolio workflows still own comparison policy, fit-gap reasoning, adaptation policy, and downstream routing in workflow code and prompt templates
+
 ## Workflow Composition
 
 Runtime-backed contexts can invoke child workflows by package name or imported main class:

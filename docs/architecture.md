@@ -50,6 +50,7 @@ from workflows.autoloop_v1 import AutoloopV1
 `workflow.toml` is metadata-only discovery input. It is limited to human-facing fields such as `name`, `title`, `description`, and `aliases`. It does not define topology, prompts, transitions, parameters, or execution semantics.
 
 Workflow discovery scans `<root>/workflows/*/workflow.toml`, then loads the main workflow class from `workflows.<package>.workflow`.
+That lightweight discovery seam stays metadata-only. Richer importing inspection of workflow parameters and compiled step contracts belongs to a separate capability-inspection seam and does not widen `workflow.toml`.
 
 ## CLI Contract
 

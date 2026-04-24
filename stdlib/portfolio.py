@@ -5,8 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.core.workflow_capabilities import inspect_workflow_capabilities, workflow_capability_payload
     from autoloop_v3.core.workflow_catalog import discover_workflow_catalog
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from core.workflow_capabilities import inspect_workflow_capabilities, workflow_capability_payload
     from core.workflow_catalog import discover_workflow_catalog
 
 from .lifecycle import write_workflow_json
@@ -18,7 +20,7 @@ def write_workflow_portfolio_snapshot(
 ) -> Path:
     """Write a workflow-local snapshot of the current repo workflow catalog."""
 
-    repo_root = ctx.package_folder.resolve().parent.parent
+    repo_root = _repo_root_from_context(ctx)
     catalog = discover_workflow_catalog(repo_root)
     return write_workflow_json(
         ctx,
@@ -30,6 +32,28 @@ def write_workflow_portfolio_snapshot(
             "workflow_count": len(catalog),
             "workflow_name": ctx.workflow_name,
             "workflows": [_catalog_entry_payload(entry) for entry in catalog],
+        },
+    )
+
+
+def write_workflow_capability_snapshot(
+    ctx,
+    relative_path: str | Path = "workflow_capability_snapshot.json",
+) -> Path:
+    """Write a workflow-local snapshot of the current repo workflow capabilities."""
+
+    repo_root = _repo_root_from_context(ctx)
+    catalog = inspect_workflow_capabilities(repo_root)
+    return write_workflow_json(
+        ctx,
+        relative_path,
+        {
+            "repo_root": str(repo_root),
+            "run_id": ctx.run_id,
+            "task_id": ctx.task_id,
+            "workflow_count": len(catalog),
+            "workflow_name": ctx.workflow_name,
+            "workflows": [workflow_capability_payload(entry) for entry in catalog],
         },
     )
 
@@ -49,4 +73,8 @@ def _catalog_entry_payload(entry) -> dict[str, object]:
     }
 
 
-__all__ = ["write_workflow_portfolio_snapshot"]
+def _repo_root_from_context(ctx) -> Path:
+    return ctx.package_folder.resolve().parent.parent
+
+
+__all__ = ["write_workflow_capability_snapshot", "write_workflow_portfolio_snapshot"]
