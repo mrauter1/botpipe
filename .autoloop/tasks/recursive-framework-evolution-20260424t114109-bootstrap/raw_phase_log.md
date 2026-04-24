@@ -260,3 +260,59 @@ Open issues / next step
   `.venv/bin/python -m pytest -q tests/runtime/test_package_cli.py::test_cli_workflows_show_reports_parameters_and_aliases tests/runtime/test_package_cli.py::test_cli_workflow_resolution_prefers_canonical_names_and_rejects_ambiguous_aliases tests/runtime/test_package_cli.py::test_cli_serializes_typed_workflow_parameters_as_json_safe_values tests/runtime/test_package_cli.py::test_cli_run_resume_answer_and_diagnostics_follow_package_contract`
   `.venv/bin/python -m pytest -q tests/unit/test_stdlib_and_extensions.py::test_portfolio_helper_writes_workflow_local_catalog_snapshot tests/unit/test_stdlib_and_extensions.py::test_portfolio_health_helper_writes_grouped_workflow_run_health_via_shared_resolution_and_run_summaries tests/unit/test_stdlib_and_extensions.py::test_company_helpers_write_bounded_company_operation_snapshot_without_mutating_autoloop_state tests/unit/test_stdlib_and_extensions.py::test_refinement_helper_accepts_main_workflow_class_references tests/unit/test_stdlib_and_extensions.py::test_decomposition_helper_accepts_main_workflow_class_references tests/unit/test_stdlib_and_extensions.py::test_diagnostics_helper_accepts_main_workflow_class_references_and_allows_empty_filtered_histories tests/unit/test_stdlib_and_extensions.py::test_evaluation_helper_validates_eval_cases_via_selected_workflow_snapshot_and_loader_paths`
 - Broader failures remain outside this phase: wrapper/template assertions in `tests/runtime/test_package_cli.py` and missing `docs/authoring.md` checks in `tests/unit/test_stdlib_and_extensions.py`.
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+I’m reviewing the resolver-foundation implementation against the phase contract and the changed runtime surfaces first, then I’ll update `criteria.md` and `feedback.md` with the verified status and any findings.
+
+I don’t get a useful `git diff` view in this workspace, so I’m auditing the changed runtime files directly. I’m focusing on loader edge cases and any place the new origin metadata can drift from actual runtime behavior, because those are the highest-risk regressions in this slice.
+
+I’ve identified two likely contract violations in the loader: path detection is too eager for bare names, and explicit package-path refs skip the package-exported `Parameters` branch. I’m confirming both with focused repro snippets before I write them up as findings.
+
+I confirmed both loader regressions with targeted repros. I’m recording them now as blocking findings and leaving the criteria unchecked, because they directly break the promised resolver semantics for canonical names and the exact parameter-precedence order.
+
+Scope considered
+
+- Resolver-foundation phase artifacts, the authoritative phase contract, and the changed runtime files that implement workflow-reference resolution, origin metadata, and `ctx.root`.
+- Regression risk in adjacent runtime/stdlib behavior where the new resolver semantics can diverge from existing package execution.
+
+What I analyzed
+
+- [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), and the new [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py).
+- The authoritative decisions ledger and the implementation notes for this phase.
+
+What I reviewed
+
+- Canonical-name vs explicit-path dispatch.
+- Explicit file/directory/module/class resolution behavior.
+- The exact five-branch parameter-resolution order.
+- Workflow-origin metadata persistence and collision handling.
+- The `ctx.root` migration in affected stdlib helpers.
+
+Key findings / decisions
+
+- Two blocking findings were added to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/feedback.md).
+- `IMP-001`: bare workflow names are incorrectly shadowed by unrelated existing repo-root paths because `_is_path_reference(...)` treats any existing `<root>/<name>` as an explicit path.
+- `IMP-002`: explicit package file/directory refs skip the package-exported `Parameters` branch and incorrectly fall through to legacy `params.py`, violating the required precedence order.
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/criteria.md) remains unchecked because the slice is not yet safe to mark complete.
+
+Open issues / next step
+
+- Fix the path-detection heuristic so bare names resolve as names unless they are syntactically path-like.
+- For explicit package paths, derive and pass the real package module when available so parameter resolution honors package exports before legacy `params.py`.
+- Rerun the resolver/runtime test slice after those fixes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
