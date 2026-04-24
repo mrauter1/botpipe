@@ -190,7 +190,9 @@ def test_workflow_to_eval_suite_prompt_readme_lists_route_grammar_and_runtime_bo
             "frame_verifier.md",
             (
                 "Read these artifacts",
+                "Write these artifacts",
                 "Artifact checks",
+                "Evidence requirements",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -223,7 +225,9 @@ def test_workflow_to_eval_suite_prompt_readme_lists_route_grammar_and_runtime_bo
             "design_verifier.md",
             (
                 "Read these artifacts",
+                "Write these artifacts",
                 "Artifact checks",
+                "Evidence requirements",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -256,7 +260,9 @@ def test_workflow_to_eval_suite_prompt_readme_lists_route_grammar_and_runtime_bo
             "package_verifier.md",
             (
                 "Read these artifacts",
+                "Write these artifacts",
                 "Artifact checks",
+                "Evidence requirements",
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
@@ -1027,6 +1033,43 @@ def test_workflow_to_eval_suite_publish_rejects_malformed_case_kind(
     )
 
     with pytest.raises(ValueError, match="unsupported case_kind"):
+        workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
+
+
+def test_workflow_to_eval_suite_publish_rejects_missing_required_case_kind(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_eval_suite_test_context(
+        tmp_path,
+        monkeypatch,
+        manifest_overrides={
+            "cases": [
+                {
+                    "case_id": "baseline_release_gate",
+                    "case_kind": "benchmark",
+                    "expected_artifacts": [
+                        "release_decision_package",
+                        "decision_summary",
+                    ],
+                    "prompt": "Assess a routine release candidate with complete evidence and publish the release decision package.",
+                    "workflow_parameters": {"release_name": "2026.04"},
+                },
+                {
+                    "case_id": "edge_missing_owner",
+                    "case_kind": "edge",
+                    "expected_artifacts": ["risk_register", "blocking_issues"],
+                    "prompt": "Assess a release candidate where ownership is unclear but the team still wants a decision.",
+                    "workflow_parameters": {"release_name": "2026.04-edge"},
+                },
+            ]
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="validated_eval_case_manifest.json case_kinds must include benchmark, edge, and adversarial",
+    ):
         workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
 
 

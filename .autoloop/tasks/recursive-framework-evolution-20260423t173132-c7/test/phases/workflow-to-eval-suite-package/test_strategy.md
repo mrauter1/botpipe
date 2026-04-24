@@ -17,6 +17,7 @@
 - AC-3 publish-time validation and failure paths:
   `tests/runtime/test_workflow_to_eval_suite.py::test_workflow_to_eval_suite_publish_rejects_invalid_selected_workflow_reference`
   `tests/runtime/test_workflow_to_eval_suite.py::test_workflow_to_eval_suite_publish_rejects_malformed_case_kind`
+  `tests/runtime/test_workflow_to_eval_suite.py::test_workflow_to_eval_suite_publish_rejects_missing_required_case_kind`
   `tests/runtime/test_workflow_to_eval_suite.py::test_workflow_to_eval_suite_publish_rejects_duplicate_case_ids`
   `tests/runtime/test_workflow_to_eval_suite.py::test_workflow_to_eval_suite_publish_rejects_invalid_case_parameters`
   `tests/runtime/test_workflow_to_eval_suite.py::test_workflow_to_eval_suite_publish_rejects_unknown_expected_artifacts`
@@ -37,8 +38,10 @@
 - Repeatable input normalization trims, de-duplicates, and preserves order for `constraints` and `evidence_expectations`.
 - `needs_rework` on the packaging step preserves the same work-item boundary while updating workflow state deterministically.
 - Publish-time validation rejects malformed case kinds, duplicate ids, invalid per-case workflow parameters, unknown expected artifacts, and summary drift.
+- Publish-time validation rejects incomplete benchmark/edge/adversarial category coverage.
 
 ## Known Gaps
 
 - Downstream evaluation execution is intentionally out of scope for this phase.
+- The stricter AC-4 verifier-prompt contract test now exposes an implementation gap: the verifier prompts still need explicit write-policy and evidence-expectation sections.
 - No network, timing, or concurrency coverage is needed; tests stay filesystem-local and deterministic.
