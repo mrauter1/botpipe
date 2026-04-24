@@ -557,6 +557,7 @@ def test_workflow_package_to_composable_building_blocks_runs_and_publishes_candi
     assert (tmp_path / PARENT_DOC_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[
         PARENT_DOC_RELATIVE_PATH
     ]
+    assert (run.workflow_dir / "candidate_decomposition_surface" / BUILDING_BLOCK_DOC_RELATIVE_PATH).exists()
     assert (run.workflow_dir / "candidate_decomposition_surface" / BUILDING_BLOCK_WORKFLOW_RELATIVE_PATH).exists()
     assert (run.workflow_dir / "candidate_decomposition_surface" / BUILDING_BLOCK_TEST_RELATIVE_PATH).exists()
 
@@ -710,6 +711,60 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_candidat
     ):
         run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
             run.result.state,
+            run.publish_context,
+        )
+
+
+def test_workflow_package_to_composable_building_blocks_publish_rejects_unlisted_candidate_surface_files(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run = _run_successful_decomposition_workflow(tmp_path, monkeypatch, include_evidence_paths=True)
+    extra_file = run.workflow_dir / "candidate_decomposition_surface" / "docs" / "workflows" / "unlisted.md"
+    extra_file.parent.mkdir(parents=True, exist_ok=True)
+    extra_file.write_text("# Unlisted\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="candidate_decomposition_manifest.json relative_paths must match candidate_decomposition_surface",
+    ):
+        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
+            run.result.state,
+            run.publish_context,
+        )
+
+
+def test_workflow_package_to_composable_building_blocks_publish_rejects_missing_declared_doc_and_runtime_test(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run = _run_successful_decomposition_workflow(tmp_path, monkeypatch, include_evidence_paths=True)
+    for relative_path in (BUILDING_BLOCK_DOC_RELATIVE_PATH, BUILDING_BLOCK_TEST_RELATIVE_PATH):
+        (run.workflow_dir / "candidate_decomposition_surface" / relative_path).unlink()
+
+    baseline_manifest = json.loads((run.workflow_dir / "baseline_parent_manifest.json").read_text(encoding="utf-8"))
+    building_block_index = json.loads((run.workflow_dir / "candidate_building_block_index.json").read_text(encoding="utf-8"))
+    candidate_manifest = run.workflow_pkg._write_candidate_decomposition_manifest(
+        run.workflow_dir,
+        baseline_manifest,
+        building_block_index,
+        "release_candidate_to_go_no_go",
+        2,
+    )
+    publish_state = run.result.state.model_copy(
+        update={
+            "candidate_file_count": candidate_manifest["file_count"],
+            "candidate_changed_paths": candidate_manifest["changed_relative_paths"],
+            "target_test_command": f"pytest -q {PARENT_TEST_RELATIVE_PATH}",
+        }
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="candidate_decomposition_manifest.json must include every declared building-block doc_relative_path and runtime_test_relative_path",
+    ):
+        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
+            publish_state,
             run.publish_context,
         )
 

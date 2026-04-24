@@ -522,3 +522,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+
+
+---
+run_id=run-20260424T091635Z-858b34e9 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbee5-5bbf-7573-b0ab-c104ff75bd1b
+---
+Implementing the two blocking review findings now. I’m re-reading the publication helpers, the active feedback, and the workflow-specific tests so the fix stays local to this workflow and covers the missed tampering cases without widening framework scope.
+
+Plan for the fix:
+- Tighten `publish_candidate_decomposition` validation in `workflow.py` so publication checks the real `candidate_decomposition_surface/` contents, not just the manifest snapshot, and so every declared building-block doc/runtime-test path is treated as required.
+- Extend the workflow-specific runtime proof with one regression for hidden post-manifest files and one regression for missing declared doc/test artifacts under a narrower test command.
+- Update the phase notes and the current-turn decision block with the exact publish-time invariants this attempt adds.
+
+I’ve got the fix shape. I’m patching the workflow-local validation and tests now, keeping the change surface to this workflow package, its doc, and the phase notes.
+
+The code change is in place. I’m checking the patched sections and then running the workflow-specific validation suite to make sure the new guards trip where the reviewer found holes.
+
+The patched logic looks consistent. I’m running the focused compile and runtime proof now; if anything regresses, I’ll adjust before closing this attempt.
+
+The targeted suite passed, including the two new regressions. I’m only updating the phase notes now so the validation record reflects the actual post-fix run.
+
+Scope considered
+- Phase-local fix for the two blocking review findings in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py), [test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py), [workflow doc](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_package_to_composable_building_blocks.md), and the phase notes/decision ledger.
+- I kept the blast radius local to this workflow package and did not widen runtime or shared framework behavior.
+
+What I analyzed
+- The reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/workflow-package-to-building-blocks/feedback.md), the publish helpers around candidate-manifest validation, and the workflow-specific runtime proof.
+- The active plan, implementation notes, and the current-turn header already appended to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt).
+
+What I changed
+- In [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py), I added a workflow-local `_surface_relative_paths(...)` helper, reused it for manifest generation, and tightened publication so `candidate_decomposition_manifest.json` must match the actual on-disk `candidate_decomposition_surface/` file set and must include every declared `doc_relative_path` and `runtime_test_relative_path`.
+- In [the runtime test](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py), I added regressions for hidden post-manifest files and missing declared doc/test artifacts, and I strengthened the happy-path assertion to require the building-block doc in the candidate overlay.
+- In [the workflow doc](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_package_to_composable_building_blocks.md), I made the new publish-time rejection cases explicit. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/workflow-package-to-building-blocks/implementation_notes.md) and appended the non-obvious invariants under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt).
+
+Key findings / decisions
+- I kept overlay validation local to this workflow, per the phase contract. The only new helper is internal and exists to make manifest generation and publication share the same surface enumeration logic.
+- Publication now fails before overlay copy when the manifest omits real candidate files or when declared building-block docs/tests are missing, which closes both reviewer-reported gaps without changing CLI or promotion behavior.
+
+Open issues / next step
+- Validation passed: `python3 -m py_compile workflows/workflow_package_to_composable_building_blocks/workflow.py tests/runtime/test_workflow_package_to_composable_building_blocks.py` and `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` with `22 passed in 6.49s`.
+- No open implement-side blockers remain in this phase scope. The next step is verifier rerun against the updated workflow package and phase artifacts.

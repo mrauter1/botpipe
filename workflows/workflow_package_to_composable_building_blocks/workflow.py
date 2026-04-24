@@ -961,9 +961,7 @@ def _write_candidate_decomposition_manifest(
         max_candidate_building_blocks=max_candidate_building_blocks,
     )
 
-    candidate_relative_paths = sorted(
-        path.relative_to(candidate_root).as_posix() for path in candidate_root.rglob("*") if path.is_file()
-    )
+    candidate_relative_paths = _surface_relative_paths(candidate_root)
     if not candidate_relative_paths:
         raise ValueError("candidate_decomposition_surface must contain at least one file")
 
@@ -1323,10 +1321,24 @@ def _validate_candidate_decomposition_manifest(
             "candidate_decomposition_manifest.json baseline_relative_paths must match baseline_parent_manifest.json"
         )
 
+    candidate_root = Path(
+        _require_text(
+            candidate_manifest.get("surface_root"),
+            "candidate_decomposition_manifest.json must define non-empty surface_root",
+        )
+    )
+    actual_relative_paths = _surface_relative_paths(candidate_root)
     candidate_relative_paths = _require_string_list(
         candidate_manifest.get("relative_paths"),
         "candidate_decomposition_manifest.json must define non-empty relative_paths",
     )
+    if candidate_relative_paths != actual_relative_paths:
+        raise ValueError("candidate_decomposition_manifest.json relative_paths must match candidate_decomposition_surface")
+    if _require_positive_int(
+        candidate_manifest.get("file_count"),
+        "candidate_decomposition_manifest.json must define positive integer file_count",
+    ) != len(candidate_relative_paths):
+        raise ValueError("candidate_decomposition_manifest.json file_count must match candidate_decomposition_surface")
     missing_baseline_paths = sorted(set(baseline_relative_paths) - set(candidate_relative_paths))
     if missing_baseline_paths:
         raise ValueError("candidate_decomposition_manifest.json must preserve every baseline relative_path")
@@ -1359,6 +1371,11 @@ def _validate_candidate_decomposition_manifest(
             min_length=2,
         )
     )
+    missing_declared_exact_paths = sorted(path for path in allowed_exact_paths if path not in candidate_relative_paths)
+    if missing_declared_exact_paths:
+        raise ValueError(
+            "candidate_decomposition_manifest.json must include every declared building-block doc_relative_path and runtime_test_relative_path"
+        )
     for relative_path in candidate_relative_paths:
         if relative_path in baseline_relative_paths:
             continue
@@ -1374,13 +1391,6 @@ def _validate_candidate_decomposition_manifest(
     )
     if sorted(file_entries) != candidate_relative_paths:
         raise ValueError("candidate_decomposition_manifest.json files must match relative_paths")
-
-    candidate_root = Path(
-        _require_text(
-            candidate_manifest.get("surface_root"),
-            "candidate_decomposition_manifest.json must define non-empty surface_root",
-        )
-    )
     for relative_path, entry in file_entries.items():
         surface_path = Path(
             _require_text(
@@ -1538,6 +1548,12 @@ def _manifest_file_map(manifest: Mapping[str, Any], error_message: str) -> dict[
         relative_path = _require_text(payload.get("relative_path"), error_message)
         result[relative_path] = payload
     return result
+
+
+def _surface_relative_paths(root: Path) -> list[str]:
+    if not root.is_dir():
+        raise FileNotFoundError(f"candidate decomposition surface is missing: {root}")
+    return sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file())
 
 
 def _path_under_repo_or_none(repo_root: Path, path: Path) -> str | None:

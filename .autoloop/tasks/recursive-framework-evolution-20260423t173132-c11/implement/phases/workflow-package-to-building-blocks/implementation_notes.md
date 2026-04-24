@@ -9,46 +9,28 @@
 
 ## Files changed
 
-- `workflows/workflow_package_to_composable_building_blocks/__init__.py`
-- `workflows/workflow_package_to_composable_building_blocks/params.py`
-- `workflows/workflow_package_to_composable_building_blocks/contracts.py`
 - `workflows/workflow_package_to_composable_building_blocks/workflow.py`
-- `workflows/workflow_package_to_composable_building_blocks/workflow.toml`
-- `workflows/workflow_package_to_composable_building_blocks/assets/decomposition_package_checklist.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/README.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/frame_producer.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/frame_verifier.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/design_producer.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/design_verifier.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/implement_producer.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/implement_verifier.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/evaluate_producer.md`
-- `workflows/workflow_package_to_composable_building_blocks/prompts/evaluate_verifier.md`
 - `docs/workflows/workflow_package_to_composable_building_blocks.md`
 - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
-- `.autoloop_recursive/framework_evolution_charter.md`
-- `.autoloop_recursive/framework_roadmap.md`
-- `.autoloop_recursive/framework_gap_ledger.md`
-- `.autoloop_recursive/workflow_candidate_ledger.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/implement/phases/workflow-package-to-building-blocks/implementation_notes.md`
 - `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/decisions.txt`
 
 ## Symbols touched
 
 - `WorkflowPackageToComposableBuildingBlocks`
-- `DecompositionRequestFramingPayload`
-- `DecompositionPlanPayload`
-- `CandidateDecompositionBuildPayload`
-- `CandidateDecompositionEvaluationPayload`
-- local candidate publication helpers and validation in `workflow_package_to_composable_building_blocks.workflow`
-- workflow-specific docs, prompt templates, and runtime proof
+- `_write_candidate_decomposition_manifest`
+- `_validate_candidate_decomposition_manifest`
+- `_surface_relative_paths`
+- workflow-specific publish-time regression coverage
 
 ## Checklist mapping
 
 - Plan item `Create the new workflow package under workflows/workflow_package_to_composable_building_blocks/`: done
 - Plan item `Define parameter model, route contracts, prompt templates, and checklist asset`: done
 - Plan item `Keep overlay validation local by default and publish a deterministic manifest`: done
-- Plan item `Publish workflow docs and workflow-specific runtime proof`: done
-- Plan item `Update recursive memory files for cycle 11`: done
+- Plan item `Publish workflow docs and workflow-specific runtime proof`: done; added publish-side regressions for hidden candidate files and missing declared doc/test artifacts
+- Reviewer finding `IMP-001`: resolved by rescanning `candidate_decomposition_surface/` and rejecting manifest/file-set drift during publication
+- Reviewer finding `IMP-002`: resolved by requiring every declared building-block doc/runtime-test path to exist in the candidate overlay before publication
 
 ## Assumptions
 
@@ -64,7 +46,7 @@
 ## Intended behavior changes
 
 - The repo now ships `workflow_package_to_composable_building_blocks` as a reusable candidate-only decomposition building block.
-- Publish-time validation now rejects hidden execution, selected-workflow identity drift, and candidate files outside the declared repo-relative boundary for this workflow.
+- Publish-time validation now rejects hidden execution, selected-workflow identity drift, manifest drift from the actual candidate surface, missing declared building-block docs/tests, and candidate files outside the declared repo-relative boundary for this workflow.
 - Decomposition evidence capture now records explicit evidence copies or a `request.md` fallback in `decomposition_evidence_manifest.json`.
 
 ## Known non-changes
@@ -76,15 +58,15 @@
 ## Expected side effects
 
 - Operators and later workflows can now turn explicit decomposition pressure into a parent rewrite candidate, extracted building-block packages, migration guidance, and a deterministic receipt.
-- Recursive memory now treats the decomposition layer as shipped rather than merely deferred.
+- Publication fails earlier when candidate overlays contain hidden files or omit declared building-block docs/tests, even if a narrower test command would otherwise pass.
 
 ## Validation performed
 
-- `python3 -m py_compile workflows/workflow_package_to_composable_building_blocks/workflow.py workflows/workflow_package_to_composable_building_blocks/contracts.py workflows/workflow_package_to_composable_building_blocks/params.py tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+- `python3 -m py_compile workflows/workflow_package_to_composable_building_blocks/workflow.py tests/runtime/test_workflow_package_to_composable_building_blocks.py`
 - `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py`
-- Result: `20 passed in 5.17s`
+- Result: `22 passed in 6.49s`
 
 ## Deduplication / centralization decisions
 
-- Reused the decomposition surface and lifecycle helper seams from `stdlib/` instead of re-implementing selected-workflow capture or bootstrap/receipt boilerplate.
-- Kept candidate-manifest and hidden-execution validation local to this workflow rather than extracting another shared helper before duplication was demonstrated.
+- Kept publish-time validation local to this workflow rather than extracting another shared helper before duplication was demonstrated.
+- Introduced one workflow-local `_surface_relative_paths(...)` helper so manifest generation and publication enforce the same candidate-surface enumeration logic.

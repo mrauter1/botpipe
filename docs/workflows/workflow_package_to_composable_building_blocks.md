@@ -225,6 +225,8 @@ Payload models used by the package:
 - Publish-time validation rejects:
 - hidden execution through non-`candidate_only` building-block publication modes
 - selected-workflow identity drift
+- candidate-manifest drift from the actual `candidate_decomposition_surface/` file set
+- missing declared building-block docs or runtime tests
 - candidate files outside the declared repo-relative boundary
 - candidate-manifest or building-block-index drift
 - overlay validation failures against the declared test command
