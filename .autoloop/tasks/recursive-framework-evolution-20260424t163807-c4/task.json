@@ -14,13 +14,13 @@
       "proof-docs-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "prompt-surface-migration"
+    "current_phase_index": 2,
+    "current_phase_id": "proof-docs-memory-closeout"
   },
   "phase_status": {
     "prompt-contract-doctrine": "completed",
-    "prompt-surface-migration": "in_progress",
-    "proof-docs-memory-closeout": "planned"
+    "prompt-surface-migration": "completed",
+    "proof-docs-memory-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260424T214122Z-85956296",
       "status": "in_progress",
       "ts": "2026-04-24T22:12:17.675370+00:00"
+    },
+    {
+      "phase_id": "prompt-surface-migration",
+      "run_id": "run-20260424T214122Z-85956296",
+      "status": "completed",
+      "ts": "2026-04-24T22:32:51.872664+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-memory-closeout",
+      "run_id": "run-20260424T214122Z-85956296",
+      "status": "in_progress",
+      "ts": "2026-04-24T22:32:51.876928+00:00"
     }
   ]
 }

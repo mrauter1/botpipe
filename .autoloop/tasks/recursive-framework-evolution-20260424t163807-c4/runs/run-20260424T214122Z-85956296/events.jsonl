@@ -33,3 +33,7 @@
 {"ts": "2026-04-24T22:31:46.187128+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 33, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "prompt-surface-migration"}
 {"ts": "2026-04-24T22:32:51.768487+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 34, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "prompt-surface-migration"}
 {"ts": "2026-04-24T22:32:51.810499+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 35, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "prompt-surface-migration"}
+{"ts": "2026-04-24T22:32:51.873847+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 36, "event_type": "phase_completed", "pair": "test", "phase_id": "prompt-surface-migration", "phase_mode": "single"}
+{"ts": "2026-04-24T22:32:51.877948+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 37, "event_type": "phase_started", "phase_id": "proof-docs-memory-closeout", "phase_mode": "single"}
+{"ts": "2026-04-24T22:32:51.879186+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 38, "event_type": "pair_started", "pair": "implement", "phase_id": "proof-docs-memory-closeout"}
+{"ts": "2026-04-24T22:32:51.879343+00:00", "run_id": "run-20260424T214122Z-85956296", "seq": 39, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "proof-docs-memory-closeout"}
