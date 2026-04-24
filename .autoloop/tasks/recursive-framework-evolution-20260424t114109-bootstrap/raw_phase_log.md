@@ -375,3 +375,57 @@ Open issues / next step
   - `.venv/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py`
   - targeted CLI and stdlib regression tests listed in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/implementation_notes.md)
 - Next step is verifier review to clear `IMP-001` and `IMP-002` and mark the phase criteria complete if no further regressions are found.
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbffe-f524-74a0-9a2b-3d7a16c7d6ac
+---
+I’m re-checking the resolver slice against the reviewer findings, then I’ll update the phase criteria and feedback artifacts to reflect the current state.
+
+The remaining question is whether the code and tests fully close the two previously blocking cases without creating a new edge-case regression. I’m running the resolver test slice and reading the exact loader paths involved.
+
+The targeted resolver slice is green and the previously blocking cases now behave correctly. I’m updating the verifier artifacts to record that re-verification result and to clear the phase criteria.
+
+The reviewer artifacts are updated. I’m doing a quick readback to confirm the criteria are fully checked and the feedback history clearly records the resolution state before I close the review.
+
+Scope considered
+
+- Resolver-foundation only: unified workflow-reference resolution, explicit path/module/class handling, parameter precedence, origin safety, and the phase-local verifier artifacts.
+- I did not review out-of-scope catalog migration, builders, or docs/template rewrites.
+
+What I analyzed
+
+- [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py), especially `resolve_workflow_reference`, `_is_path_reference`, `_resolve_python_path`, `_resolve_parameters_cls`, and `_package_module_name_for_source`.
+- The new resolver regression coverage in [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py).
+- The phase notes and prior feedback in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/implementation_notes.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/feedback.md).
+
+What I reviewed
+
+- Whether bare workflow names still get mis-routed as explicit paths when same-named repo-root paths exist.
+- Whether explicit package file/directory refs now honor the required parameter precedence, including package-exported `Parameters` before legacy `params.py`.
+- Whether the targeted runtime regression slice still passes after the fixes.
+
+Key findings / decisions
+
+- No blocking findings remain in the resolver-foundation slice.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/criteria.md) to checked state.
+- I appended resolution notes to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/implement/phases/resolver-foundation/feedback.md) for `IMP-001` and `IMP-002`, plus a final “no new blocking issues” note.
+- Re-verified test slice: `.venv/bin/python -m pytest -q tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workspace_and_context.py` passed with `41 passed`.
+
+Open issues / next step
+
+- No phase-blocking issues remain for `resolver-foundation`.
+- The historical blocking entries remain in `feedback.md` for traceability, but the appended cycle-2 notes mark them resolved.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
