@@ -345,8 +345,32 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
 
 
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
-    resolved = _resolve_reference(root_path, entry.workflow_name)
-    compiled = compile_workflow(resolved.workflow_cls)
+    if entry.manifest_path is not None and entry.workflow_module is not None and entry.package_module is not None:
+        from ..runtime.loader import ResolvedWorkflow, WorkflowReference
+
+        loaded = load_workflow_package_contract(root_path, entry)
+        reference = WorkflowReference(
+            original=entry.workflow_name,
+            kind="catalog_name",
+            workflow_name=entry.workflow_name,
+            title=entry.title,
+            description=entry.description,
+            aliases=entry.aliases,
+            class_name=loaded.workflow_cls.__name__,
+            module_name=loaded.workflow_cls.__module__,
+            source_path=entry.source_path,
+            package_dir=entry.package_dir,
+            manifest_path=entry.manifest_path,
+            authoring_shape=entry.authoring_shape,
+            package_name=entry.package_name,
+            package_module=entry.package_module,
+            workflow_module=entry.workflow_module,
+        )
+        resolved = ResolvedWorkflow(reference=reference, workflow_cls=loaded.workflow_cls, parameters_cls=loaded.parameters_cls)
+        compiled = loaded.compiled
+    else:
+        resolved = _resolve_reference(root_path, str(entry.source_path))
+        compiled = compile_workflow(resolved.workflow_cls)
     return _capability_entry_from_resolved(resolved, compiled, entry)
 
 

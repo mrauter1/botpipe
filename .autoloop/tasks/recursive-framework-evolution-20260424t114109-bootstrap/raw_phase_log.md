@@ -677,3 +677,80 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc01a-6cf7-7d82-9d17-384cffd89c68
+---
+I’m addressing the blocking review finding in deep inspection first. I’ll inspect the current capability inspection path, fix it to resolve by workflow origin instead of by canonical name, then add the missing regression coverage before touching the phase notes.
+
+I’m addressing the blocking deep-inspection alias collision the reviewer found. First I’m re-reading the capability inspection path and the relevant tests so I can patch the origin resolution without widening scope.
+
+The fix is localized in capability inspection: catalog entries need to be inspected by their concrete origin, not by a potentially ambiguous canonical name. I’m checking the existing helpers around `_inspect_catalog_entry` so I can patch that path and add one regression test instead of introducing another resolver layer.
+
+I have the exact failure point now. Next I’m patching `_inspect_catalog_entry` to resolve from `source_path`, then I’ll add a collision test right next to the other inferred-shape coverage so the regression stays pinned to this phase.
+
+I’ve confirmed the cleanest fix path: keep catalog metadata as-is, but load each entry from `entry.source_path` during deep inspection. That avoids alias collisions and doesn’t disturb the resolver’s canonical-name policy for user-facing resolution.
+
+The code change is in place. I’m running the focused runtime suite first, then a few previously-passing helper/CLI checks to make sure the origin-based inspection didn’t perturb adjacent consumers.
+
+The first patch exposed a second constraint in the resolver: path-based loading still falls through to package-exported parameter imports for manifest packages. I’m checking that path so I can keep the origin-based inspection and avoid regressing existing mature-package parameter lookup.
+
+The failure isn’t in the new collision logic; it’s a module-cache interaction. Path-based inspection is trying to import `workflows.<pkg>` for package-exported parameters, and an existing cached `workflows` package from another root is winning. I’m tightening the inspection path so manifest-backed catalog entries keep using their explicit discovered modules instead of that fallback import path.
+
+I’m narrowing the fix one step further: manifest-backed catalog entries should keep using their discovered modules, while inferred entries use `source_path`. That matches the reviewer’s “exact origin” requirement and avoids dragging loader module-cache behavior into this phase.
+
+The targeted phase checks are green now, including the new collision repro. I’m updating the phase notes and shared decisions with the final scope of the fix so the next turn doesn’t accidentally drift back to name-based inspection.
+
+I’ve got the minimal final delta. I’m recording one decision because this exact-origin split between manifest-backed and inferred entries is easy to accidentally undo later, then I’ll update the implementation notes with the reviewer issue and validation.
+
+I’ve finished the code and artifact updates. I’m doing one last sanity pass over the new regression test and the touched file paths, then I’ll hand back a concise summary for the verifier.
+
+Scope considered
+
+- Phase-local fix for `catalog-and-helper-migration`.
+- Only the reviewer-reported deep-inspection collision path, one regression test, and the required phase artifacts.
+- No out-of-phase scaffold/builder/docs changes.
+
+What I analyzed
+
+- `core/workflow_capabilities.py`, especially `_inspect_catalog_entry` and `load_workflow_package_contract(...)`.
+- `runtime/loader.py` parameter-loading behavior to make sure the fix would not regress manifest-backed packages.
+- `tests/runtime/test_compatibility_runtime.py` to add coverage at the existing inferred-shape inspection layer.
+- Phase artifacts: `feedback.md`, `implementation_notes.md`, `decisions.txt`.
+
+What I changed
+
+- Fixed `core.workflow_capabilities._inspect_catalog_entry` so catalog-wide deep inspection now loads each entry from its exact origin:
+  - manifest-backed entries use their discovered package/workflow modules via `load_workflow_package_contract(...)`
+  - inferred entries use `entry.source_path`
+- Added a regression test covering the reviewer’s collision case: inferred single-file canonical name vs manifest alias.
+- Updated phase artifacts:
+  - appended the non-obvious origin-loading decision to `decisions.txt`
+  - updated `implementation_notes.md` to map the reviewer fix and validation
+
+Key findings / decisions
+
+- The reviewer finding was valid: resolving catalog entries by `entry.workflow_name` could substitute the wrong workflow when an inferred canonical name matched a manifest alias.
+- Using exact origin loading is the narrow fix that preserves:
+  - shallow import-free catalog behavior
+  - canonical-name-first user resolution
+  - existing manifest-backed parameter export behavior
+- Validation passed:
+  - `python3 -m py_compile core/workflow_capabilities.py tests/runtime/test_compatibility_runtime.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py`
+  - `.venv/bin/python -m pytest -q tests/runtime/test_package_cli.py::test_cli_workflows_show_reports_parameters_and_aliases tests/runtime/test_package_cli.py::test_cli_workflow_resolution_prefers_canonical_names_and_rejects_ambiguous_aliases tests/runtime/test_package_cli.py::test_cli_workflows_list_includes_manifest_and_inferred_workflows_without_imports tests/unit/test_stdlib_and_extensions.py::test_portfolio_helpers_keep_catalog_snapshot_lightweight_and_capability_snapshot_rich tests/unit/test_stdlib_and_extensions.py::test_adaptation_helpers_accept_single_file_workflow_references`
+
+Open issues / next step
+
+- The blocking review issue `IMP-001` is addressed and the targeted phase checks are green.
+- Broader out-of-scope doc/template assertions still remain for later phases, unchanged from the previous turn.
