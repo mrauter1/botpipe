@@ -764,3 +764,103 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+---
+I’m aligning the front-door adapt handoff, recursive memory, and baseline docs/tests for the new adaptation layer. First I’m reading the phase artifacts, required framework docs/code, and the current workflow definitions to pin the exact contracts before editing.
+
+The repo has already moved past the stale `src/autoloop/...` layout from the request snapshot, so I’m mapping the current equivalents before changing anything. Next I’m reading the front-door workflow, the new adaptation package, the baseline docs/tests, and the standing memory files that this phase has to update.
+
+I’m at the point of diffing intent versus current state. The front-door package step already mentions the adaptation building block in a few places, so now I’m checking where the handoff is still too generic or where the docs/tests don’t yet freeze the cycle-6 closeout contract.
+
+The likely gap is no runtime proof that an `adapt` selection actually produces a concrete handoff through the existing artifacts. I’m reading the strategy runtime test in the adapt-related sections now to decide whether this phase needs just coverage/doc fixes or a small publication-side guard as well.
+
+I’ve narrowed the phase gap: the docs/prompts already mention the new adaptation building block, but the front-door runtime proof is still centered on `run_existing`, and publication doesn’t currently enforce the concrete `adapt` handoff. I’m going to add a narrow publication-side guard for `adapt`, add runtime regression coverage that freezes the unchanged summary field set while proving the concrete handoff artifacts, then refresh the cycle-6 roadmap proof and phase notes.
+
+I’ve got the edit set. I’m patching three things together: a small `publish_strategy` validator for concrete `adapt` handoffs, a new runtime regression that proves the front door publishes that handoff without widening `strategy_summary.json`, and the matching prompt/doc/memory updates so the frozen closeout proof stays truthful.
+
+The validator patch is in. I’m wiring the regression surface now: one positive adapt-route run that freezes the unchanged summary schema, plus failure-path publication checks so the concrete handoff can’t silently drift back to generic prose.
+
+The runtime test additions are in. I’m doing a quick consistency pass now for signature mistakes and proof-count drift before I run the focused suite on the final state.
+
+The change set is ready for validation. I’m running the exact frozen closeout command now so the recorded cycle-6 proof matches the final repository state, not just the intended diff.
+
+The focused suite is clean on the final state. I’m doing the closeout bookkeeping now: one phase-scoped decision note, concise implementation notes, and a final diff summary so the next phase inherits the exact handoff and proof surface.
+
+I’ve got the closeout notes drafted. I’m writing one explicit decision for future turns and the phase notes now so the next implement/test steps inherit the concrete `adapt` handoff rule and the updated `72 passed` proof surface.
+
+I caught one bookkeeping omission: the phase notes file itself wasn’t listed in its own changed-files block. I’m fixing that and then I’m done.
+
+Scope considered
+
+Phase-local closeout only: the front-door `adapt` handoff in [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py), its prompts/docs in [workflows/task_to_workflow_strategy/prompts/package_producer.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/prompts/package_producer.md) and [docs/workflows/task_to_workflow_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_workflow_strategy.md), the phase-scoped runtime/baseline tests, and the cycle-6 recursive memory files.
+
+What I analyzed
+
+I checked the current front-door packaging/publication path, the new `candidate_workflow_to_adapted_execution_plan` contract, the existing `strategy_summary.json` field set, the phase plan/decisions, and the cycle-6 memory closeout text. The main gap was that docs/prompts already named the adaptation building block, but runtime proof and publication validation did not yet force a concrete `adapt` handoff through the existing artifacts.
+
+What I changed
+
+I added a narrow publication guard so `task_to_workflow_strategy` now rejects `adapt` packages that do not name `candidate_workflow_to_adapted_execution_plan` and the selected workflow in `workflow_strategy_package.md`, the existing `strategy_summary.json` `next_action`, and `strategy_next_action.md`, while keeping the summary schema unchanged. I also updated the front-door prompts/docs, added one end-to-end adapt-route regression plus three publish-time failure-path tests in [tests/runtime/test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py), refreshed the cycle-6 recursive memory wording, and moved the frozen closeout proof in [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md) and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) from `68 passed` to `72 passed`.
+
+Key findings / decisions
+
+The safe implementation was to harden publication, not to widen `StrategyPackagePayload` or add new summary fields. I also treated `adapt` as a single-selected-workflow handoff, since `candidate_workflow_to_adapted_execution_plan` accepts one `selected_workflow`.
+
+Open issues / next step
+
+No open producer-side issues in this phase scope. Validation passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` -> `72 passed in 1.40s`.
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+---
+I’m auditing the phase-local closeout changes now. I’ll re-check the front-door adapt handoff against the phase contract, inspect the touched workflow/tests/docs/memory surfaces, and rerun the frozen closeout command before I update the reviewer artifacts.
+
+I didn’t get a useful tracked diff surface from `git diff` because several of the touched repo-root artifacts live in the current untracked layout, so I’m auditing the live file contents directly and grounding the review with a fresh rerun of the frozen closeout command.
+
+The audit is converging cleanly: the new guard matches the phase contract, the summary schema stayed frozen, and the closeout suite reran green. I’m marking the criteria complete and appending a concise “no findings” audit result with the validation evidence now.
+
+Scope considered
+
+Phase-local review of the front-door `adapt` handoff changes in `task_to_workflow_strategy`, the touched prompts/docs, the cycle-6 recursive memory updates, the baseline-doc assertion update, and the phase-scoped reviewer artifacts.
+
+What I analyzed
+
+I reviewed the current implementation against the phase contract, the shared decisions ledger, the implementation notes, the live file contents in the touched workflow/test/doc surfaces, and the cycle-6 closeout proof text. I also reran the frozen closeout command to validate the final repository state.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/implement/phases/portfolio-handoff-docs-and-closeout/criteria.md) to all checked and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/implement/phases/portfolio-handoff-docs-and-closeout/feedback.md). I reran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` and confirmed `72 passed in 1.35s`.
+
+Key findings / decisions
+
+No blocking or non-blocking findings in phase scope. The implementation satisfies AC-1 through AC-3: the `adapt` route now names `candidate_workflow_to_adapted_execution_plan` through `workflow_strategy_package.md`, the existing `strategy_summary.json` `next_action`, and `strategy_next_action.md`; `StrategyPackagePayload` and the summary field set remain unchanged; and the recursive memory plus baseline-doc proof reflect cycle-6 closeout without introducing stale-path or recursive-wrapper claims.
+
+Open issues / next step
+
+No open review issues in this phase scope. The phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
