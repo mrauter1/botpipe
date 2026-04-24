@@ -127,6 +127,25 @@ def test_task_to_workflow_strategy_package_docs_capture_decision_records() -> No
         assert required in text
 
 
+def test_task_to_workflow_strategy_adapt_handoff_docs_and_prompts_reference_adaptation_building_block() -> None:
+    doc_text = (REPO_ROOT / "docs" / "workflows" / "task_to_workflow_strategy.md").read_text(encoding="utf-8")
+    select_prompt = (
+        REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / "select_producer.md"
+    ).read_text(encoding="utf-8")
+    package_prompt = (
+        REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / "package_producer.md"
+    ).read_text(encoding="utf-8")
+    verifier_prompt = (
+        REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "prompts" / "package_verifier.md"
+    ).read_text(encoding="utf-8")
+    checklist = (
+        REPO_ROOT / "workflows" / "task_to_workflow_strategy" / "assets" / "strategy_package_checklist.md"
+    ).read_text(encoding="utf-8")
+
+    for text in (doc_text, select_prompt, package_prompt, verifier_prompt, checklist):
+        assert "candidate_workflow_to_adapted_execution_plan" in text
+
+
 def test_task_to_workflow_strategy_package_rejects_blank_task_title(tmp_path: Path) -> None:
     _install_repo_task_to_workflow_strategy_package(tmp_path)
     parameters_cls = resolve_workflow_reference(tmp_path, "task_to_workflow_strategy").parameters_cls

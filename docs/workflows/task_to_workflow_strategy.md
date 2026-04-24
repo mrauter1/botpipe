@@ -35,6 +35,11 @@ Parameters:
 - `constraints` optional and repeatable
 - `evidence_expectations` optional and repeatable
 
+Cycle 6 adaptation handoff note:
+
+- When the selected route is `adapt`, this workflow now uses the existing `workflow_strategy_package.md` and `strategy_next_action.md` artifacts to point explicitly to `candidate_workflow_to_adapted_execution_plan`.
+- `strategy_summary.json` stays on the same field set; the handoff became more concrete only through the existing human-facing package and next-action surfaces.
+
 ## Candidate additions considered
 
 | Candidate | Why it matters | Trade-off | Decision |
@@ -201,8 +206,8 @@ Step payload models:
 - `prompts/frame_verifier.md`: role `workflow critic`; checks that the framing package is explicit enough to support portfolio comparison.
 - `prompts/select_producer.md`: role `workflow portfolio strategist`; consumes the published child candidate-workflow-set package and chooses one final route without executing it.
 - `prompts/select_verifier.md`: role `strategy verifier`; checks that the child package was consumed explicitly and the final route decision is legal and justified.
-- `prompts/package_producer.md`: role `strategy packager`; writes the terminal strategy package, machine-readable summary, and next-action artifact while staying consistent with the adopted child candidate package.
-- `prompts/package_verifier.md`: role `strategy package verifier`; confirms the package is ready for deterministic publication and still stops at packaging rather than hidden execution.
+- `prompts/package_producer.md`: role `strategy packager`; writes the terminal strategy package, machine-readable summary, and next-action artifact while staying consistent with the adopted child candidate package. When the chosen route is `adapt`, it must point explicitly to `candidate_workflow_to_adapted_execution_plan` through the existing package and next-action artifacts.
+- `prompts/package_verifier.md`: role `strategy package verifier`; confirms the package is ready for deterministic publication and still stops at packaging rather than hidden execution, including an explicit `adapt` handoff to `candidate_workflow_to_adapted_execution_plan`.
 
 ## Verification and evidence contract
 

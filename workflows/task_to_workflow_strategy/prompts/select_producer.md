@@ -37,6 +37,7 @@ Artifact handling
 - why the rejected routes lost,
 - why the child candidate-workflow-set posture supports the chosen route,
 - why this workflow intentionally stops at strategy publication instead of auto-running the selection.
+- If the selected route is `adapt`, the recommended workflow list must name the workflow that should be adapted and the rationale must make clear that the downstream handoff goes to `candidate_workflow_to_adapted_execution_plan`, not directly to workflow execution.
 
 Expected outcome
 - Leave the workflow with an explicit, inspectable route decision that builds on the child candidate set without redoing candidate retrieval.

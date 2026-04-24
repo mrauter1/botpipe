@@ -1,0 +1,4 @@
+name = "candidate_workflow_to_adapted_execution_plan"
+title = "Candidate Workflow To Adapted Execution Plan"
+description = "Turn a chosen workflow plus task context into an execution-ready adapted plan with validated workflow parameters."
+aliases = ["adapted-execution-plan", "workflow-adaptation-plan"]

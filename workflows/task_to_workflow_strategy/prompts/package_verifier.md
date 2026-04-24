@@ -43,8 +43,10 @@ Route selection rules
 - Choose `needs_rework` when the same route still stands and the packaging artifacts can be corrected locally.
 - Choose `needs_replan` when packaging reveals that the selected route or recommended workflows changed materially enough that the selection step must run again.
 - Use reserved routes only for genuine missing prerequisites or irrecoverable contradictions.
+- If the selected route is `adapt`, the package and next action must name `candidate_workflow_to_adapted_execution_plan` explicitly as the downstream building block.
 
 Forbidden
 - Do not approve a package that omits the builder baseline from `strategy_summary`.
 - Do not approve packaging that implies the downstream workflow already ran.
+- Do not approve an `adapt` handoff that leaves the downstream building block generic or unnamed.
 - Do not rewrite the artifacts yourself.

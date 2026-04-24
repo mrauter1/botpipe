@@ -43,6 +43,7 @@ Artifact handling
 - how the child candidate-workflow-set package shaped the final decision,
 - what evidence or parameters the downstream operator still needs,
 - why this workflow intentionally stops at packaging rather than hidden downstream execution.
+- If `selected_strategy` is `adapt`, the package must name `candidate_workflow_to_adapted_execution_plan` as the next building block and explain which selected workflow plus task facts it should receive.
 - `strategy_summary` must be valid JSON and define at least:
 - `selected_strategy`
 - `recommended_workflows`
@@ -55,6 +56,7 @@ Artifact handling
 - `next_action`
 - `ready_for_handoff`
 - `strategy_next_action` must state exactly what should happen next, which workflow or authoring path should be invoked, and which task-specific facts should be carried forward.
+- If `selected_strategy` is `adapt`, `strategy_next_action` must direct the operator to run `candidate_workflow_to_adapted_execution_plan` and pass the chosen workflow plus current task context through the existing message and workflow-parameter surfaces.
 
 Expected outcome
 - Leave the workflow with a terminal strategy package that is inspectable, machine-readable, and ready for handoff without auto-running any downstream workflow.
