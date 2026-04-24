@@ -1434,3 +1434,86 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+---
+I’m covering the test slice for the docs/templates/regression phase. First I’m reading the active test artifacts and the updated baseline tests so I can decide whether any additional regression coverage is still missing before I change the repo tests.
+
+The current baseline tests cover most of the doctrine change, but they don’t yet pin the new recursive-memory “current seams / active milestones” wording. I’m adding that focused regression coverage and then I’ll update the phase test artifacts.
+
+I’ve added the missing roadmap-regression assertion. I’m running the focused baseline/template/strictness slice now to verify the new coverage before I close the test artifacts.
+
+Scope considered
+- The changed docs/templates regression surface for this phase: canonical docs, recursive-memory baselines, recursive templates, CLI/help wording, and the adjacent regression tests already updated by implementation.
+- The active test artifacts under `.autoloop/tasks/.../test/phases/docs-templates-and-regression/`.
+
+What I analyzed
+- `tests/test_architecture_baseline_docs.py`, `tests/runtime/test_package_cli.py`, and `tests/strictness/test_no_compat.py`.
+- The active `test_strategy.md` / `feedback.md` files and the current roadmap/charter wording that the new doctrine depends on.
+
+What I changed
+- Added focused coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) to pin the refreshed recursive-memory roadmap wording around the flexible authoring doctrine and the docs/template sync milestone.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/docs-templates-and-regression/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, stabilization notes, and known gaps.
+- Appended a concise summary of the test additions to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/test/phases/docs-templates-and-regression/feedback.md).
+
+Key findings / decisions
+- The existing implementation-side test updates already covered most of the phase; the remaining gap was that the new recursive-memory “current seams / active milestones” wording was not explicitly pinned.
+- Focused validation passed: `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py tests/runtime/test_package_cli.py tests/strictness/test_no_compat.py` with `44 passed`.
+
+Open issues / next step
+- No blocking test gaps found in-phase.
+- Known gap remains intentionally narrow: this slice does not add per-workflow doc fixtures across every file under `docs/workflows/`; coverage stays centered on the canonical docs/templates/baselines and adjacent regression surfaces.
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc0d5-c080-7a70-8c6a-13a81a0e21ea
+---
+I’m auditing the test slice now. First I’m reading the active test artifacts plus the changed regression tests to see whether the added coverage is sufficient and whether any blocking gaps remain.
+
+I’m not seeing a material coverage or reliability gap in the added test slice. I’m updating the test audit artifacts as a clean pass now.
+
+Scope considered
+- The active test-phase artifacts, the updated baseline-doc coverage in `tests/test_architecture_baseline_docs.py`, the related recursive-template/CLI assertions in `tests/runtime/test_package_cli.py`, and the preserved-invariant guard in `tests/strictness/test_no_compat.py`.
+- The shared decisions ledger and the implementation/test notes only where needed to verify intent and recorded validation.
+
+What I analyzed
+- `criteria.md`, `feedback.md`, and `test_strategy.md` for the active test phase.
+- The changed assertions covering recursive-memory roadmap wording, template wording, CLI/help text, and strictness exceptions.
+- The recorded targeted validation (`44 passed`) and the implementation-side full-suite result (`481 passed`).
+
+What I reviewed
+- Coverage quality for the flow-first docs/templates doctrine and the recursive-memory baseline sync.
+- Regression protection for stale active wrapper-drift wording, package-only minimum-structure claims, and strictness false positives around internal provider-native `thread_id`.
+- Edge/failure-path coverage for the changed expectations around roadmap wording and strictness allowlisting.
+- Reliability and intent alignment of the added assertions.
+
+Key findings / decisions
+- No blocking or non-blocking findings.
+- I updated the test audit artifacts to mark the criteria complete and recorded a clean audit result in `feedback.md`.
+
+Open issues / next step
+- No in-phase issues remain from the test audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
