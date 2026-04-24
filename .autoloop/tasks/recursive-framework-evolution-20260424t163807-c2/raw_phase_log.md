@@ -348,3 +348,57 @@ Open issues / next step
 
 - No remaining implementation-side blockers in this phase slice.
 - Next step is re-review so `criteria.md` and `feedback.md` can be updated against the fixed publish-time behavior.
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+
+
+---
+run_id=run-20260424T203350Z-420719ce | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc13a-cc6d-7160-a8c1-3c59b63df3c9
+---
+I’m re-reviewing the verifier follow-up only: the two publish handlers, the new regression tests, and the phase artifacts. I’ll confirm the original blocking regression is actually closed before I touch `criteria.md` and `feedback.md`.
+
+The original blocker is closed: both publish handlers are non-coercive again and the new runtime coverage proves the numeric-regression case. I’m marking the phase artifacts complete and leaving a short re-review note so the feedback file reflects the final state instead of the interim blocker.
+
+Scope considered
+
+- Phase-local re-review of the shared-validation migration after the verifier’s blocking finding.
+- The two corrected publish handlers, the newly added runtime regression tests, and the updated implementation notes.
+- Acceptance criteria AC-1 through AC-3 and the shared decisions ledger for behavior-preservation constraints.
+
+What I analyzed
+
+- `workflows/release_candidate_to_go_no_go/workflow.py:on_publish_decision`
+- `workflows/incident_to_hardening_program/workflow.py:on_publish_incident_package`
+- `tests/runtime/test_release_candidate_to_go_no_go.py`
+- `tests/runtime/test_incident_to_hardening_program.py`
+- Phase-local `implementation_notes.md`, `criteria.md`, and `feedback.md`
+
+What I reviewed
+
+- Whether the prior coercion regression is actually closed.
+- Whether the fix preserves the shared-validation migration instead of reintroducing workflow-local helper copies.
+- Whether regression coverage now includes the numeric summary payload cases that previously would have slipped through.
+- Whether the phase artifacts now accurately reflect the final review outcome.
+
+Key findings / decisions
+
+- `IMP-001` is resolved. Both publish handlers now use `coerce=False` for the affected summary string fields.
+- The implementation preserves the original publication invariants while keeping the shared validation seam in place.
+- The runtime tests now cover the concrete regression scenario called out in review: numeric summary values for release/incident publication fields are rejected.
+- I updated `criteria.md` so all acceptance boxes are checked and appended a re-review outcome section to `feedback.md` stating that there are no remaining scoped findings.
+
+Open issues / next step
+
+- No remaining blocking or non-blocking findings in scoped review.
+- This phase is ready to close from the reviewer side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
