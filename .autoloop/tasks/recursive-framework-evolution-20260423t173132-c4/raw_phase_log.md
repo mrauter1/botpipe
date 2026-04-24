@@ -797,3 +797,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+---
+I’m auditing the phase-local test work now: the refined baseline-doc test, the updated `test_strategy.md`, and the final targeted pytest proof. I’ll verify the changed test coverage against the cycle-4 decisions and acceptance criteria first, then I’ll update the test-phase `criteria.md` and `feedback.md` with the audit result.
+
+The current audit surface is small and deterministic. I’m re-running the exact targeted pytest command now to confirm the tightened cycle-4 proof assertion still holds on the final state before I mark the test-phase criteria.
+
+The targeted suite passed again with the tightened proof assertion, and I don’t see a missing coverage or flake gap on the changed surface. I’m marking the audit criteria complete and appending the no-findings audit result to the test feedback now.
+
+The audit artifacts are updated. I’m doing one quick readback of the test-phase `criteria.md` and `feedback.md` so the completion signal matches the recorded verdict and no checkbox is left open.
+
+Scope considered
+
+- Phase-local `closeout-memory-and-regression-proof` only: the tightened cycle-4 baseline-doc test, the phase-local `test_strategy.md`, the test feedback/criteria artifacts, and the targeted regression command required by AC-3.
+- I excluded unrelated wrapper/template cleanup, CLI/schema work, and any non-test audit edits outside the active phase artifacts.
+
+What I analyzed
+
+- The cycle-4 shared decisions, especially the closeout requirement to keep `task_to_workflow_strategy` shipped, the catalog/snapshot seam shipped, and `tests/runtime/test_package_cli.py` out of scope.
+- The updated assertions in `tests/test_architecture_baseline_docs.py` and the coverage map in `test_strategy.md`.
+- The exact targeted pytest suite across the seam, front door, builder, evidence-pack, security workflow, and baseline docs.
+
+What I reviewed
+
+- Coverage quality for the changed surface: cycle-4 shipped/deferred status, closeout proof text, and preserved out-of-scope wrapper drift.
+- Regression protection: whether the tests would fail if the cycle-4 memory baseline or recorded regression proof silently drifted.
+- Reliability: deterministic string assertions only, no timing/network/order-sensitive behavior.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- I re-ran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py`; result: `88 passed`.
+- `criteria.md` is now fully checked, and `feedback.md` records the no-findings audit result as `TST-001`.
+
+Open issues / next step
+
+- No open audit blockers in this phase scope.
+- The known `recursive_autoloop/` wrapper/template drift remains explicitly deferred and correctly stayed out of these tests.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
