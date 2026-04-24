@@ -20,3 +20,4 @@ Deep capability inspection now loads manifest-backed catalog entries through the
 Scaffold CLI shape spelling stays user-facing as `flow-specs`, while builder/runtime workflow parameters normalize to `flow_specs`; the builder parameter validator accepts hyphenated input and canonicalizes it to underscore form.
 Canonical `docs/` and `Workflow_Instructions.md` were restored from `legacy_docs/` because the shipped builder workflow and its tests already resolve those canonical paths; broader prose refresh remains deferred to the docs phase.
 Recursive wrapper/template edits in this slice were limited to package-CLI contract strings and authoring-surface reminders required by existing package-CLI tests; recursive-memory baseline document refresh remains out of phase.
+`stdlib.validation.validate_model_file(...)` now treats non-object JSON as a reportable validation issue instead of raising, so every invalid-shape path returns a `ValidationReport` consistently.

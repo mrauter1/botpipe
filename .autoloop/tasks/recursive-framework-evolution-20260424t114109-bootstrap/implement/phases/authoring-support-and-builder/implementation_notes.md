@@ -66,6 +66,7 @@
 ## Intended behavior changes
 
 - Stdlib now exposes reusable validation and typed JSON helper seams for optional workflow-local support files.
+- `validate_model_file(...)` now reports non-object JSON shapes through `ValidationReport.issues` instead of raising.
 - CLI scaffolding defaults to the recommended flow-first two-file layout instead of the legacy mandatory package layout.
 - The workflow builder carries authoring-shape intent through invocation metadata and can generate `single`, `flow_specs`, or `package` outputs.
 
@@ -83,6 +84,7 @@
 ## Validation performed
 
 - `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_package_cli.py tests/runtime/test_workflow_builder_package.py`
+- Reviewer blocking feedback `IMP-001` reproduced and fixed with added unit coverage for non-object JSON validation reporting.
 - Additional wider check attempted:
   `PYTHONPATH=/home/rauter/autoloop_v3_bkp .venv/bin/pytest -q tests/runtime/test_compatibility_runtime.py tests/test_architecture_baseline_docs.py`
   Result: `tests/runtime/test_compatibility_runtime.py` passed; `tests/test_architecture_baseline_docs.py` still fails on pre-existing recursive-memory baseline content outside this phase.

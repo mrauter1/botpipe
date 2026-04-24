@@ -103,6 +103,8 @@ def validate_model_file(path: str | Path, model_cls: type[BaseModel]) -> Validat
         issues = (ValidationIssue(location=("json",), message=f"invalid JSON: {exc.msg}"),)
     except ValidationError as exc:
         issues = tuple(_validation_issue(error) for error in exc.errors())
+    except ValueError as exc:
+        issues = (ValidationIssue(location=("json",), message=str(exc)),)
     else:
         issues = ()
     return ValidationReport(path=target, model_name=model_cls.__name__, issues=issues)
