@@ -14,13 +14,13 @@
       "closeout-memory-and-regression-proof"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "task-to-workflow-strategy-package"
+    "current_phase_index": 2,
+    "current_phase_id": "closeout-memory-and-regression-proof"
   },
   "phase_status": {
     "workflow-catalog-seam": "completed",
-    "task-to-workflow-strategy-package": "in_progress",
-    "closeout-memory-and-regression-proof": "planned"
+    "task-to-workflow-strategy-package": "completed",
+    "closeout-memory-and-regression-proof": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260423T233047Z-caa6b120",
       "status": "in_progress",
       "ts": "2026-04-23T23:59:16.554255+00:00"
+    },
+    {
+      "phase_id": "task-to-workflow-strategy-package",
+      "run_id": "run-20260423T233047Z-caa6b120",
+      "status": "completed",
+      "ts": "2026-04-24T00:20:54.346161+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "closeout-memory-and-regression-proof",
+      "run_id": "run-20260423T233047Z-caa6b120",
+      "status": "in_progress",
+      "ts": "2026-04-24T00:20:54.350964+00:00"
     }
   ]
 }
