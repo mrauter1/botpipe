@@ -285,6 +285,30 @@ Refinement helper boundary:
 - it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
 - prompt templates and workflow code still own refinement policy, baseline/candidate strategy, file copying, verification evidence, and promotion/rollback decisions
 
+## Optional Decomposition Surface Helpers
+
+`stdlib/decomposition.py` provides a narrow authoring-only seam for workflows that need one additive, read-only artifact combining a selected workflow's identity, editable authoring surface, and compiled step/route topology.
+
+```python
+from autoloop_v3.stdlib import write_selected_workflow_decomposition_surface
+
+write_selected_workflow_decomposition_surface(ctx, "release_candidate_to_go_no_go")
+```
+
+Decomposition helper boundary:
+
+- the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
+- it is additive and read-only: it snapshots existing package/compiler data and does not mutate selected workflow files
+- it reuses the shared workflow resolution, catalog, and compiler seams instead of ad hoc repo scraping or `workflow.toml` expansion
+- it combines selected workflow identity, editable authoring surface paths, repo-root-relative path metadata, and compiled step/route topology in one artifact
+- it captures the selected workflow's `__init__.py`, `workflow.toml`, `workflow.py`, optional `params.py`, optional `contracts.py`, prompt files, asset files, linked workflow doc path, and the inferred `tests/runtime/test_<workflow>.py` path when present
+- compiled step summaries include session names, required/provided/log artifacts, available routes, route contracts, local route targets, and package-relative plus repo-relative prompt paths
+- it writes the canonical result to `selected_workflow_decomposition_surface.json` by default
+- it does not mutate, auto-decompose, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
+- it does not add CLI flags, new `workflow.toml` fields, runtime-owned decomposition automation, or hidden downstream routing
+- it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- workflow code and prompt templates still own decomposition policy, baseline/candidate strategy, building-block extraction boundaries, verification evidence, and promotion/rollback decisions
+
 ## Optional Diagnostic Snapshot Helpers
 
 `stdlib/diagnostics.py` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's historical run evidence.
