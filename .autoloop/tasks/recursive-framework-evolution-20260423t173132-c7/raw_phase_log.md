@@ -772,3 +772,45 @@ No open issues in this phase scope. Review is complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdce-bd2b-75c2-977f-7270183b4eb2
+---
+I’m treating this as a scoped closeout test pass: confirm the cycle-7 baseline assertions and add only the regression coverage that the prompt-contract fix actually needs, then I’ll record the coverage map in the phase test artifacts.
+
+The regression already had a generic marker test, so I’m strengthening that existing runtime test instead of adding a new one. That keeps the targeted closeout proof count stable while locking the exact verifier-side artifact-locality strings that failed in this cycle.
+
+I’ve made the repo test change without increasing test count. Next I’m recording that test-design choice in the shared ledger and the phase test artifacts, then I’ll rerun the same targeted closeout suite to confirm it still lands at `77 passed`.
+
+The refined regression coverage passed unchanged at `77 passed`. I’m doing a quick artifact readback now so the handoff reflects the final coverage map and test-auditor note, then I’ll close with the phase summary only.
+
+Scope considered
+
+Phase-local cycle-7 closeout only: the changed `workflow_to_eval_suite` verifier-prompt contract, the cycle-7 baseline proof assertion, and the required test-phase artifacts.
+
+What I analyzed
+
+I reviewed the shared decisions, the closeout implementation notes, the existing `tests/runtime/test_workflow_to_eval_suite.py` prompt-contract coverage, the cycle-7 assertions in `tests/test_architecture_baseline_docs.py`, and the active phase test artifacts.
+
+What I changed
+
+I strengthened the existing parametrized prompt-contract test in `tests/runtime/test_workflow_to_eval_suite.py` with the exact verifier artifact-locality strings that regressed, without increasing the test count. I updated `test/phases/cycle-seven-closeout/test_strategy.md` with a behavior-to-test coverage map, appended the test-phase summary to `test/phases/cycle-seven-closeout/feedback.md`, and recorded the non-obvious test decision under the latest header in `decisions.txt`.
+
+Key findings / decisions
+
+The safest regression guard was to tighten the existing prompt-contract assertion rather than add a new test, because the closeout docs already intentionally record the targeted suite result as `77 passed`. The targeted proof reran cleanly with the strengthened assertion:
+`.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` -> `77 passed`.
+
+Open issues / next step
+
+No open test-phase issues in scope. Future intentional changes to the targeted closeout suite will need a deliberate update to the recorded roadmap proof count.
