@@ -146,6 +146,31 @@ def test_workflow_builder_package_accepts_cli_style_flow_specs_parameter(tmp_pat
     assert parameters["authoring_shape"] == "flow_specs"
 
 
+def test_workflow_builder_package_normalizes_optional_title_aliases_and_target_command(tmp_path: Path) -> None:
+    _install_repo_workflow_builder_package(tmp_path)
+    parameters_cls = resolve_workflow_reference(tmp_path, "workflow_idea_to_workflow_package").parameters_cls
+
+    parameters = coerce_workflow_parameter_mapping(
+        parameters_cls,
+        {
+            "package_name": "release_candidate_to_go_no_go",
+            "package_title": " Release Candidate To Go / No-Go ",
+            "workflow_kind": "end_to_end",
+            "aliases": [" release-go-no-go ", "", "release-go-no-go", "release-decision"],
+            "target_test_command": " pytest -q tests/runtime/test_release_candidate_to_go_no_go.py ",
+        },
+    )
+
+    assert parameters == {
+        "aliases": ["release-go-no-go", "release-decision"],
+        "authoring_shape": "flow_specs",
+        "package_name": "release_candidate_to_go_no_go",
+        "package_title": "Release Candidate To Go / No-Go",
+        "target_test_command": "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py",
+        "workflow_kind": "end_to_end",
+    }
+
+
 @pytest.mark.parametrize(
     ("authoring_shape", "expected_source"),
     [
