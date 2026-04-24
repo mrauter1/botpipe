@@ -4,3 +4,7 @@
 {"ts": "2026-04-24T22:49:29.553394+00:00", "run_id": "run-20260424T224329Z-a6be59a5", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T22:50:44.669559+00:00", "run_id": "run-20260424T224329Z-a6be59a5", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-24T22:50:44.730209+00:00", "run_id": "run-20260424T224329Z-a6be59a5", "seq": 6, "event_type": "pair_completed", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-24T22:50:44.808190+00:00", "run_id": "run-20260424T224329Z-a6be59a5", "seq": 7, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["older-domain-prompt-surface-migration", "proof-docs-and-memory-sync"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-04-24T22:50:44.809767+00:00", "run_id": "run-20260424T224329Z-a6be59a5", "seq": 8, "event_type": "phase_started", "phase_id": "older-domain-prompt-surface-migration", "phase_mode": "single"}
+{"ts": "2026-04-24T22:50:44.810409+00:00", "run_id": "run-20260424T224329Z-a6be59a5", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "older-domain-prompt-surface-migration"}
+{"ts": "2026-04-24T22:50:44.810470+00:00", "run_id": "run-20260424T224329Z-a6be59a5", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "older-domain-prompt-surface-migration"}

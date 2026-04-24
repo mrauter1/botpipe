@@ -80,3 +80,12 @@ No open verification issues remain for the planning artifacts. The plan can proc
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T224329Z-a6be59a5 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=older-domain-prompt-surface-migration,proof-docs-and-memory-sync
+explicit=True
+current_phase_index=0
