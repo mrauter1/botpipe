@@ -4,3 +4,6 @@ The request's mandatory inspection paths are stale; cycle 6 planning and impleme
 Cycle 6 should ship `candidate_workflow_to_adapted_execution_plan` as the reusable building block that turns a chosen workflow plus task context into an execution-ready adapted plan with validated parameters.
 The paired framework slice should stay additive and authoring-only: selected-workflow contract snapshot plus deterministic workflow-parameter validation helpers, not runtime-owned auto-adaptation and not `workflow.toml` expansion.
 `task_to_workflow_strategy` should remain the front door and only hand off the `adapt` route more concretely to the new building block; it must not absorb adaptation planning or auto-run the selected workflow.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260424T015723Z-b21e6db6" ts="2026-04-24T02:09:16.180693+00:00" />
+Cycle 2 narrows phase 3 explicitly: `task_to_workflow_strategy` must keep the current `strategy_summary.json` / `StrategyPackagePayload` field set unchanged in cycle 6.
+The adapt-route handoff should become more concrete only through the already-existing `next_action`, `strategy_next_action`, and `workflow_strategy_package.md` artifacts, not by introducing new summary fields or new publish-time summary validators.

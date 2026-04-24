@@ -95,11 +95,14 @@ phases:
   in_scope:
   - Update task_to_workflow_strategy prompts/docs/tests so adapt-route handoff points
     to the new building block.
+  - Keep the existing strategy_summary.json machine-readable field set unchanged while
+    making the adapt-route handoff concrete through existing handoff artifacts.
   - Update recursive memory files with cycle-6 outcomes, gap updates, and the next
     deferred portfolio gap.
   - Update architecture/doc baseline tests and plan for targeted closeout verification.
   out_of_scope:
   - Changing the package-only CLI contract.
+  - Changing StrategyPackagePayload or adding new strategy_summary.json fields.
   - Claiming recursive_autoloop wrapper/template parity.
   - Adding hidden downstream execution to the front door.
   dependencies:
@@ -107,15 +110,17 @@ phases:
   acceptance_criteria:
   - id: AC-1
     text: The front-door adapt route names candidate_workflow_to_adapted_execution_plan
-      as the concrete next step without auto-running it.
+      as the concrete next step through workflow_strategy_package.md, next_action,
+      and strategy_next_action without auto-running it.
   - id: AC-2
-    text: Recursive memory records the new adaptation layer, its helper seam, and
-      a coherent next deferred gap.
+    text: The existing strategy_summary.json field set remains unchanged for cycle
+      6 and no new StrategyPackagePayload fields are introduced.
   - id: AC-3
-    text: tests/test_architecture_baseline_docs.py reflects cycle-6 closeout without
-      introducing stale-path or recursive-wrapper claims.
+    text: Recursive memory and tests/test_architecture_baseline_docs.py reflect cycle-6
+      closeout without introducing stale-path or recursive-wrapper claims.
   deliverables:
-  - workflows/task_to_workflow_strategy/prompts/
+  - workflows/task_to_workflow_strategy/prompts/package_producer.md
+  - workflows/task_to_workflow_strategy/prompts/package_verifier.md
   - docs/workflows/task_to_workflow_strategy.md
   - .autoloop_recursive/framework_evolution_charter.md
   - .autoloop_recursive/framework_roadmap.md
@@ -124,7 +129,8 @@ phases:
   - tests/runtime/test_task_to_workflow_strategy.py
   - tests/test_architecture_baseline_docs.py
   risks:
-  - Strategy handoff wording could drift from the actual new workflow interface.
+  - Strategy handoff wording could drift from the actual new workflow interface even
+    when the summary schema stays frozen.
   - Recursive memory could claim more proof or scope than the implementation actually
     ships.
   rollback:

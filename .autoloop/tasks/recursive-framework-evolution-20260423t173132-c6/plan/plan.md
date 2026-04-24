@@ -235,11 +235,13 @@ Planned payload models:
 ### Phase 3: Portfolio handoff, docs, and recursive closeout
 
 - Update `task_to_workflow_strategy` prompts/docs/tests so the `adapt` route points to the new building block instead of a generic prose handoff.
-- Keep the existing strategy-summary schema stable unless an additive machine-readable handoff field is required to keep the new contract unambiguous.
+- Freeze the existing `strategy_summary.json` / `StrategyPackagePayload` field set for cycle 6.
+- Make the adapt-route handoff more concrete only through the already-existing `next_action`, `strategy_next_action`, and `workflow_strategy_package.md` content.
 - Update `docs/workflows/task_to_workflow_strategy.md`, recursive memory files, and `tests/test_architecture_baseline_docs.py`.
 - Record cycle-6 closeout proof and set the next deferred portfolio gap explicitly.
 - Acceptance:
 - no hidden execution is introduced into the front door
+- no new `strategy_summary.json` fields, payload models, or publish-time summary validators are introduced for this cycle
 - recursive memory records the shipped adaptation layer and its helper seam
 - doc baseline tests describe cycle 6 accurately
 
@@ -276,7 +278,8 @@ Planned payload models:
 - `validated_workflow_parameters.json`
 - `adapted_execution_plan_receipt.json`
 - Updated front-door expectation:
-- adapt-route handoff text should explicitly reference `candidate_workflow_to_adapted_execution_plan`
+- adapt-route handoff should explicitly reference `candidate_workflow_to_adapted_execution_plan` through the existing `next_action`, `strategy_next_action`, and `workflow_strategy_package.md` surfaces
+- `strategy_summary.json` remains on its current field set for cycle 6
 
 ## Compatibility and regression notes
 
@@ -285,7 +288,8 @@ Planned payload models:
 - Keep runtime-owned control surfaces limited to `expected_output_schema`, `available_routes`, and `route_contracts`.
 - Do not add runtime-owned auto-adaptation or auto-execution.
 - Do not mutate the selected workflow package at run time; adaptation lives entirely in workflow-local artifacts and validated parameters.
-- Keep existing strategy and candidate-set workflows discoverable and behaviorally stable except for a more concrete adapt-route handoff.
+- Do not change `workflows/task_to_workflow_strategy/contracts.py`, the `StrategyPackagePayload` field set, or the existing `strategy_summary.json` publish-time contract for cycle 6.
+- Keep existing strategy and candidate-set workflows discoverable and behaviorally stable except for more concrete adapt-route wording inside the already-existing handoff artifacts.
 
 ## Validation plan
 
