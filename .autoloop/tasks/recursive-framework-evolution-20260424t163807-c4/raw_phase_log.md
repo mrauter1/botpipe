@@ -504,3 +504,56 @@ Open issues / next step
 
 - Older domain workflow prompt families are still deferred.
 - The strongest remaining authoring-surface follow-ons are selected-workflow serializer convergence and optional compaction of the older domain prompt family.
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+
+
+---
+run_id=run-20260424T214122Z-85956296 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc18d-0702-7442-9c7b-7601bcff8aa5
+---
+I’m reviewing the phase artifacts and the migrated prompt/test diff first, then I’ll decide whether any intent or regression findings need to be recorded before I update the phase criteria and feedback files.
+
+Reviewing the phase artifacts and the scoped implementation diff now. I’ll verify the acceptance criteria against the migrated prompt family, then update `criteria.md` and `feedback.md` only under the phase artifact directory.
+
+I’ve confirmed the reviewer-owned artifacts are still blank, so the remaining work is the audit itself. Next I’m checking the scoped diff and the prompt/test coverage balance to decide whether there are any real blocking or non-blocking findings.
+
+The working tree no longer carries the prompt/test edits as unstaged diff, so I’m checking the repository state directly rather than relying on `git diff`. That means the review has to validate the current files against the phase contract, not just the transient diff output.
+
+I’ve spot-checked representative prompts across all ten workflow families. The remaining question is whether there’s any coverage hole large enough to record as debt, so I’m doing one consistency sweep over all migrated prompt files and the current prompt-facing test surface.
+
+One consistency check surfaced a nuance: several verifier prompts in the builder/selected-workflow families do not include a separate `## Evidence` section, even though the later families do. I’m checking whether those prompts still keep evidence expectations explicit enough to satisfy the phase contract or whether that remains review debt.
+
+The implementation meets the phase goal at the current prompt surface, but there’s one test-coverage hole worth recording as follow-up debt rather than holding the phase open. I’m writing that to the reviewer artifacts now and marking the criteria complete.
+
+Scope considered
+
+Phase-local review of `prompt-surface-migration` only. I checked the scoped prompt families, the prompt-facing test surface, `docs/architecture.md`, `docs/authoring.md`, the phase notes, and the shared decisions ledger, without pulling unrelated dirty repo state into scope.
+
+What I analyzed
+
+The review focused on whether the migrated prompts preserved artifact names, route intent, and step boundaries while moving to the compact contract style. I spot-checked representative prompts across all ten targeted workflow families, confirmed the scoped families no longer use the old `Read these artifacts` / `Write these artifacts` scaffolding, checked consistency of the new section/table shape, and compared prompt-body coverage across the ten runtime suites.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/implement/phases/prompt-surface-migration/criteria.md) to mark all review gates satisfied and appended one non-blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c4/implement/phases/prompt-surface-migration/feedback.md).
+
+Key findings / decisions
+
+No blocking findings. The prompt migration satisfies the accepted phase scope and keeps the workflow/runtime/provider boundary intact.
+
+One non-blocking finding was recorded as `PSM-001`: four of the ten migrated workflow families do not yet have runtime tests that pin the new prompt-body markers, so prompt-surface regressions in those families would be less visible than in the later six suites.
+
+Open issues / next step
+
+Follow-up debt is limited to adding the same prompt-marker assertions to `test_workflow_builder_package.py`, `test_task_to_candidate_workflow_set.py`, `test_task_to_workflow_strategy.py`, and `test_candidate_workflow_to_adapted_execution_plan.py`, ideally via one shared helper.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
