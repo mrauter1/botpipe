@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T091635Z-858b34e9" ts="2026-04-24T09:16:35.772817+00:00" />
+Mandatory stale request paths were mapped to the live package-root layout: docs/architecture.md, docs/authoring.md, core/, runtime/, stdlib/, and repo-root workflows/.
+workflow_idea_to_workflow_package remains credible enough that cycle 11 should ship workflow_package_to_composable_building_blocks instead of another builder-first workflow.
+Cycle 11 should publish a candidate decomposition overlay and receipt rather than mutating the authoritative selected workflow package in place.
+The paired framework improvement should be an additive authoring-only write_selected_workflow_decomposition_surface(...) seam; do not widen workflow.toml or add runtime-owned decomposition automation.

@@ -1,4 +1,121 @@
 version: 1
 task_id: recursive-framework-evolution-20260423t173132-c11
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c11/runs/run-20260424T091635Z-858b34e9/request.md
-phases: []
+phases:
+- phase_id: decomposition-surface-seam
+  title: Add Decomposition Surface Seam
+  objective: Create a narrow authoring-only helper that publishes a selected workflow
+    decomposition surface without widening runtime or manifest contracts.
+  status: planned
+  in_scope:
+  - Add `stdlib/decomposition.py` with `write_selected_workflow_decomposition_surface(...)`
+    built on existing discovery and compiler seams.
+  - Export the helper through `stdlib/__init__.py` and document its boundary in `docs/authoring.md`.
+  - Add unit and baseline-doc test coverage for the helper contract.
+  out_of_scope:
+  - Runtime-owned decomposition automation.
+  - New `workflow.toml` fields.
+  - Recursive wrapper/template cleanup.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The helper writes a workflow-local JSON artifact that combines selected
+      workflow identity, authoring surface paths, and compiled step/route metadata.
+  - id: AC-2
+    text: Authoring docs describe the helper as additive, read-only, and outside runtime-owned
+      control contracts.
+  - id: AC-3
+    text: Unit and baseline-doc tests cover the helper contract and its boundary.
+  deliverables:
+  - stdlib/decomposition.py
+  - stdlib/__init__.py export update
+  - docs/authoring.md decomposition helper section
+  - tests/unit/test_stdlib_and_extensions.py coverage
+  - tests/test_architecture_baseline_docs.py updates
+  risks:
+  - The helper may duplicate refinement-oriented snapshot logic unless it composes
+    existing discovery/compiler seams instead of reimplementing them.
+  rollback:
+  - Remove the helper, export, doc text, and tests together if the seam proves redundant
+    or boundary-violating.
+- phase_id: workflow-package-to-building-blocks
+  title: Implement Decomposition Workflow
+  objective: Ship `workflow_package_to_composable_building_blocks` as a reusable building
+    block that publishes a candidate decomposition overlay, verification artifacts,
+    and receipt.
+  status: planned
+  in_scope:
+  - Create the new workflow package under `workflows/workflow_package_to_composable_building_blocks/`.
+  - Define the parameter model, route contracts, prompt templates, checklist asset,
+    and publish-time validation logic.
+  - Publish a workflow doc and workflow-specific runtime test proving discovery, compilation,
+    terminal candidate publication, and rejection of invalid overlays.
+  out_of_scope:
+  - Auto-promoting candidate decomposition outputs into the authoritative repo.
+  - Public CLI changes.
+  - Refactoring unrelated existing workflows.
+  dependencies:
+  - decomposition-surface-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: The workflow package is discoverable by canonical name and alias and compiles
+      with explicit pair-step control contracts.
+  - id: AC-2
+    text: The workflow publishes the planned decomposition artifacts, including the
+      candidate overlay, deterministic manifest, migration guidance, promotion record,
+      rollback plan, and receipt.
+  - id: AC-3
+    text: Publish-time validation rejects hidden execution, identity drift, and candidate
+      files outside the allowed repo-relative boundary.
+  deliverables:
+  - workflows/workflow_package_to_composable_building_blocks/
+  - docs/workflows/workflow_package_to_composable_building_blocks.md
+  - tests/runtime/test_workflow_package_to_composable_building_blocks.py
+  risks:
+  - Candidate overlay validation may drift from the existing refinement discipline
+    if multi-package validation is implemented ad hoc.
+  - The workflow may regress into a plan-only output unless candidate packages and
+    manifests are required artifacts.
+  rollback:
+  - Remove the workflow package, workflow doc, and runtime test together if the candidate
+    publication boundary cannot be kept explicit.
+- phase_id: recursive-memory-and-validation
+  title: Refresh Memory And Prove The Slice
+  objective: Update recursive memory and baseline docs for cycle 11, then run the
+    targeted proof suite for the helper and workflow package.
+  status: planned
+  in_scope:
+  - Update the four standing `.autoloop_recursive/` memory files with cycle-11 decisions
+    and deferred follow-ons.
+  - Extend baseline-doc assertions for the new helper, workflow, and cycle-11 memory
+    state.
+  - Run the targeted pytest suite and record any conditional follow-up coverage needed
+    for shared validation logic.
+  out_of_scope:
+  - Editing verifier-owned criteria files.
+  - Broad full-suite execution unless targeted proof exposes unexpected regressions.
+  - Revisiting earlier cycle decisions unless the new implementation forces a correction.
+  dependencies:
+  - workflow-package-to-building-blocks
+  acceptance_criteria:
+  - id: AC-1
+    text: Recursive memory records cycle-11 outcomes, the chosen decomposition workflow,
+      the chosen helper seam, and the next deferred follow-on.
+  - id: AC-2
+    text: Baseline-doc tests cover the new authoring seam and the new cycle-11 memory
+      baseline.
+  - id: AC-3
+    text: The targeted pytest suite passes, with any conditional refinement-regression
+      proof recorded if shared overlay logic was extracted.
+  deliverables:
+  - .autoloop_recursive/framework_evolution_charter.md
+  - .autoloop_recursive/framework_roadmap.md
+  - .autoloop_recursive/framework_gap_ledger.md
+  - .autoloop_recursive/workflow_candidate_ledger.md
+  - Targeted pytest evidence for the cycle-11 slice
+  risks:
+  - Recursive-memory updates can drift from the implemented slice if they are written
+    before the workflow contract and helper boundary are finalized.
+  rollback:
+  - Revert the cycle-11 memory and baseline-doc updates as one block if the workflow
+    or helper ship shape changes materially during implementation.
