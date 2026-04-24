@@ -830,3 +830,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe23-85f9-7881-a1c5-05054118b90b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbe23-85f9-7881-a1c5-05054118b90b
+
+
+---
+run_id=run-20260424T045554Z-27198177 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe23-85f9-7881-a1c5-05054118b90b
+---
+I’m treating this as a cycle-8 closeout pass: verify what the prior phases shipped, update the standing recursive-memory files and baseline doc tests, then run the targeted pytest proof required by the phase contract.
+
+I’ve confirmed the active phase is only the closeout slice, and the checkout already migrated away from the stale `src/autoloop/...` paths. Next I’m reading the current architecture/docs surfaces, the shipped refinement workflow artifacts, and the standing memory/test files so the closeout updates match what actually landed.
+
+The standing memory files already contain cycle-8 content, so this pass is likely about syncing exact-string baseline assertions and recording the proof cleanly against the phase’s required test set, not inventing new closeout language from scratch.
+
+I’ve found the likely delta: cycle-8 memory already says the right thing substantively, but the proof string is still the earlier two-test command. The phase contract requires a broader targeted proof, so I’m checking the exact assertions and then I’ll rerun the correct test set before editing the closeout records.
+
+I’ve narrowed it to a concrete closeout fix: cycle-8’s proof references are still the smaller earlier run, and the closeout notes don’t reflect the builder regression surface the phase explicitly requires. I’m running the required test set now so the docs/tests can be updated to the exact passing command and count instead of guessing.
+
+I have the exact passing command now: the required closeout proof is the five-file regression set and it passed at `112`. I’m updating the recursive memory, exact-string baseline test, the cycle closeout notes, and the decision/implementation artifacts to pin that broader proof surface explicitly.
+
+The closeout artifacts are updated. I’m rerunning the same required regression set now to verify the new exact-string baseline assertions and the standing memory stay aligned with the recorded proof.
+
+Scope considered
+
+- Phase-local cycle-8 closeout only: the four standing recursive-memory files, [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/implement/phases/cycle-eight-closeout/implementation_notes.md), and the phase decision ledger. No workflow, runtime, CLI, or wrapper cleanup changes.
+
+What I analyzed
+
+- Current cycle-8 memory/test expectations, prior phase implementation notes, and the current [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md) and [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) surfaces.
+- The recorded cycle-8 proof was stale: it still referenced the smaller two-test run instead of the phase-required helper seam + builder/eval regression + refinement workflow + baseline docs set.
+
+What I changed
+
+- Updated [framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md), [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md), [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md), and [workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md) so cycle 8 now records the broader proof surface and `112 passed`.
+- Updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) to pin the expanded cycle-8 proof strings and pass count.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/implement/phases/cycle-eight-closeout/implementation_notes.md) and appended the closeout decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c8/decisions.txt).
+
+Key findings / decisions
+
+- The builder remains the credible baseline; cycle-8 closeout proof now explicitly includes the workflow-builder regression surface alongside the refinement seam, eval-suite surface, refinement workflow, and recursive-memory docs.
+- Validation ran with `./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py` and passed with `112 passed`.
+
+Open issues / next step
+
+- No phase-local blockers remain. `recursive_autoloop/` wrapper/template cleanup stays deferred and untouched, as required.
