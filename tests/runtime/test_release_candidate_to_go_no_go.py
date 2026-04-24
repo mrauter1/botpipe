@@ -23,6 +23,30 @@ from workflow.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+COMMON_PROMPT_CONTRACT_MARKERS = (
+    "## Step Contract",
+    "## Artifact Contract",
+    "| Artifact | Direction | Notes |",
+    "## Output Requirements",
+    "## Routes",
+    "## Forbidden",
+)
+LEGACY_PROMPT_SCAFFOLDING_MARKERS = ("Read these artifacts", "Write these artifacts")
+
+
+def _assert_compact_prompt_contract(
+    prompt_name: str,
+    text: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    for marker in COMMON_PROMPT_CONTRACT_MARKERS:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in required_markers:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in LEGACY_PROMPT_SCAFFOLDING_MARKERS:
+        assert marker not in text, f"{prompt_name} still contains legacy scaffolding marker: {marker}"
 
 
 def _clear_workflow_modules() -> None:
@@ -119,6 +143,131 @@ def test_release_go_no_go_package_docs_capture_decision_records() -> None:
         "tests/runtime/test_release_candidate_to_go_no_go.py",
     ):
         assert required in text
+
+
+def test_release_go_no_go_prompt_readme_uses_shared_contract_sections() -> None:
+    text = (REPO_ROOT / "workflows" / "release_candidate_to_go_no_go" / "prompts" / "README.md").read_text(
+        encoding="utf-8"
+    )
+
+    for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
+        "Reserved routes:",
+        "`question`",
+        "`blocked`",
+        "`failed`",
+        "Application routes:",
+        "`release_framed`",
+        "`evidence_pack_ready`",
+        "`assessment_ready`",
+        "`decision_package_ready`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "`frame_producer.md` / `frame_verifier.md`",
+        "ReleaseDecisionPackagePayload",
+        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+    ):
+        assert required in text
+
+
+@pytest.mark.parametrize(
+    ("prompt_name", "required_markers"),
+    (
+        (
+            "frame_producer.md",
+            (
+                "`release_scope_brief`",
+                "`decision_criteria`",
+                "`evidence_intake_register`",
+                "`release_framed`",
+                "`needs_replan`",
+            ),
+        ),
+        (
+            "frame_verifier.md",
+            (
+                "Required outcome structure",
+                "`release_framed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`authoritative_artifacts`",
+            ),
+        ),
+        (
+            "evidence_producer.md",
+            (
+                "`release_inventory`",
+                "`test_evidence_pack`",
+                "`blocking_issues`",
+                "`evidence_pack_ready`",
+                "`needs_rework`",
+            ),
+        ),
+        (
+            "evidence_verifier.md",
+            (
+                "Required outcome structure",
+                "`evidence_pack_ready`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`blocker_artifacts`",
+            ),
+        ),
+        (
+            "assessment_producer.md",
+            (
+                "`go_no_go_assessment`",
+                "`risk_register`",
+                "`decision_summary`",
+                "`assessment_ready`",
+                "`conditional_go`",
+            ),
+        ),
+        (
+            "assessment_verifier.md",
+            (
+                "Required outcome structure",
+                "`assessment_ready`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`blocking_issue_count`",
+            ),
+        ),
+        (
+            "package_producer.md",
+            (
+                "`release_decision_package`",
+                "`release_communications_draft`",
+                "`decision_package_ready`",
+                "`conditional_go`",
+                "`decision_summary`",
+            ),
+        ),
+        (
+            "package_verifier.md",
+            (
+                "Required outcome structure",
+                "`decision_package_ready`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`communication_ready`",
+            ),
+        ),
+    ),
+)
+def test_release_go_no_go_prompts_keep_step_local_contracts_explicit(
+    prompt_name: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    text = (REPO_ROOT / "workflows" / "release_candidate_to_go_no_go" / "prompts" / prompt_name).read_text(
+        encoding="utf-8"
+    )
+
+    _assert_compact_prompt_contract(prompt_name, text, required_markers)
 
 
 def test_release_go_no_go_package_rejects_blank_release_name(tmp_path: Path) -> None:

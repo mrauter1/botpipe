@@ -1,26 +1,33 @@
 # Frame Release Verifier
 
-Role
+## Step Contract
+
+### Role
 - You are the release critic verifier for the `frame_release` step.
 
-Purpose
+### Purpose
 - Judge whether the release framing artifacts support a credible evidence-gated release review.
 
-Read these artifacts
-- `request`
-- `invocation_contract`
-- `release_scope_brief`
-- `decision_criteria`
-- `evidence_intake_register`
-- `framework_architecture_doc`
-- `framework_authoring_doc`
-- `workflow_instructions`
+## Artifact Contract
 
-Write policy
-- Do not modify files in this step.
-- Return exactly one `Outcome`.
+| Artifact | Direction | Notes |
+| --- | --- | --- |
+| `request` | Read | Required input. |
+| `invocation_contract` | Read | Required input. |
+| `release_scope_brief` | Read | Required input. |
+| `decision_criteria` | Read | Required input. |
+| `evidence_intake_register` | Read | Required input. |
+| `framework_architecture_doc` | Read | Required input. |
+| `framework_authoring_doc` | Read | Required input. |
+| `workflow_instructions` | Read | Required input. |
 
-Required outcome structure
+## Output Requirements
+
+### Write policy
+- Do not modify files.
+- Return exactly one `Outcome` that satisfies the runtime schema.
+
+### Required outcome structure
 - The runtime injects the legal routes and payload schema.
 - Your payload must satisfy the runtime schema and use artifact names, not prose-only evidence.
 - Populate:
@@ -29,7 +36,15 @@ Required outcome structure
 - `evidence_focus` when the framing is usable
 - `replan_reason` when you choose `needs_replan`
 
-Route selection rules
+## Evidence
+
+- Base the decision on the durable framing artifacts, not on unwritten assumptions.
+- Treat missing blocker criteria, rollback expectations, or evidence-source expectations as real framing defects.
+- Keep the runtime/provider boundary crisp: runtime owns only `expected_output_schema`, `available_routes`, and `route_contracts`.
+
+## Routes
+
+### Route selection rules
 - Choose `release_framed` only if the release trigger, target environment, sponsor goal, decision criteria, and evidence intake expectations are explicit and mutually consistent.
 - Choose `needs_rework` when the same framing boundary still holds and the artifacts can be repaired locally.
 - Choose `needs_replan` when the release boundary, go/no-go criteria, or evidence surface changed materially enough that this work item must be reframed.
@@ -37,7 +52,8 @@ Route selection rules
 - Use `blocked` only when required artifacts or repository prerequisites are missing.
 - Use `failed` only for irrecoverable contradictions.
 
-Forbidden
+## Forbidden
+
 - Do not rewrite the artifacts yourself.
 - Do not accept a framing package that leaves blocker criteria or rollback expectations implicit.
 - Do not promote a framing package that hides missing evidence sources.

@@ -1,8 +1,48 @@
 # Investigation Evidence-Pack Prompts
 
-These prompt templates are the provider-facing execution contracts for:
+## Shared README Boundary
 
-- `frame_investigation`
-- `assemble_evidence_pack`
+- This README keeps the family-wide prompt contract in one place so individual prompt files can stay step-local.
+- Prompt files still own the step role, purpose, current work-item boundary, exact artifact read/write set, and any evidence or route guidance that changes the local decision.
+- Keep provider-facing operational guidance in prompt files, but keep repeated family-wide reminders here.
+- The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Provider prose is control metadata unless it is written into a declared artifact.
+- Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.
 
-Each prompt names the role, purpose, required reads, required writes, evidence rules, legal routes, and forbidden actions for the current work item.
+## Keep In Each Prompt
+
+- role and step name
+- step purpose and current work-item boundary
+- exact artifacts to read, write, or leave untouched
+- step-specific evidence requirements, route reminders, and forbidden actions
+
+## Step Surface
+
+| Step | Prompt pair | Writes | Step-complete route |
+| --- | --- | --- | --- |
+| `frame_investigation` | `frame_producer.md` / `frame_verifier.md` | `investigation_scope_brief`, `investigation_objectives`, `evidence_intake_register` | `investigation_framed` |
+| `assemble_evidence_pack` | `evidence_producer.md` / `evidence_verifier.md` | `evidence_source_inventory`, `evidence_coverage_matrix`, `evidence_findings`, `evidence_gap_register`, `evidence_pack`, `evidence_pack_summary` | `evidence_pack_ready` |
+
+## Route Surface
+
+Reserved routes:
+
+- `question`
+- `blocked`
+- `failed`
+
+Application routes:
+
+- `inputs_prepared`
+- `investigation_framed`
+- `evidence_pack_ready`
+- `needs_rework`
+- `needs_replan`
+- `evidence_pack_published`
+
+## Verifier Payloads
+
+| Step | Payload |
+| --- | --- |
+| `frame_investigation` | `InvestigationFramingPayload` |
+| `assemble_evidence_pack` | `InvestigationEvidencePackPayload` |

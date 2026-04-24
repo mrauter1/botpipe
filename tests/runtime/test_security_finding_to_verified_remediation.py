@@ -23,6 +23,30 @@ from workflow.primitives import Event, Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+COMMON_PROMPT_CONTRACT_MARKERS = (
+    "## Step Contract",
+    "## Artifact Contract",
+    "| Artifact | Direction | Notes |",
+    "## Output Requirements",
+    "## Routes",
+    "## Forbidden",
+)
+LEGACY_PROMPT_SCAFFOLDING_MARKERS = ("Read these artifacts", "Write these artifacts")
+
+
+def _assert_compact_prompt_contract(
+    prompt_name: str,
+    text: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    for marker in COMMON_PROMPT_CONTRACT_MARKERS:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in required_markers:
+        assert marker in text, f"{prompt_name} is missing required contract marker: {marker}"
+
+    for marker in LEGACY_PROMPT_SCAFFOLDING_MARKERS:
+        assert marker not in text, f"{prompt_name} still contains legacy scaffolding marker: {marker}"
 
 
 def _clear_workflow_modules() -> None:
@@ -122,6 +146,119 @@ def test_security_remediation_package_docs_capture_decision_records() -> None:
         "tests/runtime/test_security_finding_to_verified_remediation.py",
     ):
         assert required in text
+
+
+def test_security_remediation_prompt_readme_uses_shared_contract_sections() -> None:
+    text = (
+        REPO_ROOT
+        / "workflows"
+        / "security_finding_to_verified_remediation"
+        / "prompts"
+        / "README.md"
+    ).read_text(encoding="utf-8")
+
+    for required in (
+        "## Shared README Boundary",
+        "## Keep In Each Prompt",
+        "## Step Surface",
+        "## Route Surface",
+        "## Verifier Payloads",
+        "Reserved routes:",
+        "`question`",
+        "`blocked`",
+        "`failed`",
+        "Application routes:",
+        "`evidence_pack_adopted`",
+        "`finding_assessed`",
+        "`remediation_planned`",
+        "`closure_package_ready`",
+        "`needs_rework`",
+        "`needs_replan`",
+        "System step (no prompt files)",
+        "SecurityClosurePackagePayload",
+        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+    ):
+        assert required in text
+
+
+@pytest.mark.parametrize(
+    ("prompt_name", "required_markers"),
+    (
+        (
+            "assessment_producer.md",
+            (
+                "`exploit_summary`",
+                "`root_cause_analysis`",
+                "`assessment_summary`",
+                "`finding_assessed`",
+                "`preferred_remediation_option`",
+            ),
+        ),
+        (
+            "assessment_verifier.md",
+            (
+                "Required outcome structure",
+                "`finding_assessed`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`exploitability`",
+            ),
+        ),
+        (
+            "remediation_producer.md",
+            (
+                "`selected_remediation_plan`",
+                "`verification_plan`",
+                "`remediation_summary`",
+                "`remediation_planned`",
+                "`selected_remediation`",
+            ),
+        ),
+        (
+            "remediation_verifier.md",
+            (
+                "Required outcome structure",
+                "`remediation_planned`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`rollout_ready`",
+            ),
+        ),
+        (
+            "closure_producer.md",
+            (
+                "`security_remediation_package`",
+                "`stakeholder_communication_draft`",
+                "`closure_evidence_requirements`",
+                "`closure_package_ready`",
+                "`needs_replan`",
+            ),
+        ),
+        (
+            "closure_verifier.md",
+            (
+                "Required outcome structure",
+                "`closure_package_ready`",
+                "`needs_rework`",
+                "`needs_replan`",
+                "`closure_ready`",
+            ),
+        ),
+    ),
+)
+def test_security_remediation_prompts_keep_step_local_contracts_explicit(
+    prompt_name: str,
+    required_markers: tuple[str, ...],
+) -> None:
+    text = (
+        REPO_ROOT
+        / "workflows"
+        / "security_finding_to_verified_remediation"
+        / "prompts"
+        / prompt_name
+    ).read_text(encoding="utf-8")
+
+    _assert_compact_prompt_contract(prompt_name, text, required_markers)
 
 
 def test_security_remediation_package_rejects_blank_finding_title(tmp_path: Path) -> None:
