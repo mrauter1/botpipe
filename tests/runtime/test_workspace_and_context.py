@@ -322,7 +322,7 @@ def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filte
     summaries = list_workflow_run_summaries(
         tmp_path,
         workflow_names=["release_candidate_to_go_no_go", "incident_to_hardening_program"],
-        statuses=["failed", "paused", "failed"],
+        statuses=(status for status in ["failed", "paused", "failed"]),
         max_runs_per_workflow=1,
     )
 
