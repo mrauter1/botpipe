@@ -331,3 +331,107 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbe79-304c-7780-a58a-6233232146ad
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+I’m treating this as a phase-local test hardening pass for the portfolio health snapshot seam. I’ll inspect the current runtime/unit coverage and the test-phase artifacts first, then add only the missing proof needed to make the behavior-to-test map explicit and stable.
+
+The existing seam coverage is already strong on the stdlib side, so I’m using this phase to harden the underlying runtime helper against the same one-shot iterable regression shape and to make the behavior-to-test map explicit in the phase artifacts. Then I’ll rerun the targeted suite that exercises the seam end to end.
+
+I’ve kept the repo test change minimal: the runtime summary helper now gets the same generator-backed `statuses` exercise the stdlib helper already had, and the phase strategy/feedback artifacts capture the coverage map and stabilization approach. I’m recording that non-obvious test choice in the shared decisions ledger before I run the seam suite.
+
+The test changes are in place. I’m running the same targeted seam suite the implementation and review relied on so the test phase can hand off with explicit proof, not just a strategy document.
+
+Scope considered
+
+- Phase-local test work only: [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:277), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/portfolio-health-snapshot-seam/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/portfolio-health-snapshot-seam/feedback.md:1), and the shared decision line for this test turn.
+- I kept the scope on the portfolio health snapshot seam and did not add unrelated test churn.
+
+What I analyzed
+
+- The current unit proof for `write_workflow_portfolio_health_snapshot(...)`, which already exercises generator-backed `statuses`.
+- The shared runtime summary test for `list_workflow_run_summaries(...)`, which still used a list for `statuses`.
+- The docs boundary text in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:227) and the active phase constraints.
+
+What I changed
+
+- Updated [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:322) so the shared runtime summary helper now also receives a one-shot generator for `statuses`.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/portfolio-health-snapshot-seam/test_strategy.md:10) with the behavior-to-test coverage map, preserved invariants, edge cases, failure paths, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/portfolio-health-snapshot-seam/feedback.md:10).
+- Recorded the non-obvious generator-coverage choice under the current test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+- The main additional value of this phase is preventing iterable-consumption regressions at both layers, not just the stdlib wrapper.
+- Coverage now explicitly proves generator-backed `statuses` for both `write_workflow_portfolio_health_snapshot(...)` and `list_workflow_run_summaries(...)`.
+
+Open issues / next step
+
+- No open test-phase issues in this seam.
+- Validation passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py` (78 passed).
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbe79-304c-7780-a58a-6233232146ad
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+I’m auditing only the phase-local test work: the runtime/unit coverage tied to the portfolio health seam plus the new test strategy and feedback artifacts. I’ll verify that the changed tests actually protect the reviewed regression path, that the artifact map matches reality, and that no flaky or under-specified coverage was introduced.
+
+I’m auditing the phase-local test coverage and artifacts for the portfolio health snapshot seam. I’ll inspect the changed tests, the current test strategy and feedback files, and then update only the test audit artifacts based on whether any material coverage gaps remain.
+
+I’ve confirmed the phase artifacts and the shared decisions. Next I’m checking the concrete test bodies and rerunning the targeted suite so the audit is based on actual coverage rather than just the strategy notes.
+
+The concrete tests and the targeted suite both line up with the strategy notes: the regression path is covered at the runtime and stdlib layers, and the phase stays deterministic and read-only. I’m updating the audit artifacts now to reflect a clean pass with no blocking findings.
+
+Scope considered
+
+- Phase-local test audit only for the portfolio health snapshot seam.
+- I reviewed the changed tests, the authoring-boundary doc assertion target, the shared decisions ledger, and the test audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/portfolio-health-snapshot-seam/`.
+
+What I analyzed
+
+- `tests/unit/test_stdlib_and_extensions.py::test_portfolio_health_helper_writes_grouped_workflow_run_health_via_shared_resolution_and_run_summaries`
+- `tests/runtime/test_workspace_and_context.py::test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters`
+- `docs/authoring.md` portfolio health snapshot boundary text
+- `test_strategy.md`, `feedback.md`, and `criteria.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/decisions.txt`
+
+What I reviewed
+
+- Coverage of the reviewed regression path: one-shot iterable `statuses` at both the stdlib helper and shared runtime summary layers.
+- Preserved boundary behavior: read-only seam, deterministic filtering, bounded excerpts, zero-run selected workflows, and validation failures.
+- Test reliability and flake risk.
+- Validation run: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py` with `78 passed in 0.86s`.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/portfolio-health-snapshot-seam/criteria.md:1) to fully checked.
+- I appended `TST-001` as a non-blocking audit-complete note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/test/phases/portfolio-health-snapshot-seam/feedback.md:1).
+
+Open issues / next step
+
+- No open phase-local test audit issues. This seam’s test coverage is acceptable as implemented.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
