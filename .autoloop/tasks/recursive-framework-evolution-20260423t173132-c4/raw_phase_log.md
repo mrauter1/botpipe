@@ -743,3 +743,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcdc-6a67-7cc0-8ff1-15ff8f8f37af
+---
+I’m auditing the closeout from a test-author perspective now: first I’m reading the active test artifacts and the final cycle-4 baseline tests to see whether any regression-proofing gaps remain before I touch repo tests. Then I’ll update the phase-local `test_strategy.md` and feedback with the exact coverage map I actually verified.
+
+I found one small regression-proofing gap: the cycle-4 proof test froze the command string but not the recorded `88 passed` result. I’m tightening that assertion now, then I’ll update the phase-local test strategy, feedback, and this turn’s shared test decision under the new header.
+
+The repo test change is minimal and directly on the cycle-4 proof boundary. I’m re-running the targeted suite now so the recorded test feedback reflects the tightened assertion on the final state, not just the producer’s prior run.
+
+Scope considered
+
+- Phase-local `closeout-memory-and-regression-proof` only: the cycle-4 recursive-memory baseline freeze in `tests/test_architecture_baseline_docs.py`, plus the phase-local `test_strategy.md`, `feedback.md`, and the shared test decision entry.
+- I kept recursive wrapper/template fixes, manifest-schema work, CLI migrations, and workflow retrofits out of scope.
+
+What I analyzed
+
+- The active phase contract, the implement-phase notes, the cycle-4 memory updates, and the current baseline-doc tests around shipped/deferred portfolio status.
+- The shared decisions ledger, including the new closeout test-author header for this turn.
+- The targeted regression surface required by AC-3: seam, front door, builder, evidence-pack, and security workflow coverage.
+
+What I changed
+
+- Tightened `tests/test_architecture_baseline_docs.py` so the cycle-4 closeout proof now freezes both the exact targeted pytest command and the recorded `88 passed` result.
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/test/phases/closeout-memory-and-regression-proof/test_strategy.md` with an explicit behavior-to-test coverage map, preserved invariants, failure paths, and known gaps.
+- Appended a concise summary entry to `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/test/phases/closeout-memory-and-regression-proof/feedback.md`.
+- Appended one test-specific drift-prevention decision under the latest header in `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/decisions.txt`.
+
+Key findings / decisions
+
+- The only missing regression-proof detail was the pass-count receipt; that is now locked alongside the exact cycle-4 pytest command.
+- The targeted regression suite still passes after the test refinement:
+  - `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py`
+  - Result: `88 passed`
+- No new flake risk was introduced; the added assertion is a deterministic string check against checked-in memory content.
+
+Open issues / next step
+
+- No blocking issues in this phase scope.
+- `tests/runtime/test_package_cli.py` remains intentionally out of scope because recursive wrapper/template cleanup is still explicitly deferred.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
