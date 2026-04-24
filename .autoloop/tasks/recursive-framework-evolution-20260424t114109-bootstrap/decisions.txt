@@ -1,0 +1,6 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260424T144110Z-aa024541" ts="2026-04-24T14:41:10.459245+00:00" />
+Canonical docs for this slice are `docs/architecture.md`, `docs/authoring.md`, and `docs/workflows/*`; `legacy_docs/` should be treated as archival unless a later task explicitly syncs or removes it.
+`autoloop init workflow <name>` should stay repo-root oriented and scaffold into `<root>/workflows/` for every supported shape; the request's shape examples are interpreted as leaf layouts, not arbitrary current-directory output.
+Stdlib helpers that need repository discovery must read the real repo root from runtime context (`ctx.root`) instead of inferring it from `package_folder`.
+If two different workflow origins would resolve to the same canonical `workflow_name` within one task/workspace, resolution must fail clearly instead of merging histories.
+Keep `workflows list` shallow and import-free; keep `workflows show` compatibility-conscious instead of forcing a shallow-by-default behavior change without evidence it is safe.
