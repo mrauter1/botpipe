@@ -49,3 +49,4 @@
 {"ts": "2026-04-24T09:15:27.762045+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 49, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "cycle-ten-closeout"}
 {"ts": "2026-04-24T09:16:35.118944+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 50, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "cycle-ten-closeout"}
 {"ts": "2026-04-24T09:16:35.146710+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 51, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "cycle-ten-closeout"}
+{"ts": "2026-04-24T09:16:35.209765+00:00", "run_id": "run-20260424T074057Z-3b578ba2", "seq": 52, "event_type": "phase_completed", "pair": "test", "phase_id": "cycle-ten-closeout", "phase_mode": "single"}
