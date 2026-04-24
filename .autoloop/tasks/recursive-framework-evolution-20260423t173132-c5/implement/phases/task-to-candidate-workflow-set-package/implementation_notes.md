@@ -53,7 +53,7 @@
 ## Checklist mapping
 
 - AC-1: shipped `task_to_candidate_workflow_set` with explicit framing, capability capture, candidate analysis, candidate-set packaging, direct docs, and runtime proof that the builder baseline remains part of the durable candidate package.
-- AC-2: made the deterministic/provider-owned boundary explicit in the new workflow package, prompts, contracts, and docs while keeping runtime-owned control surfaces limited to `expected_output_schema`, `available_routes`, and `route_contracts`.
+- AC-2: made the deterministic/provider-owned boundary explicit in the new workflow package, prompts, contracts, and docs while keeping runtime-owned control surfaces limited to `expected_output_schema`, `available_routes`, and `route_contracts`; cycle-2 follow-up repaired the parent `publish_strategy` artifact contract so the explicit workflow/doc contract matches the adopted child artifacts the handler actually consumes.
 - AC-3: added publication-side validation for the machine-readable readiness contract and updated `task_to_workflow_strategy` to consume the new building block through explicit child composition while preserving the parent-local strategy artifact contract.
 
 ## Assumptions
@@ -72,6 +72,7 @@
 
 - Added `task_to_candidate_workflow_set` as a reusable candidate-retrieval building block with deterministic capability capture, ranked candidate publication, machine-readable posture, and deterministic receipt validation.
 - Updated `task_to_workflow_strategy` so candidate retrieval is now handled through explicit child composition rather than front-door-local prompt logic.
+- `task_to_workflow_strategy.publish_strategy` now declares the adopted child candidate artifacts it already reads, so prerequisite enforcement, capability inspection, and the documented artifact contract fail early and consistently if those files are missing.
 - Advanced recursive memory from “candidate retrieval is deferred” to “candidate retrieval shipped; adaptation planning is the next deferred layer.”
 
 ## Known non-changes
@@ -90,6 +91,8 @@
 
 - `.venv/bin/python -m py_compile workflows/task_to_candidate_workflow_set/__init__.py workflows/task_to_candidate_workflow_set/params.py workflows/task_to_candidate_workflow_set/contracts.py workflows/task_to_candidate_workflow_set/workflow.py workflows/task_to_workflow_strategy/contracts.py workflows/task_to_workflow_strategy/workflow.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py`
 - `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_compatibility_runtime.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_builder_package.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/test_architecture_baseline_docs.py` (`102 passed`)
+- `.venv/bin/python -m py_compile workflows/task_to_workflow_strategy/workflow.py tests/runtime/test_task_to_workflow_strategy.py`
+- `.venv/bin/pytest -q tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_task_to_candidate_workflow_set.py` (`16 passed`)
 
 ## Deduplication / centralization decisions
 

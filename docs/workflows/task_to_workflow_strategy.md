@@ -179,7 +179,7 @@ Application routes:
 | `build_candidate_workflow_set` | request, invocation contract, portfolio snapshot, framing artifacts | adopted `workflow_candidate_matrix.md`, `workflow_gap_analysis.md`, `candidate_route_posture.md`, `candidate_workflow_set.md`, `candidate_workflow_set_summary.json`, `candidate_next_action.md` | authoritative child candidate-set package copied into the parent workflow folder |
 | `select_strategy` | request, invocation contract, portfolio snapshot, framing artifacts, adopted child candidate artifacts | `strategy_decision.md` | authoritative final route decision surface |
 | `package_strategy` | request, invocation contract, portfolio snapshot, checklist, framing artifacts, adopted child candidate artifacts, strategy decision | `workflow_strategy_package.md`, `strategy_summary.json`, `strategy_next_action.md` | terminal handoff package and machine-readable summary |
-| `publish_strategy` | portfolio snapshot, decision artifacts, package artifacts | `strategy_receipt.json` | deterministic terminal receipt proving the front-door workflow stopped at packaging |
+| `publish_strategy` | portfolio snapshot, adopted child candidate artifacts, decision artifacts, package artifacts | `strategy_receipt.json` | deterministic terminal receipt proving the front-door workflow stopped at packaging |
 
 ### Runtime-injected control contract
 

@@ -96,6 +96,21 @@ def test_task_to_workflow_strategy_package_compiles_with_explicit_control_contra
     ]
     assert package_step.expected_output_schema is not None
 
+    publish_step = compiled.steps["publish_strategy"]
+    assert publish_step.requires == (
+        "workflow_portfolio_snapshot",
+        "workflow_candidate_matrix",
+        "workflow_gap_analysis",
+        "candidate_route_posture",
+        "candidate_workflow_set",
+        "candidate_workflow_set_summary",
+        "candidate_next_action",
+        "strategy_decision",
+        "workflow_strategy_package",
+        "strategy_summary",
+        "strategy_next_action",
+    )
+
 
 def test_task_to_workflow_strategy_package_docs_capture_decision_records() -> None:
     text = (REPO_ROOT / "docs" / "workflows" / "task_to_workflow_strategy.md").read_text(encoding="utf-8")
