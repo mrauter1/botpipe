@@ -369,3 +369,77 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbcc8-9c91-7800-8f91-37b8c288141b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbcc8-9c91-7800-8f91-37b8c288141b
+
+
+---
+run_id=run-20260423T233047Z-caa6b120 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbcc8-9c91-7800-8f91-37b8c288141b
+---
+I’m implementing the `task_to_workflow_strategy` phase-scoped package and will start by inspecting the required framework files, current workflows, and the active phase artifacts so I can match the existing contracts before editing.
+
+The repo no longer has the retired `src/autoloop/...` layout from the request template, so I’m mapping the mandatory inspection onto the live `core/`, `runtime/`, `stdlib/`, and `workflows/` surfaces and reading the current workflow package patterns next.
+
+I’ve confirmed the current package conventions and test shape. Next I’m reading the builder and recent workflow package internals so the new workflow matches the repository’s artifact contracts, state updates, docs style, and runtime proof patterns.
+
+I have the package skeleton and test conventions. I’m reading the full publish/state-update patterns from the existing workflows now so the new strategy workflow uses the same deterministic bootstrap, summary validation, and receipt semantics instead of inventing its own style.
+
+I’m on the implementation design now. I’m checking the existing runtime test helpers one more time so the new strategy test copies package fixtures the same way and proves the terminal behavior without accidentally depending on the full repo tree.
+
+Plan for this phase:
+- Add the `task_to_workflow_strategy` package with deterministic bootstrap and portfolio-capture steps, then pair steps for framing, strategy selection, and strategy packaging, ending at a published strategy receipt rather than hidden downstream execution.
+- Define typed params and route contracts, plus prompt templates that force at least three workflow candidates, include the builder baseline, and make the selected strategy plus next action explicit.
+- Add workflow docs and runtime tests covering discovery, compilation, legal routes, and end-to-end publication of the strategy package, then update the phase notes and decision ledger with the non-obvious boundaries.
+
+I’ve finished the design boundary. I’m creating the new package files now: workflow contract, prompts, checklist asset, docs, and the runtime test. After that I’ll run the focused test slice and only then update the phase notes and decisions.
+
+The new package, docs, and tests are in place. I’m running a compile pass first to catch any structural mistakes quickly, then I’ll run the focused runtime test file and fix anything the proof surface exposes before touching the phase notes.
+
+The new runtime proof is green. I’m running one adjacent regression slice now around workflow discovery and runtime package compatibility, because this phase adds a new discoverable package and I want that boundary checked before I close the notes.
+
+I’m in closeout for this phase now. I’ve got the package and proof green, so I’m recording the non-obvious boundaries in the shared decisions ledger and writing the phase implementation notes with the exact scope, preserved invariants, and validation performed.
+
+I’m doing one final hygiene pass now: targeted diff/check output on the touched files so I can catch any whitespace or patch-shape issues before I mark the phase complete.
+
+Scope considered
+
+- Phase-local `task-to-workflow-strategy-package` only: the new front-door workflow package, its docs/tests, and the required phase artifacts.
+- I intentionally left `.autoloop_recursive/` memory updates and broader closeout work to the later closeout phase.
+
+What I analyzed
+
+- Current workflow package patterns in `workflows/`, especially the builder and recent domain workflows.
+- The shipped catalog seam in `core/workflow_catalog.py`, `stdlib/portfolio.py`, and the related authoring/runtime tests.
+- The active phase plan, feedback, shared decisions, and implementation-notes contract.
+
+What I changed
+
+- Added the new workflow package in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py), [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/contracts.py), [params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/params.py), [workflow.toml](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.toml), prompts, and the checklist asset under `workflows/task_to_workflow_strategy/`.
+- Added the workflow documentation in [task_to_workflow_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/task_to_workflow_strategy.md).
+- Added runtime proof in [test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py).
+- Updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/implement/phases/task-to-workflow-strategy-package/implementation_notes.md) and appended the non-obvious boundaries to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c4/decisions.txt).
+
+Key findings / decisions
+
+- The workflow stops at a published strategy package and next-action artifact; it does not auto-run the selected downstream workflow.
+- Portfolio capture is deterministic through `write_workflow_portfolio_snapshot(...)`, while route selection remains visible in pair-step prompts and artifacts.
+- `publish_strategy` enforces the cycle requirement at the terminal boundary by requiring at least three compared candidates and the builder baseline in `strategy_summary.json`.
+
+Open issues / next step
+
+- No blocker inside this phase scope.
+- The remaining cycle work is the later closeout phase: update `.autoloop_recursive/` memory and run the broader regression-proof slice.
+
+Validation performed
+
+- `.venv/bin/python -m compileall workflows/task_to_workflow_strategy tests/runtime/test_task_to_workflow_strategy.py`
+- `.venv/bin/pytest -q tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_compatibility_runtime.py`
+- Result: `27 passed`
+- `git diff --check` on the touched phase files passed cleanly.
