@@ -51,3 +51,46 @@ The YAML is valid. I’m doing one quick consistency pass over the written plan 
 Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/decisions.txt).
 
 The plan is now implementation-ready and split into four ordered phases: resolver/runtime foundation, catalog/helper migration, authoring-support plus scaffold/builder changes, and docs/templates plus regression sweep. I also captured the repo-specific risks the request didn’t spell out: `ctx.package_folder.parent.parent` breaks single-file workflows, `docs/` is the canonical surface even though the repo currently stores prose under `legacy_docs/`, `init workflow` should stay rooted under `<root>/workflows/`, and path-based workflows need explicit origin-collision protection. `phase_plan.yaml` was validated locally with `yaml.safe_load`.
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbff0-05c9-7992-acea-8abd773e2384
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dbff0-05c9-7992-acea-8abd773e2384
+
+
+---
+run_id=run-20260424T144110Z-aa024541 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbff0-05c9-7992-acea-8abd773e2384
+---
+I’ve isolated two material gaps in the plan: it doesn’t lock down the exact parameter-resolution precedence the request requires, and it under-specifies the deep-inspection/capability payload the request explicitly asks for. I’m recording those as blocking findings and updating the verifier artifacts accordingly.
+
+The verifier artifacts are updated. I’m doing a final consistency check on the recorded findings against the plan text and the request so the close-out accurately reflects why this turn is still incomplete.
+
+Scope considered
+
+Planning artifacts for the flow-first workflow-authoring task: [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/decisions.txt), plus the immutable request snapshot and raw log.
+
+What I analyzed
+
+Current plan coverage against the explicit request sections on parameter resolution, deep inspection/capability payloads, discovery rules, CLI behavior, docs, helper seams, and compatibility constraints. I also checked the repo-facing evidence the planner cited earlier, including the package-only loader/catalog/runtime assumptions and the `ctx.package_folder.parent.parent` repo-root heuristic.
+
+What I reviewed
+
+I verified that `phase_plan.yaml` is parseable and that its runtime-owned metadata is intact. I reviewed the phase boundaries, acceptance criteria, and rollback sections for coherence, and I checked that the shared decisions ledger does not conflict with the written plan.
+
+Key findings / decisions
+
+I recorded two blocking findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/feedback.md).
+`PLAN-001`: the plan does not lock down the exact parameter-resolution precedence required by the request, which leaves room for breaking existing module-level, package-exported, or legacy parameter discovery.
+`PLAN-002`: the plan under-specifies the required deep-inspection/capability payload; the request explicitly requires state/artifact/session/transition/schema coverage that the current plan and phase contract do not enumerate.
+
+Open issues / next step
+
+[criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t114109-bootstrap/plan/criteria.md) now reflects that the plan is not yet complete or compatibility-safe enough to approve. The next step is for the planner to revise `plan.md` and `phase_plan.yaml` to encode the exact parameter-resolution order and the full deep-inspection surface, then resubmit for verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
