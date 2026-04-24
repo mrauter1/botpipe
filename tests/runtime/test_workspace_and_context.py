@@ -9,6 +9,7 @@ import pytest
 
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
+from autoloop_v3.runtime.workspace import list_workflow_run_summaries
 from workflow.primitives import Outcome
 
 
@@ -271,6 +272,99 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     assert resumed_context["workflow_params"] == {"mode": "strict"}
     assert resumed_context["answer"] == "42"
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
+
+
+def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:
+    paused_dir = _write_run_summary_record(
+        tmp_path,
+        task_id="task-1",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-paused",
+        status="paused",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:03:00+00:00",
+        request_text="  Investigate the paused release gate.\nNeed owner confirmation.\n",
+        pending_question="Who owns the gate?",
+    )
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-2",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-failed",
+        status="failed",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:02:00+00:00",
+        request_text="Investigate the failed release gate.\n",
+        terminal="FAIL",
+        error="verification mismatch",
+    )
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-3",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-success",
+        status="success",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:01:00+00:00",
+        request_text="Routine release check.\n",
+    )
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-4",
+        workflow_name="incident_to_hardening_program",
+        run_id="run-incident-success",
+        status="success",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:04:00+00:00",
+        request_text="No incident action needed.\n",
+    )
+
+    summaries = list_workflow_run_summaries(
+        tmp_path,
+        workflow_names=["release_candidate_to_go_no_go", "incident_to_hardening_program"],
+        statuses=["failed", "paused", "failed"],
+        max_runs_per_workflow=1,
+    )
+
+    assert summaries == (
+        {
+            "latest_run_id": None,
+            "latest_updated_at": None,
+            "recent_runs": [],
+            "run_count": 0,
+            "status_counts": {},
+            "workflow_name": "incident_to_hardening_program",
+        },
+        {
+            "latest_run_id": "run-paused",
+            "latest_updated_at": "2026-04-24T06:03:00+00:00",
+            "recent_runs": [
+                {
+                    "created_at": "2026-04-24T06:00:00+00:00",
+                    "error": None,
+                    "pending_question": "Who owns the gate?",
+                    "request_excerpt": "Investigate the paused release gate. Need owner confirmation.",
+                    "request_file": str(paused_dir / "request.md"),
+                    "run_folder": str(paused_dir),
+                    "run_id": "run-paused",
+                    "status": "paused",
+                    "task_id": "task-1",
+                    "terminal": None,
+                    "updated_at": "2026-04-24T06:03:00+00:00",
+                }
+            ],
+            "run_count": 2,
+            "status_counts": {"failed": 1, "paused": 1},
+            "workflow_name": "release_candidate_to_go_no_go",
+        },
+    )
+
+    with pytest.raises(ValueError, match="workflow_names entries must be non-empty strings"):
+        list_workflow_run_summaries(tmp_path, workflow_names=["release_candidate_to_go_no_go", "  "])
+    with pytest.raises(ValueError, match="statuses entries must be non-empty strings"):
+        list_workflow_run_summaries(tmp_path, statuses=["failed", "  "])
+    with pytest.raises(ValueError, match="positive integer"):
+        list_workflow_run_summaries(tmp_path, max_runs_per_workflow=0)
 
 
 def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_records_child_metadata(tmp_path: Path) -> None:
@@ -537,6 +631,43 @@ def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_c
     assert child_records[0]["request_file"] == str(child_run_dir / "request.md")
     assert child_records[0]["parent_file"] == str(child_run_dir / "parent.json")
     assert child_records[0]["error"] == "child boom"
+
+
+def _write_run_summary_record(
+    root: Path,
+    *,
+    task_id: str,
+    workflow_name: str,
+    run_id: str,
+    status: str,
+    created_at: str,
+    updated_at: str,
+    request_text: str,
+    terminal: str | None = None,
+    error: str | None = None,
+    pending_question: str | None = None,
+) -> Path:
+    task_dir = root / ".autoloop" / "tasks" / task_id
+    workflow_dir = task_dir / f"wf_{workflow_name}"
+    run_dir = workflow_dir / "runs" / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "request.md").write_text(request_text, encoding="utf-8")
+    payload = {
+        "created_at": created_at,
+        "run_id": run_id,
+        "status": status,
+        "task_id": task_id,
+        "updated_at": updated_at,
+        "workflow_name": workflow_name,
+    }
+    if terminal is not None:
+        payload["terminal"] = terminal
+    if error is not None:
+        payload["error"] = error
+    if pending_question is not None:
+        payload["pending_question"] = pending_question
+    (run_dir / "run.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return run_dir
 
 
 def _write_system_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:

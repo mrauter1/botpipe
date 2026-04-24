@@ -99,3 +99,78 @@ phase_mode=single
 phase_ids=portfolio-health-snapshot-seam,workflow-portfolio-to-operating-system,cycle-ten-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbe79-304c-7780-a58a-6233232146ad
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+I’m treating the phase contract as the scope: add the read-only portfolio health snapshot seam, reuse existing run-summary logic where possible, and lock the boundary with docs and tests. I’ll inspect the required framework files, the active phase artifacts, and the current portfolio/workspace helpers before editing.
+
+The requested inspection paths don’t exist at those exact locations in this checkout, so I’m locating the actual module layout before reading the phase-targeted code. Then I’ll map the phase contract onto the real files and keep the blast radius narrow.
+
+I’ve confirmed the repository is on the migrated layout the plan references, and the phase artifacts are still basically empty. Next I’m reading the actual portfolio/workspace/test surfaces plus the workflow packages that already consume portfolio helpers, so the new seam reuses existing patterns instead of inventing a side path.
+
+I’ve got the core authoring and workspace contracts. Now I’m tracing the existing run-history snapshot path and the shared workflow-resolution helpers, because the new helper is supposed to sit on top of those rather than duplicating filtering or workspace traversal.
+
+The phase scope is narrower than the full cycle: the governance workflow package itself is not present here, so I’m implementing the shared health-snapshot seam that later workflow code can call. I’m reading the existing helper tests and workspace record behavior in more detail to pin the exact payload shape and deterministic filtering rules before I patch anything.
+
+I’ve narrowed the likely implementation surface: a new grouped portfolio run-summary function in `runtime/workspace.py`, a portfolio stdlib wrapper on top of it, and tests that freeze the payload and boundary. I’m reading the unit-test fixtures now so the new helper can reuse the existing repo-root test harness instead of creating a separate fake environment.
+
+Plan for this phase:
+1. Add a shared read-only grouped portfolio run-summary seam in `runtime/workspace.py` that builds on existing `RunRecord` discovery and stays deterministic.
+2. Extend `stdlib/portfolio.py` and `stdlib/__init__.py` with `write_workflow_portfolio_health_snapshot(...)`, including narrow filtering options and a workflow-local JSON payload only under `ctx.workflow_folder`.
+3. Update `docs/authoring.md`, add targeted unit/runtime coverage, then record the phase details in the decisions and implementation notes artifacts.
+
+I’ve settled the shape: the runtime layer will expose deterministic grouped run summaries derived from existing `RunRecord`s, and the stdlib helper will combine those summaries with catalog metadata to write a workflow-local `workflow_portfolio_health_snapshot.json`. I’m patching the runtime and stdlib files first, then I’ll freeze the boundary in docs and tests.
+
+The stdlib purity guard caught a constraint worth preserving: authoring helpers in `stdlib/` shouldn’t hard-code package-runtime import strings. I’m adjusting the portfolio helper to use the same relative-import fallback pattern as the other stdlib modules before I finish the tests.
+
+The code changes are in place. I’m running the targeted unit/runtime suite for the seam now, and if anything fails I’ll tighten the payload or boundary language instead of widening the scope.
+
+One doc assertion missed the exact non-goal wording the tests are meant to freeze. I’m tightening the authoring text to match the boundary precisely, then I’ll rerun the same targeted suite.
+
+The targeted seam tests are green. I’m doing one extra pass on the baseline docs suite because `docs/authoring.md` changed, and I want to catch any existing contract assertions outside the phase-local files before I wrap up.
+
+The runtime and stdlib behavior look correct in the targeted diff. I’m making one small cleanup pass on the helper signature so the public type contract matches the actual accepted inputs, then I’ll write the phase notes and shared decision lines.
+
+I’ve finished the code and validation. I’m updating the phase-local implementation notes and the shared decisions ledger with the non-obvious constraints from this seam so later phases don’t accidentally widen it into governance logic or full run-history duplication.
+
+Scope considered
+
+- Phase-local only: the read-only portfolio health snapshot seam, its stdlib entrypoint/export, authoring docs, targeted tests, and the required phase artifacts. I kept CLI, manifest fields, governance scoring, and downstream execution out of scope.
+
+What I analyzed
+
+- Existing read-only run discovery in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py:342).
+- Existing portfolio and diagnostics helper patterns in [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py:23) and `stdlib/diagnostics.py`.
+- The authoring boundary in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:205).
+- Phase artifacts and shared decisions in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/implement/phases/portfolio-health-snapshot-seam/implementation_notes.md:1) and `decisions.txt`.
+
+What I changed
+
+- Added grouped read-only workflow run summaries in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py:401). It filters deterministically, groups by workflow, keeps zero-run requested workflows explicit, and emits lightweight recent-run excerpts.
+- Added `write_workflow_portfolio_health_snapshot(...)` in [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py:45) and exported it from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:14).
+- Documented the helper boundary and non-goals in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:227).
+- Added coverage in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:406) and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:277).
+
+Key findings / decisions
+
+- The new seam stays intentionally lighter than the run-history diagnostic seam: counts plus normalized request excerpts, not full event logs or analysis policy.
+- The helper writes only under `ctx.workflow_folder` and does not mutate `.autoloop` run state or workflow packages.
+- Selected/current workflows with zero matching runs are included explicitly so governance workflows can see absence, not just activity.
+
+Open issues / next step
+
+- No open issues in this phase scope.
+- Next step is for `workflow_portfolio_to_operating_system` to consume `write_workflow_portfolio_health_snapshot(...)` instead of scraping `.autoloop` directly.
+
+Validation performed: `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py` and `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` passed.

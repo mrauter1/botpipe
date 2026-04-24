@@ -207,9 +207,13 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 `stdlib/portfolio.py` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.
 
 ```python
-from autoloop_v3.stdlib import write_workflow_portfolio_snapshot
+from autoloop_v3.stdlib import (
+    write_workflow_portfolio_health_snapshot,
+    write_workflow_portfolio_snapshot,
+)
 
 write_workflow_portfolio_snapshot(ctx)
+write_workflow_portfolio_health_snapshot(ctx, statuses=["paused", "failed"], max_runs_per_workflow=5)
 ```
 
 Portfolio snapshot boundary:
@@ -218,6 +222,18 @@ Portfolio snapshot boundary:
 - it uses the shared workflow catalog seam to capture workflow metadata plus linked code/doc paths from `workflows/*/workflow.toml`, `workflow.py`, optional `params.py`, and `docs/workflows/<package>.md` when present
 - it does not add new `workflow.toml` fields and preserves the metadata-only manifest doctrine
 - it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
+- it does not import runtime-owned routing behavior into workflow packages; portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics
+
+Portfolio health snapshot boundary:
+
+- `write_workflow_portfolio_health_snapshot` writes `workflow_portfolio_health_snapshot.json` under `ctx.workflow_folder` by default
+- it reuses the shared workflow resolution and read-only run discovery seams to publish grouped per-workflow run counts, status counts, and recent-run excerpts
+- it supports deterministic status filtering and `max_runs_per_workflow` bounds
+- it does not mutate `.autoloop` run state or workflow packages
+- it keeps the health surface lightweight: identifying workflow metadata, normalized recent-run excerpts, and summary counts rather than full event logs or runtime-owned lifecycle scoring
+- it does not add CLI flags, new `workflow.toml` fields, runtime-owned governance scoring, automatic recommendations, or hidden downstream execution
+- workflow code and prompt templates still own governance framing, lifecycle interpretation, recommendation policy, publication gating, and any downstream follow-through
+- it does not auto-rank workflows, auto-select actions, auto-cluster failure modes, or impose runtime-owned portfolio policy
 
 ## Optional Selected-Workflow Adaptation Helpers
 
