@@ -526,3 +526,50 @@ Key findings / decisions
 
 Open issues / next step
 - No open issues in this phase-local test scope.
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+
+
+---
+run_id=run-20260424T034119Z-55e02f9a | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbdb0-9789-7362-b6b6-2f78e64f4a8b
+---
+I’m auditing the new test coverage and the phase-local test artifacts now. I’ll verify the changed runtime tests against the acceptance criteria, check for missed regression scenarios or flaky assumptions, then update only the auditor-owned phase files.
+
+I found two material coverage gaps. One is direct drift against the publish-time category-coverage decision; the other is that the new prompt-contract test still treats verifier prompts as acceptable even without explicit write-handling and evidence expectations, which is below AC-4. I’m recording those in the audit artifacts now.
+
+I’ve finished the coverage audit and recorded two blocking gaps in the phase feedback. I’m doing one quick confirmation run of the targeted test slice so the audit closeout is grounded in the current tree, then I’ll emit the final status.
+
+Scope considered
+- Phase-local audit of the `workflow_to_eval_suite` test coverage and the test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/`.
+- I did not edit repository code; only the auditor-owned `criteria.md` and `feedback.md`.
+
+What I analyzed
+- The active request/phase contract, the shared decisions ledger, and the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/test_strategy.md:1).
+- The changed runtime coverage in [tests/runtime/test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:1), especially the new prompt-contract assertions and existing publish-time validation tests.
+- The workflow-owned publish policy recorded in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/decisions.txt:1).
+
+What I reviewed
+- AC-1 through AC-3 coverage depth and whether the tests would actually catch regressions in discovery, typed contracts, publish-time validation, and the no-auto-run boundary.
+- AC-4 coverage depth, specifically whether the new prompt tests enforce the full prompt-template contract required by the request.
+- Test reliability and determinism. I also reran `.venv/bin/pytest -q tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py tests/unit/test_stdlib_and_extensions.py`, which passed with `76 passed in 1.04s`.
+
+Key findings / decisions
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/criteria.md:1) to reflect blocking coverage gaps.
+- I appended two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c7/test/phases/workflow-to-eval-suite-package/feedback.md:1):
+  - `TST-001`: the new prompt-contract test still accepts verifier prompts without explicit write-handling or evidence-expectation markers, which falls short of AC-4.
+  - `TST-002`: there is still no negative test for the workflow-owned publish rule that all three case kinds must be present at publication time.
+
+Open issues / next step
+- Address `TST-001` by extending the prompt-contract coverage so verifier prompts must state write policy and evidence expectations explicitly.
+- Address `TST-002` by adding a publish-step rejection test for incomplete benchmark/edge/adversarial coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
