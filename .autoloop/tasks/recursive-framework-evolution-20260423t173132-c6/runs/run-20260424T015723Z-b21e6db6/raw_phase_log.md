@@ -864,3 +864,93 @@ No open review issues in this phase scope. The phase is ready to close.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+---
+I’m auditing the test surface for this closeout phase now. I’ll check whether the current task-to-workflow-strategy regressions fully cover AC-1 through AC-3, then I’ll add only the missing test guardrails and update the phase test artifacts.
+
+I found one gap worth closing: the current regressions freeze the published `strategy_summary.json` shape, but they don’t freeze the `StrategyPackagePayload` contract itself. I’m adding a narrow contract-level test for that so AC-2 is covered at both the runtime artifact and schema surfaces, then I’ll update the phase test artifacts and rerun the frozen command.
+
+I found a way to close the remaining AC-2 gap without perturbing the frozen proof count: I’m tightening the existing compile-time contract test to freeze the exact `StrategyPackagePayload` field set and its binding to `package_strategy`, then I’ll update the phase test strategy/feedback and rerun the same command.
+
+The added guard is narrow and shouldn’t move the proof count, but I’m rerunning the full frozen closeout command anyway so the phase artifacts record current-state evidence, not expectation.
+
+The compile surface serializes the payload model to a schema dict, so the direct class-identity assertion was too strict. I’m fixing that to freeze the bound schema by title and property set instead, which still closes the AC-2 gap without depending on compiler internals.
+
+The schema assertion is corrected. I’m rerunning the same frozen suite now; if it’s clean, I’ll just leave the proof count at `72 passed` and close out the phase artifacts on that evidence.
+
+Scope considered
+
+Phase-local test coverage for the front-door `adapt` handoff, the unchanged `strategy_summary.json` / `StrategyPackagePayload` contract, and the cycle-6 recursive-memory closeout proof.
+
+What I analyzed
+
+I reviewed the current `task_to_workflow_strategy` runtime tests, the baseline-doc closeout assertions, the shared decisions ledger, and the touched workflow/docs so I could map AC-1 through AC-3 to concrete regression coverage. The only material gap I found was that AC-2 was frozen at the published `strategy_summary.json` artifact level, but not yet at the compile-time `StrategyPackagePayload` contract surface.
+
+What I changed
+
+I tightened `tests/runtime/test_task_to_workflow_strategy.py` so the existing compile-time contract test now freezes the exact `StrategyPackagePayload` field set and the bound `package_strategy` schema properties, without changing the frozen proof count. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/portfolio-handoff-docs-and-closeout/test_strategy.md) with an explicit AC-1/AC-2/AC-3 coverage map, appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/portfolio-handoff-docs-and-closeout/feedback.md), and recorded the non-obvious AC-2 coverage decision under the current test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+The current runtime regressions already covered the concrete `adapt` handoff and publish-time failure paths well. The useful incremental addition was a contract-level guard so new optional payload fields cannot slip into `StrategyPackagePayload` without failing the closeout suite, even if providers keep publishing the same summary artifact shape.
+
+Open issues / next step
+
+No blocking test-phase issues in this scope. Validation passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` -> `72 passed in 1.43s`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+
+
+---
+run_id=run-20260424T015723Z-b21e6db6 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dbd85-8660-77f2-acdc-e1a1d806147f
+---
+I’m auditing the phase-local test coverage now. I’ll verify the new AC-2 contract freeze, the adapt-handoff regressions, the phase test strategy/feedback, and rerun the frozen closeout suite before I update the audit artifacts.
+
+The test surface looks coherent: the new AC-2 contract freeze is in place, the adapt-route happy/failure paths are covered deterministically, and the frozen suite reran green. I’m marking the audit criteria complete and appending a concise no-findings result with the validation evidence now.
+
+Scope considered
+
+Phase-local audit of the closeout test surface for the front-door `adapt` handoff, the unchanged `StrategyPackagePayload` / `strategy_summary.json` contract, the cycle-6 recursive-memory proof assertions, and the updated phase test artifacts.
+
+What I analyzed
+
+I reviewed the current `tests/runtime/test_task_to_workflow_strategy.py` contract/runtime/failure-path coverage, the cycle-6 baseline-doc assertions in `tests/test_architecture_baseline_docs.py`, the phase `test_strategy.md`, the shared decisions ledger, and the frozen closeout validation command.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/portfolio-handoff-docs-and-closeout/criteria.md) to all checked and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c6/test/phases/portfolio-handoff-docs-and-closeout/feedback.md). I reran `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_task_to_workflow_strategy.py tests/test_architecture_baseline_docs.py` and confirmed `72 passed in 1.34s`.
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings in phase scope. The tests now cover the concrete `adapt` handoff happy path, deterministic publish-step failure paths, the preserved `StrategyPackagePayload` field set, the preserved published `strategy_summary.json` field set, and the cycle-6 recursive closeout proof boundary without introducing flake-prone setup.
+
+Open issues / next step
+
+No open audit issues in this phase scope. The test phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
