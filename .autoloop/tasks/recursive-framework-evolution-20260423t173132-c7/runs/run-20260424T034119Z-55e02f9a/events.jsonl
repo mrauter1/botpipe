@@ -20,3 +20,7 @@
 {"ts": "2026-04-24T04:11:29.044380+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "evaluation-helper-seam"}
 {"ts": "2026-04-24T04:12:39.619299+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "evaluation-helper-seam"}
 {"ts": "2026-04-24T04:12:39.643781+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "evaluation-helper-seam"}
+{"ts": "2026-04-24T04:12:39.696179+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "evaluation-helper-seam", "phase_mode": "single"}
+{"ts": "2026-04-24T04:12:39.699684+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 24, "event_type": "phase_started", "phase_id": "workflow-to-eval-suite-package", "phase_mode": "single"}
+{"ts": "2026-04-24T04:12:39.700788+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "workflow-to-eval-suite-package"}
+{"ts": "2026-04-24T04:12:39.700884+00:00", "run_id": "run-20260424T034119Z-55e02f9a", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "workflow-to-eval-suite-package"}
