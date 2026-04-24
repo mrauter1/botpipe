@@ -131,12 +131,13 @@
 ### Phase 3: proof, docs, and recursive memory sync
 
 - Update `docs/authoring.md` only if the new seam needs explicit authoring guidance.
+- Update `.autoloop_recursive/framework_evolution_charter.md` with either a no-doctrine-change note or an explicit doctrine change if the implementation proves one is required.
 - Update:
   - `.autoloop_recursive/framework_roadmap.md`
   - `.autoloop_recursive/framework_gap_ledger.md`
   - `.autoloop_recursive/workflow_candidate_ledger.md`
   - `.autoloop_recursive/validation_debt_ledger.md`
-- Record the required cycle audit and boilerplate/clarity budget closeout.
+- Record the full required cycle audit and boilerplate/clarity budget closeout, including zero-value entries when a category is unchanged.
 - Run targeted proof and capture actual files added/deleted and net line delta.
 
 ## Interfaces and invariants
@@ -180,14 +181,31 @@
   - repo-root overlay helpers
   - authoritative-source drift checks
   - candidate diff derivation
+- Repeated prompt sections removed or shortened:
+  - expected `0` for workflow prompts unless implementation uncovers incidental prompt cleanup; record the final value explicitly either way
 - Workflows changed to use shared helpers:
   - `workflow_and_eval_to_refined_workflow_package`
   - `workflow_package_to_composable_building_blocks`
+- New helper functions introduced:
+  - record the final exported and workflow-local helper list explicitly during closeout, anchored to `stdlib/candidate_surfaces.py` and any remaining workflow-local boundary helpers
 - Old workflow-local validation blocks replaced:
   - repeated surface-copy/manifest/overlay mechanics only
 - Core-flow readability target:
   - before: long publish-time helper tails obscure each workflow’s domain logic
   - after: publish handlers read as domain-specific checks plus a small shared surface-helper call path
+
+### Required closeout accounting
+
+- The implementation closeout must explicitly report:
+  - files added
+  - files deleted
+  - net line count change, if practical
+  - repeated validation idioms removed
+  - repeated prompt sections removed or shortened, including `0` when unchanged
+  - workflows changed to use shared helpers
+  - new helper functions introduced
+  - old workflow-local validation blocks replaced
+  - core flow readability before/after
 
 ## Deferred debt after this cycle
 

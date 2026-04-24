@@ -83,9 +83,12 @@ phases:
   status: planned
   in_scope:
   - Update docs/authoring.md if the new shared seam needs authoring guidance.
+  - Update framework_evolution_charter.md with a no-doctrine-change note or an explicit
+    doctrine change if required.
   - Update the framework roadmap, gap ledger, workflow candidate ledger, and validation
     debt ledger.
-  - Run targeted unit/runtime/docs proof and record actual boilerplate-reduction metrics.
+  - Run targeted unit/runtime/docs proof and record the full required cycle accounting,
+    including zero-value categories when unchanged.
   out_of_scope:
   - Broad documentation rewrites unrelated to the shared candidate-surface seam.
   - Untargeted full-suite test expansion beyond the affected surfaces.
@@ -93,18 +96,22 @@ phases:
   - refinement-decomposition-migration
   acceptance_criteria:
   - id: AC-1
-    text: Authoring docs and recursive memory explicitly record the consolidation
-      outcome, boundary, and any deferred debt.
+    text: Authoring docs and recursive memory, including framework_evolution_charter.md,
+      explicitly record the consolidation outcome, boundary, doctrine status, and
+      any deferred debt.
   - id: AC-2
     text: Targeted proof passes for the shared seam, both migrated workflows, and
       baseline architecture docs.
   - id: AC-3
-    text: The cycle records files added, files deleted, net line change, repeated
-      idioms removed, and workflows simplified.
+    text: 'The cycle records every required closeout metric: files added, files deleted,
+      net line change, repeated validation idioms removed, repeated prompt sections
+      removed or shortened, workflows changed to use shared helpers, new helper functions
+      introduced, old workflow-local validation blocks replaced, and core-flow readability
+      before/after.'
   deliverables:
-  - updated docs and recursive memory files
+  - updated docs and recursive memory files, including framework_evolution_charter.md
   - targeted proof results
-  - recorded cycle closeout metrics
+  - recorded full cycle closeout metrics
   risks:
   - Documentation may overstate the seam and imply runtime ownership that does not
     exist.
