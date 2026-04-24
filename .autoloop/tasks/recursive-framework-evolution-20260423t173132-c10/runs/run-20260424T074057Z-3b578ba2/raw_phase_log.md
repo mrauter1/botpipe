@@ -233,3 +233,101 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dbe79-304c-7780-a58a-6233232146ad
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+I’m fixing the reviewer’s blocking finding in the portfolio health helper, specifically the double-consumption of `statuses` for one-shot iterables. I’ll trace that path, patch the helper and its proof, then rerun the targeted suite plus a direct regression check for generator input.
+
+I’ve isolated the fix: materialize and normalize `statuses` once inside `write_workflow_portfolio_health_snapshot(...)`, then reuse that value for both the runtime summary call and the serialized payload. I’m patching the helper and tightening the unit test so it covers a one-shot generator directly.
+
+The code path is patched and the existing unit test now uses a generator for `statuses`, so it exercises the exact failure the reviewer found. I’m rerunning the targeted suite and the direct reproduction check to make sure the helper now accepts one-shot iterables without drifting its payload.
+
+The fix is verified. I’m updating the phase-local implementation notes with the reviewer finding resolution and the extra generator regression check, then I’ll close with the phase summary.
+
+Scope considered
+
+- Phase-local only: I addressed reviewer finding `IMP-001` in the portfolio health snapshot seam without widening scope beyond [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py:45), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:534), and the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/implement/phases/portfolio-health-snapshot-seam/implementation_notes.md:46).
+
+What I analyzed
+
+- The reviewer’s blocking path in `write_workflow_portfolio_health_snapshot(...)`: `statuses` was consumed once by `list_workflow_run_summaries(...)` and again when serializing the payload.
+- The existing unit proof for the helper so I could turn the exact failure mode into a regression test instead of adding a separate ad hoc path.
+
+What I changed
+
+- In [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py:55), I normalize `statuses` once into `normalized_statuses` and reuse that value for both the runtime summary call and the serialized snapshot payload.
+- In [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:534), I changed the portfolio health helper test to pass a generator for `statuses`, which now exercises the reviewer’s exact failure scenario.
+- I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/implement/phases/portfolio-health-snapshot-seam/implementation_notes.md:48) to record the one-shot-iterable fix and validation.
+
+Key findings / decisions
+
+- `IMP-001` is resolved by materializing `statuses` once inside the stdlib helper rather than re-reading an arbitrary iterable.
+- I kept the fix local to the stdlib seam and test proof; no new runtime/public abstraction was added.
+
+Open issues / next step
+
+- No remaining producer-side issues in this phase scope.
+- Validation passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py` plus a direct generator-input reproduction check for `write_workflow_portfolio_health_snapshot(...)`.
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dbe79-304c-7780-a58a-6233232146ad
+
+
+---
+run_id=run-20260424T074057Z-3b578ba2 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dbe79-304c-7780-a58a-6233232146ad
+---
+I’m re-reviewing the narrow follow-up fix for `IMP-001`: the stdlib helper’s `statuses` handling, the updated proof test, and the phase-local artifacts only. I’ll verify that one-shot iterables are now accepted without introducing any new boundary drift, then I’ll finalize criteria and feedback for this phase.
+
+The fix is exactly where the prior failure was, and the proof test now exercises a generator directly. I’m rerunning the targeted suite and the explicit generator path so the final review is based on fresh evidence, not only source inspection.
+
+The prior blocker is resolved and the regression path now has direct coverage. I’m marking the criteria complete and appending a concise re-review note to the feedback artifact so the phase history shows both the original issue and its resolution.
+
+Scope considered
+
+- Phase-local re-review only: the `IMP-001` follow-up fix in `stdlib/portfolio.py`, the updated unit proof in `tests/unit/test_stdlib_and_extensions.py`, and the active phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/implement/phases/portfolio-health-snapshot-seam/`.
+- I did not broaden scope beyond the accepted health-snapshot seam.
+
+What I analyzed
+
+- The `write_workflow_portfolio_health_snapshot(...)` path that previously re-consumed `statuses`.
+- The updated proof that now passes a generator for `statuses`.
+- The governing phase constraints and shared decisions to confirm the fix stayed additive and read-only.
+
+What I reviewed
+
+- Source inspection of the fix at [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py:45).
+- The updated unit coverage at [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:534).
+- Validation evidence:
+  - `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workspace_and_context.py tests/test_architecture_baseline_docs.py`
+  - direct generator-input reproduction for `write_workflow_portfolio_health_snapshot(...)`
+
+Key findings / decisions
+
+- No remaining blocking findings.
+- `IMP-001` is resolved: `statuses` is now normalized once and reused for both summary generation and payload serialization, so one-shot iterables no longer fail.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/implement/phases/portfolio-health-snapshot-seam/criteria.md) to fully checked and appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260423t173132-c10/implement/phases/portfolio-health-snapshot-seam/feedback.md).
+
+Open issues / next step
+
+- No open phase-local issues. The portfolio health snapshot seam is ready for the next workflow phase to consume.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
