@@ -35,12 +35,24 @@ class ValidationReport:
         return not self.issues
 
 
-def require_non_empty_string(value: Any, *, field_name: str = "value") -> str:
+def require_non_empty_string(
+    value: Any,
+    *,
+    field_name: str = "value",
+    error_message: str | None = None,
+    coerce: bool = False,
+) -> str:
     """Return one stripped non-empty string or raise ``ValueError``."""
 
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field_name} must be a non-empty string")
-    return value.strip()
+    if isinstance(value, str):
+        normalized = value.strip()
+    elif coerce and value is not None:
+        normalized = str(value).strip()
+    else:
+        raise ValueError(error_message or f"{field_name} must be a non-empty string")
+    if not normalized:
+        raise ValueError(error_message or f"{field_name} must be a non-empty string")
+    return normalized
 
 
 def normalize_optional_string(
@@ -104,16 +116,41 @@ def require_string_list(
     field_name: str = "value",
     unique: bool = False,
     min_length: int = 1,
+    error_message: str | None = None,
+    allow_scalar: bool = False,
+    coerce: bool = False,
+    dedupe: bool = False,
+    sort_output: bool = False,
 ) -> list[str]:
     """Return one normalized string list or raise ``ValueError``."""
 
-    if not isinstance(value, list):
-        raise ValueError(f"{field_name} must be a list of non-empty strings")
-    normalized = [require_non_empty_string(item, field_name=field_name) for item in value]
+    if isinstance(value, list):
+        candidates = value
+    elif allow_scalar:
+        candidates = [value]
+    else:
+        raise ValueError(error_message or f"{field_name} must be a list of non-empty strings")
+    normalized = [
+        require_non_empty_string(
+            item,
+            field_name=field_name,
+            error_message=error_message,
+            coerce=coerce,
+        )
+        for item in candidates
+    ]
+    if dedupe:
+        deduped: list[str] = []
+        for item in normalized:
+            if item not in deduped:
+                deduped.append(item)
+        normalized = deduped
+    elif unique:
+        normalized = require_unique_values(normalized, field_name=field_name)
+    if sort_output:
+        normalized = sorted(normalized)
     if len(normalized) < min_length:
-        raise ValueError(f"{field_name} must contain at least {min_length} item(s)")
-    if unique:
-        return require_unique_values(normalized, field_name=field_name)
+        raise ValueError(error_message or f"{field_name} must contain at least {min_length} item(s)")
     return normalized
 
 

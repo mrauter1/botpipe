@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib import write_workflow_capability_snapshot
+    from autoloop_v3.stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_non_empty_string,
+        require_string_list,
+        write_workflow_capability_snapshot,
+    )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -15,7 +20,14 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import write_workflow_capability_snapshot
+    from stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_non_empty_string,
+        require_string_list,
+        write_workflow_capability_snapshot,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -200,17 +212,21 @@ class TaskToCandidateWorkflowSet(Workflow):
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
         payload = dict(ctx.workflow_params)
-        task_title = _require_text(
+        task_title = require_non_empty_string(
             payload.get("task_title"),
-            "task_to_candidate_workflow_set requires workflow parameter 'task_title'",
+            error_message="task_to_candidate_workflow_set requires workflow parameter 'task_title'",
+            coerce=True,
         )
         next_state = state.model_copy(
             update={
                 "task_title": task_title,
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "constraints": _normalize_unique_strings(payload.get("constraints")),
-                "evidence_expectations": _normalize_unique_strings(payload.get("evidence_expectations")),
+                "sponsor_role": normalize_optional_string(payload.get("sponsor_role")),
+                "desired_outcome": normalize_optional_string(payload.get("desired_outcome")),
+                "constraints": normalize_unique_strings(payload.get("constraints"), allow_scalar=True),
+                "evidence_expectations": normalize_unique_strings(
+                    payload.get("evidence_expectations"),
+                    allow_scalar=True,
+                ),
                 "framing_status": None,
                 "analysis_status": None,
                 "packaging_status": None,
@@ -237,7 +253,7 @@ class TaskToCandidateWorkflowSet(Workflow):
         snapshot_path = write_workflow_capability_snapshot(ctx)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"workflow capability snapshot was not written at {snapshot_path}")
-        summary = _read_json(snapshot_path)
+        summary = read_json_object(snapshot_path)
         workflow_count = summary.get("workflow_count")
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_capability_snapshot.json must define a positive workflow_count")
@@ -267,7 +283,10 @@ class TaskToCandidateWorkflowSet(Workflow):
         del artifacts
         payload = outcome.payload
         portfolio_posture = payload.get("portfolio_posture")
-        recommended = _normalize_unique_strings(payload.get("recommended_candidate_workflows"))
+        recommended = normalize_unique_strings(
+            payload.get("recommended_candidate_workflows"),
+            allow_scalar=True,
+        )
         return state.model_copy(
             update={
                 "packaging_status": outcome.tag,
@@ -294,28 +313,37 @@ class TaskToCandidateWorkflowSet(Workflow):
             if not artifact_path.exists():
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
-        capability_snapshot = _read_json(required_paths["workflow_capability_snapshot"])
+        capability_snapshot = read_json_object(required_paths["workflow_capability_snapshot"])
         workflow_count = capability_snapshot.get("workflow_count")
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_capability_snapshot.json must define a positive workflow_count")
 
-        summary = _read_json(required_paths["candidate_workflow_set_summary"])
-        comparison_candidates = _require_string_list(
+        summary = read_json_object(required_paths["candidate_workflow_set_summary"])
+        comparison_candidates = require_string_list(
             summary.get("comparison_candidates"),
-            "candidate_workflow_set_summary.json must define non-empty comparison_candidates",
+            error_message="candidate_workflow_set_summary.json must define non-empty comparison_candidates",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
         required_candidate_count = 3 if workflow_count >= 3 else 1
         if len(comparison_candidates) < required_candidate_count:
             raise ValueError(
                 "candidate_workflow_set_summary.json must compare at least three candidate workflows when the portfolio size permits"
             )
-        ranked_candidates = _require_string_list(
+        ranked_candidates = require_string_list(
             summary.get("ranked_candidates"),
-            "candidate_workflow_set_summary.json must define non-empty ranked_candidates",
+            error_message="candidate_workflow_set_summary.json must define non-empty ranked_candidates",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
-        recommended_candidate_workflows = _require_string_list(
+        recommended_candidate_workflows = require_string_list(
             summary.get("recommended_candidate_workflows"),
-            "candidate_workflow_set_summary.json must define non-empty recommended_candidate_workflows",
+            error_message="candidate_workflow_set_summary.json must define non-empty recommended_candidate_workflows",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
         for candidate_name in ranked_candidates:
             if candidate_name not in comparison_candidates:
@@ -328,9 +356,10 @@ class TaskToCandidateWorkflowSet(Workflow):
                     "candidate_workflow_set_summary.json recommended_candidate_workflows must be drawn from ranked_candidates"
                 )
 
-        builder_baseline_workflow = _require_text(
+        builder_baseline_workflow = require_non_empty_string(
             summary.get("builder_baseline_workflow"),
-            "candidate_workflow_set_summary.json must define a non-empty builder_baseline_workflow",
+            error_message="candidate_workflow_set_summary.json must define a non-empty builder_baseline_workflow",
+            coerce=True,
         )
         if builder_baseline_workflow != _BUILDER_BASELINE:
             raise ValueError(
@@ -359,17 +388,21 @@ class TaskToCandidateWorkflowSet(Workflow):
                 "candidate_workflow_set_summary.json must recommend workflow_idea_to_workflow_package when portfolio_posture is material_gap"
             )
 
-        authoritative_artifacts = _require_string_list(
+        authoritative_artifacts = require_string_list(
             summary.get("authoritative_artifacts"),
-            "candidate_workflow_set_summary.json must define non-empty authoritative_artifacts",
+            error_message="candidate_workflow_set_summary.json must define non-empty authoritative_artifacts",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
         if not _AUTHORITATIVE_PACKAGE_ARTIFACTS.issubset(authoritative_artifacts):
             raise ValueError(
                 "candidate_workflow_set_summary.json authoritative_artifacts must include candidate_workflow_set, candidate_workflow_set_summary, and candidate_next_action"
             )
-        next_action = _require_text(
+        next_action = require_non_empty_string(
             summary.get("next_action"),
-            "candidate_workflow_set_summary.json must define a non-empty next_action",
+            error_message="candidate_workflow_set_summary.json must define a non-empty next_action",
+            coerce=True,
         )
         ready_for_strategy_selection = summary.get("ready_for_strategy_selection")
         if ready_for_strategy_selection is not True:
@@ -419,47 +452,8 @@ class TaskToCandidateWorkflowSet(Workflow):
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
-
-def _require_text(value, error_message: str) -> str:
-    if value is None:
-        raise ValueError(error_message)
-    normalized = str(value).strip()
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
-
-
-def _normalize_optional_text(value) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
-def _normalize_unique_strings(raw_value) -> list[str]:
-    if raw_value is None:
-        return []
-    if isinstance(raw_value, list):
-        candidates = raw_value
-    else:
-        candidates = [raw_value]
-    normalized: list[str] = []
-    for value in candidates:
-        candidate = str(value).strip()
-        if candidate and candidate not in normalized:
-            normalized.append(candidate)
-    return normalized
-
-
-def _require_string_list(value, error_message: str) -> list[str]:
-    normalized = _normalize_unique_strings(value)
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
-
-
 def _require_portfolio_posture(value, error_message: str) -> str:
-    posture = _require_text(value, error_message)
+    posture = require_non_empty_string(value, error_message=error_message, coerce=True)
     if posture not in _PORTFOLIO_POSTURES:
         raise ValueError(error_message)
     return posture
@@ -477,7 +471,3 @@ def _workflow_names_from_snapshot(snapshot) -> set[str]:
         if isinstance(workflow_name, str) and workflow_name.strip():
             names.add(workflow_name.strip())
     return names
-
-
-def _read_json(path):
-    return json.loads(path.read_text(encoding="utf-8"))

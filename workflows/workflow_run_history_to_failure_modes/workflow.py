@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -10,6 +9,15 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_mapping,
+        require_mapping_list,
+        require_non_empty_string,
+        require_positive_int,
+        require_string_list,
+        require_unique_values,
         write_selected_workflow_capability_snapshot,
         write_selected_workflow_run_history_snapshot,
     )
@@ -20,7 +28,19 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import write_selected_workflow_capability_snapshot, write_selected_workflow_run_history_snapshot
+    from stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_mapping,
+        require_mapping_list,
+        require_non_empty_string,
+        require_positive_int,
+        require_string_list,
+        require_unique_values,
+        write_selected_workflow_capability_snapshot,
+        write_selected_workflow_run_history_snapshot,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -841,30 +861,17 @@ class WorkflowRunHistoryToFailureModes(Workflow):
 
 
 def _require_text(value: Any, error_message: str) -> str:
-    if value is None:
-        raise ValueError(error_message)
-    normalized = str(value).strip()
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
+    return require_non_empty_string(value, error_message=error_message, coerce=True)
 
 
 def _normalize_optional_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
+    return normalize_optional_string(value)
 
 
 def _normalize_unique_strings(values: Any) -> list[str]:
-    normalized: list[str] = []
     if not isinstance(values, list):
-        return normalized
-    for value in values:
-        candidate = str(value).strip()
-        if candidate and candidate not in normalized:
-            normalized.append(candidate)
-    return normalized
+        return []
+    return normalize_unique_strings(values)
 
 
 def _normalize_status_filters(values: Any) -> list[str]:
@@ -872,33 +879,24 @@ def _normalize_status_filters(values: Any) -> list[str]:
 
 
 def _require_positive_int(value: Any, error_message: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise ValueError(error_message)
-    return value
+    return require_positive_int(value, error_message=error_message)
 
 
 def _require_string_list(value: Any, error_message: str, *, min_length: int = 1) -> list[str]:
-    if not isinstance(value, list):
-        raise ValueError(error_message)
-    normalized = [_require_text(item, error_message) for item in value]
-    if len(normalized) < min_length:
-        raise ValueError(error_message)
-    return normalized
+    return require_string_list(
+        value,
+        error_message=error_message,
+        min_length=min_length,
+        coerce=True,
+    )
 
 
 def _require_mapping(value: Any, error_message: str) -> dict[str, Any]:
-    if not isinstance(value, Mapping):
-        raise ValueError(error_message)
-    return {str(key): item for key, item in value.items()}
+    return require_mapping(value, error_message=error_message)
 
 
 def _require_mapping_list(value: Any, error_message: str, *, min_length: int = 1) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        raise ValueError(error_message)
-    mappings = [_require_mapping(item, error_message) for item in value]
-    if len(mappings) < min_length:
-        raise ValueError(error_message)
-    return mappings
+    return require_mapping_list(value, error_message=error_message, min_length=min_length)
 
 
 def _extract_history_run_ids(value: Any, *, allow_empty: bool) -> list[str]:
@@ -925,10 +923,7 @@ def _extract_history_run_ids(value: Any, *, allow_empty: bool) -> list[str]:
 
 
 def _read_json(path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"{path.name} must contain a JSON object")
-    return payload
+    return read_json_object(path)
 
 
 def _read_required_text(path, error_message: str) -> str:
@@ -939,8 +934,10 @@ def _read_required_text(path, error_message: str) -> str:
 
 
 def _ensure_unique_strings(values: list[str], error_message: str) -> None:
-    if len(set(values)) != len(values):
-        raise ValueError(error_message)
+    try:
+        require_unique_values(values)
+    except ValueError as exc:
+        raise ValueError(error_message) from exc
 
 
 __all__ = ["WorkflowRunHistoryToFailureModes"]

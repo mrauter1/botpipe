@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -11,6 +10,14 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_mapping,
+        require_mapping_list,
+        require_non_empty_string,
+        require_positive_int,
+        require_string_list,
         write_company_operation_snapshot,
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
@@ -22,7 +29,19 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import write_company_operation_snapshot, write_workflow_capability_snapshot, write_workflow_portfolio_health_snapshot
+    from stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_mapping,
+        require_mapping_list,
+        require_non_empty_string,
+        require_positive_int,
+        require_string_list,
+        write_company_operation_snapshot,
+        write_workflow_capability_snapshot,
+        write_workflow_portfolio_health_snapshot,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -756,41 +775,25 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
 
 
 def _require_text(value: Any, error_message: str) -> str:
-    if value is None:
-        raise ValueError(error_message)
-    normalized = str(value).strip()
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
+    return require_non_empty_string(value, error_message=error_message, coerce=True)
 
 
 def _normalize_optional_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
+    return normalize_optional_string(value)
 
 
 def _normalize_unique_strings(raw_value: Any) -> list[str]:
-    if raw_value is None:
-        return []
-    if isinstance(raw_value, list):
-        candidates = raw_value
-    else:
-        candidates = [raw_value]
-    normalized: list[str] = []
-    for value in candidates:
-        candidate = str(value).strip()
-        if candidate and candidate not in normalized:
-            normalized.append(candidate)
-    return normalized
+    return normalize_unique_strings(raw_value, allow_scalar=True)
 
 
 def _require_string_list(value: Any, error_message: str) -> list[str]:
-    normalized = _normalize_unique_strings(value)
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
+    return require_string_list(
+        value,
+        error_message=error_message,
+        allow_scalar=True,
+        dedupe=True,
+        coerce=True,
+    )
 
 
 def _require_priority_category_list(value: Any, error_message: str) -> list[str]:
@@ -802,13 +805,11 @@ def _require_priority_category_list(value: Any, error_message: str) -> list[str]
 
 
 def _require_positive_int(value: Any, error_message: str) -> int:
-    if not isinstance(value, int) or value <= 0:
-        raise ValueError(error_message)
-    return value
+    return require_positive_int(value, error_message=error_message)
 
 
 def _read_json(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_json_object(path)
 
 
 def _read_required_text(path, error_message: str) -> str:
@@ -819,22 +820,11 @@ def _read_required_text(path, error_message: str) -> str:
 
 
 def _require_mapping(value: Any, error_message: str) -> dict[str, Any]:
-    if not isinstance(value, Mapping):
-        raise ValueError(error_message)
-    return dict(value)
+    return require_mapping(value, error_message=error_message)
 
 
 def _require_mapping_list(value: Any, error_message: str, *, min_length: int = 1) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        raise ValueError(error_message)
-    normalized: list[dict[str, Any]] = []
-    for item in value:
-        if not isinstance(item, Mapping):
-            raise ValueError(error_message)
-        normalized.append(dict(item))
-    if len(normalized) < min_length:
-        raise ValueError(error_message)
-    return normalized
+    return require_mapping_list(value, error_message=error_message, min_length=min_length)
 
 
 def _require_priority_category_count_mapping(value: Any, error_message: str) -> dict[str, int]:

@@ -239,6 +239,30 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 - they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
 - publication-artifact validation and any workflow-specific receipt semantics still belong in workflow code
 
+## Optional Validation Helpers
+
+`stdlib/validation.py` provides a small opt-in helper seam for generic workflow-local JSON, string, list, mapping, and positive-int validation.
+
+```python
+from autoloop_v3.stdlib import (
+    normalize_optional_string,
+    normalize_unique_strings,
+    read_json_object,
+    require_mapping,
+    require_mapping_list,
+    require_non_empty_string,
+    require_positive_int,
+    require_string_list,
+)
+```
+
+Validation helper boundary:
+
+- generic validation belongs in stdlib rather than copied workflow-local helper tails
+- use these helpers for shared JSON-object reads, non-empty string checks, string-list normalization, mapping checks, duplicate guards, and positive-int validation
+- keep workflow-specific publication assertions, domain allow-lists, and artifact-family invariants in workflow code
+- the helpers only validate explicit workflow-local inputs and artifacts; they do not add runtime-owned routing, publication policy, or hidden execution
+
 ## Optional Portfolio Snapshot Helpers
 
 `stdlib/portfolio.py` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -10,6 +9,12 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_mapping,
+        require_non_empty_string,
+        require_string_list,
         write_selected_workflow_capability_snapshot,
         write_validated_eval_case_manifest,
     )
@@ -20,7 +25,16 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import write_selected_workflow_capability_snapshot, write_validated_eval_case_manifest
+    from stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_mapping,
+        require_non_empty_string,
+        require_string_list,
+        write_selected_workflow_capability_snapshot,
+        write_validated_eval_case_manifest,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -221,13 +235,15 @@ class WorkflowToEvalSuite(Workflow):
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
         payload = dict(ctx.workflow_params)
-        selected_workflow_reference = _require_text(
+        selected_workflow_reference = require_non_empty_string(
             payload.get("selected_workflow"),
-            "workflow_to_eval_suite requires workflow parameter 'selected_workflow'",
+            error_message="workflow_to_eval_suite requires workflow parameter 'selected_workflow'",
+            coerce=True,
         )
-        task_title = _require_text(
+        task_title = require_non_empty_string(
             payload.get("task_title"),
-            "workflow_to_eval_suite requires workflow parameter 'task_title'",
+            error_message="workflow_to_eval_suite requires workflow parameter 'task_title'",
+            coerce=True,
         )
 
         next_state = state.model_copy(
@@ -235,10 +251,10 @@ class WorkflowToEvalSuite(Workflow):
                 "selected_workflow_reference": selected_workflow_reference,
                 "selected_workflow_name": None,
                 "task_title": task_title,
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "constraints": _normalize_unique_strings(payload.get("constraints")),
-                "evidence_expectations": _normalize_unique_strings(payload.get("evidence_expectations")),
+                "sponsor_role": normalize_optional_string(payload.get("sponsor_role")),
+                "desired_outcome": normalize_optional_string(payload.get("desired_outcome")),
+                "constraints": normalize_unique_strings(payload.get("constraints")),
+                "evidence_expectations": normalize_unique_strings(payload.get("evidence_expectations")),
                 "framing_status": None,
                 "design_status": None,
                 "packaging_status": None,
@@ -268,18 +284,20 @@ class WorkflowToEvalSuite(Workflow):
         if not snapshot_path.exists():
             raise FileNotFoundError(f"selected workflow capability snapshot was not written at {snapshot_path}")
 
-        snapshot = _read_json(snapshot_path)
-        selected_workflow_name = _require_text(
+        snapshot = read_json_object(snapshot_path)
+        selected_workflow_name = require_non_empty_string(
             snapshot.get("selected_workflow_name"),
-            "selected_workflow_capability.json must define a non-empty selected_workflow_name",
+            error_message="selected_workflow_capability.json must define a non-empty selected_workflow_name",
+            coerce=True,
         )
-        capability = _require_mapping(
+        capability = require_mapping(
             snapshot.get("selected_workflow_capability"),
-            "selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
+            error_message="selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
         )
-        capability_workflow_name = _require_text(
+        capability_workflow_name = require_non_empty_string(
             capability.get("workflow_name"),
-            "selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
+            error_message="selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
+            coerce=True,
         )
         if capability_workflow_name != selected_workflow_name:
             raise ValueError("selected_workflow_capability.json workflow_name must match selected_workflow_name")
@@ -307,17 +325,21 @@ class WorkflowToEvalSuite(Workflow):
         del artifacts
         payload = outcome.payload
         selected_workflow_name = payload.get("selected_workflow_name")
-        case_ids = _require_string_list(
+        case_ids = require_string_list(
             payload.get("case_ids"),
-            "design verifier payload must define case_ids as a non-empty string list",
+            error_message="design verifier payload must define case_ids as a non-empty string list",
+            dedupe=True,
+            coerce=True,
         )
         case_kinds = _require_case_kinds(
             payload.get("case_kinds"),
             "design verifier payload must define case_kinds as a non-empty string list",
         )
-        covered_expected_artifacts = _require_string_list(
+        covered_expected_artifacts = require_string_list(
             payload.get("covered_expected_artifacts"),
-            "design verifier payload must define covered_expected_artifacts as a non-empty string list",
+            error_message="design verifier payload must define covered_expected_artifacts as a non-empty string list",
+            dedupe=True,
+            coerce=True,
         )
         return state.model_copy(
             update={
@@ -336,17 +358,21 @@ class WorkflowToEvalSuite(Workflow):
         del artifacts
         payload = outcome.payload
         selected_workflow_name = payload.get("selected_workflow_name")
-        case_ids = _require_string_list(
+        case_ids = require_string_list(
             payload.get("case_ids"),
-            "package verifier payload must define case_ids as a non-empty string list",
+            error_message="package verifier payload must define case_ids as a non-empty string list",
+            dedupe=True,
+            coerce=True,
         )
         case_kinds = _require_case_kinds(
             payload.get("case_kinds"),
             "package verifier payload must define case_kinds as a non-empty string list",
         )
-        covered_expected_artifacts = _require_string_list(
+        covered_expected_artifacts = require_string_list(
             payload.get("covered_expected_artifacts"),
-            "package verifier payload must define covered_expected_artifacts as a non-empty string list",
+            error_message="package verifier payload must define covered_expected_artifacts as a non-empty string list",
+            dedupe=True,
+            coerce=True,
         )
         return state.model_copy(
             update={
@@ -378,40 +404,44 @@ class WorkflowToEvalSuite(Workflow):
             if not artifact_path.exists():
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
-        capability_snapshot = _read_json(required_paths["selected_workflow_capability"])
-        snapshot_selected_workflow_name = _require_text(
+        capability_snapshot = read_json_object(required_paths["selected_workflow_capability"])
+        snapshot_selected_workflow_name = require_non_empty_string(
             capability_snapshot.get("selected_workflow_name"),
-            "selected_workflow_capability.json must define a non-empty selected_workflow_name",
+            error_message="selected_workflow_capability.json must define a non-empty selected_workflow_name",
+            coerce=True,
         )
-        selected_capability = _require_mapping(
+        selected_capability = require_mapping(
             capability_snapshot.get("selected_workflow_capability"),
-            "selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
+            error_message="selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
         )
-        capability_workflow_name = _require_text(
+        capability_workflow_name = require_non_empty_string(
             selected_capability.get("workflow_name"),
-            "selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
+            error_message="selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
+            coerce=True,
         )
         if capability_workflow_name != snapshot_selected_workflow_name:
             raise ValueError("selected_workflow_capability.json workflow_name must match selected_workflow_name")
         if state.selected_workflow_name is not None and snapshot_selected_workflow_name != state.selected_workflow_name:
             raise ValueError("selected_workflow_capability.json selected_workflow_name must match workflow state")
 
-        capability_entry_step = _require_text(
+        capability_entry_step = require_non_empty_string(
             selected_capability.get("entry_step_name"),
-            "selected_workflow_capability.json must define selected_workflow_capability.entry_step_name",
+            error_message="selected_workflow_capability.json must define selected_workflow_capability.entry_step_name",
+            coerce=True,
         )
         capability_parameters_supported = bool(selected_capability.get("parameters_supported"))
 
-        proposed_manifest = _read_json(required_paths["eval_case_manifest"])
+        proposed_manifest = read_json_object(required_paths["eval_case_manifest"])
         validated_path = write_validated_eval_case_manifest(
             ctx,
             state.selected_workflow_reference or snapshot_selected_workflow_name,
             proposed_manifest,
         )
-        validated_manifest = _read_json(validated_path)
-        validated_workflow_name = _require_text(
+        validated_manifest = read_json_object(validated_path)
+        validated_workflow_name = require_non_empty_string(
             validated_manifest.get("selected_workflow_name"),
-            "validated_eval_case_manifest.json must define a non-empty selected_workflow_name",
+            error_message="validated_eval_case_manifest.json must define a non-empty selected_workflow_name",
+            coerce=True,
         )
         if validated_workflow_name != snapshot_selected_workflow_name:
             raise ValueError(
@@ -421,9 +451,11 @@ class WorkflowToEvalSuite(Workflow):
         validated_case_count = validated_manifest.get("case_count")
         if not isinstance(validated_case_count, int) or validated_case_count <= 0:
             raise ValueError("validated_eval_case_manifest.json must define positive integer case_count")
-        validated_case_ids = _require_string_list(
+        validated_case_ids = require_string_list(
             validated_manifest.get("case_ids"),
-            "validated_eval_case_manifest.json must define non-empty case_ids",
+            error_message="validated_eval_case_manifest.json must define non-empty case_ids",
+            dedupe=True,
+            coerce=True,
         )
         validated_case_kinds = _require_case_kinds(
             validated_manifest.get("case_kinds"),
@@ -437,18 +469,20 @@ class WorkflowToEvalSuite(Workflow):
             raise ValueError("validated_eval_case_manifest.json case_count must match case_ids length")
         covered_expected_artifacts = _collect_covered_expected_artifacts(validated_manifest.get("validated_cases"))
 
-        summary = _read_json(required_paths["workflow_eval_suite_summary"])
-        summary_selected_workflow_name = _require_text(
+        summary = read_json_object(required_paths["workflow_eval_suite_summary"])
+        summary_selected_workflow_name = require_non_empty_string(
             summary.get("selected_workflow_name"),
-            "workflow_eval_suite_summary.json must define a non-empty selected_workflow_name",
+            error_message="workflow_eval_suite_summary.json must define a non-empty selected_workflow_name",
+            coerce=True,
         )
         if summary_selected_workflow_name != snapshot_selected_workflow_name:
             raise ValueError(
                 "workflow_eval_suite_summary.json selected_workflow_name must match selected_workflow_capability.json"
             )
-        summary_entry_step = _require_text(
+        summary_entry_step = require_non_empty_string(
             summary.get("selected_workflow_entry_step"),
-            "workflow_eval_suite_summary.json must define a non-empty selected_workflow_entry_step",
+            error_message="workflow_eval_suite_summary.json must define a non-empty selected_workflow_entry_step",
+            coerce=True,
         )
         if summary_entry_step != capability_entry_step:
             raise ValueError(
@@ -471,9 +505,11 @@ class WorkflowToEvalSuite(Workflow):
         if summary_case_count != validated_case_count:
             raise ValueError("workflow_eval_suite_summary.json case_count must match validated_eval_case_manifest.json")
 
-        summary_case_ids = _require_string_list(
+        summary_case_ids = require_string_list(
             summary.get("case_ids"),
-            "workflow_eval_suite_summary.json must define non-empty case_ids",
+            error_message="workflow_eval_suite_summary.json must define non-empty case_ids",
+            dedupe=True,
+            coerce=True,
         )
         if summary_case_ids != validated_case_ids:
             raise ValueError("workflow_eval_suite_summary.json case_ids must match validated_eval_case_manifest.json")
@@ -489,9 +525,11 @@ class WorkflowToEvalSuite(Workflow):
         if state.case_kinds and summary_case_kinds != state.case_kinds:
             raise ValueError("workflow_eval_suite_summary.json case_kinds must match workflow state")
 
-        summary_covered_expected_artifacts = _require_string_list(
+        summary_covered_expected_artifacts = require_string_list(
             summary.get("covered_expected_artifacts"),
-            "workflow_eval_suite_summary.json must define non-empty covered_expected_artifacts",
+            error_message="workflow_eval_suite_summary.json must define non-empty covered_expected_artifacts",
+            dedupe=True,
+            coerce=True,
         )
         if summary_covered_expected_artifacts != covered_expected_artifacts:
             raise ValueError(
@@ -500,18 +538,21 @@ class WorkflowToEvalSuite(Workflow):
         if state.covered_expected_artifacts and summary_covered_expected_artifacts != state.covered_expected_artifacts:
             raise ValueError("workflow_eval_suite_summary.json covered_expected_artifacts must match workflow state")
 
-        authoritative_artifacts = _require_string_list(
+        authoritative_artifacts = require_string_list(
             summary.get("authoritative_artifacts"),
-            "workflow_eval_suite_summary.json must define non-empty authoritative_artifacts",
+            error_message="workflow_eval_suite_summary.json must define non-empty authoritative_artifacts",
+            dedupe=True,
+            coerce=True,
         )
         if not _AUTHORITATIVE_PACKAGE_ARTIFACTS.issubset(authoritative_artifacts):
             raise ValueError(
                 "workflow_eval_suite_summary.json authoritative_artifacts must include workflow_eval_suite, workflow_eval_suite_summary, workflow_eval_next_action, validated_eval_case_manifest, and eval_rubric"
             )
 
-        next_action = _require_text(
+        next_action = require_non_empty_string(
             summary.get("next_action"),
-            "workflow_eval_suite_summary.json must define a non-empty next_action",
+            error_message="workflow_eval_suite_summary.json must define a non-empty next_action",
+            coerce=True,
         )
         ready_for_publication = summary.get("ready_for_publication")
         if ready_for_publication is not True:
@@ -578,44 +619,8 @@ class WorkflowToEvalSuite(Workflow):
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
-def _require_text(value: Any, error_message: str) -> str:
-    if value is None:
-        raise ValueError(error_message)
-    normalized = str(value).strip()
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
-
-
-def _normalize_optional_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
-def _normalize_unique_strings(values: Any) -> list[str]:
-    normalized: list[str] = []
-    if not isinstance(values, list):
-        return normalized
-    for value in values:
-        candidate = str(value).strip()
-        if candidate and candidate not in normalized:
-            normalized.append(candidate)
-    return normalized
-
-
-def _require_string_list(value: Any, error_message: str, *, min_length: int = 1) -> list[str]:
-    if not isinstance(value, list):
-        raise ValueError(error_message)
-    normalized = _normalize_unique_strings(value)
-    if len(normalized) < min_length:
-        raise ValueError(error_message)
-    return normalized
-
-
 def _require_case_kinds(value: Any, error_message: str) -> list[str]:
-    kinds = _require_string_list(value, error_message)
+    kinds = require_string_list(value, error_message=error_message, dedupe=True, coerce=True)
     normalized: list[str] = []
     for kind in kinds:
         if kind not in _REQUIRED_CASE_KINDS:
@@ -625,31 +630,20 @@ def _require_case_kinds(value: Any, error_message: str) -> list[str]:
     return normalized
 
 
-def _require_mapping(value: Any, error_message: str) -> dict[str, Any]:
-    if not isinstance(value, Mapping):
-        raise ValueError(error_message)
-    return {str(key): item for key, item in value.items()}
-
-
-def _read_json(path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"{path.name} must contain a JSON object")
-    return payload
-
-
 def _collect_covered_expected_artifacts(value: Any) -> list[str]:
     if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
         raise ValueError("validated_eval_case_manifest.json must define validated_cases as a JSON array")
     covered: set[str] = set()
     for index, raw_case in enumerate(value):
-        case = _require_mapping(
+        case = require_mapping(
             raw_case,
-            f"validated_eval_case_manifest.json validated_cases[{index}] must be a JSON object",
+            error_message=f"validated_eval_case_manifest.json validated_cases[{index}] must be a JSON object",
         )
-        artifacts = _require_string_list(
+        artifacts = require_string_list(
             case.get("expected_artifacts"),
-            "validated_eval_case_manifest.json validated_cases must define non-empty expected_artifacts",
+            error_message="validated_eval_case_manifest.json validated_cases must define non-empty expected_artifacts",
+            dedupe=True,
+            coerce=True,
         )
         covered.update(artifacts)
     if not covered:

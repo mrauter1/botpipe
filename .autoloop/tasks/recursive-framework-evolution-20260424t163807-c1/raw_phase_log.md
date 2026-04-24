@@ -313,3 +313,71 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc110-98a3-73b0-af78-7032089be8b5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc110-98a3-73b0-af78-7032089be8b5
+
+
+---
+run_id=run-20260424T193807Z-9f2bcebf | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc110-98a3-73b0-af78-7032089be8b5
+---
+I’m treating this as a consolidation cycle in the scoped workflow family. First I’m auditing the repo, phase artifacts, and the existing shared validation seam so I can migrate the targeted workflows without widening scope or changing workflow/runtime boundaries.
+
+The repo-wide scan confirms the phase plan is aligned with the actual duplication: the selected-workflow and governance packages still carry their own validation tails even after the shared stdlib seam was added. I’m reading the helper seam, the authoring docs, and the targeted workflow/test files now to map each local helper to its shared replacement before editing.
+
+I’ve confirmed the helper seam and the doc contract. Next I’m checking each targeted workflow’s imports, its remaining local helper tail, and any workflow-specific error messages so I can do a mechanical migration without accidentally tightening behavior.
+
+The workflow files are consistent enough to migrate mechanically, but there are a few behavior variants I need to preserve: some helper tails accept scalar-to-string coercion, some intentionally sort normalized filters, and the decomposition/refinement workflows are stricter about path and string types. I’m checking the targeted runtime tests and the recursive-memory ledgers now so I only touch what the phase contract actually requires.
+
+The runtime tests mostly pin publication behavior and domain-specific error messages, which is good: it means the migration should stay a dependency-preserving refactor, not a semantic rewrite. I’m now checking the few stricter workflows and the docs/tests that need an explicit note that generic validation belongs in stdlib.
+
+I’ve got enough context to edit safely. The concrete plan is: migrate the nine target workflows to shared stdlib validation imports, keep the stricter path-boundary helpers local in refinement/decomposition, then update authoring/docs plus the recursive ledgers to record that generic validation now lives in stdlib and the older domain workflows are the remaining migration debt.
+
+I’m editing the shared validation seam first because the workflow migrations depend on it. The only helper-surface change is additive: preserving existing error wording and normalization behavior where the migrated workflows already depended on it, without moving any domain policy into stdlib.
+
+The first migration wave is in place. I’m continuing across the larger diagnostic/governance workflows now; those files have more local validation calls, but the pattern is the same: swap generic string/list/mapping/JSON checks to stdlib and leave only the workflow-specific publication rules behind.
+
+I’m switching from code to closeout surfaces for a moment: authoring docs need to freeze the boundary that came out of this cycle, otherwise the next author will just reintroduce local helper tails. After that I’ll update the recursive ledgers and then run compile-level verification across everything touched.
+
+I’ve finished the code and doc edits. I’m doing compile-level verification now across the touched stdlib, workflow, and test modules to catch import/signature drift before I write the phase notes and closeout summary.
+
+**Scope considered**
+- Scoped to the phase contract for workflow-validation migrations and closeout.
+- Audited `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, `.autoloop_recursive/`, the phase artifacts, plan, and decisions ledger.
+- Kept unrelated dirty files out of scope.
+
+**What I analyzed**
+- The shared seam in [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py).
+- The nine target workflow packages:
+  `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, `candidate_workflow_to_adapted_execution_plan`, `workflow_to_eval_suite`, `workflow_run_history_to_failure_modes`, `workflow_portfolio_to_operating_system`, `company_operation_to_recursive_improvement_cycle`, `workflow_and_eval_to_refined_workflow_package`, `workflow_package_to_composable_building_blocks`.
+- The targeted baseline docs/tests and the recursive-memory ledgers.
+
+**What I changed**
+- Migrated the scoped workflow family onto the shared validation seam by routing generic JSON/string/list/mapping/int checks through `stdlib/validation.py`.
+- Extended the shared seam additively so migrations could preserve existing error wording and normalization behavior:
+  `require_non_empty_string(...)` and `require_string_list(...)` now support migration-friendly options.
+- Removed or collapsed repeated workflow-local helper tails in the smaller workflows, and reduced the larger workflows to thin shared-validator wrappers where stricter local path/boundary logic still needs to stay local.
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) to freeze the validation boundary.
+- Updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) plus the shared-validator unit coverage.
+- Updated the recursive-memory files and the phase notes/decisions ledger.
+- Files added/deleted: `0 / 0`.
+- Practical tracked diff on edited code files: about `+87` net lines.
+- Repeated idioms reduced: copied `_require_text`, `_read_json`, string-list normalization, mapping/mapping-list checks, and positive-int checks across the migrated family.
+
+**Key findings / decisions**
+- This cycle stayed in `consolidate` mode; adding a new workflow would have been lower leverage than finishing the shared validation migration.
+- Generic validation now has one obvious home: `stdlib/validation.py`.
+- Domain-specific publication checks, hidden-execution checks, selected-workflow identity checks, and repo/path-boundary logic remain workflow-local.
+- The remaining migration debt is the older domain workflow wave:
+  `investigation_request_to_evidence_pack`, `security_finding_to_verified_remediation`, `release_candidate_to_go_no_go`, and `incident_to_hardening_program`.
+
+**Open issues / next step**
+- Compile-level verification passed for all touched Python modules with `python3 -m py_compile`.
+- I did not run the targeted pytest suites because the current environment is missing the dependencies needed to execute them.
+- The next follow-on cycle should migrate the four older domain workflows to the same shared validation baseline if the current seam stays stable.

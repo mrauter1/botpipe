@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
         adopt_child_artifacts,
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
         require_child_workflow_result,
+        require_non_empty_string,
+        require_string_list,
         run_child_workflow,
         write_workflow_portfolio_snapshot,
     )
@@ -20,7 +23,17 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow, write_workflow_portfolio_snapshot
+    from stdlib import (
+        adopt_child_artifacts,
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_child_workflow_result,
+        require_non_empty_string,
+        require_string_list,
+        run_child_workflow,
+        write_workflow_portfolio_snapshot,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -233,17 +246,21 @@ class TaskToWorkflowStrategy(Workflow):
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
         payload = dict(ctx.workflow_params)
-        task_title = _require_text(
+        task_title = require_non_empty_string(
             payload.get("task_title"),
-            "task_to_workflow_strategy requires workflow parameter 'task_title'",
+            error_message="task_to_workflow_strategy requires workflow parameter 'task_title'",
+            coerce=True,
         )
         next_state = state.model_copy(
             update={
                 "task_title": task_title,
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "constraints": _normalize_unique_strings(payload.get("constraints")),
-                "evidence_expectations": _normalize_unique_strings(payload.get("evidence_expectations")),
+                "sponsor_role": normalize_optional_string(payload.get("sponsor_role")),
+                "desired_outcome": normalize_optional_string(payload.get("desired_outcome")),
+                "constraints": normalize_unique_strings(payload.get("constraints"), allow_scalar=True),
+                "evidence_expectations": normalize_unique_strings(
+                    payload.get("evidence_expectations"),
+                    allow_scalar=True,
+                ),
                 "framing_status": None,
                 "selection_status": None,
                 "packaging_status": None,
@@ -270,7 +287,7 @@ class TaskToWorkflowStrategy(Workflow):
         snapshot_path = write_workflow_portfolio_snapshot(ctx)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"workflow portfolio snapshot was not written at {snapshot_path}")
-        summary = _read_json(snapshot_path)
+        summary = read_json_object(snapshot_path)
         workflow_count = summary.get("workflow_count")
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_portfolio_snapshot.json must define a positive workflow_count")
@@ -332,7 +349,10 @@ class TaskToWorkflowStrategy(Workflow):
         del artifacts
         payload = outcome.payload
         selected_strategy = payload.get("selected_strategy")
-        recommended_workflows = _normalize_unique_strings(payload.get("recommended_workflows"))
+        recommended_workflows = normalize_unique_strings(
+            payload.get("recommended_workflows"),
+            allow_scalar=True,
+        )
         return state.model_copy(
             update={
                 "selection_status": outcome.tag,
@@ -348,7 +368,10 @@ class TaskToWorkflowStrategy(Workflow):
         del artifacts
         payload = outcome.payload
         selected_strategy = payload.get("selected_strategy")
-        recommended_workflows = _normalize_unique_strings(payload.get("recommended_workflows"))
+        recommended_workflows = normalize_unique_strings(
+            payload.get("recommended_workflows"),
+            allow_scalar=True,
+        )
         return state.model_copy(
             update={
                 "packaging_status": outcome.tag,
@@ -379,25 +402,32 @@ class TaskToWorkflowStrategy(Workflow):
             if not artifact_path.exists():
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
-        summary = _read_json(required_paths["strategy_summary"])
+        summary = read_json_object(required_paths["strategy_summary"])
         selected_strategy = _require_strategy(
             summary.get("selected_strategy"),
             "strategy_summary.json must define a legal selected_strategy",
         )
-        recommended_workflows = _require_string_list(
+        recommended_workflows = require_string_list(
             summary.get("recommended_workflows"),
-            "strategy_summary.json must define non-empty recommended_workflows",
+            error_message="strategy_summary.json must define non-empty recommended_workflows",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
-        comparison_candidates = _require_string_list(
+        comparison_candidates = require_string_list(
             summary.get("comparison_candidates"),
-            "strategy_summary.json must define comparison_candidates with at least three workflow names",
+            error_message="strategy_summary.json must define comparison_candidates with at least three workflow names",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
         if len(comparison_candidates) < 3:
             raise ValueError("strategy_summary.json must compare at least three candidate workflows")
 
-        builder_baseline_workflow = _require_text(
+        builder_baseline_workflow = require_non_empty_string(
             summary.get("builder_baseline_workflow"),
-            "strategy_summary.json must define a non-empty builder_baseline_workflow",
+            error_message="strategy_summary.json must define a non-empty builder_baseline_workflow",
+            coerce=True,
         )
         if builder_baseline_workflow != _BUILDER_BASELINE:
             raise ValueError(
@@ -426,14 +456,18 @@ class TaskToWorkflowStrategy(Workflow):
         if selected_strategy == "adapt" and len(recommended_workflows) != 1:
             raise ValueError("strategy_summary.json must recommend exactly one workflow for adapt")
 
-        authoritative_artifacts = _require_string_list(
+        authoritative_artifacts = require_string_list(
             summary.get("authoritative_artifacts"),
-            "strategy_summary.json must define non-empty authoritative_artifacts",
+            error_message="strategy_summary.json must define non-empty authoritative_artifacts",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
-        rejected_routes = _normalize_unique_strings(summary.get("rejected_routes"))
-        next_action = _require_text(
+        rejected_routes = normalize_unique_strings(summary.get("rejected_routes"), allow_scalar=True)
+        next_action = require_non_empty_string(
             summary.get("next_action"),
-            "strategy_summary.json must define a non-empty next_action",
+            error_message="strategy_summary.json must define a non-empty next_action",
+            coerce=True,
         )
         ready_for_handoff = summary.get("ready_for_handoff")
         if ready_for_handoff is not True:
@@ -459,18 +493,24 @@ class TaskToWorkflowStrategy(Workflow):
                 selected_workflow,
             )
 
-        candidate_summary = _read_json(required_paths["candidate_workflow_set_summary"])
-        candidate_comparison_candidates = _require_string_list(
+        candidate_summary = read_json_object(required_paths["candidate_workflow_set_summary"])
+        candidate_comparison_candidates = require_string_list(
             candidate_summary.get("comparison_candidates"),
-            "candidate_workflow_set_summary.json must define comparison_candidates",
+            error_message="candidate_workflow_set_summary.json must define comparison_candidates",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
         if comparison_candidates != candidate_comparison_candidates:
             raise ValueError(
                 "strategy_summary.json comparison_candidates must match candidate_workflow_set_summary.json"
             )
-        candidate_recommended_workflows = _require_string_list(
+        candidate_recommended_workflows = require_string_list(
             candidate_summary.get("recommended_candidate_workflows"),
-            "candidate_workflow_set_summary.json must define recommended_candidate_workflows",
+            error_message="candidate_workflow_set_summary.json must define recommended_candidate_workflows",
+            allow_scalar=True,
+            dedupe=True,
+            coerce=True,
         )
         if not set(recommended_workflows).issubset(candidate_recommended_workflows):
             raise ValueError(
@@ -528,57 +568,18 @@ class TaskToWorkflowStrategy(Workflow):
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
-
-def _require_text(value, error_message: str) -> str:
-    if value is None:
-        raise ValueError(error_message)
-    normalized = str(value).strip()
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
-
-
-def _normalize_optional_text(value) -> str | None:
-    if value is None:
-        return None
-    normalized = str(value).strip()
-    return normalized or None
-
-
-def _normalize_unique_strings(raw_value) -> list[str]:
-    if raw_value is None:
-        return []
-    if isinstance(raw_value, list):
-        candidates = raw_value
-    else:
-        candidates = [raw_value]
-    normalized: list[str] = []
-    for value in candidates:
-        candidate = str(value).strip()
-        if candidate and candidate not in normalized:
-            normalized.append(candidate)
-    return normalized
-
-
 def _require_strategy(value, error_message: str) -> str:
-    strategy = _require_text(value, error_message)
+    strategy = require_non_empty_string(value, error_message=error_message, coerce=True)
     if strategy not in _STRATEGY_ROUTES:
         raise ValueError(error_message)
     return strategy
 
 
 def _require_portfolio_posture(value, error_message: str) -> str:
-    posture = _require_text(value, error_message)
+    posture = require_non_empty_string(value, error_message=error_message, coerce=True)
     if posture not in _PORTFOLIO_POSTURES:
         raise ValueError(error_message)
     return posture
-
-
-def _require_string_list(value, error_message: str) -> list[str]:
-    normalized = _normalize_unique_strings(value)
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
 
 
 def _strategy_for_portfolio_posture(portfolio_posture: str) -> str:
@@ -597,10 +598,6 @@ def _read_request_text(ctx) -> str:
 
 def _read_text(path) -> str:
     return path.read_text(encoding="utf-8")
-
-
-def _read_json(path):
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _require_concrete_adapt_handoff(surface_name: str, text: str, selected_workflow: str) -> None:

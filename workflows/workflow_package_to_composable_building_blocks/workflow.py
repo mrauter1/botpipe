@@ -19,7 +19,16 @@ from pydantic import BaseModel, Field
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.core.compiler import compile_workflow
     from autoloop_v3.runtime.loader import resolve_workflow_reference
-    from autoloop_v3.stdlib import write_selected_workflow_decomposition_surface
+    from autoloop_v3.stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_mapping,
+        require_non_empty_string,
+        require_positive_int,
+        require_string_list,
+        write_selected_workflow_decomposition_surface,
+    )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -30,7 +39,16 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from core.compiler import compile_workflow
     from runtime.loader import resolve_workflow_reference
-    from stdlib import write_selected_workflow_decomposition_surface
+    from stdlib import (
+        normalize_optional_string,
+        normalize_unique_strings,
+        read_json_object,
+        require_mapping,
+        require_non_empty_string,
+        require_positive_int,
+        require_string_list,
+        write_selected_workflow_decomposition_surface,
+    )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
@@ -1564,10 +1582,7 @@ def _path_under_repo_or_none(repo_root: Path, path: Path) -> str | None:
 
 
 def _read_json(path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"expected JSON object at {path}")
-    return payload
+    return read_json_object(path)
 
 
 def _require_non_empty_text_file(path: Path, error_message: str) -> str:
@@ -1608,55 +1623,37 @@ def _require_repo_relative_path(value: Any, *, prefix: str, error_message: str) 
 
 
 def _require_text(value: Any, error_message: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(error_message)
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError(error_message)
-    return normalized
+    return require_non_empty_string(value, error_message=error_message)
 
 
 def _normalize_optional_text(value: Any) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise ValueError("expected string or null")
-    normalized = value.strip()
-    return normalized or None
+    return normalize_optional_string(value, error_message="expected string or null", coerce=False)
 
 
 def _normalize_unique_strings(values: Any) -> list[str]:
-    if values is None:
-        return []
-    if not isinstance(values, list):
-        raise ValueError("expected a list of strings")
-    normalized: list[str] = []
-    for value in values:
-        candidate = _require_text(value, "list entries must be non-empty strings")
-        if candidate not in normalized:
-            normalized.append(candidate)
-    return normalized
+    return normalize_unique_strings(
+        values,
+        error_message="expected a list of strings",
+        item_error_message="list entries must be non-empty strings",
+        coerce=False,
+    )
 
 
 def _require_string_list(value: Any, error_message: str, *, min_length: int = 1) -> list[str]:
-    if not isinstance(value, list):
-        raise ValueError(error_message)
-    result = [_require_text(entry, error_message) for entry in value]
-    if len(result) < min_length:
-        raise ValueError(error_message)
-    return sorted(result)
+    return require_string_list(
+        value,
+        error_message=error_message,
+        min_length=min_length,
+        sort_output=True,
+    )
 
 
 def _require_positive_int(value: Any, error_message: str) -> int:
-    if not isinstance(value, int) or value < 1:
-        raise ValueError(error_message)
-    return value
+    return require_positive_int(value, error_message=error_message)
 
 
 def _require_mapping(value: Any, error_message: str) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise ValueError(error_message)
-    return dict(value)
+    return require_mapping(value, error_message=error_message)
 
 
 __all__ = ["WorkflowPackageToComposableBuildingBlocks"]
