@@ -717,3 +717,50 @@ I’m writing the phase notes with the exact invariants I preserved and the deli
 **Open issues / next step**
 - Full-suite `pytest -q` was not run in this turn; only the phase-relevant subsets above.
 - Later phases still need to land the broader session continuity/default-session work, typed routes/effects, and worklist snapshots if checkpoint diagnostics are expected to include selection state.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc310-7a68-7050-aab6-2752130a18d7
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+I’m auditing the phase artifacts and re-reading the engine changes with a regression lens. The goal here is to decide whether this is actually safe to ship for the phase contract, not just whether the added tests pass.
+
+I’m broadening one step beyond the engine into compiler/validation because the implementation changed `SystemStep` contract rules. That’s the main adjacent regression surface for this phase.
+
+I found one suspicious ordering change in the engine: artifact enforcement now happens before final route resolution. I’m reproducing that with a small runtime snippet, because if it’s real it’s a blocking mismatch with both the phase plan and existing routing semantics.
+
+I have a blocking finding. The new enforcement order can hide routing errors behind artifact-validation failures, which means the phase doesn’t yet match the intended execution contract. I’m recording that in the verifier artifacts now.
+
+Scope considered
+- Phase-local review for `artifact-runtime-enforcement` only.
+- Reviewed the runtime/compiler/checkpoint changes in `core/engine.py`, `core/compiler.py`, `core/validation.py`, `core/stores/protocols.py`, `runtime/stores/filesystem.py`, plus the added tests and phase notes.
+- Updated only the verifier-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-runtime-enforcement/`.
+
+What I analyzed
+- The requested execution order from the phase plan and decisions ledger: resolve the selected route, then enforce artifact contracts before route commit.
+- The new engine ordering around middleware/system-handler route tags, required artifact selection, and checkpoint failure context.
+- The adjacent compile/validation change that now allows `SystemStep.route_contracts`.
+
+What I reviewed
+- Re-read the changed engine paths and the new tests.
+- Reproduced one concrete failure case locally with a minimal runtime snippet: a workflow `on_outcome()` returning `Event("bogus")` on a step with a missing `required=True` produced artifact now raises artifact validation first instead of a routing error.
+
+Key findings / decisions
+- 1 blocking finding recorded in `feedback.md` as `IMP-001`.
+- `criteria.md` remains incomplete because the new enforcement order can mask invalid-route failures and checkpoint the wrong failure cause.
+- The verifier artifacts were updated accordingly.
+
+Open issues / next step
+- Fix `core/engine.py` so route resolution happens before `_enforce_artifact_contracts(...)` for all step kinds, then rerun the focused engine/runtime tests and clear the blocking finding if the reproduction no longer fails with the wrong exception.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
