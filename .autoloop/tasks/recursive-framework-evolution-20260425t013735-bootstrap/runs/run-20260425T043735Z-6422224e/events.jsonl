@@ -123,3 +123,6 @@
 {"ts": "2026-04-25T07:27:09.538144+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 123, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "child-io"}
 {"ts": "2026-04-25T07:28:03.040040+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 124, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "child-io"}
 {"ts": "2026-04-25T07:28:03.085840+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 125, "event_type": "pair_completed", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "child-io"}
+{"ts": "2026-04-25T07:28:03.173932+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 126, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "child-io", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-04-25T07:28:03.175741+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 127, "event_type": "pair_started", "pair": "test", "phase_id": "child-io"}
+{"ts": "2026-04-25T07:28:03.175972+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 128, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "child-io"}
