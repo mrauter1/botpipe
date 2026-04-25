@@ -622,3 +622,119 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+---
+I’m treating this as a docs-and-closeout phase for the typed JSON publication consolidation. I’ll inspect the current docs, recursive memory files, prior phase artifacts, and the migrated workflow/test surfaces first, then I’ll update only the cycle-closeout materials and run the targeted proof the phase asks for.
+
+I have the cycle plan and phase scope. Next I’m pulling the prior phase notes, current doctrine/docs, recursive-memory ledgers, and the migrated workflow/test files so the closeout stays consistent with what actually shipped.
+
+The repo audit is clear now: this phase is strictly closeout, not another code-shape change. I’m checking the exact migrated contracts, prior phase notes, and the architecture-doc test so the docs and memory updates describe the typed seam precisely and the proof command covers the right surfaces.
+
+I’ve narrowed the missing closeout work. The typed seam is already documented generically, but the phase still needs three things tied off explicitly: the non-goal boundary for raw pre-validation inputs, architecture-doc proof that freezes that section, and cycle-10 closeout notes across the recursive memory files.
+
+I’ve got the exact closeout delta. I’m editing the authoring doc, freezing that boundary in the architecture-doc tests, then syncing the five recursive-memory files and the phase notes so the cycle ends with one consistent story: typed specs for durable summaries and validated outputs, raw pre-validation inputs still local, no doctrine or compatibility change.
+
+The closeout edits are in. I’m running the targeted proof now against the typed-artifact unit seam, the four migrated runtime families, and the architecture-doc baseline so I can replace the placeholder result with the actual closeout evidence.
+
+The suite is still running; no failures yet. Once it settles I’ll stamp the exact pass count into the roadmap and phase notes, then I’ll do one quick sanity pass on the touched files and close out the accounting.
+
+The proof passed cleanly: `199 passed`. I’m replacing the placeholder evidence with that exact result and doing a final readback on the changed docs and notes to make sure the closeout language is internally consistent.
+
+I reran the architecture-doc baseline after stamping the proof count, so the final state is validated too. I’m recording that last sanity pass in the phase notes, then I’ll mark the plan complete and summarize the closeout.
+
+Scope considered
+
+- Phase-local closeout for the typed JSON-artifact consolidation: docs, recursive memory, proof, and accounting only.
+- I audited the mandated repo surfaces, the two earlier cycle-10 phase notes, the migrated workflow family, and the architecture/authoring docs before editing.
+
+What I analyzed
+
+- The typed seam in `stdlib/json_artifacts.py` and `stdlib/validation.py`.
+- The migrated family and contracts: `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, `candidate_workflow_to_adapted_execution_plan`, and `workflow_to_eval_suite`.
+- The current closeout surfaces: [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), the five `.autoloop_recursive/` memory files, [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/implement/phases/docs-memory-and-proof-closeout/implementation_notes.md), and `decisions.txt`.
+
+What I changed
+
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) to make the typed-artifact boundary explicit: use typed specs for durable summaries and validated outputs, keep raw proposal/draft JSON workflow-local until validation writes the authoritative artifact, and do not turn the seam into a publication registry.
+- Added architecture-doc proof in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) for both the typed-artifact boundary and the cycle-10 recursive-memory closeout entries.
+- Synced all five standing recursive-memory files with a cycle-10 closeout note, added the no-doctrine-change note in the charter, updated closeout accounting in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/implement/phases/docs-memory-and-proof-closeout/implementation_notes.md), and appended the phase decision to `decisions.txt`.
+
+Key findings / decisions
+
+- Cycle mode stayed `consolidate`; no new workflow was added.
+- No doctrine changed. CLI, runtime/provider boundaries, `workflow.toml`, artifact names, and `ctx.invoke_workflow(...)` compatibility were preserved.
+- Closeout accounting records `0` files added, `0` deleted, `4` workflows migrated to shared helpers, `0` new helper functions, and `5` raw summary or validated-manifest entry reads replaced in earlier cycle-10 phases. Repo-wide net line delta is still not practical in this checkout because `.autoloop_recursive/` is untracked here.
+- Targeted proof passed: `199 passed` for the scoped unit/runtime/docs suite, plus a final `33 passed` rerun for `tests/test_architecture_baseline_docs.py`.
+
+Open issues / next step
+
+- No phase-local blocker remains.
+- Deferred pressure is broader authoring-surface and portfolio-shape work, not another typed-summary helper or publication-framework seam.
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+---
+I’m reviewing the phase-local closeout only: criteria, feedback, implementation notes, the touched docs/tests, and the recursive-memory updates. I’ll verify the implementation against the phase contract and record any findings only in the active phase artifacts.
+
+I have the phase notes and decisions. Next I’m reading the exact changed sections in the docs, tests, and recursive-memory files to check for inconsistencies, unsupported claims, or proof/accounting drift before I mark criteria.
+
+I’ve read the changed sections and the new assertions. I’m doing one independent rerun of the scoped proof command now so the review doesn’t rely only on the implementation notes.
+
+The independent rerun matched the implementation notes: `199 passed`. I don’t see a correctness, compatibility, or maintainability issue in scope, so I’m marking the criteria complete and recording an explicit no-findings review in the phase feedback.
+
+Scope considered
+
+- Phase-local review for `docs-memory-and-proof-closeout` only.
+- Reviewed the active phase artifacts, `decisions.txt`, the touched docs/test surfaces, and the recursive-memory updates needed by AC-1 through AC-3.
+
+What I analyzed
+
+- The phase contract, acceptance criteria, and prior cycle-10 decisions.
+- The updated typed-artifact boundary in `docs/authoring.md`.
+- The new architecture-doc assertions in `tests/test_architecture_baseline_docs.py`.
+- The cycle-10 closeout notes in the five `.autoloop_recursive/` files.
+- The phase-local implementation notes and reported proof command.
+
+What I reviewed
+
+- Intent fidelity: the closeout stays in `consolidate` mode, adds no workflow, and documents the typed JSON-artifact seam and its non-goals consistently.
+- Safety and compatibility: the notes and memory entries preserve CLI, runtime, provider, `workflow.toml`, artifact-name, and `ctx.invoke_workflow(...)` compatibility.
+- Validation: I independently reran the scoped proof command and confirmed `199 passed`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Criteria were updated to complete.
+- Feedback was updated with an explicit no-findings outcome and the independent proof result.
+
+Open issues / next step
+
+- No phase-local issue remains.
+- This phase is review-complete and can advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
