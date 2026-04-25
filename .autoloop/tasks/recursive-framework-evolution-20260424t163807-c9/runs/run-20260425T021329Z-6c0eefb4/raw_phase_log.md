@@ -676,3 +676,148 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+I’m treating this as the cycle closeout phase: I’ll inspect the repo surfaces and phase artifacts first, then I’ll update the docs and recursive-memory files around the shared publication-validation consolidation, and finish with targeted proof plus closeout accounting.
+
+I’ve confirmed this tree is already dirty in unrelated areas, so I’m isolating scope to the cycle files, the migrated publication-validation helper, the three workflows using it, and the proof/docs surfaces required by the phase contract.
+
+I’ve got the cycle plan and current decision ledger. Next I’m reading the migrated helper surface, the three publish handlers, the baseline docs, and the standing memory files so the closeout updates stay consistent with the implementation that already landed.
+
+The helper seam is already in place and the three publish handlers are using it. I’m moving to the cycle memory and closeout artifacts now so the docs and ledgers reflect the actual helper boundary, the no-new-workflow decision, and the remaining deferred debt.
+
+The recursive-memory files already capture the two implementation phases, but they do not yet have the final cycle-9 closeout note that this phase is supposed to add. I’m checking the cycle-9 sections in the roadmap, gap ledger, and candidate ledger now so I can add one consistent closeout entry instead of scattering mismatched notes.
+
+Plan for the closeout phase:
+1. Tighten `docs/authoring.md` so the publication-validation seam and its non-goals are explicit for the governance/diagnostic family.
+2. Add one consistent cycle-9 closeout note across the charter, roadmap, gap ledger, workflow-candidate ledger, and validation-debt ledger.
+3. Record phase-local implementation notes and any non-obvious decision for future turns.
+4. Re-run the targeted proof suite and capture the results in the closeout artifacts.
+
+I’ve narrowed the edits to a small closeout set: one clarifying change in `docs/authoring.md`, one final no-doctrine-change note in the charter, and matching cycle-9 closeout entries in the roadmap and ledgers. After that I’ll run the scoped proof again and update the phase notes with the exact accounting.
+
+I’m applying the doc and recursive-memory edits now. The change set stays narrow: it documents the already-shipped helper seam more explicitly, adds the required no-doctrine-change closeout note, and records the deferred adjacent migrations instead of widening scope.
+
+The closeout docs are in place. I’m running the scoped proof now against the shared helper surface, the three migrated workflows, and the architecture/authoring baseline docs, then I’ll write the final phase notes with the exact result and accounting.
+
+The scoped suite is still running. I’ve reached the halfway point cleanly so far; once it finishes I’ll fold the exact pass count and the final cycle accounting into the phase notes.
+
+The only failure is a docs-baseline assertion: the authoring guide still needs the exact legacy boundary sentence that the baseline test pins. I’m restoring that wording and keeping the added non-goal detail beside it, then I’ll rerun the same scoped suite.
+
+The proof is green now. I’m pulling the tracked diff stats for the cycle-touched files so the closeout accounting in the roadmap and phase notes uses concrete numbers instead of rough estimates.
+
+I’m recording the proof result and the accounting now. I’m being explicit about what is and is not practical to count in this checkout, because the recursive-memory files are outside the tracked baseline while the earlier implementation phases already logged their tracked helper/workflow deltas.
+
+The proof-complete state is recorded. I’m doing one quick pass over the closeout artifacts to make sure the phase notes, roadmap note, and decision entry all align with the same boundary and accounting language, then I’ll wrap with the phase summary.
+
+One small cleanup remains: the authoring note has a redundant package-sections bullet after the new boundary wording. I’m removing the duplicate so the helper-boundary section reads cleanly without changing the tested contract language.
+
+I made one non-semantic docs cleanup after the green run, so I’m rerunning the same scoped proof once more to keep the recorded result current.
+
+Scope considered
+
+- Cycle-9 closeout only: [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), the five `.autoloop_recursive` standing memory files, [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/decisions.txt), and the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/implement/phases/docs-memory-and-proof-closeout/implementation_notes.md).
+- I kept unrelated dirty files out of scope.
+
+What I analyzed
+
+- The shipped cycle-9 helper seam in `stdlib/validation.py` and the three migrated workflows.
+- The existing cycle plan, prior phase notes, decision ledger, authoring docs, and recursive-memory entries to make the closeout wording consistent.
+- The scoped proof surface required by the phase contract.
+
+What I changed
+
+- Tightened `docs/authoring.md` so the publication-validation plus snapshot-reader helpers are documented as one additive governance/diagnostic helper family, with explicit non-goals kept workflow-local.
+- Added the required cycle-9 proof/docs/memory closeout notes to:
+  - `.autoloop_recursive/framework_evolution_charter.md`
+  - `.autoloop_recursive/framework_roadmap.md`
+  - `.autoloop_recursive/framework_gap_ledger.md`
+  - `.autoloop_recursive/workflow_candidate_ledger.md`
+  - `.autoloop_recursive/validation_debt_ledger.md`
+- Appended the phase-local closeout decision in `decisions.txt`.
+- Filled in the phase `implementation_notes.md` with audit, invariants, accounting, and validation results.
+
+Key findings / decisions
+
+- Cycle mode stays `consolidate`; no new workflow was justified.
+- No charter doctrine changed. The closeout explicitly records that instead of leaving it implicit.
+- Preserved contracts: no CLI, runtime/provider, `workflow.toml`, artifact-name, or `ctx.invoke_workflow(...)` change.
+- Deferred debt remains adjacent publish-handler adoption in `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, `candidate_workflow_to_adapted_execution_plan`, and `workflow_to_eval_suite`.
+- Targeted proof passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py`
+  - Result: `141 passed`
+
+Open issues / next step
+
+- No blockers in this phase.
+- Next logical follow-on is the deferred adjacent publish-handler migration, not portfolio expansion.
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+I’m reviewing the phase-local closeout artifacts against the stated acceptance criteria, then I’ll update the verifier-owned criteria and feedback files only.
+
+I found one acceptance-gap in the closeout docs: the cycle-9 note is consistent on helper boundary and deferred debt, but the preserved compatibility contract is only explicit in the charter and phase notes, not across the standing ledgers the phase was supposed to sync. I’m recording that as a blocking docs-fidelity issue in the verifier artifacts now.
+
+Scope considered
+
+- Phase-local closeout artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/implement/phases/docs-memory-and-proof-closeout/`
+- Request-required doc and memory targets that the phase updated:
+  - `docs/authoring.md`
+  - `.autoloop_recursive/framework_evolution_charter.md`
+  - `.autoloop_recursive/framework_roadmap.md`
+  - `.autoloop_recursive/framework_gap_ledger.md`
+  - `.autoloop_recursive/workflow_candidate_ledger.md`
+  - `.autoloop_recursive/validation_debt_ledger.md`
+- Phase implementation notes and the shared decisions ledger for intent/constraint checks
+
+What I analyzed
+
+- The phase contract and acceptance criteria
+- The recorded closeout proof in `implementation_notes.md`
+- The cycle-9 closeout wording across the standing recursive-memory files
+- The updated `docs/authoring.md` validation-boundary section
+
+What I reviewed
+
+- Helper-boundary documentation completeness
+- Consistency of the no-new-workflow / consolidate rationale
+- Whether preserved compatibility contracts were recorded consistently across the required memory files
+- Whether the scoped proof and accounting were documented
+
+Key findings / decisions
+
+- I updated `criteria.md` and `feedback.md`.
+- The scoped proof is documented as passing: `141 passed`.
+- I found 1 blocking issue:
+  - `IMP-001`: AC-1 is not fully met because the preserved compatibility contract is explicit in the charter, but not consistently restated in the other standing ledgers’ cycle-9 closeout notes.
+
+Open issues / next step
+
+- Add one concise preserved-contract sentence to the cycle-9 closeout note in the remaining standing ledgers so they all consistently say the cycle preserved CLI/runtime/provider/`ctx.invoke_workflow(...)` compatibility, then rerun review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
