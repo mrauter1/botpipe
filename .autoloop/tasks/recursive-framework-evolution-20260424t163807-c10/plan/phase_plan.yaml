@@ -1,4 +1,150 @@
 version: 1
 task_id: recursive-framework-evolution-20260424t163807-c10
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/runs/run-20260425T030605Z-ce22105c/request.md
-phases: []
+phases:
+- phase_id: typed-publication-artifact-contracts
+  title: Typed Publication Artifact Contracts
+  objective: Promote the existing typed JSON-artifact seam into the package-summary
+    authoring surface without widening runtime-owned behavior.
+  status: planned
+  in_scope:
+  - Audit the scoped workflow family's summary and direct-fit manifest artifacts against
+    their current workflow-local Pydantic contracts.
+  - Add or tighten workflow-local typed summary or manifest models only where the
+    current terminal payload model does not fully match the on-disk JSON artifact
+    shape.
+  - Reuse JsonArtifactSpec, read_model_file(...), and validate_model_file(...) for
+    workflow-local artifact contracts where the fit is direct.
+  - Keep artifact filenames and top-level JSON keys unchanged.
+  out_of_scope:
+  - New workflows or building blocks.
+  - Runtime-owned publication policy, CLI changes, provider changes, or workflow.toml
+    semantic changes.
+  - A generic publication registry or template framework.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The direct-fit package summaries or manifests in the scoped workflow family
+      have explicit typed artifact contracts rather than relying only on raw dict
+      parsing in publish handlers.
+  - id: AC-2
+    text: The migration reuses the existing model-file helper seam by default, with
+      only minimal additive helper changes if a direct mechanical gap appears.
+  - id: AC-3
+    text: Unit-level proof covers the adopted typed artifact pattern without changing
+      public artifact names or keys.
+  deliverables:
+  - Updated workflow-local typed summary or manifest contracts for the scoped workflow
+    family.
+  - Any minimal stdlib helper or export adjustments required for direct typed artifact
+    adoption.
+  - Focused unit coverage for the adopted typed artifact pattern.
+  risks:
+  - Typed artifact contracts could drift from the current on-disk JSON shape if model
+    alignment is too aggressive.
+  - A helper addition could expand the authoring surface more than the simplification
+    justifies.
+  rollback:
+  - Remove any additive helper change first and keep the typed artifact adoption workflow-local
+    if the shared seam proves too broad.
+  - Restore raw dict parsing for any artifact whose current JSON contract does not
+    align cleanly with a typed model.
+- phase_id: migrate-direct-fit-publishers
+  title: Migrate Direct-Fit Publishers
+  objective: Refactor the builder, front-door, adaptation, and evaluation publish
+    handlers to consume typed artifacts while keeping only cross-artifact and domain-policy
+    checks local.
+  status: planned
+  in_scope:
+  - Migrate task_to_candidate_workflow_set publish-time summary validation to typed
+    artifact reads.
+  - Migrate task_to_workflow_strategy publish-time summary validation to typed artifact
+    reads.
+  - Migrate candidate_workflow_to_adapted_execution_plan publish-time summary validation
+    to typed artifact reads.
+  - Migrate workflow_to_eval_suite publish-time summary and direct-fit manifest validation
+    to typed artifact reads where the fit is direct.
+  - Delete replaced manual summary-parsing blocks when the typed seam fully covers
+    them.
+  out_of_scope:
+  - Changing artifact filenames, receipt names, route tags, or external JSON keys.
+  - Forced migration of governance, diagnostic, or older domain workflows unless the
+    fit remains purely mechanical and low-risk.
+  - Moving state-drift, child-summary, or selected-workflow alignment policy into
+    stdlib.
+  dependencies:
+  - typed-publication-artifact-contracts
+  acceptance_criteria:
+  - id: AC-1
+    text: The four scoped publish handlers consume typed artifact models for their
+      summary or direct-fit manifest inputs instead of starting from raw dict parsing.
+  - id: AC-2
+    text: Workflow-local publish handlers remain responsible for cross-artifact, state,
+      and domain-policy checks after the migration.
+  - id: AC-3
+    text: Targeted runtime suites for the migrated workflows continue to pass without
+      artifact-contract drift.
+  deliverables:
+  - Refactored publish handlers in task_to_candidate_workflow_set, task_to_workflow_strategy,
+    candidate_workflow_to_adapted_execution_plan, and workflow_to_eval_suite.
+  - Removed or reduced workflow-local manual summary-validation blocks in the scoped
+    family.
+  - Targeted runtime regression coverage for the migrated workflows.
+  risks:
+  - Manual validation could be deleted too aggressively and lose a subtle cross-artifact
+    invariant.
+  - Exact publish-time error behavior may drift if typed validation changes when failures
+    are raised.
+  rollback:
+  - Revert individual workflow migrations while keeping the typed artifact contract
+    work additive if one publish handler needs a narrower boundary.
+  - Restore local parsing for any workflow whose publish semantics stop reading clearly
+    after migration.
+- phase_id: docs-memory-and-proof-closeout
+  title: Docs Memory And Proof Closeout
+  objective: Document the typed JSON-artifact authoring pattern, synchronize recursive
+    memory, and close the cycle with targeted proof and boilerplate accounting.
+  status: planned
+  in_scope:
+  - Update docs/authoring.md to describe the typed JSON-artifact authoring pattern
+    and its non-goals.
+  - Update framework evolution charter, framework roadmap, framework gap ledger, workflow
+    candidate ledger, and validation debt ledger for the cycle outcome.
+  - Record an explicit no-doctrine-change note in the charter if the implementation
+    leaves charter doctrine unchanged.
+  - Run targeted unit, runtime, and architecture-doc proof for the migrated family.
+  - Record closeout accounting for files changed, line delta, repetition removed,
+    helper usage, and preserved compatibility.
+  out_of_scope:
+  - Unrelated recursive-memory cleanup outside the cycle outcome.
+  - Broad repo-wide test expansion beyond the helper seam and migrated workflow family.
+  - Edits to verifier-owned criteria.md.
+  dependencies:
+  - migrate-direct-fit-publishers
+  acceptance_criteria:
+  - id: AC-1
+    text: docs/authoring.md and all five standing recursive-memory files describe
+      the typed artifact authoring pattern, the chosen consolidation, preserved contracts,
+      and deferred debt consistently.
+  - id: AC-2
+    text: Targeted proof covers the adopted typed artifact seam, the four migrated
+      workflows, and the architecture-baseline docs.
+  - id: AC-3
+    text: Closeout explicitly records that no new workflow was added and that CLI,
+      runtime, provider, workflow.toml, and ctx.invoke_workflow compatibility were
+      preserved.
+  deliverables:
+  - Updated docs/authoring.md.
+  - Updated framework evolution charter note plus recursive-memory roadmap and ledger
+    entries for cycle 10.
+  - Recorded targeted proof results and boilerplate-reduction accounting.
+  risks:
+  - Docs and recursive memory can drift from the real helper boundary if closeout
+    is treated as secondary work.
+  - Proof may miss regressions if migration expands beyond the direct-fit workflow
+    family without updating the test scope.
+  rollback:
+  - Revert docs and recursive-memory updates together with code if the implementation
+    direction changes materially.
+  - Narrow the proof surface back to the mandatory migrated family if opportunistic
+    expansion proves unstable.

@@ -1,1 +1,2 @@
 # Plan ↔ Plan Verifier Feedback
+- 2026-04-25: Replaced the empty plan with a `consolidate`-mode implementation plan focused on typed JSON artifact adoption for existing package summaries and direct-fit manifests. This direction was chosen because generic validation debt is already largely converged, while builder/front-door/selected-workflow publish handlers still manually parse the same summary shapes despite the existing `JsonArtifactSpec` and model-file helper seam.
