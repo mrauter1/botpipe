@@ -4,3 +4,5 @@ Preserve separate selected-workflow artifacts (`selected_workflow_capability.jso
 Move repeated selected-workflow identity and structure checks into shared helpers while keeping workflow-specific publication semantics local to each workflow package.
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260425T010712Z-3766f767" ts="2026-04-25T01:13:51.036308+00:00" />
 Framework charter synchronization is mandatory in cycle 8 closeout even if the result is only an explicit no-doctrine-change note.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="converge-selected-workflow-serializers" pair="implement" turn_seq="1" run_id="run-20260425T010712Z-3766f767" ts="2026-04-25T01:16:40.704738+00:00" />
+Centralize selected-workflow payload construction in `core/workflow_capabilities.py` and keep stdlib/workflow migrations limited to thin artifact writers plus shared selected-workflow identity validators so the existing artifact filenames and JSON contracts stay unchanged.

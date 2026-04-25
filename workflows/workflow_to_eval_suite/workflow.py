@@ -15,6 +15,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_mapping,
         require_non_empty_string,
         require_string_list,
+        validate_selected_workflow_capability_snapshot,
+        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_validated_eval_case_manifest,
     )
@@ -32,6 +34,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_mapping,
         require_non_empty_string,
         require_string_list,
+        validate_selected_workflow_capability_snapshot,
+        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_validated_eval_case_manifest,
     )
@@ -285,22 +289,7 @@ class WorkflowToEvalSuite(Workflow):
             raise FileNotFoundError(f"selected workflow capability snapshot was not written at {snapshot_path}")
 
         snapshot = read_json_object(snapshot_path)
-        selected_workflow_name = require_non_empty_string(
-            snapshot.get("selected_workflow_name"),
-            error_message="selected_workflow_capability.json must define a non-empty selected_workflow_name",
-            coerce=True,
-        )
-        capability = require_mapping(
-            snapshot.get("selected_workflow_capability"),
-            error_message="selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
-        )
-        capability_workflow_name = require_non_empty_string(
-            capability.get("workflow_name"),
-            error_message="selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
-            coerce=True,
-        )
-        if capability_workflow_name != selected_workflow_name:
-            raise ValueError("selected_workflow_capability.json workflow_name must match selected_workflow_name")
+        selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(snapshot)
         return (
             state.model_copy(update={"selected_workflow_name": selected_workflow_name}),
             Event("selected_workflow_contract_captured"),
@@ -405,24 +394,11 @@ class WorkflowToEvalSuite(Workflow):
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
         capability_snapshot = read_json_object(required_paths["selected_workflow_capability"])
-        snapshot_selected_workflow_name = require_non_empty_string(
-            capability_snapshot.get("selected_workflow_name"),
-            error_message="selected_workflow_capability.json must define a non-empty selected_workflow_name",
-            coerce=True,
+        snapshot_selected_workflow_name, selected_capability = validate_selected_workflow_capability_snapshot(
+            capability_snapshot,
+            expected_selected_workflow_name=state.selected_workflow_name,
+            expected_label="workflow state",
         )
-        selected_capability = require_mapping(
-            capability_snapshot.get("selected_workflow_capability"),
-            error_message="selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
-        )
-        capability_workflow_name = require_non_empty_string(
-            selected_capability.get("workflow_name"),
-            error_message="selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
-            coerce=True,
-        )
-        if capability_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError("selected_workflow_capability.json workflow_name must match selected_workflow_name")
-        if state.selected_workflow_name is not None and snapshot_selected_workflow_name != state.selected_workflow_name:
-            raise ValueError("selected_workflow_capability.json selected_workflow_name must match workflow state")
 
         capability_entry_step = require_non_empty_string(
             selected_capability.get("entry_step_name"),
@@ -438,15 +414,12 @@ class WorkflowToEvalSuite(Workflow):
             proposed_manifest,
         )
         validated_manifest = read_json_object(validated_path)
-        validated_workflow_name = require_non_empty_string(
+        validate_selected_workflow_name_alignment(
             validated_manifest.get("selected_workflow_name"),
-            error_message="validated_eval_case_manifest.json must define a non-empty selected_workflow_name",
-            coerce=True,
+            snapshot_selected_workflow_name,
+            artifact_name="validated_eval_case_manifest.json",
+            expected_artifact_name="selected_workflow_capability.json",
         )
-        if validated_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError(
-                "validated_eval_case_manifest.json selected_workflow_name must match selected_workflow_capability.json"
-            )
 
         validated_case_count = validated_manifest.get("case_count")
         if not isinstance(validated_case_count, int) or validated_case_count <= 0:
@@ -470,15 +443,12 @@ class WorkflowToEvalSuite(Workflow):
         covered_expected_artifacts = _collect_covered_expected_artifacts(validated_manifest.get("validated_cases"))
 
         summary = read_json_object(required_paths["workflow_eval_suite_summary"])
-        summary_selected_workflow_name = require_non_empty_string(
+        summary_selected_workflow_name = validate_selected_workflow_name_alignment(
             summary.get("selected_workflow_name"),
-            error_message="workflow_eval_suite_summary.json must define a non-empty selected_workflow_name",
-            coerce=True,
+            snapshot_selected_workflow_name,
+            artifact_name="workflow_eval_suite_summary.json",
+            expected_artifact_name="selected_workflow_capability.json",
         )
-        if summary_selected_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError(
-                "workflow_eval_suite_summary.json selected_workflow_name must match selected_workflow_capability.json"
-            )
         summary_entry_step = require_non_empty_string(
             summary.get("selected_workflow_entry_step"),
             error_message="workflow_eval_suite_summary.json must define a non-empty selected_workflow_entry_step",

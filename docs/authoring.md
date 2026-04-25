@@ -295,6 +295,7 @@ Validation helper boundary:
 
 - generic validation belongs in stdlib rather than copied workflow-local helper tails
 - use these helpers for shared JSON-object reads, non-empty string checks, string-list normalization, mapping checks, duplicate guards, non-negative-int validation, and positive-int validation
+- use the selected-workflow snapshot validators in the same module when multiple workflows need the same capability, authoring-surface, decomposition-surface, or cross-artifact selected-workflow-name checks
 - keep workflow-specific publication assertions, domain allow-lists, and artifact-family invariants in workflow code
 - the helpers only validate explicit workflow-local inputs and artifacts; they do not add runtime-owned routing, publication policy, or hidden execution
 
@@ -439,6 +440,7 @@ Refinement helper boundary:
 
 - the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
 - it reuses the shared workflow resolution and catalog seams instead of ad hoc repo scraping or `workflow.toml` expansion
+- it writes the authoritative selected-workflow authoring-surface payload built in `core/workflow_capabilities.py`, so later helpers and workflows consume one canonical editable-surface shape
 - it keeps the compiled selected-workflow contract separate from the editable selected-workflow surface; workflows that need both should call `write_selected_workflow_capability_snapshot(...)` and `write_selected_workflow_authoring_surface(...)` explicitly
 - it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional legacy support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
 - it writes the canonical result to `selected_workflow_authoring_surface.json` by default
@@ -462,6 +464,7 @@ Decomposition helper boundary:
 - the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
 - it is additive and read-only: it snapshots existing workflow/compiler data and does not mutate selected workflow files
 - it reuses the shared workflow resolution, catalog, and compiler seams instead of ad hoc repo scraping or `workflow.toml` expansion
+- it writes the authoritative selected-workflow decomposition payload built in `core/workflow_capabilities.py`, so authoring-surface and compiled-surface fields stay synchronized across decomposition consumers
 - it combines selected workflow identity, editable authoring surface paths, repo-root-relative path metadata, and compiled step/route topology in one artifact
 - it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional legacy support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
 - compiled step summaries include session names, required/provided/log artifacts, available routes, route contracts, local route targets, and package-relative plus repo-relative prompt paths

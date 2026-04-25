@@ -19,6 +19,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_positive_int,
         require_string_list,
         require_unique_values,
+        validate_selected_workflow_capability_snapshot,
+        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_selected_workflow_run_history_snapshot,
     )
@@ -39,6 +41,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_positive_int,
         require_string_list,
         require_unique_values,
+        validate_selected_workflow_capability_snapshot,
+        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_selected_workflow_run_history_snapshot,
     )
@@ -310,30 +314,15 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             raise FileNotFoundError(f"selected workflow run history snapshot was not written at {history_path}")
 
         capability_snapshot = _read_json(capability_path)
-        snapshot_selected_workflow_name = _require_text(
-            capability_snapshot.get("selected_workflow_name"),
-            "selected_workflow_capability.json must define a non-empty selected_workflow_name",
-        )
-        selected_capability = _require_mapping(
-            capability_snapshot.get("selected_workflow_capability"),
-            "selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
-        )
-        capability_workflow_name = _require_text(
-            selected_capability.get("workflow_name"),
-            "selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
-        )
-        if capability_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError("selected_workflow_capability.json workflow_name must match selected_workflow_name")
+        snapshot_selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(capability_snapshot)
 
         history_snapshot = _read_json(history_path)
-        history_selected_workflow_name = _require_text(
+        validate_selected_workflow_name_alignment(
             history_snapshot.get("selected_workflow_name"),
-            "selected_workflow_run_history.json must define a non-empty selected_workflow_name",
+            snapshot_selected_workflow_name,
+            artifact_name="selected_workflow_run_history.json",
+            expected_artifact_name="selected_workflow_capability.json",
         )
-        if history_selected_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError(
-                "selected_workflow_run_history.json selected_workflow_name must match selected_workflow_capability.json"
-            )
         run_history = _require_mapping(
             history_snapshot.get("selected_workflow_run_history"),
             "selected_workflow_run_history.json must define selected_workflow_run_history as a JSON object",
@@ -462,32 +451,19 @@ class WorkflowRunHistoryToFailureModes(Workflow):
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
         capability_snapshot = _read_json(required_paths["selected_workflow_capability"])
-        snapshot_selected_workflow_name = _require_text(
-            capability_snapshot.get("selected_workflow_name"),
-            "selected_workflow_capability.json must define a non-empty selected_workflow_name",
+        snapshot_selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(
+            capability_snapshot,
+            expected_selected_workflow_name=state.selected_workflow_name,
+            expected_label="workflow state",
         )
-        selected_capability = _require_mapping(
-            capability_snapshot.get("selected_workflow_capability"),
-            "selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
-        )
-        capability_workflow_name = _require_text(
-            selected_capability.get("workflow_name"),
-            "selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
-        )
-        if capability_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError("selected_workflow_capability.json workflow_name must match selected_workflow_name")
-        if state.selected_workflow_name is not None and snapshot_selected_workflow_name != state.selected_workflow_name:
-            raise ValueError("selected_workflow_capability.json selected_workflow_name must match workflow state")
 
         history_snapshot = _read_json(required_paths["selected_workflow_run_history"])
-        history_selected_workflow_name = _require_text(
+        validate_selected_workflow_name_alignment(
             history_snapshot.get("selected_workflow_name"),
-            "selected_workflow_run_history.json must define a non-empty selected_workflow_name",
+            snapshot_selected_workflow_name,
+            artifact_name="selected_workflow_run_history.json",
+            expected_artifact_name="selected_workflow_capability.json",
         )
-        if history_selected_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError(
-                "selected_workflow_run_history.json selected_workflow_name must match selected_workflow_capability.json"
-            )
         run_history = _require_mapping(
             history_snapshot.get("selected_workflow_run_history"),
             "selected_workflow_run_history.json must define selected_workflow_run_history as a JSON object",
@@ -589,12 +565,12 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             raise ValueError("run_history_scope.md must reference the filtered run IDs")
 
         manifest = _read_json(required_paths["failure_mode_manifest"])
-        manifest_selected_workflow_name = _require_text(
+        validate_selected_workflow_name_alignment(
             manifest.get("selected_workflow_name"),
-            "failure_mode_manifest.json must define a non-empty selected_workflow_name",
+            snapshot_selected_workflow_name,
+            artifact_name="failure_mode_manifest.json",
+            expected_artifact_name="selected_workflow_capability.json",
         )
-        if manifest_selected_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError("failure_mode_manifest.json selected_workflow_name must match selected_workflow_capability.json")
         manifest_evidence_run_ids = _require_string_list(
             manifest.get("evidence_run_ids"),
             "failure_mode_manifest.json must define non-empty evidence_run_ids",
@@ -691,14 +667,12 @@ class WorkflowRunHistoryToFailureModes(Workflow):
                 raise ValueError("recurring_weak_points.md must reference each recurring_weak_point_id")
 
         improvement_summary = _read_json(required_paths["improvement_opportunities_summary"])
-        summary_selected_workflow_name = _require_text(
+        validate_selected_workflow_name_alignment(
             improvement_summary.get("selected_workflow_name"),
-            "improvement_opportunities.json must define a non-empty selected_workflow_name",
+            snapshot_selected_workflow_name,
+            artifact_name="improvement_opportunities.json",
+            expected_artifact_name="selected_workflow_capability.json",
         )
-        if summary_selected_workflow_name != snapshot_selected_workflow_name:
-            raise ValueError(
-                "improvement_opportunities.json selected_workflow_name must match selected_workflow_capability.json"
-            )
         summary_evidence_run_ids = _require_string_list(
             improvement_summary.get("evidence_run_ids"),
             "improvement_opportunities.json must define non-empty evidence_run_ids",

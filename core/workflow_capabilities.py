@@ -344,6 +344,162 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
     }
 
 
+def selected_workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, object]:
+    """Return the authoritative compiled selected-workflow payload."""
+
+    return workflow_capability_payload(entry)
+
+
+def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) -> dict[str, object]:
+    """Return the authoritative editable selected-workflow surface payload."""
+
+    runtime_test_path = _runtime_test_path(entry.test_paths)
+    asset_paths = [str(path) for path in entry.asset_paths]
+    prompt_paths = [str(path) for path in entry.prompt_paths]
+    spec_paths = [str(path) for path in entry.spec_paths]
+    test_paths = [str(path) for path in entry.test_paths]
+    package_init_path = _optional_path_string(entry.package_init_path)
+    contracts_path = _optional_path_string(entry.contracts_path)
+    doc_path = _optional_path_string(entry.doc_path)
+    manifest_path = _optional_path_string(entry.manifest_path)
+    params_path = _optional_path_string(entry.params_path)
+    editable_paths = sorted(
+        {
+            str(entry.source_path),
+            *(
+                path
+                for path in (
+                    manifest_path,
+                    package_init_path,
+                    params_path,
+                    contracts_path,
+                    doc_path,
+                    runtime_test_path,
+                    *spec_paths,
+                    *prompt_paths,
+                    *asset_paths,
+                    *test_paths,
+                )
+                if path is not None
+            ),
+        }
+    )
+    return {
+        "asset_paths": asset_paths,
+        "contracts_path": contracts_path,
+        "doc_path": doc_path,
+        "editable_paths": editable_paths,
+        "manifest_path": manifest_path,
+        "package_dir": str(entry.package_dir),
+        "package_init_path": package_init_path,
+        "package_name": entry.package_name,
+        "params_path": params_path,
+        "prompt_paths": prompt_paths,
+        "runtime_test_path": runtime_test_path,
+        "spec_paths": spec_paths,
+        "test_paths": test_paths,
+        "workflow_name": entry.workflow_name,
+        "workflow_path": str(entry.workflow_path),
+    }
+
+
+def selected_workflow_decomposition_surface_payload(
+    entry: WorkflowCapabilityEntry,
+    *,
+    repo_root: str | Path,
+) -> dict[str, object]:
+    """Return the authoritative decomposition payload for one selected workflow."""
+
+    repo_root_path = Path(repo_root).resolve()
+    authoring_surface = selected_workflow_authoring_surface_payload(entry)
+    decomposition_authoring_surface = {
+        key: value
+        for key, value in authoring_surface.items()
+        if key not in {"package_name", "workflow_name"}
+    }
+    return {
+        "selected_workflow_authoring_surface": {
+            **decomposition_authoring_surface,
+            "asset_paths_repo_relative": _repo_relative_list(
+                repo_root_path,
+                decomposition_authoring_surface["asset_paths"],
+            ),
+            "contracts_path_repo_relative": _optional_repo_relative(
+                repo_root_path,
+                decomposition_authoring_surface["contracts_path"],
+            ),
+            "doc_path_repo_relative": _optional_repo_relative(repo_root_path, decomposition_authoring_surface["doc_path"]),
+            "editable_paths_repo_relative": _repo_relative_list(
+                repo_root_path,
+                decomposition_authoring_surface["editable_paths"],
+            ),
+            "manifest_path_repo_relative": _optional_repo_relative(
+                repo_root_path,
+                decomposition_authoring_surface["manifest_path"],
+            ),
+            "package_dir_repo_relative": _optional_repo_relative(
+                repo_root_path,
+                decomposition_authoring_surface["package_dir"],
+            ),
+            "package_init_path_repo_relative": _optional_repo_relative(
+                repo_root_path,
+                decomposition_authoring_surface["package_init_path"],
+            ),
+            "params_path_repo_relative": _optional_repo_relative(
+                repo_root_path,
+                decomposition_authoring_surface["params_path"],
+            ),
+            "prompt_paths_repo_relative": _repo_relative_list(
+                repo_root_path,
+                decomposition_authoring_surface["prompt_paths"],
+            ),
+            "runtime_test_path_repo_relative": _optional_repo_relative(
+                repo_root_path,
+                decomposition_authoring_surface["runtime_test_path"],
+            ),
+            "spec_paths_repo_relative": _repo_relative_list(
+                repo_root_path,
+                decomposition_authoring_surface["spec_paths"],
+            ),
+            "test_paths_repo_relative": _repo_relative_list(
+                repo_root_path,
+                decomposition_authoring_surface["test_paths"],
+            ),
+            "workflow_path_repo_relative": _optional_repo_relative(
+                repo_root_path,
+                decomposition_authoring_surface["workflow_path"],
+            ),
+        },
+        "selected_workflow_compiled_surface": {
+            "artifacts": [_artifact_capability_payload(artifact) for artifact in entry.artifacts],
+            "entry_step_name": entry.entry_step_name,
+            "global_routes": dict(entry.global_transitions),
+            "parameters": [_parameter_field_payload(field) for field in entry.parameters],
+            "parameters_supported": entry.parameters_supported,
+            "sessions": list(entry.sessions),
+            "state_model": entry.state_model,
+            "step_count": len(entry.steps),
+            "steps": [
+                _compiled_step_payload(
+                    repo_root_path,
+                    entry.package_dir,
+                    step=step,
+                    route_targets=entry.transitions.get(step.name, {}),
+                )
+                for step in entry.steps
+            ],
+        },
+        "selected_workflow_identity": {
+            "aliases": list(entry.aliases),
+            "description": entry.description,
+            "package_name": entry.package_name,
+            "title": entry.title,
+            "workflow_class": entry.workflow_class,
+            "workflow_name": entry.workflow_name,
+        },
+    }
+
+
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
     if entry.manifest_path is not None and entry.workflow_module is not None and entry.package_module is not None:
         from ..runtime.loader import ResolvedWorkflow, WorkflowReference
@@ -501,6 +657,50 @@ def _compiled_step_capability(step) -> WorkflowStepCapability:
     )
 
 
+def _parameter_field_payload(field: WorkflowParameterField) -> dict[str, object]:
+    return {
+        "default": field.default,
+        "name": field.name,
+        "repeated": field.supports_multiple,
+        "required": field.required,
+        "type": annotation_display_name(field.annotation),
+    }
+
+
+def _artifact_capability_payload(artifact: WorkflowArtifactCapability) -> dict[str, object]:
+    return {
+        "name": artifact.name,
+        "producer_steps": list(artifact.producer_steps),
+        "template": artifact.template,
+        "workflow_level": artifact.workflow_level,
+    }
+
+
+def _compiled_step_payload(
+    repo_root: Path,
+    package_dir: Path,
+    *,
+    step: WorkflowStepCapability,
+    route_targets: Mapping[str, str],
+) -> dict[str, object]:
+    return {
+        "available_routes": list(step.available_routes),
+        "expected_output_schema": step.expected_output_schema,
+        "kind": step.kind,
+        "log_artifacts": list(step.log_artifacts),
+        "name": step.name,
+        "producer_prompt": step.producer_prompt,
+        "producer_prompt_repo_relative": _prompt_repo_relative(repo_root, package_dir, step.producer_prompt),
+        "produces": list(step.produces),
+        "requires": list(step.requires),
+        "route_contracts": {route_name: dict(contract) for route_name, contract in step.route_contracts.items()},
+        "route_targets": dict(route_targets),
+        "session_name": step.session_name,
+        "verifier_prompt": step.verifier_prompt,
+        "verifier_prompt_repo_relative": _prompt_repo_relative(repo_root, package_dir, step.verifier_prompt),
+    }
+
+
 def _resolved_prompt_paths(package_dir: Path, compiled: CompiledWorkflow) -> tuple[Path, ...]:
     paths: list[Path] = []
     for step in compiled.steps.values():
@@ -512,6 +712,41 @@ def _resolved_prompt_paths(package_dir: Path, compiled: CompiledWorkflow) -> tup
             if candidate.is_file():
                 paths.append(candidate)
     return tuple(paths)
+
+
+def _runtime_test_path(test_paths: tuple[Path, ...]) -> str | None:
+    for path in test_paths:
+        if path.name.startswith("test_"):
+            return str(path)
+    return None
+
+
+def _optional_path_string(path: Path | None) -> str | None:
+    return None if path is None else str(path)
+
+
+def _repo_relative_list(repo_root: Path, paths: Sequence[str]) -> list[str]:
+    return [_repo_relative(repo_root, path) for path in paths]
+
+
+def _prompt_repo_relative(repo_root: Path, package_dir: Path, prompt_path: str | None) -> str | None:
+    if prompt_path is None:
+        return None
+    return _optional_repo_relative(repo_root, package_dir / prompt_path)
+
+
+def _optional_repo_relative(repo_root: Path, path: str | Path | None) -> str | None:
+    if path is None:
+        return None
+    return _repo_relative(repo_root, path)
+
+
+def _repo_relative(repo_root: Path, path: str | Path) -> str:
+    resolved = Path(path).resolve()
+    try:
+        return resolved.relative_to(repo_root).as_posix()
+    except ValueError:
+        return str(resolved)
 
 
 def _support_params_path(source_path: Path) -> Path | None:
@@ -697,6 +932,9 @@ __all__ = [
     "json_safe_parameter_value",
     "load_workflow_package_contract",
     "locate_workflow_class",
+    "selected_workflow_authoring_surface_payload",
+    "selected_workflow_capability_payload",
+    "selected_workflow_decomposition_surface_payload",
     "workflow_capability_payload",
     "workflow_parameter_fields",
 ]

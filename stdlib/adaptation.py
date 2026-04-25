@@ -8,16 +8,14 @@ from typing import Any
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..core.workflow_capabilities import (
-        WorkflowCapabilityEntry,
         inspect_workflow_reference,
-        workflow_capability_payload,
+        selected_workflow_capability_payload,
     )
     from ..runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
 except ImportError:  # pragma: no cover - direct repo-root import fallback
     from core.workflow_capabilities import (
-        WorkflowCapabilityEntry,
         inspect_workflow_reference,
-        workflow_capability_payload,
+        selected_workflow_capability_payload,
     )
     from runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
 
@@ -33,7 +31,7 @@ def write_selected_workflow_capability_snapshot(
 
     repo_root = _repo_root_from_context(ctx)
     resolved = resolve_workflow_reference(repo_root, workflow)
-    capability = workflow_capability_payload(_selected_workflow_capability_entry(repo_root, resolved))
+    capability = selected_workflow_capability_payload(inspect_workflow_reference(repo_root, resolved.workflow_cls))
     return write_workflow_json(
         ctx,
         relative_path,
@@ -71,12 +69,6 @@ def write_validated_workflow_parameters(
             "workflow_name": ctx.workflow_name,
         },
     )
-
-
-def _selected_workflow_capability_entry(repo_root: Path, resolved) -> WorkflowCapabilityEntry:
-    return inspect_workflow_reference(repo_root, resolved.workflow_cls)
-
-
 def _repo_root_from_context(ctx) -> Path:
     return ctx.root.resolve()
 

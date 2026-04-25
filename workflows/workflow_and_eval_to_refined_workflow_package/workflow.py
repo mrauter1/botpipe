@@ -23,6 +23,9 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        validate_selected_workflow_authoring_surface_snapshot,
+        validate_selected_workflow_capability_snapshot,
+        validate_selected_workflow_name_alignment,
         validate_authoritative_surface_sources_unchanged,
         validate_baseline_surface_manifest,
         validate_candidate_surface_manifest,
@@ -50,6 +53,9 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        validate_selected_workflow_authoring_surface_snapshot,
+        validate_selected_workflow_capability_snapshot,
+        validate_selected_workflow_name_alignment,
         validate_authoritative_surface_sources_unchanged,
         validate_baseline_surface_manifest,
         validate_candidate_surface_manifest,
@@ -718,37 +724,14 @@ def _validated_selected_workflow_name(
     authoring_snapshot: Mapping[str, Any],
     selected_workflow_reference: str,
 ) -> str:
-    capability_selected_workflow_name = _require_text(
-        capability_snapshot.get("selected_workflow_name"),
-        "selected_workflow_capability.json must define a non-empty selected_workflow_name",
+    capability_selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(capability_snapshot)
+    authoring_selected_workflow_name, _ = validate_selected_workflow_authoring_surface_snapshot(authoring_snapshot)
+    validate_selected_workflow_name_alignment(
+        authoring_selected_workflow_name,
+        capability_selected_workflow_name,
+        artifact_name="selected_workflow_authoring_surface.json",
+        expected_artifact_name="selected_workflow_capability.json",
     )
-    capability = _require_mapping(
-        capability_snapshot.get("selected_workflow_capability"),
-        "selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
-    )
-    capability_workflow_name = _require_text(
-        capability.get("workflow_name"),
-        "selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
-    )
-    if capability_workflow_name != capability_selected_workflow_name:
-        raise ValueError("selected_workflow_capability.json workflow_name must match selected_workflow_name")
-
-    authoring_selected_workflow_name = _require_text(
-        authoring_snapshot.get("selected_workflow_name"),
-        "selected_workflow_authoring_surface.json must define a non-empty selected_workflow_name",
-    )
-    authoring_surface = _require_mapping(
-        authoring_snapshot.get("selected_workflow_authoring_surface"),
-        "selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface as a JSON object",
-    )
-    authoring_workflow_name = _require_text(
-        authoring_surface.get("workflow_name"),
-        "selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface.workflow_name",
-    )
-    if authoring_workflow_name != authoring_selected_workflow_name:
-        raise ValueError("selected_workflow_authoring_surface.json workflow_name must match selected_workflow_name")
-    if capability_selected_workflow_name != authoring_selected_workflow_name:
-        raise ValueError("selected_workflow_authoring_surface.json must match selected_workflow_capability.json")
     if not selected_workflow_reference.strip():
         raise ValueError("selected_workflow_reference must stay non-empty")
     return capability_selected_workflow_name
@@ -758,12 +741,12 @@ def _validate_evaluation_summary_selected_workflow(
     summary_payload: Mapping[str, Any],
     selected_workflow_name: str,
 ) -> None:
-    summary_selected_workflow_name = _require_text(
+    validate_selected_workflow_name_alignment(
         summary_payload.get("selected_workflow_name"),
-        "baseline_evaluation_summary.json must define non-empty selected_workflow_name",
+        selected_workflow_name,
+        artifact_name="baseline_evaluation_summary.json",
+        expected_artifact_name="selected workflow",
     )
-    if summary_selected_workflow_name != selected_workflow_name:
-        raise ValueError("baseline_evaluation_summary.json selected_workflow_name must match selected workflow")
 
 
 def _write_baseline_workflow_manifest(

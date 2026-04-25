@@ -25,6 +25,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        validate_selected_workflow_decomposition_surface_snapshot,
         validate_authoritative_surface_sources_unchanged,
         validate_baseline_surface_manifest,
         validate_candidate_surface_manifest,
@@ -51,6 +52,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        validate_selected_workflow_decomposition_surface_snapshot,
         validate_authoritative_surface_sources_unchanged,
         validate_baseline_surface_manifest,
         validate_candidate_surface_manifest,
@@ -704,32 +706,8 @@ def _validated_selected_workflow_name(
     decomposition_surface_snapshot: Mapping[str, Any],
     selected_workflow_reference: str,
 ) -> str:
-    selected_workflow_name = _require_text(
-        decomposition_surface_snapshot.get("selected_workflow_name"),
-        "selected_workflow_decomposition_surface.json must define a non-empty selected_workflow_name",
-    )
-    decomposition_surface = _require_mapping(
-        decomposition_surface_snapshot.get("selected_workflow_decomposition_surface"),
-        "selected_workflow_decomposition_surface.json must define selected_workflow_decomposition_surface as a JSON object",
-    )
-    identity = _require_mapping(
-        decomposition_surface.get("selected_workflow_identity"),
-        "selected_workflow_decomposition_surface.json must define selected_workflow_identity as a JSON object",
-    )
-    identity_workflow_name = _require_text(
-        identity.get("workflow_name"),
-        "selected_workflow_decomposition_surface.json must define selected_workflow_identity.workflow_name",
-    )
-    if identity_workflow_name != selected_workflow_name:
-        raise ValueError("selected_workflow_decomposition_surface.json identity must match selected_workflow_name")
-
-    compiled_surface = _require_mapping(
-        decomposition_surface.get("selected_workflow_compiled_surface"),
-        "selected_workflow_decomposition_surface.json must define selected_workflow_compiled_surface as a JSON object",
-    )
-    _require_positive_int(
-        compiled_surface.get("step_count"),
-        "selected_workflow_decomposition_surface.json must define positive integer step_count",
+    selected_workflow_name, _, _, _ = validate_selected_workflow_decomposition_surface_snapshot(
+        decomposition_surface_snapshot
     )
     if not selected_workflow_reference.strip():
         raise ValueError("selected_workflow_reference must stay non-empty")

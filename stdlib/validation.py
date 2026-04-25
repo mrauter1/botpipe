@@ -353,6 +353,126 @@ def read_json_object(path: str | Path) -> dict[str, Any]:
     return payload
 
 
+def validate_selected_workflow_name_alignment(
+    value: Any,
+    expected_selected_workflow_name: str,
+    *,
+    artifact_name: str,
+    expected_artifact_name: str,
+) -> str:
+    """Require one selected-workflow name and align it to another artifact."""
+
+    selected_workflow_name = require_non_empty_string(
+        value,
+        error_message=f"{artifact_name} must define a non-empty selected_workflow_name",
+        coerce=True,
+    )
+    if selected_workflow_name != expected_selected_workflow_name:
+        raise ValueError(f"{artifact_name} selected_workflow_name must match {expected_artifact_name}")
+    return selected_workflow_name
+
+
+def validate_selected_workflow_capability_snapshot(
+    payload: Mapping[str, Any],
+    *,
+    expected_selected_workflow_name: str | None = None,
+    expected_label: str = "workflow state",
+) -> tuple[str, dict[str, Any]]:
+    """Validate one selected-workflow capability snapshot."""
+
+    selected_workflow_name = require_non_empty_string(
+        payload.get("selected_workflow_name"),
+        error_message="selected_workflow_capability.json must define a non-empty selected_workflow_name",
+        coerce=True,
+    )
+    capability = require_mapping(
+        payload.get("selected_workflow_capability"),
+        error_message="selected_workflow_capability.json must define selected_workflow_capability as a JSON object",
+    )
+    capability_workflow_name = require_non_empty_string(
+        capability.get("workflow_name"),
+        error_message="selected_workflow_capability.json must define selected_workflow_capability.workflow_name",
+        coerce=True,
+    )
+    if capability_workflow_name != selected_workflow_name:
+        raise ValueError("selected_workflow_capability.json workflow_name must match selected_workflow_name")
+    if expected_selected_workflow_name is not None and selected_workflow_name != expected_selected_workflow_name:
+        raise ValueError(f"selected_workflow_capability.json selected_workflow_name must match {expected_label}")
+    return selected_workflow_name, capability
+
+
+def validate_selected_workflow_authoring_surface_snapshot(
+    payload: Mapping[str, Any],
+    *,
+    expected_selected_workflow_name: str | None = None,
+    expected_label: str = "workflow state",
+) -> tuple[str, dict[str, Any]]:
+    """Validate one selected-workflow authoring-surface snapshot."""
+
+    selected_workflow_name = require_non_empty_string(
+        payload.get("selected_workflow_name"),
+        error_message="selected_workflow_authoring_surface.json must define a non-empty selected_workflow_name",
+        coerce=True,
+    )
+    authoring_surface = require_mapping(
+        payload.get("selected_workflow_authoring_surface"),
+        error_message="selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface as a JSON object",
+    )
+    authoring_workflow_name = require_non_empty_string(
+        authoring_surface.get("workflow_name"),
+        error_message="selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface.workflow_name",
+        coerce=True,
+    )
+    if authoring_workflow_name != selected_workflow_name:
+        raise ValueError("selected_workflow_authoring_surface.json workflow_name must match selected_workflow_name")
+    if expected_selected_workflow_name is not None and selected_workflow_name != expected_selected_workflow_name:
+        raise ValueError(f"selected_workflow_authoring_surface.json selected_workflow_name must match {expected_label}")
+    return selected_workflow_name, authoring_surface
+
+
+def validate_selected_workflow_decomposition_surface_snapshot(
+    payload: Mapping[str, Any],
+    *,
+    expected_selected_workflow_name: str | None = None,
+    expected_label: str = "workflow state",
+) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Validate one selected-workflow decomposition snapshot."""
+
+    selected_workflow_name = require_non_empty_string(
+        payload.get("selected_workflow_name"),
+        error_message="selected_workflow_decomposition_surface.json must define a non-empty selected_workflow_name",
+        coerce=True,
+    )
+    decomposition_surface = require_mapping(
+        payload.get("selected_workflow_decomposition_surface"),
+        error_message="selected_workflow_decomposition_surface.json must define selected_workflow_decomposition_surface as a JSON object",
+    )
+    identity = require_mapping(
+        decomposition_surface.get("selected_workflow_identity"),
+        error_message="selected_workflow_decomposition_surface.json must define selected_workflow_identity as a JSON object",
+    )
+    identity_workflow_name = require_non_empty_string(
+        identity.get("workflow_name"),
+        error_message="selected_workflow_decomposition_surface.json must define selected_workflow_identity.workflow_name",
+        coerce=True,
+    )
+    if identity_workflow_name != selected_workflow_name:
+        raise ValueError("selected_workflow_decomposition_surface.json identity must match selected_workflow_name")
+    compiled_surface = require_mapping(
+        decomposition_surface.get("selected_workflow_compiled_surface"),
+        error_message="selected_workflow_decomposition_surface.json must define selected_workflow_compiled_surface as a JSON object",
+    )
+    require_positive_int(
+        compiled_surface.get("step_count"),
+        error_message="selected_workflow_decomposition_surface.json must define positive integer step_count",
+    )
+    if expected_selected_workflow_name is not None and selected_workflow_name != expected_selected_workflow_name:
+        raise ValueError(
+            f"selected_workflow_decomposition_surface.json selected_workflow_name must match {expected_label}"
+        )
+    return selected_workflow_name, decomposition_surface, identity, compiled_surface
+
+
 def _validation_issue(error: dict[str, Any]) -> ValidationIssue:
     raw_location = error.get("loc") or ()
     location = tuple(str(item) for item in raw_location)
@@ -373,6 +493,10 @@ __all__ = [
     "require_positive_int",
     "require_string_list",
     "require_unique_values",
+    "validate_selected_workflow_authoring_surface_snapshot",
+    "validate_selected_workflow_capability_snapshot",
+    "validate_selected_workflow_decomposition_surface_snapshot",
+    "validate_selected_workflow_name_alignment",
     "validate_model_file",
     "write_model_file",
 ]
