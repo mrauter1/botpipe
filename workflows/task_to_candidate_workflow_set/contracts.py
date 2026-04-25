@@ -6,6 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import JsonArtifactSpec
+except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import JsonArtifactSpec
+
 from workflow import RouteContract
 
 
@@ -46,6 +51,26 @@ class CandidateWorkflowSetPayload(BaseModel):
     next_action: str = Field(min_length=1)
     ready_for_strategy_selection: bool = False
     replan_reason: str | None = None
+
+
+class CandidateWorkflowSetSummaryPayload(BaseModel):
+    """Typed contract for candidate_workflow_set_summary.json."""
+
+    comparison_candidates: list[str] = Field(min_length=1)
+    ranked_candidates: list[str] = Field(min_length=1)
+    recommended_candidate_workflows: list[str] = Field(min_length=1)
+    builder_baseline_workflow: str = Field(min_length=1)
+    builder_considered: bool = False
+    portfolio_posture: PortfolioPosture
+    authoritative_artifacts: list[str] = Field(min_length=1)
+    next_action: str = Field(min_length=1)
+    ready_for_strategy_selection: bool = False
+
+
+CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT = JsonArtifactSpec(
+    "candidate_workflow_set_summary.json",
+    CandidateWorkflowSetSummaryPayload,
+)
 
 
 FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS = {
@@ -105,9 +130,11 @@ PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS = {
 
 __all__ = [
     "ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS",
+    "CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT",
     "CandidateRequestFramingPayload",
     "CandidateWorkflowAnalysisPayload",
     "CandidateWorkflowSetPayload",
+    "CandidateWorkflowSetSummaryPayload",
     "FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS",
     "PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS",
     "PortfolioPosture",

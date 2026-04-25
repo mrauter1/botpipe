@@ -6,7 +6,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import JsonArtifactSpec
+except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import JsonArtifactSpec
+
 from workflow import RouteContract
+
+from ..task_to_candidate_workflow_set.contracts import CandidateWorkflowSetSummaryPayload
 
 
 StrategyRoute = Literal["run_existing", "compose", "adapt", "create_new"]
@@ -43,6 +50,28 @@ class StrategyPackagePayload(BaseModel):
     next_action: str = Field(min_length=1)
     ready_for_handoff: bool = False
     replan_reason: str | None = None
+
+
+class StrategySummaryPayload(BaseModel):
+    """Typed contract for strategy_summary.json."""
+
+    selected_strategy: StrategyRoute
+    recommended_workflows: list[str] = Field(min_length=1)
+    comparison_candidates: list[str] = Field(min_length=1)
+    builder_baseline_workflow: str = Field(min_length=1)
+    builder_considered: bool
+    create_new_required: bool
+    authoritative_artifacts: list[str] = Field(min_length=1)
+    next_action: str = Field(min_length=1)
+    ready_for_handoff: bool = False
+    rejected_routes: list[str] = Field(default_factory=list)
+
+
+CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT = JsonArtifactSpec(
+    "candidate_workflow_set_summary.json",
+    CandidateWorkflowSetSummaryPayload,
+)
+STRATEGY_SUMMARY_ARTIFACT = JsonArtifactSpec("strategy_summary.json", StrategySummaryPayload)
 
 
 FRAME_TASK_ROUTE_CONTRACTS = {
@@ -101,11 +130,14 @@ PACKAGE_STRATEGY_ROUTE_CONTRACTS = {
 
 
 __all__ = [
+    "CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT",
     "FRAME_TASK_ROUTE_CONTRACTS",
     "PACKAGE_STRATEGY_ROUTE_CONTRACTS",
     "SELECT_STRATEGY_ROUTE_CONTRACTS",
     "StrategyPackagePayload",
     "StrategyRoute",
+    "STRATEGY_SUMMARY_ARTIFACT",
+    "StrategySummaryPayload",
     "StrategySelectionPayload",
     "TaskFramingPayload",
 ]

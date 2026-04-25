@@ -1,3 +1,5 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260425T030605Z-ce22105c" ts="2026-04-25T03:06:05.422327+00:00" />
 Cycle 10 stays in consolidate mode and targets typed JSON artifact adoption for existing package summaries and direct-fit manifests instead of adding a workflow or broader publication framework.
 Use the existing stdlib JsonArtifactSpec and model-file helper seam as the preferred authoring surface for migrated publish handlers; add a new helper only if migration exposes a direct mechanical gap that the current seam cannot cover cleanly.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="typed-publication-artifact-contracts" pair="implement" turn_seq="1" run_id="run-20260425T030605Z-ce22105c" ts="2026-04-25T03:14:05.838256+00:00" />
+Split the publish-time JSON contracts from verifier payload models when the on-disk summary omits verifier-only fields (for example `summary`), and keep the typed artifact specs workflow-local in `contracts.py` while leaving cross-artifact policy checks in the publish handlers.

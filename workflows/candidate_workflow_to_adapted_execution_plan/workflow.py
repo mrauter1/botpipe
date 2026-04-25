@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
-
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
@@ -12,7 +9,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
-        require_mapping,
         require_non_empty_string,
         require_string_list,
         validate_selected_workflow_artifact_alignment,
@@ -31,7 +27,6 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
-        require_mapping,
         require_non_empty_string,
         require_string_list,
         validate_selected_workflow_artifact_alignment,
@@ -46,9 +41,11 @@ from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Wor
 from workflow.primitives import Event, Outcome
 
 from .contracts import (
+    ADAPTED_EXECUTION_SUMMARY_ARTIFACT,
     ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS,
     FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS,
     PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS,
+    VALIDATED_WORKFLOW_PARAMETERS_ARTIFACT,
     AdaptationRequestFramingPayload,
     AdaptationSurfaceAnalysisPayload,
     AdaptedExecutionPlanPayload,
@@ -360,27 +357,24 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             state.selected_workflow_reference or snapshot_selected_workflow_name,
             proposed_parameters,
         )
-        validated_payload = read_json_object(validated_path)
+        validated_payload = VALIDATED_WORKFLOW_PARAMETERS_ARTIFACT.read(validated_path)
         validate_selected_workflow_artifact_alignment(
-            validated_payload,
+            validated_payload.model_dump(mode="python"),
             artifact_name="validated_workflow_parameters.json",
             expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
-        validated_parameters = require_mapping(
-            validated_payload.get("validated_parameters"),
-            error_message="validated_workflow_parameters.json must define validated_parameters as a JSON object",
-        )
+        validated_parameters = dict(validated_payload.validated_parameters)
 
-        summary = read_json_object(required_paths["adapted_execution_summary"])
+        summary = ADAPTED_EXECUTION_SUMMARY_ARTIFACT.read(required_paths["adapted_execution_summary"])
         summary_selected_workflow_name = validate_selected_workflow_artifact_alignment(
-            summary,
+            summary.model_dump(mode="python"),
             artifact_name="adapted_execution_summary.json",
             expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         summary_entry_step = require_non_empty_string(
-            summary.get("selected_workflow_entry_step"),
+            summary.selected_workflow_entry_step,
             error_message="adapted_execution_summary.json must define a non-empty selected_workflow_entry_step",
             coerce=True,
         )
@@ -394,11 +388,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
                 "adapted_execution_summary.json selected_workflow_entry_step must match selected_workflow_capability.json"
             )
 
-        summary_parameters_supported = summary.get("selected_workflow_parameters_supported")
-        if not isinstance(summary_parameters_supported, bool):
-            raise ValueError(
-                "adapted_execution_summary.json must define boolean selected_workflow_parameters_supported"
-            )
+        summary_parameters_supported = summary.selected_workflow_parameters_supported
         capability_parameters_supported = bool(selected_capability.get("parameters_supported"))
         if summary_parameters_supported is not capability_parameters_supported:
             raise ValueError(
@@ -406,7 +396,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             )
 
         proposed_parameter_keys = require_string_list(
-            summary.get("proposed_parameter_keys"),
+            summary.proposed_parameter_keys,
             error_message="adapted_execution_summary.json must define proposed_parameter_keys as a string list",
             min_length=0,
             dedupe=True,
@@ -420,13 +410,13 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             raise ValueError("adapted_execution_summary.json proposed_parameter_keys must match workflow state")
 
         expected_downstream_artifacts = require_string_list(
-            summary.get("expected_downstream_artifacts"),
+            summary.expected_downstream_artifacts,
             error_message="adapted_execution_summary.json must define non-empty expected_downstream_artifacts",
             dedupe=True,
             coerce=True,
         )
         authoritative_artifacts = require_string_list(
-            summary.get("authoritative_artifacts"),
+            summary.authoritative_artifacts,
             error_message="adapted_execution_summary.json must define non-empty authoritative_artifacts",
             dedupe=True,
             coerce=True,
@@ -437,11 +427,11 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             )
 
         next_action = require_non_empty_string(
-            summary.get("next_action"),
+            summary.next_action,
             error_message="adapted_execution_summary.json must define a non-empty next_action",
             coerce=True,
         )
-        ready_for_execution = summary.get("ready_for_execution")
+        ready_for_execution = summary.ready_for_execution
         if ready_for_execution is not True:
             raise ValueError("adapted_execution_summary.json must confirm ready_for_execution=true")
 

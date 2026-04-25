@@ -41,9 +41,11 @@ from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Wor
 from workflow.primitives import Event, Outcome
 
 from .contracts import (
+    CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT,
     FRAME_TASK_ROUTE_CONTRACTS,
     PACKAGE_STRATEGY_ROUTE_CONTRACTS,
     SELECT_STRATEGY_ROUTE_CONTRACTS,
+    STRATEGY_SUMMARY_ARTIFACT,
     StrategyPackagePayload,
     StrategySelectionPayload,
     TaskFramingPayload,
@@ -402,20 +404,20 @@ class TaskToWorkflowStrategy(Workflow):
             if not artifact_path.exists():
                 raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
 
-        summary = read_json_object(required_paths["strategy_summary"])
+        summary = STRATEGY_SUMMARY_ARTIFACT.read(required_paths["strategy_summary"])
         selected_strategy = _require_strategy(
-            summary.get("selected_strategy"),
+            summary.selected_strategy,
             "strategy_summary.json must define a legal selected_strategy",
         )
         recommended_workflows = require_string_list(
-            summary.get("recommended_workflows"),
+            summary.recommended_workflows,
             error_message="strategy_summary.json must define non-empty recommended_workflows",
             allow_scalar=True,
             dedupe=True,
             coerce=True,
         )
         comparison_candidates = require_string_list(
-            summary.get("comparison_candidates"),
+            summary.comparison_candidates,
             error_message="strategy_summary.json must define comparison_candidates with at least three workflow names",
             allow_scalar=True,
             dedupe=True,
@@ -425,7 +427,7 @@ class TaskToWorkflowStrategy(Workflow):
             raise ValueError("strategy_summary.json must compare at least three candidate workflows")
 
         builder_baseline_workflow = require_non_empty_string(
-            summary.get("builder_baseline_workflow"),
+            summary.builder_baseline_workflow,
             error_message="strategy_summary.json must define a non-empty builder_baseline_workflow",
             coerce=True,
         )
@@ -436,13 +438,11 @@ class TaskToWorkflowStrategy(Workflow):
         if builder_baseline_workflow not in comparison_candidates:
             raise ValueError("strategy_summary.json must include the builder baseline in comparison_candidates")
 
-        builder_considered = summary.get("builder_considered")
+        builder_considered = summary.builder_considered
         if builder_considered is not True:
             raise ValueError("strategy_summary.json must confirm builder_considered=true")
 
-        create_new_required = summary.get("create_new_required")
-        if not isinstance(create_new_required, bool):
-            raise ValueError("strategy_summary.json must define boolean create_new_required")
+        create_new_required = summary.create_new_required
         if create_new_required != (selected_strategy == "create_new"):
             raise ValueError(
                 "strategy_summary.json create_new_required must match whether selected_strategy is create_new"
@@ -457,19 +457,19 @@ class TaskToWorkflowStrategy(Workflow):
             raise ValueError("strategy_summary.json must recommend exactly one workflow for adapt")
 
         authoritative_artifacts = require_string_list(
-            summary.get("authoritative_artifacts"),
+            summary.authoritative_artifacts,
             error_message="strategy_summary.json must define non-empty authoritative_artifacts",
             allow_scalar=True,
             dedupe=True,
             coerce=True,
         )
-        rejected_routes = normalize_unique_strings(summary.get("rejected_routes"), allow_scalar=True)
+        rejected_routes = normalize_unique_strings(summary.rejected_routes, allow_scalar=True)
         next_action = require_non_empty_string(
-            summary.get("next_action"),
+            summary.next_action,
             error_message="strategy_summary.json must define a non-empty next_action",
             coerce=True,
         )
-        ready_for_handoff = summary.get("ready_for_handoff")
+        ready_for_handoff = summary.ready_for_handoff
         if ready_for_handoff is not True:
             raise ValueError("strategy_summary.json must confirm ready_for_handoff=true")
 
@@ -493,9 +493,11 @@ class TaskToWorkflowStrategy(Workflow):
                 selected_workflow,
             )
 
-        candidate_summary = read_json_object(required_paths["candidate_workflow_set_summary"])
+        candidate_summary = CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT.read(
+            required_paths["candidate_workflow_set_summary"]
+        )
         candidate_comparison_candidates = require_string_list(
-            candidate_summary.get("comparison_candidates"),
+            candidate_summary.comparison_candidates,
             error_message="candidate_workflow_set_summary.json must define comparison_candidates",
             allow_scalar=True,
             dedupe=True,
@@ -506,7 +508,7 @@ class TaskToWorkflowStrategy(Workflow):
                 "strategy_summary.json comparison_candidates must match candidate_workflow_set_summary.json"
             )
         candidate_recommended_workflows = require_string_list(
-            candidate_summary.get("recommended_candidate_workflows"),
+            candidate_summary.recommended_candidate_workflows,
             error_message="candidate_workflow_set_summary.json must define recommended_candidate_workflows",
             allow_scalar=True,
             dedupe=True,
@@ -517,7 +519,7 @@ class TaskToWorkflowStrategy(Workflow):
                 "strategy_summary.json recommended_workflows must be drawn from candidate_workflow_set_summary.json"
             )
         candidate_portfolio_posture = _require_portfolio_posture(
-            candidate_summary.get("portfolio_posture"),
+            candidate_summary.portfolio_posture,
             "candidate_workflow_set_summary.json must define a legal portfolio_posture",
         )
         expected_strategy = _strategy_for_portfolio_posture(candidate_portfolio_posture)
@@ -525,7 +527,7 @@ class TaskToWorkflowStrategy(Workflow):
             raise ValueError(
                 "strategy_summary.json selected_strategy must align with candidate_workflow_set_summary.json portfolio_posture"
             )
-        child_ready = candidate_summary.get("ready_for_strategy_selection")
+        child_ready = candidate_summary.ready_for_strategy_selection
         if child_ready is not True:
             raise ValueError(
                 "candidate_workflow_set_summary.json must confirm ready_for_strategy_selection=true"

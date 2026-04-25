@@ -273,6 +273,29 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 - they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
 - publication-artifact validation and any workflow-specific receipt semantics still belong in workflow code
 
+## Typed JSON Artifact Contracts
+
+When a workflow owns a durable JSON summary or manifest, keep its artifact contract explicit in the workflow package instead of starting publish handlers from raw dictionaries.
+
+```python
+from autoloop_v3.stdlib import JsonArtifactSpec
+
+
+PACKAGE_SUMMARY_ARTIFACT = JsonArtifactSpec(
+    "strategy_summary.json",
+    StrategySummaryPayload,
+)
+```
+
+Typed JSON artifact boundary:
+
+- declare workflow-local `JsonArtifactSpec(...)` surfaces in `contracts.py` when the JSON artifact belongs to one workflow family
+- prefer `artifact_spec.read(path)` or `read_model_file(path, Model)` for publish-step reads so the workflow starts from a validated model, not `summary.get(...)`
+- use `artifact_spec.validate(path)` or `validate_model_file(path, Model)` for focused proof or readable failure reports when a workflow-local JSON contract needs direct validation
+- keep artifact filenames and top-level JSON keys stable; the typed seam should clarify authoring, not rename surfaces
+- keep cross-artifact alignment, state-drift checks, hidden-execution policy, and receipt shaping in workflow code
+- do not turn this into a generic publication registry or runtime-owned publication framework
+
 ## Optional Validation Helpers
 
 `stdlib/validation.py` provides a small opt-in helper seam for generic workflow-local JSON, string, list, mapping, non-negative-int, and positive-int validation.

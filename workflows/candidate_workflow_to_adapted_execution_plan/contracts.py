@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
+
+try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import JsonArtifactSpec
+except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import JsonArtifactSpec
 
 from workflow import RouteContract
 
@@ -40,6 +47,40 @@ class AdaptedExecutionPlanPayload(BaseModel):
     next_action: str = Field(min_length=1)
     ready_for_execution: bool
     replan_reason: str | None = None
+
+
+class ValidatedWorkflowParametersPayload(BaseModel):
+    """Typed contract for validated_workflow_parameters.json."""
+
+    repo_root: str = Field(min_length=1)
+    run_id: str = Field(min_length=1)
+    selected_workflow_name: str = Field(min_length=1)
+    task_id: str = Field(min_length=1)
+    validated_parameters: dict[str, Any] = Field(default_factory=dict)
+    workflow_name: str = Field(min_length=1)
+
+
+class AdaptedExecutionSummaryPayload(BaseModel):
+    """Typed contract for adapted_execution_summary.json."""
+
+    selected_workflow_name: str = Field(min_length=1)
+    selected_workflow_entry_step: str = Field(min_length=1)
+    selected_workflow_parameters_supported: bool
+    proposed_parameter_keys: list[str]
+    expected_downstream_artifacts: list[str] = Field(min_length=1)
+    authoritative_artifacts: list[str] = Field(min_length=1)
+    next_action: str = Field(min_length=1)
+    ready_for_execution: bool
+
+
+ADAPTED_EXECUTION_SUMMARY_ARTIFACT = JsonArtifactSpec(
+    "adapted_execution_summary.json",
+    AdaptedExecutionSummaryPayload,
+)
+VALIDATED_WORKFLOW_PARAMETERS_ARTIFACT = JsonArtifactSpec(
+    "validated_workflow_parameters.json",
+    ValidatedWorkflowParametersPayload,
+)
 
 
 FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS = {
@@ -108,10 +149,14 @@ PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS = {
 
 
 __all__ = [
+    "ADAPTED_EXECUTION_SUMMARY_ARTIFACT",
     "ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS",
     "AdaptationRequestFramingPayload",
     "AdaptationSurfaceAnalysisPayload",
     "AdaptedExecutionPlanPayload",
+    "AdaptedExecutionSummaryPayload",
     "FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS",
     "PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS",
+    "VALIDATED_WORKFLOW_PARAMETERS_ARTIFACT",
+    "ValidatedWorkflowParametersPayload",
 ]

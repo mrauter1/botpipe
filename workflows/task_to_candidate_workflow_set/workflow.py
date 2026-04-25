@@ -36,6 +36,7 @@ from workflow.primitives import Event, Outcome
 
 from .contracts import (
     ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
+    CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT,
     FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
     PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
     CandidateRequestFramingPayload,
@@ -318,9 +319,11 @@ class TaskToCandidateWorkflowSet(Workflow):
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_capability_snapshot.json must define a positive workflow_count")
 
-        summary = read_json_object(required_paths["candidate_workflow_set_summary"])
+        summary = CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT.read(
+            required_paths["candidate_workflow_set_summary"]
+        )
         comparison_candidates = require_string_list(
-            summary.get("comparison_candidates"),
+            summary.comparison_candidates,
             error_message="candidate_workflow_set_summary.json must define non-empty comparison_candidates",
             allow_scalar=True,
             dedupe=True,
@@ -332,14 +335,14 @@ class TaskToCandidateWorkflowSet(Workflow):
                 "candidate_workflow_set_summary.json must compare at least three candidate workflows when the portfolio size permits"
             )
         ranked_candidates = require_string_list(
-            summary.get("ranked_candidates"),
+            summary.ranked_candidates,
             error_message="candidate_workflow_set_summary.json must define non-empty ranked_candidates",
             allow_scalar=True,
             dedupe=True,
             coerce=True,
         )
         recommended_candidate_workflows = require_string_list(
-            summary.get("recommended_candidate_workflows"),
+            summary.recommended_candidate_workflows,
             error_message="candidate_workflow_set_summary.json must define non-empty recommended_candidate_workflows",
             allow_scalar=True,
             dedupe=True,
@@ -357,7 +360,7 @@ class TaskToCandidateWorkflowSet(Workflow):
                 )
 
         builder_baseline_workflow = require_non_empty_string(
-            summary.get("builder_baseline_workflow"),
+            summary.builder_baseline_workflow,
             error_message="candidate_workflow_set_summary.json must define a non-empty builder_baseline_workflow",
             coerce=True,
         )
@@ -366,7 +369,7 @@ class TaskToCandidateWorkflowSet(Workflow):
                 f"candidate_workflow_set_summary.json builder_baseline_workflow must be {_BUILDER_BASELINE!r}"
             )
         builder_present = _BUILDER_BASELINE in _workflow_names_from_snapshot(capability_snapshot)
-        builder_considered = summary.get("builder_considered")
+        builder_considered = summary.builder_considered
         if builder_present:
             if builder_considered is not True:
                 raise ValueError("candidate_workflow_set_summary.json must confirm builder_considered=true")
@@ -376,7 +379,7 @@ class TaskToCandidateWorkflowSet(Workflow):
                 )
 
         portfolio_posture = _require_portfolio_posture(
-            summary.get("portfolio_posture"),
+            summary.portfolio_posture,
             "candidate_workflow_set_summary.json must define a legal portfolio_posture",
         )
         if portfolio_posture == "compose_needed" and len(recommended_candidate_workflows) < 2:
@@ -389,7 +392,7 @@ class TaskToCandidateWorkflowSet(Workflow):
             )
 
         authoritative_artifacts = require_string_list(
-            summary.get("authoritative_artifacts"),
+            summary.authoritative_artifacts,
             error_message="candidate_workflow_set_summary.json must define non-empty authoritative_artifacts",
             allow_scalar=True,
             dedupe=True,
@@ -400,11 +403,11 @@ class TaskToCandidateWorkflowSet(Workflow):
                 "candidate_workflow_set_summary.json authoritative_artifacts must include candidate_workflow_set, candidate_workflow_set_summary, and candidate_next_action"
             )
         next_action = require_non_empty_string(
-            summary.get("next_action"),
+            summary.next_action,
             error_message="candidate_workflow_set_summary.json must define a non-empty next_action",
             coerce=True,
         )
-        ready_for_strategy_selection = summary.get("ready_for_strategy_selection")
+        ready_for_strategy_selection = summary.ready_for_strategy_selection
         if ready_for_strategy_selection is not True:
             raise ValueError(
                 "candidate_workflow_set_summary.json must confirm ready_for_strategy_selection=true"
