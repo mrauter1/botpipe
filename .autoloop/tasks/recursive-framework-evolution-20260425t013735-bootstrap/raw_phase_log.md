@@ -1163,3 +1163,59 @@ No new product ambiguity surfaced. The next step is verifier re-review against `
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+---
+I’m re-reviewing only the session-continuity scope and the two previously blocking paths. First I’m checking the current artifacts and the relevant runtime/session code to confirm whether `IMP-001` and `IMP-002` are actually resolved.
+
+The code paths look consistent with the requested fix. I’m rerunning the same targeted suites and two minimal repros so the review outcome is based on current behavior, not just the producer’s notes.
+
+The previous blockers do not reproduce anymore. I’m updating the phase artifacts now: all criteria become checked, and the feedback file gets a follow-up note recording that cycle 2 found no new findings and that `IMP-001`/`IMP-002` are resolved.
+
+Scope considered
+
+Session-continuity phase only. I re-reviewed the two previously blocking paths against the accepted phase contract: fresh-run default-session creation and stable reuse of legacy restored run-global sessions.
+
+What I analyzed
+
+I checked the current implementation in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:95), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py:123), and [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py:151). I also reviewed the producer notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/session-continuity/implementation_notes.md:1) and reran the targeted suites the producer listed.
+
+What I reviewed
+
+The current behavior matches the intended fix:
+- Fresh system-only runs now create and persist a `default` binding before `on_start`, satisfying AC-07.
+- Resume now normalizes legacy run-global snapshots to the current run key, and direct context reopening reuses already-restored legacy active bindings instead of silently rebinding, satisfying AC-08.
+
+Validation I reran:
+- `tests/unit/test_primitives_and_stores.py`
+- `tests/contract/test_engine_contracts.py`
+- `tests/runtime/test_compatibility_runtime.py`
+
+I also reran the two minimal repros from cycle 1:
+- A fresh system-only run now leaves `default` present in `active_keys_by_slot` and `bindings`.
+- A direct legacy `scope=None` restore now returns the same binding from `ctx.get_session("main")` and `ctx.open_session("main")`.
+
+Key findings / decisions
+
+No new findings. `IMP-001` and `IMP-002` no longer reproduce. The phase artifacts are updated accordingly:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/session-continuity/criteria.md:1) now has all boxes checked.
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/session-continuity/feedback.md:1) now records cycle 2 verification with no new findings.
+
+Open issues / next step
+
+No open blocking issues remain in this phase. Session-continuity is ready to be treated as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
