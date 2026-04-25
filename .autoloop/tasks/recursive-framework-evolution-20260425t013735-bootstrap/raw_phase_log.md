@@ -1517,3 +1517,57 @@ Open issues / next step
 - Syntax validation passed with `python3 -m py_compile ...` on the touched Python files.
 - I still could not run pytest or a real runtime import exercise in this environment because the available interpreter lacks `pytest` and `pydantic`.
 - Next step is to run the focused typed-params tests, then full `pytest -q`, in the project’s real Python environment.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc33e-596b-7713-984c-201397f86f53
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+I’m re-reviewing the typed-params phase against the reviewer finding that was left open. First I’m checking the updated runner/workspace flow to confirm new-run normalization now happens before persistence and that resume behavior still uses stored params.
+
+I don’t see a remaining blocking defect in the code path that was flagged last round. I’m marking the criteria complete and appending a follow-up note in the feedback artifact so the prior blocking item doesn’t remain the apparent final state.
+
+Scope considered
+
+- Phase-scoped `typed-params` review only.
+- Updated runtime persistence path in `runtime/runner.py`, with adjacent checks against `runtime/workspace.py`, `runtime/loader.py`, `core/context.py`, and `core/engine.py`.
+- Phase artifacts in `.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-params/`.
+
+What I analyzed
+
+- Whether new-run `workflow_params` are normalized before any run metadata is persisted.
+- Whether resume still ignores fresh overrides and keeps using stored params.
+- Whether the new regression test actually covers the prior persistence-ordering defect.
+- Whether the implementation remains aligned with the typed-params decisions recorded in `decisions.txt`.
+
+What I reviewed
+
+- `runtime/runner.py`, especially `execute_workflow_package(...)` and `_normalize_execution_options(...)`.
+- The new negative-path test in `tests/runtime/test_workspace_and_context.py`.
+- The updated `implementation_notes.md`.
+- The phase `criteria.md` and `feedback.md`, which I updated to reflect the current review state.
+
+Key findings / decisions
+
+- I do not see any remaining blocking findings in the typed-params scope.
+- The previous blocking issue (`IMP-001`) is resolved: new-run `RunnerOptions.workflow_params` are normalized before workspace creation, so invalid direct-run params fail before persistence and persisted params stay aligned with `ctx.params`.
+- The resume contract remains intact: stored params still win over fresh overrides.
+- I marked all criteria as satisfied and appended a follow-up note in `feedback.md` recording that `IMP-001` is resolved in this revision.
+
+Open issues / next step
+
+- No blocking code issues remain for this phase.
+- The implementation notes still correctly disclose the local validation limit: the environment here does not provide `pytest` or an importable `pydantic`, so only syntax-level validation was available in-turn.
+- Next step outside this review is the normal one: run the focused typed-params tests and then full `pytest -q` in the project’s real Python environment.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
