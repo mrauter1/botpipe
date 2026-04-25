@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -704,7 +705,10 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authorita
 
     with pytest.raises(
         ValueError,
-        match="authoritative selected workflow file changed during refinement publication",
+        match=(
+            "authoritative selected workflow file changed during refinement publication: "
+            f"{re.escape(PROMPT_RELATIVE_PATH)}"
+        ),
     ):
         run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
             run.result.state,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -741,7 +742,10 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_authorit
 
     with pytest.raises(
         ValueError,
-        match="authoritative selected workflow file changed during decomposition publication",
+        match=(
+            "authoritative selected workflow file changed during decomposition publication: "
+            f"{re.escape(PARENT_PROMPT_RELATIVE_PATH)}"
+        ),
     ):
         run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
             run.result.state,

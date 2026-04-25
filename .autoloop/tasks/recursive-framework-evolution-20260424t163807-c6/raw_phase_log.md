@@ -598,3 +598,60 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1e2-4332-7dd3-8493-2aaba416ebf4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc1e2-4332-7dd3-8493-2aaba416ebf4
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1e2-4332-7dd3-8493-2aaba416ebf4
+---
+I’m auditing the phase-local workflow migration from the test-author perspective now. I’ll inspect the changed workflow/test surface, confirm the current runtime coverage really matches the acceptance criteria, and then update the phase-local test strategy and feedback with the concrete behavior map and any added or confirmed regression coverage.
+
+The existing runtime coverage is already close, but there’s one worthwhile tightening: the new drift-rejection tests only match the prefix of the failure message. I’m strengthening those two assertions to include the repo-relative path too, so the tests pin the preserved shared-seam output more precisely.
+
+I tightened the two new drift tests and I’m rerunning the scoped runtime suites now. That keeps this turn aligned with the phase contract: validate unchanged publication behavior, boundary rejections, and the preserved workflow-local drift failure surface.
+
+The scoped suites are clean through the early batches again. I’m waiting for the final exit codes, then I’ll record the behavior-to-test map and the concrete test additions in the phase-local strategy and feedback artifacts.
+
+The scoped proof passed: `23` refinement tests and `24` decomposition tests. I’m recording the exact coverage map now, including the happy path, boundary failures, and the strengthened drift-message assertions that lock the shared-seam wrapper output to the workflow-local contract.
+
+Scope considered
+
+- Phase-local test coverage for the refinement/decomposition workflow migration.
+- Focused on the two migrated runtime suites plus the shared-seam dependency behavior they exercise.
+- Excluded unrelated dirty files.
+
+What I analyzed
+
+- The migrated workflow-local wrapper behavior around `stdlib.candidate_surfaces`.
+- Existing happy-path and boundary-rejection coverage in:
+  - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
+  - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+- The shared decisions ledger to keep artifact names, route names, receipt payloads, and workflow-local policy wording stable.
+
+What I changed
+
+- Tightened the new authoritative-source drift tests in both runtime suites so they assert the preserved repo-relative file path in the failure message, not just the shared prefix.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/test/phases/refinement-decomposition-migration/test_strategy.md) with the behavior-to-test coverage map, invariants, failure paths, flake controls, and known gaps.
+- Appended the phase-local test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/test/phases/refinement-decomposition-migration/feedback.md).
+- Appended one test-specific constraint to `decisions.txt` under the current test-author header.
+
+Key findings / decisions
+
+- The scoped runtime proof remains green after the assertion tightening:
+  - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`: `23 passed`
+  - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`: `24 passed`
+- Coverage now explicitly locks the workflow-local authoritative-drift error surface to the repo-relative path, which is the main wrapper-level regression risk after moving the mechanics into the shared seam.
+- No additional test expansion was necessary beyond the targeted runtime suites for this phase.
+
+Open issues / next step
+
+- No in-scope test blocker remains.
+- Known gap is intentional: seam-level path-hardening and overlay mechanics stay covered in the earlier shared-helper unit phase; this phase remains on targeted workflow runtime proof only.
