@@ -4,3 +4,6 @@ Treat session/checkpoint persistence migration as backward-readable: loaders sho
 Artifact contract enforcement must occur after provider/system handlers and before route effects; missing or invalid required artifacts must fail explicitly without fallback routing.
 Typed child workflow IO should be additive on `ChildWorkflowResult`; preserve existing metadata, artifact, and path fields until callers migrate.
 Docs must replace the current greenfield/backward-compatibility framing where it conflicts with this upgrade contract and must keep `workflow.toml` metadata-only.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="artifact-model" pair="implement" turn_seq="1" run_id="run-20260425T043735Z-6422224e" ts="2026-04-25T04:43:45.088599+00:00" />
+Keep artifact-model scope additive: artifact metadata and handle validation land now, while route-based enforcement and automatic step-local owner binding remain deferred to later phases.
+Raw dict artifact schemas are accepted only for JSON artifacts and are validated eagerly with `jsonschema` when available so unsupported schema declarations fail at definition time.
