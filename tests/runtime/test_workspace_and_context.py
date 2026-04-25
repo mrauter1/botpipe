@@ -10,7 +10,14 @@ import pytest
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.loader import WorkflowParameterError
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from autoloop_v3.runtime.workspace import list_task_operation_summaries, list_workflow_run_summaries
+from autoloop_v3.runtime.workspace import (
+    create_run,
+    ensure_workspace,
+    ensure_workflow_workspace,
+    list_task_operation_summaries,
+    list_workflow_run_summaries,
+    resolve_run_workflow_input,
+)
 from workflow.primitives import Outcome
 
 
@@ -275,6 +282,40 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     assert resumed_context["workflow_params"] == {"mode": "strict"}
     assert resumed_context["answer"] == "42"
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
+
+
+def test_create_run_persists_workflow_input_and_resolve_run_workflow_input_handles_fresh_and_stored_paths(
+    tmp_path: Path,
+) -> None:
+    package_dir = tmp_path / "workflows" / "child_input_workspace_demo"
+    package_dir.mkdir(parents=True, exist_ok=True)
+
+    task_workspace = ensure_workspace(tmp_path, "child-input-workspace-task", message="Parent request")
+    workflow_workspace = ensure_workflow_workspace(
+        task_workspace,
+        "child_input_workspace_demo",
+        package_dir=package_dir,
+        reference="child_input_workspace_demo",
+    )
+
+    provided_input = {"topic": "alpha", "urgency": 2}
+    run_workspace = create_run(
+        workflow_workspace,
+        message="Run typed child",
+        workflow_input=provided_input,
+    )
+
+    run_meta = json.loads(run_workspace.run_meta_file.read_text(encoding="utf-8"))
+
+    assert run_meta["workflow_input"] == provided_input
+    assert resolve_run_workflow_input(run_workspace, None) == provided_input
+    assert resolve_run_workflow_input(run_workspace, {"topic": "beta", "urgency": 9}) == provided_input
+
+    run_meta.pop("workflow_input", None)
+    run_workspace.run_meta_file.write_text(json.dumps(run_meta, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    fallback_input = {"topic": "gamma", "urgency": 3}
+    assert resolve_run_workflow_input(run_workspace, fallback_input) == fallback_input
 
 
 def test_context_exposes_typed_params_on_new_runs(tmp_path: Path) -> None:
@@ -1120,6 +1161,7 @@ def test_context_invoke_workflow_supports_typed_child_input_and_output(tmp_path:
     assert parent_payload["child_metadata"]["typed_output"]["available"] is True
     assert parent_payload["child_metadata"]["typed_output"]["validation_error"] is None
     assert child_payload == {"topic": "alpha", "urgency": 2, "mode": "strict"}
+    assert child_meta["workflow_input"] == {"topic": "alpha", "urgency": 2}
     assert child_meta["typed_output"]["available"] is True
     assert child_meta["typed_output"]["validation_error"] is None
     assert len(child_records) == 1
@@ -1159,6 +1201,7 @@ def test_context_invoke_workflow_records_typed_child_output_validation_failures(
     assert parent_payload["child_workflow"] == "child_typed_invalid"
     assert parent_payload["child_status"] == "success"
     assert parent_payload["child_output"] is None
+    assert child_meta["workflow_input"] == {"topic": "alpha", "urgency": 2}
     assert parent_payload["child_metadata"]["typed_output"]["declared"] is True
     assert parent_payload["child_metadata"]["typed_output"]["available"] is False
     assert "typed output validation failed" in parent_payload["child_metadata"]["typed_output"]["validation_error"]

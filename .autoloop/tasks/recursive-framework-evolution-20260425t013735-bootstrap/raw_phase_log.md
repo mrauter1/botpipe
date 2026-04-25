@@ -2605,3 +2605,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc379-e4bc-7732-8324-86f1f9de1982
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc379-e4bc-7732-8324-86f1f9de1982
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc379-e4bc-7732-8324-86f1f9de1982
+---
+I’m covering the `child-io` phase from the test side now. I’ll inspect the current typed child-IO tests and the phase-local test artifacts first, then I’ll add the narrowest regression coverage needed to pin the fresh-run `workflow_input` behavior that just caused a reviewer-found bug.
+
+The end-to-end typed child tests already cover the feature, but I want one tighter regression test on the workspace helper itself because the reviewer-found bug lived below the child workflow surface. I’m checking the workspace helper signatures now so I can add a deterministic persistence/fallback test without introducing a lot of fixture noise.
+
+I’ve got a good narrow test target. I’m adding one helper-level regression test for the workspace persistence/fallback contract, and I’m tightening the end-to-end typed child tests to assert that `workflow_input` is actually persisted into the child run metadata on both success and typed-output-validation failure paths.
+
+The test coverage is in place. I’m running a syntax check on the updated runtime test module now, then I’ll write the phase-local strategy map and the concise feedback summary.
+
+Scope considered
+
+- Phase-local `child-io` test coverage only.
+- I focused on the typed child input/output runtime path, especially the fresh-run `workflow_input` persistence bug that the reviewer found.
+
+What I analyzed
+
+- Existing typed child-IO coverage in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- The workspace helper path in `runtime/workspace.py` that now persists and resolves `workflow_input`.
+- The phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/child-io/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/child-io/feedback.md).
+
+What I changed
+
+- Refined [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py):
+  - added a targeted regression test for `create_run(...)` + `resolve_run_workflow_input(...)` covering:
+    - fresh-run persistence of `workflow_input`
+    - stored-value preference on reread
+    - fallback to the caller payload when a fresh `run.json` exists without the field
+  - strengthened the typed child success/failure tests to assert `child_meta["workflow_input"]` is persisted in child `run.json`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/child-io/test_strategy.md) with an explicit behavior-to-test map.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/child-io/feedback.md).
+
+Key findings / decisions
+
+- The end-to-end typed child tests already covered the feature, but the reviewer-found bug lived in the workspace helper layer, so I added one narrow regression test there instead of broadening fixture churn.
+- I explicitly pinned `workflow_input` persistence on both the success and typed-output-validation-failure child paths so the additive output contract cannot regress while leaving input handling untested.
+
+Open issues / next step
+
+- Validation performed: `python3 -m py_compile tests/runtime/test_workspace_and_context.py`
+- I could not run `pytest` in this environment because the runtime dependencies are unavailable here. The next step is to run the updated runtime test slice in an environment with project dependencies installed.
