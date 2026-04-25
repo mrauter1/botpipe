@@ -160,3 +160,12 @@ No open verification issues remain. The plan is complete and ready for the next 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T074502Z-48656955 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=converge-eval-helper-validation
+explicit=True
+current_phase_index=0
