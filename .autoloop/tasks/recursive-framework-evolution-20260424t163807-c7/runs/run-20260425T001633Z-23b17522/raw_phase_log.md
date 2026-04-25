@@ -497,3 +497,110 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc212-9e35-7151-b726-cd31c0f08710
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc212-9e35-7151-b726-cd31c0f08710
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc212-9e35-7151-b726-cd31c0f08710
+---
+I’m checking the phase-owned test artifacts and the targeted runtime tests first so I can map the implemented seam migration to concrete coverage, then I’ll decide whether any additional repo test changes are still needed beyond the tests already added in the implementation turn.
+
+There’s one regression surface worth hardening further: the non-obvious `boundary_field_map` wiring on the candidate-manifest path. I’m adding one candidate-manifest boundary mismatch test per workflow so a future refactor can’t silently drop those package/doc/runtime-test alignment checks.
+
+The new candidate-boundary tests are in place and the focused suites are running. If they stay green, I’ll record the behavior-to-test map explicitly in the phase strategy and note that these additions protect the non-obvious `boundary_field_map` wiring on both publish paths.
+
+Scope considered
+
+- Phase-local `migrate-refinement-decomposition-callers` test scope only.
+- Reviewed the migrated refinement/decomposition runtime suites plus the phase-owned test artifacts.
+
+What I analyzed
+
+- The shared-seam migration decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/decisions.txt), especially the explicit `boundary_field_map` requirement and preserved refinement error wording.
+- Existing runtime coverage in [test_workflow_and_eval_to_refined_workflow_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py) and [test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py).
+- The phase-owned [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/migrate-refinement-decomposition-callers/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/migrate-refinement-decomposition-callers/feedback.md).
+
+What I changed
+
+- Added a refinement publish-time regression test for candidate-manifest boundary metadata drift.
+- Added a decomposition publish-time regression test for candidate-manifest boundary metadata drift.
+- Updated the phase test strategy with an explicit behavior-to-test coverage map, preserved invariants, failure paths, flake controls, and known gaps.
+- Appended a concise producer update to the phase test feedback artifact.
+- Appended two test-scope decisions under the latest test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+- The highest-value extra regression surface was candidate-manifest boundary metadata, because the shared seam depends on explicit `boundary_field_map` wiring and a future omission would not be caught by file-tree-only boundary tests.
+- Focused runtime proof is green:
+  - `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` -> `25 passed`
+  - `./.venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` -> `26 passed`
+
+Open issues / next step
+
+- No open test-blocking issues in this phase scope.
+- Auditor can validate the updated phase artifacts and the two added candidate-boundary regression tests.
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc212-9e35-7151-b726-cd31c0f08710
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc212-9e35-7151-b726-cd31c0f08710
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc212-9e35-7151-b726-cd31c0f08710
+---
+I’m auditing the phase test additions against the active contract now, with emphasis on whether the new coverage actually protects the shared-seam migration’s preserved invariants and the non-obvious `boundary_field_map` regression risk. Then I’ll update the test criteria and feedback artifacts and close with the loop-control block.
+
+The strategy and the runtime suites line up with the phase decisions: they now cover both baseline and candidate manifest boundary metadata, preserved boundary wording, unchanged receipts, and shared-seam failure paths. I’m finishing the proof run and then I’ll mark the test audit complete unless something unexpected shows up.
+
+The combined proof is green. I’m updating the auditor-owned artifacts now: all criteria boxes checked, and the feedback file will record that this audit found no blocking or non-blocking test gaps in the phase scope.
+
+Scope considered
+
+- Phase-local audit of `migrate-refinement-decomposition-callers` test work only.
+- Reviewed the updated runtime tests, the phase test strategy, the phase feedback artifact, and the shared decisions relevant to the caller migration.
+
+What I analyzed
+
+- The explicit test-scope decisions for this phase, especially the new requirement to protect caller-side `boundary_field_map` wiring.
+- The targeted runtime coverage in:
+  - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
+  - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+- The phase-owned [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/migrate-refinement-decomposition-callers/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/migrate-refinement-decomposition-callers/feedback.md).
+
+What I reviewed
+
+- Coverage for unchanged receipt payloads and overlay validation outcomes.
+- Coverage for preserved boundary rejections, including the refinement workflow’s historical boundary wording.
+- New regression coverage for baseline-manifest and candidate-manifest boundary metadata mismatches.
+- Reliability of the temp-workspace mutation pattern and absence of flake-prone dependencies.
+- Combined proof run:
+  - `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+  - Result: `51 passed in 22.81s`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/migrate-refinement-decomposition-callers/criteria.md) with all boxes checked.
+- Updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/migrate-refinement-decomposition-callers/feedback.md) with the audit result and combined proof note.
+
+Open issues / next step
+
+- No open test-audit issues in this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
