@@ -14,12 +14,12 @@
       "docs-memory-and-proof-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "typed-publication-artifact-contracts"
+    "current_phase_index": 1,
+    "current_phase_id": "migrate-direct-fit-publishers"
   },
   "phase_status": {
-    "typed-publication-artifact-contracts": "in_progress",
-    "migrate-direct-fit-publishers": "planned",
+    "typed-publication-artifact-contracts": "completed",
+    "migrate-direct-fit-publishers": "in_progress",
     "docs-memory-and-proof-closeout": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260425T030605Z-ce22105c",
       "status": "in_progress",
       "ts": "2026-04-25T03:14:05.754849+00:00"
+    },
+    {
+      "phase_id": "typed-publication-artifact-contracts",
+      "run_id": "run-20260425T030605Z-ce22105c",
+      "status": "completed",
+      "ts": "2026-04-25T03:34:43.923218+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "migrate-direct-fit-publishers",
+      "run_id": "run-20260425T030605Z-ce22105c",
+      "status": "in_progress",
+      "ts": "2026-04-25T03:34:43.927983+00:00"
     }
   ]
 }
