@@ -33,3 +33,7 @@
 {"ts": "2026-04-25T08:37:21.777113+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 33, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-params-migration"}
 {"ts": "2026-04-25T08:38:43.815777+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 34, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-params-migration"}
 {"ts": "2026-04-25T08:38:43.858952+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 35, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-params-migration"}
+{"ts": "2026-04-25T08:38:43.937664+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 36, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-params-migration", "phase_mode": "single"}
+{"ts": "2026-04-25T08:38:43.940852+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 37, "event_type": "phase_started", "phase_id": "proof-and-closeout", "phase_mode": "single"}
+{"ts": "2026-04-25T08:38:43.941868+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 38, "event_type": "pair_started", "pair": "implement", "phase_id": "proof-and-closeout"}
+{"ts": "2026-04-25T08:38:43.941923+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 39, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "proof-and-closeout"}
