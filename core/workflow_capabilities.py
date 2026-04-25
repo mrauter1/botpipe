@@ -569,7 +569,7 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
             {
                 step.session_name
                 for step in compiled.steps.values()
-                if step.session_name is not None
+                if step.session_name is not None and step.session_name != compiled.default_session_name
             }
         )
     )
@@ -611,7 +611,10 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
         ),
         transitions={step_name: dict(routes) for step_name, routes in compiled.routes.items()},
         global_transitions=dict(compiled.global_routes),
-        steps=tuple(_compiled_step_capability(step) for step in compiled.steps.values()),
+        steps=tuple(
+            _compiled_step_capability(step, default_session_name=compiled.default_session_name)
+            for step in compiled.steps.values()
+        ),
     )
 
 
@@ -644,11 +647,11 @@ def _compiled_artifact_capability(name: str, artifact) -> WorkflowArtifactCapabi
     )
 
 
-def _compiled_step_capability(step) -> WorkflowStepCapability:
+def _compiled_step_capability(step, *, default_session_name: str) -> WorkflowStepCapability:
     return WorkflowStepCapability(
         name=step.name,
         kind=step.kind,
-        session_name=step.session_name,
+        session_name=None if step.session_name == default_session_name else step.session_name,
         requires=step.requires,
         produces=step.produces,
         log_artifacts=step.log_artifacts,

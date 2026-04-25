@@ -134,9 +134,10 @@ def build_session_binding(
     metadata["model_override"] = model
     metadata["effort_override"] = effort
     return SessionBinding(
-        ref_name=binding.ref_name,
-        scope=binding.scope,
+        key=binding.key,
         session_id=session_id,
+        provider=provider_name,
+        provider_metadata=metadata["provider_metadata"],
         metadata=metadata,
     )
 
