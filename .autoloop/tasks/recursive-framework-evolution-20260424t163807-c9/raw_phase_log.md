@@ -821,3 +821,63 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+I’m addressing the reviewer’s acceptance-gap only: I’ll add the preserved compatibility sentence to the remaining cycle-9 closeout notes in the standing ledgers, then rerun the same scoped proof and refresh the phase notes.
+
+I’ve confirmed the reviewer’s complaint is narrow and valid. I’m patching the remaining cycle-9 closeout notes to restate the preserved CLI/runtime/provider/`ctx.invoke_workflow(...)` contract explicitly, plus a matching decision entry, then I’ll rerun the scoped suite.
+
+The doc-memory fix is applied. I’m rerunning the same scoped proof so the phase notes stay aligned with the final artifact state after the reviewer-driven patch.
+
+I’ve got the rerun green. I’m refreshing the implementation notes with the reviewer-fix details and the updated tracked closeout delta before I hand it back.
+
+The only tracked delta left from the closeout slice is the added decision entry; the recursive-memory files still sit outside the tracked baseline here. I’m updating the phase notes to reflect that and to record that the reviewer’s compatibility-wording finding was resolved.
+
+Scope considered
+
+- Reviewer finding `IMP-001` only, plus the phase-local closeout artifacts it referenced.
+- Standing recursive-memory closeout notes in:
+  - `.autoloop_recursive/framework_roadmap.md`
+  - `.autoloop_recursive/workflow_candidate_ledger.md`
+  - `.autoloop_recursive/validation_debt_ledger.md`
+- Phase implementation notes and the shared decisions ledger.
+
+What I analyzed
+
+- The reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/implement/phases/docs-memory-and-proof-closeout/feedback.md).
+- The cycle-9 closeout wording across the standing ledgers to confirm which notes were missing the preserved compatibility statement.
+- The scoped proof surface required by the phase contract.
+
+What I changed
+
+- Added the preserved compatibility-contract sentence to the cycle-9 closeout notes in:
+  - [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md)
+  - [.autoloop_recursive/workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md)
+  - [.autoloop_recursive/validation_debt_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/validation_debt_ledger.md)
+- Appended the reviewer-fix rationale under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/decisions.txt).
+- Updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/implement/phases/docs-memory-and-proof-closeout/implementation_notes.md) to record the feedback resolution and the rerun.
+
+Key findings / decisions
+
+- `IMP-001` is addressed by making the preserved CLI/runtime/provider/`ctx.invoke_workflow(...)` contract explicit in the remaining cycle-9 closeout ledgers.
+- No workflow/runtime behavior changed; this is still a docs-memory closeout fix only.
+- Reran scoped proof successfully:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py`
+  - Result: `141 passed`
+
+Open issues / next step
+
+- No known blocker remains in the implementation slice.
+- Ready for verifier rerun on the updated closeout artifacts.

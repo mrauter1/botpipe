@@ -72,6 +72,7 @@
 
 - Future cycles now see one consistent cycle-9 narrative across docs and recursive memory instead of separate partial notes.
 - The cycle now has an explicit no-doctrine-change closeout entry in the charter.
+- Reviewer feedback `IMP-001` is resolved by mirroring the preserved compatibility-contract statement in the remaining cycle-9 closeout ledgers.
 
 ## Validation Performed
 
@@ -81,6 +82,8 @@
 - Repair during validation:
   - The first rerun failed one docs-baseline assertion after the authoring-guide wording tightened.
   - Restored the exact required boundary sentence in `docs/authoring.md` and reran the same scoped suite green.
+  - The reviewer then flagged one documentation-consistency gap in the standing ledgers (`IMP-001`).
+  - Added the preserved compatibility-contract sentence to the remaining cycle-9 closeout notes and reran the same scoped suite green.
 
 ## Deduplication / Centralization Decisions
 
@@ -91,7 +94,7 @@
 
 - Files added: `0`
 - Files deleted: `0`
-- Net line change: repo-wide is still not practical in this checkout; earlier cycle-9 implementation notes already recorded tracked deltas of `+163` and `+79` across the helper/workflow/test migration, while this closeout itself changed tracked files by `+4` lines (`docs/authoring.md` and `decisions.txt`)
+- Net line change: repo-wide is still not practical in this checkout; earlier cycle-9 implementation notes already recorded tracked deltas of `+163` and `+79` across the helper/workflow/test migration, while the remaining tracked delta from this closeout is `+2` lines in `decisions.txt` and the recursive-memory files sit outside the tracked baseline
 - Repeated validation idioms removed: `0` in this phase; cycle total remains `8` mechanical patterns from the prior two phases
 - Repeated prompt sections removed or shortened: `0`
 - Workflows changed to use shared helpers: `0` in this phase; cycle total remains `3` scoped workflows
