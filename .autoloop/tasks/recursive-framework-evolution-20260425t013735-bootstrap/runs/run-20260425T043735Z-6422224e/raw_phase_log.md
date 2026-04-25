@@ -2143,3 +2143,118 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc35d-e300-7c22-9336-e54faba217cc
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+I’m addressing the two blocking review findings in the worklist phase: deterministic item identity and `Advance` semantics. I’ll inspect the affected runtime and validation paths, patch the narrowest safe fix, then run focused regression tests before updating phase notes.
+
+The worklist code already has one natural centralization point: `load_items(...)`. I’m checking whether I can safely enforce duplicate-id rejection there and reuse that same path for restore, refresh, and selection without widening behavior elsewhere.
+
+I’m fixing this in two layers: compile-time/runtime validation for `Advance`, plus a single item-load validation path that every worklist read already flows through. Then I’ll add regression tests that reproduce the reviewer’s exact cases.
+
+I’ve got the patch shape. Next I’m editing the shared validation/load paths and the focused regression tests together so the fix stays centralized and the failure modes are pinned.
+
+I’ve finished the code/test edits. I’m running focused validation now against the touched runtime, validation, and worklist tests to confirm the reviewer repros are closed without widening behavior.
+
+The focused suite passed. I’m doing one last pass on the diff and then I’ll update the phase notes and decision ledger with the exact constraints that changed, so the next turn doesn’t drift back into the same gaps.
+
+I’ve confirmed the fix stays small: no new modules, just a stricter worklist load path, a matching `Advance` validator, and regression tests. I’m recording those constraints now in the phase notes and shared decision ledger.
+
+Scope considered
+
+- Phase-local worklist fixes only: [core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/worklists.py:167), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:600), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:834), and the focused worklist tests plus phase notes/decisions.
+
+What I analyzed
+
+- Reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/feedback.md).
+- The shared phase plan and current [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/implementation_notes.md).
+- The runtime paths where worklist ids are materialized and where `Advance(...)` validation/runtime routing could drift.
+
+What I changed
+
+- Centralized worklist item validation in `Worklist.load_items(...)` so duplicate item ids now fail immediately before selection, restore, refresh, status mutation, or work-item continuity can collapse by id.
+- Tightened `Advance(worklist)` validation so it is only legal from a source step scoped to that same worklist, and added a matching runtime guard in `_advance_worklist(...)`.
+- Added focused regression tests for duplicate ids and for invalid unscoped/mismatched `Advance(...)` usage.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/implementation_notes.md) and appended the non-obvious constraints under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+- The narrowest safe fix was `load_items(...)`, because every worklist read path already goes through it.
+- The `Advance(...)` rule now lives in validation and is mirrored once at runtime to keep compiled and executed behavior aligned.
+- Validation performed:
+- `python -m py_compile core/worklists.py core/validation.py core/engine.py tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py`
+- `pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py`
+- Result: `120 passed`.
+
+Open issues / next step
+
+- I did not run full `pytest -q`.
+- The next step is verifier re-review of this phase against the updated feedback items.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc35d-e300-7c22-9336-e54faba217cc
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+I’m re-reviewing the worklist phase after the producer’s fixes, focusing on the two prior blocking findings and adjacent regressions in selection and `Advance` behavior.
+
+The fixes line up with the prior repros. I’m running the focused suite once in verifier mode so the phase can close on actual execution, not just on code inspection.
+
+I’ve confirmed the focused verifier suite passes. I’m updating the phase artifacts now: criteria to complete, and feedback with a short closure note so the earlier blocking findings don’t look unresolved in the next cycle.
+
+Scope considered
+
+- Phase-local review of the worklist follow-up changes only: [core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/worklists.py:167), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:600), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:834), the new focused tests, and the active phase artifacts.
+
+What I analyzed
+
+- The prior blocking findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/feedback.md).
+- The producer’s updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/implementation_notes.md).
+- The exact code paths for worklist loading, `Advance(...)` validation, and runtime advancement behavior.
+
+What I reviewed
+
+- `Worklist.load_items(...)` now rejects duplicate item ids before selection/restore/refresh logic derives id-keyed maps.
+- `Advance(worklist)` is now constrained to the source step’s matching scope at validation time and guarded again at runtime.
+- Focused verifier validation:
+- `python -m py_compile core/worklists.py core/validation.py core/engine.py tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py`
+- `pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py`
+- Result: `120 passed`.
+
+Key findings / decisions
+
+- No remaining blocking or non-blocking findings in phase scope.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/criteria.md) to fully checked.
+- Appended a closure note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/feedback.md) recording that `IMP-001` and `IMP-002` are resolved.
+
+Open issues / next step
+
+- No open issues in this phase-local review.
+- Full-suite regression and docs remain for later phases, outside this verifier scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
