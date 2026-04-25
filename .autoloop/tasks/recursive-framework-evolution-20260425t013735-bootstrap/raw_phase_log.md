@@ -1040,3 +1040,64 @@ I’ve finished code and validation. I’m recording the non-obvious migration d
   - `tests/unit/test_stdlib_and_extensions.py`
   - `tests/strictness/test_no_compat.py`
 - A full `pytest -q` pass still reports out-of-phase failures in `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`, `tests/runtime/test_workflow_package_to_composable_building_blocks.py`, and `tests/test_architecture_baseline_docs.py`. The strictness regression from the temporary root export was fixed afterward, but I did not rerun the entire suite again once that was reverted.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+---
+I’m at the point of writing findings. Two session-specific gaps look material: the default session is still lazy and not guaranteed for every run, and legacy run-global bindings with no stored key cannot be rebound safely once `ctx.open_session(...)` is called again after resume. I’m checking the phase criteria wording one more time before I mark them blocking.
+
+I’m confirming both blocking scenarios with small runtime probes rather than relying only on code inspection. That gives me concrete failure cases to cite in the review artifacts.
+
+I’ve got the concrete repros for both blockers and I’m writing the review artifacts now. The phase does move the model forward, but it’s not ready to mark complete with those two compatibility holes still open.
+
+Reviewing the session-continuity phase artifacts and the relevant runtime/session code paths first. I’m checking whether the implementation actually satisfies AC-07 and AC-08 before I update the reviewer files.
+
+The review narrowed to two regression surfaces: default-session creation on every run, and legacy restore behavior when a resumed workflow reopens a session slot. I’m pulling exact code locations now so the findings are concrete and fixable.
+
+I’ve confirmed the restore path is still carrying a legacy “slot-name as run key” fallback. I’m running two minimal repros now so the feedback is tied to observed behavior, not just static inspection.
+
+The shell doesn’t have `python` on PATH here; I’m rerunning the repros against the repo virtualenv so the findings stay evidence-backed.
+
+I have enough to write the review: there are two blocking regressions, and they both sit directly on the phase acceptance criteria. I’m updating the reviewer artifact now with concrete failure modes and minimal fix directions.
+
+Scope considered
+
+Session-continuity phase only. I reviewed the implementation against the active phase contract, the request snapshot, the shared decisions ledger, the producer’s implementation notes, and the session-related runtime/store code paths needed to verify AC-07 and AC-08.
+
+What I analyzed
+
+I checked the default-session path through [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:103), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py:94), [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py:129), [core/stores/memory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/memory.py:48), and [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py:196). I also verified the active reviewer artifacts at [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/session-continuity/criteria.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/session-continuity/feedback.md:1).
+
+What I reviewed
+
+I confirmed two blocking regressions with concrete behavior:
+- A fresh system-only run still leaves the session store empty, so the implicit `default` session is not guaranteed to exist for every run.
+- A restored legacy `scope=None` binding is keyed as `run/<slot>` rather than `run/<run_id>`, so a later `ctx.open_session(slot)` silently opens a new session and abandons the restored provider conversation.
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/session-continuity/feedback.md:1) with:
+- `IMP-001` blocking
+- `IMP-002` blocking
+
+The criteria file remains fully unchecked, which is accurate while these blockers stand.
+
+Key findings / decisions
+
+The phase is not complete. AC-07 fails because default-session creation is still lazy rather than guaranteed per run. AC-08 fails for legacy restore because reopened run-continuity sessions do not reliably reuse restored global bindings. No out-of-scope findings were added.
+
+Open issues / next step
+
+Producer should fix `IMP-001` and `IMP-002`, then rerun the targeted session/store/runtime coverage plus the two minimal repros that demonstrate the failures above. After that, the verifier can re-check criteria and decide whether the phase can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
