@@ -1,4 +1,118 @@
 version: 1
 task_id: recursive-framework-evolution-20260425t013735-c2
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c2/runs/run-20260425T080712Z-39cec555/request.md
-phases: []
+phases:
+- phase_id: shared-parameter-seam
+  title: Shared Parameter Seam
+  objective: Add one additive stdlib-owned parameter-model seam for the repeated task
+    and selected-workflow parameter bundles without changing runtime-owned parameter
+    resolution.
+  status: planned
+  in_scope:
+  - Define shared parameter base models or mixins for the repeated task-framing bundles
+    now duplicated across workflow params modules.
+  - Re-export the new seam through stdlib without widening the root workflow shim.
+  - Add focused unit proof that locks validator/default behavior for the shared seam.
+  out_of_scope:
+  - Changing CLI -wf behavior or runtime loader resolution order.
+  - Adding a new workflow package.
+  - Prompt-family rewrites beyond any documentation needed to explain the seam.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: A shared stdlib parameter seam exists for the repeated task and selected-workflow
+      bundles, and it stays additive rather than runtime-owned.
+  - id: AC-2
+    text: Unit coverage proves the shared seam preserves required-text, optional-text,
+      repeatable-string, and positive-int normalization behavior where applicable.
+  deliverables:
+  - Shared stdlib parameter-model seam
+  - Updated stdlib exports
+  - Focused unit tests for shared parameter behavior
+  risks:
+  - Pydantic inheritance ordering could alter normalized payloads or error messages
+    if the seam is too broad.
+  - A new helper module could become speculative if it captures workflows that are
+    not truly aligned.
+  rollback:
+  - Remove the new shared seam and revert workflows to their existing local Parameters
+    models.
+  - Keep validation factories in stdlib/validation.py unchanged if the model-level
+    seam proves unstable.
+- phase_id: workflow-params-migration
+  title: Workflow Params Migration
+  objective: Migrate the duplicated workflow params modules onto the shared seam while
+    preserving each workflow's local Parameters export and workflow-specific validation
+    rules.
+  status: planned
+  in_scope:
+  - Migrate the front-door, candidate retrieval, adaptation, eval, refinement, decomposition,
+    governance, company, and diagnostic workflow families that currently repeat the
+    same params scaffolding.
+  - Keep workflow-specific validators local where field semantics differ, including
+    literal normalization and order-sensitive status handling.
+  - Update authoring docs to document the shared parameter boundary and local non-goals.
+  out_of_scope:
+  - Changing workflow artifact contracts, prompt routes, or ctx.invoke_workflow composition
+    behavior.
+  - Refactoring unrelated domain workflow params modules that do not materially benefit
+    from the shared seam.
+  - General prompt-body compaction work.
+  dependencies:
+  - shared-parameter-seam
+  acceptance_criteria:
+  - id: AC-1
+    text: The targeted workflow params modules are shorter and defer their repeated
+      common fields to the shared seam while keeping workflow-specific rules explicit
+      locally.
+  - id: AC-2
+    text: docs/authoring.md and the recursive-memory files describe the new seam boundary,
+      its intended reuse, and the remaining local rules.
+  deliverables:
+  - Migrated workflow params modules
+  - Updated authoring documentation
+  - Updated recursive-memory ledgers
+  risks:
+  - Migrating too many workflows at once could mask one workflow-specific parameter
+    difference.
+  - Docs and memory could drift from the exact seam shape if updated separately from
+    the code.
+  rollback:
+  - Restore individual workflow params modules while leaving the new seam unused.
+  - Revert doc and recursive-memory edits that describe a seam not adopted by the
+    workflow family.
+- phase_id: proof-and-closeout
+  title: Proof And Closeout
+  objective: Verify that the shared parameter seam and migrated workflows preserve
+    behavior, then record the cycle outcome, boilerplate reduction, and deferred debt.
+  status: planned
+  in_scope:
+  - Run targeted tests for the migrated workflow family and the shared seam.
+  - Confirm no CLI, runtime, provider, or artifact-contract regression was introduced.
+  - Record the cycle metrics, feedback, and deferred debt clearly.
+  out_of_scope:
+  - Broad full-repo test expansion unrelated to the migrated workflow family.
+  - New runtime, loader, or workflow portfolio features.
+  dependencies:
+  - workflow-params-migration
+  acceptance_criteria:
+  - id: AC-1
+    text: Targeted proof passes for the shared seam and migrated workflow family,
+      or any blocked proof is documented with the exact blocker and unchanged compatibility
+      claims.
+  - id: AC-2
+    text: The cycle closeout reports boilerplate reduction, workflows migrated, compatibility
+      preservation, and remaining deferred debt.
+  deliverables:
+  - Targeted proof results
+  - Closeout notes with boilerplate metrics
+  - Synchronized plan feedback and decision record
+  risks:
+  - Existing dirty workspace state could obscure whether proof failures are caused
+    by this slice.
+  - Insufficient closeout detail could allow later cycles to reopen the same parameter-seam
+    debate.
+  rollback:
+  - Revert migrated params modules if targeted proof shows payload-shape drift.
+  - Keep the current cycle documented as a no-ship convergence report if proof cannot
+    establish safe migration.
