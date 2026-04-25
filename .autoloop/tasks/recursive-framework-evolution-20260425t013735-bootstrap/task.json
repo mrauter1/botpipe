@@ -20,8 +20,8 @@
       "public-surface-docs-regression"
     ],
     "explicit": true,
-    "current_phase_index": 6,
-    "current_phase_id": "worklists"
+    "current_phase_index": 7,
+    "current_phase_id": "child-io"
   },
   "phase_status": {
     "artifact-model": "completed",
@@ -30,8 +30,8 @@
     "session-continuity": "completed",
     "typed-params": "completed",
     "typed-routes-effects": "completed",
-    "worklists": "in_progress",
-    "child-io": "planned",
+    "worklists": "completed",
+    "child-io": "in_progress",
     "public-surface-docs-regression": "planned"
   },
   "phase_history": [
@@ -118,6 +118,19 @@
       "run_id": "run-20260425T043735Z-6422224e",
       "status": "in_progress",
       "ts": "2026-04-25T06:40:02.747368+00:00"
+    },
+    {
+      "phase_id": "worklists",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "completed",
+      "ts": "2026-04-25T07:10:38.099010+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "child-io",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "in_progress",
+      "ts": "2026-04-25T07:10:38.102030+00:00"
     }
   ]
 }
