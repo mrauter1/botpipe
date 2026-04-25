@@ -216,3 +216,12 @@ No open verifier issue remains for the planning artifacts. The plan gate is clea
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=shared-parameter-seam,workflow-params-migration,proof-and-closeout
+explicit=True
+current_phase_index=0
