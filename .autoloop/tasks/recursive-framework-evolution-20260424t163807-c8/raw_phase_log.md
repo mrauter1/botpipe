@@ -538,3 +538,60 @@ Open issues / next step
 
 - No blocking issues remain for this phase.
 - Deferred local debt is unchanged by design: eval-suite case policy, run-history ranking/evidence semantics, refinement overlay/evaluation policy, and decomposition building-block policy still belong in workflow-local validators.
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+---
+I’m reviewing the phase-local implementation against the accepted scope and the shared decisions, starting with the changed validator seam, the five migrated workflows, and the active criteria/feedback artifacts.
+
+I’ve got the implementation notes and decisions. I’m reading the actual helper definitions and the migrated call sites now to verify the diff really removed duplicated identity checks without smuggling domain policy into stdlib.
+
+I’ve finished the code review pass across the changed seam, the five workflow migrations, the docs/tests, and the phase notes. I’m marking the criteria and recording a no-findings review note in the phase feedback artifact now.
+
+Scope considered
+
+- Phase-local review of the selected-workflow validator extraction.
+- I reviewed the active criteria/feedback artifacts, the shared decisions ledger, the phase implementation notes, the new helper seam in `stdlib/validation.py`, the five migrated workflow packages, the updated docs/tests, and the recursive-memory sync for regression or scope drift.
+
+What I analyzed
+
+- The new shared helpers: `validate_selected_workflow_artifact_alignment(...)` and `validate_selected_workflow_capability_and_authoring_snapshots(...)`.
+- The migrated consumers:
+  - `candidate_workflow_to_adapted_execution_plan`
+  - `workflow_to_eval_suite`
+  - `workflow_run_history_to_failure_modes`
+  - `workflow_and_eval_to_refined_workflow_package`
+  - `workflow_package_to_composable_building_blocks`
+- The stated invariants from `decisions.txt`: preserve separate selected-workflow artifacts, keep package-specific publication policy local, and avoid widening runtime/CLI behavior.
+
+What I reviewed
+
+- Whether AC-1 is met: duplicated selected-workflow identity/alignment checks were moved behind shared validators.
+- Whether AC-2 is met: case-count rules, run-history evidence rules, refinement overlay/evaluation rules, and decomposition building-block policy remain workflow-local.
+- Whether docs, tests, and recursive-memory updates match the actual implementation and proof claim.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The implementation stays within scope, preserves the selected-workflow artifact contracts, keeps domain policy local, and is backed by the documented proof run (`219 passed`).
+- I updated the phase artifacts accordingly: all criteria boxes checked in `criteria.md`, and a no-findings review note appended to `feedback.md`.
+
+Open issues / next step
+
+- No open review issues for this phase.
+- The phase is ready to advance without implementer rework.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

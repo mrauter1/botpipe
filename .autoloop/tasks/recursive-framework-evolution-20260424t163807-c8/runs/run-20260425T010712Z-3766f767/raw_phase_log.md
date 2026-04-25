@@ -453,3 +453,145 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+---
+I’m treating this as a scoped consolidation pass for selected-workflow validators. I’ll inspect the repo surfaces and phase artifacts first, identify the duplicated validation patterns across the named workflows, then implement the shared validator extraction with tests/docs/memory updates.
+
+I’ve loaded the phase plan and the repo map. Next I’m tracing the exact selected-workflow snapshot and publication validators across stdlib, the five target workflows, the relevant tests, and the standing memory files so the extraction stays inside the approved seam.
+
+The current stdlib writers are already thin wrappers after the serializer phase. I’m checking the exact workflow-local publication checks now to extract only the shared selected-workflow identity/alignment rules and leave the package-specific evidence logic local.
+
+The repeated seam is clear now: the five workflows all validate the same `selected_workflow_name` plus nested `workflow_name` alignment in slightly different ways. I’m drilling into the helper call sites and the current tests so I can consolidate that logic without broadening publication semantics.
+
+I have the current test and memory surface. Next I’m isolating the exact local validators inside publication and context-capture so I can replace only the duplicated selected-workflow checks, not the domain-specific rules around cases, run history, overlays, or building blocks.
+
+I’ve isolated the exact duplicated checks. I’m deciding the smallest shared seam now: likely one cross-artifact helper for snapshot-to-snapshot `selected_workflow_name` alignment plus one paired capability/authoring validator, so the workflows get shorter without hiding their domain rules.
+
+The standing memory already has a serializer-convergence entry for cycle 8. I’m reading those exact sections next so I can append the validator phase cleanly and keep the ledgers internally consistent.
+
+I’ve settled on the seam: one shared cross-artifact helper for top-level `selected_workflow_name` alignment and one paired capability-plus-authoring snapshot validator. I’m editing stdlib first, then I’ll collapse the five workflow call sites onto those helpers and remove the local validator shims.
+
+I hit a patch mismatch in the decomposition workflow because the surrounding lines differ slightly from the earlier read. I’m reopening the exact capture and publish sections, then I’ll patch only the current text to avoid trampling unrelated changes.
+
+The workflow migrations are in place. I’m tightening the proof layer now by extending the unit coverage around the new validator seam and then I’ll sync the authoring docs and recursive memory with the narrower boundary that actually shipped.
+
+The shared validators and workflow migrations are patched. I’m doing a scoped compile/diff pass before proof so I can catch any import drift or accidental behavior changes before I touch the recursive-memory artifacts.
+
+The code compiles cleanly. I’m running the scoped proof set now against the migrated workflows plus the stdlib/doc tests, then I’ll update the recursive memory and phase notes with the actual results and closeout metrics.
+
+The scoped proof is still running. While that finishes, I’m preparing the closeout updates for the charter, roadmap, gap ledger, candidate ledger, validation debt ledger, decisions, and implementation notes so the phase leaves a synchronized record instead of just code changes.
+
+One scoped test failed. I’m pulling the traceback now before editing anything else so I can fix the regression at the helper seam rather than papering over it in the workflow tests.
+
+The regression is only an error-message drift in the refinement publish step. I’m restoring the old workflow-state mismatch message there while keeping the shared capability-plus-authoring validator in place, then I’ll rerun the scoped proof.
+
+The refinement regression is fixed and the targeted publish-state test now passes. I’m re-running the full scoped proof set to capture the final result string for the memory and implementation notes.
+
+The proof set is green now: `219 passed`. I’m writing the closeout record into the recursive memory, decisions ledger, and phase implementation notes with the final helper names, preserved invariants, and scoped metrics.
+
+The code proof is already green, but I changed the recursive memory afterward and the baseline-doc test reads those files. I’m rerunning the same scoped proof one last time against the final state so the closeout result reflects the repository exactly as left.
+
+The repository is in the final scoped state now. I’m collecting the exact touched-file stat snapshot and the phase-specific implementation-note summary next so the closeout can report concrete results rather than a generic “done.”
+
+Scope considered
+
+- Cycle mode: `consolidate`; no new workflow was needed.
+- I audited the requested surfaces: [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), `core/`, `runtime/`, `extensions/`, `stdlib/`, current `workflows/`, relevant `tests/`, the active phase artifacts, and the five standing `.autoloop_recursive/` memory files.
+
+What I analyzed
+
+- The three most relevant existing seams were adaptation, refinement, and decomposition: `stdlib/adaptation.py` + `candidate_workflow_to_adapted_execution_plan`, `stdlib/refinement.py` + `workflow_and_eval_to_refined_workflow_package`, and `stdlib/decomposition.py` + `workflow_package_to_composable_building_blocks`.
+- The repeated pattern was the same top-level `selected_workflow_name` alignment boilerplate across adaptation, eval-suite, and run-history, plus duplicated capability/authoring snapshot pairing in refinement and a trivial local wrapper in decomposition.
+- The highest-leverage simplification was shared selected-workflow validation, not another workflow.
+
+What I changed
+
+- Added `validate_selected_workflow_artifact_alignment(...)` and `validate_selected_workflow_capability_and_authoring_snapshots(...)` in [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py) and exported them through `stdlib`.
+- Migrated these workflows to the shared seam:
+  - [candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py)
+  - [workflow_to_eval_suite/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py)
+  - [workflow_run_history_to_failure_modes/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py)
+  - [workflow_and_eval_to_refined_workflow_package/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py)
+  - [workflow_package_to_composable_building_blocks/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py)
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), unit/doc tests, the recursive memory ledgers, [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/decisions.txt), and the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/implement/phases/extract-selected-workflow-validators/implementation_notes.md).
+
+Key findings / decisions
+
+- I kept package-specific publication semantics local; only generic selected-workflow identity/alignment moved into stdlib.
+- I preserved artifact filenames/contracts and kept the refinement workflow’s existing state-mismatch error wording local to avoid behavior drift.
+- Boilerplate budget for this phase: files added `0`, files deleted `0`, workflows changed to use shared helpers `5`, new helper functions introduced `2`, repeated validation idioms removed `2`, old workflow-local validation blocks replaced `9`, scoped tracked line delta approximately `+2` lines.
+- Final proof passed: `219 passed` with `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`.
+
+Open issues / next step
+
+- No blocking issues remain for this phase.
+- Deferred local debt is unchanged by design: eval-suite case policy, run-history ranking/evidence semantics, refinement overlay/evaluation policy, and decomposition building-block policy still belong in workflow-local validators.
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+---
+I’m reviewing the phase-local implementation against the accepted scope and the shared decisions, starting with the changed validator seam, the five migrated workflows, and the active criteria/feedback artifacts.
+
+I’ve got the implementation notes and decisions. I’m reading the actual helper definitions and the migrated call sites now to verify the diff really removed duplicated identity checks without smuggling domain policy into stdlib.
+
+I’ve finished the code review pass across the changed seam, the five workflow migrations, the docs/tests, and the phase notes. I’m marking the criteria and recording a no-findings review note in the phase feedback artifact now.
+
+Scope considered
+
+- Phase-local review of the selected-workflow validator extraction.
+- I reviewed the active criteria/feedback artifacts, the shared decisions ledger, the phase implementation notes, the new helper seam in `stdlib/validation.py`, the five migrated workflow packages, the updated docs/tests, and the recursive-memory sync for regression or scope drift.
+
+What I analyzed
+
+- The new shared helpers: `validate_selected_workflow_artifact_alignment(...)` and `validate_selected_workflow_capability_and_authoring_snapshots(...)`.
+- The migrated consumers:
+  - `candidate_workflow_to_adapted_execution_plan`
+  - `workflow_to_eval_suite`
+  - `workflow_run_history_to_failure_modes`
+  - `workflow_and_eval_to_refined_workflow_package`
+  - `workflow_package_to_composable_building_blocks`
+- The stated invariants from `decisions.txt`: preserve separate selected-workflow artifacts, keep package-specific publication policy local, and avoid widening runtime/CLI behavior.
+
+What I reviewed
+
+- Whether AC-1 is met: duplicated selected-workflow identity/alignment checks were moved behind shared validators.
+- Whether AC-2 is met: case-count rules, run-history evidence rules, refinement overlay/evaluation rules, and decomposition building-block policy remain workflow-local.
+- Whether docs, tests, and recursive-memory updates match the actual implementation and proof claim.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The implementation stays within scope, preserves the selected-workflow artifact contracts, keeps domain policy local, and is backed by the documented proof run (`219 passed`).
+- I updated the phase artifacts accordingly: all criteria boxes checked in `criteria.md`, and a no-findings review note appended to `feedback.md`.
+
+Open issues / next step
+
+- No open review issues for this phase.
+- The phase is ready to advance without implementer rework.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
