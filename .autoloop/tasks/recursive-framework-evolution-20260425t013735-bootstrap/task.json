@@ -20,15 +20,15 @@
       "public-surface-docs-regression"
     ],
     "explicit": true,
-    "current_phase_index": 3,
-    "current_phase_id": "session-continuity"
+    "current_phase_index": 4,
+    "current_phase_id": "typed-params"
   },
   "phase_status": {
     "artifact-model": "completed",
     "artifact-inventory": "completed",
     "artifact-runtime-enforcement": "completed",
-    "session-continuity": "in_progress",
-    "typed-params": "planned",
+    "session-continuity": "completed",
+    "typed-params": "in_progress",
     "typed-routes-effects": "planned",
     "worklists": "planned",
     "child-io": "planned",
@@ -79,6 +79,19 @@
       "run_id": "run-20260425T043735Z-6422224e",
       "status": "in_progress",
       "ts": "2026-04-25T05:31:12.538469+00:00"
+    },
+    {
+      "phase_id": "session-continuity",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "completed",
+      "ts": "2026-04-25T06:05:35.911226+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "typed-params",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "in_progress",
+      "ts": "2026-04-25T06:05:35.917973+00:00"
     }
   ]
 }
