@@ -88,3 +88,30 @@ The planner needs to revise the plan so the required charter update is explicit 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T074502Z-48656955 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dc399-63bc-70d3-84bd-df48f3190fc5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dc399-63bc-70d3-84bd-df48f3190fc5
+
+
+---
+run_id=run-20260425T074502Z-48656955 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc399-63bc-70d3-84bd-df48f3190fc5
+---
+I’m revising the plan against the verifier’s blocking findings, not changing direction. The update is to make the required charter sync explicit and to tighten the regression proof so any optional `stdlib/validation.py` change carries the right shared-seam test coverage.
+
+I’m making the minimum correction set now: no scope expansion, just explicit charter sync and conditional shared-seam proof requirements so the plan can pass verification without drifting from the chosen consolidation slice.
+
+The first patch failed because the YAML formatter rewrote the file shape. I’m patching the plan and phase contract against the current on-disk text now, then I’ll re-parse the YAML again.
+
+The plan revision is in place. I’m re-parsing the phase file and doing a quick readback now to make sure the verifier issues are closed cleanly and the YAML is still valid.
+
+Revised the plan to address both verifier blockers without changing the chosen consolidation scope.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c1/plan/plan.md) now makes `.autoloop_recursive/framework_evolution_charter.md` a required closeout update and adds conditional broader proof when `stdlib/validation.py` changes. [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c1/plan/phase_plan.yaml) was updated to match that contract, [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c1/plan/feedback.md) records the revision, and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c1/decisions.txt) now preserves those two non-obvious constraints under the new turn header.
+
+I also re-validated `phase_plan.yaml` locally with `python3` + `yaml.safe_load`; it parses successfully.

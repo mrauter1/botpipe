@@ -12,7 +12,8 @@ phases:
     instead of private `_require_*` helpers.
   - Preserve `workflow_to_eval_suite` artifact contracts while keeping eval-specific
     case policy local.
-  - Update targeted unit/runtime proof plus recursive-memory closeout for the consolidation.
+  - Update targeted proof plus all five standing recursive-memory files for the consolidation,
+    and broaden proof if `stdlib/validation.py` changes.
   out_of_scope:
   - Adding any new workflow package or reusable building block.
   - Changing CLI behavior, runtime/provider boundaries, workspace layout, or `ctx.invoke_workflow(...)`.
@@ -26,21 +27,25 @@ phases:
     text: '`workflow_to_eval_suite` keeps the same artifact names, manifest payload
       keys, and publish-step behavior after the helper migration.'
   - id: AC-3
-    text: Targeted proof covers the helper migration and the recursive memory/docs
-      closeout records the no-new-workflow consolidation rationale.
+    text: Proof covers the helper migration at the correct scope for the files touched,
+      and the recursive memory/docs closeout updates all five standing memory files
+      while recording the no-new-workflow consolidation rationale.
   deliverables:
   - Updated `stdlib/evaluation.py` aligned to the shared validation seam.
-  - Targeted proof updates in `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_workflow_to_eval_suite.py`.
-  - Synchronized recursive memory and any necessary authoring-doc note for the helper
-    boundary.
+  - Targeted proof updates in `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_workflow_to_eval_suite.py`,
+    plus `tests/unit/test_validation.py` and the adjacent selected-workflow consumer
+    suites if `stdlib/validation.py` changes.
+  - Synchronized all five standing recursive-memory files and any necessary authoring-doc
+    note for the helper boundary.
   risks:
   - Over-extracting a new helper seam when the current shared validation exports already
     suffice.
   - Accidental error-message or artifact-payload drift in `write_validated_eval_case_manifest(...)`.
-  - Touching direct workflow code unnecessarily instead of keeping the change centered
-    on the helper.
+  - Touching `stdlib/validation.py` without running the broader shared-seam proof
+    and missing regressions outside the eval helper family.
   rollback:
   - Revert the eval-helper refactor and restore the prior helper-local validation
     path if payload or publish behavior changes.
-  - Keep docs and recursive memory aligned to the actual shipped boundary if implementation
-    scope narrows.
+  - If implementation scope narrows to `stdlib/evaluation.py` only, keep the broader
+    shared-seam proof and `stdlib/validation.py` edits out of the slice and still
+    update all five standing memory files.

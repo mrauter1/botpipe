@@ -56,9 +56,10 @@
 2. Proof and compatibility checks
    - Expand `tests/unit/test_stdlib_and_extensions.py` around `write_validated_eval_case_manifest(...)` so payload shape, path safety, parameter coercion, and failure cases remain stable.
    - Run `tests/runtime/test_workflow_to_eval_suite.py` to confirm the consumer workflow still publishes the same artifacts and receipts.
+   - If implementation touches `stdlib/validation.py`, also run `tests/unit/test_validation.py` plus the directly affected selected-workflow consumer suites that rely on the same shared validation surface: `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`, `tests/runtime/test_workflow_run_history_to_failure_modes.py`, and `tests/runtime/test_workflow_to_eval_suite.py`.
 3. Docs and recursive memory closeout
    - Update `docs/authoring.md` only if the shared-vs-local validation boundary needs a new explicit note for authoring helpers.
-   - Update `.autoloop_recursive/framework_roadmap.md`, `.autoloop_recursive/framework_gap_ledger.md`, `.autoloop_recursive/workflow_candidate_ledger.md`, and `.autoloop_recursive/validation_debt_ledger.md` with the audit result, chosen consolidation, and any remaining deferred debt.
+   - Update `.autoloop_recursive/framework_evolution_charter.md`, `.autoloop_recursive/framework_roadmap.md`, `.autoloop_recursive/framework_gap_ledger.md`, `.autoloop_recursive/workflow_candidate_ledger.md`, and `.autoloop_recursive/validation_debt_ledger.md` with the audit result, chosen consolidation, and any remaining deferred debt.
 
 ## Interfaces And Files Expected To Change
 
@@ -66,11 +67,15 @@
   - `stdlib/evaluation.py`
   - `stdlib/validation.py` only if one narrowly scoped mechanical helper is unavoidable
 - Likely tests:
+  - `tests/unit/test_validation.py` if `stdlib/validation.py` changes
   - `tests/unit/test_stdlib_and_extensions.py`
+  - `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py` if `stdlib/validation.py` changes
   - `tests/runtime/test_workflow_to_eval_suite.py`
+  - `tests/runtime/test_workflow_run_history_to_failure_modes.py` if `stdlib/validation.py` changes
   - `tests/test_architecture_baseline_docs.py` only if docs wording changes
 - Likely docs and memory:
   - `docs/authoring.md` if boundary wording changes
+  - `.autoloop_recursive/framework_evolution_charter.md`
   - `.autoloop_recursive/framework_roadmap.md`
   - `.autoloop_recursive/framework_gap_ledger.md`
   - `.autoloop_recursive/workflow_candidate_ledger.md`
@@ -81,6 +86,8 @@
 - Preserve existing artifact filenames, top-level JSON keys, case ordering, and loader-based parameter coercion.
 - Treat error-message drift as acceptable only when the new wording is clearer and the tests are updated intentionally; do not silently weaken validation coverage.
 - Avoid expanding the root `workflow` shim or adding runtime-owned evaluation behavior.
+- Treat `.autoloop_recursive/framework_evolution_charter.md` as required closeout scope, not optional documentation.
+- If `stdlib/validation.py` changes, treat the regression surface as shared and require the broader proof set above before considering the slice safe.
 - Keep the seam additive: no `workflow.toml`, CLI, session, provider, or workspace contract changes.
 
 ## Compatibility Notes
@@ -100,6 +107,7 @@
 - New helper functions introduced: `0` preferred, `1` maximum if the current seam is genuinely insufficient
 - Old workflow-local validation blocks replaced: none in workflow files; one helper-local validation block family in `stdlib/evaluation.py`
 - Core flow readability before/after: eval manifest validation should read as shared mechanical checks plus local eval policy, not raw schema plumbing
+- Required memory files updated in implementation: all five standing recursive-memory files, including `framework_evolution_charter.md`
 
 ## Deferred Debt After This Slice
 
