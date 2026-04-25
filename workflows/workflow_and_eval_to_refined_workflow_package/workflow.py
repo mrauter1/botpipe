@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from functools import partial
-from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
         derive_candidate_surface_manifest,
         materialize_baseline_surface,
+        normalize_candidate_surface_overlay_result,
         normalize_candidate_surface_boundary,
         normalize_optional_string,
         normalize_unique_strings,
@@ -24,6 +24,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_positive_int,
         require_string_list,
         validate_authoritative_surface_sources_unchanged,
+        validate_baseline_surface_manifest,
+        validate_candidate_surface_manifest,
         validate_candidate_surface_overlay,
         write_selected_workflow_authoring_surface,
         write_selected_workflow_capability_snapshot,
@@ -39,6 +41,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib import (
         derive_candidate_surface_manifest,
         materialize_baseline_surface,
+        normalize_candidate_surface_overlay_result,
         normalize_candidate_surface_boundary,
         normalize_optional_string,
         normalize_unique_strings,
@@ -48,6 +51,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_positive_int,
         require_string_list,
         validate_authoritative_surface_sources_unchanged,
+        validate_baseline_surface_manifest,
+        validate_candidate_surface_manifest,
         validate_candidate_surface_overlay,
         write_selected_workflow_authoring_surface,
         write_selected_workflow_capability_snapshot,
@@ -886,73 +891,24 @@ def _validate_baseline_manifest(
     repo_root: Path,
     expected_boundary: Mapping[str, Any],
 ) -> None:
-    if _require_text(
-        baseline_manifest.get("surface_kind"),
-        "baseline_workflow_manifest.json must define non-empty surface_kind",
-    ) != "baseline":
-        raise ValueError("baseline_workflow_manifest.json surface_kind must be baseline")
-    if _require_text(
-        baseline_manifest.get("repo_root"),
-        "baseline_workflow_manifest.json must define non-empty repo_root",
-    ) != str(repo_root):
-        raise ValueError("baseline_workflow_manifest.json repo_root must match the runtime repo root")
-    if _require_text(
-        baseline_manifest.get("package_name"),
-        "baseline_workflow_manifest.json must define non-empty package_name",
-    ) != _require_text(
-        expected_boundary.get("package_name"),
-        "expected boundary must define package_name",
-    ):
-        raise ValueError("baseline_workflow_manifest.json package_name must match selected_workflow_authoring_surface.json")
-    if _require_text(
-        baseline_manifest.get("package_root_relative_path"),
-        "baseline_workflow_manifest.json must define non-empty package_root_relative_path",
-    ) != _require_text(
-        expected_boundary.get("package_root_relative_path"),
-        "expected boundary must define package_root_relative_path",
-    ):
-        raise ValueError("baseline_workflow_manifest.json package_root_relative_path must match selected_workflow_authoring_surface.json")
-    if _normalize_optional_text(baseline_manifest.get("doc_relative_path")) != _normalize_optional_text(
-        expected_boundary.get("doc_relative_path")
-    ):
-        raise ValueError("baseline_workflow_manifest.json doc_relative_path must match selected_workflow_authoring_surface.json")
-    if _normalize_optional_text(baseline_manifest.get("runtime_test_relative_path")) != _normalize_optional_text(
-        expected_boundary.get("runtime_test_relative_path")
-    ):
-        raise ValueError("baseline_workflow_manifest.json runtime_test_relative_path must match selected_workflow_authoring_surface.json")
-    file_entries = _manifest_file_map(
+    validate_baseline_surface_manifest(
         baseline_manifest,
-        "baseline_workflow_manifest.json must define files as a JSON array of objects with relative_path",
+        repo_root,
+        manifest_label="baseline_workflow_manifest.json",
+        expected_surface_kind="baseline",
+        expected_boundary=expected_boundary,
+        boundary_field_map={
+            "package_name": "package_name",
+            "package_root_relative_path": "package_root_relative_path",
+            "doc_relative_path": "doc_relative_path",
+            "runtime_test_relative_path": "runtime_test_relative_path",
+        },
+        optional_boundary_fields=("doc_relative_path", "runtime_test_relative_path"),
+        expected_relative_paths=_require_string_list(
+            expected_boundary.get("baseline_relative_paths"),
+            "expected boundary must define non-empty baseline_relative_paths",
+        ),
     )
-    relative_paths = _require_string_list(
-        baseline_manifest.get("relative_paths"),
-        "baseline_workflow_manifest.json must define non-empty relative_paths",
-    )
-    if sorted(file_entries) != relative_paths:
-        raise ValueError("baseline_workflow_manifest.json files must match relative_paths")
-    for relative_path, entry in file_entries.items():
-        source_path = Path(
-            _require_text(
-                entry.get("source_path"),
-                "baseline_workflow_manifest.json file entries must define non-empty source_path",
-            )
-        )
-        surface_path = Path(
-            _require_text(
-                entry.get("surface_path"),
-                "baseline_workflow_manifest.json file entries must define non-empty surface_path",
-            )
-        )
-        if source_path != repo_root / relative_path:
-            raise ValueError("baseline_workflow_manifest.json source_path entries must stay aligned to the repo root")
-        if not source_path.exists() or not surface_path.exists():
-            raise FileNotFoundError("baseline_workflow_manifest.json file entries must point at existing files")
-        expected_digest = _require_text(
-            entry.get("surface_sha256"),
-            "baseline_workflow_manifest.json file entries must define non-empty surface_sha256",
-        )
-        if _sha256_file(surface_path) != expected_digest:
-            raise ValueError("baseline_workflow_manifest.json surface_sha256 must match the copied baseline surface")
 
 
 def _validate_authoritative_files_unchanged(baseline_manifest: Mapping[str, Any], repo_root: Path) -> None:
@@ -970,111 +926,37 @@ def _validate_candidate_manifest(
     expected_boundary: Mapping[str, Any],
     baseline_manifest: Mapping[str, Any],
 ) -> None:
-    if _require_text(
-        candidate_manifest.get("surface_kind"),
-        "candidate_workflow_manifest.json must define non-empty surface_kind",
-    ) != "candidate":
-        raise ValueError("candidate_workflow_manifest.json surface_kind must be candidate")
-    if _require_text(
-        candidate_manifest.get("repo_root"),
-        "candidate_workflow_manifest.json must define non-empty repo_root",
-    ) != str(repo_root):
-        raise ValueError("candidate_workflow_manifest.json repo_root must match the runtime repo root")
-    if _require_text(
-        candidate_manifest.get("package_name"),
-        "candidate_workflow_manifest.json must define non-empty package_name",
-    ) != _require_text(
-        expected_boundary.get("package_name"),
-        "expected boundary must define package_name",
-    ):
-        raise ValueError("candidate_workflow_manifest.json package_name must match selected_workflow_authoring_surface.json")
-    if _require_text(
-        candidate_manifest.get("package_root_relative_path"),
-        "candidate_workflow_manifest.json must define non-empty package_root_relative_path",
-    ) != _require_text(
-        expected_boundary.get("package_root_relative_path"),
-        "expected boundary must define package_root_relative_path",
-    ):
-        raise ValueError("candidate_workflow_manifest.json package_root_relative_path must match selected_workflow_authoring_surface.json")
-    if _normalize_optional_text(candidate_manifest.get("doc_relative_path")) != _normalize_optional_text(
-        expected_boundary.get("doc_relative_path")
-    ):
-        raise ValueError("candidate_workflow_manifest.json doc_relative_path must match selected_workflow_authoring_surface.json")
-    if _normalize_optional_text(candidate_manifest.get("runtime_test_relative_path")) != _normalize_optional_text(
-        expected_boundary.get("runtime_test_relative_path")
-    ):
-        raise ValueError("candidate_workflow_manifest.json runtime_test_relative_path must match selected_workflow_authoring_surface.json")
-
-    baseline_relative_paths = _require_string_list(
-        baseline_manifest.get("relative_paths"),
-        "baseline_workflow_manifest.json must define non-empty relative_paths",
-    )
-    candidate_baseline_relative_paths = _require_string_list(
-        candidate_manifest.get("baseline_relative_paths"),
-        "candidate_workflow_manifest.json must define non-empty baseline_relative_paths",
-    )
-    if candidate_baseline_relative_paths != baseline_relative_paths:
-        raise ValueError("candidate_workflow_manifest.json baseline_relative_paths must match baseline_workflow_manifest.json")
-
-    candidate_relative_paths = _require_string_list(
-        candidate_manifest.get("relative_paths"),
-        "candidate_workflow_manifest.json must define non-empty relative_paths",
-    )
-    missing_baseline_paths = sorted(set(baseline_relative_paths) - set(candidate_relative_paths))
-    if missing_baseline_paths:
-        raise ValueError("candidate_workflow_manifest.json must preserve every baseline relative_path")
-
-    package_root_relative_path = _require_text(
-        expected_boundary.get("package_root_relative_path"),
-        "expected boundary must define package_root_relative_path",
-    )
-    allowed_exact_paths = {
-        path
-        for path in (
-            _normalize_optional_text(expected_boundary.get("doc_relative_path")),
-            _normalize_optional_text(expected_boundary.get("runtime_test_relative_path")),
+    try:
+        validate_candidate_surface_manifest(
+            candidate_manifest,
+            repo_root=repo_root,
+            manifest_label="candidate_workflow_manifest.json",
+            expected_surface_kind="candidate",
+            expected_boundary=expected_boundary,
+            boundary_field_map={
+                "package_name": "package_name",
+                "package_root_relative_path": "package_root_relative_path",
+                "doc_relative_path": "doc_relative_path",
+                "runtime_test_relative_path": "runtime_test_relative_path",
+            },
+            optional_boundary_fields=("doc_relative_path", "runtime_test_relative_path"),
+            baseline_manifest=baseline_manifest,
+            baseline_manifest_label="baseline_workflow_manifest.json",
+            allowed_added_path_prefixes=[
+                _require_text(
+                    expected_boundary.get("package_root_relative_path"),
+                    "expected boundary must define package_root_relative_path",
+                )
+            ],
+            allowed_added_exact_paths=[
+                _normalize_optional_text(expected_boundary.get("doc_relative_path")),
+                _normalize_optional_text(expected_boundary.get("runtime_test_relative_path")),
+            ],
         )
-        if path is not None
-    }
-    for relative_path in candidate_relative_paths:
-        if relative_path in baseline_relative_paths:
-            continue
-        if relative_path.startswith(f"{package_root_relative_path}/"):
-            continue
-        if relative_path in allowed_exact_paths:
-            continue
-        raise ValueError("candidate_workflow_manifest.json must stay scoped to the selected workflow boundary")
-
-    file_entries = _manifest_file_map(
-        candidate_manifest,
-        "candidate_workflow_manifest.json must define files as a JSON array of objects with relative_path",
-    )
-    if sorted(file_entries) != candidate_relative_paths:
-        raise ValueError("candidate_workflow_manifest.json files must match relative_paths")
-
-    candidate_root = Path(
-        _require_text(
-            candidate_manifest.get("surface_root"),
-            "candidate_workflow_manifest.json must define non-empty surface_root",
-        )
-    )
-    for relative_path, entry in file_entries.items():
-        surface_path = Path(
-            _require_text(
-                entry.get("surface_path"),
-                "candidate_workflow_manifest.json file entries must define non-empty surface_path",
-            )
-        )
-        if surface_path != candidate_root / relative_path:
-            raise ValueError("candidate_workflow_manifest.json surface_path entries must stay under candidate_workflow_surface")
-        if not surface_path.exists():
-            raise FileNotFoundError(f"candidate surface file is missing: {surface_path}")
-        expected_digest = _require_text(
-            entry.get("surface_sha256"),
-            "candidate_workflow_manifest.json file entries must define non-empty surface_sha256",
-        )
-        if _sha256_file(surface_path) != expected_digest:
-            raise ValueError("candidate_workflow_manifest.json surface_sha256 must match candidate_workflow_surface")
+    except ValueError as exc:
+        if str(exc) == "candidate_workflow_manifest.json must stay within the allowed repo-relative boundary":
+            raise ValueError("candidate_workflow_manifest.json must stay scoped to the selected workflow boundary") from exc
+        raise
 
 
 def _validate_candidate_overlay(
@@ -1084,32 +966,18 @@ def _validate_candidate_overlay(
     candidate_manifest: Mapping[str, Any],
     target_test_command: str,
 ) -> dict[str, Any]:
-    overlay_validation = validate_candidate_surface_overlay(
-        repo_root=repo_root,
-        workflow_names=selected_workflow_name,
-        candidate_manifest=candidate_manifest,
-        target_test_command=target_test_command,
-        candidate_manifest_label="candidate_workflow_manifest.json",
-        overlay_failure_prefix="overlay validation command failed for candidate workflow surface",
-        overlay_temp_prefix="workflow_refinement_overlay_",
-    )
-    compiled_workflow_names = _require_string_list(
-        overlay_validation.get("compiled_workflow_names"),
-        "overlay validation must define non-empty compiled_workflow_names",
-    )
-    if len(compiled_workflow_names) != 1:
-        raise ValueError("overlay validation must compile exactly one selected workflow")
-    test_returncode = overlay_validation.get("test_returncode")
-    if not isinstance(test_returncode, int) or test_returncode < 0:
-        raise ValueError("overlay validation must define non-negative integer test_returncode")
-    return {
-        "compiled_workflow_name": compiled_workflow_names[0],
-        "test_command": _require_text(
-            overlay_validation.get("test_command"),
-            "overlay validation must define non-empty test_command",
+    return normalize_candidate_surface_overlay_result(
+        validate_candidate_surface_overlay(
+            repo_root=repo_root,
+            workflow_names=selected_workflow_name,
+            candidate_manifest=candidate_manifest,
+            target_test_command=target_test_command,
+            candidate_manifest_label="candidate_workflow_manifest.json",
+            overlay_failure_prefix="overlay validation command failed for candidate workflow surface",
+            overlay_temp_prefix="workflow_refinement_overlay_",
         ),
-        "test_returncode": test_returncode,
-    }
+        expect_single_compiled_workflow=True,
+    )
 
 
 def _resolve_input_path(repo_root: Path, raw_value: str, field_name: str) -> Path:
@@ -1120,21 +988,6 @@ def _resolve_input_path(repo_root: Path, raw_value: str, field_name: str) -> Pat
     if not path.is_file():
         raise ValueError(f"{field_name} must point to a file: {path}")
     return path
-
-
-def _manifest_file_map(manifest: Mapping[str, Any], error_message: str) -> dict[str, dict[str, Any]]:
-    files = manifest.get("files")
-    if not isinstance(files, list):
-        raise ValueError(error_message)
-    result: dict[str, dict[str, Any]] = {}
-    for index, entry in enumerate(files):
-        mapping = _require_mapping(entry, error_message)
-        relative_path = _require_text(
-            mapping.get("relative_path"),
-            f"{error_message}; offending index {index}",
-        )
-        result[relative_path] = dict(mapping)
-    return result
 
 
 _read_json = read_json_object
@@ -1150,14 +1003,6 @@ def _require_non_empty_text_file(path: Path, error_message: str) -> str:
     if not content:
         raise ValueError(error_message)
     return content
-
-
-def _sha256_file(path: Path) -> str:
-    digest = sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 _require_text = partial(require_non_empty_string, coerce=True)

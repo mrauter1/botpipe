@@ -753,6 +753,26 @@ def test_workflow_package_to_composable_building_blocks_publish_rejects_authorit
         )
 
 
+def test_workflow_package_to_composable_building_blocks_publish_rejects_baseline_manifest_boundary_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run = _run_successful_decomposition_workflow(tmp_path, monkeypatch, include_evidence_paths=True)
+    baseline_manifest_path = run.workflow_dir / "baseline_parent_manifest.json"
+    payload = json.loads(baseline_manifest_path.read_text(encoding="utf-8"))
+    payload["parent_package_root_relative_path"] = "workflows/incident_to_hardening_program"
+    baseline_manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="baseline_parent_manifest.json parent_package_root_relative_path must match the expected workflow boundary",
+    ):
+        run.workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_publish_candidate_decomposition(
+            run.result.state,
+            run.publish_context,
+        )
+
+
 def test_workflow_package_to_composable_building_blocks_publish_rejects_candidate_files_outside_allowed_boundary(
     tmp_path: Path,
     monkeypatch,

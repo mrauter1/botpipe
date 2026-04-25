@@ -361,3 +361,82 @@ No audit blockers remain for this phase. The next planned phase should add runti
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc212-9e35-7151-b726-cd31c0f08710
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc212-9e35-7151-b726-cd31c0f08710
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc212-9e35-7151-b726-cd31c0f08710
+---
+I’m auditing the repository and the phase artifacts first so I can map the refinement/decomposition callers onto the new shared candidate-surface seam without drifting artifact or route behavior. Then I’ll patch the two workflows, update the targeted tests, and record the audit plus implementation notes required by the cycle contract.
+
+The repository has unrelated dirty state, mostly outside this phase, so I’m isolating the touched blast radius and reading the refinement/decomposition family plus the new stdlib seam. Next I’m checking exactly where the duplicated manifest and overlay validators still live so I can replace only the mechanical tails and leave workflow-local policy intact.
+
+I’ve confirmed the shared seam exists and the remaining duplication is inside workflow-local publish/evaluate helpers, not in prompts or routes. I’m drilling into those helper sections now to migrate them onto `validate_baseline_surface_manifest`, `validate_candidate_surface_manifest`, and overlay normalization without touching the domain-specific receipt logic.
+
+Plan from here:
+1. Replace the duplicated manifest and overlay validator tails in the refinement workflow with the shared candidate-surface helpers.
+2. Do the same in the decomposition workflow while keeping building-block index validation and evidence rules local.
+3. Update the targeted runtime tests where helper function names or error paths change, run the focused test set, then write the phase notes and any non-obvious decision entry.
+
+I’ve got the migration shape pinned down. I’m editing the refinement workflow first: swapping its duplicated manifest and overlay validator tails for thin wrappers around the shared stdlib seam, while preserving its workflow-specific boundary wording and receipt shape.
+
+The first patch partially matched but missed the tail helpers, so I’m re-reading the exact bottom of the refinement file and applying a narrower patch. The change set is still the same: shared seam in, local policy retained.
+
+The refinement caller is now on the shared seam with its old boundary wording preserved. I’m applying the same migration to decomposition, but there I can use the shared boundary error directly and keep only the building-block-index and evidence-specific checks local.
+
+The decomposition file still had some redundant pre-checks layered on top of the shared validator. I’m collapsing those now so the workflow keeps only the building-block-specific policy and lets stdlib own the mechanical manifest checks.
+
+I found a subtle seam detail while wiring the callers: the shared validator only checks mapped boundary fields, so the callers need to pass the field map explicitly. I’m fixing that before touching tests so the migration preserves the old package/doc/runtime-test alignment checks instead of silently dropping them.
+
+The caller code is compiling. I’m adding one focused runtime regression test per workflow to prove the migrated publish path still rejects manifest-boundary drift through the shared seam, alongside the existing artifact and boundary tests.
+
+The focused runtime suite is running now. If there’s a failure, it should be in the publish-time manifest path I just migrated; otherwise I’ll finish the phase notes and decision entry with the exact symbols and validation performed.
+
+The code and focused runtime coverage are green. I’m writing the phase ledger entries now: one non-obvious decision about preserving the refinement boundary wording, and concise implementation notes that map the exact helper migrations and proof back to the phase checklist.
+
+Scope considered
+
+- Phase-local `migrate-refinement-decomposition-callers` scope only.
+- Touched [workflow_and_eval_to_refined_workflow_package/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py), [workflow_package_to_composable_building_blocks/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py), the two targeted runtime tests, [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/decisions.txt), and [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/implement/phases/migrate-refinement-decomposition-callers/implementation_notes.md).
+- I did not make out-of-phase recursive memory or docs changes in this producer run.
+
+What I analyzed
+
+- The new shared seam in `stdlib/candidate_surfaces.py`, including its boundary-field mapping requirement and overlay-result normalizer.
+- The duplicated publish-time validator tails in both workflows.
+- The targeted runtime coverage for unchanged artifact names, boundary rejections, and overlay-validation behavior.
+
+What I changed
+
+- Migrated the refinement workflow to use shared baseline/candidate manifest validators plus shared overlay-result normalization.
+- Migrated the decomposition workflow to use the same shared validators/normalizer while keeping building-block index checks, declared doc/runtime-test presence, and evidence validation local.
+- Preserved the refinement workflow’s historical boundary error wording by translating the shared seam’s generic allowed-boundary rejection.
+- Added one focused runtime regression test per workflow proving baseline-manifest boundary drift is still rejected at publish time.
+- Updated the phase ledger files with the audit, checklist mapping, preserved invariants, and the non-obvious migration decisions.
+- Files added: `0`
+- Files deleted: `0`
+- Net line change across touched files: `-189`
+- Repeated prompt sections removed or shortened: `0`
+- Repeated validation idioms removed: baseline manifest tails, candidate manifest tails, overlay normalization tails
+
+Key findings / decisions
+
+- The shared validators only enforce boundary metadata when callers pass `boundary_field_map`; wiring that explicitly was necessary to avoid silently dropping package/doc/runtime-test alignment checks.
+- Decomposition now shares the mechanical manifest validation path without moving workflow-local building-block policy into stdlib.
+- Focused proof passed:
+  - `./.venv/bin/python -m py_compile workflows/workflow_and_eval_to_refined_workflow_package/workflow.py workflows/workflow_package_to_composable_building_blocks/workflow.py`
+  - `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
+  - `./.venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+
+Open issues / next step
+
+- No open code issues in this phase scope.
+- Cycle-wide recursive memory/doc closeout is still pending outside this phase-local producer turn.

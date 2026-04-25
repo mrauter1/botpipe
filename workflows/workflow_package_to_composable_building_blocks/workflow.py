@@ -16,6 +16,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
         derive_candidate_surface_manifest,
         materialize_baseline_surface,
+        normalize_candidate_surface_overlay_result,
         normalize_candidate_surface_boundary,
         normalize_optional_string,
         normalize_unique_strings,
@@ -25,6 +26,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_positive_int,
         require_string_list,
         validate_authoritative_surface_sources_unchanged,
+        validate_baseline_surface_manifest,
+        validate_candidate_surface_manifest,
         validate_candidate_surface_overlay,
         write_selected_workflow_decomposition_surface,
     )
@@ -39,6 +42,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib import (
         derive_candidate_surface_manifest,
         materialize_baseline_surface,
+        normalize_candidate_surface_overlay_result,
         normalize_candidate_surface_boundary,
         normalize_optional_string,
         normalize_unique_strings,
@@ -48,6 +52,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_positive_int,
         require_string_list,
         validate_authoritative_surface_sources_unchanged,
+        validate_baseline_surface_manifest,
+        validate_candidate_surface_manifest,
         validate_candidate_surface_overlay,
         write_selected_workflow_decomposition_surface,
     )
@@ -1000,79 +1006,24 @@ def _validate_baseline_parent_manifest(
     repo_root: Path,
     boundary: Mapping[str, Any],
 ) -> None:
-    if _require_text(
-        baseline_manifest.get("surface_kind"),
-        "baseline_parent_manifest.json must define non-empty surface_kind",
-    ) != "baseline_parent":
-        raise ValueError("baseline_parent_manifest.json surface_kind must be baseline_parent")
-    if _require_text(
-        baseline_manifest.get("repo_root"),
-        "baseline_parent_manifest.json must define non-empty repo_root",
-    ) != str(repo_root):
-        raise ValueError("baseline_parent_manifest.json repo_root must match the runtime repo root")
-    if _require_text(
-        baseline_manifest.get("parent_package_name"),
-        "baseline_parent_manifest.json must define non-empty parent_package_name",
-    ) != _require_text(boundary.get("parent_package_name"), "boundary must define parent_package_name"):
-        raise ValueError("baseline_parent_manifest.json parent_package_name must match the decomposition surface")
-    if _require_text(
-        baseline_manifest.get("parent_package_root_relative_path"),
-        "baseline_parent_manifest.json must define non-empty parent_package_root_relative_path",
-    ) != _require_text(
-        boundary.get("parent_package_root_relative_path"),
-        "boundary must define parent_package_root_relative_path",
-    ):
-        raise ValueError(
-            "baseline_parent_manifest.json parent_package_root_relative_path must match the decomposition surface"
-        )
-    if _normalize_optional_text(baseline_manifest.get("parent_doc_relative_path")) != _normalize_optional_text(
-        boundary.get("parent_doc_relative_path")
-    ):
-        raise ValueError("baseline_parent_manifest.json parent_doc_relative_path must match the decomposition surface")
-    if _normalize_optional_text(
-        baseline_manifest.get("parent_runtime_test_relative_path")
-    ) != _normalize_optional_text(boundary.get("parent_runtime_test_relative_path")):
-        raise ValueError(
-            "baseline_parent_manifest.json parent_runtime_test_relative_path must match the decomposition surface"
-        )
-    file_entries = _manifest_file_map(
+    validate_baseline_surface_manifest(
         baseline_manifest,
-        "baseline_parent_manifest.json must define files as a JSON array of objects with relative_path",
+        repo_root,
+        manifest_label="baseline_parent_manifest.json",
+        expected_surface_kind="baseline_parent",
+        expected_boundary=boundary,
+        boundary_field_map={
+            "parent_package_name": "parent_package_name",
+            "parent_package_root_relative_path": "parent_package_root_relative_path",
+            "parent_doc_relative_path": "parent_doc_relative_path",
+            "parent_runtime_test_relative_path": "parent_runtime_test_relative_path",
+        },
+        optional_boundary_fields=("parent_doc_relative_path", "parent_runtime_test_relative_path"),
+        expected_relative_paths=_require_string_list(
+            boundary.get("baseline_relative_paths"),
+            "boundary must define non-empty baseline_relative_paths",
+        ),
     )
-    relative_paths = _require_string_list(
-        baseline_manifest.get("relative_paths"),
-        "baseline_parent_manifest.json must define non-empty relative_paths",
-    )
-    if sorted(file_entries) != relative_paths:
-        raise ValueError("baseline_parent_manifest.json files must match relative_paths")
-    if relative_paths != _require_string_list(
-        boundary.get("baseline_relative_paths"),
-        "boundary must define non-empty baseline_relative_paths",
-    ):
-        raise ValueError("baseline_parent_manifest.json relative_paths must match the decomposition surface")
-    for relative_path, entry in file_entries.items():
-        source_path = Path(
-            _require_text(
-                entry.get("source_path"),
-                "baseline_parent_manifest.json file entries must define non-empty source_path",
-            )
-        )
-        surface_path = Path(
-            _require_text(
-                entry.get("surface_path"),
-                "baseline_parent_manifest.json file entries must define non-empty surface_path",
-            )
-        )
-        if source_path != repo_root / relative_path:
-            raise ValueError("baseline_parent_manifest.json source_path entries must stay aligned to the repo root")
-        if not source_path.exists() or not surface_path.exists():
-            raise FileNotFoundError("baseline_parent_manifest.json file entries must point at existing files")
-        expected_digest = _require_text(
-            entry.get("surface_sha256"),
-            "baseline_parent_manifest.json file entries must define non-empty surface_sha256",
-        )
-        if _sha256_file(surface_path) != expected_digest:
-            raise ValueError("baseline_parent_manifest.json surface_sha256 must match the copied baseline surface")
 
 
 def _validate_authoritative_files_unchanged(baseline_manifest: Mapping[str, Any], repo_root: Path) -> None:
@@ -1186,77 +1137,6 @@ def _validate_candidate_decomposition_manifest(
     baseline_manifest: Mapping[str, Any],
     declared_building_blocks: Mapping[str, Any],
 ) -> None:
-    if _require_text(
-        candidate_manifest.get("surface_kind"),
-        "candidate_decomposition_manifest.json must define non-empty surface_kind",
-    ) != "candidate_decomposition":
-        raise ValueError("candidate_decomposition_manifest.json surface_kind must be candidate_decomposition")
-    if _require_text(
-        candidate_manifest.get("repo_root"),
-        "candidate_decomposition_manifest.json must define non-empty repo_root",
-    ) != str(repo_root):
-        raise ValueError("candidate_decomposition_manifest.json repo_root must match the runtime repo root")
-    if _require_text(
-        candidate_manifest.get("parent_package_name"),
-        "candidate_decomposition_manifest.json must define non-empty parent_package_name",
-    ) != _require_text(boundary.get("parent_package_name"), "boundary must define parent_package_name"):
-        raise ValueError("candidate_decomposition_manifest.json parent_package_name must match the decomposition surface")
-    if _require_text(
-        candidate_manifest.get("parent_package_root_relative_path"),
-        "candidate_decomposition_manifest.json must define non-empty parent_package_root_relative_path",
-    ) != _require_text(
-        boundary.get("parent_package_root_relative_path"),
-        "boundary must define parent_package_root_relative_path",
-    ):
-        raise ValueError(
-            "candidate_decomposition_manifest.json parent_package_root_relative_path must match the decomposition surface"
-        )
-    if _normalize_optional_text(candidate_manifest.get("parent_doc_relative_path")) != _normalize_optional_text(
-        boundary.get("parent_doc_relative_path")
-    ):
-        raise ValueError("candidate_decomposition_manifest.json parent_doc_relative_path must match the decomposition surface")
-    if _normalize_optional_text(
-        candidate_manifest.get("parent_runtime_test_relative_path")
-    ) != _normalize_optional_text(boundary.get("parent_runtime_test_relative_path")):
-        raise ValueError(
-            "candidate_decomposition_manifest.json parent_runtime_test_relative_path must match the decomposition surface"
-        )
-
-    baseline_relative_paths = _require_string_list(
-        baseline_manifest.get("relative_paths"),
-        "baseline_parent_manifest.json must define non-empty relative_paths",
-    )
-    candidate_baseline_relative_paths = _require_string_list(
-        candidate_manifest.get("baseline_relative_paths"),
-        "candidate_decomposition_manifest.json must define non-empty baseline_relative_paths",
-    )
-    if candidate_baseline_relative_paths != baseline_relative_paths:
-        raise ValueError(
-            "candidate_decomposition_manifest.json baseline_relative_paths must match baseline_parent_manifest.json"
-        )
-
-    candidate_root = Path(
-        _require_text(
-            candidate_manifest.get("surface_root"),
-            "candidate_decomposition_manifest.json must define non-empty surface_root",
-        )
-    )
-    actual_relative_paths = _surface_relative_paths(candidate_root)
-    candidate_relative_paths = _require_string_list(
-        candidate_manifest.get("relative_paths"),
-        "candidate_decomposition_manifest.json must define non-empty relative_paths",
-    )
-    if candidate_relative_paths != actual_relative_paths:
-        raise ValueError("candidate_decomposition_manifest.json relative_paths must match candidate_decomposition_surface")
-    if _require_positive_int(
-        candidate_manifest.get("file_count"),
-        "candidate_decomposition_manifest.json must define positive integer file_count",
-    ) != len(candidate_relative_paths):
-        raise ValueError("candidate_decomposition_manifest.json file_count must match candidate_decomposition_surface")
-    missing_baseline_paths = sorted(set(baseline_relative_paths) - set(candidate_relative_paths))
-    if missing_baseline_paths:
-        raise ValueError("candidate_decomposition_manifest.json must preserve every baseline relative_path")
-
     building_block_names = _require_string_list(
         candidate_manifest.get("building_block_names"),
         "candidate_decomposition_manifest.json must define non-empty building_block_names",
@@ -1278,52 +1158,38 @@ def _validate_candidate_decomposition_manifest(
             "candidate_decomposition_manifest.json building_block_package_roots must match candidate_building_block_index.json"
         )
 
-    allowed_exact_paths = set(
-        _require_string_list(
-            declared_building_blocks.get("allowed_exact_paths"),
-            "declared building blocks must define non-empty allowed_exact_paths",
-            min_length=2,
-        )
+    allowed_exact_paths = _require_string_list(
+        declared_building_blocks.get("allowed_exact_paths"),
+        "declared building blocks must define non-empty allowed_exact_paths",
+        min_length=2,
     )
-    missing_declared_exact_paths = sorted(path for path in allowed_exact_paths if path not in candidate_relative_paths)
+    validated_manifest = validate_candidate_surface_manifest(
+        candidate_manifest,
+        repo_root=repo_root,
+        manifest_label="candidate_decomposition_manifest.json",
+        expected_surface_kind="candidate_decomposition",
+        expected_boundary=boundary,
+        boundary_field_map={
+            "parent_package_name": "parent_package_name",
+            "parent_package_root_relative_path": "parent_package_root_relative_path",
+            "parent_doc_relative_path": "parent_doc_relative_path",
+            "parent_runtime_test_relative_path": "parent_runtime_test_relative_path",
+        },
+        optional_boundary_fields=("parent_doc_relative_path", "parent_runtime_test_relative_path"),
+        baseline_manifest=baseline_manifest,
+        baseline_manifest_label="baseline_parent_manifest.json",
+        allowed_added_path_prefixes=building_block_package_roots,
+        allowed_added_exact_paths=allowed_exact_paths,
+        require_surface_listing_matches_disk=True,
+        require_file_count_matches_relative_paths=True,
+    )
+    missing_declared_exact_paths = sorted(
+        path for path in set(allowed_exact_paths) if path not in validated_manifest["relative_paths"]
+    )
     if missing_declared_exact_paths:
         raise ValueError(
             "candidate_decomposition_manifest.json must include every declared building-block doc_relative_path and runtime_test_relative_path"
         )
-    for relative_path in candidate_relative_paths:
-        if relative_path in baseline_relative_paths:
-            continue
-        if any(relative_path.startswith(f"{package_root}/") for package_root in building_block_package_roots):
-            continue
-        if relative_path in allowed_exact_paths:
-            continue
-        raise ValueError("candidate_decomposition_manifest.json must stay within the allowed repo-relative boundary")
-
-    file_entries = _manifest_file_map(
-        candidate_manifest,
-        "candidate_decomposition_manifest.json must define files as a JSON array of objects with relative_path",
-    )
-    if sorted(file_entries) != candidate_relative_paths:
-        raise ValueError("candidate_decomposition_manifest.json files must match relative_paths")
-    for relative_path, entry in file_entries.items():
-        surface_path = Path(
-            _require_text(
-                entry.get("surface_path"),
-                "candidate_decomposition_manifest.json file entries must define non-empty surface_path",
-            )
-        )
-        if surface_path != candidate_root / relative_path:
-            raise ValueError(
-                "candidate_decomposition_manifest.json surface_path entries must stay under candidate_decomposition_surface"
-            )
-        if not surface_path.exists():
-            raise FileNotFoundError(f"candidate surface file is missing: {surface_path}")
-        expected_digest = _require_text(
-            entry.get("surface_sha256"),
-            "candidate_decomposition_manifest.json file entries must define non-empty surface_sha256",
-        )
-        if _sha256_file(surface_path) != expected_digest:
-            raise ValueError("candidate_decomposition_manifest.json surface_sha256 must match candidate_decomposition_surface")
 
 
 def _validate_candidate_overlay(
@@ -1334,30 +1200,18 @@ def _validate_candidate_overlay(
     candidate_manifest: Mapping[str, Any],
     target_test_command: str,
 ) -> dict[str, Any]:
-    overlay_validation = validate_candidate_surface_overlay(
-        repo_root=repo_root,
-        workflow_names=[selected_workflow_name, *building_block_names],
-        candidate_manifest=candidate_manifest,
-        target_test_command=target_test_command,
-        candidate_manifest_label="candidate_decomposition_manifest.json",
-        overlay_failure_prefix="overlay validation command failed for candidate decomposition surface",
-        overlay_temp_prefix="workflow_decomposition_overlay_",
-    )
-    compiled_workflow_names = _require_string_list(
-        overlay_validation.get("compiled_workflow_names"),
-        "overlay validation must define non-empty compiled_workflow_names",
-    )
-    test_returncode = overlay_validation.get("test_returncode")
-    if not isinstance(test_returncode, int) or test_returncode < 0:
-        raise ValueError("overlay validation must define non-negative integer test_returncode")
-    return {
-        "compiled_workflow_names": compiled_workflow_names,
-        "test_command": _require_text(
-            overlay_validation.get("test_command"),
-            "overlay validation must define non-empty test_command",
+    return normalize_candidate_surface_overlay_result(
+        validate_candidate_surface_overlay(
+            repo_root=repo_root,
+            workflow_names=[selected_workflow_name, *building_block_names],
+            candidate_manifest=candidate_manifest,
+            target_test_command=target_test_command,
+            candidate_manifest_label="candidate_decomposition_manifest.json",
+            overlay_failure_prefix="overlay validation command failed for candidate decomposition surface",
+            overlay_temp_prefix="workflow_decomposition_overlay_",
         ),
-        "test_returncode": test_returncode,
-    }
+        expect_single_compiled_workflow=False,
+    )
 
 
 def _resolve_input_path(repo_root: Path, raw_value: str, field_name: str) -> Path:
@@ -1368,24 +1222,6 @@ def _resolve_input_path(repo_root: Path, raw_value: str, field_name: str) -> Pat
     if not path.is_file():
         raise ValueError(f"{field_name} must point to a file: {path}")
     return path
-
-
-def _manifest_file_map(manifest: Mapping[str, Any], error_message: str) -> dict[str, dict[str, Any]]:
-    files = manifest.get("files")
-    if not isinstance(files, list):
-        raise ValueError(error_message)
-    result: dict[str, dict[str, Any]] = {}
-    for entry in files:
-        payload = _require_mapping(entry, error_message)
-        relative_path = _require_text(payload.get("relative_path"), error_message)
-        result[relative_path] = payload
-    return result
-
-
-def _surface_relative_paths(root: Path) -> list[str]:
-    if not root.is_dir():
-        raise FileNotFoundError(f"candidate decomposition surface is missing: {root}")
-    return sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file())
 
 
 def _path_under_repo_or_none(repo_root: Path, path: Path) -> str | None:
