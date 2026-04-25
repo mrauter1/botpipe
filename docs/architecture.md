@@ -1,8 +1,6 @@
 # Architecture
 
-This redesign is greenfield.
-
-Backward compatibility is not a goal for CLI syntax, package names, config filenames, runtime payloads, or on-disk layout. Feature compatibility is still required: pause/resume, checkpoint recovery, tracing, workflow composition, reusable workflow packages, and Autoloop-v1 operational parity must remain available through the new architecture.
+This architecture is additive rather than greenfield. Public compatibility matters: the CLI, package discovery, `workflow.toml` metadata-only behavior, `ctx.invoke_workflow(...)`, `ctx.open_session(..., scope=...)`, checkpoint/resume behavior, tracing, and provider/session boundaries remain part of the contract while the authoring surface grows more capable.
 
 ## Internal Layout
 
@@ -17,6 +15,24 @@ The public authoring contract does not point workflow authors at internal module
 
 - `workflow`
 - `workflow.primitives`
+
+The root `workflow` shim is authoring-facing only:
+
+- `Workflow`, `Context`, `Session`, `Continuity`, `Artifact`, `Prompt`
+- `PairStep`, `LLMStep`, `SystemStep`
+- `Route`, `RouteContract`, `SUCCESS`, `PAUSE`, `FAIL`, `GLOBAL`
+- `SetStatus`, `Advance`, `Refresh`, `ResetCompletion`, `BoardMutation`
+- `WorkItem`, `Worklist`, `Selector`
+
+Low-level runtime values stay under `workflow.primitives`:
+
+- `Event`
+- `Outcome`
+- `Checkpoint`
+- `ResolvedArtifacts`
+- `ChildWorkflowResult`
+
+`workflow` does not re-export engine/compiler/store/provider internals such as `Engine`, `compile_workflow`, or `WorkflowMeta`.
 
 ## Workflow Surfaces
 
@@ -68,6 +84,8 @@ Shallow workflow discovery stays import-free and scans:
 - `<root>/workflows/*.py`
 
 Deep inspection and execution may import and compile workflow modules. That richer seam reports compiled step contracts, parameters, prompt paths, support-file paths, and source metadata without widening `workflow.toml`.
+
+Route/effect declarations are ordinary Python objects, not a string DSL. Dict transition shorthand still works, but richer contracts use `Route.to(...)` and explicit effect objects in workflow code.
 
 ## CLI Contract
 
@@ -161,6 +179,19 @@ Framework-owned persisted session payloads use canonical fields such as:
 
 Verifier and single-LLM turns remain strict runtime contracts: built-in CLI adapters must return machine-parseable JSON outcomes that the runtime validates locally before the workflow engine accepts them. Provider-specific continuation aliases do not leak into framework-owned session payloads.
 
+Sessions now distinguish slot, default continuity policy, and explicit runtime overrides:
+
+- `Session` names a provider conversation slot
+- `Continuity` defines the default reuse policy for that slot
+- `ctx.open_session(..., scope=...)` remains supported as an explicit runtime binding override
+
+`scope=` is not deprecated. `ctx.open_session(session)`, `ctx.open_session(session, scope="cluster-1")`, and positional `ctx.open_session(session, "cluster-1")` remain valid public behavior.
+
+Artifact contracts and provider-output contracts are separate:
+
+- artifact schema validates files written to disk
+- `expected_output_schema` validates `Outcome.payload`
+
 ## Workspace Layout
 
 Runtime data lives under task, workflow, and run scopes:
@@ -198,10 +229,10 @@ The task `request.md` is the latest rendered request snapshot for the task. Each
 
 ## Recursive Operation
 
-Recursive automation under `recursive_autoloop/` keeps the public name-first package/message-oriented wrapper contract.
+Recursive automation under `recursive_autoloop/` keeps the globally installed Autoloop CLI contract.
 
-- Wrapper start commands use `autoloop run <workflow> <task-id> --root ... --message ...`
-- Wrapper resume commands use `autoloop resume <workflow> <task-id> --root ...`
+- Wrapper start commands use `autoloop --workspace ... --task-id ... --intent ... --pairs ...`
+- Wrapper resume commands use `autoloop --workspace ... --task-id ... --resume`
 - Recursive memory lives under `.autoloop_recursive/`
 - Recursive templates and guidance point readers at `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, and repo-root `workflows/`
 

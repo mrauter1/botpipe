@@ -7,9 +7,19 @@ from workflow import (
     Workflow,
     Context,
     Session,
+    Continuity,
     Artifact,
     Prompt,
+    Route,
     RouteContract,
+    Advance,
+    Refresh,
+    ResetCompletion,
+    BoardMutation,
+    SetStatus,
+    WorkItem,
+    Worklist,
+    Selector,
     PairStep,
     LLMStep,
     SystemStep,
@@ -18,7 +28,7 @@ from workflow import (
     FAIL,
     GLOBAL,
 )
-from workflow.primitives import Event, Outcome, Checkpoint, ResolvedArtifacts
+from workflow.primitives import Event, Outcome, Checkpoint, ResolvedArtifacts, ChildWorkflowResult
 ```
 
 Keep the root surface strict: do not import engine internals, compiler helpers, or compatibility modules from `workflow`.
@@ -95,6 +105,15 @@ If a workflow supports parameters, expose a `Parameters` model through one of th
 4. legacy package conventions such as `params.py`
 
 The runtime validates and coerces `-wf` values through that model before execution starts. `specs.py` is never scanned specially; if you want it involved, import from it explicitly.
+
+Typed parameter access:
+
+```python
+ctx.params.mode
+ctx.workflow_params["mode"]
+```
+
+`ctx.params` is the typed `Parameters` model for the workflow. `ctx.workflow_params` remains the compatibility dict surface.
 
 ## Step Control Contracts
 
@@ -247,12 +266,165 @@ New runs are message-first:
 
 The runtime persists resumability through an opaque `session_id` plus optional `provider_metadata`. Workflow code should treat session continuity as opaque runtime state and use the `Session` / context APIs rather than depending on persisted payload details.
 
+Every workflow also has an implicit default session slot named `default`. `LLMStep` and `PairStep` use that slot automatically when no explicit `session=` is declared.
+
+`Continuity` defines the default reuse policy for a session slot:
+
+```python
+worker = Session(continuity=Continuity.work_item("gate"))
+```
+
+Supported continuity policies are `Continuity.run()`, `Continuity.task()`, `Continuity.work_item(...)`, `Continuity.fresh()`, and `Continuity.key(...)`.
+
+`ctx.open_session(..., scope=...)` remains supported and is the explicit runtime override surface:
+
+```python
+ctx.open_session(self.worker)
+ctx.open_session(self.worker, scope="cluster-1")
+ctx.open_session(self.worker, "cluster-1")
+```
+
+Mental model:
+
+- `Session` is a named provider conversation slot
+- `Continuity` is the default reuse policy for that slot
+- `scope=` is an explicit runtime binding override, not a replacement for continuity
+
+In other words, `scope= is an explicit runtime binding override` for the session slot chosen by the step or caller.
+
 Implications for authors:
 
 - do not assume provider-specific naming for the continuation handle
 - do not read or write session JSON directly from workflow logic
 - keep provider-specific behavior inside provider adapters or provider-specific prompts, not workflow contracts
 - do not document or depend on any legacy provider-specific continuation alias outside the canonical `session_id` contract
+
+## Artifact Declarations And Contracts
+
+Class-level artifacts remain valid:
+
+```python
+report = Artifact("{workflow_folder}/report.md")
+```
+
+Step-local artifacts can now be declared inline:
+
+```python
+class Summary(BaseModel):
+    summary: str
+    ready: bool
+
+
+draft = PairStep(
+    name="draft",
+    producer="prompts/draft_producer.md",
+    verifier="prompts/draft_verifier.md",
+    produces={
+        "summary": Artifact.json("summary.json", schema=Summary, required=True),
+        "report": Artifact.md("report.md", required=True),
+    },
+    route_contracts={
+        "ready": RouteContract(
+            summary="The report and summary are ready.",
+            required_artifacts=("summary", "report"),
+        )
+    },
+)
+```
+
+The step exposes those artifacts as attributes, so downstream steps may write `requires=[draft.summary, draft.report]`.
+
+Path rules:
+
+- explicit templates such as `Artifact("{workflow_folder}/report.md")` resolve exactly as written
+- class-level relative paths resolve under `workflow_folder`
+- step-local relative paths resolve under `{workflow_folder}/{step_name}/`
+
+`produces` and `requires` are different contracts:
+
+- `requires` means the artifact must already exist before the step runs
+- `produces` means the step owns a writable output handle
+
+Artifact schema and provider output schema are also different:
+
+- `Artifact.schema` validates artifact file content on disk
+- `expected_output_schema` validates `Outcome.payload`
+
+Requiredness rules:
+
+- `Artifact.required=True` makes that produced artifact required by default on successful completion
+- `RouteContract.required_artifacts` is the selected-route-specific override
+- optional produced artifacts may be absent
+- optional produced artifacts that exist and declare a schema still validate
+
+## Typed Routes And Effects
+
+Dict transition shorthand remains valid:
+
+```python
+transitions = {ask: {"done": SUCCESS}}
+```
+
+Advanced routes use Python objects, not a string DSL:
+
+```python
+transitions = {
+    assess: {
+        "passed": Route.to(
+            SUCCESS,
+            SetStatus(gates, "completed"),
+            Advance(gates),
+        ),
+        "needs_rework": Route.to(assess, ResetCompletion(gates)),
+    }
+}
+```
+
+Use `Route.to(...)`, `Route.complete(...)`, `Route.pause(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
+
+## Worklists And Scoped Steps
+
+`Worklist` and `WorkItem` let workflows scope a step to the current selected item without introducing hidden looping:
+
+```python
+gates = Worklist.from_artifact(
+    name="gate",
+    artifact=gate_board,
+    collection="gates",
+    item_id="gate_id",
+    title="title",
+    status="status",
+)
+
+assess = PairStep(
+    name="assess",
+    producer="prompts/assess_producer.md",
+    verifier="prompts/assess_verifier.md",
+    scope=gates,
+)
+```
+
+Worklist helpers exposed on `Context`:
+
+- `ctx.selection(gates)`
+- `ctx.current(gates)`
+- `ctx.item`
+
+The engine does not silently loop a whole worklist. Progression is explicit through effects such as `Advance(gates)`.
+
+## Typed Child Workflow Contracts
+
+Child composition still centers on `ctx.invoke_workflow(...)`, and workflows may now declare typed `Input` and `Output` models:
+
+```python
+result = ctx.invoke_workflow(
+    ChildWorkflow,
+    message="Review this package",
+    input=ChildWorkflow.Input(topic="release", urgency=2),
+)
+```
+
+If the child workflow declares `Output` and `build_output(...)`, the returned `ChildWorkflowResult.output` carries the validated typed output. The low-level compatibility fields remain available on `ChildWorkflowResult`, including run paths, metadata, and artifact maps.
 
 ## Optional Lifecycle Helpers
 

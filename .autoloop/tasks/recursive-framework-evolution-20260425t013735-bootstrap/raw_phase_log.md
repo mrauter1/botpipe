@@ -2706,3 +2706,84 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc38c-812b-7443-918c-9a1504416b17
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+I’m handling the public-surface/docs/regression phase. First I’m reading the active phase artifacts and the current export/docs/test surfaces to see what earlier phases already landed and what still needs to be tightened.
+
+I’ve confirmed prior phases already landed the feature work, and this phase is the export/docs/regression pass. Next I’m checking the current public shim, strictness tests, and docs against the requested final API so I can close the remaining gaps without widening scope.
+
+The repo is in the middle of a package-root migration, so I’m being careful not to touch the unrelated delete/add churn. I’m now reading the exact strictness and doc assertions that define this phase’s contract, then I’ll patch only the root shim/docs/tests that are still out of alignment.
+
+I’ve got the exact deltas now. The main gaps are the low-level `workflow.primitives` export contract and the docs/tests still describing the older greenfield/narrower surface, so I’m patching those next and then I’ll run the relevant regressions before the full suite.
+
+The doc surface is wider than just two markdown files: there are recursive templates and memory ledgers that tests treat as contract mirrors. I’m checking those now so I can decide whether to update the assertions only or bring the mirrored text back into sync with the new compatibility doctrine.
+
+I’ve narrowed the edits to the intended blast radius: root shim primitives, the two canonical docs, and the contract tests that pin them. After that I’ll run the strictness/doc-focused subset first so any wording drift is cheap to fix before the full suite.
+
+The contract patches are in. I’m running the strictness/doc-facing subset first to catch any wording or export mismatches before I spend time on the full regression suite.
+
+`pytest` isn’t on the shell path in this workspace. I’m switching to the project venv runner and then I’ll re-run the focused contract subset.
+
+The remaining failures were stale recursive-memory assertions pointing at the wrong files, not framework code. I’ve aligned those tests with the current ledger structure and I’m re-running the subset now.
+
+The doc/strictness slice is clean now. I’m running the full suite next; if anything still fails, I’ll treat it as regression fallout from this phase and fix only what’s necessary to get back to green.
+
+The full run is still in progress. I’m polling it rather than starting other work so I can react immediately if a regression shows up.
+
+The full suite has multiple failures outside the doc subset, so I’m letting the run finish to get the exact failing set before I touch anything. That should tell me whether this phase exposed stale expectations or a real public-surface regression.
+
+The remaining failures are real runtime regressions that sit on the seams upgraded in earlier phases: child-workflow invocation compatibility and artifact validation against directory outputs. I’m inspecting those contracts now and I’ll patch the runtime rather than papering over the tests.
+
+I found three concrete regressions behind the full-suite failures: `ctx.invoke_workflow(...)` now always sends `input=` even when callers still use the older three-argument invoker shape, typed child output validation is coercing instead of validating strictly, and artifact validation is treating legacy directory outputs like text files. I’m patching those seams directly.
+
+The runtime seam fixes are under test now across the previously failing areas. I’m waiting for this focused run to finish before I re-run the full suite.
+
+One of the focused regressions is still failing. I’m waiting for the traceback so I can fix it directly instead of widening the change set.
+
+The last placeholder regression is under retest with the other previously failing cases. If this finishes cleanly, I’ll do one more full-suite pass.
+
+The full suite is running again from a clean checkpoint after the runtime fixes. I’m polling until it exits so I can either close this out or address the next concrete failure set immediately.
+
+The rerun is past the earlier failure bands and still green. I’m waiting for completion before I update the phase notes and decision ledger.
+
+The full pass is still moving cleanly. I’m continuing to poll rather than changing anything mid-run.
+
+No new failures have appeared so far. I’m waiting for the final summary to confirm the suite is fully back to green.
+
+The suite is green. I’m updating the phase notes and the shared decision ledger now so the final state is documented for the next turn instead of leaving the rationale implicit in the diff.
+
+Scope considered
+- Root public surface in [workflow/primitives.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/primitives.py), canonical docs in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), strictness/doc regression tests, and the runtime seams exposed by the full-suite pass in [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), [core/artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/artifacts.py), and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py).
+
+What I analyzed
+- The active phase artifacts and decision ledger, the current root shim exports, the strictness/doc assertions, and the failing runtime regressions after the first full `pytest` run.
+- The failing runtime cases clustered around three upgraded seams: child-workflow invocation compatibility, typed child output validation, and artifact validation for legacy directory outputs.
+
+What I changed
+- Updated the docs to reflect the final additive contract: `workflow.toml` remains metadata-only, `ctx.open_session(..., scope=...)` remains supported, continuity is the default session policy, `scope=` is the explicit override, artifact schema vs `expected_output_schema` is spelled out, and the authoring docs now cover typed params, step-local artifacts, typed routes/effects, worklists, and typed child outputs.
+- Aligned strictness/doc tests with the intended public surface, including `workflow.primitives` exposing `ChildWorkflowResult`, and corrected stale recursive-memory assertions to match the maintained ledger structure.
+- Fixed runtime regressions uncovered by the full suite:
+  - `Context.invoke_workflow(...)` now preserves older invoker callback shapes when no typed child input is supplied.
+  - Typed workflow output validation is now strict instead of coercive.
+  - Artifact validation now accepts schema-less directory outputs by existence, which preserves existing candidate-surface workflows under route-artifact enforcement.
+  - Placeholder resolution no longer misclassifies ordinary `state.*` `None` values as missing work-item context.
+
+Key findings / decisions
+- The public-surface phase was not doc-only in practice; the full regression run exposed compatibility breaks introduced by earlier feature phases, and they needed runtime fixes to satisfy the acceptance criterion.
+- The additive boundary is now consistent across code, docs, and tests: root `workflow` stays authoring-facing, `workflow.primitives` carries the low-level runtime values, and older workflow packages keep working without rewriting their child invokers or directory-style produced artifacts.
+- Validation performed: `.venv/bin/pytest -q` passed with `679 passed`.
+
+Open issues / next step
+- No open issues from this phase. The phase notes and shared decisions ledger were updated with the non-obvious compatibility decisions and regression fixes.
