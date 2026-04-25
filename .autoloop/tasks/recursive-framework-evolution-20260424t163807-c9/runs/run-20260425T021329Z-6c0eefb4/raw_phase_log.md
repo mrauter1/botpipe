@@ -90,3 +90,87 @@ Revise `plan.md` and `phase_plan.yaml` so phase 3 explicitly covers `.autoloop_r
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+---
+I’m taking the verifier’s blocking finding as the immediate scope boundary. I’ll update the plan artifacts so phase 3 explicitly covers `.autoloop_recursive/framework_evolution_charter.md`, keep the rest of the consolidation plan intact, and then re-validate the YAML locally.
+
+I’ve confirmed the charter file is the missing memory artifact the verifier called out. I’m narrowing the fix to intent fidelity only: add the charter explicitly to phase 3 and state that implementation must either update doctrine or write a no-doctrine-change closeout note there.
+
+The patch missed because the YAML serializer normalized quoting on disk. I’m reading the exact current snippets and applying a narrower patch so only the charter scope and no-doctrine-change note change.
+
+The fidelity fix is in place. I’m re-running the required YAML parse and then I’ll do a quick consistency check that the charter requirement now appears in the narrative plan, phase contract, feedback trail, and the current decision block.
+
+Scope considered
+The verifier’s blocking finding, the current planning artifacts, the standing-memory requirement from the authoritative request, and the charter file needed to resolve the fidelity gap.
+
+What I analyzed
+The mismatch between the request’s five required recursive-memory files and phase 3’s prior four-file closeout scope. I also re-checked the current charter file shape so the fix would require an explicit doctrine update or no-doctrine-change note rather than a silent omission.
+
+What I changed
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/plan/plan.md) so milestone 3 explicitly includes `.autoloop_recursive/framework_evolution_charter.md` and requires a visible no-doctrine-change note when doctrine stays unchanged.
+Updated [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/plan/phase_plan.yaml) so phase 3 in-scope items, acceptance criteria, and deliverables now cover the charter explicitly.
+Appended a closeout note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/plan/feedback.md) describing the correction.
+Appended one carry-forward constraint under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/decisions.txt).
+Re-validated `phase_plan.yaml` locally with `python3` and `yaml.safe_load`.
+
+Key findings / decisions
+The only blocking verifier finding was the omitted charter update scope.
+The plan now explicitly treats the charter as part of the required recursive-memory closeout.
+The consolidation target, workflow scope, compatibility constraints, and phase ordering were left unchanged.
+
+Open issues / next step
+The charter-coverage gap is addressed. The next step is verifier re-review so `PLAN-001` can be closed and the criteria can be updated accordingly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+---
+I’m re-verifying only the changed plan surfaces plus the standing request/decision context, with emphasis on whether the charter omission is actually closed and whether the phase contract still parses cleanly after the fix.
+
+The charter scope is now explicit in both the narrative plan and the phase contract, and the YAML still parses. I’m closing out the verification by marking the criteria complete and appending a continuity note that the prior blocking finding is resolved with no remaining findings.
+
+Scope considered
+The authoritative request, the current plan artifacts, the verifier feedback history, the shared decisions file, and the phase-contract parseability after the producer’s phase-3 charter fix.
+
+What I analyzed
+Whether the prior blocking intent-fidelity gap around `.autoloop_recursive/framework_evolution_charter.md` was actually closed, whether the updated plan still preserves compatibility and regression controls, and whether `phase_plan.yaml` remains coherent and parseable with non-empty required lists.
+
+What I reviewed
+`plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, `decisions.txt`, and the immutable request snapshot. I also re-validated `phase_plan.yaml` locally with `python3` and `yaml.safe_load`.
+
+Key findings / decisions
+No remaining blocking or non-blocking findings.
+`PLAN-001` is resolved: the plan now explicitly includes `.autoloop_recursive/framework_evolution_charter.md` in phase 3 and requires either a doctrine update or a visible no-doctrine-change closeout note.
+`criteria.md` was updated so all verification gates are checked.
+
+Open issues / next step
+No open verification issues remain. The planning artifacts are complete and consistent for implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

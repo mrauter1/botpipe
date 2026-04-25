@@ -136,3 +136,41 @@ The charter-coverage gap is addressed. The next step is verifier re-review so `P
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc269-d8d7-7603-80be-9e6a12c42b6a
+---
+I’m re-verifying only the changed plan surfaces plus the standing request/decision context, with emphasis on whether the charter omission is actually closed and whether the phase contract still parses cleanly after the fix.
+
+The charter scope is now explicit in both the narrative plan and the phase contract, and the YAML still parses. I’m closing out the verification by marking the criteria complete and appending a continuity note that the prior blocking finding is resolved with no remaining findings.
+
+Scope considered
+The authoritative request, the current plan artifacts, the verifier feedback history, the shared decisions file, and the phase-contract parseability after the producer’s phase-3 charter fix.
+
+What I analyzed
+Whether the prior blocking intent-fidelity gap around `.autoloop_recursive/framework_evolution_charter.md` was actually closed, whether the updated plan still preserves compatibility and regression controls, and whether `phase_plan.yaml` remains coherent and parseable with non-empty required lists.
+
+What I reviewed
+`plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, `decisions.txt`, and the immutable request snapshot. I also re-validated `phase_plan.yaml` locally with `python3` and `yaml.safe_load`.
+
+Key findings / decisions
+No remaining blocking or non-blocking findings.
+`PLAN-001` is resolved: the plan now explicitly includes `.autoloop_recursive/framework_evolution_charter.md` in phase 3 and requires either a doctrine update or a visible no-doctrine-change closeout note.
+`criteria.md` was updated so all verification gates are checked.
+
+Open issues / next step
+No open verification issues remain. The planning artifacts are complete and consistent for implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
