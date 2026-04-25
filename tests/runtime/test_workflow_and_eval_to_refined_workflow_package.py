@@ -715,6 +715,26 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_candidate
         )
 
 
+def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_candidate_manifest_boundary_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run = _run_successful_refinement_workflow(tmp_path, monkeypatch)
+    candidate_manifest_path = run.workflow_dir / "candidate_workflow_manifest.json"
+    payload = json.loads(candidate_manifest_path.read_text(encoding="utf-8"))
+    payload["package_root_relative_path"] = "workflows/incident_to_hardening_program"
+    candidate_manifest_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="candidate_workflow_manifest.json package_root_relative_path must match the expected workflow boundary",
+    ):
+        run.workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_publish_refined_workflow(
+            run.result.state,
+            run.publish_context,
+        )
+
+
 def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authoritative_source_drift(
     tmp_path: Path,
     monkeypatch,

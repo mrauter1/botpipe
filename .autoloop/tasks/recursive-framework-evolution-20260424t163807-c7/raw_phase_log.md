@@ -497,3 +497,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc212-9e35-7151-b726-cd31c0f08710
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc212-9e35-7151-b726-cd31c0f08710
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc212-9e35-7151-b726-cd31c0f08710
+---
+I’m checking the phase-owned test artifacts and the targeted runtime tests first so I can map the implemented seam migration to concrete coverage, then I’ll decide whether any additional repo test changes are still needed beyond the tests already added in the implementation turn.
+
+There’s one regression surface worth hardening further: the non-obvious `boundary_field_map` wiring on the candidate-manifest path. I’m adding one candidate-manifest boundary mismatch test per workflow so a future refactor can’t silently drop those package/doc/runtime-test alignment checks.
+
+The new candidate-boundary tests are in place and the focused suites are running. If they stay green, I’ll record the behavior-to-test map explicitly in the phase strategy and note that these additions protect the non-obvious `boundary_field_map` wiring on both publish paths.
+
+Scope considered
+
+- Phase-local `migrate-refinement-decomposition-callers` test scope only.
+- Reviewed the migrated refinement/decomposition runtime suites plus the phase-owned test artifacts.
+
+What I analyzed
+
+- The shared-seam migration decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/decisions.txt), especially the explicit `boundary_field_map` requirement and preserved refinement error wording.
+- Existing runtime coverage in [test_workflow_and_eval_to_refined_workflow_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py) and [test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py).
+- The phase-owned [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/migrate-refinement-decomposition-callers/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/migrate-refinement-decomposition-callers/feedback.md).
+
+What I changed
+
+- Added a refinement publish-time regression test for candidate-manifest boundary metadata drift.
+- Added a decomposition publish-time regression test for candidate-manifest boundary metadata drift.
+- Updated the phase test strategy with an explicit behavior-to-test coverage map, preserved invariants, failure paths, flake controls, and known gaps.
+- Appended a concise producer update to the phase test feedback artifact.
+- Appended two test-scope decisions under the latest test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+- The highest-value extra regression surface was candidate-manifest boundary metadata, because the shared seam depends on explicit `boundary_field_map` wiring and a future omission would not be caught by file-tree-only boundary tests.
+- Focused runtime proof is green:
+  - `./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` -> `25 passed`
+  - `./.venv/bin/pytest -q tests/runtime/test_workflow_package_to_composable_building_blocks.py` -> `26 passed`
+
+Open issues / next step
+
+- No open test-blocking issues in this phase scope.
+- Auditor can validate the updated phase artifacts and the two added candidate-boundary regression tests.
