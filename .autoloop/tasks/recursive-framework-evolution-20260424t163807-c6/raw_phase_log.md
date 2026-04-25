@@ -708,3 +708,72 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+---
+I’m handling the proof/docs/memory closeout phase. I’ll inspect the current repository state, the prior phase artifacts, and the targeted docs/tests surfaces first so I can close this out without widening scope.
+
+I’ve confirmed this repo is already in a very dirty state outside the active task, so I’m keeping scope tight around the shared candidate-surface seam, the two migrated workflows, the affected docs, and the recursive-memory files. Next I’m reading the touched code and memory surfaces to verify what still needs explicit closeout.
+
+The closeout gap is visible now: the migration phase already updated memory with an in-flight note, but this phase still needs the final proof record, the explicit full accounting block, and either a no-op or a narrow authoring-doc update for the new seam. I’m checking the remaining helper/test details before editing those docs and ledgers.
+
+I’ve confirmed the new shared seam is not documented in `docs/authoring.md` yet, and the closeout note is also missing from the recursive ledgers. I’m patching those narrow gaps now, along with the phase implementation notes and the final decisions block, before rerunning the scoped proof.
+
+I’ve got the exact insertion points. The edit set is narrow: one authoring-doc section plus one docs-baseline assertion, then the charter/roadmap/ledgers, the phase notes, and the current decisions block.
+
+I’m editing the closeout artifacts now: a narrow authoring-doc section for the shared seam, one docs-baseline assertion, then the charter/roadmap/ledgers and the phase notes. After that I’ll rerun the scoped proof as one combined pass.
+
+The closeout artifacts are patched. I’m running the single scoped proof bundle now so the docs assertion, the shared seam, and both migrated workflow families are all validated together and can be recorded with one final result.
+
+The proof run is still in progress. The early output is clean, so I’m waiting for the final count before I lock the closeout notes.
+
+The scoped proof passed, but the final count is `144 passed`, not the provisional `142` I used while patching. I’m correcting the recorded proof totals now so the closeout artifacts stay exact.
+
+The proof is green. I only need to fix the recorded pass count in the closeout artifacts and then I’ll do one final readback of the touched files for consistency.
+
+The proof count is corrected. I’m doing one last consistency pass over the touched closeout artifacts, then I’ll summarize the completed scope and the final accounting.
+
+Scope considered
+
+- Phase-local cycle-6 closeout only: shared candidate-surface seam, the two migrated workflows, targeted docs/tests, recursive-memory files, and the current decisions ledger.
+
+What I analyzed
+
+- Confirmed the cycle stays in `consolidate` mode and does not need a new workflow.
+- Verified the shared `stdlib/candidate_surfaces.py` seam remains mechanical only, with refinement/decomposition policy still local.
+- Checked the missing closeout gaps: authoring guidance for the seam, explicit charter/ledger closeout notes, and full mandatory accounting.
+
+What I changed
+
+- Added a narrow authoring-doc section for `stdlib/candidate_surfaces.py` in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and pinned it in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- Updated the recursive-memory closeout in:
+  - [.autoloop_recursive/framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md)
+  - [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md)
+  - [.autoloop_recursive/framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md)
+  - [.autoloop_recursive/workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md)
+  - [.autoloop_recursive/validation_debt_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/validation_debt_ledger.md)
+- Updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/proof-docs-memory-closeout/implementation_notes.md) and appended the final closeout decisions under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/decisions.txt).
+
+Key findings / decisions
+
+- Cycle 6 closes as `consolidate`; this was higher leverage than a new workflow because it removed duplicated refinement/decomposition publication mechanics behind one shared helper seam.
+- Final accounting: files added `1`, files deleted `0`, repeated prompt sections removed `0`, workflows changed to use shared helpers `2`, new helper functions introduced `5`. Net repo-wide line delta is still not practical because the checkout already has a large dirty remap, but the scoped workflow/test migration stayed `-214` lines before this small docs closeout.
+- Targeted proof passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  - Result: `144 passed in 19.55s`
+
+Open issues / next step
+
+- No blocker remains in this scoped phase.
+- Deferred debt stays outside this family: broader serializer/surface convergence beyond refinement/decomposition is still the next consolidation pressure.

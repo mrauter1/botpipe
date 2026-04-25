@@ -471,6 +471,32 @@ Decomposition helper boundary:
 - it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
 - workflow code and prompt templates still own decomposition policy, baseline/candidate strategy, building-block extraction boundaries, verification evidence, and promotion/rollback decisions
 
+## Optional Candidate-Surface Publication Helpers
+
+`stdlib/candidate_surfaces.py` provides a narrow authoring-only seam for workflows that need the repeated mechanical parts of candidate-only publication for one selected workflow surface.
+
+```python
+from autoloop_v3.stdlib import (
+    derive_candidate_surface_manifest,
+    materialize_baseline_surface,
+    normalize_candidate_surface_boundary,
+    validate_authoritative_surface_sources_unchanged,
+    validate_candidate_surface_overlay,
+)
+```
+
+Candidate-surface helper boundary:
+
+- the helpers own only the mechanical baseline/candidate publication operations: repo-relative boundary normalization, baseline surface materialization, candidate-manifest diff derivation, authoritative-source drift rejection, and isolated overlay validation
+- they reuse the shared selected-workflow surface artifacts and repo-relative path hardening instead of ad hoc workflow-local copy, digest, and traversal checks
+- they write only workflow-local surface folders and manifest metadata under `ctx.workflow_folder`
+- overlay validation still runs against an isolated repo copy with the same runnable-root fallback used by the workflow-local publication path
+- they do not own refinement-specific evaluation alignment, decomposition-specific evidence capture, building-block extraction policy, or publication receipt shaping
+- they do not mutate, auto-promote, auto-decompose, auto-refine, or auto-run the selected workflow
+- they do not add CLI flags, new `workflow.toml` fields, runtime-owned publication automation, or hidden downstream routing
+- they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- workflow code and prompt templates still own domain-specific publication policy, evidence requirements, allowed-path rules, and promotion or rollback decisions
+
 ## Optional Diagnostic Snapshot Helpers
 
 `stdlib/diagnostics.py` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's historical run evidence.
