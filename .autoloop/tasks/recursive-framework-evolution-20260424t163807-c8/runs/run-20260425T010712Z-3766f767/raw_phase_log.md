@@ -191,3 +191,140 @@ phase_mode=single
 phase_ids=converge-selected-workflow-serializers,extract-selected-workflow-validators,proof-docs-memory-sync
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc235-d58e-79b2-a521-ff3cac162f12
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+I’m treating this as a scoped architecture-consolidation change around selected-workflow serializers. First I’m reading the phase artifacts, the required docs, and the current serializer/helper surfaces across `core/`, `stdlib/`, `workflows/`, `tests/`, and `.autoloop_recursive/` so I can complete the mandatory audit before editing.
+
+I’ve confirmed the planner already scoped this to consolidation of selected-workflow serializers and validators. Next I’m reading the current capability builders, stdlib wrappers, the consuming workflows, and the baseline docs/tests to locate the exact duplication and the least disruptive seam to centralize.
+
+The duplication is where the plan said it would be: `refinement` and `decomposition` both rebuild editable path inventories and runtime-test inference, while several workflows revalidate the same selected-workflow identity fields after reading those snapshots. I’m drilling into the exact payload shape and the current tests now so I can centralize the builders without altering artifact contracts.
+
+I have enough context to narrow the implementation plan:
+1. Add authoritative selected-workflow payload builders in `core/workflow_capabilities.py` for capability, authoring-surface, and decomposition-surface views, including the shared path and repo-relative conversion helpers.
+2. Convert `stdlib/adaptation.py`, `stdlib/refinement.py`, and `stdlib/decomposition.py` into thin writers over those builders, preserving filenames and JSON contracts.
+3. Move generic selected-workflow identity checks into `stdlib/validation.py`, then replace the duplicated workflow-local blocks in the adaptation, eval-suite, run-history, refinement, and decomposition workflows while leaving their domain-specific publication rules intact.
+4. Update the authoring docs, recursive-memory ledgers, implementation notes, and targeted tests to lock the contracts and record the consolidation audit.
+
+I’ve finished the audit phase. The three most relevant helper/workflow families are `adaptation` + adapted-execution-plan, `refinement` + refined-workflow-package, and `decomposition` + composable-building-blocks; the repeated pattern is identical selected-workflow snapshot shaping plus repeated identity assertions in consumers. I’m reading the targeted tests and the standing recursive-memory files now, then I’ll patch the shared seam and migrate the callers.
+
+I’ve completed the required inspection and the changes stay phase-local. Before editing I’m checking the current worktree so I don’t step on unrelated files, then I’ll patch the shared builders and validators first and migrate the workflow call sites second.
+
+I’m editing the shared serializer seam now. The first patch centralizes selected-workflow payload construction in `core/workflow_capabilities.py`; after that I’ll collapse the stdlib wrappers onto those builders and replace the duplicated workflow-local identity checks with shared validators.
+
+The shared builders and validators are in place. I’m doing a quick syntax pass on just the touched Python files before I adjust tests and docs, because this refactor moved imports and deleted local helper code in several workflows.
+
+The refactor is structurally sound so far; the only snag was this shell lacking `python` on PATH, so I’m switching to the repo venv for compile/tests. Next I’m updating the remaining workflow-local wrappers, then I’ll run the focused proof set against the touched serializer family.
+
+I’m at the proof stage for the scoped surface now: the next run is the focused unit/runtime/doc suite for adaptation, eval-suite, run-history, refinement, and decomposition. If anything breaks, it should point directly at a contract drift in the new shared builders or validators rather than unrelated repo state.
+
+Two failures showed up early in the focused proof, which is good: the breakage is local to this consolidation. I’m pulling the failure details now and will patch the contract drift before rerunning the same scoped suite.
+
+The failures are contract-shape drift, not logic bugs: the nested authoring block inside `selected_workflow_decomposition_surface.json` accidentally inherited two fields that were never part of that artifact contract. I’m trimming those back to the existing shape and rerunning the same focused proof set.
+
+The scoped proof is green now: `218 passed` across the selected-workflow unit/runtime/doc surfaces. I’m in closeout mode, collecting the exact touched-file diff stats and then updating the phase notes, decisions ledger, and recursive-memory files with the audit, the consolidation result, and the deferred debt that remains local by design.
+
+I’m writing the closeout artifacts now. The implementation notes will capture the audit, checklist mapping, preserved invariants, and proof command so later turns don’t have to rediscover why this phase centralized the serializers in `core` but left domain-specific publication checks inside each workflow.
+
+**Scope considered**
+
+- Mandatory audit covered `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, and `.autoloop_recursive/`.
+- This cycle stayed in `consolidate` mode. No new workflow was added.
+
+**What I analyzed**
+
+- The selected-workflow helper family in [stdlib/adaptation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/adaptation.py), [stdlib/refinement.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/refinement.py), and [stdlib/decomposition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/decomposition.py).
+- The consuming workflow validations in [candidate_workflow_to_adapted_execution_plan](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py), [workflow_to_eval_suite](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py), [workflow_run_history_to_failure_modes](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py), [workflow_and_eval_to_refined_workflow_package](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py), and [workflow_package_to_composable_building_blocks](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py).
+- The selected-workflow serializer contract tests in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+
+**What I changed**
+
+- Centralized authoritative selected-workflow payload builders in [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py) for capability, authoring-surface, and decomposition-surface payloads.
+- Reduced the stdlib selected-workflow writers to thin artifact emitters over those core builders.
+- Added shared selected-workflow snapshot validators in [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py) and re-exported them through `stdlib`.
+- Replaced repeated workflow-local selected-workflow identity checks in 5 workflows with the shared validators.
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/implement/phases/converge-selected-workflow-serializers/implementation_notes.md), [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/decisions.txt), and all required `.autoloop_recursive/` memory files.
+- Files added/deleted: `0` / `0`.
+- Scoped tracked net line delta: `+133` including closeout notes; code/docs/test refactor set stayed roughly flat and the stdlib selected-workflow writers got materially smaller.
+- Repeated validation idioms removed: capability snapshot identity, authoring/decomposition snapshot identity, cross-artifact `selected_workflow_name` alignment.
+- Workflows changed to use shared helpers: `5`.
+- New helper functions introduced: `7` authoritative payload/validation helpers.
+- Old workflow-local validation blocks replaced: `10+` repeated selected-workflow identity/alignment blocks.
+- Core flow readability before/after: selected-workflow consumers no longer re-derive serializer structure locally; they now read as workflow policy over shared artifact contracts.
+
+**Key findings / decisions**
+
+- The highest-leverage change was serializer/validator convergence, not another workflow.
+- Keeping `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, and `selected_workflow_decomposition_surface.json` separate was the right boundary; only construction and generic validation were centralized.
+- Domain-specific publication checks still belong in workflow code. I did not move eval-suite policy, run-history policy, refinement overlay policy, or decomposition building-block policy into shared helpers.
+- Validation passed: `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py` with `218 passed`.
+
+**Open issues / next step**
+
+- No blocking issues from this phase.
+- Deferred by design: eval-suite case policy, run-history evidence/severity policy, refinement overlay/evaluation policy, and decomposition building-block policy remain workflow-local.
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc235-d58e-79b2-a521-ff3cac162f12
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+I’m reviewing the selected-workflow serializer convergence against the phase contract now. First I’m reading the current criteria/feedback artifacts, the shared decisions ledger, and the scoped code diffs so I can decide whether there are any blocking regressions before I mark the phase complete.
+
+The scoped diffs line up with the accepted plan: payload shaping is centralized in `core`, stdlib writers are thin again, and the workflow-local validation shrinkage stayed on the generic selected-workflow seam instead of swallowing domain rules. I’m doing one verifier-side proof run now; if that stays green, I’ll mark all criteria complete and leave feedback with no findings.
+
+Scope considered
+
+- Phase-local review of the selected-workflow serializer convergence against the active phase contract, shared decisions, implementation notes, and the touched helper/workflow/test/doc surfaces.
+- I did not absorb unrelated dirty files into scope.
+
+What I analyzed
+
+- The centralization in `core/workflow_capabilities.py`.
+- The stdlib writer slimming in `stdlib/adaptation.py`, `stdlib/refinement.py`, and `stdlib/decomposition.py`.
+- The shared validator extraction in `stdlib/validation.py` and its workflow consumers.
+- The scoped proof coverage and the phase closeout artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/`.
+
+What I reviewed
+
+- Intent fidelity to AC-1 and AC-2.
+- Preservation of the three selected-workflow artifact contracts and filenames.
+- Whether generic selected-workflow validation moved to shared helpers without swallowing workflow-specific publication rules.
+- Verifier proof rerun:
+  `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  Result: `218 passed`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The implementation matches the accepted consolidation plan: payload shaping is centralized in `core`, stdlib selected-workflow writers are thin again, artifact contracts remain separate, and the shared selected-workflow validation seam stays generic while domain publication policy remains workflow-local.
+- I updated `criteria.md` to all checked and recorded the no-findings result plus proof in `feedback.md`.
+
+Open issues / next step
+
+- No open review issues for this phase.
+- Phase can proceed as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
