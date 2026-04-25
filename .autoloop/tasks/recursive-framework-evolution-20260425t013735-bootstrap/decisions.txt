@@ -18,3 +18,4 @@ Artifact-inventory tests treat `CompiledWorkflow.artifact_items(authoritative=Tr
 Runtime artifact enforcement resolves produced-artifact paths from compiled artifact metadata, not raw template strings, so step-local relative outputs keep their `{workflow_folder}/{step_name}/...` behavior at execution time.
 Optional produced outputs are runtime-validated only when they both exist and declare a schema, which keeps this phase aligned with the approved contract without widening failures for schema-less optional artifacts.
 System steps now accept route contracts for selected-route artifact enforcement, but `expected_output_schema` remains forbidden on `SystemStep`.
+Selected-route resolution must happen before output-artifact validation so invalid middleware or system-handler route tags still fail as routing errors instead of being masked by missing required outputs.

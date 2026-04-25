@@ -54,6 +54,7 @@
 - Provider-owned steps now validate required produced artifacts after middleware/handler processing and before route success is committed.
 - System steps now apply the same selected-route artifact enforcement and may declare `route_contracts` for that purpose.
 - Checkpoints now persist additive `failure_context` for artifact validation failures.
+- Invalid selected-route tags still fail as routing errors before any output-artifact validation runs.
 
 ## Known Non-Changes
 
@@ -68,10 +69,8 @@
 
 ## Validation Performed
 
-- `./.venv/bin/pytest -q tests/contract/test_engine_contracts.py`
-- `./.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py`
-- `./.venv/bin/pytest -q tests/runtime/test_compatibility_runtime.py -k 'filesystem_session_store or filesystem_checkpoint_store_roundtrips_failure_context'`
-- `python3 -m py_compile core/engine.py core/compiler.py core/validation.py core/stores/protocols.py runtime/stores/filesystem.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py`
+- `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`
+- `./.venv/bin/pytest -q tests/contract/test_engine_contracts.py tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py tests/runtime/test_compatibility_runtime.py -k 'engine_contracts or test_primitives_and_stores or test_validation or filesystem_session_store or filesystem_checkpoint_store_roundtrips_failure_context'`
 
 ## Deduplication / Centralization
 

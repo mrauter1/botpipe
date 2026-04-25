@@ -764,3 +764,47 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc310-7a68-7050-aab6-2752130a18d7
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+I’m addressing the reviewer’s ordering bug only. The fix is to restore route resolution ahead of artifact enforcement, then add a regression test that reproduces the exact middleware-invalid-tag case the reviewer flagged.
+
+I’ve got the exact fix ready: route resolution moves back in front of artifact enforcement, and the new regression test will assert that an invalid middleware tag still raises `RoutingError` even when required outputs are missing.
+
+The fix is in. I’m rerunning the focused contract/unit/runtime slices now, including the new middleware-invalid-route regression, before I touch the phase notes.
+
+The regression is fixed and the focused suite is green. I’m recording the ordering rule explicitly in the shared notes so later phases don’t accidentally reintroduce the same masking bug.
+
+Scope considered
+- Phase-local follow-up for `artifact-runtime-enforcement`, limited to the reviewer’s `IMP-001` ordering bug.
+- Touched [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), and the phase notes/decisions files.
+
+What I analyzed
+- The reviewer’s repro: invalid middleware/system route tags were being masked by artifact validation because `_execute_step()` enforced outputs before resolving the selected route.
+- The intended phase ordering from the request and decisions ledger: selected-route resolution first, artifact enforcement second.
+
+What I changed
+- Reordered `_execute_step()` so `self.compiled.route(...)` runs before `_enforce_artifact_contracts(...)` for `PairStep`, `LLMStep`, and `SystemStep`.
+- Added a regression test proving an invalid middleware tag still raises `RoutingError` even when a required produced artifact is missing.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-runtime-enforcement/implementation_notes.md) and appended the non-obvious ordering rule to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+Key findings / decisions
+- The bug was real: route resolution had drifted behind artifact validation, which could checkpoint and surface the wrong failure cause.
+- Validation run:
+  - `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`
+  - `./.venv/bin/pytest -q tests/contract/test_engine_contracts.py tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py tests/runtime/test_compatibility_runtime.py -k 'engine_contracts or test_primitives_and_stores or test_validation or filesystem_session_store or filesystem_checkpoint_store_roundtrips_failure_context'`
+
+Open issues / next step
+- No new phase-local issues found after the fix.
+- The next step is reviewer re-verification so `criteria.md`/`feedback.md` can be cleared if the blocking finding is resolved.
