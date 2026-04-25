@@ -2362,3 +2362,102 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc379-e4bc-7732-8324-86f1f9de1982
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc379-e4bc-7732-8324-86f1f9de1982
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc379-e4bc-7732-8324-86f1f9de1982
+---
+I’m implementing the `child-io` phase only: typed child workflow input/output support, preserved child-result metadata, and explicit typed-output failure reporting. I’ll read the active phase artifacts and the current child-workflow runtime/compiler paths first, then patch the narrowest set of files that carry this contract.
+
+I’ve confirmed the phase artifacts are still mostly blank, so the relevant context is in the code and prior decisions. Next I’m tracing the current child-workflow call path, result model, and resume/runner plumbing to patch the existing surfaces instead of adding a parallel mechanism.
+
+I’ve found the current contract boundary: `Context.invoke_workflow(...)` is still message+parameters only, and `ChildWorkflowResult` is legacy metadata/artifacts only. I’m reading the existing runtime tests next so the new typed `input`/`output` fields land additively without breaking those older assertions.
+
+I’ve isolated the compatibility surfaces that can’t move: older callers rely on `message`, `parameters`, `output_metadata`, and `output_artifacts`, and parent runs persist those exact fields into `children.jsonl`. I’m adding typed child IO alongside those fields, with aliases rather than replacements, and using run metadata to record any typed-output validation error instead of hiding it in memory only.
+
+Plan for the edit set:
+
+1. Extend the runtime contract in place:
+   - add `Context.input`
+   - add additive `ChildWorkflowResult.output`, `.artifacts`, `.metadata`
+   - extend `ctx.invoke_workflow(...)` to accept typed `input`
+
+2. Thread typed child IO through compilation and execution:
+   - compile optional `Input` / `Output` conventions and `build_output`
+   - carry typed child input through runner and engine contexts
+   - build and validate typed child output after terminal completion without changing terminal status
+
+3. Persist and expose the new result details:
+   - record typed-output metadata in `run.json`
+   - include additive `output` / `artifacts` / `metadata` in parent `children.jsonl` records while preserving legacy fields
+
+4. Add focused regression tests:
+   - typed child input + typed output happy path
+   - typed child output validation failure is explicit and non-hidden
+   - keep legacy `output_metadata` / `output_artifacts` assertions intact
+
+I’ll patch the core/runtime path first, then add the targeted tests and update the phase notes/decisions with anything non-obvious.
+
+I’ve got enough context to start editing. The code changes are staying inside the existing `core` and `runtime` flow so the public behavior stays additive: old child invocation still works, while typed `input`/`output` rides through the same runner path.
+
+I’m at the persistence layer now. The key constraint is resume compatibility, so I’m treating child input the same way params were handled earlier: store a JSON-safe snapshot in `run.json`, reload it on resume, and never let a fresh override silently replace the persisted child contract.
+
+I noticed one compatibility risk while wiring persistence: writing a `workflow_input: null` key into every `run.json` would widen the metadata surface unnecessarily. I’m tightening that so the new field is only written when typed input actually exists.
+
+The runtime path is patched; I’m adding the phase-specific regression tests now. I’m keeping them in the existing workspace/context suite so they exercise the real child-run filesystem path, `run.json`, and `children.jsonl` rather than a mocked composition layer.
+
+The code path is in place. I’m running the child-workflow regression slice now, starting with the workspace/context suite that already covered legacy child invocation so I can catch compatibility drift before widening the test surface.
+
+`pytest` isn’t on PATH in this environment, so I’m switching to `python -m pytest` against the same focused suite.
+
+`pytest` isn’t installed here, so I can’t run the repository suite directly. I’m switching to two lighter checks instead: `py_compile` across the touched modules, then an ad hoc `python3` smoke run that exercises the new typed child-input/output path end to end through the real runner.
+
+I found one compatibility wrinkle in the tests themselves: a couple of existing child-run assertions compare the whole `children.jsonl` record shape exactly. Since the new fields are additive by design, I’m updating those assertions to pin the old fields and the new additive ones together.
+
+The edit set compiles cleanly. I’m doing a final diff pass now for two things only: no accidental contract drift outside the child-IO path, and the phase artifacts/decision ledger reflecting the non-obvious behavior choices I introduced.
+
+Scope considered
+
+- Typed child workflow IO only: nested `Input` / `Output` / `build_output`, `ctx.invoke_workflow(...)`, child result shaping, child-run metadata persistence, and targeted runtime tests.
+- I kept legacy child composition behavior in scope for regression checks because `output_metadata`, `output_artifacts`, and `children.jsonl` are existing compatibility surfaces.
+
+What I analyzed
+
+- Child invocation and result flow in [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), and [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py).
+- Existing child-run persistence and legacy assertions in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) and composition helpers in [stdlib/composition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/composition.py).
+
+What I changed
+
+- Added additive typed child IO support:
+  - `Context` now carries `ctx.input`.
+  - `ctx.invoke_workflow(...)` now accepts `input=...` while preserving `message=` and `parameters=`.
+  - `CompiledWorkflow` now captures optional nested `Input`, `Output`, and `build_output`.
+  - `Engine` now builds typed terminal output additively and records validation errors without changing terminal status.
+- Extended child-result surfaces additively:
+  - `ChildWorkflowResult` now includes `output`, `artifacts`, and `metadata` while preserving `output_metadata`, `output_artifacts`, and all existing path fields.
+  - Parent `children.jsonl` records now include additive `output`, `artifacts`, and `metadata` fields.
+  - Child `run.json` now persists `workflow_input` and typed-output metadata when applicable.
+- Updated tests:
+  - added happy-path typed child input/output coverage
+  - added explicit typed-output validation-failure coverage
+  - adjusted legacy `children.jsonl` assertions for the additive fields
+
+Key findings / decisions
+
+- Typed child output is non-fatal by design in this phase: workflow terminal/status stays tied to execution, and output-contract failures are surfaced in metadata instead of being silently dropped.
+- Typed child input is restored from persisted run metadata on resume, mirroring the typed-params behavior.
+- I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/child-io/implementation_notes.md) and appended the non-obvious decisions under the latest turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+Open issues / next step
+
+- Validation performed: `python3 -m py_compile` on the touched modules passed.
+- I could not run `pytest` or a live runtime smoke test here because this environment is missing both `pytest` and `pydantic` at execution time. The next step is to run the targeted child-workflow runtime tests in an environment with project dependencies installed.

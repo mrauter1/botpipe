@@ -890,6 +890,9 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
             "trace_file": str(child_run_dir / "trace.jsonl"),
             "raw_dir": str(child_run_dir / "raw"),
             "parent_file": str(child_run_dir / "parent.json"),
+            "output": None,
+            "artifacts": {"child_dump": str(child_run_dir / "child.json")},
+            "metadata": {},
             "ts": child_records[0]["ts"],
         }
     ]
@@ -958,7 +961,10 @@ def test_composition_helpers_keep_child_invocation_explicit_and_adopt_selected_a
     assert len(child_records) == 1
     assert child_records[0]["workflow_name"] == "child_success"
     assert child_records[0]["status"] == "success"
+    assert child_records[0]["output"] is None
     assert child_records[0]["output_artifacts"] == {"child_dump": str(child_run_dir / "child.json")}
+    assert child_records[0]["artifacts"] == child_records[0]["output_artifacts"]
+    assert child_records[0]["metadata"] == {}
 
 
 def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inheriting_parent_answers(tmp_path: Path) -> None:
@@ -1075,6 +1081,93 @@ def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_c
     assert child_records[0]["request_file"] == str(child_run_dir / "request.md")
     assert child_records[0]["parent_file"] == str(child_run_dir / "parent.json")
     assert child_records[0]["error"] == "child boom"
+
+
+def test_context_invoke_workflow_supports_typed_child_input_and_output(tmp_path: Path) -> None:
+    _write_child_typed_workflow_package(tmp_path, package_name="child_typed")
+    _write_parent_typed_invoker_workflow_package(
+        tmp_path,
+        package_name="parent_typed",
+        child_package_name="child_typed",
+    )
+
+    result = run_workflow_package(
+        "parent_typed",
+        provider=ScriptedLLMProvider(),
+        options=RunnerOptions(root=tmp_path, task_id="subworkflow-typed-task", message="Parent request"),
+    )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-typed-task"
+    parent_run_dir = next((task_dir / "wf_parent_typed" / "runs").iterdir())
+    child_run_dir = next((task_dir / "wf_child_typed" / "runs").iterdir())
+    parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
+    child_payload = json.loads((child_run_dir / "typed-child.json").read_text(encoding="utf-8"))
+    child_records = [
+        json.loads(line)
+        for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    child_meta = json.loads((child_run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert result.terminal == "SUCCESS"
+    assert parent_payload["child_workflow"] == "child_typed"
+    assert parent_payload["child_status"] == "success"
+    assert parent_payload["child_output"] == {"summary": "alpha:strict:2", "ready": True}
+    assert parent_payload["child_output_metadata"] == {}
+    assert parent_payload["child_artifacts"] == {"child_dump": str(child_run_dir / "typed-child.json")}
+    assert parent_payload["child_artifacts_alias"] == parent_payload["child_artifacts"]
+    assert parent_payload["child_metadata"]["typed_output"]["declared"] is True
+    assert parent_payload["child_metadata"]["typed_output"]["available"] is True
+    assert parent_payload["child_metadata"]["typed_output"]["validation_error"] is None
+    assert child_payload == {"topic": "alpha", "urgency": 2, "mode": "strict"}
+    assert child_meta["typed_output"]["available"] is True
+    assert child_meta["typed_output"]["validation_error"] is None
+    assert len(child_records) == 1
+    assert child_records[0]["output"] == {"summary": "alpha:strict:2", "ready": True}
+    assert child_records[0]["output_metadata"] == {}
+    assert child_records[0]["output_artifacts"] == {"child_dump": str(child_run_dir / "typed-child.json")}
+    assert child_records[0]["artifacts"] == child_records[0]["output_artifacts"]
+    assert child_records[0]["metadata"]["typed_output"]["available"] is True
+
+
+def test_context_invoke_workflow_records_typed_child_output_validation_failures(tmp_path: Path) -> None:
+    _write_child_typed_workflow_package(tmp_path, package_name="child_typed_invalid", invalid_output=True)
+    _write_parent_typed_invoker_workflow_package(
+        tmp_path,
+        package_name="parent_typed_invalid",
+        child_package_name="child_typed_invalid",
+    )
+
+    result = run_workflow_package(
+        "parent_typed_invalid",
+        provider=ScriptedLLMProvider(),
+        options=RunnerOptions(root=tmp_path, task_id="subworkflow-typed-invalid-task", message="Parent request"),
+    )
+
+    task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-typed-invalid-task"
+    parent_run_dir = next((task_dir / "wf_parent_typed_invalid" / "runs").iterdir())
+    child_run_dir = next((task_dir / "wf_child_typed_invalid" / "runs").iterdir())
+    parent_payload = json.loads((parent_run_dir / "summary.json").read_text(encoding="utf-8"))
+    child_records = [
+        json.loads(line)
+        for line in (parent_run_dir / "children.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    child_meta = json.loads((child_run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert result.terminal == "SUCCESS"
+    assert parent_payload["child_workflow"] == "child_typed_invalid"
+    assert parent_payload["child_status"] == "success"
+    assert parent_payload["child_output"] is None
+    assert parent_payload["child_metadata"]["typed_output"]["declared"] is True
+    assert parent_payload["child_metadata"]["typed_output"]["available"] is False
+    assert "typed output validation failed" in parent_payload["child_metadata"]["typed_output"]["validation_error"]
+    assert child_meta["typed_output"]["available"] is False
+    assert "typed output validation failed" in child_meta["typed_output"]["validation_error"]
+    assert len(child_records) == 1
+    assert child_records[0]["output"] is None
+    assert child_records[0]["metadata"]["typed_output"]["available"] is False
+    assert "typed output validation failed" in child_records[0]["metadata"]["typed_output"]["validation_error"]
 
 
 def _write_run_summary_record(
@@ -1638,6 +1731,143 @@ class ChildFailingWorkflow(Workflow):
     @staticmethod
     def on_explode(state: State, ctx):
         raise RuntimeError("child boom")
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_child_typed_workflow_package(root: Path, *, package_name: str, invalid_output: bool = False) -> None:
+    package_dir = root / "workflows" / package_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        "from .workflow import ChildTypedWorkflow\nfrom .params import Parameters\n__all__ = ['ChildTypedWorkflow', 'Parameters']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text(f'name = "{package_name}"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "params.py").write_text(
+        """
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "strict"
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    output_expr = (
+        "{'summary': f\"{ctx.input.topic}:{ctx.params.mode}:{ctx.input.urgency}\", 'ready': 'yes'}"
+        if invalid_output
+        else "ChildTypedWorkflow.Output(summary=f\"{ctx.input.topic}:{ctx.params.mode}:{ctx.input.urgency}\", ready=True)"
+    )
+    (package_dir / "workflow.py").write_text(
+        f"""
+from __future__ import annotations
+
+import json
+
+from pydantic import BaseModel
+
+from workflow import Artifact, SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+
+
+class ChildTypedWorkflow(Workflow):
+    name = "{package_name}"
+
+    class State(BaseModel):
+        topic: str = ""
+        mode: str = ""
+
+    class Input(BaseModel):
+        topic: str
+        urgency: int = 1
+
+    class Output(BaseModel):
+        summary: str
+        ready: bool
+
+    child_dump = Artifact("{{run_folder}}/typed-child.json")
+    plan = SystemStep(name="plan", produces={{"child_dump": child_dump}})
+    entry = plan
+    transitions = {{plan: {{"done": SUCCESS}}}}
+
+    @staticmethod
+    def on_plan(state: State, ctx):
+        payload = {{
+            "topic": ctx.input.topic,
+            "urgency": ctx.input.urgency,
+            "mode": ctx.params.mode,
+        }}
+        (ctx.run_folder / "typed-child.json").write_text(json.dumps(payload), encoding="utf-8")
+        return state.model_copy(update={{"topic": ctx.input.topic, "mode": ctx.params.mode}}), Event("done")
+
+    @staticmethod
+    def build_output(state: State, ctx):
+        return {output_expr}
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_parent_typed_invoker_workflow_package(root: Path, *, package_name: str, child_package_name: str) -> None:
+    package_dir = root / "workflows" / package_name
+    package_dir.mkdir(parents=True, exist_ok=True)
+    (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    (package_dir / "__init__.py").write_text(
+        "from .workflow import ParentTypedInvokerWorkflow\n__all__ = ['ParentTypedInvokerWorkflow']\n",
+        encoding="utf-8",
+    )
+    (package_dir / "workflow.toml").write_text(f'name = "{package_name}"\n', encoding="utf-8")
+    (package_dir / "prompts").mkdir(exist_ok=True)
+    (package_dir / "assets").mkdir(exist_ok=True)
+    (package_dir / "workflow.py").write_text(
+        f"""
+from __future__ import annotations
+
+import json
+
+from pydantic import BaseModel
+
+from workflow import SUCCESS, SystemStep, Workflow
+from workflow.primitives import Event
+from workflows.{child_package_name} import ChildTypedWorkflow
+
+
+class ParentTypedInvokerWorkflow(Workflow):
+    name = "{package_name}"
+
+    class State(BaseModel):
+        finished: bool = False
+
+    launch = SystemStep(name="launch")
+    entry = launch
+    transitions = {{launch: {{"done": SUCCESS}}}}
+
+    @staticmethod
+    def on_launch(state: State, ctx):
+        child = ctx.invoke_workflow(
+            ChildTypedWorkflow,
+            message="Run typed child",
+            parameters={{"mode": "strict"}},
+            input=ChildTypedWorkflow.Input(topic="alpha", urgency=2),
+        )
+        payload = {{
+            "child_workflow": child.workflow_name,
+            "child_status": child.status,
+            "child_output": None if child.output is None else child.output.model_dump(mode="python"),
+            "child_output_metadata": child.output_metadata,
+            "child_artifacts": {{name: str(path) for name, path in child.output_artifacts.items()}},
+            "child_artifacts_alias": {{name: str(path) for name, path in child.artifacts.items()}},
+            "child_metadata": child.metadata,
+        }}
+        (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
+        return state.model_copy(update={{"finished": True}}), Event("done")
 """.strip()
         + "\n",
         encoding="utf-8",

@@ -14,10 +14,11 @@ def run_child_workflow(
     *,
     message: str,
     parameters: Mapping[str, Any] | None = None,
+    input: Any | None = None,
 ):
     """Invoke a child workflow through the existing runtime-backed context surface."""
 
-    return ctx.invoke_workflow(workflow, message=message, parameters=dict(parameters or {}))
+    return ctx.invoke_workflow(workflow, message=message, parameters=dict(parameters or {}), input=input)
 
 
 def require_child_workflow_result(
