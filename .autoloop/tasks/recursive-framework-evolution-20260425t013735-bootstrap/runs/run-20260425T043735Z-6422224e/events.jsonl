@@ -62,3 +62,6 @@
 {"ts": "2026-04-25T06:01:49.028615+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 62, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "session-continuity", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-25T06:01:49.030287+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 63, "event_type": "pair_started", "pair": "test", "phase_id": "session-continuity"}
 {"ts": "2026-04-25T06:01:49.030492+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 64, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "session-continuity"}
+{"ts": "2026-04-25T06:04:22.273381+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 65, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "session-continuity"}
+{"ts": "2026-04-25T06:05:35.785224+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 66, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "session-continuity"}
+{"ts": "2026-04-25T06:05:35.830306+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 67, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "session-continuity"}
