@@ -1909,3 +1909,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+I’m covering the finalized `typed-routes-effects` behavior with deterministic tests and phase-local artifacts. I’ll inspect the active test artifacts and the current route/effect tests first, then add only the missing coverage that protects the preserved public surface and current phase decisions.
+
+I found the remaining gap: the current tests cover internal route/effect behavior, but they do not pin the narrowed root `workflow` export surface that the implementation deliberately changed in cycle 2. I’m adding that coverage so the public API decision can’t drift back unnoticed.
+
+I found a real regression gap: the existing strictness test still expects the pre-route root shim and would miss a future re-export of effect classes. I’m updating that test to pin the actual intended public surface for this phase: `Route` is public, effect classes are not.
+
+The missing public-surface coverage is in now. I’m rerunning the strictness test plus the phase-focused unit and contract/runtime tests to make sure the new assertion matches the implemented surface and doesn’t destabilize adjacent behavior.
+
+The focused suites are green, including strictness. I’m writing the phase-local test strategy and feedback now, and I’ll record the one non-obvious testing decision so later turns keep the root shim contract aligned with the implementation decision.
+
+Scope considered
+- Active `typed-routes-effects` test phase only.
+- Focused on the finalized route/effect behavior, compatibility surfaces, and the phase-local artifacts required for test handoff.
+
+What I analyzed
+- Current route/effect tests in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1).
+- The strictness contract in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:1).
+- The latest phase decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt:1), especially the cycle-2 decision to keep `Route` public while deferring root-level effect exports.
+
+What I changed
+- Updated [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:57) so the root `workflow` shim contract now asserts:
+  `Route` is exported
+  deferred effect classes are not exported
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-routes-effects/test_strategy.md:1) with a behavior-to-coverage map, preserved invariants, edge cases, failure paths, and known gaps.
+- Appended a concise coverage summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-routes-effects/feedback.md:1).
+- Appended the phase-specific test decision under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt:1).
+
+Key findings / decisions
+- The missing regression guard was the narrowed root shim surface; without a strictness test, effect classes could have drifted back into `workflow` unnoticed.
+- Existing unit/contract/runtime coverage already handled shorthand preservation, typed route execution, and compile-time effect rejection, so I kept the new test work narrow and deterministic.
+
+Open issues / next step
+- Focused validation passed:
+  `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
+  `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_package_cli.py`
+- Known gap remains intentional: worklist-backed effect execution is deferred to the later worklist phase, so this test turn protects the deferred/public-surface boundary rather than future worklist semantics.

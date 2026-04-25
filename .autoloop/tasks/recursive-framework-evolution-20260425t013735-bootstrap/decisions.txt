@@ -37,3 +37,5 @@ Effect declarations land in this phase, but any worklist-bound effect is compile
 <autoloop-decisions-header version="1" block_seq="12" owner="implementer" phase_id="typed-routes-effects" pair="implement" turn_seq="2" run_id="run-20260425T043735Z-6422224e" ts="2026-04-25T03:35:44-03:00" />
 Keep typed `Route` as the public authoring primitive for this phase, but defer root-level effect exports until worklist semantics exist; exporting non-executable effect types would overstate support and create a broken public surface.
 Centralize transition shorthand normalization in `core.routes.normalize_route_spec(...)` so validation and compilation cannot silently drift as later worklist-aware routing rules land.
+<autoloop-decisions-header version="1" block_seq="13" owner="test_author" phase_id="typed-routes-effects" pair="test" turn_seq="1" run_id="run-20260425T043735Z-6422224e" ts="2026-04-25T06:37:37.944033+00:00" />
+Strictness coverage for this phase pins `Route` as part of the root `workflow` shim while explicitly asserting that effect classes remain absent there until worklist semantics make them executable.
