@@ -403,3 +403,50 @@ Validation passed with:
 Open issues / next step
 
 Runtime artifact enforcement is still deferred, so this phase prepares canonical references and full inventory metadata but does not yet enforce `required=True` or route-selected artifact existence after execution. The next phase should consume `artifacts_by_qualified_name` directly for enforcement and checkpoint diagnostics.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+---
+I’m reviewing the `artifact-inventory` phase only. I’ll inspect the phase artifacts, the implementation diffs in `core/validation.py`, `core/compiler.py`, and `core/engine.py`, and the targeted test coverage before I update the criteria and feedback files.
+
+I have the phase artifacts and the stated compatibility decision. Next I’m reading the actual source changes with a regression lens, especially around whether this compiler-only phase accidentally changed runtime artifact behavior through `core/engine.py`.
+
+I’ve narrowed the main review question: whether adding canonical artifact aliases in the engine changed runtime surface area beyond this phase. I’m checking for callers that iterate over `ResolvedArtifacts` or assume `compiled.artifacts` is the complete inventory, because that’s the kind of regression this phase could accidentally hide.
+
+I found one likely regression surface already: several downstream consumers still iterate `compiled.artifacts`, which is now only the unambiguous alias map, not the full inventory. I’m verifying that with a small runtime/capability repro so I can decide whether it’s a blocking issue or just an implementation note.
+
+I have one blocking finding. It’s not in the compiler logic itself; it’s the downstream consequence of splitting `compiled.artifacts` into an alias map without migrating existing consumers that still treat it as the authoritative inventory. I’m writing that up now and marking the criteria accordingly.
+
+Scope considered
+
+Phase-local review of `artifact-inventory`, centered on [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py). I also checked request-relevant downstream consumers in [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py) and [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py) because the implementation changed the meaning of `compiled.artifacts`.
+
+What I analyzed
+
+I read the accepted phase contract, the implementation notes, the shared decisions ledger, and the compiler/runtime paths that consume artifact inventory. I also verified the reported test commands and reproduced the new artifact-map behavior with a small local repro using duplicate step-local artifact names.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-inventory/criteria.md) and appended the review finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-inventory/feedback.md). The review result is not clean: there is one blocking regression tied to downstream consumers still treating `compiled.artifacts` as the full inventory.
+
+Key findings / decisions
+
+`IMP-001` is blocking. `CompiledWorkflow.artifacts` is now only the unambiguous alias map, but child-result and capability code still consume it as the authoritative artifact set. In a workflow with two step-local `summary` outputs, `compiled.artifacts` becomes empty while `compiled.artifacts_by_qualified_name` contains both canonical artifacts; `_build_child_workflow_result(...)` then drops both real files and returns no output artifacts. That is a material behavior gap against the intended unified inventory model.
+
+Open issues / next step
+
+The implementation needs a follow-up change that centralizes “full inventory” access and migrates downstream consumers that require the authoritative artifact set to use the canonical qualified map. After that, the phase criteria can be re-evaluated.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
