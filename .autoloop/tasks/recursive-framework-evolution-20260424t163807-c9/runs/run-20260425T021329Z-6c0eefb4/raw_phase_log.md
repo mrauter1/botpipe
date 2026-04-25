@@ -319,3 +319,133 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc272-8ebc-7742-b146-2ee5dd7a63b5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc272-8ebc-7742-b146-2ee5dd7a63b5
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc272-8ebc-7742-b146-2ee5dd7a63b5
+---
+I’m reviewing the changed publication-validation seam and the scoped proof coverage first so I can decide whether any test gaps remain beyond the implementer’s new unit cases. I’ll inspect the changed tests, the three migrated workflows, and the active test artifacts, then I’ll add only the minimal missing coverage and update the phase test strategy/feedback.
+
+I’m checking the current test coverage and the active phase artifacts now. If the added unit coverage already closes the phase cleanly, I’ll keep this turn to test documentation and any minimal regression test gap that still remains.
+
+The code-side test surface is already substantial, so I’m reading the new validation cases directly before deciding whether to add anything beyond documentation. I’m also checking the migrated workflow publish handlers to make sure the tests actually cover the behavior they now rely on.
+
+The new helper tests are present and they line up with the migrated workflow calls. I’m checking whether there’s any meaningful missing edge case in the helper contract itself; otherwise I’ll keep the code untouched and just update the phase strategy and feedback artifacts.
+
+I’ve confirmed the phase already has direct unit coverage for all required helper behaviors. I’m reading the helper implementation once more to see whether one small edge-case test would materially improve regression resistance, rather than inventing broader workflow tests that just repeat the same mechanics indirectly.
+
+I found one worthwhile regression edge case: the new helpers intentionally distinguish missing `publication_boundary` from a mismatched one, and `ready_for_publication` is meant to require the literal boolean `True`, not any truthy value. I’m adding a small unit test for that strictness, then I’ll update the phase strategy and feedback artifacts to reflect the actual coverage map.
+
+I’ve kept the code change narrow: one helper-level regression test that protects the strict boundary and readiness semantics the workflows now depend on. Next I’m recording the explicit behavior-to-test map in the test-phase artifacts so the auditor can see exactly what this phase covers and what it intentionally leaves local to workflow policy.
+
+I’ve updated the phase artifacts. I’m adding one short shared decision note for this test turn because it explains why the phase stops at helper-unit coverage plus scoped runtime reruns, rather than duplicating workflow-local policy tests.
+
+The scoped regression suite is running now. I’m waiting on the full result before closing this out so the phase artifacts reflect actual validation rather than assumed coverage.
+
+The suite passed cleanly with `138 passed`, so the added helper regression case didn’t widen the blast radius. I’m grabbing final line references for the touched files and then I’ll close with the required summary and loop-control block.
+
+Scope considered
+
+- I stayed within the phase-local test scope: the shared publication-validation helpers, their direct unit coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:809), and the test-phase artifacts under [.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/test_strategy.md:1).
+- I also checked the three migrated publish handlers for dependency and regression analysis, but I did not change workflow code.
+
+What I analyzed
+
+- The new helper tests and helper implementation in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:748) and [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py:380).
+- The migrated publish-handler call sites in:
+  - [workflow_portfolio_to_operating_system/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/workflow.py:447)
+  - [company_operation_to_recursive_improvement_cycle/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/workflow.py:546)
+  - [workflow_run_history_to_failure_modes/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py:449)
+- The active phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/feedback.md:1), and the current-turn section in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/decisions.txt:10).
+
+What I changed
+
+- Added one focused regression test in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:809) to lock three edge cases:
+  - blank `publication_boundary` uses the missing-message path
+  - missing `authoritative_artifacts` uses the missing-message path
+  - `ready_for_publication` requires literal `True`, not a truthy value like `1`
+- Expanded the phase coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/test_strategy.md:10) with behavior-to-test mapping, preserved invariants, edge cases, validation performed, and known gaps.
+- Appended a concise test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/feedback.md:10).
+- Added one test-scoping note under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/decisions.txt:11).
+
+Key findings / decisions
+
+- The phase already had direct unit coverage for the required helper behaviors; the only worthwhile gap was strict missing-vs-mismatch messaging and exact-boolean readiness semantics.
+- I kept this turn at the helper seam instead of adding new workflow-level publish fixtures, because the workflow-local policy remains intentionally local and the scoped runtime suites already backstop those flows.
+- Validation passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py`
+  - Result: `138 passed in 2.28s`
+
+Open issues / next step
+
+- No blocking test gaps remain for this phase.
+- The next step is verifier review of the test-phase artifacts and the added helper regression case.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc272-8ebc-7742-b146-2ee5dd7a63b5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc272-8ebc-7742-b146-2ee5dd7a63b5
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc272-8ebc-7742-b146-2ee5dd7a63b5
+---
+I’m auditing the phase-local test changes against the acceptance criteria and the shared decisions first. I’ll check the updated unit coverage, the test strategy/feedback artifacts, and then I’ll mark the criteria accurately with any findings if the coverage leaves a material gap.
+
+The coverage map and the decisions are aligned: the phase intentionally tests only the mechanical helper seam and relies on the existing workflow suites for local publish-policy behavior. I’m rerunning the scoped suite once as the final audit check before I mark the criteria and write the audit result.
+
+The scoped suite passed again, so there isn’t a reliability or regression signal hidden behind the new edge-case test. I’m marking the criteria complete and appending a concise no-findings audit entry to the phase feedback now.
+
+Scope considered
+
+- I audited the phase-local test work for the shared publication-validation seam, limited to the changed unit coverage, the active test artifacts, and the scoped regression suites for the three migrated workflows.
+- I did not modify repository code; only the test-phase audit artifacts under [.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/criteria.md:1).
+
+What I analyzed
+
+- The helper-focused unit tests in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:748), including the new strictness case at [line 809](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:809).
+- The phase coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/test_strategy.md:10).
+- The shared decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/decisions.txt:7), especially the constraint that helper tests stay mechanical and avoid duplicating workflow-local publish-policy assertions.
+
+What I reviewed
+
+- Whether the tests cover the changed helper behaviors at the right level: required-artifact existence, required text reads, publication-boundary validation, authoritative-artifact subset checks, hidden-execution rejection, and exact-boolean readiness flags.
+- Whether preserved behavior is still defended by the scoped runtime suites for:
+  - [workflow_portfolio_to_operating_system](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/workflow.py:447)
+  - [company_operation_to_recursive_improvement_cycle](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/workflow.py:546)
+  - [workflow_run_history_to_failure_modes](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py:449)
+- Whether the audit artifacts were updated accurately in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/criteria.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/feedback.md:1).
+
+Key findings / decisions
+
+- No blocking findings.
+- No actionable non-blocking gaps beyond recording the audit result.
+- I marked all criteria complete in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/criteria.md:11).
+- I appended a no-findings audit entry as `TST-001` in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/extract-shared-publication-validation/feedback.md:11).
+- Scoped validation rerun passed: `138 passed in 2.34s`.
+
+Open issues / next step
+
+- No open issues remain for this test phase.
+- This phase can advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
