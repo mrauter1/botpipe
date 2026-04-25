@@ -661,3 +661,71 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc24a-47ef-72a1-a519-25051a51e2a7
+---
+I’m auditing the phase-local test work against the changed validator seam, the shared decisions, and the active test artifacts, starting with the new unit/runtime coverage and the proof claim behind it.
+
+I’m checking the active test audit artifacts against the added unit/runtime coverage and the shared decisions, then I’ll mark criteria and append audit feedback if the phase is clean.
+
+The new coverage is narrowly scoped and matches the phase intent so far. I’m checking the exact assertions in the added tests next to make sure they protect the shared seam without normalizing behavior drift.
+
+The additions are in the expected places. I’m narrowing to the new assertions themselves and the active criteria wording so the audit verdict is tied to concrete coverage, not just the proof run.
+
+The audit looks clean: the added tests cover the shared helper failure path, the two migrated publish-path consumers, and they do not encode any broader behavior change. I’m updating the audit artifacts now.
+
+I’ve updated the auditor-owned artifacts. I’m doing a quick readback to confirm the criteria are fully checked and the feedback note is appended cleanly before I close the phase.
+
+Scope considered
+
+- Phase-local test audit for `extract-selected-workflow-validators`.
+- I limited edits to the active test audit artifacts and reviewed the new test coverage against the shared-validator extraction scope, the shared decisions ledger, and the claimed proof run.
+
+What I analyzed
+
+- The active test artifacts:
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/extract-selected-workflow-validators/criteria.md)
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/extract-selected-workflow-validators/feedback.md)
+  - [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/extract-selected-workflow-validators/test_strategy.md)
+- The relevant decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/decisions.txt), especially the requirement to preserve separate selected-workflow artifacts and keep workflow-local publication semantics local.
+- The new and adjacent tests in:
+  - [test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py)
+  - [test_candidate_workflow_to_adapted_execution_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py)
+  - [test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py)
+
+What I reviewed
+
+- Direct failure-path coverage for `validate_selected_workflow_capability_and_authoring_snapshots(...)`.
+- Runtime regression coverage for selected-workflow drift in the two migrated publish paths:
+  - `candidate_workflow_to_adapted_execution_plan`
+  - `workflow_to_eval_suite`
+- Whether the tests preserved intent instead of normalizing broader behavior changes or moving workflow-local policy into shared expectations.
+- Whether the coverage strategy and proof claim (`221 passed`) were consistent with the actual changed surfaces.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The test additions cover the new shared seam at the right levels: one direct helper failure path plus workflow-level publish-path drift checks for the migrated consumers with the highest regression risk.
+- The tests remain deterministic and do not encode any unconfirmed behavior break.
+- I updated the active auditor artifacts: all criteria boxes are checked and the audit note was appended to `feedback.md`.
+
+Open issues / next step
+
+- No open audit issues for this phase.
+- The test phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

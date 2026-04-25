@@ -14,3 +14,9 @@
   - `candidate_workflow_to_adapted_execution_plan` summary selected-workflow drift
   - `workflow_to_eval_suite` summary selected-workflow drift
 - Re-ran the scoped proof set after the additions: `221 passed`.
+
+## Audit Round 1
+
+- No blocking or non-blocking findings.
+- The added tests cover the new shared validator seam at both levels that matter for this phase: direct helper failure-path coverage and migrated workflow publish-path drift coverage.
+- The assertions preserve existing workflow-local policy boundaries and stay deterministic by using local artifact mutation only.
