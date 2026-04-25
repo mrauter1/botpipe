@@ -174,3 +174,12 @@ No open verification issues remain. The planning artifacts are complete and cons
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=extract-shared-publication-validation,migrate-governance-and-diagnostic-publishers,docs-memory-and-proof-closeout
+explicit=True
+current_phase_index=0
