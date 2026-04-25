@@ -567,3 +567,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc284-2349-71e2-a8b1-c6677b862da3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc284-2349-71e2-a8b1-c6677b862da3
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc284-2349-71e2-a8b1-c6677b862da3
+---
+I’m treating this as a focused regression-proof pass for the new shared snapshot-reader seam and the scoped governance/company publish-family behavior. First I’m reading the phase test artifacts and the current helper/test coverage so I can add only the smallest missing tests and then document the coverage map.
+
+The current unit tests cover the happy path and one failure path for the new helpers, but they still miss the malformed-snapshot-shape cases that would break both governance workflows the same way. I’m adding those focused unit assertions, not more workflow-specific cases, because the runtime suites already cover the workflow-level contracts.
+
+The added coverage is still at the helper seam, which matches the phase decisions and keeps the test surface small. I’m rerunning the scoped proof now to make sure the new malformed-shape assertions and the existing runtime suites still pass together.
+
+Scope considered
+
+- Phase-local test work for the shared snapshot-reader helper migration and the scoped governance/company/diagnostic publish-family regression surface.
+- Repository test surface touched: [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) plus the phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/migrate-governance-and-diagnostic-publishers/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/migrate-governance-and-diagnostic-publishers/feedback.md).
+
+What I analyzed
+
+- The phase contract and shared decisions for keeping tests focused on the new shared helper seam.
+- Existing helper coverage in `tests/unit/test_validation.py`.
+- The scoped runtime suites for `workflow_portfolio_to_operating_system`, `company_operation_to_recursive_improvement_cycle`, and `workflow_run_history_to_failure_modes`.
+- The current implementation decision to keep unknown-reference and domain publication semantics workflow-local.
+
+What I changed
+
+- Added focused unit coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) for malformed snapshot shapes:
+  - non-list `workflows` payload in capability snapshots
+  - non-object capability snapshot entries
+  - non-list `workflows` payload in portfolio-health snapshots
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/migrate-governance-and-diagnostic-publishers/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/migrate-governance-and-diagnostic-publishers/feedback.md).
+- Recorded the non-obvious test-boundary decision under the latest header in `decisions.txt`.
+
+Key findings / decisions
+
+- I kept new tests at the shared helper boundary instead of copying workflow-specific negative publication cases, because those semantics were unchanged and are already exercised by the scoped runtime suites.
+- Reviewer/implementer proof remained intact after the added unit coverage.
+- Validation passed:
+  - `./.venv/bin/python -m py_compile tests/unit/test_validation.py`
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py`
+  - Result: `141 passed`
+
+Open issues / next step
+
+- No blocking test gaps remain in this phase scope.
+- Adjacent workflows that still keep local snapshot readers remain intentionally out of scope for this test pass.
