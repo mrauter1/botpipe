@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260425T074502Z-48656955" ts="2026-04-25T07:45:02.305110+00:00" />
+Cycle mode is consolidate; no new workflow is warranted because the remaining leverage is a helper-level validation convergence inside the shipped selected-workflow eval family.
+The planned slice centers on converging `stdlib/evaluation.py` onto `stdlib.validation.py` and the existing selected-workflow snapshot validator rather than introducing another helper family.
+Keep eval-specific case-kind ordering, expected-artifact policy, and loader-based parameter coercion local even after the shared validation migration.
+Preserve CLI, runtime/provider, workspace, artifact-name, and `ctx.invoke_workflow(...)` contracts during this slice.

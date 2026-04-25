@@ -1,4 +1,46 @@
 version: 1
 task_id: recursive-framework-evolution-20260425t013735-c1
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c1/runs/run-20260425T074502Z-48656955/request.md
-phases: []
+phases:
+- phase_id: converge-eval-helper-validation
+  title: Converge Eval Helper Validation
+  objective: Move `stdlib/evaluation.py` onto the existing shared validation seam
+    so eval-manifest validation stays short, explicit, and behaviorally unchanged.
+  status: planned
+  in_scope:
+  - Refactor `stdlib/evaluation.py` to reuse shared JSON/text/list/snapshot validation
+    instead of private `_require_*` helpers.
+  - Preserve `workflow_to_eval_suite` artifact contracts while keeping eval-specific
+    case policy local.
+  - Update targeted unit/runtime proof plus recursive-memory closeout for the consolidation.
+  out_of_scope:
+  - Adding any new workflow package or reusable building block.
+  - Changing CLI behavior, runtime/provider boundaries, workspace layout, or `ctx.invoke_workflow(...)`.
+  - Broad workflow flow rewrites outside the eval-helper consumer family.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: '`stdlib/evaluation.py` no longer carries private generic JSON/text/list
+      validation tails when existing shared helpers can express the same checks.'
+  - id: AC-2
+    text: '`workflow_to_eval_suite` keeps the same artifact names, manifest payload
+      keys, and publish-step behavior after the helper migration.'
+  - id: AC-3
+    text: Targeted proof covers the helper migration and the recursive memory/docs
+      closeout records the no-new-workflow consolidation rationale.
+  deliverables:
+  - Updated `stdlib/evaluation.py` aligned to the shared validation seam.
+  - Targeted proof updates in `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_workflow_to_eval_suite.py`.
+  - Synchronized recursive memory and any necessary authoring-doc note for the helper
+    boundary.
+  risks:
+  - Over-extracting a new helper seam when the current shared validation exports already
+    suffice.
+  - Accidental error-message or artifact-payload drift in `write_validated_eval_case_manifest(...)`.
+  - Touching direct workflow code unnecessarily instead of keeping the change centered
+    on the helper.
+  rollback:
+  - Revert the eval-helper refactor and restore the prior helper-local validation
+    path if payload or publish behavior changes.
+  - Keep docs and recursive memory aligned to the actual shipped boundary if implementation
+    scope narrows.
