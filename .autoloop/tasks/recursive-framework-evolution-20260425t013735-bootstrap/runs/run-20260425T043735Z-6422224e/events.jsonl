@@ -94,3 +94,6 @@
 {"ts": "2026-04-25T06:37:37.863025+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 94, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "typed-routes-effects", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-25T06:37:37.864010+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 95, "event_type": "pair_started", "pair": "test", "phase_id": "typed-routes-effects"}
 {"ts": "2026-04-25T06:37:37.864081+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 96, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "typed-routes-effects"}
+{"ts": "2026-04-25T06:39:10.052262+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 97, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "typed-routes-effects"}
+{"ts": "2026-04-25T06:40:02.615420+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 98, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "typed-routes-effects"}
+{"ts": "2026-04-25T06:40:02.657092+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 99, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "typed-routes-effects"}

@@ -1959,3 +1959,49 @@ Open issues / next step
   `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
   `.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_package_cli.py`
 - Known gap remains intentional: worklist-backed effect execution is deferred to the later worklist phase, so this test turn protects the deferred/public-surface boundary rather than future worklist semantics.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+I’m auditing the `typed-routes-effects` test work against the finalized implementation and phase decisions. I’ll inspect the active test artifacts and the specific tests that changed, then decide whether there are any material coverage gaps before I mark the criteria.
+
+The added strictness test closes the only material gap I saw, and the focused suite list matches the changed surfaces. I’m marking the audit complete and appending a short note so the phase feedback reflects that no additional audit findings remain.
+
+Scope considered
+- Active `typed-routes-effects` test phase only.
+- Reviewed the finalized test artifacts, the latest phase decisions, and the specific strictness/unit/contract coverage that changed for route/effect behavior.
+
+What I analyzed
+- The active test artifacts in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-routes-effects/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-routes-effects/feedback.md:1).
+- The current phase decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt:1), especially the decision to keep `Route` public while deferring root-level effect exports.
+- The relevant tests in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:57), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:330), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:290).
+
+What I reviewed
+- Coverage for shorthand-to-compiled-route normalization.
+- Coverage for typed `Route` execution through the engine.
+- Failure-path coverage for invalid effect/worklist references and missing `Advance.route_to`.
+- Strictness coverage for the narrowed root `workflow` shim surface.
+- Reliability of the selected suites and whether any changed behavior remained unprotected.
+
+Key findings / decisions
+- No additional blocking or non-blocking test gaps remain in the current phase scope.
+- The added strictness assertion is the right regression guard for the cycle-2 API decision: `Route` stays public, deferred effect classes stay out of the root shim.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-routes-effects/criteria.md:1) to checked and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-routes-effects/feedback.md:1).
+
+Open issues / next step
+- No blocking issues remain for this test phase.
+- The known gap is intentional and documented: worklist-backed effect execution is deferred to the later worklist phase, so current tests appropriately protect the deferred/public-surface boundary rather than future worklist semantics.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
