@@ -97,3 +97,156 @@ phase_mode=single
 phase_ids=typed-publication-artifact-contracts,migrate-direct-fit-publishers,docs-memory-and-proof-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+I’m auditing the repository and the phase artifacts first so I can choose the smallest high-leverage consolidation inside the scoped publication-contract family, then I’ll implement and verify it end to end.
+
+I’ve confirmed the planned mode is `consolidate`; next I’m tracing the typed JSON-artifact seam and the scoped publish handlers to find the direct-fit conversions with the lowest regression risk.
+
+The repo already has the seam the plan wants; I’m narrowing to where publish handlers still parse raw dicts so I can replace only the mechanical parts and keep workflow-local policy explicit.
+
+I’ve got the four main publish handlers. Two are obvious typed-summary candidates, and the selected-workflow family likely needs local summary models plus typed readers for the validated manifest/parameter artifacts to keep the migration mechanical.
+
+I have enough context to implement. The change set is staying local: typed summary/manifest specs in the four scoped workflow families, publish-handler swaps to the existing model-file seam, then proof and recursive-memory sync.
+
+I’m editing the contract surface now: adding workflow-local typed summary and manifest specs in the scoped families, then I’ll switch the publish handlers over to those specs without moving any workflow policy into stdlib.
+
+The scoped contracts are in place. I’m finishing the selected-workflow publish handlers now, including typed reads for the validated parameter and validated manifest artifacts so the publish steps stop starting from raw dicts.
+
+I’m on the proof-and-docs pass now. The code path is migrated; next I’m adding a focused unit test for the new workflow-local artifact specs and a short authoring note so future workflows reuse the same seam instead of raw summary dict parsing.
+
+The code migration is in. I’m running focused proof now before I update the recursive-memory ledgers, so I can record the actual scoped outcome and keep the closeout factual.
+
+The failing proof is precise: the on-disk summary JSONs are leaner than the verifier payload models, so I’m splitting those artifact contracts now instead of forcing publish handlers to pretend the summary files contain verifier-only `summary` text.
+
+I’ve got green proof for the scoped migration. I’m updating the phase notes and recursive-memory ledgers now, with the exact helper boundary and the real proof command rather than planned wording.
+
+Scope considered
+
+- Scoped the phase to typed publication artifact contracts in the existing candidate, strategy, adaptation, and eval-suite workflow family.
+- Kept runtime, CLI, provider behavior, `workflow.toml`, artifact filenames, top-level JSON keys, and `ctx.invoke_workflow(...)` compatibility unchanged.
+- Updated the required recursive-memory files, phase notes, and decisions ledger.
+
+What I analyzed
+
+- `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, and `.autoloop_recursive/`.
+- The existing typed seam in `stdlib/json_artifacts.py` and `stdlib/validation.py`.
+- Publish-handler summary/manifest parsing in:
+  - `workflows/task_to_candidate_workflow_set`
+  - `workflows/task_to_workflow_strategy`
+  - `workflows/candidate_workflow_to_adapted_execution_plan`
+  - `workflows/workflow_to_eval_suite`
+- The key audit finding: on-disk summary JSONs are narrower than verifier payload models, so workflow-local artifact models had to be split from verifier payload models instead of reusing them directly.
+
+What I changed
+
+- Added workflow-local typed artifact models/specs in `contracts.py` for:
+  - `candidate_workflow_set_summary.json`
+  - `strategy_summary.json`
+  - `adapted_execution_summary.json`
+  - `workflow_eval_suite_summary.json`
+  - `validated_workflow_parameters.json`
+  - `validated_eval_case_manifest.json`
+- Migrated the four publish handlers to read typed artifacts through `JsonArtifactSpec.read(...)` instead of starting from raw dict parsing.
+- Kept cross-artifact policy checks local in workflow code.
+- Added unit proof for the adopted typed summary/manifest pattern in `tests/unit/test_stdlib_and_extensions.py`.
+- Documented the typed JSON artifact pattern in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- Updated:
+  - `.autoloop_recursive/framework_evolution_charter.md`
+  - `.autoloop_recursive/framework_roadmap.md`
+  - `.autoloop_recursive/framework_gap_ledger.md`
+  - `.autoloop_recursive/workflow_candidate_ledger.md`
+  - `.autoloop_recursive/validation_debt_ledger.md`
+  - [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/implement/phases/typed-publication-artifact-contracts/implementation_notes.md)
+
+Key findings / decisions
+
+- Cycle mode stayed `consolidate`.
+- No new workflow was necessary.
+- The non-obvious fix was splitting durable artifact models from verifier payload models where the JSON artifact omits verifier-only `summary` text.
+- Repetition reduced:
+  - raw summary/manifest dict entry points removed from 4 publish handlers
+  - workflows changed to use shared typed helper seam: 4
+  - new stdlib helper functions introduced: 0
+  - new workflow-local typed artifact contracts/specs introduced: 6 artifact specs plus supporting models
+- Tracked code/docs diff: 0 files added, 0 files deleted, +268 net lines across 11 tracked files.
+- Core-flow readability improved from “read raw JSON, unpack dicts, then validate” to “read typed artifact, then apply local policy checks”.
+
+Open issues / next step
+
+- No blocking issues from the scoped proof.
+- Remaining publish-time checks are intentionally workflow-local policy, not a shared helper gap.
+- Validation run: `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` with `189 passed`.
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+I’m reviewing the scoped implementation diff against the phase contract now, starting with the changed workflow contracts/publish handlers and the phase criteria/feedback artifacts before I update the verdict.
+
+The planner and implementer decisions align: keep the seam local, split artifact models where the JSON is narrower than verifier payloads, and avoid new runtime behavior. I’m checking the final code paths for regressions and whether the unit/runtime proof actually covers the adopted pattern.
+
+I’m down to final verification. The remaining check is whether the scoped proof reproduces cleanly from the verifier side; if it does, this should close as `COMPLETE` with no findings.
+
+Scope considered
+
+- Scoped review to the phase-local implementation for typed publication artifact contracts.
+- Reviewed the changed workflow contract/publish-handler surfaces, the focused unit/doc proof, the phase notes, and the shared decisions ledger.
+- Did not treat unrelated dirty files as in scope.
+
+What I analyzed
+
+- The accepted phase contract, criteria, feedback artifact, implementation notes, and shared decisions.
+- The typed artifact migrations in:
+  - `workflows/task_to_candidate_workflow_set`
+  - `workflows/task_to_workflow_strategy`
+  - `workflows/candidate_workflow_to_adapted_execution_plan`
+  - `workflows/workflow_to_eval_suite`
+- The supporting doc/test updates in `docs/authoring.md` and `tests/unit/test_stdlib_and_extensions.py`.
+
+What I reviewed
+
+- That on-disk summary/manifest contracts were split correctly from verifier payload models where the JSON shape is narrower.
+- That the implementation reused `JsonArtifactSpec` / model-file helpers instead of introducing new runtime or publication framework behavior.
+- That artifact filenames and top-level keys stayed unchanged.
+- That the focused verifier proof passes:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py`
+  - `189 passed`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to check all boxes.
+- Updated `feedback.md` with a no-findings review outcome and the verifier proof command/result.
+- Review outcome: `COMPLETE`.
+
+Open issues / next step
+
+- No open issues from this review.
+- The phase can proceed as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

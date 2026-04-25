@@ -189,3 +189,64 @@ Open issues / next step
 - No blocking issues from the scoped proof.
 - Remaining publish-time checks are intentionally workflow-local policy, not a shared helper gap.
 - Validation run: `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` with `189 passed`.
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+I’m reviewing the scoped implementation diff against the phase contract now, starting with the changed workflow contracts/publish handlers and the phase criteria/feedback artifacts before I update the verdict.
+
+The planner and implementer decisions align: keep the seam local, split artifact models where the JSON is narrower than verifier payloads, and avoid new runtime behavior. I’m checking the final code paths for regressions and whether the unit/runtime proof actually covers the adopted pattern.
+
+I’m down to final verification. The remaining check is whether the scoped proof reproduces cleanly from the verifier side; if it does, this should close as `COMPLETE` with no findings.
+
+Scope considered
+
+- Scoped review to the phase-local implementation for typed publication artifact contracts.
+- Reviewed the changed workflow contract/publish-handler surfaces, the focused unit/doc proof, the phase notes, and the shared decisions ledger.
+- Did not treat unrelated dirty files as in scope.
+
+What I analyzed
+
+- The accepted phase contract, criteria, feedback artifact, implementation notes, and shared decisions.
+- The typed artifact migrations in:
+  - `workflows/task_to_candidate_workflow_set`
+  - `workflows/task_to_workflow_strategy`
+  - `workflows/candidate_workflow_to_adapted_execution_plan`
+  - `workflows/workflow_to_eval_suite`
+- The supporting doc/test updates in `docs/authoring.md` and `tests/unit/test_stdlib_and_extensions.py`.
+
+What I reviewed
+
+- That on-disk summary/manifest contracts were split correctly from verifier payload models where the JSON shape is narrower.
+- That the implementation reused `JsonArtifactSpec` / model-file helpers instead of introducing new runtime or publication framework behavior.
+- That artifact filenames and top-level keys stayed unchanged.
+- That the focused verifier proof passes:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py`
+  - `189 passed`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to check all boxes.
+- Updated `feedback.md` with a no-findings review outcome and the verifier proof command/result.
+- Review outcome: `COMPLETE`.
+
+Open issues / next step
+
+- No open issues from this review.
+- The phase can proceed as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
