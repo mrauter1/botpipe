@@ -20,8 +20,8 @@
       "public-surface-docs-regression"
     ],
     "explicit": true,
-    "current_phase_index": 8,
-    "current_phase_id": "public-surface-docs-regression"
+    "current_phase_index": 9,
+    "current_phase_id": null
   },
   "phase_status": {
     "artifact-model": "completed",
@@ -32,7 +32,7 @@
     "typed-routes-effects": "completed",
     "worklists": "completed",
     "child-io": "completed",
-    "public-surface-docs-regression": "in_progress"
+    "public-surface-docs-regression": "completed"
   },
   "phase_history": [
     {
@@ -144,6 +144,13 @@
       "run_id": "run-20260425T043735Z-6422224e",
       "status": "in_progress",
       "ts": "2026-04-25T07:30:58.038208+00:00"
+    },
+    {
+      "phase_id": "public-surface-docs-regression",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "completed",
+      "ts": "2026-04-25T07:45:01.559013+00:00",
+      "pair": "test"
     }
   ]
 }
