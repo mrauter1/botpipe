@@ -729,3 +729,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc222-eb62-7f62-b2ad-dac4bda6f6d7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc222-eb62-7f62-b2ad-dac4bda6f6d7
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc222-eb62-7f62-b2ad-dac4bda6f6d7
+---
+I’m treating this as a scoped proof/test phase: confirm the closeout is covered by deterministic tests, add any missing docs-facing regression check, and then update the phase test strategy and feedback. I’m starting with the current strategy artifact, the baseline docs test, and the latest closeout notes so I only add coverage for the seam-boundary change.
+
+The baseline docs test already protects several helper-boundary sections. I’m adding one matching assertion for the candidate-surface section so this closeout’s authoring guidance is enforced by the docs suite, not just by narrative memory entries.
+
+The new guardrail is in the docs suite. I’m running the same scoped proof command the closeout uses so the test artifact can point to one authoritative pass across the helper exports, both migrated workflows, and the baseline docs.
+
+The targeted proof is green end-to-end: `152 passed`. I’m adding the actual execution result to the phase feedback and a brief stabilization note in the strategy so the test artifact is self-contained.
+
+Scope considered
+
+- Phase-local test work for `proof-docs-memory-closeout`.
+- Changed docs-facing behavior in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) plus the phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/proof-docs-memory-closeout/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/proof-docs-memory-closeout/feedback.md).
+
+What I analyzed
+
+- The updated `docs/authoring.md` candidate-surface helper section, the producer’s closeout notes, the current decisions ledger, and the existing baseline docs regression suite.
+- The targeted proof command already used by the closeout so the new test coverage would align with the accepted phase scope.
+
+What I changed
+
+- Extended `test_authoring_doc_describes_additive_candidate_surface_helper_boundary` in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) to assert the newly documented manifest-validator and overlay-result-normalizer guidance.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/proof-docs-memory-closeout/test_strategy.md) with a behavior-to-test coverage map, edge/failure coverage, flake-risk note, and known gaps.
+- Updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/proof-docs-memory-closeout/feedback.md) with the added coverage and proof result.
+- Appended the non-obvious test decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/decisions.txt).
+
+Key findings / decisions
+
+- The right regression guard for this phase was docs-facing, not new runtime fixtures: the code path was already covered, but the expanded authoring boundary was not enforced by the docs baseline suite.
+- Targeted proof passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  - Result: `152 passed in 25.26s`
+
+Open issues / next step
+
+- No blocking test gap remains in this phase.
+- Known intentional gap: repo-wide net-line accounting is documented but not directly testable in this dirty checkout.
