@@ -146,3 +146,12 @@ No open blocking issues remain. The plan can advance to the next phase on the cu
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=extend-candidate-surface-seam,migrate-refinement-decomposition-callers,proof-docs-memory-closeout
+explicit=True
+current_phase_index=0
