@@ -225,3 +225,68 @@ phase_mode=single
 phase_ids=shared-parameter-seam,workflow-params-migration,proof-and-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc3b6-3de6-7e43-bf21-04373482a595
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc3b6-3de6-7e43-bf21-04373482a595
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc3b6-3de6-7e43-bf21-04373482a595
+---
+I’m auditing the repository and the phase artifacts first so I can identify the duplicated parameter bundles, confirm the right consolidation target, and avoid widening runtime behavior.
+
+I’ve confirmed the cycle is already scoped to parameter-surface consolidation. Next I’m reading the shared validation seam, the duplicated `params.py` modules, and the standing recursive memory files to pin down the minimal additive shape.
+
+The duplication is narrower than it first looked: there are three clean clusters to consolidate and one intentional outlier where sorted status handling stays local. I’m checking the existing parameter-coercion tests now so the new seam preserves exact normalization behavior instead of just “roughly equivalent” behavior.
+
+The shared seam can stay narrow without runtime changes: one task-framing base, one selected-workflow framing base, and one portfolio-review variant are enough to collapse the repeated scaffolding while leaving identifier rules and status sorting local. I’m checking the doc-baseline and export tests before editing so the new module lands cleanly.
+
+I’ve finished the audit and the regression surfaces are clear. I’m editing now: adding a dedicated `stdlib` parameter module, migrating only the duplicated `params.py` family onto it, and leaving runtime resolution plus the status-sorting outlier untouched.
+
+I’m at the edit point. Before patching the recursive memory, I’m checking the tail of the standing ledgers so the new cycle entry matches the existing chronology and doesn’t overwrite the current ranking or debt notes.
+
+I’m writing the patch now. The seam stays stdlib-owned and additive: no loader changes, no root `workflow` expansion, and no behavioral changes outside the migrated `params.py` scaffolding.
+
+The seam is in place. I’m doing a quick structural pass before running tests to catch import mistakes, overlapping validators, or any local behavior that accidentally moved into the shared layer.
+
+I found one real cleanup issue before test execution: the refinement params module carried leftover imports from the pre-migration shape. I’m trimming those and then running the scoped proof with the repository’s virtualenv Python.
+
+The scoped suite is running cleanly so far. I’m waiting on the full pass before I do the final closeout and metrics pass.
+
+Two regressions showed up exactly where expected: the child classes that add their own required-text validator accidentally shadowed the inherited selected-workflow/task-title validator. I’m renaming those subclass validators so the shared base normalization still runs.
+
+The validator shadowing fix is behaving as intended. I’m waiting on the rest of the scoped suite, then I’ll do the closeout bookkeeping and decision note.
+
+The code and scoped proof are done. I’m finishing the non-code artifacts now: one implementation decision note, then a quick diff/metric pass so the closeout reflects the actual files and line deltas instead of estimates.
+
+**Scope considered**
+I audited the required surfaces before editing: `docs/architecture.md`, [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:89), `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, `.autoloop_recursive/`, the active phase artifacts, and the plan/decision files. I kept scope phase-local and did not absorb unrelated dirty files.
+
+**What I analyzed**
+I found three duplicated parameter clusters: task framing in `task_to_candidate_workflow_set` and `task_to_workflow_strategy`, selected-workflow framing across the adaptation/eval/refinement/decomposition/diagnostics family, and portfolio-review framing across the governance/company family. I also checked runtime parameter resolution and the existing coercion tests to preserve `-wf`, local `Parameters` exports, and the `workflow_run_history_to_failure_modes` sorted `statuses` outlier.
+
+**What I changed**
+I added the shared stdlib-owned parameter seam in [stdlib/parameters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/parameters.py:1) and re-exported it from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:28). The migrated workflow params modules now mostly expose only workflow-specific deltas, for example [workflows/task_to_candidate_workflow_set/params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_candidate_workflow_set/params.py:1), [workflows/candidate_workflow_to_adapted_execution_plan/params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/params.py:1), [workflows/workflow_and_eval_to_refined_workflow_package/params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/params.py:1), [workflows/workflow_portfolio_to_operating_system/params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/params.py:1), [workflows/company_operation_to_recursive_improvement_cycle/params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/params.py:1), and [workflows/workflow_run_history_to_failure_modes/params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/params.py:1). I added focused seam proof in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:275), updated the authoring docs, and synced the required recursive-memory ledgers plus phase notes.
+
+**Key findings / decisions**
+A non-obvious regression showed up in the first test run: subclass validator attribute names can shadow inherited validators in Pydantic, so workflow-local validators now use unique names where needed. Positive-int validator factories stayed in `stdlib/validation.py` because message wording still differs across otherwise similar workflows. Scoped proof passed: `320 passed in 33.32s`.
+
+Files added: `1`.
+Files deleted: `0`.
+Repeated validation idioms removed: `0` new validator factories; this slice removed repeated parameter bundle scaffolding instead.
+Repeated prompt sections removed or shortened: `0`.
+Workflows changed to use shared helpers: `9`.
+New helper functions introduced: `0`.
+New helper parameter models introduced: `6`.
+Old workflow-local validation blocks replaced: `0` additional validator blocks; repeated workflow-local parameter bundles replaced across `9` workflows.
+Core flow readability before/after: before, touched `params.py` files restated common field scaffolding; after, they mostly show only workflow-specific fields and local edge-case validators.
+Net line count: repo-wide not practical in this checkout because of the existing remap/untracked state; the tracked migrated workflow/test slice was net-negative (`-19`), plus one new shared stdlib module.
+
+**Open issues / next step**
+No blocking issues remain in the scoped phase. The next leverage point is broader authoring-surface or portfolio-shape work, not more parameter-bundle duplication in this migrated family.
