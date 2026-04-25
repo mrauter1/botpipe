@@ -81,3 +81,7 @@
 {"ts": "2026-04-25T06:23:34.825076+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 81, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "typed-params"}
 {"ts": "2026-04-25T06:24:37.347576+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 82, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "typed-params"}
 {"ts": "2026-04-25T06:24:37.398076+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 83, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "typed-params"}
+{"ts": "2026-04-25T06:24:37.489853+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 84, "event_type": "phase_completed", "pair": "test", "phase_id": "typed-params", "phase_mode": "single"}
+{"ts": "2026-04-25T06:24:37.492374+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 85, "event_type": "phase_started", "phase_id": "typed-routes-effects", "phase_mode": "single"}
+{"ts": "2026-04-25T06:24:37.492895+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 86, "event_type": "pair_started", "pair": "implement", "phase_id": "typed-routes-effects"}
+{"ts": "2026-04-25T06:24:37.492948+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 87, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "typed-routes-effects"}

@@ -20,16 +20,16 @@
       "public-surface-docs-regression"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "typed-params"
+    "current_phase_index": 5,
+    "current_phase_id": "typed-routes-effects"
   },
   "phase_status": {
     "artifact-model": "completed",
     "artifact-inventory": "completed",
     "artifact-runtime-enforcement": "completed",
     "session-continuity": "completed",
-    "typed-params": "in_progress",
-    "typed-routes-effects": "planned",
+    "typed-params": "completed",
+    "typed-routes-effects": "in_progress",
     "worklists": "planned",
     "child-io": "planned",
     "public-surface-docs-regression": "planned"
@@ -92,6 +92,19 @@
       "run_id": "run-20260425T043735Z-6422224e",
       "status": "in_progress",
       "ts": "2026-04-25T06:05:35.917973+00:00"
+    },
+    {
+      "phase_id": "typed-params",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "completed",
+      "ts": "2026-04-25T06:24:37.489319+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "typed-routes-effects",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "in_progress",
+      "ts": "2026-04-25T06:24:37.491893+00:00"
     }
   ]
 }
