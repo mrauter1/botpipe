@@ -934,3 +934,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+I’m treating this as a proof-and-coverage-closeout test phase: first I’ll inspect the existing phase artifacts and the already-green scoped suite, then I’ll decide whether any repository test edits are actually needed or whether the correct move is to document the existing coverage map and preserve the current deterministic proof surface.
+
+I’ve confirmed this phase stayed docs-memory-only and the implementation intentionally did not change workflow code or the proof surface. I’m taking the conservative test-author move: keep repository tests unchanged, record why the existing scoped suites are the right regression net for this phase, and rerun that deterministic proof surface before updating the phase test artifacts.
+
+The scoped proof is underway cleanly. While that runs, I’m updating the phase artifacts to map the existing unit/runtime/docs suites to the phase behaviors and to record the no-new-test-files decision explicitly.
+
+I’ve updated the phase strategy and feedback artifacts and recorded the non-obvious test decision. I’m waiting for the scoped suite to finish so I can report the exact result against the final artifact state.
+
+Scope considered
+
+- Phase-local test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/docs-memory-and-proof-closeout/`
+- The final docs-memory closeout state from the implementation phase
+- The scoped proof surface already required by the phase contract
+
+What I analyzed
+
+- The implementation notes to confirm this phase stayed docs/memory-only and did not change workflow code or helper behavior
+- The standing decisions ledger to keep the test decision aligned with earlier scoping
+- The existing deterministic proof surface covering the shared helper seam, the three migrated workflows, and the architecture-baseline docs
+
+What I changed
+
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/docs-memory-and-proof-closeout/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, and known gaps
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/test/phases/docs-memory-and-proof-closeout/feedback.md)
+- Appended the test-phase decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/decisions.txt)
+- No repository test files were modified in this phase
+
+Key findings / decisions
+
+- The correct test-author move for this slice was repository-test-neutral: the closeout changed docs, recursive-memory ledgers, and phase artifacts only
+- Reusing the existing scoped regression net is sufficient and lower-risk than adding duplicate repo tests
+- Scoped proof against the final artifact state passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py`
+  - Result: `141 passed`
+
+Open issues / next step
+
+- No test blocker in this phase
+- Known acceptable gap: recursive-memory closeout notes are not asserted directly by repository tests; the durable regression surface remains the helper seam, migrated runtime behavior, and architecture-baseline docs
