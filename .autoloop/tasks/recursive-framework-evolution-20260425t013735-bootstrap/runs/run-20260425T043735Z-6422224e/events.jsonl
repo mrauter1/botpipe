@@ -110,3 +110,6 @@
 {"ts": "2026-04-25T07:07:36.904035+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 110, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "worklists", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-25T07:07:36.904762+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 111, "event_type": "pair_started", "pair": "test", "phase_id": "worklists"}
 {"ts": "2026-04-25T07:07:36.904847+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 112, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "worklists"}
+{"ts": "2026-04-25T07:09:39.027264+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 113, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "worklists"}
+{"ts": "2026-04-25T07:10:37.993837+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 114, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "worklists"}
+{"ts": "2026-04-25T07:10:38.031701+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 115, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "worklists"}
