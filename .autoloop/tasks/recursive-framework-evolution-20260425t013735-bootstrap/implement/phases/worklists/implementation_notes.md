@@ -10,67 +10,47 @@
 ## Files Changed
 
 - `core/worklists.py`
-- `core/steps.py`
 - `core/validation.py`
-- `core/compiler.py`
-- `core/context.py`
-- `core/artifacts.py`
 - `core/engine.py`
-- `core/stores/protocols.py`
-- `runtime/stores/filesystem.py`
-- `core/__init__.py`
-- `workflow/__init__.py`
 - `tests/unit/test_primitives_and_stores.py`
 - `tests/unit/test_validation.py`
-- `tests/contract/test_engine_contracts.py`
-- `tests/runtime/test_compatibility_runtime.py`
-- `tests/strictness/test_no_compat.py`
 
 ## Symbols Touched
 
-- `WorkItem`, `Selector`, `Selection`, `SelectionSnapshot`, `Worklist`
-- `LLMStep(..., scope=...)`, `PairStep(..., scope=...)`
-- `WorkflowDefinition.worklists_by_name`
-- `CompiledWorkflow.worklists`, `CompiledStep.scope_name`
-- `Context.selection(...)`, `Context.current(...)`, `Context.item`
-- `resolve_artifact_template(...)` placeholder handling for `item` / `worklist.*`
-- `Engine._initialize_worklist_selections(...)`, `_restore_worklist_selections(...)`, `_advance_worklist(...)`
-- `CheckpointPayload.worklist_selections`
-- `FilesystemCheckpointStore` selection snapshot persistence
+- `Worklist.load_items(...)`, `_duplicate_item_ids(...)`
+- `WorkflowDefinition.worklists_by_name`, `_validate_route_effects(...)`, `_validate_advance_source_scope(...)`
+- `Engine._advance_worklist(...)`
+- Worklist regression tests in `tests/unit/test_primitives_and_stores.py` and `tests/unit/test_validation.py`
 
 ## Checklist Mapping
 
 - Plan milestone 7:
-  added `core/worklists.py` with item, selector, selection, and artifact-backed/static worklist sources
+  tightened worklist item loading so duplicate ids now fail before scoped execution derives selection/session state
 - Plan milestone 7:
-  added scoped-step validation/compilation and context selection helpers
-- Plan milestone 7:
-  implemented item-aware artifact placeholders and checkpoint selection snapshots
+  tightened scoped-step validation so `Advance(...)` is only valid for the source step's own worklist
 - Plan milestone 6 follow-through:
-  worklist-bound route effects now validate against declared worklists and execute after artifact contracts
+  kept route-effect validation/runtime semantics aligned by adding the same `Advance(...)` scope guard in both places
 - Phase AC-13:
-  scoped steps resolve the current item deterministically and artifact templates can reference `item.id` / `item.dir_key`
+  scoped item identity is now deterministic because duplicate worklist ids are rejected at load time
 - Phase AC-14:
-  `Advance(...)` moves selection state explicitly and resolves exhaustion to declared terminal behavior
+  `Advance(...)` still moves selection state explicitly, but now only from the scoped step/worklist combination that the phase contract allows
 
 ## Assumptions
 
-- Additive public-surface widening is justified in this phase because `Worklist`, `Selector`, `WorkItem`, `Continuity`, and the effect types must be authorable from `workflow` once worklist semantics exist.
-- Board mutations remain intentionally non-executable beyond validation because the active phase contract excludes extra board semantics.
+- Duplicate worklist ids are always invalid because item ids are part of selector lookup, checkpoint restore, mutable status writes, and work-item session continuity.
+- `Advance(...)` is meant to drive explicit progression for scoped work only; using it from an unscoped or differently scoped step would be hidden iteration, not a supported control-flow pattern.
 
 ## Preserved Invariants
 
 - Existing workflows without worklists continue to compile and run unchanged.
 - `ctx.open_session(..., scope=...)` and positional scope overrides remain valid and still take precedence over declarative continuity.
 - Artifact validation still occurs before route effects execute.
-- No hidden automatic full-worklist iteration was introduced; looping happens only when a route explicitly includes `Advance(...)`.
+- Scoped `Advance(...)` keeps its explicit self-loop-until-exhausted behavior; the fix only rejects invalid unscoped or mismatched uses.
 
 ## Intended Behavior Changes
 
-- Worklists can now be declared on workflow classes and referenced from scoped provider steps and typed route effects.
-- `Context` now exposes live selection helpers, and artifact templates may reference the active item or named worklist current item.
-- Checkpoints now persist worklist selection snapshots so resume restores explicit progression state.
-- The root `workflow` shim now exports the now-executable effect types plus worklist primitives and `Continuity`.
+- Worklists with duplicate item ids now fail fast on load instead of collapsing silently during selection/restore/status/session operations.
+- `Advance(worklist)` now fails validation unless the source step is scoped to that same worklist, and the engine raises if an invalid route slips through runtime assembly.
 
 ## Known Non-Changes
 
@@ -81,18 +61,15 @@
 
 ## Expected Side Effects
 
-- Scoped `Advance(...)` re-enters the same step while items remain and then resolves exhaustion via `if_exhausted`; downstream authors should not expect the enclosing route target to win before exhaustion.
-- Work-item session continuity now becomes practically usable because scoped contexts supply `ctx.current(...)` / `ctx.item`.
-- Strictness tests now treat effects/worklists as part of the public authoring shim.
+- Authors now get an explicit failure for duplicate item ids instead of non-deterministic worklist behavior later in the run.
+- Authors now get an explicit validation/runtime failure if they try to use `Advance(...)` from an unscoped or differently scoped step.
 
 ## Validation Performed
 
-- `PYTHONPATH=/home/rauter/autoloop_v3_bkp /home/rauter/autoloop_v3_bkp/autoloop_v3/.venv/bin/python -m py_compile core/worklists.py core/steps.py core/validation.py core/compiler.py core/context.py core/artifacts.py core/engine.py core/__init__.py workflow/__init__.py runtime/stores/filesystem.py`
-- `PYTHONPATH=/home/rauter/autoloop_v3_bkp /home/rauter/autoloop_v3_bkp/autoloop_v3/.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/strictness/test_no_compat.py`
-- `PYTHONPATH=/home/rauter/autoloop_v3_bkp /home/rauter/autoloop_v3_bkp/autoloop_v3/.venv/bin/pytest -q tests/runtime/test_package_cli.py tests/runtime/test_workspace_and_context.py`
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp /home/rauter/autoloop_v3_bkp/autoloop_v3/.venv/bin/python -m py_compile core/worklists.py core/validation.py core/engine.py tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py`
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp /home/rauter/autoloop_v3_bkp/autoloop_v3/.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py`
 
 ## Deduplication / Centralization
 
-- Worklist item selection, snapshotting, refresh, and status mutation are centralized in `core/worklists.py`.
-- Scoped session continuity now reuses the existing continuity/session-key machinery instead of adding worklist-specific session code in the engine.
-- Route-effect execution stays centralized in `Engine._execute_route_effect(...)` with only one worklist advancement path.
+- Worklist identity validation is centralized in `Worklist.load_items(...)` so selection, refresh, restore, mutation, and work-item session continuity all share the same duplicate-id guard.
+- The scoped-step requirement for `Advance(...)` is centralized in validation and mirrored by one engine guard, keeping compile-time and runtime behavior aligned without adding a new routing layer.

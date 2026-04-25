@@ -165,7 +165,17 @@ class Worklist(Generic[T]):
         return bool(getattr(self.source, "artifact_backed", False))
 
     def load_items(self, ctx: "Context") -> tuple[WorkItem[T], ...]:
-        return tuple(self.source.load(ctx))
+        items = tuple(self.source.load(ctx))
+        validation_error = self.source.validate(ctx, items)
+        if validation_error:
+            raise WorkflowExecutionError(f"worklist {self.name!r} is invalid: {validation_error}")
+        duplicate_ids = _duplicate_item_ids(items)
+        if duplicate_ids:
+            duplicates = ", ".join(duplicate_ids)
+            raise WorkflowExecutionError(
+                f"worklist {self.name!r} contains duplicate item id(s): {duplicates}"
+            )
+        return items
 
     def initial_selection(self, ctx: "Context") -> Selection[T]:
         items = self.load_items(ctx)
@@ -465,6 +475,17 @@ def _default_dir_key(item_id: str) -> str:
     if SAFE_DIR_KEY_RE.fullmatch(normalized):
         return normalized
     return f"_item-{normalized.encode('utf-8').hex()}"
+
+
+def _duplicate_item_ids(items: Sequence[WorkItem[Any]]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for item in items:
+        if item.id in seen and item.id not in duplicates:
+            duplicates.append(item.id)
+            continue
+        seen.add(item.id)
+    return tuple(duplicates)
 
 
 def _string_field(payload: Mapping[str, object], field_name: str, *, worklist_name: str) -> str:
