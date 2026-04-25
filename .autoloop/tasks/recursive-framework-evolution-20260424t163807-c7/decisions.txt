@@ -1,3 +1,5 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260425T001633Z-23b17522" ts="2026-04-25T00:16:33.371321+00:00" />
 Cycle 7 stays in consolidate mode; do not add a workflow because the highest-leverage pressure is extending the existing candidate-surface helper seam and removing duplicated manifest/overlay validators from refinement and decomposition.
 Keep candidate-surface helpers authoring-only; do not move refinement evaluation policy, decomposition building-block policy, or runtime routing behavior into stdlib, runtime, or workflow.toml.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260425T001633Z-23b17522" ts="2026-04-25T00:23:50.037890+00:00" />
+Cycle 7 closeout must explicitly justify the added surface if net new lines exceed 500; this reporting rule is part of the implementation contract even though the planned change still targets neutral-to-negative net lines.

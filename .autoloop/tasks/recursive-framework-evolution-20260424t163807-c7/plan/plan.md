@@ -200,6 +200,7 @@
   - files added
   - files deleted
   - net line count change, if practical
+  - if net added lines exceed 500, why that added surface was not avoidable
   - repeated validation idioms removed
   - repeated prompt sections removed or shortened, including `0` when unchanged
   - workflows changed to use shared helpers

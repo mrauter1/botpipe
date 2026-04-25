@@ -106,10 +106,10 @@ phases:
       architecture baseline docs.
   - id: AC-3
     text: The cycle closeout records files added, files deleted, net line change,
-      repeated validation idioms removed, repeated prompt sections removed or shortened,
-      workflows changed to use shared helpers, new helper functions introduced, old
-      workflow-local validation blocks replaced, and core-flow readability before
-      and after.
+      the required justification if net added lines exceed 500, repeated validation
+      idioms removed, repeated prompt sections removed or shortened, workflows changed
+      to use shared helpers, new helper functions introduced, old workflow-local validation
+      blocks replaced, and core-flow readability before and after.
   deliverables:
   - updated docs and recursive memory files, including framework_evolution_charter.md
   - targeted proof results
