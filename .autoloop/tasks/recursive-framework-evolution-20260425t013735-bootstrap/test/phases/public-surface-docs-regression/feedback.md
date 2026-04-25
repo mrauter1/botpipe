@@ -6,3 +6,6 @@
 - Phase Directory Key: public-surface-docs-regression
 - Phase Title: Public Surface, Docs, And Regression
 - Scope: phase-local authoritative verifier artifact
+
+- Added unit regression coverage in `tests/unit/test_primitives_and_stores.py` for three public-surface-adjacent failure modes: typed child input against legacy invokers now fails loudly, schema-bearing directory artifacts are rejected, and mid-chain `None` `state.*` placeholders resolve safely instead of being mistaken for missing work-item scope.
+- Re-ran `.venv/bin/pytest -q`; suite passed with `682 passed`.
