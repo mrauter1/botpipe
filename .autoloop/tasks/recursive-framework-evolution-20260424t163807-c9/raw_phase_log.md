@@ -449,3 +449,65 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc284-2349-71e2-a8b1-c6677b862da3
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc284-2349-71e2-a8b1-c6677b862da3
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc284-2349-71e2-a8b1-c6677b862da3
+---
+I’m treating this as a scoped consolidation pass for the three publish handlers named in the active phase. First I’m auditing the repo surfaces, phase artifacts, and the existing shared publication-validation seam so I can map the migration without drifting artifact contracts.
+
+I’ve got the phase plan and decision ledger; next I’m tracing the actual helper seam and the three publish handlers to see what is already centralized versus still duplicated. After that I’ll map the smallest migration and the regression surfaces in the targeted tests.
+
+The shared seam exists, but I still need the lower half of the workflow files where the publish validators live; that’s where the remaining duplication usually hides. I’m pulling just the publish-related sections and the nearby tests/docs now.
+
+The earlier phase already landed the helper seam, so this phase is about finishing the workflow-side migration cleanly and only where the fit is mechanical. I’m checking the current tree state and the tests around these handlers before I edit anything, because the remaining work may be smaller than the plan text suggests.
+
+I’ve confirmed the scoped workflows already consume the first-wave publication helpers, so the remaining leverage is the still-duplicated mechanical snapshot parsing inside the same publish family. I’m checking whether that duplication is identical enough to lift into `stdlib/validation.py` without pulling domain policy with it.
+
+I’ve narrowed the code change: one small shared helper extension in `stdlib/validation.py`, then a mechanical swap in the two governance workflows and the diagnostic workflow where it actually removes duplicated snapshot readers. I’m editing those files now, then I’ll sync the notes/docs/memory and rerun the scoped proof.
+
+The code migration is in place. I’m doing the bookkeeping edits now: decision log, phase notes, and the recursive memory files, then I’ll run the scoped unit/runtime proof to make sure the helper extraction didn’t shift any failure surfaces.
+
+The code is in a good state structurally. I hit one environment detail during verification: plain `python` isn’t on PATH here, so I’m rerunning the compile and test proof through the repo venv to keep the checks deterministic.
+
+The venv compile check passed. The scoped pytest run is still in flight; I’m waiting on the targeted governance/company/diagnostic suites plus the docs guardrail before I close out the notes.
+
+Scope considered
+
+- Scoped consolidation for the publish/context mechanics in [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py), [workflow_portfolio_to_operating_system/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/workflow.py), [company_operation_to_recursive_improvement_cycle/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/workflow.py), the targeted tests/docs, and the required phase/memory artifacts.
+- I kept unrelated dirty files out of scope.
+
+What I analyzed
+
+- The existing shared publication-validation seam in `stdlib/validation.py`.
+- The publish and context handlers for the three scoped workflows, plus the repeated local snapshot-reader tails in the two governance/company workflows.
+- The targeted runtime suites and `docs/authoring.md`.
+- The required recursive-memory files and phase notes/decision log.
+
+What I changed
+
+- Added two mechanical shared helpers in [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py): `extract_workflow_names_from_capability_snapshot(...)` and `extract_workflow_names_from_portfolio_health(...)`, and exported them from [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py).
+- Migrated [workflow_portfolio_to_operating_system/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/workflow.py) and [company_operation_to_recursive_improvement_cycle/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/workflow.py) to use those helpers in both capture and publish paths, deleting the duplicated local helper tails.
+- Added focused helper coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and documented the seam in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- Updated the required phase notes, decision log, and `.autoloop_recursive/*` memory files.
+
+Key findings / decisions
+
+- `workflow_run_history_to_failure_modes` already sat on the shared validation seam for its publish path, so I left its code unchanged and kept the proof scoped to its existing runtime coverage.
+- The remaining duplicated pressure was mechanical snapshot-name extraction, not domain publication policy, so the helper boundary stayed narrow.
+- Tracked diff for the edited tracked files: `+79` lines (`157` insertions, `78` deletions).
+
+Open issues / next step
+
+- No blocking issues from this phase.
+- Deferred debt remains the adjacent optional adoption of the same snapshot-reader helpers in workflows such as `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, and `workflow_to_eval_suite` if a later consolidation pass targets that family.
+- Validation completed: `./.venv/bin/python -m py_compile ...` passed, and `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py` passed with `140 passed`.

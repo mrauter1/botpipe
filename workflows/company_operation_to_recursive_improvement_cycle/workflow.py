@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
+        extract_workflow_names_from_capability_snapshot,
+        extract_workflow_names_from_portfolio_health,
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
@@ -37,6 +39,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
+        extract_workflow_names_from_capability_snapshot,
+        extract_workflow_names_from_portfolio_health,
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
@@ -370,7 +374,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         workflow_count = capability_snapshot.get("workflow_count")
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_capability_snapshot.json must define a positive workflow_count")
-        capability_workflow_names = _workflow_names_from_capability_snapshot(capability_snapshot)
+        capability_workflow_names = extract_workflow_names_from_capability_snapshot(capability_snapshot)
 
         health_snapshot = _read_json(health_path)
         health_payload = _require_mapping(
@@ -382,7 +386,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         expected_statuses = _sorted_unique_strings(state.statuses) or None
         if health_payload.get("statuses") != expected_statuses:
             raise ValueError("workflow_portfolio_health_snapshot.json statuses must match the invocation contract")
-        scoped_workflow_names = _extract_portfolio_workflow_names(health_payload)
+        scoped_workflow_names = extract_workflow_names_from_portfolio_health(health_payload)
         if not scoped_workflow_names:
             raise ValueError("workflow_portfolio_health_snapshot.json must contain at least one scoped workflow")
         if health_payload.get("workflow_count") != len(scoped_workflow_names):
@@ -558,14 +562,14 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         )
 
         capability_snapshot = _read_json(required_paths["workflow_capability_snapshot"])
-        capability_workflow_names = _workflow_names_from_capability_snapshot(capability_snapshot)
+        capability_workflow_names = extract_workflow_names_from_capability_snapshot(capability_snapshot)
 
         health_snapshot = _read_json(required_paths["workflow_portfolio_health_snapshot"])
         health_payload = _require_mapping(
             health_snapshot.get("workflow_portfolio_health"),
             "workflow_portfolio_health_snapshot.json must define workflow_portfolio_health as a JSON object",
         )
-        scoped_workflow_names = _extract_portfolio_workflow_names(health_payload)
+        scoped_workflow_names = extract_workflow_names_from_portfolio_health(health_payload)
         if state.focus_workflows and scoped_workflow_names != state.focus_workflows:
             raise ValueError(
                 "workflow_portfolio_health_snapshot.json scoped workflow entries must match the captured company context"
@@ -801,41 +805,6 @@ def _require_priority_category_count_mapping(value: Any, error_message: str) -> 
             raise ValueError(error_message)
         normalized[normalized_key] = raw_count
     return dict(sorted(normalized.items()))
-
-
-def _workflow_names_from_capability_snapshot(snapshot) -> set[str]:
-    workflows = snapshot.get("workflows")
-    if not isinstance(workflows, list):
-        raise ValueError("workflow_capability_snapshot.json must define a workflows list")
-    names: set[str] = set()
-    for entry in workflows:
-        if not isinstance(entry, Mapping):
-            raise ValueError("workflow_capability_snapshot.json workflows entries must be objects")
-        workflow_name = entry.get("workflow_name")
-        if isinstance(workflow_name, str) and workflow_name.strip():
-            names.add(workflow_name.strip())
-    if not names:
-        raise ValueError("workflow_capability_snapshot.json must contain at least one workflow_name")
-    return names
-
-
-def _extract_portfolio_workflow_names(health_payload: Mapping[str, Any]) -> list[str]:
-    workflows = _require_mapping_list(
-        health_payload.get("workflows"),
-        "workflow_portfolio_health_snapshot.json must define workflow_portfolio_health.workflows as a JSON array of objects",
-    )
-    names: list[str] = []
-    for entry in workflows:
-        workflow_name = _require_text(
-            entry.get("workflow_name"),
-            "workflow_portfolio_health_snapshot.json workflow entries must define workflow_name",
-        )
-        names.append(workflow_name)
-    require_unique_values(
-        names,
-        error_message="workflow_portfolio_health_snapshot.json scoped workflow names must be unique",
-    )
-    return names
 
 
 def _extract_company_task_ids(tasks: list[dict[str, Any]]) -> list[str]:

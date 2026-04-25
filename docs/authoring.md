@@ -279,6 +279,8 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 
 ```python
 from autoloop_v3.stdlib import (
+    extract_workflow_names_from_capability_snapshot,
+    extract_workflow_names_from_portfolio_health,
     read_required_text,
     normalize_optional_string,
     normalize_unique_strings,
@@ -303,6 +305,7 @@ Validation helper boundary:
 - use these helpers for shared JSON-object reads, non-empty string checks, string-list normalization, mapping checks, duplicate guards, non-negative-int validation, and positive-int validation
 - use `require_existing_artifact_paths(...)` and `read_required_text(...)` for mechanical publish-step artifact existence and non-empty text checks
 - use `validate_publication_boundary(...)`, `validate_authoritative_artifact_subset(...)`, `require_true_flag(...)`, and `validate_no_hidden_execution_signal(...)` for reusable publish-handler mechanics
+- use `extract_workflow_names_from_capability_snapshot(...)` and `extract_workflow_names_from_portfolio_health(...)` when governance-facing workflows need the shared workflow-name snapshot surface instead of copying local readers
 - use the selected-workflow snapshot validators in the same module when multiple workflows need the same capability, authoring-surface, decomposition-surface, or cross-artifact selected-workflow-name checks
   - `validate_selected_workflow_capability_snapshot(...)` validates the compiled selected-workflow snapshot contract
   - `validate_selected_workflow_authoring_surface_snapshot(...)` validates the editable selected-workflow surface contract

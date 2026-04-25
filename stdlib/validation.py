@@ -426,6 +426,55 @@ def validate_no_hidden_execution_signal(text: str, error_message: str) -> None:
         raise ValueError(error_message)
 
 
+def extract_workflow_names_from_capability_snapshot(
+    snapshot: Mapping[str, Any],
+    *,
+    artifact_name: str = "workflow_capability_snapshot.json",
+    require_at_least_one: bool = True,
+) -> set[str]:
+    """Return workflow names from one capability snapshot."""
+
+    workflows = snapshot.get("workflows")
+    if not isinstance(workflows, list):
+        raise ValueError(f"{artifact_name} must define a workflows list")
+    names: set[str] = set()
+    for entry in workflows:
+        if not isinstance(entry, Mapping):
+            raise ValueError(f"{artifact_name} workflows entries must be objects")
+        workflow_name = entry.get("workflow_name")
+        if isinstance(workflow_name, str) and workflow_name.strip():
+            names.add(workflow_name.strip())
+    if require_at_least_one and not names:
+        raise ValueError(f"{artifact_name} must contain at least one workflow_name")
+    return names
+
+
+def extract_workflow_names_from_portfolio_health(
+    health_payload: Mapping[str, Any],
+    *,
+    artifact_name: str = "workflow_portfolio_health_snapshot.json",
+) -> list[str]:
+    """Return scoped workflow names from one portfolio-health payload."""
+
+    workflows = require_mapping_list(
+        health_payload.get("workflows"),
+        f"{artifact_name} must define workflow_portfolio_health.workflows as a JSON array of objects",
+    )
+    names: list[str] = []
+    for entry in workflows:
+        workflow_name = require_non_empty_string(
+            entry.get("workflow_name"),
+            error_message=f"{artifact_name} workflow entries must define workflow_name",
+            coerce=True,
+        )
+        names.append(workflow_name)
+    require_unique_values(
+        names,
+        error_message=f"{artifact_name} scoped workflow names must be unique",
+    )
+    return names
+
+
 def validate_authoritative_artifact_subset(
     value: Any,
     *,
