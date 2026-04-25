@@ -549,3 +549,42 @@ No open issues in this phase review. The phase can be considered complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+---
+I’m handling the `artifact-inventory` test phase only. I’ll inspect the current coverage that landed in the implementation, compare it to the phase acceptance criteria and the reviewer-discovered regression, then add only the tests and test-phase artifacts needed to make the coverage map explicit and durable.
+
+The implementation already added most of the behavior coverage, but there’s one small gap worth locking down in the test phase: the new `CompiledWorkflow.artifact_items(...)` helper itself. I’m adding a focused unit test for the authoritative-vs-alias split so future changes can’t regress that contract silently.
+
+Scope considered
+
+Phase-local test work for `artifact-inventory` only. I reviewed the landed implementation and existing coverage in `tests/unit/test_validation.py`, `tests/unit/test_primitives_and_stores.py`, `tests/runtime/test_compatibility_runtime.py`, and the focused contract checks already used in this phase.
+
+What I analyzed
+
+I mapped the phase acceptance criteria and the shared decisions to the concrete tests already present. The main remaining gap was the newly introduced `CompiledWorkflow.artifact_items(authoritative=True)` boundary itself: the implementation had downstream regression tests, but not a direct unit test locking the alias-vs-authoritative split.
+
+What I changed
+
+I added `tests/unit/test_validation.py::test_compiled_workflow_artifact_items_distinguish_alias_and_authoritative_inventories` to pin the canonical-vs-alias inventory contract for duplicate step-local artifact names.
+
+I updated [.autoloop/.../test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/artifact-inventory/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, reliability notes, and known gaps. I also appended a concise test summary to [.autoloop/.../feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/artifact-inventory/feedback.md), and recorded the non-obvious test boundary in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The authoritative regression boundary for this phase is now explicit in tests: `compiled.artifact_items(authoritative=True)` is the full canonical inventory, while the default alias view may legitimately be empty when all unqualified names are ambiguous. The test strategy now ties AC-03/AC-04 coverage to specific unit and runtime tests instead of leaving that mapping implicit.
+
+Open issues / next step
+
+No blocking gaps remain in this phase’s test scope. The next step is the auditor/verifier pass for the test phase.
