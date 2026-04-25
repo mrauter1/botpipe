@@ -42,6 +42,7 @@
 - Recursive memory:
   - added cycle-6 closeout notes in the charter, roadmap, gap ledger, and workflow candidate ledger
   - added closeout validation-debt status note in `validation_debt_ledger.md`
+  - repaired the gap/candidate ledgers after review by moving the cycle-6 notes into standalone top-level sections and restoring the interrupted historical entry structure
 
 ## Checklist mapping
 
@@ -77,6 +78,7 @@
 ## Expected side effects
 
 - Future consolidation cycles now have one explicit authoring reference for where baseline/candidate overlay mechanics belong, which should reduce rediscovery and helper-surface drift.
+- The recursive-memory ledgers now keep cycle-6 closeout notes readable without interrupting older numbered entries, which reduces the risk of later cycles misreading historical debt.
 
 ## Deduplication / centralization decisions
 

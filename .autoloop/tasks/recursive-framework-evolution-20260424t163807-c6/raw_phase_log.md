@@ -822,3 +822,50 @@ Move the cycle-6 migration/closeout notes into standalone top-level sections in 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+---
+I’m addressing the verifier’s ledger-structure finding only. I’ll inspect the malformed sections in the recursive-memory files, move the cycle-6 notes into coherent top-level positions, then rerun the scoped proof and refresh the phase notes.
+
+I’ve confirmed the fix is purely structural: restore the interrupted historical entries and move the cycle-6 notes out of the middle of those older sections. I’m checking the ends of the two ledgers now so I can relocate the notes cleanly instead of leaving another ambiguous insertion point.
+
+I’ve got a clean repair path: restore the interrupted historical entry in the gap ledger, then relocate both cycle-6 note blocks to standalone tail sections in the gap and candidate ledgers. After that I’ll rerun the same scoped proof and refresh the notes under the new decisions header.
+
+The ledger structure is repaired. I’m rerunning the same scoped proof bundle now so the closeout still has one fresh, authoritative validation result after the memory-file fix.
+
+The rerun is clean. I’m doing a quick structural readback of the two repaired ledgers, then I’ll close with the scoped summary and the fresh proof result.
+
+Scope considered
+
+Phase-local fix only for `proof-docs-memory-closeout`: the reviewer finding in the recursive-memory ledgers, the active implementation notes, and the same scoped proof bundle already approved for this phase.
+
+What I analyzed
+
+I traced `IMP-001` to two structural insertions: `.autoloop_recursive/framework_gap_ledger.md` had the cycle-6 closeout note splitting an existing Cycle 9 entry, and `.autoloop_recursive/workflow_candidate_ledger.md` had the cycle-6 notes embedded inside `## Cycle 8 Candidates`. I checked the current decisions ledger and kept the repair limited to restoring coherent top-level ledger structure.
+
+What I changed
+
+I repaired both ledgers by restoring the interrupted historical entries and moving the cycle-6 migration/closeout notes into standalone top-level sections at the ends of the files. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/implement/phases/proof-docs-memory-closeout/implementation_notes.md) to record the reviewer-driven repair and appended the new constraint under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/decisions.txt).
+
+Key findings / decisions
+
+The fix is structural only; no workflow code, docs text, or proof scope changed. The new standing decision is that cycle-closeout notes in recursive-memory ledgers must live in standalone top-level sections, not inside numbered historical entries or candidate lists.
+
+I reran the scoped proof:
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+Result: `144 passed in 19.76s`.
+
+Open issues / next step
+
+No open blocker remains in the implementation scope. This is ready for verifier re-review.
