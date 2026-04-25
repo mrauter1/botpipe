@@ -330,6 +330,59 @@ class Parameters(BaseModel):
     assert payload["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
 
 
+def test_new_runs_persist_normalized_workflow_params_snapshot(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(
+        tmp_path,
+        "typed_normalized_demo",
+        "TypedNormalizedWorkflow",
+        export_parameters=True,
+        parameters_source="""
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    retries: int = 2
+    mode: str = "strict"
+""".strip(),
+    )
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "typed_params": request.context.params.model_dump(mode="python"),
+                            "workflow_params": request.context.workflow_params,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow_package(
+        "typed_normalized_demo",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-typed-normalized",
+            message="Need normalized typed params",
+            workflow_params={"retries": "5"},
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-normalized" / "wf_typed_normalized_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+    payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert paused.terminal == "PAUSE"
+    assert payload["typed_params"] == {"retries": 5, "mode": "strict"}
+    assert payload["workflow_params"] == {"retries": 5, "mode": "strict"}
+    assert run_meta["workflow_params"] == {"retries": 5, "mode": "strict"}
+
+
 def test_resume_restores_typed_params_from_persisted_run_metadata(tmp_path: Path) -> None:
     _write_pause_resume_workflow_package(
         tmp_path,
