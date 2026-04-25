@@ -2832,3 +2832,101 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc38c-812b-7443-918c-9a1504416b17
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+I’m handling the test pass for the public-surface/docs/regression phase. First I’m reading the phase-local test artifacts and the current coverage around the newly touched seams so I can decide whether any focused regression tests still need to be added.
+
+I found coverage for the happy path and the runtime regression fixes, but there are still two useful low-level guards missing: rejecting typed child input against a legacy invoker shape, and rejecting directory paths when the artifact contract is JSON/schema-backed. I’m adding those now, along with a placeholder regression check for mid-chain `None` state values.
+
+The added guards are passing. I’m running the full suite once more so the test-phase artifacts can record a current green proof instead of relying only on the implement turn’s validation.
+
+The full suite is in flight. I’m polling it to capture the final result for the phase test strategy and feedback artifacts.
+
+The rerun is still clean past the earlier failure bands. I’m waiting for completion before I write the phase-local test artifacts.
+
+The full pass is still progressing without new failures. I’m continuing to poll until the runner exits.
+
+The suite is almost done. I’m holding for the final summary so the phase artifacts can record the exact proof result.
+
+The suite is green with the added guards. I’m updating the phase-local test strategy and feedback now with the exact behavior-to-coverage map and the final proof result.
+
+Scope considered
+- Phase-local public-surface/docs/regression test scope.
+- The touched export/doc/runtime seams plus the existing runtime suites that cover typed child IO and directory-backed candidate-surface artifacts.
+
+What I analyzed
+- Current coverage in `tests/strictness/test_no_compat.py`, `tests/unit/test_primitives_and_stores.py`, `tests/test_architecture_baseline_docs.py`, and the runtime suites exercising child workflow output and candidate-surface workflows.
+- The phase-local `test_strategy.md` and `feedback.md` artifacts.
+
+What I changed
+- Added unit regression tests in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py) for:
+  - mid-chain `None` `state.*` placeholder resolution,
+  - rejecting directory paths for JSON/schema-backed artifacts,
+  - rejecting typed child input when a legacy workflow invoker cannot accept `input=`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/public-surface-docs-regression/test_strategy.md) with an explicit behavior-to-coverage map, preserved invariants, edge cases, failure paths, flake controls, and validation record.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/public-surface-docs-regression/feedback.md).
+
+Key findings / decisions
+- Existing runtime coverage already guarded the high-level typed child-output failure path and candidate-surface directory behavior; this turn filled the missing low-level guards so the compatibility fixes are pinned closer to the changed seams.
+- Validation performed:
+  - `.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/runtime/test_workspace_and_context.py::test_context_invoke_workflow_records_typed_child_output_validation_failures`
+  - `.venv/bin/pytest -q`
+- Final result: `682 passed`.
+
+Open issues / next step
+- No open issues from the test-author pass.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc38c-812b-7443-918c-9a1504416b17
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+I’m auditing the test-phase outputs for the public-surface/docs/regression phase. First I’m reading the phase-local criteria, feedback, and test strategy alongside the newly added test coverage so I can decide whether there are any blocking coverage gaps or flake risks.
+
+I’ve finished the audit pass. The added tests cover the changed runtime seams cleanly, the strategy maps the phase intent to concrete coverage, and I do not have a blocking gap to send back. I’m updating the auditor-owned artifacts now.
+
+Scope considered
+- Phase-local test audit for the public-surface/docs/regression phase.
+- The updated unit/runtime/doc test coverage, phase-local `test_strategy.md`, phase-local `feedback.md`, and the final green full-suite proof.
+
+What I analyzed
+- The changed low-level guards in `tests/unit/test_primitives_and_stores.py`.
+- Existing adjacent runtime coverage in `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`, and `tests/runtime/test_workflow_package_to_composable_building_blocks.py`.
+- The phase-local strategy/feedback artifacts against AC-17 and AC-18.
+
+What I reviewed
+- Coverage for the authoring/runtime split, docs contract preservation, legacy child-invoker compatibility, directory-backed artifact handling, strict typed child-output validation, and placeholder regression safety.
+- Failure-path depth for typed input rejection, schema-bearing directory rejection, and invalid typed child outputs.
+- Flake risk control and validation evidence, including the final `.venv/bin/pytest -q` result.
+
+Key findings / decisions
+- No blocking findings.
+- Criteria were marked complete.
+- Feedback was updated with a no-findings audit entry referencing the `682 passed` full-suite proof.
+
+Open issues / next step
+- No open test-audit issues for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -2887,3 +2887,46 @@ Key findings / decisions
 
 Open issues / next step
 - No open issues from the test-author pass.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc38c-812b-7443-918c-9a1504416b17
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+I’m auditing the test-phase outputs for the public-surface/docs/regression phase. First I’m reading the phase-local criteria, feedback, and test strategy alongside the newly added test coverage so I can decide whether there are any blocking coverage gaps or flake risks.
+
+I’ve finished the audit pass. The added tests cover the changed runtime seams cleanly, the strategy maps the phase intent to concrete coverage, and I do not have a blocking gap to send back. I’m updating the auditor-owned artifacts now.
+
+Scope considered
+- Phase-local test audit for the public-surface/docs/regression phase.
+- The updated unit/runtime/doc test coverage, phase-local `test_strategy.md`, phase-local `feedback.md`, and the final green full-suite proof.
+
+What I analyzed
+- The changed low-level guards in `tests/unit/test_primitives_and_stores.py`.
+- Existing adjacent runtime coverage in `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`, and `tests/runtime/test_workflow_package_to_composable_building_blocks.py`.
+- The phase-local strategy/feedback artifacts against AC-17 and AC-18.
+
+What I reviewed
+- Coverage for the authoring/runtime split, docs contract preservation, legacy child-invoker compatibility, directory-backed artifact handling, strict typed child-output validation, and placeholder regression safety.
+- Failure-path depth for typed input rejection, schema-bearing directory rejection, and invalid typed child outputs.
+- Flake risk control and validation evidence, including the final `.venv/bin/pytest -q` result.
+
+Key findings / decisions
+- No blocking findings.
+- Criteria were marked complete.
+- Feedback was updated with a no-findings audit entry referencing the `682 passed` full-suite proof.
+
+Open issues / next step
+- No open test-audit issues for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
