@@ -14,13 +14,13 @@
       "proof-and-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "proof-and-closeout"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "shared-parameter-seam": "completed",
     "workflow-params-migration": "completed",
-    "proof-and-closeout": "in_progress"
+    "proof-and-closeout": "completed"
   },
   "phase_history": [
     {
@@ -54,6 +54,13 @@
       "run_id": "run-20260425T080712Z-39cec555",
       "status": "in_progress",
       "ts": "2026-04-25T08:38:43.939976+00:00"
+    },
+    {
+      "phase_id": "proof-and-closeout",
+      "run_id": "run-20260425T080712Z-39cec555",
+      "status": "completed",
+      "ts": "2026-04-25T08:48:06.053660+00:00",
+      "pair": "test"
     }
   ]
 }

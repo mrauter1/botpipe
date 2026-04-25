@@ -46,3 +46,4 @@
 {"ts": "2026-04-25T08:46:31.798987+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 46, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "proof-and-closeout"}
 {"ts": "2026-04-25T08:48:05.937113+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 47, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "proof-and-closeout"}
 {"ts": "2026-04-25T08:48:05.985143+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 48, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "proof-and-closeout"}
+{"ts": "2026-04-25T08:48:06.054703+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 49, "event_type": "phase_completed", "pair": "test", "phase_id": "proof-and-closeout", "phase_mode": "single"}
