@@ -562,3 +562,63 @@ Open issues / next step
 
 - No blocking gaps in the scoped test coverage after these additions.
 - Next step is verifier/auditor review of the phase test artifacts and the new runtime regression checks.
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+---
+I’m auditing the new publish-boundary regression tests and the phase test artifacts against the accepted phase contract. First I’m checking the audit files and the added runtime tests, then I’ll validate the scoped suite and mark criteria or findings accordingly.
+
+The scoped runtime proof is clean. I’m updating the audit artifacts now: criteria to reflect the passing coverage/risk checks, and feedback with the audit result.
+
+Scope considered
+
+- Phase-local audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/migrate-direct-fit-publishers/`
+- The added scoped runtime tests in:
+  - `tests/runtime/test_task_to_candidate_workflow_set.py`
+  - `tests/runtime/test_task_to_workflow_strategy.py`
+  - `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
+  - `tests/runtime/test_workflow_to_eval_suite.py`
+- Shared boundary decisions in `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/decisions.txt`
+
+What I analyzed
+
+- The new publish-time typed-read regression tests and their surrounding helper contexts
+- The phase test strategy coverage map and feedback summary
+- The scoped runtime validation run:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py`
+  - Result: `88 passed`
+
+What I reviewed
+
+- Coverage of the four migrated publish-summary typed artifact reads
+- Coverage of the eval-suite validated-manifest typed read after helper output
+- Preservation of the workflow-local policy boundary required by the phase and by `decisions.txt`
+- Flake risk and determinism of the new tests
+- Updated `criteria.md` to mark all audit gates satisfied
+- Updated `feedback.md` with the audit result
+
+Key findings / decisions
+
+- No blocking or non-blocking defects found in the added test coverage
+- The tests are well-targeted: they prove the publish handlers fail at the typed artifact boundary rather than silently regressing to raw dict parsing
+- The eval-suite test appropriately covers the direct-fit manifest seam in addition to the summary seam
+- Audit status: COMPLETE
+
+Open issues / next step
+
+- No open issues in the phase-local test audit
+- The scoped test artifacts are ready to advance
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
