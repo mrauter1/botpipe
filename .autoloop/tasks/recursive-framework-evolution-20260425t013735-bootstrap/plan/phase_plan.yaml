@@ -1,4 +1,295 @@
 version: 1
 task_id: recursive-framework-evolution-20260425t013735-bootstrap
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/runs/run-20260425T043735Z-6422224e/request.md
-phases: []
+phases:
+- phase_id: artifact-model
+  title: Artifact Model Upgrade
+  objective: Extend artifact declarations and handles so file contracts can express
+    kind, schema, requiredness, and step ownership without breaking existing declarations.
+  status: planned
+  in_scope:
+  - Extend core/artifacts.py with artifact factories, schema metadata, requiredness,
+    qualified names, and validation helpers.
+  - Preserve existing Artifact(...) declarations and ArtifactHandle text methods while
+    adding JSON/model helpers.
+  - Add focused unit coverage for artifact factories, schema placement rules, and
+    validation results.
+  out_of_scope:
+  - Route/effect execution changes.
+  - Worklist execution semantics.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-01
+    text: Artifact declarations can express kind, schema, required, owner_step, and
+      qualified_name while existing plain Artifact(...) usage remains valid.
+  - id: AC-02
+    text: ArtifactHandle exposes JSON/model helpers and artifact validation helpers
+      without regressing text read/write/append/exists behavior.
+  deliverables:
+  - Extended artifact model and handle APIs.
+  - Artifact-focused unit tests.
+  risks:
+  - Schema validation rules may accidentally widen dependencies or reject currently
+    valid declarations.
+  rollback:
+  - Revert artifact metadata additions and validation helpers as one unit if legacy
+    declarations or handle behavior regresses.
+- phase_id: artifact-inventory
+  title: Artifact Inventory Compilation
+  objective: Normalize workflow-level and step-local artifacts into one compile-time
+    inventory with deterministic reference resolution.
+  status: planned
+  in_scope:
+  - Update core/validation.py and core/compiler.py to bind step-local artifacts, qualified
+    names, and relative step-local paths.
+  - Resolve RouteContract.required_artifacts against step-local and unqualified artifact
+    names with ambiguity rejection.
+  - Preserve deterministic compiled workflow caching.
+  out_of_scope:
+  - Runtime artifact enforcement after step execution.
+  - Session continuity changes.
+  dependencies:
+  - artifact-model
+  acceptance_criteria:
+  - id: AC-03
+    text: Inline step-local produced artifacts compile with bound names, owner-step
+      metadata, qualified names, and step attribute access.
+  - id: AC-04
+    text: Compiler validation rejects duplicate or ambiguous artifact references and
+      resolves known route-required artifacts deterministically.
+  deliverables:
+  - Unified artifact inventory and resolution rules.
+  - Compiler validation tests for step-local artifacts and route-contract references.
+  risks:
+  - Flat existing artifact names may collide with new step-local names and break compilation
+    if ambiguity handling is incomplete.
+  rollback:
+  - Revert inventory normalization changes together if compiled workflow caching or
+    legacy artifact references regress.
+- phase_id: artifact-runtime-enforcement
+  title: Artifact Runtime Enforcement
+  objective: Enforce selected-route artifact contracts in the engine after handler
+    processing and before route effects commit.
+  status: planned
+  in_scope:
+  - Add required-artifact selection and validation ordering in core/engine.py.
+  - Raise step-appropriate execution errors and checkpoint validation failures with
+    artifact context.
+  - Validate optional present schema-bearing outputs without forcing optional absent
+    artifacts to exist.
+  out_of_scope:
+  - Session continuity refactor.
+  - Typed routes/effects implementation.
+  dependencies:
+  - artifact-inventory
+  acceptance_criteria:
+  - id: AC-05
+    text: Provider-owned and system steps fail deterministically when selected-route
+      required artifacts are missing or invalid, with checkpointed diagnostic context.
+  - id: AC-06
+    text: expected_output_schema remains limited to Outcome.payload validation and
+      does not become artifact-file validation.
+  deliverables:
+  - Engine-side artifact contract enforcement.
+  - Contract/runtime tests for required, optional, and schema-bearing outputs.
+  risks:
+  - Incorrect validation ordering could break handlers that write or normalize artifacts
+    after provider execution.
+  rollback:
+  - Back out engine enforcement changes as one slice if existing provider/system workflows
+    start failing before effect commit.
+- phase_id: session-continuity
+  title: Session Continuity Model
+  objective: Replace scope-only session semantics with slot plus continuity policy
+    plus explicit override, while preserving existing scope APIs and resume behavior.
+  status: planned
+  in_scope:
+  - Add core/sessions.py with Continuity, SessionKey, and default-session semantics.
+  - Update Context, engine resolution, store protocols, in-memory store, and filesystem
+    store to support default sessions and continuity-derived bindings.
+  - Keep ctx.open_session(..., scope=...) and ctx.get_session(..., scope=...) valid,
+    including positional scope.
+  - Support legacy checkpoint/session payload restore while migrating new writes toward
+    SessionKey-based storage.
+  out_of_scope:
+  - Typed workflow parameters.
+  - Worklist execution semantics beyond continuity hooks.
+  dependencies:
+  - artifact-runtime-enforcement
+  acceptance_criteria:
+  - id: AC-07
+    text: Every run has a default provider session and provider-owned steps without
+      explicit sessions reuse it.
+  - id: AC-08
+    text: Explicit scope overrides, continuity-derived bindings, and legacy restored
+      scope snapshots all resolve to stable session bindings without regressions.
+  deliverables:
+  - Continuity-aware session model and store migration.
+  - Session/store/runtime tests for default sessions, overrides, and restore behavior.
+  risks:
+  - Checkpoint and filesystem session payload changes can break resume if backward-read
+    compatibility is incomplete.
+  rollback:
+  - Restore legacy scope-based persistence behavior while keeping additive session
+    declarations isolated if continuity migration destabilizes resume.
+- phase_id: typed-params
+  title: Typed Workflow Parameters
+  objective: Add typed parameter access to Context and runtime persistence while preserving
+    dict-style workflow_params behavior.
+  status: planned
+  in_scope:
+  - Expose ctx.params and retain ctx.workflow_params compatibility.
+  - Validate, persist, and restore typed workflow parameters through runtime loader/runner/workspace
+    code.
+  - Default to an immutable empty parameters model when no Parameters model exists.
+  out_of_scope:
+  - Route/effect objects.
+  - Typed child workflow output.
+  dependencies:
+  - session-continuity
+  acceptance_criteria:
+  - id: AC-09
+    text: Context exposes typed params plus backward-compatible dict params on new
+      runs and resumes.
+  - id: AC-10
+    text: Resume continues using persisted params rather than silently accepting override
+      drift.
+  deliverables:
+  - Typed params support in core/runtime.
+  - Workspace/runner/context tests for params persistence and restoration.
+  risks:
+  - Parameter coercion differences could change CLI/runtime behavior if typed and
+    dict values diverge.
+  rollback:
+  - Revert ctx.params and runtime typed-param reconstruction together if parameter
+    persistence becomes inconsistent.
+- phase_id: typed-routes-effects
+  title: Typed Routes And Effects
+  objective: Introduce Route and Effect objects without breaking current transition
+    shorthand or widening workflow control semantics.
+  status: planned
+  in_scope:
+  - Add core/routes.py and core/effects.py.
+  - Normalize shorthand transitions and Route objects into compiled route metadata.
+  - Validate effect targets and execute effects only after route/artifact validation
+    succeeds.
+  out_of_scope:
+  - Worklist source loading and scoped step placeholders.
+  - Child workflow typed IO.
+  dependencies:
+  - typed-params
+  acceptance_criteria:
+  - id: AC-11
+    text: Existing transition dict shorthand still compiles and executes, and Route
+      objects compile to explicit targets plus effects.
+  - id: AC-12
+    text: Invalid effect/worklist references are rejected at compile time without
+      introducing hidden route fallback or implicit looping.
+  deliverables:
+  - Compiled Route/Effect support.
+  - Compiler/engine tests for shorthand preservation and effect validation.
+  risks:
+  - Route normalization can accidentally change terminal handling or step-name resolution.
+  rollback:
+  - Revert Route/Effect compilation and execution as one slice if transition compatibility
+    breaks.
+- phase_id: worklists
+  title: Worklists And Scoped Steps
+  objective: Add first-class worklists and scoped execution while keeping progression
+    explicit and deterministic.
+  status: planned
+  in_scope:
+  - Add core/worklists.py with WorkItem, Selector, Selection, Worklist, and artifact-backed
+    sources.
+  - Extend provider-owned steps with scope=Worklist and Context with selection/current/item
+    helpers.
+  - Add item-aware template placeholders and selection snapshots/checkpoint behavior.
+  - Implement Advance-driven progression without automatic full-worklist loops.
+  out_of_scope:
+  - Typed child workflow output.
+  - Additional board-mutation semantics beyond the requested effect surface.
+  dependencies:
+  - typed-routes-effects
+  acceptance_criteria:
+  - id: AC-13
+    text: Scoped steps resolve the current work item deterministically and artifact
+      templates can reference item identifiers/dir keys.
+  - id: AC-14
+    text: Advance changes selection state explicitly and exhausted selections resolve
+      according to declared behavior without hidden iteration.
+  deliverables:
+  - Worklist/scoped-step runtime support.
+  - Worklist tests for selection, placeholders, and advancement.
+  risks:
+  - Selection state can drift across checkpoints or session continuity if worklist
+    snapshots are incomplete.
+  rollback:
+  - Revert worklist execution state and placeholder changes together if scoped execution
+    destabilizes deterministic runs.
+- phase_id: child-io
+  title: Typed Child Workflow IO
+  objective: Add typed child workflow input/output contracts while preserving the
+    current metadata-rich child result surface.
+  status: planned
+  in_scope:
+  - Support Input, Output, and build_output conventions on workflows.
+  - Extend Context.invoke_workflow(...) and runtime runner plumbing for typed child
+    input and typed output.
+  - Additive ChildWorkflowResult fields for output, artifacts, and metadata while
+    preserving legacy fields.
+  out_of_scope:
+  - Root workflow export cleanup.
+  - Docs and strictness finalization.
+  dependencies:
+  - worklists
+  acceptance_criteria:
+  - id: AC-15
+    text: Child workflows can be invoked with typed input and return typed output
+      without removing current result metadata or path fields.
+  - id: AC-16
+    text: Typed child-output validation failures are recorded explicitly rather than
+      hidden.
+  deliverables:
+  - Typed child IO runtime support.
+  - Runtime/unit tests for typed child input/output and metadata preservation.
+  risks:
+  - Downstream helpers may depend on the exact current ChildWorkflowResult field set
+    and record payloads.
+  rollback:
+  - Remove only the additive typed child-output fields if compatibility issues emerge,
+    keeping existing result metadata untouched.
+- phase_id: public-surface-docs-regression
+  title: Public Surface, Docs, And Regression
+  objective: Finalize the authoring-facing exports, documentation, and regression
+    suite for the upgraded framework contract.
+  status: planned
+  in_scope:
+  - Update core/__init__.py, workflow/__init__.py, and workflow/primitives.py to expose
+    the requested public authoring/runtime split.
+  - Update docs/authoring.md and docs/architecture.md to describe continuity, scoped
+    overrides, artifact contracts, typed params, routes/effects, worklists, and child
+    IO.
+  - Update strictness, unit, contract, and runtime tests; finish with full pytest
+    -q.
+  out_of_scope:
+  - New workflow packages unrelated to the framework contract.
+  - Provider-specific API expansion.
+  dependencies:
+  - child-io
+  acceptance_criteria:
+  - id: AC-17
+    text: The root workflow shim exports only the requested authoring primitives and
+      workflow.primitives holds the intended low-level runtime values.
+  - id: AC-18
+    text: Docs and strictness tests explicitly preserve workflow.toml metadata-only
+      behavior and ctx.open_session(..., scope=...) compatibility, and the full regression
+      suite passes.
+  deliverables:
+  - Updated public exports and documentation.
+  - Updated strictness/regression coverage and green pytest run.
+  risks:
+  - Docs and strictness assertions may lag behind code changes and leave the public
+    contract inconsistent.
+  rollback:
+  - Revert public-surface/doc changes separately if they misstate shipped behavior
+    while preserving validated runtime changes.
