@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260425T021329Z-6c0eefb4" ts="2026-04-25T02:13:29.365161+00:00" />
+Cycle 9 should remain in consolidate mode because the highest-leverage pressure is duplicated publication-boundary and publish-handler mechanics in existing governance and diagnostic workflows, not a missing workflow package.
+Prefer extending existing stdlib validation seams for publication-boundary checks instead of adding a new runtime primitive, root authoring primitive, or workflow-only helper layer.
+Keep artifact names, receipt filenames, CLI behavior, workflow.toml semantics, and ctx.invoke_workflow compatibility unchanged; only mechanical publish-validation logic may move into shared helpers.
