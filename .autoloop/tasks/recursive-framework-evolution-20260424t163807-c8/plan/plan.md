@@ -86,11 +86,12 @@
   - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
   - `tests/test_architecture_baseline_docs.py`
 - Recursive memory to update during implementation closeout
+  - `.autoloop_recursive/framework_evolution_charter.md`
   - `.autoloop_recursive/framework_roadmap.md`
   - `.autoloop_recursive/framework_gap_ledger.md`
   - `.autoloop_recursive/workflow_candidate_ledger.md`
   - `.autoloop_recursive/validation_debt_ledger.md`
-  - `.autoloop_recursive/framework_evolution_charter.md` only if doctrine changes; current expectation is a no-doctrine-change note at most
+  - Charter synchronization is mandatory even if doctrine stays unchanged; the minimum acceptable closeout is an explicit no-doctrine-change note so later cycles know the file was reviewed and synced.
 
 ## Compatibility and regression controls
 
@@ -102,6 +103,7 @@
 - Do not merge compiled and authoring surfaces into one artifact; reuse must happen behind the existing helper boundaries.
 - Keep workflow-specific publication semantics local to the workflows; shared helpers should validate generic selected-workflow identity and structure only.
 - Validate with targeted unit and runtime suites before closeout.
+- Synchronize every standing recursive-memory file named in the request during closeout, including `.autoloop_recursive/framework_evolution_charter.md`; if doctrine does not change, record that explicitly rather than treating the charter as skipped.
 - Rollback plan:
   - revert payload-builder and validator extraction first
   - restore migrated workflows to prior inline validation if helper behavior drifts
@@ -140,6 +142,7 @@
   - run-history evidence-window and severity rules
   - refinement evaluation-summary and overlay-proof rules
   - decomposition building-block-index and candidate-only publication checks
+- Do not defer charter synchronization itself; only the doctrinal content may remain unchanged, and that no-change outcome still needs to be recorded during closeout.
 - Revisit later only if repetition survives this slice:
   - portfolio and company snapshot validation convergence
   - broader publication-summary helper extraction for the portfolio-governance family

@@ -81,13 +81,17 @@ phases:
   in_scope:
   - Update docs/authoring.md and any touched workflow docs that describe the selected-workflow
     helper family.
+  - Synchronize every standing recursive-memory file named in the request, including
+    .autoloop_recursive/framework_evolution_charter.md, even when the charter update
+    is only a no-doctrine-change note.
   - Run targeted unit and runtime suites for the migrated workflows plus architecture-baseline
     docs proof.
   - Update framework_roadmap.md, framework_gap_ledger.md, workflow_candidate_ledger.md,
     and validation_debt_ledger.md.
   out_of_scope:
   - Untargeted full-repo test expansion unless the focused proof exposes broader breakage.
-  - Charter edits beyond an explicit no-doctrine-change note if needed.
+  - Charter doctrine expansion beyond what the selected-workflow seam change actually
+    requires.
   dependencies:
   - extract-selected-workflow-validators
   acceptance_criteria:
@@ -98,13 +102,21 @@ phases:
     text: Targeted proof covers the new shared helpers and the affected workflow family,
       and recursive memory records the resolved duplication plus any deferred local
       debt.
+  - id: AC-3
+    text: All standing recursive-memory files named in the request, including framework_evolution_charter.md,
+      are synchronized explicitly, with a no-doctrine-change note when charter doctrine
+      stays unchanged.
   deliverables:
   - Updated docs and recursive-memory files.
+  - Updated framework_evolution_charter.md or an explicit no-doctrine-change note
+    recorded there for this cycle.
   - Targeted proof results for unit, runtime, and architecture-baseline doc coverage.
   risks:
   - Docs may lag the new helper boundaries and reintroduce confusion about capability
     versus authoring versus decomposition surfaces.
   - Memory updates may understate remaining workflow-local validation debt.
+  - Closeout could otherwise skip charter synchronization and leave later cycles without
+    an explicit doctrine-sync record.
   rollback:
   - Revert docs and memory changes together with the helper migration if proof fails.
   - Keep the previous documented helper boundaries until targeted proof passes.

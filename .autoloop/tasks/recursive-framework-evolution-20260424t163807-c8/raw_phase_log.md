@@ -92,3 +92,48 @@ Revise `plan.md` and the final sync phase in `phase_plan.yaml` so charter synchr
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dc22d-2ae6-7d80-9861-b5ec1760463f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dc22d-2ae6-7d80-9861-b5ec1760463f
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc22d-2ae6-7d80-9861-b5ec1760463f
+---
+I’m addressing the verifier’s blocking finding now: update the plan so charter synchronization is explicit in both the narrative plan and the machine-readable final phase, while keeping the rest of the consolidation direction intact.
+
+I have the verifier’s gap pinned down. I’m making a narrow correction: keep the selected-workflow consolidation plan intact, but make charter synchronization explicit in the narrative plan, the final phase contract, the feedback trail, and this turn’s decision block.
+
+The patch missed because `phase_plan.yaml` was normalized on readback. I’m re-reading the exact current text and applying a narrower patch against the current file shapes.
+
+The correction is in place. I’m re-validating `phase_plan.yaml` with `python3` + `yaml.safe_load` and doing a quick readback of the changed sections so the follow-up verifier sees the charter-sync fix explicitly.
+
+Scope considered
+
+The existing cycle 8 planning artifacts, the verifier feedback, the current decisions history, and the standing charter file to confirm the intended closeout shape.
+
+What I analyzed
+
+I focused on the verifier’s blocking finding and checked whether the plan and phase contract explicitly required synchronization of every standing recursive-memory file named in the request, especially `.autoloop_recursive/framework_evolution_charter.md`.
+
+What I changed
+
+I updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/plan/plan.md) so charter sync is mandatory even when the result is only a no-doctrine-change note.
+I updated [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/plan/phase_plan.yaml) so the final phase explicitly includes charter synchronization in scope, acceptance criteria, deliverables, risks, and rollback framing.
+I appended a closeout note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/plan/feedback.md) explaining the correction, and added one durable line under the current turn’s header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/decisions.txt).
+
+Key findings / decisions
+
+The selected-workflow consolidation plan remains unchanged in scope.
+The verifier’s `PLAN-001` gap is now addressed by making charter synchronization explicit rather than conditional.
+`phase_plan.yaml` re-validated successfully with `python3` and `yaml.safe_load`.
+
+Open issues / next step
+
+The next step is re-verification. The only known blocking gap from the prior verifier pass has been corrected.
