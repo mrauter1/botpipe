@@ -182,3 +182,12 @@ No open blocking issues. The planning artifacts are complete and ready for the n
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=converge-selected-workflow-serializers,extract-selected-workflow-validators,proof-docs-memory-sync
+explicit=True
+current_phase_index=0
