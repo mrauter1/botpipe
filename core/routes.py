@@ -32,4 +32,18 @@ class Route:
         return Route(target=FAIL, effects=tuple(effects))
 
 
+def normalize_route_spec(destination: object) -> Route:
+    """Normalize shorthand workflow transition declarations to Route objects."""
+
+    if isinstance(destination, Route):
+        return destination
+    if destination == SUCCESS:
+        return Route.complete()
+    if destination == PAUSE:
+        return Route.pause()
+    if destination == FAIL:
+        return Route.fail()
+    return Route.to(destination)
+
+
 __all__ = ["Route"]

@@ -35,6 +35,7 @@
 - `_validate_topology(...)`
 - `_validate_route_effects(...)`
 - `Engine._apply_route_effects(...)`
+- `normalize_route_spec(...)`
 
 ## Checklist Mapping
 
@@ -51,6 +52,7 @@
 
 - Worklist declarations/runtime support remain out of scope for this phase.
 - Backward-compatible inspection payloads should keep emitting plain transition targets.
+- Root-level effect exports should wait until effect execution semantics are actually available.
 
 ## Preserved Invariants
 
@@ -62,7 +64,7 @@
 ## Intended Behavior Changes
 
 - Compiled transition metadata is now explicit (`CompiledRoute.target` plus `CompiledRoute.effects`).
-- Root `workflow` shim now exports typed route/effect authoring primitives for this phase.
+- Root `workflow` shim now exports typed route authoring primitives for this phase; effect declarations remain internal scaffolding.
 
 ## Known Non-Changes
 
@@ -74,15 +76,15 @@
 
 - Internal consumers of `compiled.routes` / `compiled.global_routes` must read `.target` from `CompiledRoute`.
 - Any attempted worklist-bound effect fails validation early until the worklist phase lands.
+- Effect validation tests import from `autoloop_v3.core.effects` rather than `workflow`.
 
 ## Validation Performed
 
 - `.venv/bin/python -m py_compile core/routes.py core/effects.py core/compiler.py core/validation.py core/engine.py core/workflow_capabilities.py workflow/__init__.py core/__init__.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py`
 - `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
-- `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py`
-- `.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py tests/runtime/test_package_cli.py`
+- `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_package_cli.py`
 
 ## Deduplication / Centralization
 
-- Route normalization is centralized in compiler/validation helpers instead of split across engine callers.
+- Route normalization is centralized in `core.routes.normalize_route_spec(...)` and reused by validation and compilation.
 - Compatibility flattening for transition payloads is centralized in `core/workflow_capabilities.py`.

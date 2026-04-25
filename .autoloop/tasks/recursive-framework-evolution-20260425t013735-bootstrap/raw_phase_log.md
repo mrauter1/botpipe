@@ -1814,3 +1814,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+The reviewer’s blocking issue is fair: I exported a public effect authoring surface that the runtime still cannot honor because worklist execution is out of phase. I’m fixing this by narrowing the public surface back to what is actually supported in this phase and centralizing route normalization so the compiler and validator stay aligned.
+
+I confirmed the only current root-level effect imports are the tests I added in the last turn. I’m patching the public shims to remove those effect exports, moving the effect-validation tests to internal imports, and centralizing route normalization in `core.routes` so there’s one source of truth.
+
+The public surface is narrowed back to supported behavior, and route normalization now has a single implementation. I’m rerunning the focused suites plus a quick import/compatibility pass to make sure I didn’t create a regression while removing the root-level effect exports.
+
+The focused suites are green after the narrowing change. I’m updating the phase notes and shared decisions to reflect the actual final stance of this phase: typed routes are public now, effect declarations remain internal scaffolding until worklist semantics exist.
+
+Scope considered
+- Active `typed-routes-effects` phase only.
+- Reviewed the verifier feedback, the active phase artifacts, and the touched route/compiler/validation/shim/test paths needed to resolve the blocking issue without widening into worklist runtime support.
+
+What I analyzed
+- The blocking review finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-routes-effects/feedback.md:1).
+- Public shim exposure in [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1) and [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:1).
+- Route normalization paths in [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py:1), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:1), and [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1).
+- The phase notes and shared decisions.
+
+What I changed
+- Removed root-level effect exports from [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1) and [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:1) so the public authoring surface only exposes what this phase can actually support.
+- Moved effect-validation tests to internal imports from `autoloop_v3.core.effects` in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1).
+- Centralized shorthand transition normalization in `core.routes.normalize_route_spec(...)` and reused it from compiler and validator, removing duplicated logic.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-routes-effects/implementation_notes.md:1) and appended the turn’s decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt:1).
+
+Key findings / decisions
+- The reviewer’s blocking issue came from overstating support: effect declarations exist, but worklist semantics are still out of phase. The fix was to narrow the public API instead of pretending those effect types are ready.
+- `Route` remains the public primitive for this phase; effect declarations stay internal scaffolding until worklist semantics land.
+- Route normalization now has one source of truth, reducing future drift between validation and compilation.
+
+Open issues / next step
+- Worklist-backed effect execution is still deferred to the later worklist phase.
+- Validation performed:
+  `.venv/bin/python -m py_compile core/routes.py core/compiler.py core/validation.py core/__init__.py workflow/__init__.py tests/unit/test_validation.py`
+  `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_package_cli.py`
