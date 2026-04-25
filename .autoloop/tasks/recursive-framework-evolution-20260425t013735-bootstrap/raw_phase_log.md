@@ -1407,3 +1407,60 @@ Open issues / next step
 
 - I could not run the actual pytest suite here: `pytest` is not installed, and the available system `python3` also lacks `pydantic`, so runtime import execution was not possible in this environment.
 - Next step is to run the focused typed-params tests, then full `pytest -q`, in the project’s real Python environment.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc33e-596b-7713-984c-201397f86f53
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+I’m reviewing the typed-params implementation against the active phase criteria first, then I’ll audit the runtime paths it touched for resume drift, validation gaps, and compatibility regressions before I update the phase artifacts.
+
+I have the phase artifacts and the shared typed-params decision. Next I’m reading the exact runtime diff surfaces for correctness, especially the no-`Parameters` fallback and any new validation paths that could change existing runner behavior.
+
+I’ve confirmed the new code path and the added tests. I’m broadening the scan one level now to see whether the new runner-side validation changes any existing programmatic call patterns or assumptions about `Parameters` types outside the new tests.
+
+I found a material runner-path defect rather than just a test gap. I’m writing it up as a blocking finding and leaving the criteria unchecked, because it violates the phase’s “validate, persist, and restore” contract for non-CLI execution.
+
+Scope considered
+
+- Phase-scoped `typed-params` review only.
+- Request-relevant runtime surfaces: `core/context.py`, `core/engine.py`, `runtime/loader.py`, `runtime/runner.py`, `runtime/workspace.py`.
+- Phase artifacts reviewed and updated only under `.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-params/`.
+
+What I analyzed
+
+- How `ctx.params` is created and threaded through new runs and resumes.
+- Whether runner/workspace persistence validates parameters before writing `run.json`.
+- Whether resume remains pinned to persisted params instead of fresh overrides.
+- Added tests versus the actual runtime behavior they are supposed to guard.
+
+What I reviewed
+
+- Implementation diff semantics against AC-09 and AC-10.
+- Shared decision block for typed params in `decisions.txt`.
+- Phase notes and new test coverage.
+- Adjacent persistence path in `runtime/workspace.py:create_run(...)`, because the runner now depends on it for parameter restoration.
+
+Key findings / decisions
+
+- I recorded one blocking finding in `feedback.md`: `IMP-001`.
+- Core issue: direct runtime execution still persists raw `workflow_params` before normalizing them through the declared `Parameters` model, so the persisted mapping can be invalid or can drift from `ctx.params`.
+- Because of that, the phase does not fully satisfy the “validate, persist, and restore typed workflow parameters through runtime loader/runner/workspace code” requirement.
+- I left the criteria checkboxes unchecked; with a blocking correctness/safety issue present, `COMPLETE` would be inaccurate.
+
+Open issues / next step
+
+- Fix `IMP-001` by normalizing `RunnerOptions.workflow_params` with `coerce_workflow_parameter_mapping(...)` before `create_run(...)` writes metadata, then reuse that normalized mapping for both persistence and `materialize_workflow_params(...)`.
+- Add or update a direct-run negative test that proves invalid/unknown programmatic `workflow_params` are rejected before `run.json` is written with bad data.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
