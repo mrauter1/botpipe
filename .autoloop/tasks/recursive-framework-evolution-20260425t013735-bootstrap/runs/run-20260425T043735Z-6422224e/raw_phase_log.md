@@ -1571,3 +1571,119 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc33e-596b-7713-984c-201397f86f53
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+I’m treating this as the `typed-params` test phase only. First I’m reading the active test artifacts and the current typed-param tests so I can add only the missing regression coverage instead of churning unrelated files.
+
+I’m checking the current typed-params test coverage against the phase contract now. The aim is to add only the missing regression coverage, then update the phase strategy and feedback artifacts to match what the tests actually prove.
+
+The existing test file already covers most of the new parameter surface. I’m checking the remaining typed-params cases now to see whether one more persistence-alignment regression test is warranted or whether the current suite is already sufficient.
+
+The remaining gap is whether new-run metadata stores the normalized parameter mapping, not just whether bad input is rejected. I’m reading the loader coercion path before I add a persistence-alignment test so the assertion matches the actual contract instead of guessing at coercion details.
+
+I found one useful gap that isn’t covered yet: proving that a successful new run persists the normalized parameter mapping, including model defaults and coercion, not just the raw caller input. I’m adding that regression test now, then I’ll update the test strategy and test feedback artifacts to map the coverage explicitly.
+
+I’ve settled on one additional runtime test: it proves new-run `run.json` stores the normalized parameter snapshot, including defaults and type coercion, and that the provider sees the same normalized mapping in `ctx.params` and `ctx.workflow_params`. After that I’ll only touch the test-phase strategy and feedback artifacts.
+
+The repo-side test change is in place. I’m doing a quick readback and a lightweight validation now so I don’t leave a malformed assertion or mismatched artifact summary behind.
+
+The test edit is syntactically clean. `pytest` itself isn’t installed in this shell, so I can’t execute the focused runtime slice here; I’m doing one final diff check and then I’ll close out with exactly what changed and what still needs to be run in the real project environment.
+
+Scope considered
+
+- Phase-scoped `typed-params` test work only.
+- Existing typed-params coverage in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) and [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py).
+- Active phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-params/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-params/feedback.md).
+
+What I analyzed
+
+- The current runtime tests already covered `ctx.params` on new runs, resume restoration, resume override drift protection, and invalid direct-run parameter rejection.
+- The remaining gap was persistence alignment on successful new runs: proving `run.json` stores the normalized parameter snapshot rather than raw caller input.
+- I checked `runtime/loader.py` and `runtime/runner.py` to match the new assertion to the actual normalization contract.
+
+What I changed
+
+- Added `test_new_runs_persist_normalized_workflow_params_snapshot` in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py). It asserts Pydantic coercion and defaults are aligned across `ctx.params`, `ctx.workflow_params`, and persisted `run.json`.
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-params/test_strategy.md) into an explicit behavior-to-coverage map for happy-path, failure-path, and resume-preservation cases.
+- Appended a concise summary of the added regression coverage to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-params/feedback.md).
+
+Key findings / decisions
+
+- The new test is intentionally narrow and phase-local: it validates normalization persistence without broadening into out-of-scope child-workflow or routing behavior.
+- I did not append to `decisions.txt`; the test change does not introduce a non-obvious contract beyond what the implementation phase already recorded.
+- Validation performed: `python3 -m py_compile tests/runtime/test_workspace_and_context.py`.
+
+Open issues / next step
+
+- I could not execute the focused pytest slice here because `pytest` is not installed in this shell: `pytest: command not found`.
+- Next step is to run the typed-params-focused runtime tests, then full `pytest -q`, in the project’s real Python environment.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc33e-596b-7713-984c-201397f86f53
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+I’m auditing only the typed-params test phase artifacts and the new test coverage against the phase contract. First I’m reading the criteria, feedback, decisions, and the exact test changes so I can decide whether there is any real coverage gap or only documentation cleanup.
+
+I don’t see a material coverage hole in the typed-params test set after the added normalization-persistence case. I’m marking the criteria complete and appending a single non-blocking audit note so the artifact records that this review was coverage-based rather than backed by an in-turn pytest run.
+
+Scope considered
+
+- Phase-scoped `typed-params` test audit only.
+- Active phase artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-params/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-params/feedback.md), and [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/typed-params/test_strategy.md).
+- Request-relevant tests in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) and [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py).
+- Shared typed-params decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+What I analyzed
+
+- Whether the tests cover the approved typed-params contract: `ctx.params`, `ctx.workflow_params`, normalization before persistence, resume restoration, and override-drift rejection.
+- Whether the added normalization-persistence test matches the decisions ledger and the implementation’s intended behavior.
+- Whether there were any material gaps in failure-path or preserved-behavior coverage.
+
+What I reviewed
+
+- The new `test_new_runs_persist_normalized_workflow_params_snapshot` coverage and its interaction with the existing typed-params runtime tests.
+- The empty-parameters fallback unit coverage.
+- The phase test strategy and feedback artifacts for fidelity to the actual test set.
+
+Key findings / decisions
+
+- I found no blocking audit issues in the typed-params test scope.
+- The test set now covers:
+  - empty `Parameters` fallback via `EmptyParameters`
+  - typed access on new runs
+  - normalized `run.json` persistence on new runs
+  - resume restoration from persisted params
+  - rejection of resume override drift
+  - failure before persistence for invalid direct-run params
+- I updated `criteria.md` to complete and appended one non-blocking note in `feedback.md` documenting that this audit was static because `pytest` is unavailable in the shell.
+
+Open issues / next step
+
+- No blocking issues remain for this phase’s test coverage.
+- The only residual limitation is execution evidence: the shell for this turn does not provide `pytest`, so the audit could not confirm runtime execution in-turn.
+- The next step outside this audit is to run the focused typed-params tests and then full `pytest -q` in the project’s actual Python environment.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
