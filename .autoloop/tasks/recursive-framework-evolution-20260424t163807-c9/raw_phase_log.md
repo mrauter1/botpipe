@@ -763,3 +763,61 @@ Open issues / next step
 
 - No blockers in this phase.
 - Next logical follow-on is the deferred adjacent publish-handler migration, not portfolio expansion.
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc28e-4ffc-75f1-a3bc-81b00f1e2dc7
+---
+I’m reviewing the phase-local closeout artifacts against the stated acceptance criteria, then I’ll update the verifier-owned criteria and feedback files only.
+
+I found one acceptance-gap in the closeout docs: the cycle-9 note is consistent on helper boundary and deferred debt, but the preserved compatibility contract is only explicit in the charter and phase notes, not across the standing ledgers the phase was supposed to sync. I’m recording that as a blocking docs-fidelity issue in the verifier artifacts now.
+
+Scope considered
+
+- Phase-local closeout artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/implement/phases/docs-memory-and-proof-closeout/`
+- Request-required doc and memory targets that the phase updated:
+  - `docs/authoring.md`
+  - `.autoloop_recursive/framework_evolution_charter.md`
+  - `.autoloop_recursive/framework_roadmap.md`
+  - `.autoloop_recursive/framework_gap_ledger.md`
+  - `.autoloop_recursive/workflow_candidate_ledger.md`
+  - `.autoloop_recursive/validation_debt_ledger.md`
+- Phase implementation notes and the shared decisions ledger for intent/constraint checks
+
+What I analyzed
+
+- The phase contract and acceptance criteria
+- The recorded closeout proof in `implementation_notes.md`
+- The cycle-9 closeout wording across the standing recursive-memory files
+- The updated `docs/authoring.md` validation-boundary section
+
+What I reviewed
+
+- Helper-boundary documentation completeness
+- Consistency of the no-new-workflow / consolidate rationale
+- Whether preserved compatibility contracts were recorded consistently across the required memory files
+- Whether the scoped proof and accounting were documented
+
+Key findings / decisions
+
+- I updated `criteria.md` and `feedback.md`.
+- The scoped proof is documented as passing: `141 passed`.
+- I found 1 blocking issue:
+  - `IMP-001`: AC-1 is not fully met because the preserved compatibility contract is explicit in the charter, but not consistently restated in the other standing ledgers’ cycle-9 closeout notes.
+
+Open issues / next step
+
+- Add one concise preserved-contract sentence to the cycle-9 closeout note in the remaining standing ledgers so they all consistently say the cycle preserved CLI/runtime/provider/`ctx.invoke_workflow(...)` compatibility, then rerun review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
