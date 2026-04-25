@@ -332,3 +332,74 @@ No test-audit blocker remains for this phase. Later phases should extend coverag
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+---
+I’m implementing the `artifact-inventory` phase only: compiler-side artifact inventory, step-local binding, and deterministic reference resolution. I’ll inspect the current artifact/compiler/validation code and the phase notes first, then patch the smallest set of files that satisfy the phase acceptance criteria.
+
+I’ve confirmed the phase notes are effectively empty, so the codebase and the main plan are the real source of detail here. Next I’m tracing how artifacts are currently collected, resolved, and exposed so I can change the compiler path without leaking into the runtime-enforcement phase.
+
+I’ve found the current shape: artifact metadata already grew in `core.artifacts`, but compiler and validation still treat the namespace as flat. I’m checking the runtime resolution path now so the compile-time changes won’t accidentally break existing handle lookup or path rendering.
+
+I have enough context to patch this phase cleanly. The main gap is centralized artifact reference resolution: today the compiler validates route contracts against a flat `inventory.keys()`, which can’t distinguish `plan.summary` from another step’s `summary`, and the compiled artifact map exposes only unqualified names.
+
+I’m at the edit point now. The patch will be confined to `core/validation.py`, `core/compiler.py`, `core/engine.py`, and focused tests so this phase lands as a coherent compile-time upgrade without pulling in session or runtime-contract work early.
+
+The inventory/compiler patch is in. I’m reviewing the resulting compiled shapes now, especially alias handling, because the safest version keeps existing unqualified artifact access working while adding canonical qualified references for the new step-local cases.
+
+I hit one environment detail while checking syntax: this shell has `python3`, not `python`. I’m cleaning a couple of compiler nits now and then I’ll add the focused tests that prove the new qualified-name and ambiguity behavior.
+
+I caught one real logic bug before running tests: step-local route-contract resolution was still checking global names too early. I’m fixing that ordering now so `required_artifacts=("summary",)` really picks `draft.summary` before a workflow-level `summary`.
+
+The code parses cleanly. The test runner binary isn’t on `PATH` here, so I’m switching to `python3 -m pytest` and will use that for the focused validation pass.
+
+The base interpreter doesn’t have `pytest` installed, so I can’t execute the test suite directly from this shell. I’m checking whether the repo has a project-local virtualenv or runner entrypoint so I can still validate without guessing.
+
+There’s a local `.venv`, so I can validate against the project environment after all. I’m rerunning the focused unit tests there and will fix anything that falls out before I touch the phase notes.
+
+One failing test exposed a genuine inventory edge case: the same `Artifact` object can appear first as a future `requires` reference and only later as a produced artifact. I’m making the registry tolerate that late producer binding, then I’ll rerun the focused suite.
+
+The inventory-focused unit suite is green. Because I touched `core/engine.py` for alias resolution, I’m doing one small contract pass as a regression check instead of widening straight to the full suite.
+
+The compile/runtime regression spot check passed too, so the phase change is stable in the paths I touched. I’m updating the phase notes now with the exact files, symbols, checklist mapping, and the one non-obvious compatibility decision this phase introduced.
+
+Scope considered
+
+Compiler-side artifact inventory only for the active `artifact-inventory` phase: [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), plus the required phase notes under [.autoloop/.../implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-inventory/implementation_notes.md) and [.autoloop/.../decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt). I kept runtime artifact enforcement, sessions, params, routes/effects, worklists, and child IO out of scope.
+
+What I analyzed
+
+I traced the current artifact path through `Artifact`, `Step.__getattr__`, `collect_artifact_inventory(...)`, route-contract normalization, compiled workflow metadata, and engine artifact-handle resolution. I also checked adjacent regression surfaces where compiled artifact names are consumed, especially provider artifact access and deterministic compile caching.
+
+What I changed
+
+I upgraded inventory compilation so workflow-level artifacts and inline step-local outputs share one canonical inventory with `qualified_name` and `owner_step` metadata. Step-local inline artifacts now bind to names like `draft.summary`, while workflow-level artifacts keep unqualified aliases when they remain globally unique.
+
+I added centralized artifact reference resolution in `core.validation`, including ambiguity rejection and step-local-first route-contract resolution. `RouteContract.required_artifacts` now compile to deterministic canonical names, and `CompiledWorkflow` now carries a full `artifacts_by_qualified_name` map alongside the compatibility-oriented `artifacts` alias map.
+
+I adjusted `core.engine` artifact-handle resolution so canonical qualified handles exist without breaking existing unqualified access where it is still safe. I added focused tests for step-local binding, qualified references in compiled metadata, ambiguous unqualified references, and step-local route-contract resolution.
+
+Key findings / decisions
+
+The non-obvious compatibility choice is that `compiled.artifacts` remains an unqualified alias map only for globally unambiguous artifacts, while the full inventory lives in `compiled.artifacts_by_qualified_name`. That lets this phase land canonical step-local compilation without breaking existing artifact access patterns.
+
+Validation passed with:
+`./.venv/bin/python -m py_compile core/validation.py core/compiler.py core/engine.py tests/unit/test_validation.py`
+`./.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+`./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py`
+`./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "compiled_workflow_is_deterministic or pair_step_contract_logs_raw_output_and_updates_state or llm_step_contract_logs_outcome_raw_output_and_uses_global_route"`
+
+Open issues / next step
+
+Runtime artifact enforcement is still deferred, so this phase prepares canonical references and full inventory metadata but does not yet enforce `required=True` or route-selected artifact existence after execution. The next phase should consume `artifacts_by_qualified_name` directly for enforcement and checkpoint diagnostics.
