@@ -738,3 +738,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2bc-06da-70d0-b5fd-66849e3fb1c8
+---
+I’m treating this as a narrow test-closeout pass: verify the new docs/memory assertions are sufficient for the typed-artifact closeout, add only any missing regression coverage in repo tests, and then update the phase-local test strategy and feedback artifacts.
+
+The existing assertions are close, but one regression surface is still soft: the closeout accounting and deferred-debt wording in the roadmap. I’m tightening that architecture-doc test, then I’ll record the exact coverage map and the test-phase decision in the phase artifacts.
+
+The test refinement is in. I’m running the architecture-doc baseline and then the full scoped proof suite so the phase artifacts can cite actual results rather than planned coverage.
+
+The docs baseline passed. The scoped suite is still running; once it settles I’ll capture the final count and finish the phase artifacts with the executed coverage.
+
+Both runs passed: `33 passed` for the docs baseline and `199 passed` for the scoped suite. I’m stamping those results into the phase artifacts now so the test record is complete.
+
+Scope considered
+
+- Phase-local test work for `docs-memory-and-proof-closeout`.
+- Focused on the changed docs/memory closeout behavior, the architecture-doc regression surface, the shared decisions ledger, and the active test-phase artifacts.
+
+What I analyzed
+
+- The phase contract and acceptance criteria.
+- The new cycle-10 closeout assertions already added to `tests/test_architecture_baseline_docs.py`.
+- The updated docs/memory wording around typed JSON artifacts, accounting, preserved compatibility, and deferred debt.
+- The active `test_strategy.md`, `feedback.md`, and the latest `decisions.txt` header for this turn.
+
+What I changed
+
+- Tightened `tests/test_architecture_baseline_docs.py` so the cycle-10 closeout test also freezes the roadmap’s explicit accounting line for removed raw-summary parsing and the deferred-debt direction.
+- Updated `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/docs-memory-and-proof-closeout/test_strategy.md` with a behavior-to-test map, preserved invariants, edge/failure paths, known gaps, executed commands, and results.
+- Appended the test-phase summary to `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/docs-memory-and-proof-closeout/feedback.md`.
+- Added the non-obvious test decision to `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/decisions.txt` under the active test-author header.
+
+Key findings / decisions
+
+- The meaningful remaining regression surface for this phase was doc drift in closeout accounting and deferred-debt wording, not missing runtime assertions.
+- Validation passed:
+  - `tests/test_architecture_baseline_docs.py`: `33 passed`
+  - scoped unit/runtime/docs suite: `199 passed`
+- No additional runtime-only tests were added because this phase changes docs/memory only and the migrated workflow family is already covered by the scoped proof suite.
+
+Open issues / next step
+
+- No phase-local blocker remains.
+- Test coverage for the docs-memory closeout is now explicit, executed, and recorded in the phase artifacts.
