@@ -450,3 +450,54 @@ The implementation needs a follow-up change that centralizes “full inventory�
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc2fe-51ac-7c93-8e99-98fd506ed890
+---
+I’m addressing the reviewer’s blocking finding only: downstream consumers still treat `compiled.artifacts` as the full inventory. I’ll trace those consumers, patch them to use the authoritative canonical inventory where required, and rerun the focused validation plus the reviewer’s repro surface.
+
+I’ve confirmed the reviewer’s repro path in the code: `runtime/runner.py` and `core/workflow_capabilities.py` still consume the alias map. I’m patching this with one centralized compiled-workflow helper so the canonical inventory choice is explicit instead of repeated ad hoc.
+
+I’m making the follow-up fix in four places: one small helper on `CompiledWorkflow`, two downstream consumers switched to the authoritative inventory, and two regression tests that cover the exact reviewer scenario.
+
+The fix is in. I’m validating the two downstream paths directly now: capability inspection and child-workflow output artifact collection, then I’ll rerun the phase-focused suites to make sure nothing else shifted.
+
+The targeted tests are green, including the two new downstream regression checks. I’m running a quick direct repro of the reviewer’s duplicate-`summary` scenario as one last sanity check before I update the phase notes.
+
+Scope considered
+
+Reviewer-scoped fix for `artifact-inventory`: [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), and regression coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py). I left reviewer-owned artifacts untouched except for updating [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-inventory/implementation_notes.md), and I appended the non-obvious follow-up decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+What I analyzed
+
+I traced every remaining `compiled.artifacts` consumer after the inventory split and confirmed the reviewer’s regression: child-workflow result collection and capability inspection were still reading the alias-only map instead of the canonical inventory. I also verified that engine-side alias resolution did not need further changes.
+
+What I changed
+
+I added `CompiledWorkflow.artifact_items(authoritative=False|True)` as the centralized inventory selector. Then I switched [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py) child-result collection and [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py) capability assembly to `artifact_items(authoritative=True)` so ambiguous step-local outputs are preserved under canonical qualified names.
+
+I added two runtime regression tests in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py): one for capability inspection with duplicate step-local `summary` outputs, and one for child workflow result artifact collection with the same shape.
+
+Key findings / decisions
+
+The compatibility contract remains the same: `compiled.artifacts` is the unambiguous alias map, while the authoritative full inventory is the canonical qualified set. The follow-up fix makes that distinction explicit and reusable so downstream consumers stop making inconsistent assumptions.
+
+Validation passed:
+`./.venv/bin/python -m py_compile core/compiler.py core/workflow_capabilities.py runtime/runner.py tests/runtime/test_compatibility_runtime.py`
+`./.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py -k "canonical_artifacts_when_unqualified_aliases_are_ambiguous or child_workflow_result_preserves_canonical_outputs_when_unqualified_aliases_are_ambiguous or inspect_workflow_capabilities_adds_importing_parameter_and_step_contract_detail"`
+`./.venv/bin/python -m pytest -q tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py`
+`./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "compiled_workflow_is_deterministic or pair_step_contract_logs_raw_output_and_updates_state or llm_step_contract_logs_outcome_raw_output_and_uses_global_route"`
+
+Open issues / next step
+
+The reviewer’s blocking finding should now clear on re-review. The next step is the verifier turn; I did not edit reviewer-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-inventory/criteria.md).

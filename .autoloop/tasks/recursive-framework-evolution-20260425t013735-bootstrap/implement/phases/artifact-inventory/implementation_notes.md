@@ -12,7 +12,10 @@
 - `core/validation.py`
 - `core/compiler.py`
 - `core/engine.py`
+- `core/workflow_capabilities.py`
+- `runtime/runner.py`
 - `tests/unit/test_validation.py`
+- `tests/runtime/test_compatibility_runtime.py`
 
 ## Symbols touched
 
@@ -22,7 +25,9 @@
 - `resolve_artifact_reference(...)`
 - `normalize_step_route_contracts(...)`
 - `CompiledWorkflow.artifacts_by_qualified_name`
+- `CompiledWorkflow.artifact_items(...)`
 - `Engine._resolve_artifacts(...)`
+- `_build_child_workflow_result(...)`
 
 ## Checklist mapping
 
@@ -56,6 +61,7 @@
 - `CompiledWorkflow.artifacts` now exposes only unqualified aliases that are globally unambiguous.
 - `CompiledWorkflow.artifacts_by_qualified_name` carries the full inventory for downstream runtime phases.
 - Engine artifact resolution now exposes both canonical qualified handles and preserved unqualified aliases where safe.
+- Child-workflow result collection and capability inspection now enumerate the canonical artifact inventory, so ambiguous step-local outputs are not dropped.
 
 ## Validation performed
 
@@ -63,7 +69,10 @@
 - `./.venv/bin/python -m pytest -q tests/unit/test_validation.py`
 - `./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py`
 - `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py -k "compiled_workflow_is_deterministic or pair_step_contract_logs_raw_output_and_updates_state or llm_step_contract_logs_outcome_raw_output_and_uses_global_route"`
+- `./.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py -k "canonical_artifacts_when_unqualified_aliases_are_ambiguous or child_workflow_result_preserves_canonical_outputs_when_unqualified_aliases_are_ambiguous or inspect_workflow_capabilities_adds_importing_parameter_and_step_contract_detail"`
+- Reviewer repro re-run against duplicate step-local `summary` outputs now returns `['draft.summary', 'review.summary']` from `_build_child_workflow_result(...)`.
 
 ## Deduplication / centralization
 
 - Centralized artifact-name disambiguation in `core.validation` so validation and compilation use the same resolution rules.
+- Centralized authoritative-vs-alias artifact enumeration in `CompiledWorkflow.artifact_items(...)` so downstream consumers do not each re-decide which inventory view to use.

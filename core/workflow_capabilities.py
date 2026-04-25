@@ -605,7 +605,10 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
         parameters_supported=resolved.parameters_cls is not None,
         parameters=workflow_parameter_fields(resolved.parameters_cls),
         sessions=sessions,
-        artifacts=tuple(_compiled_artifact_capability(name, artifact) for name, artifact in compiled.artifacts.items()),
+        artifacts=tuple(
+            _compiled_artifact_capability(name, artifact)
+            for name, artifact in compiled.artifact_items(authoritative=True)
+        ),
         transitions={step_name: dict(routes) for step_name, routes in compiled.routes.items()},
         global_transitions=dict(compiled.global_routes),
         steps=tuple(_compiled_step_capability(step) for step in compiled.steps.values()),
