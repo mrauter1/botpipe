@@ -373,3 +373,69 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+---
+I’m treating this as a scoped consolidation pass for the direct-fit publish handlers. First I’m reading the phase artifacts, the mandatory architecture/authoring docs, and the relevant workflow/helper/test surfaces so I can complete the required pre-change audit before touching code.
+
+I’ve got the plan and the prior typed-contract phase context. Next I’m reading the architecture/authoring docs, the four scoped workflows plus the typed artifact helpers and tests, and I’ll compare that against the current worktree before editing.
+
+The scoped family is already partly migrated in the worktree. I’m narrowing in on the publish handlers and their tests now to verify whether anything is still missing versus the active phase contract, especially around direct-fit manifest reads and any leftover raw dict parsing.
+
+I’ve confirmed the new typed specs and the four publish handlers are in place. The remaining work looks like validation and closeout: I’m checking the exact diffs on the scoped files, then I’ll run the targeted proof and update the phase notes and recursive memory if anything is still missing.
+
+The code migration itself appears complete in the scoped files. I’m running the targeted unit/runtime proof now, and then I’ll write the phase-local implementation notes plus the one non-obvious decision record for this turn.
+
+The targeted proof is still running. While that finishes, I’m drafting the closeout notes so the phase artifact includes the audit, checklist mapping, preserved invariants, and the exact validation command/result.
+
+I have the proof result. I’m writing the phase-local closeout artifacts now: one concise decision-line under this turn’s header and a structured implementation note that records the audit, touched symbols, preserved invariants, and the passing validation command/result.
+
+**Scope considered**
+
+- Mandatory audit surfaces: `docs/architecture.md`, `docs/authoring.md`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, `.autoloop_recursive/`
+- Active phase artifacts: plan, feedback, prior typed-contract notes, current [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/implement/phases/migrate-direct-fit-publishers/implementation_notes.md), and `decisions.txt`
+
+**What I analyzed**
+
+- The four scoped publish handlers:
+  - `task_to_candidate_workflow_set`
+  - `task_to_workflow_strategy`
+  - `candidate_workflow_to_adapted_execution_plan`
+  - `workflow_to_eval_suite`
+- The typed artifact seam in `stdlib/json_artifacts.py` and model-file helpers in `stdlib/validation.py`
+- The matching runtime and unit tests for those workflows
+- The recursive memory ledgers to confirm cycle-10 closeout state and remaining debt
+
+**What I changed**
+
+- Validated that the scoped family already consumes workflow-local typed summary/manifest specs via `JsonArtifactSpec.read(...)` and keeps cross-artifact/domain-policy checks local.
+- Ran the targeted proof:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py`
+  - Result: `192 passed`
+- Updated the phase-local [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/implement/phases/migrate-direct-fit-publishers/implementation_notes.md) with the audit, checklist mapping, preserved invariants, assumptions, and validation result.
+- Appended the non-obvious boundary decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/decisions.txt:8).
+
+**Key findings / decisions**
+
+- Cycle mode remains `consolidate`.
+- The direct-fit publisher migration is in place and satisfies the phase intent:
+  - typed reads for durable summaries and validated manifests
+  - workflow-local handling for state drift, cross-artifact alignment, route/domain policy, and receipts
+- Kept `proposed_workflow_parameters.json` and `eval_case_manifest.json` as raw pre-validation inputs by design; only validated outputs and durable summaries use the typed seam.
+- Recursive memory and docs already reflected the cycle-10 typed-artifact migration, so no extra memory edits were needed in this turn.
+
+**Open issues / next step**
+
+- No blocking issues in this phase.
+- Next step is downstream review or handoff on the validated direct-fit publisher migration.
