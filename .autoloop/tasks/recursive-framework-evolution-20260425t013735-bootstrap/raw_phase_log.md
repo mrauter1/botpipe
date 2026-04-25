@@ -1863,3 +1863,49 @@ Open issues / next step
   `.venv/bin/python -m py_compile core/routes.py core/compiler.py core/validation.py core/__init__.py workflow/__init__.py tests/unit/test_validation.py`
   `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
   `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_package_cli.py`
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+I’m re-reviewing the same phase after the producer’s narrow fix. I’ll verify that the blocking issue is actually resolved in code, re-check the acceptance criteria against the current implementation, and then update the phase artifacts accordingly.
+
+The narrowed public surface matches the updated shared decision, and the duplicate normalization path is gone. I’m marking the phase complete, checking the criteria, and appending a short resolution note so the feedback file reflects the current cycle instead of only the prior blocking state.
+
+Scope considered
+- Active `typed-routes-effects` phase only.
+- Reviewed the current phase artifacts, shared decisions, and the touched route/compiler/validation/shim/test paths needed to reassess AC-11 and AC-12 after the producer’s follow-up fix.
+
+What I analyzed
+- Current code in [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py:1), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:280), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:635), [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:1), [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1), and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1).
+- The updated phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-routes-effects/implementation_notes.md:1).
+- The latest typed-routes-effects decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt:1).
+
+What I reviewed
+- Whether the blocking public-surface problem was actually removed.
+- Whether route shorthand normalization is now centralized.
+- Whether the narrowed public API still satisfies the phase contract without widening semantics.
+- Whether the criteria can be fully checked and prior findings can be considered resolved.
+
+Key findings / decisions
+- The prior blocking issue is resolved: root `workflow`/`core` shims no longer export non-executable effect types as supported authoring primitives.
+- The prior duplication issue is resolved: shorthand normalization is centralized in `core.routes.normalize_route_spec(...)`.
+- I found no new blocking or non-blocking issues in the updated phase scope.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-routes-effects/criteria.md:1) to checked and appended a resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-routes-effects/feedback.md:1).
+
+Open issues / next step
+- No blocking issues remain for this phase.
+- Worklist-backed effect execution remains intentionally deferred to the later worklist phase, consistent with the current scoped decision and implementation notes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
