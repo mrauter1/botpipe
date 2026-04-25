@@ -33,3 +33,7 @@
 {"ts": "2026-04-25T01:57:27.268734+00:00", "run_id": "run-20260425T010712Z-3766f767", "seq": 33, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "extract-selected-workflow-validators"}
 {"ts": "2026-04-25T01:59:43.421030+00:00", "run_id": "run-20260425T010712Z-3766f767", "seq": 34, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "extract-selected-workflow-validators"}
 {"ts": "2026-04-25T01:59:43.466318+00:00", "run_id": "run-20260425T010712Z-3766f767", "seq": 35, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "extract-selected-workflow-validators"}
+{"ts": "2026-04-25T01:59:43.530313+00:00", "run_id": "run-20260425T010712Z-3766f767", "seq": 36, "event_type": "phase_completed", "pair": "test", "phase_id": "extract-selected-workflow-validators", "phase_mode": "single"}
+{"ts": "2026-04-25T01:59:43.534283+00:00", "run_id": "run-20260425T010712Z-3766f767", "seq": 37, "event_type": "phase_started", "phase_id": "proof-docs-memory-sync", "phase_mode": "single"}
+{"ts": "2026-04-25T01:59:43.535247+00:00", "run_id": "run-20260425T010712Z-3766f767", "seq": 38, "event_type": "pair_started", "pair": "implement", "phase_id": "proof-docs-memory-sync"}
+{"ts": "2026-04-25T01:59:43.535329+00:00", "run_id": "run-20260425T010712Z-3766f767", "seq": 39, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "proof-docs-memory-sync"}
