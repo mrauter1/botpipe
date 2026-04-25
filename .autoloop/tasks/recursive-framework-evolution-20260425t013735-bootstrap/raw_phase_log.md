@@ -1101,3 +1101,65 @@ Producer should fix `IMP-001` and `IMP-002`, then rerun the targeted session/sto
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc31e-dd9d-7812-a74f-05cd32f9d513
+---
+The verifier found two concrete regressions in the session phase: the implicit `default` slot is not created for every run, and legacy global session restores do not stay stable if code reopens the slot. I’m tracing those two paths through engine startup and snapshot restore before editing anything.
+
+The compiler already routes provider-owned steps to `default`; the remaining gap is runtime state, not compilation. I’m reviewing the existing session tests now so the fixes land in the same behavioral seams instead of adding a second compatibility path.
+
+I have the fix shape now: normalize legacy run-global bindings at resume time, keep a narrow legacy alias in `Context` so direct restored snapshots stay stable, and eagerly open `default` on fresh runs before `on_start`. I’m checking the nearby resume tests so I can cover those exact seams instead of adding a parallel test harness.
+
+I’m at the edit point now. The changes are limited to the engine/context/session-serialization seam and a few phase-local tests: no public-surface expansion, no out-of-phase refactor.
+
+The code changes are in place. I’m running the narrow regression set now: one unit file for snapshot/context compatibility and one contract file for engine startup and resume behavior.
+
+The startup fix changed one existing expectation: workflows that open named sessions in `on_start` now also have the implicit `default` slot present, which is intended for this phase. I’m updating that test to assert the new invariant instead of the old narrower snapshot.
+
+One existing contract test was still asserting the pre-phase snapshot shape. I’ve corrected that expectation and I’m rerunning the session-focused contract plus a runtime compatibility slice to check the restore path didn’t drift.
+
+I’ve verified the code fixes. The remaining work in this turn is bookkeeping: updating the phase notes so they reflect the new startup/restore behavior and the targeted validation I actually ran.
+
+Scope considered
+
+Session-continuity phase only. I focused on the two blocking reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/session-continuity/feedback.md:1): eager default-session creation for every fresh run, and stable reuse of legacy restored run-global sessions.
+
+What I analyzed
+
+I traced engine startup and resume through [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:55), legacy binding construction and snapshot shapes in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py:14), direct runtime lookup in [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py:94), and in-memory restore behavior in [core/stores/memory.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/memory.py:48). I also checked the phase plan and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/session-continuity/implementation_notes.md:1).
+
+What I changed
+
+I fixed `IMP-001` by eagerly opening the compiled default session during fresh engine startup, before `on_start`, in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:103). That makes system-only runs persist a `default` binding and keeps later `on_start` scope overrides intact.
+
+I fixed `IMP-002` by centralizing legacy run-global snapshot normalization in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py:129) and applying it on resume in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:95). I also added a narrow compatibility alias in [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py:122) so directly restored legacy active bindings are reused rather than silently rebound.
+
+I updated tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:742) and [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:225) to cover the new default-session invariant and the legacy restore/reopen path.
+
+Key findings / decisions
+
+The fix stays phase-local and additive. Default-session initialization is now a startup invariant rather than a provider-step side effect, and legacy `scope=None` snapshots are normalized once at resume instead of leaving reopen behavior to drift. I did not widen the public API or change `scope=` semantics.
+
+Validation passed:
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp /home/rauter/autoloop_v3_bkp/autoloop_v3/.venv/bin/pytest tests/unit/test_primitives_and_stores.py -q`
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp /home/rauter/autoloop_v3_bkp/autoloop_v3/.venv/bin/pytest tests/contract/test_engine_contracts.py -q`
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp /home/rauter/autoloop_v3_bkp/autoloop_v3/.venv/bin/pytest tests/runtime/test_compatibility_runtime.py -q`
+
+Open issues / next step
+
+No new product ambiguity surfaced. The next step is verifier re-review against `IMP-001` and `IMP-002`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
