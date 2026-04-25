@@ -6,3 +6,6 @@ Preserve CLI, runtime/provider, workspace, artifact-name, and `ctx.invoke_workfl
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260425T074502Z-48656955" ts="2026-04-25T07:52:51.825817+00:00" />
 The cycle closeout must update all five standing recursive-memory files, including `.autoloop_recursive/framework_evolution_charter.md`; do not treat the charter as optional.
 If implementation touches `stdlib/validation.py`, broaden proof to include `tests/unit/test_validation.py` and adjacent selected-workflow consumer suites instead of relying on eval-suite-only regression coverage.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="converge-eval-helper-validation" pair="implement" turn_seq="1" run_id="run-20260425T074502Z-48656955" ts="2026-04-25T07:56:17.679060+00:00" />
+Keep `stdlib/validation.py` unchanged in this slice; the existing shared seam already covers the eval helper's generic JSON/string/list/snapshot mechanics, so widening the shared regression surface is unnecessary.
+Keep eval-specific case-kind ordering, expected-artifact membership checks, and loader-based workflow-parameter coercion local to `stdlib/evaluation.py` even after the shared validation migration.

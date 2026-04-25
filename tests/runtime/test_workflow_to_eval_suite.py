@@ -717,6 +717,10 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
         "workflow_name": "workflow_to_eval_suite",
     }
     assert selected_capability["selected_workflow_name"] == "release_candidate_to_go_no_go"
+    assert (
+        selected_capability["selected_workflow_capability"]["workflow_name"]
+        == validated_manifest["selected_workflow_name"]
+    )
     assert selected_capability["selected_workflow_capability"]["entry_step_name"] == "bootstrap"
     assert selected_capability["selected_workflow_capability"]["parameters_supported"] is True
     assert {
