@@ -21,7 +21,13 @@ except ImportError:  # pragma: no cover - direct repo-root import fallback
     from core.compiler import compile_workflow
     from runtime.loader import resolve_workflow_reference
 
-from .validation import normalize_optional_string, require_mapping, require_non_empty_string, require_string_list
+from .validation import (
+    normalize_optional_string,
+    require_mapping,
+    require_non_empty_string,
+    require_positive_int,
+    require_string_list,
+)
 
 
 def normalize_candidate_surface_boundary(
@@ -203,6 +209,224 @@ def derive_candidate_surface_manifest(
     }
 
 
+def validate_baseline_surface_manifest(
+    baseline_manifest: Mapping[str, Any],
+    repo_root: Path,
+    *,
+    manifest_label: str,
+    expected_surface_kind: str,
+    expected_boundary: Mapping[str, Any],
+    boundary_field_map: Mapping[str, str] | None = None,
+    optional_boundary_fields: Sequence[str] = (),
+    expected_relative_paths: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Validate shared baseline-manifest mechanics and return normalized file metadata."""
+
+    field_map = dict(boundary_field_map or {})
+    optional_fields = set(optional_boundary_fields)
+
+    if _require_text(
+        baseline_manifest.get("surface_kind"),
+        f"{manifest_label} must define non-empty surface_kind",
+    ) != _require_text(expected_surface_kind, "expected_surface_kind must stay non-empty"):
+        raise ValueError(f"{manifest_label} surface_kind must be {expected_surface_kind}")
+    if _require_text(
+        baseline_manifest.get("repo_root"),
+        f"{manifest_label} must define non-empty repo_root",
+    ) != str(repo_root):
+        raise ValueError(f"{manifest_label} repo_root must match the runtime repo root")
+
+    _validate_manifest_boundary_fields(
+        baseline_manifest=baseline_manifest,
+        manifest_label=manifest_label,
+        expected_boundary=expected_boundary,
+        boundary_field_map=field_map,
+        optional_boundary_fields=optional_fields,
+    )
+
+    file_entries = _manifest_file_map(
+        baseline_manifest,
+        f"{manifest_label} must define files as a JSON array of objects with relative_path",
+    )
+    relative_paths = _require_string_list(
+        baseline_manifest.get("relative_paths"),
+        f"{manifest_label} must define non-empty relative_paths",
+    )
+    if sorted(file_entries) != relative_paths:
+        raise ValueError(f"{manifest_label} files must match relative_paths")
+    if expected_relative_paths is not None and relative_paths != _require_string_list(
+        list(expected_relative_paths),
+        "expected_relative_paths must define non-empty repo-relative paths",
+    ):
+        raise ValueError(f"{manifest_label} relative_paths must match the expected workflow boundary")
+
+    surface_root = Path(
+        _require_text(
+            baseline_manifest.get("surface_root"),
+            f"{manifest_label} must define non-empty surface_root",
+        )
+    )
+    for relative_path, entry in file_entries.items():
+        source_path = Path(
+            _require_text(
+                entry.get("source_path"),
+                f"{manifest_label} file entries must define non-empty source_path",
+            )
+        )
+        surface_path = Path(
+            _require_text(
+                entry.get("surface_path"),
+                f"{manifest_label} file entries must define non-empty surface_path",
+            )
+        )
+        if source_path != repo_root / relative_path:
+            raise ValueError(f"{manifest_label} source_path entries must stay aligned to the repo root")
+        if surface_path != surface_root / relative_path:
+            raise ValueError(f"{manifest_label} surface_path entries must stay under the copied baseline surface")
+        if not source_path.exists() or not surface_path.exists():
+            raise FileNotFoundError(f"{manifest_label} file entries must point at existing files")
+        expected_digest = _require_text(
+            entry.get("surface_sha256"),
+            f"{manifest_label} file entries must define non-empty surface_sha256",
+        )
+        if _sha256_file(surface_path) != expected_digest:
+            raise ValueError(f"{manifest_label} surface_sha256 must match the copied baseline surface")
+
+    return {
+        "surface_root": surface_root,
+        "relative_paths": relative_paths,
+        "file_entries": file_entries,
+    }
+
+
+def validate_candidate_surface_manifest(
+    candidate_manifest: Mapping[str, Any],
+    *,
+    repo_root: Path,
+    manifest_label: str,
+    expected_surface_kind: str,
+    expected_boundary: Mapping[str, Any],
+    boundary_field_map: Mapping[str, str] | None = None,
+    optional_boundary_fields: Sequence[str] = (),
+    baseline_manifest: Mapping[str, Any],
+    baseline_manifest_label: str,
+    allowed_added_path_prefixes: Sequence[str] = (),
+    allowed_added_exact_paths: Sequence[str] = (),
+    require_surface_listing_matches_disk: bool = False,
+    require_file_count_matches_relative_paths: bool = False,
+) -> dict[str, Any]:
+    """Validate shared candidate-manifest mechanics and return normalized file metadata."""
+
+    field_map = dict(boundary_field_map or {})
+    optional_fields = set(optional_boundary_fields)
+
+    if _require_text(
+        candidate_manifest.get("surface_kind"),
+        f"{manifest_label} must define non-empty surface_kind",
+    ) != _require_text(expected_surface_kind, "expected_surface_kind must stay non-empty"):
+        raise ValueError(f"{manifest_label} surface_kind must be {expected_surface_kind}")
+    if _require_text(
+        candidate_manifest.get("repo_root"),
+        f"{manifest_label} must define non-empty repo_root",
+    ) != str(repo_root):
+        raise ValueError(f"{manifest_label} repo_root must match the runtime repo root")
+
+    _validate_manifest_boundary_fields(
+        baseline_manifest=candidate_manifest,
+        manifest_label=manifest_label,
+        expected_boundary=expected_boundary,
+        boundary_field_map=field_map,
+        optional_boundary_fields=optional_fields,
+    )
+
+    baseline_relative_paths = _require_string_list(
+        baseline_manifest.get("relative_paths"),
+        f"{baseline_manifest_label} must define non-empty relative_paths",
+    )
+    candidate_baseline_relative_paths = _require_string_list(
+        candidate_manifest.get("baseline_relative_paths"),
+        f"{manifest_label} must define non-empty baseline_relative_paths",
+    )
+    if candidate_baseline_relative_paths != baseline_relative_paths:
+        raise ValueError(f"{manifest_label} baseline_relative_paths must match {baseline_manifest_label}")
+
+    candidate_root = Path(
+        _require_text(
+            candidate_manifest.get("surface_root"),
+            f"{manifest_label} must define non-empty surface_root",
+        )
+    )
+    candidate_relative_paths = _require_string_list(
+        candidate_manifest.get("relative_paths"),
+        f"{manifest_label} must define non-empty relative_paths",
+    )
+    if require_surface_listing_matches_disk:
+        actual_relative_paths = _surface_relative_paths(candidate_root)
+        if candidate_relative_paths != actual_relative_paths:
+            raise ValueError(f"{manifest_label} relative_paths must match {candidate_root.name}")
+    if require_file_count_matches_relative_paths and _require_positive_int(
+        candidate_manifest.get("file_count"),
+        f"{manifest_label} must define positive integer file_count",
+    ) != len(candidate_relative_paths):
+        raise ValueError(f"{manifest_label} file_count must match {candidate_root.name}")
+
+    missing_baseline_paths = sorted(set(baseline_relative_paths) - set(candidate_relative_paths))
+    if missing_baseline_paths:
+        raise ValueError(f"{manifest_label} must preserve every baseline relative_path")
+
+    allowed_prefixes = [
+        _require_repo_relative_path(prefix, "allowed_added_path_prefixes entries must stay repo-relative")
+        for prefix in allowed_added_path_prefixes
+    ]
+    allowed_exact_paths = {
+        _require_repo_relative_path(
+            normalized,
+            "allowed_added_exact_paths entries must stay repo-relative",
+        )
+        for raw_path in allowed_added_exact_paths
+        if (normalized := _normalize_optional_text(raw_path)) is not None
+    }
+    for relative_path in candidate_relative_paths:
+        if relative_path in baseline_relative_paths:
+            continue
+        if any(relative_path.startswith(f"{prefix}/") for prefix in allowed_prefixes):
+            continue
+        if relative_path in allowed_exact_paths:
+            continue
+        raise ValueError(f"{manifest_label} must stay within the allowed repo-relative boundary")
+
+    file_entries = _manifest_file_map(
+        candidate_manifest,
+        f"{manifest_label} must define files as a JSON array of objects with relative_path",
+    )
+    if sorted(file_entries) != candidate_relative_paths:
+        raise ValueError(f"{manifest_label} files must match relative_paths")
+    for relative_path, entry in file_entries.items():
+        surface_path = Path(
+            _require_text(
+                entry.get("surface_path"),
+                f"{manifest_label} file entries must define non-empty surface_path",
+            )
+        )
+        if surface_path != candidate_root / relative_path:
+            raise ValueError(f"{manifest_label} surface_path entries must stay under {candidate_root.name}")
+        if not surface_path.exists():
+            raise FileNotFoundError(f"candidate surface file is missing: {surface_path}")
+        expected_digest = _require_text(
+            entry.get("surface_sha256"),
+            f"{manifest_label} file entries must define non-empty surface_sha256",
+        )
+        if _sha256_file(surface_path) != expected_digest:
+            raise ValueError(f"{manifest_label} surface_sha256 must match {candidate_root.name}")
+
+    return {
+        "surface_root": candidate_root,
+        "relative_paths": candidate_relative_paths,
+        "baseline_relative_paths": baseline_relative_paths,
+        "file_entries": file_entries,
+    }
+
+
 def validate_authoritative_surface_sources_unchanged(
     baseline_manifest: Mapping[str, Any],
     repo_root: Path,
@@ -320,6 +544,39 @@ def validate_candidate_surface_overlay(
         }
 
 
+def normalize_candidate_surface_overlay_result(
+    overlay_validation: Mapping[str, Any],
+    *,
+    expect_single_compiled_workflow: bool,
+    overlay_result_label: str = "overlay validation",
+) -> dict[str, Any]:
+    """Normalize shared overlay-validation result payloads for workflow receipts."""
+
+    compiled_workflow_names = _require_string_list(
+        overlay_validation.get("compiled_workflow_names"),
+        f"{overlay_result_label} must define non-empty compiled_workflow_names",
+    )
+    test_returncode = overlay_validation.get("test_returncode")
+    if not isinstance(test_returncode, int) or test_returncode < 0:
+        raise ValueError(f"{overlay_result_label} must define non-negative integer test_returncode")
+
+    normalized = {
+        "test_command": _require_text(
+            overlay_validation.get("test_command"),
+            f"{overlay_result_label} must define non-empty test_command",
+        ),
+        "test_returncode": test_returncode,
+    }
+    if expect_single_compiled_workflow:
+        if len(compiled_workflow_names) != 1:
+            raise ValueError(f"{overlay_result_label} must compile exactly one selected workflow")
+        normalized["compiled_workflow_name"] = compiled_workflow_names[0]
+        return normalized
+
+    normalized["compiled_workflow_names"] = compiled_workflow_names
+    return normalized
+
+
 def _normalized_command_args(command: str) -> list[str]:
     command_args = shlex.split(command)
     if command_args and command_args[0] == "pytest":
@@ -351,6 +608,31 @@ def _manifest_file_map(manifest: Mapping[str, Any], error_message: str) -> dict[
         )
         result[relative_path] = dict(mapping)
     return result
+
+
+def _validate_manifest_boundary_fields(
+    *,
+    baseline_manifest: Mapping[str, Any],
+    manifest_label: str,
+    expected_boundary: Mapping[str, Any],
+    boundary_field_map: Mapping[str, str],
+    optional_boundary_fields: set[str],
+) -> None:
+    for manifest_field, boundary_field in boundary_field_map.items():
+        if manifest_field in optional_boundary_fields:
+            actual = _normalize_optional_text(baseline_manifest.get(manifest_field))
+            expected = _normalize_optional_text(expected_boundary.get(boundary_field))
+        else:
+            actual = _require_text(
+                baseline_manifest.get(manifest_field),
+                f"{manifest_label} must define non-empty {manifest_field}",
+            )
+            expected = _require_text(
+                expected_boundary.get(boundary_field),
+                f"expected boundary must define {boundary_field}",
+            )
+        if actual != expected:
+            raise ValueError(f"{manifest_label} {manifest_field} must match the expected workflow boundary")
 
 
 def _surface_relative_paths(root: Path) -> list[str]:
@@ -419,6 +701,7 @@ def _sha256_file(path: Path) -> str:
 
 
 _require_text = partial(require_non_empty_string, coerce=True)
+_require_positive_int = require_positive_int
 _normalize_optional_text = normalize_optional_string
 _require_string_list = partial(require_string_list, dedupe=True, coerce=True)
 _require_mapping = require_mapping
@@ -427,7 +710,10 @@ _require_mapping = require_mapping
 __all__ = [
     "derive_candidate_surface_manifest",
     "materialize_baseline_surface",
+    "normalize_candidate_surface_overlay_result",
     "normalize_candidate_surface_boundary",
+    "validate_baseline_surface_manifest",
     "validate_authoritative_surface_sources_unchanged",
+    "validate_candidate_surface_manifest",
     "validate_candidate_surface_overlay",
 ]
