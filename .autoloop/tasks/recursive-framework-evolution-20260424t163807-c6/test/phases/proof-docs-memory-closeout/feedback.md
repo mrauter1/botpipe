@@ -6,3 +6,5 @@
 - Phase Directory Key: proof-docs-memory-closeout
 - Phase Title: Proof And Closeout
 - Scope: phase-local authoritative verifier artifact
+
+- Added one docs-baseline regression test in `tests/test_architecture_baseline_docs.py` that pins the cycle-6 closeout notes outside the historical Cycle 8 candidate list and Cycle 9 gap-entry sections, preventing the malformed-ledger regression found during implement verification.

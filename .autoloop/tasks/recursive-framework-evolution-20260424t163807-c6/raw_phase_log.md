@@ -914,3 +914,53 @@ No open review blocker remains. The phase is complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+
+
+---
+run_id=run-20260424T231545Z-4bd3affc | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc1f0-af59-7fe1-83c5-2b32468d3f8a
+---
+I’m handling the test-phase closeout for the same scope. I’ll inspect the current proof/docs/memory surfaces, decide what regression is still worth pinning in tests after the ledger-structure fix, then update the phase test artifacts and run the scoped suite.
+
+The current docs baseline already checks the new seam and several recursive-memory notes, but it does not pin the specific ledger-structure regression that the reviewer caught. I’m adding one focused baseline-doc test for that structure and then I’ll update the phase strategy/feedback and rerun the scoped proof.
+
+I’ve identified a narrow regression worth pinning: the cycle-6 closeout notes must stay outside the Cycle 8 and Cycle 9 historical sections. I’m adding one focused docs-baseline test for that structure, then I’ll update the test strategy, feedback, and the current decisions block.
+
+The regression test is in place. I’m running the same scoped proof bundle now so the new memory-structure assertion is validated together with the existing seam, workflow, and docs coverage.
+
+Scope considered
+
+Phase-local test work for `proof-docs-memory-closeout`: the new candidate-surface authoring guidance, the repaired recursive-memory ledgers, the existing scoped proof bundle, and the active phase test artifacts.
+
+What I analyzed
+
+I checked the current docs baseline coverage and found it already pinned the new `candidate_surfaces` authoring boundary, but it did not protect the specific malformed-ledger regression that implement verification caught. I also reviewed the latest decisions block so the new test would encode the intended invariant: cycle-6 closeout notes must stay outside older numbered ledger sections.
+
+What I changed
+
+I added one focused docs-baseline regression test to [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) that asserts:
+- the Cycle 9 gap entry remains intact,
+- the Cycle 8 candidate list remains intact,
+- the cycle-6 migration/closeout notes exist elsewhere as standalone top-level sections.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/test/phases/proof-docs-memory-closeout/test_strategy.md), appended the test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/test/phases/proof-docs-memory-closeout/feedback.md), and recorded the non-obvious regression target under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c6/decisions.txt).
+
+Key findings / decisions
+
+The additional regression worth pinning in tests was the recursive-memory structure, not new runtime behavior. The new test keeps this phase deterministic by reading static docs/ledger text only, with no timing, network, or ordering flake risk.
+
+I ran the scoped proof bundle:
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+Result: `145 passed in 19.95s`.
+
+Open issues / next step
+
+No open test-phase blocker remains. The scoped suite now covers the seam docs, the migrated workflows, the baseline docs, and the ledger-structure regression that surfaced during implement verification.
