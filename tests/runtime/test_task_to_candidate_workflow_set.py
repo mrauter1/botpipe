@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
@@ -693,6 +694,44 @@ def test_task_to_candidate_workflow_set_publish_rejects_summary_without_builder_
     )
 
     with pytest.raises(ValueError, match="builder baseline"):
+        workflow_pkg.TaskToCandidateWorkflowSet.on_publish_candidate_workflow_set(state, ctx)
+
+
+def test_task_to_candidate_workflow_set_publish_rejects_summary_missing_typed_required_field(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    candidate_summary = {
+        "authoritative_artifacts": [
+            "candidate_workflow_set",
+            "candidate_workflow_set_summary",
+            "candidate_next_action",
+        ],
+        "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+        "builder_considered": True,
+        "comparison_candidates": [
+            "security_finding_to_verified_remediation",
+            "investigation_request_to_evidence_pack",
+            "workflow_idea_to_workflow_package",
+        ],
+        "next_action": "Pass the candidate set to task_to_workflow_strategy next.",
+        "portfolio_posture": "direct_fit",
+        "ranked_candidates": [
+            "security_finding_to_verified_remediation",
+            "investigation_request_to_evidence_pack",
+            "workflow_idea_to_workflow_package",
+        ],
+        "ready_for_strategy_selection": True,
+        "recommended_candidate_workflows": ["security_finding_to_verified_remediation"],
+    }
+    candidate_summary.pop("ranked_candidates")
+    workflow_pkg, state, ctx = _make_publish_candidate_workflow_set_test_context(
+        tmp_path,
+        monkeypatch,
+        candidate_summary=candidate_summary,
+    )
+
+    with pytest.raises(ValidationError, match="ranked_candidates"):
         workflow_pkg.TaskToCandidateWorkflowSet.on_publish_candidate_workflow_set(state, ctx)
 
 

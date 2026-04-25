@@ -885,6 +885,26 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_invalid_se
         workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
 
 
+def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_missing_typed_required_field(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_adaptation_test_context(
+        tmp_path,
+        monkeypatch,
+        summary_overrides={"selected_workflow_entry_step": None},
+    )
+    payload = json.loads((ctx.workflow_folder / "adapted_execution_summary.json").read_text(encoding="utf-8"))
+    payload.pop("selected_workflow_entry_step")
+    (ctx.workflow_folder / "adapted_execution_summary.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="selected_workflow_entry_step"):
+        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
+
+
 def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_invalid_proposed_parameter_payload(
     tmp_path: Path,
     monkeypatch,

@@ -1020,6 +1020,56 @@ def test_workflow_to_eval_suite_publish_rejects_invalid_selected_workflow_refere
         workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
 
 
+def test_workflow_to_eval_suite_publish_rejects_validated_manifest_missing_typed_required_field(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_eval_suite_test_context(tmp_path, monkeypatch)
+    workflow_module = importlib.import_module("workflows.workflow_to_eval_suite.workflow")
+
+    def _write_invalid_validated_manifest(*_args, **_kwargs):
+        path = ctx.workflow_folder / "validated_eval_case_manifest.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "repo_root": str(REPO_ROOT),
+                    "run_id": ctx.run_id,
+                    "selected_workflow_name": state.selected_workflow_name,
+                    "task_id": ctx.task_id,
+                    "workflow_name": ctx.workflow_name,
+                    "case_count": 3,
+                    "case_kinds": ["benchmark", "edge", "adversarial"],
+                    "validated_cases": [
+                        {
+                            "case_id": "baseline_release_gate",
+                            "case_kind": "benchmark",
+                            "expected_artifacts": [
+                                "release_decision_package",
+                                "decision_summary",
+                            ],
+                            "prompt": "Assess a routine release candidate with complete evidence and publish the release decision package.",
+                            "workflow_parameters": {"release_name": "2026.04"},
+                        }
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    monkeypatch.setattr(
+        workflow_module,
+        "write_validated_eval_case_manifest",
+        _write_invalid_validated_manifest,
+    )
+
+    with pytest.raises(ValidationError, match="case_ids"):
+        workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
+
+
 def test_workflow_to_eval_suite_publish_rejects_summary_selected_workflow_mismatch(
     tmp_path: Path,
     monkeypatch,
@@ -1034,6 +1084,26 @@ def test_workflow_to_eval_suite_publish_rejects_summary_selected_workflow_mismat
         ValueError,
         match="workflow_eval_suite_summary.json selected_workflow_name must match selected_workflow_capability.json",
     ):
+        workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
+
+
+def test_workflow_to_eval_suite_publish_rejects_summary_missing_typed_required_field(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_eval_suite_test_context(
+        tmp_path,
+        monkeypatch,
+        summary_overrides={"case_ids": []},
+    )
+    payload = json.loads((ctx.workflow_folder / "workflow_eval_suite_summary.json").read_text(encoding="utf-8"))
+    payload.pop("case_ids")
+    (ctx.workflow_folder / "workflow_eval_suite_summary.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError, match="case_ids"):
         workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
 
 

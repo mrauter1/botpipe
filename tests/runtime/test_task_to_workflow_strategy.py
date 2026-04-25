@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
@@ -1338,6 +1339,65 @@ def test_task_to_workflow_strategy_publish_strategy_rejects_summary_without_buil
     )
 
     with pytest.raises(ValueError, match="builder baseline"):
+        workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
+
+
+def test_task_to_workflow_strategy_publish_strategy_rejects_summary_missing_typed_required_field(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    strategy_summary = {
+        "authoritative_artifacts": [
+            "workflow_strategy_package",
+            "strategy_summary",
+            "strategy_next_action",
+        ],
+        "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+        "builder_considered": True,
+        "comparison_candidates": [
+            "security_finding_to_verified_remediation",
+            "investigation_request_to_evidence_pack",
+            "incident_to_hardening_program",
+        ],
+        "create_new_required": False,
+        "next_action": "Run security_finding_to_verified_remediation next.",
+        "ready_for_handoff": True,
+        "recommended_workflows": ["security_finding_to_verified_remediation"],
+        "rejected_routes": ["compose", "adapt", "create_new"],
+        "selected_strategy": "run_existing",
+    }
+    strategy_summary.pop("comparison_candidates")
+    candidate_workflow_set_summary = {
+        "authoritative_artifacts": [
+            "candidate_workflow_set",
+            "candidate_workflow_set_summary",
+            "candidate_next_action",
+        ],
+        "builder_baseline_workflow": "workflow_idea_to_workflow_package",
+        "builder_considered": True,
+        "comparison_candidates": [
+            "security_finding_to_verified_remediation",
+            "investigation_request_to_evidence_pack",
+            "incident_to_hardening_program",
+        ],
+        "next_action": "Use this candidate package to choose the final workflow strategy without redoing candidate retrieval.",
+        "portfolio_posture": "direct_fit",
+        "ranked_candidates": [
+            "security_finding_to_verified_remediation",
+            "investigation_request_to_evidence_pack",
+            "incident_to_hardening_program",
+        ],
+        "ready_for_strategy_selection": True,
+        "recommended_candidate_workflows": ["security_finding_to_verified_remediation"],
+    }
+    workflow_pkg, state, ctx = _make_publish_strategy_test_context(
+        tmp_path,
+        monkeypatch,
+        strategy_summary=strategy_summary,
+        candidate_workflow_set_summary=candidate_workflow_set_summary,
+    )
+
+    with pytest.raises(ValidationError, match="comparison_candidates"):
         workflow_pkg.TaskToWorkflowStrategy.on_publish_strategy(state, ctx)
 
 

@@ -495,3 +495,70 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2b4-3a4f-74d0-9a3a-fce3f07924f0
+---
+I’m treating this as a scoped regression-proof pass. First I’m checking the current test artifacts and the existing runtime/unit coverage around the four migrated publish handlers, then I’ll add only the minimum tests needed to prove the typed-read boundary and update the phase test artifacts.
+
+The current suites already cover the semantic policy checks, but they do not yet prove the new typed-read boundary at publish time for the candidate and strategy summaries, and only indirectly cover it for adaptation/eval. I’m adding focused runtime tests that fail on missing required typed summary fields so a future regression back to raw dict parsing gets caught immediately.
+
+I’ve identified the concrete gap: the existing suites prove the semantic checks, but they don’t yet force the publish hooks to fail specifically at the typed artifact boundary. I’m adding focused deterministic runtime tests for missing required typed summary fields, plus one eval-manifest test that proves the validated manifest is re-read through the typed seam.
+
+The new runtime regression tests are running now. After that I’ll update the phase test strategy with the behavior-to-test map and add the concise phase feedback entry with the exact coverage added.
+
+Two tests exposed setup issues, not product defects: one helper derives a child summary from the strategy payload, and the eval monkeypatch needs to target the workflow module rather than the package export. I’m correcting those tests and rerunning the same scoped runtime suite.
+
+The added tests passed. I’m updating the phase test artifacts now with the behavior-to-coverage map, the deterministic setup notes, and a concise summary of the new regression checks that guard the typed-read boundary.
+
+Scope considered
+
+- Scoped workflow publish handlers and their runtime tests:
+  - `tests/runtime/test_task_to_candidate_workflow_set.py`
+  - `tests/runtime/test_task_to_workflow_strategy.py`
+  - `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
+  - `tests/runtime/test_workflow_to_eval_suite.py`
+- Phase artifacts:
+  - [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/migrate-direct-fit-publishers/test_strategy.md)
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/migrate-direct-fit-publishers/feedback.md)
+- Shared boundary decisions in `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/decisions.txt`
+
+What I analyzed
+
+- Existing runtime publish-path coverage for the four migrated workflows
+- Where the new typed seam could regress back to raw dict parsing without the tests noticing
+- The helper/test-context setup for summary and manifest artifacts so the added tests stay deterministic and phase-local
+
+What I changed
+
+- Added focused runtime regression tests that force publish-time typed artifact reads to fail on missing required fields:
+  - `test_task_to_candidate_workflow_set_publish_rejects_summary_missing_typed_required_field`
+  - `test_task_to_workflow_strategy_publish_strategy_rejects_summary_missing_typed_required_field`
+  - `test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_missing_typed_required_field`
+  - `test_workflow_to_eval_suite_publish_rejects_summary_missing_typed_required_field`
+  - `test_workflow_to_eval_suite_publish_rejects_validated_manifest_missing_typed_required_field`
+- Updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/migrate-direct-fit-publishers/test_strategy.md) with the behavior-to-test coverage map, preserved invariants, failure paths, stabilization notes, and validation command/result.
+- Appended the concise test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/migrate-direct-fit-publishers/feedback.md).
+
+Key findings / decisions
+
+- The main missing proof was not semantic policy coverage; it was explicit proof that publish handlers fail at the typed-read boundary rather than quietly regressing to raw summary parsing.
+- The eval suite needed one extra test at the validated-manifest seam, so I patched the workflow module helper output in-test and asserted the typed manifest read raises `ValidationError`.
+- Validation passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py`
+  - Result: `88 passed`
+
+Open issues / next step
+
+- No blocking gaps in the scoped test coverage after these additions.
+- Next step is verifier/auditor review of the phase test artifacts and the new runtime regression checks.
