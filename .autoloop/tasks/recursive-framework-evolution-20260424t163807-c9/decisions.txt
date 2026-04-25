@@ -2,3 +2,5 @@
 Cycle 9 should remain in consolidate mode because the highest-leverage pressure is duplicated publication-boundary and publish-handler mechanics in existing governance and diagnostic workflows, not a missing workflow package.
 Prefer extending existing stdlib validation seams for publication-boundary checks instead of adding a new runtime primitive, root authoring primitive, or workflow-only helper layer.
 Keep artifact names, receipt filenames, CLI behavior, workflow.toml semantics, and ctx.invoke_workflow compatibility unchanged; only mechanical publish-validation logic may move into shared helpers.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260425T021329Z-6c0eefb4" ts="2026-04-25T02:20:15.097518+00:00" />
+Phase 3 must explicitly cover .autoloop_recursive/framework_evolution_charter.md; if charter doctrine does not change, implementation should still record a visible no-doctrine-change closeout note there instead of leaving the file untouched implicitly.

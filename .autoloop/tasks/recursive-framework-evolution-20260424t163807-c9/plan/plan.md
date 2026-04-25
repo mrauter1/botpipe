@@ -129,10 +129,12 @@
 
 - Update `docs/authoring.md` to document the new helper boundary.
 - Update recursive memory:
+  - `.autoloop_recursive/framework_evolution_charter.md`
   - `.autoloop_recursive/framework_roadmap.md`
   - `.autoloop_recursive/framework_gap_ledger.md`
   - `.autoloop_recursive/workflow_candidate_ledger.md`
   - `.autoloop_recursive/validation_debt_ledger.md`
+- In `.autoloop_recursive/framework_evolution_charter.md`, record either the doctrine change itself or an explicit no-doctrine-change closeout note for cycle 9 so the standing memory requirement is satisfied visibly.
 - Run targeted proof and record closeout accounting.
 
 ## Compatibility And Regression Controls

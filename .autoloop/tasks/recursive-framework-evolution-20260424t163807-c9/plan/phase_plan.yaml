@@ -90,8 +90,10 @@ phases:
   in_scope:
   - Update docs/authoring.md to describe the new publication-validation helper boundary
     and its non-goals.
-  - Update framework roadmap, framework gap ledger, workflow candidate ledger, and
-    validation debt ledger for the cycle outcome.
+  - Update framework evolution charter, framework roadmap, framework gap ledger, workflow
+    candidate ledger, and validation debt ledger for the cycle outcome.
+  - Record an explicit no-doctrine-change note in the charter if the implementation
+    leaves charter doctrine unchanged.
   - Run targeted unit, runtime, and architecture-doc proof for the migrated family.
   - Record closeout accounting for boilerplate reduction and preserved compatibility.
   out_of_scope:
@@ -102,8 +104,9 @@ phases:
   - migrate-governance-and-diagnostic-publishers
   acceptance_criteria:
   - id: AC-1
-    text: docs/authoring.md and recursive-memory files describe the helper boundary,
-      chosen consolidation, preserved contracts, and deferred debt consistently.
+    text: docs/authoring.md and all five standing recursive-memory files, including
+      the framework evolution charter, describe the helper boundary, chosen consolidation,
+      preserved contracts, and deferred debt consistently.
   - id: AC-2
     text: Targeted proof covers the new helper surface, the three migrated workflows,
       and the architecture-baseline docs.
@@ -113,7 +116,8 @@ phases:
       request.
   deliverables:
   - Updated docs/authoring.md.
-  - Updated recursive-memory ledgers and roadmap entries for cycle 9.
+  - Updated framework evolution charter note plus recursive-memory ledger and roadmap
+    entries for cycle 9.
   - Recorded targeted proof results and closeout accounting.
   risks:
   - Docs and memory may drift from the actual helper boundary if closeout is treated
