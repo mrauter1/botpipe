@@ -2083,3 +2083,63 @@ Open issues / next step
 
 - Docs were not updated in this phase.
 - I did not run full `pytest -q`; the next phase should do the broader public-surface/docs regression pass.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc35d-e300-7c22-9336-e54faba217cc
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+I’m reviewing the worklist phase diff against the request, prior decisions, and the scoped runtime/compiler paths it touched before I update the criteria and feedback artifacts.
+
+I have the phase notes and decision ledger. I’m reading the concrete worklist/runtime code paths now with a review lens for hidden regressions, unsupported edge cases, and any drift from the stated `Advance` and checkpoint semantics.
+
+I found two areas that need concrete confirmation before I write the review artifact: duplicate work-item IDs appear to be silently accepted, and `Advance(...)` seems to self-loop even when the source step is not scoped to that worklist. I’m reproducing both directly now.
+
+I’m verifying the worklist phase against the implemented code and phase artifacts, then I’ll update the reviewer files with any concrete gaps or regressions I find.
+
+I’ve narrowed the review to two concrete regression surfaces: selection identity and `Advance` semantics. I’m checking the exact validation gaps now so the feedback points at the right fix location instead of just the symptom.
+
+The compiler already knows which steps are scoped and which worklists exist. The missing part is that those invariants never get tied back to runtime `Advance` behavior or to item identity constraints.
+
+I have enough to write findings now: one determinism hole from duplicate item IDs, and one compile/runtime mismatch where `Advance` enables hidden looping on unscoped steps.
+
+I’ve written the findings into the phase feedback artifact. I’m doing one quick pass on that artifact now to keep the references clean and machine-readable.
+
+Scope considered
+
+- Phase-local review of the `worklists` implementation only: worklist/scoped-step runtime behavior, validation, checkpoint/selection handling, and the verifier artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/`.
+
+What I analyzed
+
+- Authoritative phase artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/implementation_notes.md), and the latest relevant block in `decisions.txt`.
+- Request-relevant code paths in [core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/worklists.py:1), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:769), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:471), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py:200), and [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:149).
+- Existing tests covering scoped execution and `Advance` behavior in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1912).
+
+What I reviewed
+
+- Determinism and identity handling for worklist items across initial selection, refresh, restore, and status mutation.
+- Whether `Advance(worklist)` stays constrained to the explicit scoped-step model required by this phase.
+- Consistency between compile-time validation and runtime execution for route effects.
+
+Key findings / decisions
+
+- Added two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/feedback.md).
+- `IMP-001`: duplicate work item ids are accepted, but the implementation later collapses by `item.id`, which makes restore/refresh/status/session behavior non-deterministic.
+- `IMP-002`: `Advance(worklist)` can self-loop an unscoped step, creating hidden iteration outside the scoped-step contract for this phase.
+- Because of those blocking issues, the criteria remain unchecked and this review is not complete.
+
+Open issues / next step
+
+- Fix the two blocking issues, rerun the focused worklist/runtime tests, then re-run verifier review on this phase artifact set.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
