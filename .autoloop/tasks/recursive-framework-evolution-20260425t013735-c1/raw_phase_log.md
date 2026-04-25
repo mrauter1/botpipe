@@ -293,3 +293,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T074502Z-48656955 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc3a3-b0fe-7d83-9ef0-142a89629dec
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc3a3-b0fe-7d83-9ef0-142a89629dec
+
+
+---
+run_id=run-20260425T074502Z-48656955 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc3a3-b0fe-7d83-9ef0-142a89629dec
+---
+I’m checking the phase-local test artifacts and the existing eval-helper proof first, then I’ll decide whether the repository tests already cover the migration or need one more targeted regression case before I update the test strategy and feedback.
+
+The changed behavior is already covered on the happy path, but the migration-specific failure path is still implicit. I’m adding one narrow unit test that forces a mismatched selected-workflow snapshot so the shared snapshot validator is pinned both for success and rejection, then I’ll update the phase strategy and feedback.
+
+I’ve added the migration-specific failure path. I’m rerunning the same scoped proof the phase contract expects so the test closeout can point to actual passing coverage, not just the new assertion.
+
+The scoped proof passed with the added failure path. I’m finishing the phase artifacts now: a concise behavior-to-test map, a short feedback entry, and one test decision note so later turns know why the extra snapshot-mismatch case exists.
+
+Scope considered
+
+- The eval-helper migration scope only: `stdlib/evaluation.py`, `tests/unit/test_stdlib_and_extensions.py`, `tests/runtime/test_workflow_to_eval_suite.py`, the active test-phase artifacts, and the shared decisions ledger.
+
+What I analyzed
+
+- Existing happy-path and regression coverage already added for the helper refactor.
+- Whether the changed behavior had an explicit failure-path test for the new shared snapshot-validation dependency.
+- Whether broader proof was required; it was not, because `stdlib/validation.py` stayed unchanged.
+
+What I changed
+
+- Added `test_evaluation_helper_rejects_snapshot_mismatch_through_shared_snapshot_validator(...)` to [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c1/test/phases/converge-eval-helper-validation/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, and known gaps.
+- Appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c1/test/phases/converge-eval-helper-validation/feedback.md).
+- Added one concise test decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c1/decisions.txt).
+
+Key findings / decisions
+
+- The missing migration-specific failure path was the main gap; it is now covered explicitly.
+- Scoped proof passed after the addition:
+  - `tests/unit/test_stdlib_and_extensions.py`: `79 passed`
+  - `tests/runtime/test_workflow_to_eval_suite.py`: `27 passed`
+- Flake risk is low because the new test is deterministic and uses local fixtures plus monkeypatching only.
+
+Open issues / next step
+
+- No open blocking issues in the test slice.
+- No broadened shared-seam suites were added because `stdlib/validation.py` was intentionally untouched.

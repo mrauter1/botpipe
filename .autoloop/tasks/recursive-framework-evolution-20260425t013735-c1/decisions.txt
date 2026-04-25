@@ -9,3 +9,5 @@ If implementation touches `stdlib/validation.py`, broaden proof to include `test
 <autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="converge-eval-helper-validation" pair="implement" turn_seq="1" run_id="run-20260425T074502Z-48656955" ts="2026-04-25T07:56:17.679060+00:00" />
 Keep `stdlib/validation.py` unchanged in this slice; the existing shared seam already covers the eval helper's generic JSON/string/list/snapshot mechanics, so widening the shared regression surface is unnecessary.
 Keep eval-specific case-kind ordering, expected-artifact membership checks, and loader-based workflow-parameter coercion local to `stdlib/evaluation.py` even after the shared validation migration.
+<autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="converge-eval-helper-validation" pair="test" turn_seq="1" run_id="run-20260425T074502Z-48656955" ts="2026-04-25T08:04:44.790376+00:00" />
+Add one failure-path unit test that injects a mismatched selected-workflow snapshot so the eval-helper migration is pinned to the shared snapshot validator for rejection behavior, not only the happy-path call graph.
