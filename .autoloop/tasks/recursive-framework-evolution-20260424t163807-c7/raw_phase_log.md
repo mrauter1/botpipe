@@ -267,3 +267,54 @@ No review blockers remain for this phase. The next planned implementation phase 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc207-7f5a-7303-9b3c-1a71f19a7359
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc207-7f5a-7303-9b3c-1a71f19a7359
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc207-7f5a-7303-9b3c-1a71f19a7359
+---
+I’m auditing the expanded seam’s current unit coverage before I add any new tests. I’ll look for remaining behavior gaps in the changed helper surface, then update the phase test strategy and feedback with the exact coverage map.
+
+The current unit coverage already hits the main happy path and boundary/digest failures. I’m adding one edge-case and one extra failure-path assertion: `None` exact-path allowances stay safe for future workflow migrations, and overlay normalization rejects invalid return codes.
+
+I’ve made the small unit-test refinement. Next I’m running only the candidate-surface subset again, then I’ll update the phase strategy and feedback with the exact behavior map and proof result.
+
+The focused subset passed. I’m running the full stdlib/extensions unit file once more so the new edge-case assertion doesn’t create any adjacent import or helper-surface regressions before I write the phase artifacts.
+
+The full unit file is still green. I’m recording the behavior-to-test map and the small non-obvious test decisions now, then I’ll close with the exact proof commands and remaining phase gap.
+
+Scope considered
+
+The phase-local shared seam only: [stdlib/candidate_surfaces.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/candidate_surfaces.py), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/decisions.txt), and the phase test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/extend-candidate-surface-seam/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/extend-candidate-surface-seam/feedback.md).
+
+What I analyzed
+
+I checked the new shared helper surface for remaining untested edge and failure paths after the implement phase. The main gaps were an additive edge case in candidate-manifest validation when optional exact-path allowances include `None`, and a missing failure-path assertion for invalid overlay normalization return codes.
+
+What I changed
+
+I refined [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) so candidate-manifest validation now proves `None` exact-path allowances are ignored safely, and overlay normalization now rejects negative return codes. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/extend-candidate-surface-seam/test_strategy.md) with the behavior-to-test map, appended the concise proof summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/test/phases/extend-candidate-surface-seam/feedback.md), and recorded the non-obvious test decisions under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/decisions.txt).
+
+Key findings / decisions
+
+Proof passed:
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py -k 'candidate_surface_helpers'` with `13 passed`
+- `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` with `72 passed`
+
+The phase remains unit-scoped by design because the workflow callers are intentionally unchanged here; runtime regression coverage belongs to the later migration phase.
+
+Open issues / next step
+
+No test blockers remain for this phase. The next planned phase should migrate the refinement and decomposition callers and then add the corresponding runtime regression proof.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
