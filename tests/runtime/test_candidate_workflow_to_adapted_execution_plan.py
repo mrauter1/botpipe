@@ -936,6 +936,23 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_dr
         workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
 
 
+def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_selected_workflow_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_adaptation_test_context(
+        tmp_path,
+        monkeypatch,
+        summary_overrides={"selected_workflow_name": "incident_to_hardening_program"},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="adapted_execution_summary.json selected_workflow_name must match selected_workflow_capability.json",
+    ):
+        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
+
+
 def _make_publish_adaptation_test_context(
     tmp_path: Path,
     monkeypatch,

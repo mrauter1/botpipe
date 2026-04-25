@@ -1020,6 +1020,23 @@ def test_workflow_to_eval_suite_publish_rejects_invalid_selected_workflow_refere
         workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
 
 
+def test_workflow_to_eval_suite_publish_rejects_summary_selected_workflow_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_eval_suite_test_context(
+        tmp_path,
+        monkeypatch,
+        summary_overrides={"selected_workflow_name": "incident_to_hardening_program"},
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="workflow_eval_suite_summary.json selected_workflow_name must match selected_workflow_capability.json",
+    ):
+        workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
+
+
 def test_workflow_to_eval_suite_publish_rejects_malformed_case_kind(
     tmp_path: Path,
     monkeypatch,
