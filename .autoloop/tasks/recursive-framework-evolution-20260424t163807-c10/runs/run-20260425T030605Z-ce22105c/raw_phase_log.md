@@ -88,3 +88,12 @@ No open verification issues remain. The plan artifact set is ready for the next 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=typed-publication-artifact-contracts,migrate-direct-fit-publishers,docs-memory-and-proof-closeout
+explicit=True
+current_phase_index=0
