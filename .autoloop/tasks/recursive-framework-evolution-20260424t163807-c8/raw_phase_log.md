@@ -851,3 +851,52 @@ No open issues in this phase. Review is complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc25d-3f04-72f3-addb-9a90192806f2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc25d-3f04-72f3-addb-9a90192806f2
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc25d-3f04-72f3-addb-9a90192806f2
+---
+I’m handling the test-phase closeout for proof/docs/memory-sync. First I’m checking the existing baseline-doc coverage and the phase artifacts so I can decide whether the current test delta fully covers the new docs and memory behavior or whether one more regression test is still missing.
+
+The missing regression guard is explicit memory coverage for the cycle-8 proof/docs closeout itself. I’m adding one baseline-doc test for that note family and recording that decision in the shared ledger, then I’ll rerun the focused proof set.
+
+The new baseline-doc regression test is in and the focused proof is running. I’m waiting for the full result before I write the test strategy and feedback summary so those artifacts reflect the final state rather than an in-flight run.
+
+The proof set is clean with the added memory-closeout regression guard. I’m finalizing the phase artifacts now: a concise behavior-to-test map in the test strategy and a short feedback entry summarizing the added coverage and the final `258 passed` proof result.
+
+Scope considered
+
+Phase-local test work for the proof/docs/memory-sync slice: the updated selected-workflow docs boundary, the five standing recursive-memory files, the focused baseline-doc assertions, and the scoped proof command for the selected-workflow helper family.
+
+What I analyzed
+
+I checked the final doc and memory changes against the existing baseline-doc coverage, the shared decisions ledger, and the phase contract. The missing regression guard was explicit coverage for the new cycle-8 proof/docs/memory closeout notes across all required recursive-memory files.
+
+What I changed
+
+I added one regression test to [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) that asserts the cycle-8 proof/docs/memory closeout is synchronized across `framework_evolution_charter.md`, `framework_roadmap.md`, `framework_gap_ledger.md`, `workflow_candidate_ledger.md`, and `validation_debt_ledger.md`.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/proof-docs-memory-sync/test_strategy.md) with a behavior-to-test coverage map and appended the phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/proof-docs-memory-sync/feedback.md). I recorded the non-obvious test decision under the latest header in `decisions.txt`.
+
+Key findings / decisions
+
+The existing doc assertions already covered the converged helper-family boundary in `docs/authoring.md`, so the highest-value addition was memory-closeout coverage rather than another authoring-doc test.
+
+I reran the focused proof set on the final state:
+
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+
+Result: `258 passed`.
+
+Open issues / next step
+
+No open test-authoring blockers remain in this phase. The remaining deferred gaps stay workflow-local by design and are already documented in the synchronized recursive-memory files.
