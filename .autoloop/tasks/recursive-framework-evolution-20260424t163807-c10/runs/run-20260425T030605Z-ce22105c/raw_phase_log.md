@@ -250,3 +250,126 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+I’m auditing the current test coverage for the typed artifact migration first, then I’ll add only the smallest additional tests that close any obvious regression gaps and update the phase test artifacts with the exact coverage map.
+
+The existing unit proof is valid but narrow: it exercises one summary spec and one manifest spec. I’m expanding that to the other split summary specs so the test layer actually tracks the full scoped migration, not just one representative example.
+
+I’ve added the broader summary-spec unit coverage. Next I’m running the focused proof again, then I’ll write the behavior-to-test map and the concise test feedback entry with the exact command/result.
+
+Scope considered
+
+- Scoped test work to the typed publication artifact contract phase.
+- Focused on the changed unit proof surface in `tests/unit/test_stdlib_and_extensions.py` plus the existing scoped runtime regression suites for candidate, strategy, adaptation, and eval publication flows.
+- Updated only the phase test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/typed-publication-artifact-contracts/` and the shared decisions ledger entry for this turn.
+
+What I analyzed
+
+- The phase contract and shared decisions, especially the rule that split on-disk summary models from verifier payload models when the JSON omits verifier-only `summary`.
+- Existing unit coverage for typed artifact specs.
+- Existing runtime regression coverage in:
+  - `tests/runtime/test_task_to_candidate_workflow_set.py`
+  - `tests/runtime/test_task_to_workflow_strategy.py`
+  - `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
+  - `tests/runtime/test_workflow_to_eval_suite.py`
+
+What I changed
+
+- Expanded `tests/unit/test_stdlib_and_extensions.py` with a new parametrized unit test:
+  - `test_split_summary_artifact_specs_match_on_disk_json_shapes`
+- The new unit test now covers the split summary specs for:
+  - `candidate_workflow_set_summary.json`
+  - `adapted_execution_summary.json`
+  - `workflow_eval_suite_summary.json`
+- Updated `test_strategy.md` with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, stabilization notes, and known gaps.
+- Appended a concise coverage/proof summary to the phase `feedback.md`.
+- Appended one test-author decision to `decisions.txt` documenting why the unit proof was expanded across all split summary specs.
+
+Key findings / decisions
+
+- Kept the added coverage deterministic: temp-path files only, no timing/network/order dependence.
+- Chose to broaden unit proof across the full split-summary family instead of only one representative artifact, because that better guards the actual contract split introduced by the implementation.
+- Re-ran the scoped regression suite successfully:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py`
+  - `192 passed`
+
+Open issues / next step
+
+- No blocking test gaps found within the scoped phase.
+- Known intentional gap recorded in `test_strategy.md`: unit proof checks typed read/validate behavior broadly, but not every individual Pydantic error string.
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+
+
+---
+run_id=run-20260425T030605Z-ce22105c | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2a1-55c5-7a52-857f-2c4815fa0fac
+---
+I’m auditing the added test coverage against the phase contract now, starting with the phase criteria/feedback artifacts and the broadened unit proof to see whether any regression-detection gap remains.
+
+Reviewing the phase-local test artifacts against the changed unit/runtime coverage now. I’m checking the current criteria and feedback files first, then I’ll update the audit result if the scoped proof and coverage map hold.
+
+The phase-local strategy and feedback match the intended scope. I’m validating the actual test surfaces now so the audit result reflects the concrete coverage, not just the notes.
+
+The scoped suites are running cleanly so far. I’m waiting on the full proof, then I’ll finalize the audit artifacts and close the phase if there’s no missed regression surface.
+
+The audit is down to artifact updates. I’m marking the criteria against the verified coverage and recording the no-findings outcome in the phase feedback.
+
+Scope considered
+
+- Phase-local test audit for `typed-publication-artifact-contracts`.
+- Reviewed the changed typed-artifact unit coverage, the scoped runtime regression suites for the affected workflow family, the phase test artifacts, and the shared decisions ledger.
+- Did not treat unrelated repository changes as in scope.
+
+What I analyzed
+
+- `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/typed-publication-artifact-contracts/criteria.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/typed-publication-artifact-contracts/feedback.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/test/phases/typed-publication-artifact-contracts/test_strategy.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c10/decisions.txt`
+- `tests/unit/test_stdlib_and_extensions.py`
+- The scoped runtime suites for candidate, strategy, adaptation, and eval publication flows
+
+What I reviewed
+
+- That the split on-disk summary contracts are covered directly at the unit layer for candidate, adaptation, and eval-suite artifacts.
+- That preserved publish-time behavior is still covered by runtime tests for success paths and policy/failure-path rejection.
+- That the tests keep artifact filenames and top-level JSON keys unchanged and do not encode an unconfirmed behavior break.
+- That the scoped proof remains deterministic and passes:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py`
+  - `192 passed in 5.76s`
+
+Key findings / decisions
+
+- No blocking findings.
+- No actionable non-blocking findings.
+- Updated `criteria.md` to check all audit criteria.
+- Appended `TST-001` to `feedback.md` to record the no-findings audit outcome.
+
+Open issues / next step
+
+- No open issues from the test audit.
+- The phase can proceed as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
