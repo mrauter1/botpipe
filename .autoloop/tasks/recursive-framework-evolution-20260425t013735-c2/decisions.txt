@@ -1,3 +1,6 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260425T080712Z-39cec555" ts="2026-04-25T08:07:12.998673+00:00" />
 Cycle 2 plan stays in consolidate mode and targets repeated workflow `params.py` contracts instead of adding a new workflow, because the current recursive-memory ledgers identify parameter-surface duplication as the highest-leverage remaining authoring debt.
 Implementation should keep CLI `-wf`, runtime parameter resolution, local `Parameters` exports, `ctx.params`, artifact contracts, and `ctx.invoke_workflow(...)` behavior unchanged while moving only the repeated parameter bundles into an additive stdlib seam.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260425T080712Z-39cec555" ts="2026-04-25T08:13:50.858142+00:00" />
+The standing recursive-memory sync for this cycle includes `.autoloop_recursive/framework_evolution_charter.md`; implementation should either update it or record an explicit no-change confirmation in closeout instead of omitting it.
+Cycle closeout must report every requested boilerplate metric explicitly, including zero-value items such as repeated prompt sections removed or shortened when no prompt files change in this slice.

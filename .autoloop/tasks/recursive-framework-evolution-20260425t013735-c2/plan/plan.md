@@ -67,7 +67,7 @@ Planned scope:
   - `workflow_portfolio_to_operating_system`
   - `company_operation_to_recursive_improvement_cycle`
   - `workflow_run_history_to_failure_modes` where only the shared core moves and the order-sensitive status normalization remains local
-- Update docs and recursive-memory ledgers so the new parameter seam boundary is explicit and future cycles do not reopen the same question.
+- Update docs and recursive-memory files, including the standing charter, so the new parameter seam boundary is explicit and future cycles do not reopen the same question.
 
 ### Why this is higher leverage than a new workflow
 
@@ -96,7 +96,9 @@ Planned scope:
 
 - Migrate the duplicated workflow `params.py` files onto the shared seam.
 - Update `docs/authoring.md` to document where shared parameter bundles belong and where workflow-local validation must remain.
+- Review and synchronize `.autoloop_recursive/framework_evolution_charter.md`, even if the outcome is an explicit no-change confirmation, so the standing charter remains aligned with the chosen seam boundary.
 - Update any affected architecture/doc baseline expectations and the recursive-memory files:
+  - `.autoloop_recursive/framework_evolution_charter.md`
   - `.autoloop_recursive/framework_roadmap.md`
   - `.autoloop_recursive/framework_gap_ledger.md`
   - `.autoloop_recursive/workflow_candidate_ledger.md`
@@ -106,7 +108,7 @@ Planned scope:
 
 - Run targeted proof across the migrated workflow family and the shared stdlib seam.
 - Confirm no drift in loader coercion, runtime compatibility, artifact contracts, or published workflow behavior.
-- Record the cycle closeout metrics: files added/deleted, net line delta if practical, workflows migrated, helper seam introduced, and deferred debt.
+- Record the full cycle closeout metrics contract, including zero-value items when applicable.
 
 ## Regression prevention and validation
 
@@ -154,11 +156,16 @@ Planned scope:
 Implementation should report:
 
 - files added, deleted, and net line delta if practical
+- repeated validation idioms removed
+- repeated prompt sections removed or shortened
 - repeated `params.py` bundles removed
 - workflows migrated onto the shared seam
+- new helper functions or parameter base models introduced
+- old workflow-local validation blocks replaced
 - any remaining workflow-local validators kept intentionally
-- whether any prompt text changed in scope
 - before/after readability of the touched `params.py` files
+
+Closeout must explicitly state the requested cycle-report fields even when the value is zero or `none`, rather than omitting the line entirely.
 
 Expected closeout outcome:
 

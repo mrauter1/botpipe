@@ -102,3 +102,63 @@ The planner should revise `plan.md` and `phase_plan.yaml` to cover charter synch
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dc3ad-b190-76f1-8547-84ae2004d581
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dc3ad-b190-76f1-8547-84ae2004d581
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc3ad-b190-76f1-8547-84ae2004d581
+---
+I’m tightening the plan against the verifier’s blocking findings. The two fixes are straightforward: explicitly cover charter synchronization and restore the full mandatory cycle-report contract so later phases can’t silently omit required closeout fields.
+
+I have the verifier’s exact objections in view. I’m making the plan narrower and more explicit rather than adding scope: charter synchronization becomes a named deliverable, and the closeout contract now lists every required cycle metric so later phases can report zero-value items instead of skipping them.
+
+The first patch only failed on the YAML hunk because the file was normalized without quotes in a prior readback. I’m reapplying with exact current text so the fix stays minimal and doesn’t disturb the runtime-owned metadata.
+
+The corrective edits are in place. I’m validating the YAML again and doing a brief readback to make sure the charter requirement and the full closeout metric list are both explicit in the current artifacts.
+
+Scope considered
+
+The active planning artifacts, the verifier feedback, the immutable request snapshot, the raw log, the shared decisions file, and the standing recursive-memory files named in the request.
+
+What I analyzed
+
+I focused only on the verifier’s two blocking gaps and checked that the fixes stayed inside the existing plan direction: no scope expansion, no workflow addition, no compatibility drift, and no change to runtime-owned metadata in `phase_plan.yaml`.
+
+What I changed
+
+I updated `plan.md` to:
+- name `.autoloop_recursive/framework_evolution_charter.md` as an explicit synchronization target
+- require either a charter update or an explicit no-change confirmation in closeout
+- restore the full mandatory cycle-report contract, including zero-value reporting
+
+I updated `phase_plan.yaml` to:
+- include charter synchronization in phase 2 scope and deliverables
+- require explicit full-metric closeout reporting in phase 3 acceptance/deliverables
+
+I appended a follow-up note to `feedback.md` describing the corrections, and I appended two durable constraints under the latest planner header in `decisions.txt`.
+
+Key findings / decisions
+
+The plan remains in `consolidate` mode and still centers on shared `params.py` contract convergence.
+
+The two verifier blockers are now addressed directly:
+- charter synchronization is explicitly planned
+- the cycle closeout must report every requested metric explicitly, including zero-value items
+
+`phase_plan.yaml` was re-parsed successfully with `python3` and `yaml.safe_load`.
+
+Open issues / next step
+
+No open blocking issue remains in the planner artifacts from this pass. The next step is re-verification of the updated plan set.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

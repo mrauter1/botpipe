@@ -51,7 +51,8 @@ phases:
     same params scaffolding.
   - Keep workflow-specific validators local where field semantics differ, including
     literal normalization and order-sensitive status handling.
-  - Update authoring docs to document the shared parameter boundary and local non-goals.
+  - Update authoring docs and the standing recursive-memory files, including framework_evolution_charter.md,
+    to document the shared parameter boundary and local non-goals.
   out_of_scope:
   - Changing workflow artifact contracts, prompt routes, or ctx.invoke_workflow composition
     behavior.
@@ -71,7 +72,7 @@ phases:
   deliverables:
   - Migrated workflow params modules
   - Updated authoring documentation
-  - Updated recursive-memory ledgers
+  - Updated recursive-memory files including framework_evolution_charter.md
   risks:
   - Migrating too many workflows at once could mask one workflow-specific parameter
     difference.
@@ -101,11 +102,12 @@ phases:
       or any blocked proof is documented with the exact blocker and unchanged compatibility
       claims.
   - id: AC-2
-    text: The cycle closeout reports boilerplate reduction, workflows migrated, compatibility
-      preservation, and remaining deferred debt.
+    text: The cycle closeout reports every requested cycle metric explicitly, including
+      zero-value items such as repeated prompt sections removed or shortened when
+      they do not change in this slice.
   deliverables:
   - Targeted proof results
-  - Closeout notes with boilerplate metrics
+  - Closeout notes with the full requested cycle metrics
   - Synchronized plan feedback and decision record
   risks:
   - Existing dirty workspace state could obscure whether proof failures are caused
