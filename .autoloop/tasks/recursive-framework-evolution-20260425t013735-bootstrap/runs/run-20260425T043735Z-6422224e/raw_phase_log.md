@@ -639,3 +639,128 @@ No open issues in this test-phase audit. The phase can be considered complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc310-7a68-7050-aab6-2752130a18d7
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+I’m implementing the `artifact-runtime-enforcement` phase only. First I’m reading the engine, artifact/compiler surfaces, and the phase notes/feedback so the runtime changes stay inside the approved scope and don’t break the earlier artifact inventory work.
+
+I’ve confirmed the phase notes are still empty, and the repo is already mid-refactor with many unrelated dirty paths. I’m staying inside the current `core/` runtime and `tests/` surfaces, treating the existing inventory work as the baseline rather than trying to reconcile unrelated deletions.
+
+The inventory/compiler pieces already know about qualified artifacts and route-contract name resolution. I’m checking the rest of that path now so the engine can reuse the same canonical artifact mapping instead of adding a second, drifting resolution rule.
+
+The current checkpoint model is still narrow, so I’m checking whether artifact diagnostics should be added there directly or attached through an additive metadata field. That matters because the acceptance criteria explicitly calls for checkpointed failure context, not just exception text.
+
+I’ve narrowed the change to three pieces: engine ordering, artifact-validation helpers, and additive checkpoint diagnostics. I’m reading the step model and current contract tests now so the edits line up with existing authoring behavior instead of inventing a new runtime surface.
+
+The only remaining policy choice is how broad “optional present validation” should be. I’m checking existing artifact tests before I lock it down, because the plan text is slightly narrower than the new `Artifact.json(...)` helper semantics.
+
+I’ve got the change shape: compiled system steps need route-contract metadata too, required route artifacts need explicit existence enforcement independent of `Artifact.required`, and the run loop needs additive checkpoint failure context so the diagnostics survive beyond the thrown exception.
+
+The engine and checkpoint payload are patched. I’m doing a sanity pass on the new control flow now because this kind of change is easy to get subtly wrong around exception capture and state snapshots.
+
+I’ve moved from implementation into regression coverage. The new tests are focused on the phase contract: required outputs, route-specific overrides, handler-written artifacts, optional schema outputs, and checkpointed diagnostic context.
+
+The first regression pass is running against the engine contract suite. If it breaks, I’ll tighten the helper behavior before touching notes or broader tests.
+
+The test runner isn’t on the base PATH here. I’m checking the repo-local tooling next so I can validate with the project’s own Python environment instead of assuming a global install.
+
+The failures are from two concrete issues, not the enforcement model itself. Relative produced artifacts were being resolved without owner-step context, and validation still rejected `SystemStep.route_contracts` even though the runtime now supports them.
+
+The contract suite is green. I’m running the adjacent unit surfaces next because this change touched checkpoint serialization and validation rules, and those are the likely regression edges outside the engine tests.
+
+I want one serialization regression test before closing the phase. The engine already checkpoints the new failure context in memory, but I also changed the JSON checkpoint store, so I’m adding a focused round-trip check for that path instead of relying on broader runtime coverage.
+
+The code and focused regressions are green now. I’m doing the last housekeeping pass: diff review, then updating the phase notes and shared decisions with only the non-obvious constraints this turn introduced.
+
+I’m writing the phase notes with the exact invariants I preserved and the deliberate non-changes. I’m also recording the two runtime decisions that matter for later phases: step-local output resolution at execution time, and the narrower optional-output validation boundary.
+
+**Scope considered**
+- Phase-local `artifact-runtime-enforcement` only.
+- Runtime/compiler/checkpoint paths needed for selected-route artifact enforcement: [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py), [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py).
+- Focused regression coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) and [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+- Updated phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-runtime-enforcement/implementation_notes.md) and appended decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+**What I analyzed**
+- The current artifact inventory/qualified-name work already landed in validation/compiler, so runtime enforcement needed to reuse that canonical inventory instead of inventing a second resolver.
+- The engine previously validated only input artifacts and provider payloads; produced-artifact contracts were not enforced, and runtime handles for step-local relative outputs were being resolved from raw template strings.
+- Checkpoints had no additive failure diagnostics, so artifact-validation failures would have lost route/artifact/path context after persistence.
+
+**What I changed**
+- Enforced selected-route output contracts in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py) after handler processing and before route success is committed for `LLMStep`, `PairStep`, and `SystemStep`.
+- Added route-specific required-artifact selection, default `Artifact.required` fallback, and optional-present schema validation helpers in the engine.
+- Added additive checkpoint `failure_context` in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py) and persisted it through [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py).
+- Allowed `SystemStep.route_contracts` in [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py) and [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) while still forbidding `SystemStep.expected_output_schema`.
+- Fixed runtime artifact-handle construction so step-local relative outputs resolve with owner-step context instead of the process working directory.
+- Added focused tests for missing required produced artifacts, handler-written required JSON outputs, optional schema-bearing outputs, route-specific override behavior, system-step enforcement, and filesystem checkpoint round-tripping.
+
+**Key findings / decisions**
+- Optional produced outputs are only runtime-validated when they both exist and declare a schema. That keeps this phase aligned with the approved contract without widening failures for schema-less optional outputs.
+- Route-specific required artifacts must override `Artifact.required`; engine-side enforcement now does that explicitly instead of relying on `ArtifactHandle.validate()` alone.
+- Checkpointed artifact failures now preserve post-handler state plus artifact diagnostics via additive `failure_context`.
+- Validation run:
+  - `./.venv/bin/pytest -q tests/contract/test_engine_contracts.py`
+  - `./.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py`
+  - `./.venv/bin/pytest -q tests/runtime/test_compatibility_runtime.py -k 'filesystem_session_store or filesystem_checkpoint_store_roundtrips_failure_context'`
+  - `python3 -m py_compile core/engine.py core/compiler.py core/validation.py core/stores/protocols.py runtime/stores/filesystem.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py`
+
+**Open issues / next step**
+- Full-suite `pytest -q` was not run in this turn; only the phase-relevant subsets above.
+- Later phases still need to land the broader session continuity/default-session work, typed routes/effects, and worklist snapshots if checkpoint diagnostics are expected to include selection state.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc310-7a68-7050-aab6-2752130a18d7
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+I’m auditing the phase artifacts and re-reading the engine changes with a regression lens. The goal here is to decide whether this is actually safe to ship for the phase contract, not just whether the added tests pass.
+
+I’m broadening one step beyond the engine into compiler/validation because the implementation changed `SystemStep` contract rules. That’s the main adjacent regression surface for this phase.
+
+I found one suspicious ordering change in the engine: artifact enforcement now happens before final route resolution. I’m reproducing that with a small runtime snippet, because if it’s real it’s a blocking mismatch with both the phase plan and existing routing semantics.
+
+I have a blocking finding. The new enforcement order can hide routing errors behind artifact-validation failures, which means the phase doesn’t yet match the intended execution contract. I’m recording that in the verifier artifacts now.
+
+Scope considered
+- Phase-local review for `artifact-runtime-enforcement` only.
+- Reviewed the runtime/compiler/checkpoint changes in `core/engine.py`, `core/compiler.py`, `core/validation.py`, `core/stores/protocols.py`, `runtime/stores/filesystem.py`, plus the added tests and phase notes.
+- Updated only the verifier-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-runtime-enforcement/`.
+
+What I analyzed
+- The requested execution order from the phase plan and decisions ledger: resolve the selected route, then enforce artifact contracts before route commit.
+- The new engine ordering around middleware/system-handler route tags, required artifact selection, and checkpoint failure context.
+- The adjacent compile/validation change that now allows `SystemStep.route_contracts`.
+
+What I reviewed
+- Re-read the changed engine paths and the new tests.
+- Reproduced one concrete failure case locally with a minimal runtime snippet: a workflow `on_outcome()` returning `Event("bogus")` on a step with a missing `required=True` produced artifact now raises artifact validation first instead of a routing error.
+
+Key findings / decisions
+- 1 blocking finding recorded in `feedback.md` as `IMP-001`.
+- `criteria.md` remains incomplete because the new enforcement order can mask invalid-route failures and checkpoint the wrong failure cause.
+- The verifier artifacts were updated accordingly.
+
+Open issues / next step
+- Fix `core/engine.py` so route resolution happens before `_enforce_artifact_contracts(...)` for all step kinds, then rerun the focused engine/runtime tests and clear the blocking finding if the reproduction no longer fails with the wrong exception.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
