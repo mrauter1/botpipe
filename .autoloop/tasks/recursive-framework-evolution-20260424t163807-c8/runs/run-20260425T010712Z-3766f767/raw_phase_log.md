@@ -729,3 +729,125 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc25d-3f04-72f3-addb-9a90192806f2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc25d-3f04-72f3-addb-9a90192806f2
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc25d-3f04-72f3-addb-9a90192806f2
+---
+I’m working the proof/docs/memory-sync phase for the selected-workflow seam consolidation. First I’m gathering the current repo state, the prior phase artifacts, and the touched docs/tests/workflow surfaces so I can sync documentation and proof to the actual implementation rather than restating the plan.
+
+I have the plan and current working tree. Next I’m reading the selected-workflow seam itself, the affected workflow family, and the standing memory files so the docs and proof updates reflect the shipped helper boundary and any remaining debt precisely.
+
+The helper seam is present and the standing memory already has cycle-8 phase notes from the earlier implementation steps. I’m now tracing every doc and test surface that mentions selected-workflow artifacts so the closeout only changes the places that actually define or prove the seam.
+
+The main gap now looks like closeout synchronization rather than another code change: `docs/authoring.md` already covers validation helpers, but I still need to verify whether it fully documents the converged selected-workflow helper family and whether the workflow docs and memory files tell one consistent story.
+
+I’ve confirmed the selected-workflow helper family is already implemented and broadly documented, but the closeout still needs one consistent cycle-8 proof/docs/memory sync pass. I’m narrowing to the exact places where cycle-8 still lacks an explicit closeout note or where the docs should name the converged family as one canonical seam instead of three isolated helpers.
+
+I’ve narrowed the remaining work to three things: one doc pass that names the selected-workflow helpers as a converged family, one recursive-memory closeout pass that records this proof/docs phase explicitly, and one fresh targeted proof run so the closeout is grounded in current files rather than earlier phase notes.
+
+I’ve got enough context to edit. I’m making a narrow docs pass now: one explicit authoring-doc boundary for the converged selected-workflow helper family, plus doc-proof assertions that lock that boundary in.
+
+The docs surface is now narrowed around one explicit selected-workflow helper family instead of three isolated helper descriptions. I’m syncing the recursive memory and phase notes next so the cycle-8 closeout reflects that same boundary and the current proof command.
+
+I’m updating the recursive memory now. These edits are closeout-only: they record that cycle 8 ended with one converged selected-workflow authoring seam, no doctrine expansion, and no portfolio change.
+
+The closeout notes are in place. I’m running the focused proof set now on the final docs and memory state: shared validation/unit coverage, the five selected-workflow runtime consumers, and the architecture-baseline docs suite.
+
+The proof run is still active and has cleared the first chunk of tests. I’m waiting for the full result before I lock the phase notes and metrics.
+
+One docs baseline assertion failed because the authoring doc named the selected-workflow validator seam conceptually but not all three concrete validator entrypoints. I’m adding those explicit function names now and rerunning the same proof set.
+
+The fix is in. I’m rerunning the full targeted proof set so the closeout uses one clean final result rather than mixing a failed intermediate run with the repaired docs state.
+
+The proof set is clean on the final state. I’m collecting the scoped diff metrics now so the implementation notes and closeout report include concrete counts rather than hand-wavy summaries.
+
+The scoped diff is small on tracked files, but several recursive-memory surfaces in this workspace are untracked, so I’m recording the line delta as “not practical repo-wide” and keeping the exact tracked delta only where it’s defensible. I’m finalizing the phase notes and proof counts now.
+
+The memory files changed after the clean proof run, so I’m rerunning the same focused suite once more on the fully synchronized final state. That keeps the closeout notes honest.
+
+The phase work is complete and the final proof rerun stayed green after the memory sync. I’m doing one last status check on the scoped files, then I’ll close out with the required summary.
+
+**Scope considered**
+
+Selected-workflow helper docs, the standing recursive-memory files, the cycle-8 decision ledger, and the focused proof surfaces for the affected workflow family.
+
+**What I analyzed**
+
+I reviewed the converged selected-workflow seam in `core/workflow_capabilities.py`, `stdlib/validation.py`, `stdlib/adaptation.py`, `stdlib/refinement.py`, `stdlib/decomposition.py`, the affected workflow docs/tests, and the cycle artifacts for this phase.
+
+**What I changed**
+
+[docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) now names the selected-workflow snapshot helpers as one explicit authoring family: authoritative core payload builders, thin stdlib artifact writers, shared stdlib validators, and workflow-local publication policy with three separate artifact contracts preserved.
+
+I synchronized all required recursive-memory files with an explicit cycle-8 proof/docs/memory closeout, added the phase decision note, and filled [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/implement/phases/proof-docs-memory-sync/implementation_notes.md). I also updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) so the doc boundary is enforced.
+
+**Key findings / decisions**
+
+No doctrine change was needed. The right closeout was documentation and memory convergence, not more framework code or another workflow.
+
+Repo-wide net line change is not practical to report cleanly because the workspace already carries untracked recursive-memory surfaces; tracked delta on already-indexed files in this phase was `+23` lines. No helper functions, workflow behavior, CLI behavior, runtime behavior, provider behavior, `workflow.toml` semantics, or `ctx.invoke_workflow(...)` behavior changed.
+
+Focused proof reran clean on the final synchronized state:
+
+`PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+
+Result: `257 passed`.
+
+**Open issues / next step**
+
+No in-scope blockers remain. Deferred debt is still workflow-local selected-workflow publication policy in the adaptation, eval-suite, run-history, refinement, and decomposition consumers.
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc25d-3f04-72f3-addb-9a90192806f2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc25d-3f04-72f3-addb-9a90192806f2
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc25d-3f04-72f3-addb-9a90192806f2
+---
+I’m reviewing the proof/docs/memory-sync phase against the active criteria and the shared decisions ledger. First I’m checking the scoped diffs, the final implementation notes, and the targeted proof claims so I can decide whether there are any blocking fidelity or regression issues.
+
+The scoped task files are present, and the only code-repo surfaces touched outside phase artifacts are the intended doc and baseline-doc-test files plus the recursive-memory files. I’m reading the exact updated sections now to check for fidelity, drift, and any missed obligations like touched workflow docs.
+
+The scoped review is coming back clean: the docs boundary matches the shared decisions, all required memory files were synchronized, and the final proof command is in scope and passed. I’m marking the criteria complete and recording that I found no blocking or non-blocking issues in the phase feedback artifact.
+
+Scope considered
+
+Phase-local review of the proof/docs/memory-sync deliverables: `docs/authoring.md`, `tests/test_architecture_baseline_docs.py`, the five required `.autoloop_recursive/` memory files, the phase implementation notes, the shared decisions ledger, and the claimed focused proof run.
+
+What I analyzed
+
+I checked the active phase contract against the final implementation notes, the cycle-8 shared decisions, the updated authoring-doc boundary, the recursive-memory closeout notes, and the targeted pytest command/result (`257 passed`) to verify AC-1, AC-2, and AC-3.
+
+What I reviewed
+
+I reviewed the updated selected-workflow helper-family documentation, the new baseline-doc assertions, the explicit charter no-doctrine-change note, the roadmap/gap/candidate/validation ledger synchronization, and the reviewer-owned phase artifacts (`criteria.md`, `feedback.md`).
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The docs now describe the converged selected-workflow helper boundary without widening runtime or the root authoring surface, all standing recursive-memory files named in scope were synchronized explicitly, and the focused proof set was rerun cleanly on the synchronized final state.
+
+I updated `criteria.md` to all checked and appended `RVW-000` to `feedback.md` recording that the scoped review found no issues.
+
+Open issues / next step
+
+No open issues in this phase. Review is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
