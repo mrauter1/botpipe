@@ -1766,3 +1766,51 @@ I’m recording the one non-obvious choice from this phase so later worklist wor
   `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py`
   `.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py tests/runtime/test_package_cli.py`
 - I did not run the full `pytest -q` suite in this phase.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+I’m auditing the `typed-routes-effects` implementation against the phase contract and the recent code changes. I’ll read the active phase artifacts first, then inspect the touched route/compiler/engine paths for correctness and regression risk before I mark criteria or write findings.
+
+I’ve got the phase notes and shared decisions. Now I’m reading the implemented route/effect paths directly rather than relying on the worktree diff, because this repo’s git state is noisy and I need the actual current code to assess regression risk.
+
+I’ve found one material gap so far: the new effect API is exported and compiled into route metadata, but it is not actually usable end to end. I’m grabbing exact line references now so the feedback is concrete and fixable.
+
+I’ve got the review conclusion. There’s one blocking issue: the new effect API is exposed as supported authoring surface, but the implementation rejects every worklist-bound effect at compile time and would still hard-fail at runtime if that validation were relaxed. I’m recording that in the phase artifacts now.
+
+Scope considered
+- Active phase `typed-routes-effects` only.
+- Reviewed the active phase artifacts, shared decisions, and the touched route/compiler/engine/shim paths needed to judge AC-11 and AC-12.
+
+What I analyzed
+- Current implementations of [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py:1), [core/effects.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/effects.py:1), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:1), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:1), [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py:600), [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:1), and [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1).
+- The phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-routes-effects/implementation_notes.md:1) and the authoritative decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt:1).
+
+What I reviewed
+- Whether shorthand transitions still compile and execute.
+- Whether typed `Route` metadata is carried through safely.
+- Whether effect validation and execution actually satisfy the phase contract without widening behavior.
+- Whether the newly exported authoring surface is usable as implemented.
+
+Key findings / decisions
+- Added one blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-routes-effects/feedback.md:1): the new effect API is exported publicly, but every worklist-bound effect is unconditionally rejected at validation time and would still hard-fail at runtime if that validation were relaxed. That means the phase does not actually deliver effect support end to end.
+- Added one non-blocking finding for duplicated route-normalization logic across validation and compilation.
+- Left the phase criteria unchecked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/typed-routes-effects/criteria.md:1) because the blocking issue prevents a complete pass.
+
+Open issues / next step
+- Producer should make effect support genuinely usable: validate against a real worklist declaration contract and execute supported effects through centralized runtime hooks, or stop exporting effect classes as supported authoring primitives until that exists.
+- After that, rerun the focused phase suites and re-review the updated diff.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
