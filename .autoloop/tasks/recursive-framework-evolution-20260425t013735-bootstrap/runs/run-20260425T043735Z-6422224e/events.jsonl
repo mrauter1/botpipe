@@ -17,3 +17,7 @@
 {"ts": "2026-04-25T04:54:40.059707+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 17, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "artifact-model"}
 {"ts": "2026-04-25T04:55:39.488938+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 18, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "artifact-model"}
 {"ts": "2026-04-25T04:55:39.528032+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 19, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "artifact-model"}
+{"ts": "2026-04-25T04:55:39.600776+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "artifact-model", "phase_mode": "single"}
+{"ts": "2026-04-25T04:55:39.605490+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 21, "event_type": "phase_started", "phase_id": "artifact-inventory", "phase_mode": "single"}
+{"ts": "2026-04-25T04:55:39.606121+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 22, "event_type": "pair_started", "pair": "implement", "phase_id": "artifact-inventory"}
+{"ts": "2026-04-25T04:55:39.606226+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 23, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "artifact-inventory"}
