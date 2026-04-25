@@ -292,8 +292,11 @@ Typed JSON artifact boundary:
 - declare workflow-local `JsonArtifactSpec(...)` surfaces in `contracts.py` when the JSON artifact belongs to one workflow family
 - prefer `artifact_spec.read(path)` or `read_model_file(path, Model)` for publish-step reads so the workflow starts from a validated model, not `summary.get(...)`
 - use `artifact_spec.validate(path)` or `validate_model_file(path, Model)` for focused proof or readable failure reports when a workflow-local JSON contract needs direct validation
+- use this seam for durable package summaries and validated output manifests; raw proposal or draft inputs may stay workflow-local until a validation step writes the authoritative artifact
+- split durable artifact models from verifier payload models when the on-disk JSON omits verifier-only prose fields such as `summary`
 - keep artifact filenames and top-level JSON keys stable; the typed seam should clarify authoring, not rename surfaces
 - keep cross-artifact alignment, state-drift checks, hidden-execution policy, and receipt shaping in workflow code
+- do not force every intermediate JSON draft through `JsonArtifactSpec(...)` when the workflow has not validated it yet
 - do not turn this into a generic publication registry or runtime-owned publication framework
 
 ## Optional Validation Helpers
