@@ -808,3 +808,52 @@ Key findings / decisions
 Open issues / next step
 - No new phase-local issues found after the fix.
 - The next step is reviewer re-verification so `criteria.md`/`feedback.md` can be cleared if the blocking finding is resolved.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc310-7a68-7050-aab6-2752130a18d7
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+I’m re-verifying the specific reviewer fix and the phase contract now. The focus is whether the route-resolution ordering bug is actually closed without introducing a new regression around artifact enforcement or checkpointing.
+
+The fix is in the right spot and the new regression test covers the exact masked-route case. I’m running the focused validation slice myself before I clear the reviewer artifacts.
+
+I don’t see any remaining phase-local findings after rerunning the focused suite. I’m marking the criteria complete and appending a resolution note for the prior blocking ID so the artifact trail is explicit.
+
+Scope considered
+- Phase-local re-review for `artifact-runtime-enforcement`.
+- Verified the ordering fix in `core/engine.py`, the new regression coverage in `tests/contract/test_engine_contracts.py`, and the phase notes/decisions alignment.
+- Updated only the verifier-owned artifacts in `.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/artifact-runtime-enforcement/`.
+
+What I analyzed
+- The original blocking issue: selected-route artifact enforcement was running before route resolution and could mask invalid route tags.
+- The corrected execution order for provider-owned and system steps.
+- The adjacent phase invariants: payload-only `expected_output_schema`, additive checkpoint failure context, and no fallback routing.
+
+What I reviewed
+- Re-read the changed `_execute_step()` flow in `core/engine.py`.
+- Re-read the new `test_invalid_middleware_route_still_fails_before_artifact_validation` regression test.
+- Re-ran the focused validation slice:
+  - `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`
+  - `./.venv/bin/pytest -q tests/contract/test_engine_contracts.py tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py tests/runtime/test_compatibility_runtime.py -k 'engine_contracts or test_primitives_and_stores or test_validation or filesystem_session_store or filesystem_checkpoint_store_roundtrips_failure_context'`
+
+Key findings / decisions
+- The prior blocking finding `IMP-001` is resolved.
+- I found no remaining phase-local blocking or non-blocking issues.
+- `criteria.md` is now fully checked and `feedback.md` includes the explicit resolution note.
+
+Open issues / next step
+- No open phase-local issues remain from this review.
+- The phase is ready to advance from the verifier side.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
