@@ -296,6 +296,9 @@ Validation helper boundary:
 - generic validation belongs in stdlib rather than copied workflow-local helper tails
 - use these helpers for shared JSON-object reads, non-empty string checks, string-list normalization, mapping checks, duplicate guards, non-negative-int validation, and positive-int validation
 - use the selected-workflow snapshot validators in the same module when multiple workflows need the same capability, authoring-surface, decomposition-surface, or cross-artifact selected-workflow-name checks
+  - `validate_selected_workflow_capability_snapshot(...)` validates the compiled selected-workflow snapshot contract
+  - `validate_selected_workflow_authoring_surface_snapshot(...)` validates the editable selected-workflow surface contract
+  - `validate_selected_workflow_decomposition_surface_snapshot(...)` validates the decomposition snapshot contract
   - `validate_selected_workflow_artifact_alignment(...)` handles top-level `selected_workflow_name` alignment across artifacts
   - `validate_selected_workflow_capability_and_authoring_snapshots(...)` validates the paired capability and authoring surfaces without repeating local cross-check code
 - keep workflow-specific publication assertions, domain allow-lists, and artifact-family invariants in workflow code
@@ -400,6 +403,23 @@ Company operation snapshot boundary:
 - workflow code and prompt templates still own company framing, recursive-improvement analysis, prioritization policy, publication gating, and next-cycle recommendations
 - it does not auto-rank tasks, auto-select improvements, auto-run downstream workflows, or imply external CRM, incident, or ticketing integration
 
+## Optional Selected-Workflow Snapshot Helper Family
+
+The selected-workflow snapshot helpers form one converged authoring seam across:
+
+- `stdlib/adaptation.py`
+- `stdlib/refinement.py`
+- `stdlib/decomposition.py`
+
+Family boundary:
+
+- `core/workflow_capabilities.py` owns the authoritative payload builders for the compiled capability, editable authoring-surface, and decomposition-surface views
+- the stdlib helper modules stay thin artifact writers over those builders and keep the emitted artifacts explicit under `ctx.workflow_folder`
+- `stdlib/validation.py` owns the generic snapshot identity and alignment checks, including capability, authoring-surface, decomposition-surface, and cross-artifact selected-workflow-name validation
+- workflows still own domain-specific publication policy, evidence policy, state-drift handling, and receipt shaping
+- the family intentionally keeps `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, and `selected_workflow_decomposition_surface.json` as three distinct artifact contracts instead of collapsing compiled and editable surfaces into one payload
+- the family does not add CLI flags, widen the root `workflow` authoring surface, or introduce runtime-owned adaptation, refinement, or decomposition behavior
+
 ## Optional Selected-Workflow Adaptation Helpers
 
 `stdlib/adaptation.py` provides a small additive seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
@@ -422,6 +442,7 @@ Adaptation helper boundary:
 
 - the helpers write only workflow-local JSON artifacts under `ctx.workflow_folder`
 - they reuse the existing workflow discovery, resolution, and parameter coercion seams instead of re-implementing schema logic
+- `write_selected_workflow_capability_snapshot(...)` writes the authoritative compiled selected-workflow payload built in `core/workflow_capabilities.py`, so adaptation flows share the same capability surface used by later refinement, decomposition, and validation helpers
 - they accept the same workflow references the shared loader resolves, including canonical names, aliases, and main workflow classes
 - they are authoring-only support for explicit workflow code; they do not add CLI syntax, manifest fields, runtime-owned adaptation, or automatic downstream execution
 - they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
