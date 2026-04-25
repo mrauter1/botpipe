@@ -12,11 +12,11 @@
       "converge-eval-helper-validation"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "converge-eval-helper-validation"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "converge-eval-helper-validation": "in_progress"
+    "converge-eval-helper-validation": "completed"
   },
   "phase_history": [
     {
@@ -24,6 +24,13 @@
       "run_id": "run-20260425T074502Z-48656955",
       "status": "in_progress",
       "ts": "2026-04-25T07:56:17.613267+00:00"
+    },
+    {
+      "phase_id": "converge-eval-helper-validation",
+      "run_id": "run-20260425T074502Z-48656955",
+      "status": "completed",
+      "ts": "2026-04-25T08:07:12.414880+00:00",
+      "pair": "test"
     }
   ]
 }
