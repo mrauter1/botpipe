@@ -92,6 +92,7 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
                             "workflow_name": request.context.workflow_name,
                             "workflow_folder": str(request.context.workflow_folder),
                             "package_folder": str(request.context.package_folder),
+                            "typed_params": request.context.params.model_dump(mode="python"),
                             "workflow_params": request.context.workflow_params,
                             "prompt_text": request.prompt.text,
                             "prompt_path": request.prompt.path,
@@ -125,6 +126,7 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
     assert payload["workflow_name"] == "context_demo"
     assert Path(payload["workflow_folder"]) == workflow_dir
     assert Path(payload["package_folder"]) == tmp_path / "workflows" / "context_demo"
+    assert payload["typed_params"] == {}
     assert payload["workflow_params"] == {"mode": "strict"}
     assert payload["prompt_text"] == "package prompt\n"
     assert Path(payload["prompt_path"]) == tmp_path / "workflows" / "context_demo" / "prompts" / "ask.md"
@@ -272,6 +274,141 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     assert resumed_context["workflow_params"] == {"mode": "strict"}
     assert resumed_context["answer"] == "42"
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
+
+
+def test_context_exposes_typed_params_on_new_runs(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(
+        tmp_path,
+        "typed_params_demo",
+        "TypedParamsWorkflow",
+        export_parameters=True,
+        parameters_source="""
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "strict"
+    reviewers: list[str] = []
+""".strip(),
+    )
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "typed_mode": request.context.params.mode,
+                            "typed_params": request.context.params.model_dump(mode="python"),
+                            "workflow_params": request.context.workflow_params,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow_package(
+        "typed_params_demo",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-typed-new",
+            message="Need typed params",
+            workflow_params={"mode": "focused", "reviewers": ["alice", "bob"]},
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-new" / "wf_typed_params_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+    payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+
+    assert paused.terminal == "PAUSE"
+    assert payload["typed_mode"] == "focused"
+    assert payload["typed_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
+    assert payload["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
+
+
+def test_resume_restores_typed_params_from_persisted_run_metadata(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(
+        tmp_path,
+        "typed_resume_demo",
+        "TypedResumeWorkflow",
+        export_parameters=True,
+        parameters_source="""
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "strict"
+""".strip(),
+    )
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "typed_mode": request.context.params.mode,
+                            "typed_params": request.context.params.model_dump(mode="python"),
+                            "workflow_params": request.context.workflow_params,
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            )[1],
+            lambda request: (
+                request.artifacts.context_dump.write_text(
+                    json.dumps(
+                        {
+                            "typed_mode": request.context.params.mode,
+                            "typed_params": request.context.params.model_dump(mode="python"),
+                            "workflow_params": request.context.workflow_params,
+                            "answer": request.context.answer,
+                        }
+                    ),
+                ),
+                Outcome(raw_output="Answered", tag="answered", payload={"answer": request.context.answer}),
+            )[1],
+        ]
+    )
+
+    paused = run_workflow_package(
+        "typed_resume_demo",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-typed-resume",
+            message="Need typed params",
+            workflow_params={"mode": "strict"},
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "task-typed-resume" / "wf_typed_resume_demo"
+    run_dir = next((workflow_dir / "runs").iterdir())
+
+    resumed = run_workflow_package(
+        "typed_resume_demo",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="task-typed-resume",
+            run_id=run_dir.name,
+            resume=True,
+            answer="42",
+            workflow_params={"mode": "loose"},
+        ),
+    )
+
+    payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
+
+    assert paused.terminal == "PAUSE"
+    assert resumed.terminal == "SUCCESS"
+    assert payload["typed_mode"] == "strict"
+    assert payload["typed_params"] == {"mode": "strict"}
+    assert payload["workflow_params"] == {"mode": "strict"}
+    assert payload["answer"] == "42"
 
 
 def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:
@@ -1014,15 +1151,37 @@ class {class_name}(Workflow):
     return package_dir / "workflow.py"
 
 
-def _write_pause_resume_workflow_package(root: Path, workflow_name: str, class_name: str) -> Path:
+def _write_pause_resume_workflow_package(
+    root: Path,
+    workflow_name: str,
+    class_name: str,
+    *,
+    export_parameters: bool = False,
+    parameters_source: str | None = None,
+) -> Path:
     package_dir = root / "workflows" / workflow_name
     package_dir.mkdir(parents=True, exist_ok=True)
     (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
-    (package_dir / "__init__.py").write_text(f"from .workflow import {class_name}\n__all__ = [{class_name!r}]\n", encoding="utf-8")
+    init_lines = [f"from .workflow import {class_name}"]
+    exports = [class_name]
+    if export_parameters:
+        init_lines.append("from .params import Parameters")
+        exports.append("Parameters")
+    init_lines.append(f"__all__ = {exports!r}")
+    (package_dir / "__init__.py").write_text("\n".join(init_lines) + "\n", encoding="utf-8")
     (package_dir / "workflow.toml").write_text(f'name = "{workflow_name}"\n', encoding="utf-8")
     (package_dir / "prompts").mkdir(exist_ok=True)
     (package_dir / "assets").mkdir(exist_ok=True)
     (package_dir / "prompts" / "ask.md").write_text("package prompt\n", encoding="utf-8")
+    if export_parameters:
+        source = parameters_source or """
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "strict"
+""".strip()
+        (package_dir / "params.py").write_text(source + "\n", encoding="utf-8")
     (package_dir / "workflow.py").write_text(
         f"""
 from __future__ import annotations

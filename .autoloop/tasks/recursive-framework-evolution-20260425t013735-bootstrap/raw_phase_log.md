@@ -1327,3 +1327,83 @@ No open issues remain in this test-phase scope. Session-continuity test coverage
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc33e-596b-7713-984c-201397f86f53
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+I’m treating this as the `typed-params` phase only. First I’m reading the active phase artifacts and the current parameter-loading/runtime paths so I can patch the smallest set of files without drifting into routes, worklists, or child-output work.
+
+I’ve identified the runtime seams that already resolve `Parameters`; the main risk is resume drift between `runtime.loader`, `runtime.runner`, `runtime.workspace`, and `core.engine`/`Context`. Next I’m reading those modules and the existing tests that exercise parameter persistence so I can keep the change additive.
+
+The compile side doesn’t currently carry a parameters model, so the cleanest path is to thread a typed params instance from the runtime loader into `Context` and keep `workflow_params` as the persisted JSON-safe dict. I’m checking the loader’s existing `Parameters` resolution and the CLI/runtime tests that already pin resume behavior before I edit.
+
+I’ve got the implementation path narrowed now: `Context` needs a typed `params` object, `Engine` needs to carry it on both run and resume branches, and `Runner` needs to reconstruct it from persisted metadata instead of from fresh overrides. I’m reading the generated-test helpers next so I can add focused regression coverage without widening the suite.
+
+Plan for this phase:
+1. Add a typed-params object to `Context` with an immutable empty fallback, while leaving `ctx.workflow_params` untouched.
+2. Thread that object through `Engine.run` and `Engine.resume`.
+3. Build the typed params in the filesystem runner from the resolved `Parameters` model plus persisted run metadata, so resumes stay pinned to stored params.
+4. Add focused tests for `ctx.params` on new runs, on resumes, and when no `Parameters` model exists.
+5. Update the phase notes and, if needed, append the non-obvious decision to the shared ledger.
+
+I’ve finished the read phase. I’m editing the runtime path now: `Context` gets a typed params object, `Engine` will carry it, and the runner will materialize it from persisted workflow params so resume semantics stay stable.
+
+I’m on the test pass now. I’m extending the generated workflow helper just enough to export a `Parameters` model for the typed-param cases, then I’m adding one new-run assertion and one resume-persistence assertion so this phase stays tightly scoped.
+
+The code path is patched. I’m running the focused param tests first to catch any mismatches in `Context` construction or runner validation before I touch the phase notes.
+
+`pytest` isn’t on `PATH` in this environment, so I’m retrying through `python -m pytest`. If that still fails, I’ll fall back to the project’s interpreter wrapper if one exists.
+
+`pytest` isn’t installed here, so I can’t run the actual test suite. I’m switching to two lower-level checks instead: Python bytecode compilation for the touched files, then a small runtime exercise that hits new-run and resume param restoration through the real runner.
+
+The code is stable enough to document now. I’m recording the one non-obvious implementation choice in the shared ledger, then I’ll update the phase notes with the exact files, invariants, and validation limits before I summarize.
+
+I’ve finished the code and note updates. I’m doing one last sanity pass on the repository state because `git diff --stat` only surfaced the phase artifacts and tests at first glance, which suggests either the repo index is unusual or the runtime files were already dirty.
+
+Scope considered
+
+- Phase-scoped `typed-params` work only.
+- Runtime paths that resolve, persist, restore, and expose workflow parameters: `core/context.py`, `core/engine.py`, `runtime/loader.py`, `runtime/runner.py`.
+- Focused regression surfaces in `tests/runtime/test_workspace_and_context.py` and `tests/unit/test_primitives_and_stores.py`.
+- Active phase artifacts plus the shared decisions ledger; unrelated dirty files were left untouched.
+
+What I analyzed
+
+- `Context` only exposed `workflow_params` dict copies and had no typed params surface.
+- `Engine` rebuilt `Context` on both run and resume paths, so typed params had to be threaded there to avoid new/resume divergence.
+- `runtime.runner` already treated persisted `run.json` `workflow_params` as authoritative on resume, which is the right place to reconstruct typed params.
+- `runtime.loader` already knew how to resolve and validate `Parameters`, so I centralized typed-param materialization there instead of duplicating coercion logic.
+
+What I changed
+
+- Added `EmptyParameters` and `Context.params` in `core/context.py`, keeping `ctx.workflow_params` unchanged.
+- Threaded typed params through `Engine.run(...)` and `Engine.resume(...)`.
+- Added `runtime.loader.materialize_workflow_params(...)` plus shared helpers so typed params are rebuilt from the resolved/persisted parameter mapping.
+- Updated `runtime.runner` to materialize `ctx.params` from persisted `workflow_params` before calling the engine, so resume ignores override drift for both dict and typed access.
+- Extended focused tests to cover:
+  - empty typed params when no `Parameters` model exists
+  - typed params on new runs
+  - typed params restored from persisted metadata on resume
+- Updated the phase `implementation_notes.md` and appended the non-obvious typed-param decision to `decisions.txt`.
+
+Key findings / decisions
+
+- `ctx.params` is runtime-additive only; `ctx.workflow_params` remains the compatibility and persistence surface.
+- Resume semantics stay anchored to stored `run.json` params, not fresh overrides.
+- For workflows without a declared `Parameters` model, `ctx.params` is intentionally `EmptyParameters()` even if raw programmatic `workflow_params` exist.
+- Validation performed: `python3 -m py_compile core/context.py core/engine.py runtime/loader.py runtime/runner.py tests/runtime/test_workspace_and_context.py tests/unit/test_primitives_and_stores.py`
+
+Open issues / next step
+
+- I could not run the actual pytest suite here: `pytest` is not installed, and the available system `python3` also lacks `pydantic`, so runtime import execution was not possible in this environment.
+- Next step is to run the focused typed-params tests, then full `pytest -q`, in the project’s real Python environment.
