@@ -14,13 +14,13 @@
       "proof-docs-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "refinement-decomposition-migration"
+    "current_phase_index": 2,
+    "current_phase_id": "proof-docs-memory-closeout"
   },
   "phase_status": {
     "shared-candidate-surface-seam": "completed",
-    "refinement-decomposition-migration": "in_progress",
-    "proof-docs-memory-closeout": "planned"
+    "refinement-decomposition-migration": "completed",
+    "proof-docs-memory-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260424T231545Z-4bd3affc",
       "status": "in_progress",
       "ts": "2026-04-24T23:45:23.648391+00:00"
+    },
+    {
+      "phase_id": "refinement-decomposition-migration",
+      "run_id": "run-20260424T231545Z-4bd3affc",
+      "status": "completed",
+      "ts": "2026-04-25T00:01:08.800337+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-memory-closeout",
+      "run_id": "run-20260424T231545Z-4bd3affc",
+      "status": "in_progress",
+      "ts": "2026-04-25T00:01:08.807930+00:00"
     }
   ]
 }
