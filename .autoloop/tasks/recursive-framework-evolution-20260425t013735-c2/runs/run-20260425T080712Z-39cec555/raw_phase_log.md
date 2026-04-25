@@ -527,3 +527,104 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc3c2-cd05-7902-98df-479cca99d29d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc3c2-cd05-7902-98df-479cca99d29d
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc3c2-cd05-7902-98df-479cca99d29d
+---
+I’m checking the active phase test artifacts, the shared decisions ledger, and the existing parameter-seam tests first so I can decide whether this phase needs new assertions or only a coverage map for behavior that is already protected.
+
+The existing unit and runtime tests already target the shared parameter seam directly. I’m rerunning the scoped suite now, then I’ll write the behavior-to-test coverage map and record whether any new repo test edits were actually necessary.
+
+I’m mapping the exact assertions while the suite runs so the strategy file names concrete happy-path, edge-case, and failure-path coverage instead of just listing files.
+
+The relevant seam and runtime coverage is already in place. I’m waiting for the rerun to finish, then I’ll document that the phase needed coverage mapping and proof, not another layer of duplicate tests.
+
+I’m writing the test-phase artifacts now. The key point is that this phase did not need more test code; it needed an explicit coverage map and a fresh deterministic proof run over the existing seam and workflow-family tests.
+
+Scope considered
+- Active phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t013735-c2/test/phases/workflow-params-migration/`
+- Shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260425t013735-c2/decisions.txt`
+- Request-relevant coverage in `tests/unit/test_stdlib_and_extensions.py`, the targeted runtime suites for the migrated workflow family, and `tests/test_architecture_baseline_docs.py`
+
+What I analyzed
+- The shared parameter seam in `stdlib/parameters.py` and the migrated workflow `params.py` modules
+- Existing seam-level unit tests for normalization, stdlib re-exports, and inherited validator behavior
+- Existing runtime suites for front-door, candidate retrieval, adaptation, eval, refinement, decomposition, governance, company, and diagnostic workflows
+- Existing doc-baseline proof for the seam boundary in `docs/authoring.md` and recursive-memory files
+
+What I changed
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c2/test/phases/workflow-params-migration/test_strategy.md:1) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, stability notes, and known gaps.
+- Appended a concise test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c2/test/phases/workflow-params-migration/feedback.md:1).
+- Appended one non-obvious test decision under the active header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-c2/decisions.txt:12).
+- Re-ran the scoped deterministic suite: `321 passed in 33.11s`.
+
+Key findings / decisions
+- No new repository test assertions were necessary; the relevant seam-level and runtime coverage already existed and directly exercised the migrated workflow families.
+- The strongest regression risk for this phase was inherited validator loss in refinement/decomposition subclasses and loss of local sorted-status behavior in diagnostics; both are already covered and remained green.
+- The test deliverable for this turn is explicit coverage mapping plus independent proof, not duplicate assertions.
+
+Open issues / next step
+- No blocking test gaps found in the approved phase scope.
+- The next test/audit step can use the recorded coverage map and the fresh `321 passed` proof result.
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc3c2-cd05-7902-98df-479cca99d29d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc3c2-cd05-7902-98df-479cca99d29d
+
+
+---
+run_id=run-20260425T080712Z-39cec555 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc3c2-cd05-7902-98df-479cca99d29d
+---
+I’m auditing the test-phase artifacts against the phase contract, the shared decisions ledger, and the existing seam/runtime coverage to confirm that the coverage map matches real regression protection and does not silently normalize any behavior change.
+
+The strategy matches the shared decisions so far. I’m rerunning the scoped proof once more and spot-checking the specific seam assertions named in the coverage map before I mark the audit complete.
+
+The seam assertions are concrete and align with the strategy. I’m just waiting for the full suite to finish so I can close the audit with either no findings or a specific coverage gap.
+
+The scoped test suite passed again and I did not find a coverage or intent gap in the named phase surface. I’m marking the audit complete and recording a no-findings outcome in the test feedback artifact.
+
+Scope considered
+- Active phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t013735-c2/test/phases/workflow-params-migration/`
+- Shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260425t013735-c2/decisions.txt`
+- Request-relevant seam and regression coverage in `tests/unit/test_stdlib_and_extensions.py`, the targeted runtime suites for the migrated workflow families, and `tests/test_architecture_baseline_docs.py`
+
+What I analyzed
+- The test author’s coverage map in `test_strategy.md`
+- The non-obvious test decision recorded for this phase
+- The seam-level assertions covering shared bundle normalization, stdlib export visibility, and inherited validator preservation
+- The runtime suites covering front-door, candidate retrieval, adaptation, eval, refinement, decomposition, governance, company, and diagnostic workflows
+
+What I reviewed
+- Whether preserved invariants from the shared decisions ledger are actually protected by tests
+- Whether edge cases and failure paths are covered, especially blank required text, deduped repeatable strings, positive-int failures, and local sorted-status behavior
+- Whether the coverage map overstates protection or silently normalizes a regression
+- The scoped deterministic proof rerun, which passed again: `321 passed in 33.53s`
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- The coverage map accurately reflects real regression protection for the migrated parameter seam and the workflow-local non-goals that intentionally remain outside the shared seam.
+- I marked all audit criteria complete and recorded a no-findings audit outcome in the test feedback artifact.
+
+Open issues / next step
+- No open issues in the approved phase scope.
+- The test phase can be treated as complete and ready for downstream closeout.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
