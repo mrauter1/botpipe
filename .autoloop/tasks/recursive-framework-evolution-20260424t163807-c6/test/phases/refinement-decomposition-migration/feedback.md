@@ -13,3 +13,7 @@
 - Re-ran the scoped runtime suites after the assertion tightening:
   - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` -> `23 passed`
   - `tests/runtime/test_workflow_package_to_composable_building_blocks.py` -> `24 passed`
+
+## Audit findings
+
+- `TST-000` | `non-blocking` | No audit findings. The targeted runtime suites cover unchanged publication receipts, boundary/failure paths, and the tightened workflow-local authoritative-drift message surface without adding flaky assumptions or normalizing an unconfirmed behavior change.
