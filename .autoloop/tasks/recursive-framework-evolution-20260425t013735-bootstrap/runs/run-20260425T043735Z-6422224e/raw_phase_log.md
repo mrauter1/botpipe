@@ -857,3 +857,103 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc310-7a68-7050-aab6-2752130a18d7
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+I’m treating this as a focused coverage pass for the finished runtime enforcement change. First I’m checking the existing phase test artifacts and the current contract tests so I can fill any remaining edge-case gaps instead of churning tests that already cover the intent.
+
+I found one worthwhile gap: the reviewer bug was reproduced on the middleware/provider branch, but not on the parallel `SystemStep` branch. I’m adding that now so the ordering guarantee is enforced on both code paths, then I’ll update the phase strategy and test feedback.
+
+The coverage gap is patched. I’m running the focused contract slice now, then I’ll append the one non-obvious test decision to the shared ledger and stop.
+
+The new test passes. I’m recording the rationale in the shared decisions file so later turns keep the ordering regression covered on both execution branches, not just the provider path that triggered the reviewer finding.
+
+Scope considered
+- Phase-local test work for `artifact-runtime-enforcement`.
+- Focused on [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) plus the phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/artifact-runtime-enforcement/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/artifact-runtime-enforcement/feedback.md), and the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+What I analyzed
+- The finished runtime-enforcement tests already covered required outputs, optional schema-bearing outputs, route-specific overrides, and checkpoint artifact context.
+- The remaining gap was branch coverage for the reviewer-discovered ordering bug: middleware/provider invalid-route ordering was covered, but the parallel `SystemStep` path was not.
+
+What I changed
+- Added `test_invalid_system_route_still_fails_before_artifact_validation` in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/artifact-runtime-enforcement/test_strategy.md) with a behavior-to-test map, edge cases, stabilization notes, and known gaps.
+- Appended a concise coverage summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/artifact-runtime-enforcement/feedback.md).
+- Appended one non-obvious test decision under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+Key findings / decisions
+- The ordering regression is now guarded on both relevant execution paths:
+  - middleware/provider-selected invalid route
+  - system-handler-selected invalid route
+- Validation run:
+  - `python3 -m py_compile tests/contract/test_engine_contracts.py`
+  - `./.venv/bin/pytest -q tests/contract/test_engine_contracts.py -k 'invalid_middleware_route_still_fails_before_artifact_validation or invalid_system_route_still_fails_before_artifact_validation or required_produced_artifact or optional_json_artifact or route_specific_required_artifacts or system_step_route_specific_required_artifacts'`
+
+Open issues / next step
+- No new phase-local test gaps found beyond the explicitly out-of-scope session continuity and worklist behavior.
+- The next step is test-auditor review of the updated strategy and focused regression coverage.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc310-7a68-7050-aab6-2752130a18d7
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc310-7a68-7050-aab6-2752130a18d7
+---
+I’m auditing the new test coverage rather than the runtime code itself. First I’m checking the strategy and the exact regression tests that were added so I can decide whether the phase is fully covered or if anything material is still unguarded.
+
+I don’t see any material coverage gap after rechecking the updated tests. The new system-branch regression closes the only remaining branch asymmetry, and the phase strategy matches the actual assertions in the suite.
+
+Scope considered
+- Phase-local audit for `artifact-runtime-enforcement` test coverage only.
+- Reviewed the updated phase artifacts, the focused contract tests in `tests/contract/test_engine_contracts.py`, and the relevant decisions ledger entries for this phase.
+
+What I analyzed
+- Whether the changed behavior is covered at the right level for required artifacts, optional schema-bearing outputs, route-specific overrides, checkpoint artifact context, and invalid-route ordering.
+- Whether the added system-branch regression test closes the branch asymmetry exposed by the earlier reviewer finding.
+- Whether the phase strategy matches the actual assertions and avoids flaky setup.
+
+What I reviewed
+- `test_strategy.md` behavior map and stated known gaps.
+- `tests/contract/test_engine_contracts.py` around:
+  - missing required produced artifact
+  - invalid middleware route before artifact validation
+  - invalid system route before artifact validation
+  - handler-written required JSON artifact
+  - optional schema-bearing artifact present/absent
+  - route-specific override behavior
+  - system-step selected-route enforcement
+- Focused execution:
+  - `./.venv/bin/pytest -q tests/contract/test_engine_contracts.py -k 'invalid_middleware_route_still_fails_before_artifact_validation or invalid_system_route_still_fails_before_artifact_validation or required_produced_artifact or optional_json_artifact or route_specific_required_artifacts or system_step_route_specific_required_artifacts'`
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- The added tests now cover both invalid-route ordering branches and the main required/optional artifact enforcement paths with deterministic in-memory fixtures.
+- `criteria.md` is fully checked and `feedback.md` includes the clean audit result.
+
+Open issues / next step
+- No open phase-local test-audit issues remain.
+- The test side of `artifact-runtime-enforcement` is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
