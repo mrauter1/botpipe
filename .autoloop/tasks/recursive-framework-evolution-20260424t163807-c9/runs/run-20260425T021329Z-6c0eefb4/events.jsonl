@@ -49,3 +49,4 @@
 {"ts": "2026-04-25T03:05:19.413902+00:00", "run_id": "run-20260425T021329Z-6c0eefb4", "seq": 49, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "docs-memory-and-proof-closeout"}
 {"ts": "2026-04-25T03:06:04.650131+00:00", "run_id": "run-20260425T021329Z-6c0eefb4", "seq": 50, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "docs-memory-and-proof-closeout"}
 {"ts": "2026-04-25T03:06:04.691269+00:00", "run_id": "run-20260425T021329Z-6c0eefb4", "seq": 51, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "docs-memory-and-proof-closeout"}
+{"ts": "2026-04-25T03:06:04.772380+00:00", "run_id": "run-20260425T021329Z-6c0eefb4", "seq": 52, "event_type": "phase_completed", "pair": "test", "phase_id": "docs-memory-and-proof-closeout", "phase_mode": "single"}

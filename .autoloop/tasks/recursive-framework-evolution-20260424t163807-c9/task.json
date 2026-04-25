@@ -14,13 +14,13 @@
       "docs-memory-and-proof-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "docs-memory-and-proof-closeout"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "extract-shared-publication-validation": "completed",
     "migrate-governance-and-diagnostic-publishers": "completed",
-    "docs-memory-and-proof-closeout": "in_progress"
+    "docs-memory-and-proof-closeout": "completed"
   },
   "phase_history": [
     {
@@ -54,6 +54,13 @@
       "run_id": "run-20260425T021329Z-6c0eefb4",
       "status": "in_progress",
       "ts": "2026-04-25T02:53:19.094890+00:00"
+    },
+    {
+      "phase_id": "docs-memory-and-proof-closeout",
+      "run_id": "run-20260425T021329Z-6c0eefb4",
+      "status": "completed",
+      "ts": "2026-04-25T03:06:04.771800+00:00",
+      "pair": "test"
     }
   ]
 }
