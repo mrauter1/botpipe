@@ -14,13 +14,13 @@
       "docs-memory-and-proof-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "migrate-direct-fit-publishers"
+    "current_phase_index": 2,
+    "current_phase_id": "docs-memory-and-proof-closeout"
   },
   "phase_status": {
     "typed-publication-artifact-contracts": "completed",
-    "migrate-direct-fit-publishers": "in_progress",
-    "docs-memory-and-proof-closeout": "planned"
+    "migrate-direct-fit-publishers": "completed",
+    "docs-memory-and-proof-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260425T030605Z-ce22105c",
       "status": "in_progress",
       "ts": "2026-04-25T03:34:43.927983+00:00"
+    },
+    {
+      "phase_id": "migrate-direct-fit-publishers",
+      "run_id": "run-20260425T030605Z-ce22105c",
+      "status": "completed",
+      "ts": "2026-04-25T03:43:15.047307+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "docs-memory-and-proof-closeout",
+      "run_id": "run-20260425T030605Z-ce22105c",
+      "status": "in_progress",
+      "ts": "2026-04-25T03:43:15.051985+00:00"
     }
   ]
 }
