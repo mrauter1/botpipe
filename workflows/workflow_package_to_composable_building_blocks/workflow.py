@@ -384,9 +384,9 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         try:
             surface_path = write_selected_workflow_decomposition_surface(ctx, state.selected_workflow_reference)
             surface_snapshot = _read_json(surface_path)
-            selected_workflow_name = _validated_selected_workflow_name(
-                surface_snapshot,
-                state.selected_workflow_reference,
+            _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
+            selected_workflow_name, _, _, _ = validate_selected_workflow_decomposition_surface_snapshot(
+                surface_snapshot
             )
             boundary = _decomposition_surface_boundary(surface_snapshot, repo_root)
             _write_baseline_parent_manifest(
@@ -584,12 +584,12 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         _require_non_empty_text_file(required_paths["promotion_record"], "promotion_record.md must be non-empty")
         _require_non_empty_text_file(required_paths["rollback_plan"], "rollback_plan.md must be non-empty")
 
-        selected_workflow_name = _validated_selected_workflow_name(
+        _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
+        selected_workflow_name, _, _, _ = validate_selected_workflow_decomposition_surface_snapshot(
             decomposition_surface_snapshot,
-            state.selected_workflow_reference,
+            expected_selected_workflow_name=state.selected_workflow_name,
+            expected_label="workflow state",
         )
-        if state.selected_workflow_name is not None and state.selected_workflow_name != selected_workflow_name:
-            raise ValueError("selected_workflow_decomposition_surface.json must match workflow state")
 
         boundary = _decomposition_surface_boundary(decomposition_surface_snapshot, repo_root)
         _validate_evidence_manifest(
@@ -700,18 +700,6 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
 
 def _repo_root_from_context(ctx) -> Path:
     return ctx.package_folder.resolve().parent.parent
-
-
-def _validated_selected_workflow_name(
-    decomposition_surface_snapshot: Mapping[str, Any],
-    selected_workflow_reference: str,
-) -> str:
-    selected_workflow_name, _, _, _ = validate_selected_workflow_decomposition_surface_snapshot(
-        decomposition_surface_snapshot
-    )
-    if not selected_workflow_reference.strip():
-        raise ValueError("selected_workflow_reference must stay non-empty")
-    return selected_workflow_name
 
 
 def _decomposition_surface_boundary(

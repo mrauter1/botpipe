@@ -23,9 +23,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_non_empty_string,
         require_positive_int,
         require_string_list,
-        validate_selected_workflow_authoring_surface_snapshot,
-        validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_name_alignment,
+        validate_selected_workflow_artifact_alignment,
+        validate_selected_workflow_capability_and_authoring_snapshots,
         validate_authoritative_surface_sources_unchanged,
         validate_baseline_surface_manifest,
         validate_candidate_surface_manifest,
@@ -53,9 +52,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_non_empty_string,
         require_positive_int,
         require_string_list,
-        validate_selected_workflow_authoring_surface_snapshot,
-        validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_name_alignment,
+        validate_selected_workflow_artifact_alignment,
+        validate_selected_workflow_capability_and_authoring_snapshots,
         validate_authoritative_surface_sources_unchanged,
         validate_baseline_surface_manifest,
         validate_candidate_surface_manifest,
@@ -405,14 +403,10 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
 
         capability_snapshot = _read_json(capability_path)
         authoring_snapshot = _read_json(authoring_surface_path)
-        selected_workflow_name = _validated_selected_workflow_name(
+        _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
+        selected_workflow_name, _, authoring_surface = validate_selected_workflow_capability_and_authoring_snapshots(
             capability_snapshot,
             authoring_snapshot,
-            state.selected_workflow_reference,
-        )
-        authoring_surface = _require_mapping(
-            authoring_snapshot.get("selected_workflow_authoring_surface"),
-            "selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface as a JSON object",
         )
         baseline_manifest = _write_baseline_workflow_manifest(
             ctx,
@@ -612,19 +606,14 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "rollback_plan.md must be non-empty",
         )
 
-        selected_workflow_name = _validated_selected_workflow_name(
+        _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
+        selected_workflow_name, _, authoring_surface = validate_selected_workflow_capability_and_authoring_snapshots(
             capability_snapshot,
             authoring_snapshot,
-            state.selected_workflow_reference,
         )
         _validate_evaluation_summary_selected_workflow(baseline_evaluation_summary, selected_workflow_name)
         if state.selected_workflow_name is not None and state.selected_workflow_name != selected_workflow_name:
             raise ValueError("selected_workflow snapshots must match workflow state")
-
-        authoring_surface = _require_mapping(
-            authoring_snapshot.get("selected_workflow_authoring_surface"),
-            "selected_workflow_authoring_surface.json must define selected_workflow_authoring_surface as a JSON object",
-        )
         expected_boundary = _authoring_surface_boundary(authoring_surface, repo_root)
 
         baseline_relative_paths = _require_string_list(
@@ -719,32 +708,14 @@ def _repo_root_from_context(ctx) -> Path:
     return ctx.package_folder.resolve().parent.parent
 
 
-def _validated_selected_workflow_name(
-    capability_snapshot: Mapping[str, Any],
-    authoring_snapshot: Mapping[str, Any],
-    selected_workflow_reference: str,
-) -> str:
-    capability_selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(capability_snapshot)
-    authoring_selected_workflow_name, _ = validate_selected_workflow_authoring_surface_snapshot(authoring_snapshot)
-    validate_selected_workflow_name_alignment(
-        authoring_selected_workflow_name,
-        capability_selected_workflow_name,
-        artifact_name="selected_workflow_authoring_surface.json",
-        expected_artifact_name="selected_workflow_capability.json",
-    )
-    if not selected_workflow_reference.strip():
-        raise ValueError("selected_workflow_reference must stay non-empty")
-    return capability_selected_workflow_name
-
-
 def _validate_evaluation_summary_selected_workflow(
     summary_payload: Mapping[str, Any],
     selected_workflow_name: str,
 ) -> None:
-    validate_selected_workflow_name_alignment(
-        summary_payload.get("selected_workflow_name"),
-        selected_workflow_name,
+    validate_selected_workflow_artifact_alignment(
+        summary_payload,
         artifact_name="baseline_evaluation_summary.json",
+        expected_selected_workflow_name=selected_workflow_name,
         expected_artifact_name="selected workflow",
     )
 

@@ -19,8 +19,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_positive_int,
         require_string_list,
         require_unique_values,
+        validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_selected_workflow_run_history_snapshot,
     )
@@ -41,8 +41,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_positive_int,
         require_string_list,
         require_unique_values,
+        validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_selected_workflow_run_history_snapshot,
     )
@@ -317,10 +317,10 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         snapshot_selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(capability_snapshot)
 
         history_snapshot = _read_json(history_path)
-        validate_selected_workflow_name_alignment(
-            history_snapshot.get("selected_workflow_name"),
-            snapshot_selected_workflow_name,
+        validate_selected_workflow_artifact_alignment(
+            history_snapshot,
             artifact_name="selected_workflow_run_history.json",
+            expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         run_history = _require_mapping(
@@ -458,10 +458,10 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         )
 
         history_snapshot = _read_json(required_paths["selected_workflow_run_history"])
-        validate_selected_workflow_name_alignment(
-            history_snapshot.get("selected_workflow_name"),
-            snapshot_selected_workflow_name,
+        validate_selected_workflow_artifact_alignment(
+            history_snapshot,
             artifact_name="selected_workflow_run_history.json",
+            expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         run_history = _require_mapping(
@@ -565,10 +565,10 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             raise ValueError("run_history_scope.md must reference the filtered run IDs")
 
         manifest = _read_json(required_paths["failure_mode_manifest"])
-        validate_selected_workflow_name_alignment(
-            manifest.get("selected_workflow_name"),
-            snapshot_selected_workflow_name,
+        validate_selected_workflow_artifact_alignment(
+            manifest,
             artifact_name="failure_mode_manifest.json",
+            expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         manifest_evidence_run_ids = _require_string_list(
@@ -667,10 +667,10 @@ class WorkflowRunHistoryToFailureModes(Workflow):
                 raise ValueError("recurring_weak_points.md must reference each recurring_weak_point_id")
 
         improvement_summary = _read_json(required_paths["improvement_opportunities_summary"])
-        validate_selected_workflow_name_alignment(
-            improvement_summary.get("selected_workflow_name"),
-            snapshot_selected_workflow_name,
+        validate_selected_workflow_artifact_alignment(
+            improvement_summary,
             artifact_name="improvement_opportunities.json",
+            expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         summary_evidence_run_ids = _require_string_list(

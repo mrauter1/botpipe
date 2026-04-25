@@ -15,8 +15,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_mapping,
         require_non_empty_string,
         require_string_list,
+        validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_validated_workflow_parameters,
     )
@@ -34,8 +34,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_mapping,
         require_non_empty_string,
         require_string_list,
+        validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_validated_workflow_parameters,
     )
@@ -361,10 +361,10 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             proposed_parameters,
         )
         validated_payload = read_json_object(validated_path)
-        validate_selected_workflow_name_alignment(
-            validated_payload.get("selected_workflow_name"),
-            snapshot_selected_workflow_name,
+        validate_selected_workflow_artifact_alignment(
+            validated_payload,
             artifact_name="validated_workflow_parameters.json",
+            expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         validated_parameters = require_mapping(
@@ -373,10 +373,10 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         )
 
         summary = read_json_object(required_paths["adapted_execution_summary"])
-        summary_selected_workflow_name = validate_selected_workflow_name_alignment(
-            summary.get("selected_workflow_name"),
-            snapshot_selected_workflow_name,
+        summary_selected_workflow_name = validate_selected_workflow_artifact_alignment(
+            summary,
             artifact_name="adapted_execution_summary.json",
+            expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         summary_entry_step = require_non_empty_string(

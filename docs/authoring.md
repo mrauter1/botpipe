@@ -296,6 +296,8 @@ Validation helper boundary:
 - generic validation belongs in stdlib rather than copied workflow-local helper tails
 - use these helpers for shared JSON-object reads, non-empty string checks, string-list normalization, mapping checks, duplicate guards, non-negative-int validation, and positive-int validation
 - use the selected-workflow snapshot validators in the same module when multiple workflows need the same capability, authoring-surface, decomposition-surface, or cross-artifact selected-workflow-name checks
+  - `validate_selected_workflow_artifact_alignment(...)` handles top-level `selected_workflow_name` alignment across artifacts
+  - `validate_selected_workflow_capability_and_authoring_snapshots(...)` validates the paired capability and authoring surfaces without repeating local cross-check code
 - keep workflow-specific publication assertions, domain allow-lists, and artifact-family invariants in workflow code
 - the helpers only validate explicit workflow-local inputs and artifacts; they do not add runtime-owned routing, publication policy, or hidden execution
 

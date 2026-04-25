@@ -15,8 +15,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_mapping,
         require_non_empty_string,
         require_string_list,
+        validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_validated_eval_case_manifest,
     )
@@ -34,8 +34,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_mapping,
         require_non_empty_string,
         require_string_list,
+        validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_name_alignment,
         write_selected_workflow_capability_snapshot,
         write_validated_eval_case_manifest,
     )
@@ -414,10 +414,10 @@ class WorkflowToEvalSuite(Workflow):
             proposed_manifest,
         )
         validated_manifest = read_json_object(validated_path)
-        validate_selected_workflow_name_alignment(
-            validated_manifest.get("selected_workflow_name"),
-            snapshot_selected_workflow_name,
+        validate_selected_workflow_artifact_alignment(
+            validated_manifest,
             artifact_name="validated_eval_case_manifest.json",
+            expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
 
@@ -443,10 +443,10 @@ class WorkflowToEvalSuite(Workflow):
         covered_expected_artifacts = _collect_covered_expected_artifacts(validated_manifest.get("validated_cases"))
 
         summary = read_json_object(required_paths["workflow_eval_suite_summary"])
-        summary_selected_workflow_name = validate_selected_workflow_name_alignment(
-            summary.get("selected_workflow_name"),
-            snapshot_selected_workflow_name,
+        summary_selected_workflow_name = validate_selected_workflow_artifact_alignment(
+            summary,
             artifact_name="workflow_eval_suite_summary.json",
+            expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         summary_entry_step = require_non_empty_string(

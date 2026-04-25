@@ -372,6 +372,23 @@ def validate_selected_workflow_name_alignment(
     return selected_workflow_name
 
 
+def validate_selected_workflow_artifact_alignment(
+    payload: Mapping[str, Any],
+    *,
+    artifact_name: str,
+    expected_selected_workflow_name: str,
+    expected_artifact_name: str,
+) -> str:
+    """Validate one artifact payload's selected-workflow name against another artifact."""
+
+    return validate_selected_workflow_name_alignment(
+        payload.get("selected_workflow_name"),
+        expected_selected_workflow_name,
+        artifact_name=artifact_name,
+        expected_artifact_name=expected_artifact_name,
+    )
+
+
 def validate_selected_workflow_capability_snapshot(
     payload: Mapping[str, Any],
     *,
@@ -473,6 +490,28 @@ def validate_selected_workflow_decomposition_surface_snapshot(
     return selected_workflow_name, decomposition_surface, identity, compiled_surface
 
 
+def validate_selected_workflow_capability_and_authoring_snapshots(
+    capability_snapshot: Mapping[str, Any],
+    authoring_snapshot: Mapping[str, Any],
+    *,
+    expected_selected_workflow_name: str | None = None,
+    expected_label: str = "workflow state",
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    """Validate paired capability and authoring snapshots for the same selected workflow."""
+
+    capability_selected_workflow_name, capability = validate_selected_workflow_capability_snapshot(
+        capability_snapshot,
+        expected_selected_workflow_name=expected_selected_workflow_name,
+        expected_label=expected_label,
+    )
+    _, authoring_surface = validate_selected_workflow_authoring_surface_snapshot(
+        authoring_snapshot,
+        expected_selected_workflow_name=capability_selected_workflow_name,
+        expected_label="selected_workflow_capability.json",
+    )
+    return capability_selected_workflow_name, capability, authoring_surface
+
+
 def _validation_issue(error: dict[str, Any]) -> ValidationIssue:
     raw_location = error.get("loc") or ()
     location = tuple(str(item) for item in raw_location)
@@ -494,6 +533,8 @@ __all__ = [
     "require_string_list",
     "require_unique_values",
     "validate_selected_workflow_authoring_surface_snapshot",
+    "validate_selected_workflow_artifact_alignment",
+    "validate_selected_workflow_capability_and_authoring_snapshots",
     "validate_selected_workflow_capability_snapshot",
     "validate_selected_workflow_decomposition_surface_snapshot",
     "validate_selected_workflow_name_alignment",
