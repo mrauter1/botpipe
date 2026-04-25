@@ -479,18 +479,24 @@ Decomposition helper boundary:
 from autoloop_v3.stdlib import (
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
+    normalize_candidate_surface_overlay_result,
     normalize_candidate_surface_boundary,
+    validate_baseline_surface_manifest,
     validate_authoritative_surface_sources_unchanged,
+    validate_candidate_surface_manifest,
     validate_candidate_surface_overlay,
 )
 ```
 
 Candidate-surface helper boundary:
 
-- the helpers own only the mechanical baseline/candidate publication operations: repo-relative boundary normalization, baseline surface materialization, candidate-manifest diff derivation, authoritative-source drift rejection, and isolated overlay validation
+- the helpers own only the mechanical baseline/candidate publication operations: repo-relative boundary normalization, baseline surface materialization, candidate-manifest diff derivation, baseline/candidate manifest validation, authoritative-source drift rejection, isolated overlay validation, and overlay-result normalization
 - they reuse the shared selected-workflow surface artifacts and repo-relative path hardening instead of ad hoc workflow-local copy, digest, and traversal checks
+- manifest validators cover shared mechanics such as `repo_root` and `surface_kind` alignment, boundary-field comparison, `relative_paths` versus `files` consistency, copied-surface digest checks, and caller-supplied added-path allow-lists
+- callers still own workflow-specific boundary policy, optional boundary-field wiring, domain-specific error wording, and any post-validation receipt semantics
 - they write only workflow-local surface folders and manifest metadata under `ctx.workflow_folder`
 - overlay validation still runs against an isolated repo copy with the same runnable-root fallback used by the workflow-local publication path
+- overlay-result normalization only validates the mechanical compile/test receipt shape, including whether the caller expects one compiled workflow or many
 - they do not own refinement-specific evaluation alignment, decomposition-specific evidence capture, building-block extraction policy, or publication receipt shaping
 - they do not mutate, auto-promote, auto-decompose, auto-refine, or auto-run the selected workflow
 - they do not add CLI flags, new `workflow.toml` fields, runtime-owned publication automation, or hidden downstream routing

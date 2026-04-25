@@ -604,3 +604,77 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc222-eb62-7f62-b2ad-dac4bda6f6d7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc222-eb62-7f62-b2ad-dac4bda6f6d7
+
+
+---
+run_id=run-20260425T001633Z-23b17522 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc222-eb62-7f62-b2ad-dac4bda6f6d7
+---
+I’m treating this as a scoped closeout phase: verify the candidate-surface seam migration, update only the docs and recursive memory that need it, and record the cycle accounting and proof results. I’m starting with the mandatory audit inputs, prior phase artifacts, and the touched workflow/helper surfaces so I can confirm the exact consolidation outcome before editing.
+
+I’ve loaded the plan and prior phase decisions. Next I’m narrowing onto the migrated seam itself, the affected docs/tests, and the recursive memory files so the closeout reflects the actual implementation rather than the planned one.
+
+The closeout will mostly be documentation and accounting. I’m now checking whether `docs/authoring.md` already captures the seam boundary accurately, and I’m reading the prior phase notes so the cycle metrics match the actual helper/workflow changes rather than inferred ones.
+
+The authoring doc already has a candidate-surface section, but it still describes only the original helper subset. I’m checking the recursive memory ledgers next to see whether this cycle needs a fresh `c7` closeout entry or just a bounded update to the existing seam notes.
+
+I’ve confirmed the phase is running in a very dirty checkout, so I’m not going to rely on whole-worktree git stats. I’m switching to scoped accounting from the already-recorded phase notes plus direct file counts in the touched surfaces, then I’ll run the targeted proof once the docs/memory edits are in place.
+
+I have enough context to edit now. I’m going to make three bounded changes: tighten `docs/authoring.md` so it reflects the expanded candidate-surface seam, append cycle-`c7` closeout notes to the recursive memory ledgers, and write the phase-local implementation notes and decision entry with the required proof/accounting fields.
+
+I’m at proof now. The docs change is in place; I’m running the scoped unit, runtime, and baseline-doc suites together so the closeout notes can cite actual results instead of inherited numbers.
+
+I’ve got the proof result: `152 passed` on the scoped suite. I’m writing the closeout records now, including the explicit accounting fields and a `c7` memory entry so later turns don’t confuse the earlier seam-migration notes with this final documentation/proof phase.
+
+The closeout records are in place. I’m doing a final sanity pass over the edited docs and notes, then I’ll summarize the exact scope, proof, and remaining deferred debt.
+
+Scope considered
+
+- Phase-local closeout for the candidate-surface consolidation cycle: [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), the five `.autoloop_recursive/*` memory files, [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/implement/phases/proof-docs-memory-closeout/implementation_notes.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/decisions.txt).
+
+What I analyzed
+
+- The cycle request, plan, prior-phase notes, `docs/architecture.md`, `docs/authoring.md`, `stdlib/candidate_surfaces.py`, the two migrated workflows, targeted unit/runtime tests, and the current recursive-memory ledgers.
+- The existing authoring docs already named the candidate-surface seam, but they did not describe the expanded manifest-validator and overlay-result-normalizer boundary added in this cycle.
+
+What I changed
+
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) so the candidate-surface helper section now documents the full shared surface: manifest validation, allow-list boundary checks, and overlay-result normalization, while keeping workflow-specific policy local.
+- Appended `Recursive-Framework-Evolution-20260424t163807-c7` closeout notes to:
+  - [framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md)
+  - [framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md)
+  - [framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md)
+  - [workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md)
+  - [validation_debt_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/validation_debt_ledger.md)
+- Wrote the required phase accounting, audit, invariants, and proof record into [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c7/implement/phases/proof-docs-memory-closeout/implementation_notes.md), and added the non-obvious closeout decisions under the current header in `decisions.txt`.
+
+Key findings / decisions
+
+- Cycle mode remains `consolidate`; no new workflow was justified.
+- No doctrine change was needed. The right closeout move was to document the expanded existing seam, not widen runtime behavior or add a new authoring surface.
+- Full targeted proof passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  - Result: `152 passed in 24.41s`
+- Recorded cycle accounting:
+  - files added `0`
+  - files deleted `0`
+  - repo-wide net line change not practical in this dirty checkout
+  - scoped code migration remained net-negative (`-214`) before this docs/memory closeout
+  - repeated validation idioms removed `3`
+  - repeated prompt sections removed `0`
+  - workflows changed to use shared helpers `2`
+  - new helper functions introduced `5`
+  - old workflow-local validation blocks replaced `6`
+
+Open issues / next step
+
+- Deferred debt remains serializer/surface convergence beyond the refinement/decomposition family.
+- No blocking issue remains for this phase.
