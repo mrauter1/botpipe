@@ -2005,3 +2005,141 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc35d-e300-7c22-9336-e54faba217cc
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+I’m starting with the active phase artifacts and the existing workflow runtime so I can wire worklists into the current compiler, context, and engine without drifting outside the phase scope.
+
+I have the phase boundary and prior decisions. Next I’m reading the current route/effect, engine, context, compiler, and step implementations to see exactly where scoped selection and `Advance` should land.
+
+The repo layout is a little different than the earlier `src/` assumption, so I’m switching to the package root directly and reading the concrete modules there before changing anything.
+
+I’ve confirmed worklist support is still completely absent and route effects deliberately hard-fail. Now I’m reading the persistence and public-surface pieces so I can add selection state in a way that survives checkpoint/resume and matches the current export patterns.
+
+Plan for this phase:
+1. Add worklist declarations and validation, then thread scoped-step metadata through compilation.
+2. Extend `Context`, checkpoint/session primitives, and template resolution with selection/current-item state.
+3. Implement engine-side scoped execution and `Advance` effect handling, then add focused unit/contract/runtime tests and update the phase notes/decision log.
+
+The main open design point is `Advance` semantics on a scoped step. I’m checking the existing capability/inspection layer and the plan artifacts one more time so I can make that behavior explicit and keep it consistent everywhere.
+
+I have enough context to start the code changes. I’m adding the worklist model first so validation, compilation, session continuity, and runtime selection all use one shared representation instead of duplicating the rules in the engine.
+
+The checkpoint store needs a small additive shape change for selection snapshots. I hit a context mismatch in the filesystem store, so I’m reading the exact save/load helpers and patching that part directly instead of forcing a broad edit.
+
+The runtime wiring is in progress now: selections are initialized before `on_start` and restored before resume execution. Next I’m changing step execution so scoped contexts, placeholders, and `Advance` all use the same selection state instead of ad hoc per-step logic.
+
+The structural pieces are in place now. I’m moving to tests next, which will flush out any remaining mismatches in selection restore, placeholder resolution, and the exact `Advance` routing behavior.
+
+I’ve moved into verification. The first pass is the focused unit/contract/runtime suites that cover the new worklist declarations, selection helpers, checkpoint round-trips, and scoped `Advance` execution.
+
+The failing case is the work-item continuity resolution, not the worklist loop itself. I’m tightening session selection so declarative continuity re-derives per-item keys while still preserving explicit `scope=` / `key=` overrides.
+
+The focused worklist suites are green. I’m running one broader runtime pass now against CLI/workspace flows because the checkpoint shape and workflow shim exports changed additively in this phase.
+
+I’m at the bookkeeping pass now: recording the non-obvious runtime decisions and the exact phase mapping so later turns don’t drift on `Advance` semantics, selection snapshots, or the now-public worklist/effect surface.
+
+The implementation and verification are done. I’m doing a final scan of the touched files and the phase artifacts so the close-out reflects the actual scoped diff rather than the repo’s unrelated dirty state.
+
+Scope considered
+
+- Phase-local worklist/scoped-step support only: core runtime/compiler/context/store surfaces, public shim exports needed to author the feature, focused tests, and the required phase artifacts.
+
+What I analyzed
+
+- `core/validation.py`, `core/compiler.py`, `core/context.py`, `core/engine.py`, `core/artifacts.py`, `core/steps.py`, session/checkpoint stores, shim exports, and the existing unit/contract/runtime coverage around routes, sessions, and checkpoints.
+
+What I changed
+
+- Added `core/worklists.py` with `WorkItem`, `Selector`, `Selection`, snapshot types, static/artifact-backed sources, and selection/status helpers.
+- Added `scope=` support to provider-owned steps, workflow-level worklist discovery/validation, and compiled `scope_name`/`worklists` metadata.
+- Extended `Context` with `selection(...)`, `current(...)`, and `item`, and added item/worklist-aware artifact placeholders.
+- Implemented runtime selection init/restore, checkpoint persistence for worklist selections, and executable route effects for `Refresh`, `ResetCompletion`, `SetStatus`, and `Advance`.
+- Made `Continuity.work_item(...)` usable in practice by re-deriving session keys per current item while preserving explicit `scope=` / `key=` overrides.
+- Exported `Continuity`, worklist primitives, and effect types from `workflow` now that they are executable.
+- Updated phase notes/decisions and added focused tests.
+
+Key findings / decisions
+
+- `Advance(worklist)` on a scoped step now re-enters that same step while items remain, then resolves via `if_exhausted`; that matches the approved `Route.to(SUCCESS, ..., Advance(worklist))` pattern.
+- Worklist progression is resumed from additive `SelectionSnapshot` data rather than persisting arbitrary item payloads.
+- `BoardMutation` remains explicitly unimplemented in this phase.
+- Validation run:
+  - `156` focused unit/contract/runtime/strictness tests passed
+  - `33` broader CLI/workspace runtime tests passed
+
+Open issues / next step
+
+- Docs were not updated in this phase.
+- I did not run full `pytest -q`; the next phase should do the broader public-surface/docs regression pass.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc35d-e300-7c22-9336-e54faba217cc
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+I’m reviewing the worklist phase diff against the request, prior decisions, and the scoped runtime/compiler paths it touched before I update the criteria and feedback artifacts.
+
+I have the phase notes and decision ledger. I’m reading the concrete worklist/runtime code paths now with a review lens for hidden regressions, unsupported edge cases, and any drift from the stated `Advance` and checkpoint semantics.
+
+I found two areas that need concrete confirmation before I write the review artifact: duplicate work-item IDs appear to be silently accepted, and `Advance(...)` seems to self-loop even when the source step is not scoped to that worklist. I’m reproducing both directly now.
+
+I’m verifying the worklist phase against the implemented code and phase artifacts, then I’ll update the reviewer files with any concrete gaps or regressions I find.
+
+I’ve narrowed the review to two concrete regression surfaces: selection identity and `Advance` semantics. I’m checking the exact validation gaps now so the feedback points at the right fix location instead of just the symptom.
+
+The compiler already knows which steps are scoped and which worklists exist. The missing part is that those invariants never get tied back to runtime `Advance` behavior or to item identity constraints.
+
+I have enough to write findings now: one determinism hole from duplicate item IDs, and one compile/runtime mismatch where `Advance` enables hidden looping on unscoped steps.
+
+I’ve written the findings into the phase feedback artifact. I’m doing one quick pass on that artifact now to keep the references clean and machine-readable.
+
+Scope considered
+
+- Phase-local review of the `worklists` implementation only: worklist/scoped-step runtime behavior, validation, checkpoint/selection handling, and the verifier artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/`.
+
+What I analyzed
+
+- Authoritative phase artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/implementation_notes.md), and the latest relevant block in `decisions.txt`.
+- Request-relevant code paths in [core/worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/worklists.py:1), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:769), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:471), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py:200), and [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:149).
+- Existing tests covering scoped execution and `Advance` behavior in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1912).
+
+What I reviewed
+
+- Determinism and identity handling for worklist items across initial selection, refresh, restore, and status mutation.
+- Whether `Advance(worklist)` stays constrained to the explicit scoped-step model required by this phase.
+- Consistency between compile-time validation and runtime execution for route effects.
+
+Key findings / decisions
+
+- Added two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/worklists/feedback.md).
+- `IMP-001`: duplicate work item ids are accepted, but the implementation later collapses by `item.id`, which makes restore/refresh/status/session behavior non-deterministic.
+- `IMP-002`: `Advance(worklist)` can self-loop an unscoped step, creating hidden iteration outside the scoped-step contract for this phase.
+- Because of those blocking issues, the criteria remain unchecked and this review is not complete.
+
+Open issues / next step
+
+- Fix the two blocking issues, rerun the focused worklist/runtime tests, then re-run verifier review on this phase artifact set.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
