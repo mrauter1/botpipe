@@ -393,3 +393,63 @@ Open issues / next step
 
 - No open issues from the test-author phase.
 - The next step is auditor review against the updated phase artifacts and the `219 passed` proof result.
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc235-d58e-79b2-a521-ff3cac162f12
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+I’m auditing the test phase against the serializer-convergence contract first, then I’ll update the phase-local criteria and feedback artifacts only.
+
+I’ve got the phase artifacts. Next I’m checking the actual test delta against the changed serializer and validator seams, then I’ll decide whether the audit criteria can be fully checked.
+
+The direct core seam test exists where expected. I’m doing one last pass over adjacent serializer coverage and then I’ll either record findings or mark the audit clean.
+
+The focused proof set is still running. I’m waiting on that before I write the final audit state into the phase artifacts.
+
+I’ve finished the proof rerun and the adjacent coverage pass. The test suite is clean, and I’m updating the auditor-owned artifacts to reflect a no-findings audit.
+
+Scope considered
+
+- Phase-local test audit for `converge-selected-workflow-serializers`.
+- I reviewed the changed serializer/validator test surface, the phase-local test artifacts, and the focused adjacent runtime/doc regression surface. I did not expand into unrelated dirty files.
+
+What I analyzed
+
+- The new direct unit coverage in `tests/unit/test_stdlib_and_extensions.py` for the centralized payload builders in `core/workflow_capabilities.py`.
+- Existing selected-workflow wrapper, validator, and runtime regression coverage across the adaptation, eval-suite, run-history, refinement, and decomposition workflow families.
+- The active phase artifacts in `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/converge-selected-workflow-serializers/` and the shared `decisions.txt` ledger.
+
+What I reviewed
+
+- Whether tests cover AC-1 and AC-2 without encoding a contract change.
+- Whether preserved invariants remain checked: separate artifact files, unchanged top-level JSON contracts, repo-relative path conversion, runtime-test inference, and decomposition nested-authoring shape.
+- Whether the test surface has material missing edge/failure coverage or flake risk.
+- Auditor proof rerun:
+  `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  Result: `219 passed in 28.42s`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The added direct core-seam unit test closes the remaining material gap from the consolidation: serializer regressions in the centralized payload builders are now caught even if the thin stdlib wrappers keep passing.
+- Existing runtime and unit coverage already provides adequate edge/failure-path protection for adjacent preserved behavior, including selected-workflow name alignment and decomposition identity validation.
+- I updated the auditor-owned `criteria.md` to fully checked and recorded the clean audit plus proof rerun in `feedback.md`.
+
+Open issues / next step
+
+- No open issues from the test audit.
+- This test phase can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

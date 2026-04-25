@@ -328,3 +328,128 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc235-d58e-79b2-a521-ff3cac162f12
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+I’m reviewing the changed selected-workflow serializer surface and the current test coverage first. I’ll inspect the phase test artifacts, the touched helper/workflow diffs, and the existing unit/runtime tests to identify any regression gaps before editing the scoped test files.
+
+The phase session file exists, and the shared decisions ledger already has the runtime-created header for this turn. Next I’m reading that session file plus the serializer-related tests in detail so I can decide whether this phase needs new repository tests or only closeout artifacts.
+
+The existing scoped tests already cover the stdlib wrappers and the new shared validation seam, but they still validate the centralized core payload builders only indirectly through the wrappers. I’m adding one focused unit test for the core builder outputs themselves so this phase leaves a direct regression tripwire on the new authoritative seam, then I’ll update the test strategy and phase feedback.
+
+I found one real remaining test gap: the new authoritative payload builders in `core/workflow_capabilities.py` are still exercised only through the stdlib wrappers. I’m adding one direct unit test on those core builders so future regressions in the centralized seam get caught even if the wrapper tests keep passing.
+
+The new direct core-builder test is in place. I’m rerunning the same focused proof set the implementation used so this phase leaves a verified behavior-to-test map, not just an extra unit assertion.
+
+The focused proof passed with the new direct core-builder coverage: `219 passed`. I’m updating the phase test strategy, the scoped feedback artifact, and the shared decisions ledger now so later turns know exactly which behaviors are covered and why the new test sits at the core seam instead of duplicating wrapper assertions again.
+
+Scope considered
+
+- Selected-workflow serializer convergence only: `core/workflow_capabilities.py`, the selected-workflow stdlib writers, their consuming workflow/runtime tests, and the phase-local test artifacts.
+- I did not touch non-test repository code or unrelated dirty files.
+
+What I analyzed
+
+- The new authoritative payload builders in `core/workflow_capabilities.py`.
+- Existing wrapper-contract coverage in `tests/unit/test_stdlib_and_extensions.py`.
+- The focused runtime/doc regression surface already used by implement/verifier.
+- The active phase session file, shared decisions ledger, and phase-local test artifacts.
+
+What I changed
+
+- Added one direct unit test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) for:
+  - `selected_workflow_capability_payload(...)`
+  - `selected_workflow_authoring_surface_payload(...)`
+  - `selected_workflow_decomposition_surface_payload(...)`
+- That test asserts the centralized core seam preserves the existing authoring/decomposition contract shape, including:
+  - repo-relative path fields
+  - runtime-test inference
+  - omission of `workflow_name` and `package_name` from the nested decomposition authoring surface
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/converge-selected-workflow-serializers/test_strategy.md) with an explicit behavior-to-test coverage map.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/converge-selected-workflow-serializers/feedback.md).
+- Appended one test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/decisions.txt) under the current test-author header.
+- Re-ran the focused proof set:
+  `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  Result: `219 passed`.
+
+Key findings / decisions
+
+- The existing wrapper and runtime tests were already strong; the real remaining gap was direct coverage of the new centralized core payload-builder seam.
+- I kept the new coverage narrow and deterministic so it validates the consolidation target without duplicating the wrapper tests wholesale.
+- No flake risk was introduced: the new test uses the existing temp-workflow fixture pattern and local filesystem-only assertions.
+
+Open issues / next step
+
+- No open issues from the test-author phase.
+- The next step is auditor review against the updated phase artifacts and the `219 passed` proof result.
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc235-d58e-79b2-a521-ff3cac162f12
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc235-d58e-79b2-a521-ff3cac162f12
+---
+I’m auditing the test phase against the serializer-convergence contract first, then I’ll update the phase-local criteria and feedback artifacts only.
+
+I’ve got the phase artifacts. Next I’m checking the actual test delta against the changed serializer and validator seams, then I’ll decide whether the audit criteria can be fully checked.
+
+The direct core seam test exists where expected. I’m doing one last pass over adjacent serializer coverage and then I’ll either record findings or mark the audit clean.
+
+The focused proof set is still running. I’m waiting on that before I write the final audit state into the phase artifacts.
+
+I’ve finished the proof rerun and the adjacent coverage pass. The test suite is clean, and I’m updating the auditor-owned artifacts to reflect a no-findings audit.
+
+Scope considered
+
+- Phase-local test audit for `converge-selected-workflow-serializers`.
+- I reviewed the changed serializer/validator test surface, the phase-local test artifacts, and the focused adjacent runtime/doc regression surface. I did not expand into unrelated dirty files.
+
+What I analyzed
+
+- The new direct unit coverage in `tests/unit/test_stdlib_and_extensions.py` for the centralized payload builders in `core/workflow_capabilities.py`.
+- Existing selected-workflow wrapper, validator, and runtime regression coverage across the adaptation, eval-suite, run-history, refinement, and decomposition workflow families.
+- The active phase artifacts in `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c8/test/phases/converge-selected-workflow-serializers/` and the shared `decisions.txt` ledger.
+
+What I reviewed
+
+- Whether tests cover AC-1 and AC-2 without encoding a contract change.
+- Whether preserved invariants remain checked: separate artifact files, unchanged top-level JSON contracts, repo-relative path conversion, runtime-test inference, and decomposition nested-authoring shape.
+- Whether the test surface has material missing edge/failure coverage or flake risk.
+- Auditor proof rerun:
+  `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py`
+  Result: `219 passed in 28.42s`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The added direct core-seam unit test closes the remaining material gap from the consolidation: serializer regressions in the centralized payload builders are now caught even if the thin stdlib wrappers keep passing.
+- Existing runtime and unit coverage already provides adequate edge/failure-path protection for adjacent preserved behavior, including selected-workflow name alignment and decomposition identity validation.
+- I updated the auditor-owned `criteria.md` to fully checked and recorded the clean audit plus proof rerun in `feedback.md`.
+
+Open issues / next step
+
+- No open issues from the test audit.
+- This test phase can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
