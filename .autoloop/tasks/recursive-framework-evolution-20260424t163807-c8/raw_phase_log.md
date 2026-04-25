@@ -137,3 +137,48 @@ The verifier’s `PLAN-001` gap is now addressed by making charter synchronizati
 Open issues / next step
 
 The next step is re-verification. The only known blocking gap from the prior verifier pass has been corrected.
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc22d-2ae6-7d80-9861-b5ec1760463f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dc22d-2ae6-7d80-9861-b5ec1760463f
+
+
+---
+run_id=run-20260425T010712Z-3766f767 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc22d-2ae6-7d80-9861-b5ec1760463f
+---
+I’m re-verifying the corrected plan artifacts now, with the focus on whether the charter-sync gap is fully closed and whether the updated phase contract remains coherent and parseable.
+
+The charter-sync gap is now covered in both the narrative plan and the phase contract, and I’m not seeing any new blocking issues. I’m marking the checklist complete and appending a closure note to the feedback log before finalizing.
+
+The verifier-owned files are updated. I’m doing one quick readback to confirm all criteria are checked and the feedback log now records the resolved blocking issue plus the final non-blocking verification note.
+
+Scope considered
+
+The corrected cycle 8 planning artifacts, the immutable request snapshot, the authoritative raw log, the current shared decisions ledger, and the verifier-owned checklist and feedback files.
+
+What I analyzed
+
+I re-checked intent coverage, especially the standing memory-file update contract, plus the updated phase boundaries, acceptance criteria, compatibility notes, regression controls, rollback coverage, and YAML parseability.
+
+What I reviewed
+
+`plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, `decisions.txt`, and a fresh `python3` + `yaml.safe_load` parse of `phase_plan.yaml`.
+
+Key findings / decisions
+
+No blocking findings remain.
+The prior blocking issue (`PLAN-001`) is resolved: charter synchronization is now explicit in both `plan.md` and the final phase in `phase_plan.yaml`.
+The phase contract is coherent, runtime-owned metadata remains intact, required lists are populated, and the verifier checklist is now fully checked.
+
+Open issues / next step
+
+No open blocking issues. The planning artifacts are complete and ready for the next loop stage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
