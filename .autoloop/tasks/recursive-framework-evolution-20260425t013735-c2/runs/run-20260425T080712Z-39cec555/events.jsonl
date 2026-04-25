@@ -11,3 +11,6 @@
 {"ts": "2026-04-25T08:16:33.165974+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 11, "event_type": "phase_started", "phase_id": "shared-parameter-seam", "phase_mode": "single"}
 {"ts": "2026-04-25T08:16:33.166441+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "shared-parameter-seam"}
 {"ts": "2026-04-25T08:16:33.166514+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "shared-parameter-seam"}
+{"ts": "2026-04-25T08:26:33.798048+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-parameter-seam"}
+{"ts": "2026-04-25T08:27:31.829301+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-parameter-seam"}
+{"ts": "2026-04-25T08:27:31.883060+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 16, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "shared-parameter-seam"}
