@@ -13,12 +13,18 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
+        read_required_text,
+        require_existing_artifact_paths,
         require_mapping,
         require_mapping_list,
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        require_true_flag,
         require_unique_values,
+        validate_authoritative_artifact_subset,
+        validate_no_hidden_execution_signal,
+        validate_publication_boundary,
         validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_capability_snapshot,
         write_selected_workflow_capability_snapshot,
@@ -35,12 +41,18 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
+        read_required_text,
+        require_existing_artifact_paths,
         require_mapping,
         require_mapping_list,
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        require_true_flag,
         require_unique_values,
+        validate_authoritative_artifact_subset,
+        validate_no_hidden_execution_signal,
+        validate_publication_boundary,
         validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_capability_snapshot,
         write_selected_workflow_capability_snapshot,
@@ -434,21 +446,20 @@ class WorkflowRunHistoryToFailureModes(Workflow):
     @staticmethod
     def on_publish_failure_mode_package(state: State, ctx) -> tuple[State, Event]:
         workflow_folder = ctx.workflow_folder
-        required_paths = {
-            "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
-            "selected_workflow_run_history": workflow_folder / "selected_workflow_run_history.json",
-            "diagnostic_scope_brief": workflow_folder / "diagnostic_scope_brief.md",
-            "run_history_scope": workflow_folder / "run_history_scope.md",
-            "failure_mode_map": workflow_folder / "failure_mode_map.md",
-            "failure_mode_manifest": workflow_folder / "failure_mode_manifest.json",
-            "recurring_weak_points": workflow_folder / "recurring_weak_points.md",
-            "improvement_opportunities": workflow_folder / "improvement_opportunities.md",
-            "improvement_opportunities_summary": workflow_folder / "improvement_opportunities.json",
-            "diagnostic_next_actions": workflow_folder / "diagnostic_next_actions.md",
-        }
-        for artifact_path in required_paths.values():
-            if not artifact_path.exists():
-                raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
+        required_paths = require_existing_artifact_paths(
+            {
+                "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
+                "selected_workflow_run_history": workflow_folder / "selected_workflow_run_history.json",
+                "diagnostic_scope_brief": workflow_folder / "diagnostic_scope_brief.md",
+                "run_history_scope": workflow_folder / "run_history_scope.md",
+                "failure_mode_map": workflow_folder / "failure_mode_map.md",
+                "failure_mode_manifest": workflow_folder / "failure_mode_manifest.json",
+                "recurring_weak_points": workflow_folder / "recurring_weak_points.md",
+                "improvement_opportunities": workflow_folder / "improvement_opportunities.md",
+                "improvement_opportunities_summary": workflow_folder / "improvement_opportunities.json",
+                "diagnostic_next_actions": workflow_folder / "diagnostic_next_actions.md",
+            }
+        )
 
         capability_snapshot = _read_json(required_paths["selected_workflow_capability"])
         snapshot_selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(
@@ -550,14 +561,14 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         if state.evidence_run_ids and evidence_run_ids != state.evidence_run_ids:
             raise ValueError("selected_workflow_run_history.json evidence run IDs must match workflow state")
 
-        diagnostic_scope_text = _read_required_text(
+        diagnostic_scope_text = read_required_text(
             required_paths["diagnostic_scope_brief"],
             "diagnostic_scope_brief.md must not be empty",
         )
         if snapshot_selected_workflow_name not in diagnostic_scope_text:
             raise ValueError("diagnostic_scope_brief.md must name the selected workflow")
 
-        run_history_scope_text = _read_required_text(
+        run_history_scope_text = read_required_text(
             required_paths["run_history_scope"],
             "run_history_scope.md must not be empty",
         )
@@ -650,7 +661,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         if derived_failure_mode_ids != manifest_failure_mode_ids:
             raise ValueError("failure_mode_manifest.json failure_mode_ids must match the failure_modes entries")
 
-        failure_mode_map_text = _read_required_text(
+        failure_mode_map_text = read_required_text(
             required_paths["failure_mode_map"],
             "failure_mode_map.md must not be empty",
         )
@@ -658,7 +669,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             if failure_mode_id not in failure_mode_map_text:
                 raise ValueError("failure_mode_map.md must reference each failure_mode_id")
 
-        recurring_weak_points_text = _read_required_text(
+        recurring_weak_points_text = read_required_text(
             required_paths["recurring_weak_points"],
             "recurring_weak_points.md must not be empty",
         )
@@ -743,29 +754,26 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         if derived_opportunity_ids != ranked_opportunity_ids:
             raise ValueError("improvement_opportunities.json ranked_opportunity_ids must match the opportunities entries")
 
-        authoritative_artifacts = _require_string_list(
+        authoritative_artifacts = validate_authoritative_artifact_subset(
             improvement_summary.get("authoritative_artifacts"),
-            "improvement_opportunities.json must define non-empty authoritative_artifacts",
+            required_artifacts=_AUTHORITATIVE_PACKAGE_ARTIFACTS,
+            missing_error_message="improvement_opportunities.json must define non-empty authoritative_artifacts",
+            subset_error_message="improvement_opportunities.json authoritative_artifacts must include improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions, failure_mode_map, failure_mode_manifest, and recurring_weak_points",
         )
-        if not _AUTHORITATIVE_PACKAGE_ARTIFACTS.issubset(authoritative_artifacts):
-            raise ValueError(
-                "improvement_opportunities.json authoritative_artifacts must include improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions, failure_mode_map, failure_mode_manifest, and recurring_weak_points"
-            )
         next_action = _require_text(
             improvement_summary.get("next_action"),
             "improvement_opportunities.json must define a non-empty next_action",
         )
-        publication_boundary = _require_text(
+        publication_boundary = validate_publication_boundary(
             improvement_summary.get("publication_boundary"),
-            "improvement_opportunities.json must define a non-empty publication_boundary",
+            expected_boundary=_PUBLICATION_BOUNDARY,
+            missing_error_message="improvement_opportunities.json must define a non-empty publication_boundary",
+            mismatch_error_message="improvement_opportunities.json publication_boundary must be diagnostic_publication_only",
         )
-        if publication_boundary != _PUBLICATION_BOUNDARY:
-            raise ValueError(
-                "improvement_opportunities.json publication_boundary must be diagnostic_publication_only"
-            )
-        ready_for_publication = improvement_summary.get("ready_for_publication")
-        if ready_for_publication is not True:
-            raise ValueError("improvement_opportunities.json must confirm ready_for_publication=true")
+        require_true_flag(
+            improvement_summary.get("ready_for_publication"),
+            "improvement_opportunities.json must confirm ready_for_publication=true",
+        )
         summary_workflow_name = _require_text(
             improvement_summary.get("workflow_name"),
             "improvement_opportunities.json must define a non-empty workflow_name",
@@ -773,7 +781,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         if summary_workflow_name != ctx.workflow_name:
             raise ValueError("improvement_opportunities.json workflow_name must match the current workflow")
 
-        improvement_opportunities_text = _read_required_text(
+        improvement_opportunities_text = read_required_text(
             required_paths["improvement_opportunities"],
             "improvement_opportunities.md must not be empty",
         )
@@ -781,14 +789,16 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             if opportunity_id not in improvement_opportunities_text:
                 raise ValueError("improvement_opportunities.md must reference each ranked_opportunity_id")
 
-        diagnostic_next_actions_text = _read_required_text(
+        diagnostic_next_actions_text = read_required_text(
             required_paths["diagnostic_next_actions"],
             "diagnostic_next_actions.md must not be empty",
         )
         if _PUBLICATION_BOUNDARY not in diagnostic_next_actions_text:
             raise ValueError("diagnostic_next_actions.md must state the diagnostic publication boundary explicitly")
-        if any(marker in diagnostic_next_actions_text.lower() for marker in ("auto-run", "automatically run")):
-            raise ValueError("diagnostic_next_actions.md must not imply hidden downstream execution")
+        validate_no_hidden_execution_signal(
+            diagnostic_next_actions_text,
+            "diagnostic_next_actions.md must not imply hidden downstream execution",
+        )
 
         write_publication_receipt(
             ctx,
@@ -876,11 +886,6 @@ def _extract_history_run_ids(value: Any, *, allow_empty: bool) -> list[str]:
             )
         )
     return run_ids
-def _read_required_text(path, error_message: str) -> str:
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        raise ValueError(error_message)
-    return text
 
 
 __all__ = ["WorkflowRunHistoryToFailureModes"]

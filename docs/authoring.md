@@ -279,15 +279,21 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 
 ```python
 from autoloop_v3.stdlib import (
+    read_required_text,
     normalize_optional_string,
     normalize_unique_strings,
     read_json_object,
+    require_existing_artifact_paths,
     require_mapping,
     require_mapping_list,
     require_non_negative_int,
     require_non_empty_string,
     require_positive_int,
+    require_true_flag,
     require_string_list,
+    validate_authoritative_artifact_subset,
+    validate_no_hidden_execution_signal,
+    validate_publication_boundary,
 )
 ```
 
@@ -295,6 +301,8 @@ Validation helper boundary:
 
 - generic validation belongs in stdlib rather than copied workflow-local helper tails
 - use these helpers for shared JSON-object reads, non-empty string checks, string-list normalization, mapping checks, duplicate guards, non-negative-int validation, and positive-int validation
+- use `require_existing_artifact_paths(...)` and `read_required_text(...)` for mechanical publish-step artifact existence and non-empty text checks
+- use `validate_publication_boundary(...)`, `validate_authoritative_artifact_subset(...)`, `require_true_flag(...)`, and `validate_no_hidden_execution_signal(...)` for reusable publish-handler mechanics
 - use the selected-workflow snapshot validators in the same module when multiple workflows need the same capability, authoring-surface, decomposition-surface, or cross-artifact selected-workflow-name checks
   - `validate_selected_workflow_capability_snapshot(...)` validates the compiled selected-workflow snapshot contract
   - `validate_selected_workflow_authoring_surface_snapshot(...)` validates the editable selected-workflow surface contract
@@ -302,6 +310,7 @@ Validation helper boundary:
   - `validate_selected_workflow_artifact_alignment(...)` handles top-level `selected_workflow_name` alignment across artifacts
   - `validate_selected_workflow_capability_and_authoring_snapshots(...)` validates the paired capability and authoring surfaces without repeating local cross-check code
 - keep workflow-specific publication assertions, domain allow-lists, and artifact-family invariants in workflow code
+- keep package-section requirements and other domain-specific publish semantics in workflow code
 - the helpers only validate explicit workflow-local inputs and artifacts; they do not add runtime-owned routing, publication policy, or hidden execution
 
 For workflow `Parameters` models, reuse the shared Pydantic validator factories instead of copying the same `field_validator(...)` bodies into every `params.py`.

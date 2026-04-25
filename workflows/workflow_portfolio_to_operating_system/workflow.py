@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from functools import partial
 from typing import Any
@@ -14,12 +13,18 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
+        read_required_text,
+        require_existing_artifact_paths,
         require_mapping,
         require_mapping_list,
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        require_true_flag,
         require_unique_values,
+        validate_authoritative_artifact_subset,
+        validate_no_hidden_execution_signal,
+        validate_publication_boundary,
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
     )
@@ -34,12 +39,18 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
+        read_required_text,
+        require_existing_artifact_paths,
         require_mapping,
         require_mapping_list,
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        require_true_flag,
         require_unique_values,
+        validate_authoritative_artifact_subset,
+        validate_no_hidden_execution_signal,
+        validate_publication_boundary,
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
     )
@@ -81,27 +92,6 @@ _PACKAGE_SECTION_MARKERS = (
     "## Create Next",
 )
 _PUBLICATION_BOUNDARY = "operating_system_publication_only"
-_HIDDEN_EXECUTION_PATTERNS = (
-    re.compile(r"\bauto[- ]?run\b"),
-    re.compile(r"\bautomatically\s+(?:run|queue|launch|execute|trigger|start)(?:s|ed)?\b"),
-    re.compile(
-        r"\b(?:the runtime|the system|this workflow|this package)\s+(?:will\s+)?(?:queue|launch|run|execute|trigger|start)(?:s|ed)?\b"
-    ),
-    re.compile(r"\bwill\s+be\s+(?:queued|launched|run|executed|triggered|started)\b"),
-    re.compile(r"\bwithout further review\b"),
-)
-_NEGATED_HIDDEN_EXECUTION_MARKERS = (
-    "do not auto-run",
-    "does not auto-run",
-    "must not auto-run",
-    "should not auto-run",
-    "do not automatically",
-    "does not automatically",
-    "must not automatically",
-    "should not automatically",
-    "without auto-running",
-    "instead of auto-running",
-)
 
 
 class WorkflowPortfolioToOperatingSystem(Workflow):
@@ -454,19 +444,18 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
     @staticmethod
     def on_publish_portfolio_operating_system(state: State, ctx) -> tuple[State, Event]:
         workflow_folder = ctx.workflow_folder
-        required_paths = {
-            "workflow_capability_snapshot": workflow_folder / "workflow_capability_snapshot.json",
-            "workflow_portfolio_health_snapshot": workflow_folder / "workflow_portfolio_health_snapshot.json",
-            "workflow_lifecycle_matrix": workflow_folder / "workflow_lifecycle_matrix.md",
-            "portfolio_gap_analysis": workflow_folder / "portfolio_gap_analysis.md",
-            "portfolio_change_candidates": workflow_folder / "portfolio_change_candidates.json",
-            "workflow_portfolio_operating_system": workflow_folder / "workflow_portfolio_operating_system.md",
-            "portfolio_operating_summary": workflow_folder / "portfolio_operating_summary.json",
-            "portfolio_next_actions": workflow_folder / "portfolio_next_actions.md",
-        }
-        for artifact_path in required_paths.values():
-            if not artifact_path.exists():
-                raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
+        required_paths = require_existing_artifact_paths(
+            {
+                "workflow_capability_snapshot": workflow_folder / "workflow_capability_snapshot.json",
+                "workflow_portfolio_health_snapshot": workflow_folder / "workflow_portfolio_health_snapshot.json",
+                "workflow_lifecycle_matrix": workflow_folder / "workflow_lifecycle_matrix.md",
+                "portfolio_gap_analysis": workflow_folder / "portfolio_gap_analysis.md",
+                "portfolio_change_candidates": workflow_folder / "portfolio_change_candidates.json",
+                "workflow_portfolio_operating_system": workflow_folder / "workflow_portfolio_operating_system.md",
+                "portfolio_operating_summary": workflow_folder / "portfolio_operating_summary.json",
+                "portfolio_next_actions": workflow_folder / "portfolio_next_actions.md",
+            }
+        )
 
         capability_snapshot = _read_json(required_paths["workflow_capability_snapshot"])
         capability_workflow_names = _workflow_names_from_capability_snapshot(capability_snapshot)
@@ -485,11 +474,11 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         if unknown_workflows:
             raise ValueError("workflow_portfolio_health_snapshot.json includes unknown focus-workflow references")
 
-        lifecycle_matrix_text = _read_required_text(
+        lifecycle_matrix_text = read_required_text(
             required_paths["workflow_lifecycle_matrix"],
             "workflow_lifecycle_matrix.md must not be empty",
         )
-        gap_analysis_text = _read_required_text(
+        gap_analysis_text = read_required_text(
             required_paths["portfolio_gap_analysis"],
             "portfolio_gap_analysis.md must not be empty",
         )
@@ -547,33 +536,32 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         for workflow_name in priority_workflows:
             if workflow_name not in analyzed_workflows:
                 raise ValueError("portfolio_operating_summary.json priority_workflows must be drawn from analyzed_workflows")
-        authoritative_artifacts = _require_string_list(
+        authoritative_artifacts = validate_authoritative_artifact_subset(
             summary.get("authoritative_artifacts"),
-            "portfolio_operating_summary.json must define authoritative_artifacts as a non-empty string list",
+            required_artifacts=_AUTHORITATIVE_PACKAGE_ARTIFACTS,
+            missing_error_message="portfolio_operating_summary.json must define authoritative_artifacts as a non-empty string list",
+            subset_error_message="portfolio_operating_summary.json authoritative_artifacts must include workflow_portfolio_operating_system, portfolio_operating_summary, portfolio_next_actions, workflow_lifecycle_matrix, portfolio_gap_analysis, and portfolio_change_candidates",
         )
-        if not _AUTHORITATIVE_PACKAGE_ARTIFACTS.issubset(authoritative_artifacts):
-            raise ValueError(
-                "portfolio_operating_summary.json authoritative_artifacts must include workflow_portfolio_operating_system, portfolio_operating_summary, portfolio_next_actions, workflow_lifecycle_matrix, portfolio_gap_analysis, and portfolio_change_candidates"
-            )
         next_action = _require_text(
             summary.get("next_action"),
             "portfolio_operating_summary.json must define a non-empty next_action",
         )
-        _validate_no_hidden_execution_signal(
+        validate_no_hidden_execution_signal(
             next_action,
             "portfolio_operating_summary.json next_action must not imply hidden downstream execution",
         )
-        publication_boundary = _require_text(
+        publication_boundary = validate_publication_boundary(
             summary.get("publication_boundary"),
-            "portfolio_operating_summary.json must define a non-empty publication_boundary",
+            expected_boundary=_PUBLICATION_BOUNDARY,
+            missing_error_message="portfolio_operating_summary.json must define a non-empty publication_boundary",
+            mismatch_error_message="portfolio_operating_summary.json publication_boundary must be operating_system_publication_only",
         )
-        if publication_boundary != _PUBLICATION_BOUNDARY:
-            raise ValueError("portfolio_operating_summary.json publication_boundary must be operating_system_publication_only")
-        ready_for_publication = summary.get("ready_for_publication")
-        if ready_for_publication is not True:
-            raise ValueError("portfolio_operating_summary.json must confirm ready_for_publication=true")
+        require_true_flag(
+            summary.get("ready_for_publication"),
+            "portfolio_operating_summary.json must confirm ready_for_publication=true",
+        )
 
-        operating_system_text = _read_required_text(
+        operating_system_text = read_required_text(
             required_paths["workflow_portfolio_operating_system"],
             "workflow_portfolio_operating_system.md must not be empty",
         )
@@ -582,17 +570,21 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
                 raise ValueError("workflow_portfolio_operating_system.md must keep keep/refine/decompose/merge/retire/create-next sections explicit")
         if _PUBLICATION_BOUNDARY not in operating_system_text:
             raise ValueError("workflow_portfolio_operating_system.md must state the operating-system publication boundary explicitly")
-        if _contains_hidden_execution_signal(operating_system_text):
-            raise ValueError("workflow_portfolio_operating_system.md must not imply hidden downstream execution")
+        validate_no_hidden_execution_signal(
+            operating_system_text,
+            "workflow_portfolio_operating_system.md must not imply hidden downstream execution",
+        )
 
-        next_actions_text = _read_required_text(
+        next_actions_text = read_required_text(
             required_paths["portfolio_next_actions"],
             "portfolio_next_actions.md must not be empty",
         )
         if _PUBLICATION_BOUNDARY not in next_actions_text:
             raise ValueError("portfolio_next_actions.md must state the operating-system publication boundary explicitly")
-        if _contains_hidden_execution_signal(next_actions_text):
-            raise ValueError("portfolio_next_actions.md must not imply hidden downstream execution")
+        validate_no_hidden_execution_signal(
+            next_actions_text,
+            "portfolio_next_actions.md must not imply hidden downstream execution",
+        )
 
         for workflow_name, posture in lifecycle_postures.items():
             if workflow_name not in lifecycle_matrix_text or posture not in lifecycle_matrix_text:
@@ -648,13 +640,6 @@ _normalize_unique_strings = partial(normalize_unique_strings, allow_scalar=True)
 _require_string_list = partial(require_string_list, allow_scalar=True, dedupe=True, coerce=True)
 _require_positive_int = require_positive_int
 _read_json = read_json_object
-
-
-def _read_required_text(path, error_message: str) -> str:
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        raise ValueError(error_message)
-    return text
 
 
 _require_mapping = require_mapping
@@ -812,23 +797,6 @@ def _count_lifecycle_postures(lifecycle_postures: Mapping[str, str]) -> dict[str
     for posture in lifecycle_postures.values():
         counts[posture] = counts.get(posture, 0) + 1
     return dict(sorted(counts.items()))
-
-
-def _contains_hidden_execution_signal(text: str) -> bool:
-    for raw_line in text.splitlines():
-        lowered = raw_line.strip().lower()
-        if not lowered:
-            continue
-        if any(marker in lowered for marker in _NEGATED_HIDDEN_EXECUTION_MARKERS):
-            continue
-        if any(pattern.search(lowered) for pattern in _HIDDEN_EXECUTION_PATTERNS):
-            return True
-    return False
-
-
-def _validate_no_hidden_execution_signal(text: str, error_message: str) -> None:
-    if _contains_hidden_execution_signal(text):
-        raise ValueError(error_message)
 
 
 __all__ = ["WorkflowPortfolioToOperatingSystem"]

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, TypeVar
@@ -12,6 +14,28 @@ from pydantic import BaseModel, ValidationError, ValidationInfo, field_validator
 from .lifecycle import write_workflow_json
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+
+_HIDDEN_EXECUTION_PATTERNS = (
+    re.compile(r"\bauto[- ]?run\b"),
+    re.compile(r"\bautomatically\s+(?:run|queue|launch|execute|trigger|start)(?:s|ed)?\b"),
+    re.compile(
+        r"\b(?:the runtime|the system|this workflow|this package)\s+(?:will\s+)?(?:queue|launch|run|execute|trigger|start)(?:s|ed)?\b"
+    ),
+    re.compile(r"\bwill\s+be\s+(?:queued|launched|run|executed|triggered|started)\b"),
+    re.compile(r"\bwithout further review\b"),
+)
+_NEGATED_HIDDEN_EXECUTION_MARKERS = (
+    "do not auto-run",
+    "does not auto-run",
+    "must not auto-run",
+    "should not auto-run",
+    "do not automatically",
+    "does not automatically",
+    "must not automatically",
+    "should not automatically",
+    "without auto-running",
+    "instead of auto-running",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,6 +375,97 @@ def read_json_object(path: str | Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"{target.name} must contain a JSON object")
     return payload
+
+
+def require_existing_artifact_paths(
+    required_paths: Mapping[str, str | Path],
+    *,
+    missing_error_prefix: str = "missing required publication artifact at",
+) -> dict[str, Path]:
+    """Return resolved paths when every required artifact exists."""
+
+    normalized = {str(name): Path(path) for name, path in required_paths.items()}
+    for artifact_path in normalized.values():
+        if not artifact_path.exists():
+            raise FileNotFoundError(f"{missing_error_prefix} {artifact_path}")
+    return normalized
+
+
+def read_required_text(path: str | Path, error_message: str) -> str:
+    """Return one stripped non-empty text artifact or raise ``ValueError``."""
+
+    text = Path(path).read_text(encoding="utf-8").strip()
+    if not text:
+        raise ValueError(error_message)
+    return text
+
+
+def contains_hidden_execution_signal(
+    text: str,
+    *,
+    patterns: tuple[re.Pattern[str], ...] = _HIDDEN_EXECUTION_PATTERNS,
+    negated_markers: tuple[str, ...] = _NEGATED_HIDDEN_EXECUTION_MARKERS,
+) -> bool:
+    """Return ``True`` when text implies hidden downstream execution."""
+
+    for raw_line in text.splitlines():
+        lowered = raw_line.strip().lower()
+        if not lowered:
+            continue
+        if any(marker in lowered for marker in negated_markers):
+            continue
+        if any(pattern.search(lowered) for pattern in patterns):
+            return True
+    return False
+
+
+def validate_no_hidden_execution_signal(text: str, error_message: str) -> None:
+    """Reject text that implies hidden downstream execution."""
+
+    if contains_hidden_execution_signal(text):
+        raise ValueError(error_message)
+
+
+def validate_authoritative_artifact_subset(
+    value: Any,
+    *,
+    required_artifacts: Collection[str],
+    missing_error_message: str,
+    subset_error_message: str,
+) -> list[str]:
+    """Validate one authoritative-artifact list and require the shared subset."""
+
+    authoritative_artifacts = require_string_list(value, missing_error_message, coerce=True)
+    if not set(required_artifacts).issubset(authoritative_artifacts):
+        raise ValueError(subset_error_message)
+    return authoritative_artifacts
+
+
+def validate_publication_boundary(
+    value: Any,
+    *,
+    expected_boundary: str,
+    missing_error_message: str,
+    mismatch_error_message: str,
+) -> str:
+    """Validate one publication-boundary string against the expected value."""
+
+    publication_boundary = require_non_empty_string(
+        value,
+        error_message=missing_error_message,
+        coerce=True,
+    )
+    if publication_boundary != expected_boundary:
+        raise ValueError(mismatch_error_message)
+    return publication_boundary
+
+
+def require_true_flag(value: Any, error_message: str) -> bool:
+    """Require one readiness flag to be exactly ``True``."""
+
+    if value is not True:
+        raise ValueError(error_message)
+    return True
 
 
 def validate_selected_workflow_name_alignment(

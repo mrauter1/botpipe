@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping
 from functools import partial
 from typing import Any
@@ -14,12 +13,18 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
+        read_required_text,
+        require_existing_artifact_paths,
         require_mapping,
         require_mapping_list,
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        require_true_flag,
         require_unique_values,
+        validate_authoritative_artifact_subset,
+        validate_no_hidden_execution_signal,
+        validate_publication_boundary,
         write_company_operation_snapshot,
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
@@ -35,12 +40,18 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
+        read_required_text,
+        require_existing_artifact_paths,
         require_mapping,
         require_mapping_list,
         require_non_empty_string,
         require_positive_int,
         require_string_list,
+        require_true_flag,
         require_unique_values,
+        validate_authoritative_artifact_subset,
+        validate_no_hidden_execution_signal,
+        validate_publication_boundary,
         write_company_operation_snapshot,
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
@@ -92,27 +103,6 @@ _PACKAGE_SECTION_MARKERS = (
     "## Publication Boundary",
 )
 _PUBLICATION_BOUNDARY = "recursive_improvement_publication_only"
-_HIDDEN_EXECUTION_PATTERNS = (
-    re.compile(r"\bauto[- ]?run\b"),
-    re.compile(r"\bautomatically\s+(?:run|queue|launch|execute|trigger|start)(?:s|ed)?\b"),
-    re.compile(
-        r"\b(?:the runtime|the system|this workflow|this package)\s+(?:will\s+)?(?:queue|launch|run|execute|trigger|start)(?:s|ed)?\b"
-    ),
-    re.compile(r"\bwill\s+be\s+(?:queued|launched|run|executed|triggered|started)\b"),
-    re.compile(r"\bwithout further review\b"),
-)
-_NEGATED_HIDDEN_EXECUTION_MARKERS = (
-    "do not auto-run",
-    "does not auto-run",
-    "must not auto-run",
-    "should not auto-run",
-    "do not automatically",
-    "does not automatically",
-    "must not automatically",
-    "should not automatically",
-    "without auto-running",
-    "instead of auto-running",
-)
 
 
 class CompanyOperationToRecursiveImprovementCycle(Workflow):
@@ -553,20 +543,19 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
     @staticmethod
     def on_publish_recursive_improvement_cycle(state: State, ctx) -> tuple[State, Event]:
         workflow_folder = ctx.workflow_folder
-        required_paths = {
-            "workflow_capability_snapshot": workflow_folder / "workflow_capability_snapshot.json",
-            "workflow_portfolio_health_snapshot": workflow_folder / "workflow_portfolio_health_snapshot.json",
-            "company_operation_snapshot": workflow_folder / "company_operation_snapshot.json",
-            "company_pressure_map": workflow_folder / "company_pressure_map.md",
-            "recursive_improvement_priority_matrix": workflow_folder / "recursive_improvement_priority_matrix.md",
-            "recursive_improvement_candidates": workflow_folder / "recursive_improvement_candidates.json",
-            "recursive_improvement_cycle": workflow_folder / "recursive_improvement_cycle.md",
-            "recursive_improvement_summary": workflow_folder / "recursive_improvement_summary.json",
-            "recursive_improvement_next_actions": workflow_folder / "recursive_improvement_next_actions.md",
-        }
-        for artifact_path in required_paths.values():
-            if not artifact_path.exists():
-                raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
+        required_paths = require_existing_artifact_paths(
+            {
+                "workflow_capability_snapshot": workflow_folder / "workflow_capability_snapshot.json",
+                "workflow_portfolio_health_snapshot": workflow_folder / "workflow_portfolio_health_snapshot.json",
+                "company_operation_snapshot": workflow_folder / "company_operation_snapshot.json",
+                "company_pressure_map": workflow_folder / "company_pressure_map.md",
+                "recursive_improvement_priority_matrix": workflow_folder / "recursive_improvement_priority_matrix.md",
+                "recursive_improvement_candidates": workflow_folder / "recursive_improvement_candidates.json",
+                "recursive_improvement_cycle": workflow_folder / "recursive_improvement_cycle.md",
+                "recursive_improvement_summary": workflow_folder / "recursive_improvement_summary.json",
+                "recursive_improvement_next_actions": workflow_folder / "recursive_improvement_next_actions.md",
+            }
+        )
 
         capability_snapshot = _read_json(required_paths["workflow_capability_snapshot"])
         capability_workflow_names = _workflow_names_from_capability_snapshot(capability_snapshot)
@@ -603,11 +592,11 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             focus_workflows=scoped_workflow_names if state.focus_workflows else None,
         )
 
-        pressure_map_text = _read_required_text(
+        pressure_map_text = read_required_text(
             required_paths["company_pressure_map"],
             "company_pressure_map.md must not be empty",
         )
-        priority_matrix_text = _read_required_text(
+        priority_matrix_text = read_required_text(
             required_paths["recursive_improvement_priority_matrix"],
             "recursive_improvement_priority_matrix.md must not be empty",
         )
@@ -676,39 +665,37 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             raise ValueError(
                 "recursive_improvement_summary.json priority_category_counts must not drift from recursive_improvement_candidates.json"
             )
-        authoritative_artifacts = _require_string_list(
+        authoritative_artifacts = validate_authoritative_artifact_subset(
             summary.get("authoritative_artifacts"),
-            "recursive_improvement_summary.json must define authoritative_artifacts as a non-empty string list",
+            required_artifacts=_AUTHORITATIVE_PACKAGE_ARTIFACTS,
+            missing_error_message="recursive_improvement_summary.json must define authoritative_artifacts as a non-empty string list",
+            subset_error_message="recursive_improvement_summary.json authoritative_artifacts must include recursive_improvement_cycle, recursive_improvement_summary, recursive_improvement_next_actions, company_pressure_map, recursive_improvement_priority_matrix, and recursive_improvement_candidates",
         )
-        if not _AUTHORITATIVE_PACKAGE_ARTIFACTS.issubset(authoritative_artifacts):
-            raise ValueError(
-                "recursive_improvement_summary.json authoritative_artifacts must include recursive_improvement_cycle, recursive_improvement_summary, recursive_improvement_next_actions, company_pressure_map, recursive_improvement_priority_matrix, and recursive_improvement_candidates"
-            )
         next_action = _require_text(
             summary.get("next_action"),
             "recursive_improvement_summary.json must define a non-empty next_action",
         )
-        _validate_no_hidden_execution_signal(
+        validate_no_hidden_execution_signal(
             next_action,
             "recursive_improvement_summary.json next_action must not imply hidden downstream execution",
         )
-        publication_boundary = _require_text(
+        publication_boundary = validate_publication_boundary(
             summary.get("publication_boundary"),
-            "recursive_improvement_summary.json must define a non-empty publication_boundary",
+            expected_boundary=_PUBLICATION_BOUNDARY,
+            missing_error_message="recursive_improvement_summary.json must define a non-empty publication_boundary",
+            mismatch_error_message="recursive_improvement_summary.json publication_boundary must be recursive_improvement_publication_only",
         )
-        if publication_boundary != _PUBLICATION_BOUNDARY:
-            raise ValueError(
-                "recursive_improvement_summary.json publication_boundary must be recursive_improvement_publication_only"
-            )
-        if summary.get("ready_for_publication") is not True:
-            raise ValueError("recursive_improvement_summary.json must confirm ready_for_publication=true")
+        require_true_flag(
+            summary.get("ready_for_publication"),
+            "recursive_improvement_summary.json must confirm ready_for_publication=true",
+        )
         if _require_text(
             summary.get("workflow_name"),
             "recursive_improvement_summary.json must define workflow_name",
         ) != ctx.workflow_name:
             raise ValueError("recursive_improvement_summary.json workflow_name must match the workflow")
 
-        cycle_text = _read_required_text(
+        cycle_text = read_required_text(
             required_paths["recursive_improvement_cycle"],
             "recursive_improvement_cycle.md must not be empty",
         )
@@ -717,20 +704,24 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
                 raise ValueError("recursive_improvement_cycle.md must keep category sections and the publication boundary explicit")
         if _PUBLICATION_BOUNDARY not in cycle_text:
             raise ValueError("recursive_improvement_cycle.md must state the recursive-improvement publication boundary explicitly")
-        if _contains_hidden_execution_signal(cycle_text):
-            raise ValueError("recursive_improvement_cycle.md must not imply hidden downstream execution")
+        validate_no_hidden_execution_signal(
+            cycle_text,
+            "recursive_improvement_cycle.md must not imply hidden downstream execution",
+        )
         for candidate_id in candidate_ids:
             if candidate_id not in cycle_text:
                 raise ValueError("recursive_improvement_cycle.md must name each priority item explicitly")
 
-        next_actions_text = _read_required_text(
+        next_actions_text = read_required_text(
             required_paths["recursive_improvement_next_actions"],
             "recursive_improvement_next_actions.md must not be empty",
         )
         if _PUBLICATION_BOUNDARY not in next_actions_text:
             raise ValueError("recursive_improvement_next_actions.md must state the recursive-improvement publication boundary explicitly")
-        if _contains_hidden_execution_signal(next_actions_text):
-            raise ValueError("recursive_improvement_next_actions.md must not imply hidden downstream execution")
+        validate_no_hidden_execution_signal(
+            next_actions_text,
+            "recursive_improvement_next_actions.md must not imply hidden downstream execution",
+        )
 
         write_publication_receipt(
             ctx,
@@ -793,13 +784,6 @@ def _require_priority_category_list(value: Any, error_message: str) -> list[str]
 
 _require_positive_int = require_positive_int
 _read_json = read_json_object
-
-
-def _read_required_text(path, error_message: str) -> str:
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        raise ValueError(error_message)
-    return text
 
 
 _require_mapping = require_mapping
@@ -1012,23 +996,6 @@ def _validate_improvement_candidates(
 
 def _sorted_unique_strings(values: list[str]) -> list[str]:
     return sorted({value for value in values if value})
-
-
-def _contains_hidden_execution_signal(text: str) -> bool:
-    for raw_line in text.splitlines():
-        lowered = raw_line.strip().lower()
-        if not lowered:
-            continue
-        if any(marker in lowered for marker in _NEGATED_HIDDEN_EXECUTION_MARKERS):
-            continue
-        if any(pattern.search(lowered) for pattern in _HIDDEN_EXECUTION_PATTERNS):
-            return True
-    return False
-
-
-def _validate_no_hidden_execution_signal(text: str, error_message: str) -> None:
-    if _contains_hidden_execution_signal(text):
-        raise ValueError(error_message)
 
 
 __all__ = ["CompanyOperationToRecursiveImprovementCycle"]
