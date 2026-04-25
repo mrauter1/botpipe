@@ -2510,3 +2510,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc379-e4bc-7732-8324-86f1f9de1982
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc379-e4bc-7732-8324-86f1f9de1982
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc379-e4bc-7732-8324-86f1f9de1982
+---
+I’m addressing the reviewer’s blocking finding only: fresh child runs are dropping `workflow_input` before the engine sees it. I’ll trace the new-run workspace path again, patch the persistence/fallback centrally, and then re-run the static verification I can do in this environment.
+
+I’ve confirmed the failure path: the fix belongs in the workspace layer, not in the child-invoker itself. I’m making the new-run path symmetric with `workflow_params` and adding a stored-field-missing fallback in `resolve_run_workflow_input(...)` so fresh runs and resumes share one source of truth.
+
+The workspace-layer fix is in. I’m re-running the same static check on the touched modules now, then I’ll do one last readback of the exact persistence points so I can close this with the reviewer finding addressed cleanly.
+
+The code files are fine; the failed check was my mistake because I included the Markdown notes file in `py_compile`. I’m rerunning against only the Python modules and then I’ll inspect the final diff for the workspace persistence path.
+
+Scope considered
+
+- The reviewer’s blocking `child-io` finding only: fresh-run typed child input was being dropped before engine execution.
+- I limited edits to the workspace/runner persistence path plus the phase-local implementation notes.
+
+What I analyzed
+
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/child-io/feedback.md)
+- The fresh-run path in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py) and [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), specifically `create_run(...)`, `resolve_run_workflow_input(...)`, and `_prepare_workspaces(...)`.
+
+What I changed
+
+- Made `create_run(...)` accept and persist `workflow_input` alongside `workflow_params`.
+- Updated `_prepare_workspaces(...)` to pass `options.workflow_input` into `create_run(...)`.
+- Tightened `resolve_run_workflow_input(...)` so if `run.json` exists but does not yet contain `workflow_input`, it falls back to the caller-supplied payload instead of returning `None`.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/child-io/implementation_notes.md) to capture the fresh-run symmetry fix and the centralization choice.
+
+Key findings / decisions
+
+- The fix stays centralized in `runtime/workspace.py`, which keeps fresh-run and resume semantics sharing one resolution path instead of adding a runner-only special case.
+- This directly addresses the reviewer’s `IMP-001`: first-run child workflows should now receive typed input the same way resumed child workflows do.
+
+Open issues / next step
+
+- Validation performed: `python3 -m py_compile runtime/workspace.py runtime/runner.py`
+- I still cannot run `pytest` in this environment because the runtime dependencies are unavailable here. The next step is a reviewer pass or targeted test run in an environment with project dependencies installed.

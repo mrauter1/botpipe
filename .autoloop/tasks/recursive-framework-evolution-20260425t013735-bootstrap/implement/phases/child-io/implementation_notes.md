@@ -55,6 +55,7 @@
 - Child workflows may now declare nested `Input` / `Output` models and `build_output(state, ctx)`.
 - Runtime contexts now expose typed child input via `ctx.input`.
 - Parent callers can pass `input=...` to `ctx.invoke_workflow(...)` and receive validated typed output via `ChildWorkflowResult.output`.
+- Fresh child runs now persist and immediately re-read `workflow_input` symmetrically with `workflow_params`, so first-run typed input and resumed typed input follow one workspace contract.
 
 ## Known Non-Changes
 
@@ -81,3 +82,4 @@
 
 - Centralized typed child-input coercion/materialization in `runtime/runner.py` so parent invocation, new runs, and resumes share one validation path.
 - Centralized terminal output construction in `Engine._build_workflow_output(...)` so success/pause/fail all use one additive typed-output contract.
+- Centralized fresh-run vs stored-run child-input resolution in `runtime/workspace.py:resolve_run_workflow_input(...)` and reused it from `create_run(...)`, fixing the reviewer-reported drop without adding a second new-run special case in the runner.
