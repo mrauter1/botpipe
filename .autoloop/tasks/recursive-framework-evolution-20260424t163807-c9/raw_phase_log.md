@@ -511,3 +511,59 @@ Open issues / next step
 - No blocking issues from this phase.
 - Deferred debt remains the adjacent optional adoption of the same snapshot-reader helpers in workflows such as `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, and `workflow_to_eval_suite` if a later consolidation pass targets that family.
 - Validation completed: `./.venv/bin/python -m py_compile ...` passed, and `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py` passed with `140 passed`.
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc284-2349-71e2-a8b1-c6677b862da3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc284-2349-71e2-a8b1-c6677b862da3
+
+
+---
+run_id=run-20260425T021329Z-6c0eefb4 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc284-2349-71e2-a8b1-c6677b862da3
+---
+I’m reviewing the scoped implementation against the phase contract and acceptance criteria. First I’m reading the current criteria/feedback artifacts and the exact diffs for the helper and workflow changes, then I’ll decide whether the phase is complete or needs follow-up findings.
+
+The phase artifacts are still empty, and the shared decision for this phase is narrow: only mechanical snapshot-reader extraction is allowed to move. I’m reading the exact helper and handler bodies directly, because the repo’s dirty baseline makes `git diff` less informative than the live file content here.
+
+The helper boundary looks clean: the new functions stay mechanical and the two governance/company workflows only dropped duplicated snapshot readers. I’m doing one reviewer-side proof run of the scoped suites now so the criteria update isn’t based only on the implementation notes.
+
+The reviewer-side proof passed, and I don’t see a contract, regression, or architecture issue in the scoped change. I’m marking the phase complete in the verifier artifacts now.
+
+Scope considered
+
+- Phase-local review of the scoped helper/workflow migration plus the required verifier artifacts under `.autoloop/tasks/recursive-framework-evolution-20260424t163807-c9/implement/phases/migrate-governance-and-diagnostic-publishers/`.
+- Request-relevant code surfaces: `stdlib/validation.py`, `stdlib/__init__.py`, the three scoped workflows, `tests/unit/test_validation.py`, `docs/authoring.md`, and the implementation notes.
+
+What I analyzed
+
+- The active phase contract, acceptance criteria, and shared decisions ledger.
+- The new shared helpers `extract_workflow_names_from_capability_snapshot(...)` and `extract_workflow_names_from_portfolio_health(...)`.
+- The updated capture/publish paths in `workflow_portfolio_to_operating_system` and `company_operation_to_recursive_improvement_cycle`.
+- The existing publish path in `workflow_run_history_to_failure_modes` to confirm it still satisfies the shared-helper boundary.
+- The implementation notes and reviewer-side scoped pytest proof.
+
+What I reviewed
+
+- Intent fidelity against the phase goal: mechanical publish-related validation moved into shared helpers without changing artifact contracts.
+- Safety of the helper boundary: no domain policy was moved into stdlib.
+- Simplicity: duplicated local snapshot-reader tails were removed rather than replaced with another local abstraction layer.
+- Validation coverage: reviewer reran `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_validation.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py`, which passed with `140 passed`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking corrective findings.
+- Updated `criteria.md` to all checked and appended the review outcome to `feedback.md`.
+
+Open issues / next step
+
+- No open issues from review.
+- Phase can proceed as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
