@@ -2558,3 +2558,50 @@ Open issues / next step
 
 - Validation performed: `python3 -m py_compile runtime/workspace.py runtime/runner.py`
 - I still cannot run `pytest` in this environment because the runtime dependencies are unavailable here. The next step is a reviewer pass or targeted test run in an environment with project dependencies installed.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc379-e4bc-7732-8324-86f1f9de1982
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc379-e4bc-7732-8324-86f1f9de1982
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc379-e4bc-7732-8324-86f1f9de1982
+---
+I’m re-checking the reviewer finding against the updated workspace/runner path now. I’ll verify the fresh-run `workflow_input` resolution, then decide whether any blocking issues remain before updating the phase artifacts.
+
+The fresh-run path now persists `workflow_input` before the runner re-reads it, and the centralized fallback covers existing run files missing the field. I’m treating the prior blocker as resolved and updating the phase artifacts to reflect a clean re-review with no remaining findings.
+
+Scope considered
+
+- Phase-local `child-io` re-review only.
+- I rechecked the fresh-run typed child-input path in `runtime/workspace.py` and `runtime/runner.py`, plus the phase-local review artifacts.
+
+What I analyzed
+
+- `create_run(...)`, `resolve_run_workflow_input(...)`, and `_prepare_workspaces(...)` after the cycle-2 fix.
+- The prior blocking finding `IMP-001` against the actual fresh-run control flow.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/child-io/criteria.md) to fully checked.
+- Updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/implement/phases/child-io/feedback.md) with a re-review note marking `IMP-001` resolved.
+
+Key findings / decisions
+
+- The prior blocker is resolved.
+- Fresh runs now persist `workflow_input` during `create_run(...)`, and `resolve_run_workflow_input(...)` has the centralized fallback needed for newly created `run.json` files that may not yet carry the field.
+- No remaining blocking findings in reviewed scope.
+
+Open issues / next step
+
+- No further reviewer findings for this phase based on the reviewed code path.
+- Phase review can proceed as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
