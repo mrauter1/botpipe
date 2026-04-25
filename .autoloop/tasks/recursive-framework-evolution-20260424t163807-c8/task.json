@@ -14,12 +14,12 @@
       "proof-docs-memory-sync"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "converge-selected-workflow-serializers"
+    "current_phase_index": 1,
+    "current_phase_id": "extract-selected-workflow-validators"
   },
   "phase_status": {
-    "converge-selected-workflow-serializers": "in_progress",
-    "extract-selected-workflow-validators": "planned",
+    "converge-selected-workflow-serializers": "completed",
+    "extract-selected-workflow-validators": "in_progress",
     "proof-docs-memory-sync": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260425T010712Z-3766f767",
       "status": "in_progress",
       "ts": "2026-04-25T01:16:40.639818+00:00"
+    },
+    {
+      "phase_id": "converge-selected-workflow-serializers",
+      "run_id": "run-20260425T010712Z-3766f767",
+      "status": "completed",
+      "ts": "2026-04-25T01:39:00.768750+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "extract-selected-workflow-validators",
+      "run_id": "run-20260425T010712Z-3766f767",
+      "status": "in_progress",
+      "ts": "2026-04-25T01:39:00.773652+00:00"
     }
   ]
 }
