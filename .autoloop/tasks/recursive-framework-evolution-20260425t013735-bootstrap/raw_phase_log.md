@@ -2005,3 +2005,81 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc35d-e300-7c22-9336-e54faba217cc
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+I’m starting with the active phase artifacts and the existing workflow runtime so I can wire worklists into the current compiler, context, and engine without drifting outside the phase scope.
+
+I have the phase boundary and prior decisions. Next I’m reading the current route/effect, engine, context, compiler, and step implementations to see exactly where scoped selection and `Advance` should land.
+
+The repo layout is a little different than the earlier `src/` assumption, so I’m switching to the package root directly and reading the concrete modules there before changing anything.
+
+I’ve confirmed worklist support is still completely absent and route effects deliberately hard-fail. Now I’m reading the persistence and public-surface pieces so I can add selection state in a way that survives checkpoint/resume and matches the current export patterns.
+
+Plan for this phase:
+1. Add worklist declarations and validation, then thread scoped-step metadata through compilation.
+2. Extend `Context`, checkpoint/session primitives, and template resolution with selection/current-item state.
+3. Implement engine-side scoped execution and `Advance` effect handling, then add focused unit/contract/runtime tests and update the phase notes/decision log.
+
+The main open design point is `Advance` semantics on a scoped step. I’m checking the existing capability/inspection layer and the plan artifacts one more time so I can make that behavior explicit and keep it consistent everywhere.
+
+I have enough context to start the code changes. I’m adding the worklist model first so validation, compilation, session continuity, and runtime selection all use one shared representation instead of duplicating the rules in the engine.
+
+The checkpoint store needs a small additive shape change for selection snapshots. I hit a context mismatch in the filesystem store, so I’m reading the exact save/load helpers and patching that part directly instead of forcing a broad edit.
+
+The runtime wiring is in progress now: selections are initialized before `on_start` and restored before resume execution. Next I’m changing step execution so scoped contexts, placeholders, and `Advance` all use the same selection state instead of ad hoc per-step logic.
+
+The structural pieces are in place now. I’m moving to tests next, which will flush out any remaining mismatches in selection restore, placeholder resolution, and the exact `Advance` routing behavior.
+
+I’ve moved into verification. The first pass is the focused unit/contract/runtime suites that cover the new worklist declarations, selection helpers, checkpoint round-trips, and scoped `Advance` execution.
+
+The failing case is the work-item continuity resolution, not the worklist loop itself. I’m tightening session selection so declarative continuity re-derives per-item keys while still preserving explicit `scope=` / `key=` overrides.
+
+The focused worklist suites are green. I’m running one broader runtime pass now against CLI/workspace flows because the checkpoint shape and workflow shim exports changed additively in this phase.
+
+I’m at the bookkeeping pass now: recording the non-obvious runtime decisions and the exact phase mapping so later turns don’t drift on `Advance` semantics, selection snapshots, or the now-public worklist/effect surface.
+
+The implementation and verification are done. I’m doing a final scan of the touched files and the phase artifacts so the close-out reflects the actual scoped diff rather than the repo’s unrelated dirty state.
+
+Scope considered
+
+- Phase-local worklist/scoped-step support only: core runtime/compiler/context/store surfaces, public shim exports needed to author the feature, focused tests, and the required phase artifacts.
+
+What I analyzed
+
+- `core/validation.py`, `core/compiler.py`, `core/context.py`, `core/engine.py`, `core/artifacts.py`, `core/steps.py`, session/checkpoint stores, shim exports, and the existing unit/contract/runtime coverage around routes, sessions, and checkpoints.
+
+What I changed
+
+- Added `core/worklists.py` with `WorkItem`, `Selector`, `Selection`, snapshot types, static/artifact-backed sources, and selection/status helpers.
+- Added `scope=` support to provider-owned steps, workflow-level worklist discovery/validation, and compiled `scope_name`/`worklists` metadata.
+- Extended `Context` with `selection(...)`, `current(...)`, and `item`, and added item/worklist-aware artifact placeholders.
+- Implemented runtime selection init/restore, checkpoint persistence for worklist selections, and executable route effects for `Refresh`, `ResetCompletion`, `SetStatus`, and `Advance`.
+- Made `Continuity.work_item(...)` usable in practice by re-deriving session keys per current item while preserving explicit `scope=` / `key=` overrides.
+- Exported `Continuity`, worklist primitives, and effect types from `workflow` now that they are executable.
+- Updated phase notes/decisions and added focused tests.
+
+Key findings / decisions
+
+- `Advance(worklist)` on a scoped step now re-enters that same step while items remain, then resolves via `if_exhausted`; that matches the approved `Route.to(SUCCESS, ..., Advance(worklist))` pattern.
+- Worklist progression is resumed from additive `SelectionSnapshot` data rather than persisting arbitrary item payloads.
+- `BoardMutation` remains explicitly unimplemented in this phase.
+- Validation run:
+  - `156` focused unit/contract/runtime/strictness tests passed
+  - `33` broader CLI/workspace runtime tests passed
+
+Open issues / next step
+
+- Docs were not updated in this phase.
+- I did not run full `pytest -q`; the next phase should do the broader public-surface/docs regression pass.
