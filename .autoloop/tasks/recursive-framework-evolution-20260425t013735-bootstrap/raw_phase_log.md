@@ -1464,3 +1464,56 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc33e-596b-7713-984c-201397f86f53
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc33e-596b-7713-984c-201397f86f53
+---
+I’ve isolated the reviewer’s defect to the new-run path: persistence happens before runner-side normalization. I’m fixing that by normalizing only on new runs, before any run workspace is created, so resume keeps ignoring fresh overrides while persisted and typed params stay aligned.
+
+The code fix is in. I’m updating the phase notes and the shared decision block to capture the non-obvious part: new-run parameter normalization now happens before workspace creation so persisted metadata can’t drift from the typed view.
+
+I’ve applied the reviewer fix and updated the notes. I’m rerunning the syntax pass now, and then I’ll summarize the remaining validation limit plainly since the environment still doesn’t have pytest/pydantic installed.
+
+Scope considered
+
+- Phase-scoped `typed-params` work only.
+- Reviewer feedback in `.autoloop/.../typed-params/feedback.md`, especially `IMP-001`.
+- Runtime paths involved in parameter normalization, persistence, and typed context exposure: `runtime/runner.py`, `runtime/loader.py`, `runtime/workspace.py`, `core/context.py`, `core/engine.py`.
+- Phase artifacts updated: `implementation_notes.md` and the current typed-params block in `decisions.txt`.
+
+What I analyzed
+
+- Where `RunnerOptions.workflow_params` first enters the runtime path.
+- The ordering between runner-side normalization and `create_run(...)` metadata persistence.
+- Resume behavior versus new-run behavior so the fix would not reintroduce override drift on resume.
+- Existing typed-param tests to see where negative coverage was missing.
+
+What I changed
+
+- Added `runtime.runner._normalize_execution_options(...)` and called it from `execute_workflow_package(...)`.
+- New-run options with a declared `Parameters` model are now normalized through `coerce_workflow_parameter_mapping(...)` before `_prepare_workspaces(...)` can call `create_run(...)`.
+- Resume behavior is unchanged: fresh overrides are still ignored in favor of persisted `run.json` params.
+- Added a focused regression test in `tests/runtime/test_workspace_and_context.py` asserting invalid direct-run workflow params fail before `.autoloop` state is created.
+- Updated the typed-params implementation notes and appended the non-obvious runner-normalization decision to the current turn block in `decisions.txt`.
+
+Key findings / decisions
+
+- This addresses `IMP-001`: persisted run metadata and `ctx.params` now share the same validated mapping on new runs when `Parameters` exists.
+- The fix is intentionally narrow: it only normalizes new-run `RunnerOptions.workflow_params`; it does not change the existing resume contract.
+- Workflows without a declared `Parameters` model still keep raw `ctx.workflow_params` compatibility and still get `ctx.params == EmptyParameters()`.
+
+Open issues / next step
+
+- Syntax validation passed with `python3 -m py_compile ...` on the touched Python files.
+- I still could not run pytest or a real runtime import exercise in this environment because the available interpreter lacks `pytest` and `pydantic`.
+- Next step is to run the focused typed-params tests, then full `pytest -q`, in the project’s real Python environment.

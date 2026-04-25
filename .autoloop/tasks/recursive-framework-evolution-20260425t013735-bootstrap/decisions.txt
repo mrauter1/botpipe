@@ -30,3 +30,4 @@ Session-continuity regression coverage now includes filesystem-backed end-to-end
 <autoloop-decisions-header version="1" block_seq="10" owner="implementer" phase_id="typed-params" pair="implement" turn_seq="1" run_id="run-20260425T043735Z-6422224e" ts="2026-04-25T06:05:35.995739+00:00" />
 `ctx.params` is materialized from the persisted `workflow_params` mapping for both new runs and resumes, so resume behavior stays pinned to stored metadata rather than fresh override drift.
 When a workflow has no declared `Parameters` model, `ctx.params` intentionally falls back to immutable `EmptyParameters()` even if raw `workflow_params` are present programmatically; the dict surface remains `ctx.workflow_params`.
+New-run `RunnerOptions.workflow_params` are normalized before workspace creation when a workflow declares `Parameters`, so `run.json` and `ctx.params` share the same validated mapping and invalid direct-run params fail before persistence.

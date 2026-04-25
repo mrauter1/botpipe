@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.runtime.loader import WorkflowParameterError
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop_v3.runtime.workspace import list_task_operation_summaries, list_workflow_run_summaries
 from workflow.primitives import Outcome
@@ -409,6 +410,36 @@ class Parameters(BaseModel):
     assert payload["typed_params"] == {"mode": "strict"}
     assert payload["workflow_params"] == {"mode": "strict"}
     assert payload["answer"] == "42"
+
+
+def test_new_runs_validate_workflow_params_before_persisting_run_metadata(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(
+        tmp_path,
+        "typed_invalid_demo",
+        "TypedInvalidWorkflow",
+        export_parameters=True,
+        parameters_source="""
+from pydantic import BaseModel
+
+
+class Parameters(BaseModel):
+    mode: str = "strict"
+""".strip(),
+    )
+
+    with pytest.raises(WorkflowParameterError, match="unknown workflow parameter 'unknown'"):
+        run_workflow_package(
+            "typed_invalid_demo",
+            provider=ScriptedLLMProvider(),
+            options=RunnerOptions(
+                root=tmp_path,
+                task_id="task-invalid-params",
+                message="Need typed params",
+                workflow_params={"unknown": "value"},
+            ),
+        )
+
+    assert not (tmp_path / ".autoloop").exists()
 
 
 def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:

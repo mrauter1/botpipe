@@ -30,6 +30,7 @@
 - `runtime.loader._workflow_parameter_snapshot_model`
 - `runtime.runner.execute_workflow_package`
 - `runtime.runner._execute_compiled_workflow`
+- `runtime.runner._normalize_execution_options`
 
 ## Checklist Mapping
 
@@ -38,6 +39,7 @@
   - preserved `ctx.workflow_params`
   - restored typed params from persisted run metadata on resume
   - defaulted missing `Parameters` declarations to immutable empty params
+  - normalized new-run workflow params before persistence so runner-backed metadata and typed params stay aligned
 - Deferred:
   - no docs updates in this phase
   - no child-workflow typed output changes in this phase
@@ -69,6 +71,7 @@
 ## Expected Side Effects
 
 - Programmatic runner calls that pass invalid values to a declared `Parameters` model now fail when the runner materializes `ctx.params`, matching the typed-runtime contract.
+- Programmatic runner calls that pass invalid values to a declared `Parameters` model now fail before a run workspace is created, so invalid params are not written into `run.json`.
 - Non-BaseModel `Parameters` types are adapted into a frozen BaseModel snapshot for `ctx.params`; `ctx.workflow_params` remains the serialized compatibility surface.
 
 ## Validation Performed
