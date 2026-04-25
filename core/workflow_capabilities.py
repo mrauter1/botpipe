@@ -609,8 +609,11 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
             _compiled_artifact_capability(name, artifact)
             for name, artifact in compiled.artifact_items(authoritative=True)
         ),
-        transitions={step_name: dict(routes) for step_name, routes in compiled.routes.items()},
-        global_transitions=dict(compiled.global_routes),
+        transitions={
+            step_name: {tag: route.target for tag, route in routes.items()}
+            for step_name, routes in compiled.routes.items()
+        },
+        global_transitions={tag: route.target for tag, route in compiled.global_routes.items()},
         steps=tuple(
             _compiled_step_capability(step, default_session_name=compiled.default_session_name)
             for step in compiled.steps.values()

@@ -1687,3 +1687,82 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc34f-c47b-7912-a6c9-04260ecfdef8
+---
+I’m implementing the `typed-routes-effects` phase. I’ll read the phase artifacts, the current route/compiler/engine code, and the relevant tests first so I can fit the change into existing behavior without widening scope.
+
+I’ve confirmed the phase artifacts are still blank, so the codebase is the real source of execution detail here. Next I’m reading the compiler, validation, engine, and workflow shims together so I can wire typed routes in without breaking the existing shorthand path.
+
+The current compiler still stores route destinations as plain strings, and the engine commits the route before any effect layer exists. I’m checking for any existing worklist/runtime hooks before I decide whether effects should be true runtime behavior now or stay intentionally gated behind validation.
+
+There’s no worklist model in the repo yet, only a forward-looking hook in session continuity. That means typed effects need to land in a way that preserves route compilation now and rejects unresolved worklist targets cleanly instead of inventing partial runtime semantics.
+
+I’ve narrowed the compatibility surface: `compiled.routes` is only consumed in a few internal places, so I can carry richer route metadata there and preserve the old external transition summaries at the capability layer. I’m checking the store and error types now so runtime effect failures, if any, land in the same failure/checkpoint path as the existing engine.
+
+The route surface is narrow enough to evolve safely: only the engine and capability inspector read compiled routes directly. I’m moving to the implementation pass now, with one deliberate constraint: effect objects can exist and compile, but any effect that points at a non-existent worklist must fail at compile time instead of becoming a hidden runtime no-op.
+
+I have the change shape pinned down. Before editing I’m checking the worktree so I don’t collide with unrelated local changes, then I’ll patch the route/effect modules, compiler/validation, engine, shims, and focused tests in one pass.
+
+I checked the worktree. It’s very dirty globally, but the route/compiler/engine/test files I’m touching are isolated from that broader churn, so I’m proceeding with a narrow patch set only.
+
+The first patch is in. I’ve kept it phase-local: typed `Route` objects are compiled end to end, and effect objects exist now, but worklist-bound effects are intentionally compile-time rejected until the later worklist phase can make them real.
+
+`pytest` isn’t on the shell path here, so I’m switching to `python -m pytest` and, if needed, the project venv entrypoint. I also want one quick syntax/import pass because the route metadata shape changed under the compiler and capability inspector.
+
+The shell only has `python3`, not `python`. I’m rerunning the focused tests and compile checks with that interpreter now.
+
+The code compiles, but the base interpreter here doesn’t have `pytest` installed. I’m checking for the repository’s virtualenv or tool wrapper so I can still run the focused suite before I finish.
+
+The repo has a `.venv`, so I can run the real test environment after all. I’m using that now for the two phase-targeted suites first, then I’ll decide whether the blast radius needs one more compatibility pass.
+
+One unit test exposed the validation order: `Advance(if_exhausted="route")` needs to fail on the missing `route_to` before the still-deferred worklist check. I’m fixing that ordering and then rerunning the targeted suites plus one compatibility surface that serializes transitions.
+
+The focused suites are green now, including the compatibility paths that serialize workflow transitions for inspection and CLI output. I’m doing a final diff review and then I’ll write the phase notes and any decision entry needed to keep later phases from undoing this on the worklist branch.
+
+I’m recording the one non-obvious choice from this phase so later worklist work doesn’t accidentally treat it as a regression: compiled routes are now rich objects internally, but inspection/CLI outputs still flatten back to plain target strings for compatibility.
+
+**Scope considered**
+- `typed-routes-effects` phase only: route/effect authoring primitives, compiler normalization, engine routing integration, compatibility serialization, and focused tests.
+- I kept worklist loading/scoped runtime support out of scope and did not pull unrelated dirty files into this change.
+
+**What I analyzed**
+- Route compilation and transition validation in [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:1) and [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1).
+- Runtime routing and artifact-enforcement ordering in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:1).
+- Public shim/export surface in [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:1) and [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1).
+- Compatibility payload generation in [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py:1).
+- Phase notes and shared decision log.
+
+**What I changed**
+- Added typed authoring primitives in [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py:1) and [core/effects.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/effects.py:1).
+- Introduced internal `CompiledRoute` metadata and changed compiled transitions to carry `target` plus `effects`.
+- Preserved shorthand transitions by normalizing `Step` / `SUCCESS` / `PAUSE` / `FAIL` into typed routes during validation/compilation.
+- Updated the engine to resolve `CompiledRoute`, enforce artifacts first, then apply route effects.
+- Kept inspection and CLI payloads backward-compatible by flattening compiled routes back to plain target strings.
+- Exported `Route`, `Advance`, `Refresh`, `ResetCompletion`, `SetStatus`, and `BoardMutation` from the root `workflow` shim.
+- Added focused unit and contract coverage for typed route compilation, route-object execution, and compile-time effect validation.
+
+**Key findings / decisions**
+- Worklist runtime support does not exist yet in this repo, so worklist-bound effects are intentionally rejected at compile time instead of becoming hidden no-ops.
+- `Advance(..., if_exhausted="route")` is validated before the deferred worklist check so its contract failure stays precise.
+- Compatibility risk from changing `compiled.routes` was contained by projecting `.target` in capability/CLI payloads instead of widening external output formats.
+
+**Open issues / next step**
+- Worklist-backed effect execution is still deferred to the later worklist phase; this phase only establishes the typed route/effect surface and strict validation boundary.
+- Validation performed:
+  `.venv/bin/python -m py_compile ...`
+  `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py`
+  `.venv/bin/python -m pytest -q tests/runtime/test_compatibility_runtime.py tests/runtime/test_package_cli.py`
+- I did not run the full `pytest -q` suite in this phase.
