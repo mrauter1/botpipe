@@ -19,3 +19,5 @@ Runtime artifact enforcement resolves produced-artifact paths from compiled arti
 Optional produced outputs are runtime-validated only when they both exist and declare a schema, which keeps this phase aligned with the approved contract without widening failures for schema-less optional artifacts.
 System steps now accept route contracts for selected-route artifact enforcement, but `expected_output_schema` remains forbidden on `SystemStep`.
 Selected-route resolution must happen before output-artifact validation so invalid middleware or system-handler route tags still fail as routing errors instead of being masked by missing required outputs.
+<autoloop-decisions-header version="1" block_seq="7" owner="test_author" phase_id="artifact-runtime-enforcement" pair="test" turn_seq="1" run_id="run-20260425T043735Z-6422224e" ts="2026-04-25T05:29:05.271655+00:00" />
+Artifact-runtime-enforcement regression coverage explicitly guards route-resolution ordering on both middleware/provider and system-handler branches so future refactors cannot fix only one path and reintroduce masked routing failures on the other.
