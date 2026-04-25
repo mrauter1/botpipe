@@ -133,3 +133,6 @@
 {"ts": "2026-04-25T07:30:58.038706+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 133, "event_type": "phase_started", "phase_id": "public-surface-docs-regression", "phase_mode": "single"}
 {"ts": "2026-04-25T07:30:58.039324+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 134, "event_type": "pair_started", "pair": "implement", "phase_id": "public-surface-docs-regression"}
 {"ts": "2026-04-25T07:30:58.039403+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 135, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "public-surface-docs-regression"}
+{"ts": "2026-04-25T07:40:44.358122+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 136, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-docs-regression"}
+{"ts": "2026-04-25T07:41:55.630725+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 137, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-docs-regression"}
+{"ts": "2026-04-25T07:41:55.667350+00:00", "run_id": "run-20260425T043735Z-6422224e", "seq": 138, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "public-surface-docs-regression"}

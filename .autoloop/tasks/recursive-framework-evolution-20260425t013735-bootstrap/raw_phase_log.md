@@ -2787,3 +2787,48 @@ Key findings / decisions
 
 Open issues / next step
 - No open issues from this phase. The phase notes and shared decisions ledger were updated with the non-obvious compatibility decisions and regression fixes.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc38c-812b-7443-918c-9a1504416b17
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc38c-812b-7443-918c-9a1504416b17
+---
+I’m reviewing the phase-local deliverables against the requested public surface, docs, and regression criteria. First I’m reading the reviewer-owned criteria/feedback files and the relevant diffs so I can decide whether there are any blocking findings before I update the phase artifacts.
+
+The tracked diff surface is thin because this repo is mid-migration, so I’m verifying the current file state directly rather than relying on `git diff`. I’m checking the public exports and the runtime changes that were added to get the full suite green.
+
+I’ve finished the code review pass. I’m updating the verifier-owned criteria and feedback artifacts now; at this point I do not have a blocking finding to send back to implementation.
+
+Scope considered
+- Phase-local review of the public surface, docs, and regression deliverables.
+- Direct verification of the current public export files, updated docs, touched runtime seams, phase notes, and the green full-suite result.
+
+What I analyzed
+- The active criteria and feedback artifacts, implementation notes, and the relevant request/decision constraints.
+- Current file state for `workflow/__init__.py`, `workflow/primitives.py`, `docs/authoring.md`, `docs/architecture.md`, `core/context.py`, `core/artifacts.py`, and `core/engine.py`.
+- The validation evidence recorded by implementation, including the successful `.venv/bin/pytest -q` run.
+
+What I reviewed
+- AC-17: the root `workflow` shim remains authoring-only and `workflow.primitives` exposes the intended low-level runtime values, including `ChildWorkflowResult`.
+- AC-18: docs explicitly preserve `workflow.toml` as metadata-only and keep `ctx.open_session(..., scope=...)` supported, while the regression suite is green.
+- The runtime compatibility fixes added during the phase to preserve legacy child invokers, directory-backed produced artifacts, placeholder handling, and strict typed child output validation.
+
+Key findings / decisions
+- No blocking findings.
+- Criteria were marked complete.
+- Feedback was updated with a no-findings review entry referencing the green full-suite result.
+
+Open issues / next step
+- No open review issues for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
