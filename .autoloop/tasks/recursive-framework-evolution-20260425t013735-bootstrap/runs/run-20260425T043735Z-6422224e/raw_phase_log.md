@@ -218,3 +218,117 @@ No issue blocks this phase. The next implementation phase can proceed to artifac
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc2f3-6a49-79a2-94c9-e46cf47883d9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc2f3-6a49-79a2-94c9-e46cf47883d9
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2f3-6a49-79a2-94c9-e46cf47883d9
+---
+I’m handling the `artifact-model` test phase only. I’ll inspect the current artifact tests and the phase test artifacts first, then add any missing happy-path, edge-case, or failure-path coverage before updating the phase strategy and feedback notes.
+
+The current tests cover the core happy path, but two direct regression surfaces are still missing for this phase: optional artifact validation semantics and artifact-schema dependency failure when `jsonschema` is unavailable. I’m adding those now, along with one handle-API edge case around `read_model()` without a schema.
+
+The added tests are deterministic and local-only, with no timing or network surface. I’m running the focused unit/contract/runtime subset again to confirm the new expectations align with the current implementation and don’t destabilize adjacent behavior.
+
+The test runs are clean. I’m documenting the behavior-to-test map and the exact additions in the phase-owned test artifacts now, including the environment-sensitive `jsonschema` case and the preserved text-handle invariants.
+
+I’ve finished the source and phase-artifact edits. I’m doing a quick cleanup of generated `__pycache__` directories so this turn leaves only test-source and phase-note changes.
+
+Scope considered
+
+Phase-local `artifact-model` only. I focused on the new artifact declaration and handle behavior in `core/artifacts.py`, the matching validation surface in `tests/unit/test_validation.py`, the handle/helper coverage in `tests/unit/test_primitives_and_stores.py`, and the phase-owned test artifacts.
+
+What I analyzed
+
+I reviewed the implemented artifact metadata and helper APIs, the existing test coverage added during implementation, the shared decisions for this run, and the active test-phase artifacts. I looked specifically for uncovered happy paths, edge cases, and environment-sensitive failure paths in the new artifact validation behavior.
+
+What I changed
+
+I added focused tests in [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py) for:
+- `ArtifactHandle.read_model()` failing without a schema
+- optional missing artifact validation succeeding
+
+I added a focused validation test in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) for:
+- raw artifact-schema rejection when `jsonschema` is unavailable
+
+I updated the phase strategy and feedback artifacts:
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/artifact-model/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/artifact-model/feedback.md)
+
+Key findings / decisions
+
+The added tests close two meaningful gaps in this phase:
+- optional-artifact validation should not fail when the artifact is absent
+- artifact-schema declarations need an explicit failure-path test for missing `jsonschema`, because that behavior is environment-sensitive
+
+Validation passed:
+- `./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py`
+- `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py`
+
+Open issues / next step
+
+No blocking test issue remains for this phase. Later phases should add runtime coverage once route-based artifact enforcement and step-local artifact inventory resolution are implemented.
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc2f3-6a49-79a2-94c9-e46cf47883d9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc2f3-6a49-79a2-94c9-e46cf47883d9
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc2f3-6a49-79a2-94c9-e46cf47883d9
+---
+I’m auditing the `artifact-model` test phase only. I’ll verify the new and preserved artifact coverage against the phase contract, then update the test-phase criteria and feedback artifacts accordingly.
+
+The strategy and coverage map line up with the phase contract. I’m running the focused unit plus adjacent regression subset once myself so the audit reflects observed test behavior, not just the recorded notes.
+
+The audit run is clean. I’m updating the auditor-owned criteria and feedback artifacts now to reflect that the phase-local test coverage is sufficient and stable.
+
+Scope considered
+
+Phase-local `artifact-model` test scope only. I audited the updated unit tests in `tests/unit/test_primitives_and_stores.py` and `tests/unit/test_validation.py`, the phase test strategy and feedback artifacts, and the shared decisions that constrain what the tests should and should not encode.
+
+What I analyzed
+
+I checked whether the tests cover the new artifact metadata and helper APIs, preserve regression coverage for the existing text-handle behavior, include relevant failure paths and environment-sensitive cases, and avoid normalizing behavior that was explicitly deferred to later phases.
+
+What I reviewed
+
+I verified that the tests now cover:
+- artifact factories, binding metadata, and step-local relative resolution helper behavior
+- preserved `ArtifactHandle` text-method invariants
+- JSON/model helper happy paths
+- `read_model()` failure without a schema
+- missing required artifact failure
+- missing optional artifact success
+- schema-placement rejection on non-JSON artifacts
+- unsupported schema-type rejection
+- raw artifact-schema rejection when `jsonschema` is unavailable
+
+I reran:
+- `./.venv/bin/python -m pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_validation.py`
+- `./.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py`
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings in the phase-local test scope. The coverage is aligned with the active phase contract, the shared decisions, and the implementation’s stated phase boundaries. I updated the auditor-owned artifacts so `criteria.md` is fully checked and `feedback.md` records the clean audit result.
+
+Open issues / next step
+
+No test-audit blocker remains for this phase. Later phases should extend coverage when runtime artifact enforcement and step-local artifact inventory semantics are implemented.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
