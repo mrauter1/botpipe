@@ -17,3 +17,6 @@
 {"ts": "2026-04-25T08:27:31.967988+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 17, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "shared-parameter-seam", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-25T08:27:31.969647+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 18, "event_type": "pair_started", "pair": "test", "phase_id": "shared-parameter-seam"}
 {"ts": "2026-04-25T08:27:31.969895+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 19, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "shared-parameter-seam"}
+{"ts": "2026-04-25T08:29:28.206171+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-parameter-seam"}
+{"ts": "2026-04-25T08:30:16.089300+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "shared-parameter-seam"}
+{"ts": "2026-04-25T08:30:16.132944+00:00", "run_id": "run-20260425T080712Z-39cec555", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "shared-parameter-seam"}
