@@ -20,8 +20,8 @@
       "public-surface-docs-regression"
     ],
     "explicit": true,
-    "current_phase_index": 5,
-    "current_phase_id": "typed-routes-effects"
+    "current_phase_index": 6,
+    "current_phase_id": "worklists"
   },
   "phase_status": {
     "artifact-model": "completed",
@@ -29,8 +29,8 @@
     "artifact-runtime-enforcement": "completed",
     "session-continuity": "completed",
     "typed-params": "completed",
-    "typed-routes-effects": "in_progress",
-    "worklists": "planned",
+    "typed-routes-effects": "completed",
+    "worklists": "in_progress",
     "child-io": "planned",
     "public-surface-docs-regression": "planned"
   },
@@ -105,6 +105,19 @@
       "run_id": "run-20260425T043735Z-6422224e",
       "status": "in_progress",
       "ts": "2026-04-25T06:24:37.491893+00:00"
+    },
+    {
+      "phase_id": "typed-routes-effects",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "completed",
+      "ts": "2026-04-25T06:40:02.741046+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "worklists",
+      "run_id": "run-20260425T043735Z-6422224e",
+      "status": "in_progress",
+      "ts": "2026-04-25T06:40:02.747368+00:00"
     }
   ]
 }
