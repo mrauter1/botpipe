@@ -14,12 +14,12 @@
       "proof-docs-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "extend-candidate-surface-seam"
+    "current_phase_index": 1,
+    "current_phase_id": "migrate-refinement-decomposition-callers"
   },
   "phase_status": {
-    "extend-candidate-surface-seam": "in_progress",
-    "migrate-refinement-decomposition-callers": "planned",
+    "extend-candidate-surface-seam": "completed",
+    "migrate-refinement-decomposition-callers": "in_progress",
     "proof-docs-memory-closeout": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260425T001633Z-23b17522",
       "status": "in_progress",
       "ts": "2026-04-25T00:26:03.911908+00:00"
+    },
+    {
+      "phase_id": "extend-candidate-surface-seam",
+      "run_id": "run-20260425T001633Z-23b17522",
+      "status": "completed",
+      "ts": "2026-04-25T00:38:12.680039+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "migrate-refinement-decomposition-callers",
+      "run_id": "run-20260425T001633Z-23b17522",
+      "status": "in_progress",
+      "ts": "2026-04-25T00:38:12.683098+00:00"
     }
   ]
 }
