@@ -2258,3 +2258,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc35d-e300-7c22-9336-e54faba217cc
+
+
+---
+run_id=run-20260425T043735Z-6422224e | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc35d-e300-7c22-9336-e54faba217cc
+---
+I’m reviewing the worklist phase from the test side now: existing worklist coverage, the implementer’s new regression tests, and any remaining gap between the accepted behavior and what’s actually pinned by tests.
+
+The remaining worthwhile gaps are narrow: one branch for `Advance(...)` on `GLOBAL`, and one artifact-backed duplicate-id failure so the central load-time guard is pinned across both worklist source types. I’m adding those now.
+
+I’ve added the extra coverage for the remaining phase-specific branches. I’m running the focused validation set again now, including the new artifact-backed duplicate-id case and the `GLOBAL`-route rejection branch.
+
+The targeted suite passed. I’m updating the test artifacts now with the behavior-to-coverage map and a concise summary of the added regression tests so the next turn can audit exactly what is pinned.
+
+Scope considered
+
+- Phase-local worklist test coverage only: focused worklist validation/runtime tests plus the active test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/worklists/`.
+
+What I analyzed
+
+- Existing worklist coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:430), [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:366), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1912).
+- The latest worklist decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+- Coverage gaps around source-type drift for duplicate ids and the remaining `GLOBAL` branch in `Advance(...)` validation.
+
+What I changed
+
+- Added [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:537) coverage for rejecting `Advance(...)` from `GLOBAL` transitions.
+- Added [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:2041) coverage for artifact-backed worklists with duplicate ids failing before scoped execution begins.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/worklists/test_strategy.md) with a behavior-to-coverage map, invariants, failure paths, flake controls, and the remaining known gap.
+- Appended a concise coverage summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/test/phases/worklists/feedback.md) and recorded the non-obvious test decisions under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t013735-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+- The highest-value extra regression check was to pin duplicate-id rejection on both static and artifact-backed sources, because the guard is centralized in `Worklist.load_items(...)`.
+- The other missing branch worth pinning was `Advance(...)` on `GLOBAL`, since that path is explicitly rejected by the new validator.
+- Focused validation performed:
+- `python -m py_compile tests/unit/test_validation.py tests/contract/test_engine_contracts.py`
+- `pytest -q tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/unit/test_primitives_and_stores.py`
+- Result: `122 passed`.
+
+Open issues / next step
+
+- I did not run the full repository test suite.
+- The remaining known gap is isolated runtime exercise of `_advance_worklist(...)` for invalid persisted/programmatically assembled routes; current coverage relies on compile-time validation plus shared engine tests.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
