@@ -11,3 +11,6 @@
 {"ts": "2026-04-26T15:50:24.929004+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 11, "event_type": "phase_started", "phase_id": "provider-usage-plumbing", "phase_mode": "single"}
 {"ts": "2026-04-26T15:50:24.929500+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 12, "event_type": "pair_started", "pair": "implement", "phase_id": "provider-usage-plumbing"}
 {"ts": "2026-04-26T15:50:24.929735+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 13, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "provider-usage-plumbing"}
+{"ts": "2026-04-26T16:00:17.310968+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 14, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-usage-plumbing"}
+{"ts": "2026-04-26T16:02:17.424291+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 15, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-usage-plumbing"}
+{"ts": "2026-04-26T16:02:17.463611+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 16, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "provider-usage-plumbing"}

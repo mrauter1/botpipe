@@ -249,3 +249,60 @@ Result: `126 passed`
 Open issues / next step
 
 No open blocker in this phase. The next phase can consume `StepFinish.provider_usage` and typed provider response usage without additional core plumbing.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+---
+I’m reviewing only the phase-local provider-usage implementation and its regression surface. First I’m reading the active criteria/feedback artifacts and the touched provider/engine files to check intent fidelity, compatibility, and whether any blocking gaps remain.
+
+I’ve confirmed the main plumbing path and test coverage. The remaining review question is whether the helper-layer change to session metadata is an unintended compatibility regression, so I’m checking how `provider_metadata` is consumed elsewhere before I label that as a finding.
+
+The main open question is session-metadata compatibility. I’m running the compatibility-runtime test file in addition to the already green provider/engine tests, because that’s where a regression from the new metadata filtering would surface first.
+
+Scope considered
+
+Phase-local review of `provider-usage-plumbing` only. I limited the audit to the touched provider model/transport/engine paths, the new regression tests, and the phase artifact files that I was allowed to edit.
+
+What I analyzed
+
+I reviewed the implementation in `core/providers/models.py`, `core/providers/rendered.py`, `core/providers/turns.py`, `runtime/providers/_common.py`, `runtime/providers/codex.py`, `runtime/providers/claude.py`, `core/extensions.py`, and `core/engine.py`. I also checked repository usage of `provider_metadata` and `SessionBinding` to look for compatibility regressions from the new usage plumbing.
+
+What I reviewed
+
+I verified the added tests in `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_providers.py`, and `tests/contract/test_engine_contracts.py`, then ran:
+`./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/contract/test_engine_contracts.py -q`
+
+Result: `160 passed in 0.62s`
+
+I updated:
+- `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/provider-usage-plumbing/criteria.md`
+- `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/provider-usage-plumbing/feedback.md`
+
+Key findings / decisions
+
+No blocking or non-blocking implementation defects were identified in scope.
+
+The implementation satisfies the phase contract:
+- typed optional usage exists on provider responses
+- runtime/rendered transports propagate usage
+- pair and llm `StepFinish` events expose `provider_usage`
+- missing usage remains non-fatal
+- compatibility/runtime/provider tests stay green
+
+Open issues / next step
+
+No open review issues for this phase. The phase can advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
