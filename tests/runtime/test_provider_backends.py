@@ -7,10 +7,12 @@ from pathlib import Path
 
 import pytest
 
+from autoloop_v3.core.providers.rendered import RenderedLLMProvider
+from autoloop_v3.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from autoloop_v3.runtime import cli
-from autoloop_v3.runtime.providers.claude import ClaudeProvider
+from autoloop_v3.runtime.providers.claude import ClaudeTransport
 import autoloop_v3.runtime.providers.claude as claude_runtime_provider
-from autoloop_v3.runtime.providers.codex import CodexProvider
+from autoloop_v3.runtime.providers.codex import CodexTransport
 import autoloop_v3.runtime.providers.codex as codex_runtime_provider
 from autoloop_v3.runtime.config import (
     ClaudeProviderConfig,
@@ -29,15 +31,9 @@ import autoloop_v3.runtime.provider_backends as provider_backends
 CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n"
 
 
-class _StubProvider:
-    def run_producer(self, request):  # pragma: no cover - defensive
-        raise AssertionError(f"unexpected producer call: {request!r}")
-
-    def run_verifier(self, request):  # pragma: no cover - defensive
-        raise AssertionError(f"unexpected verifier call: {request!r}")
-
-    def run_llm(self, request):  # pragma: no cover - defensive
-        raise AssertionError(f"unexpected llm call: {request!r}")
+class _StubTransport:
+    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:  # pragma: no cover - defensive
+        raise AssertionError(f"unexpected turn call: {turn!r}")
 
 
 def _resolved_config(provider_name: str = "codex") -> ResolvedRuntimeConfig:
@@ -63,22 +59,27 @@ def _completed(*, args: list[str], stdout: str = "", stderr: str = "", returncod
 
 def test_resolve_provider_backend_dispatches_by_provider_name(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[str] = []
-    codex_provider = _StubProvider()
-    claude_provider = _StubProvider()
+    codex_transport = _StubTransport()
+    claude_transport = _StubTransport()
 
     monkeypatch.setitem(
         provider_backends._BACKEND_BUILDERS,
         "codex",
-        lambda config: seen.append(config.provider.name) or codex_provider,
+        lambda config: seen.append(config.provider.name) or codex_transport,
     )
     monkeypatch.setitem(
         provider_backends._BACKEND_BUILDERS,
         "claude",
-        lambda config: seen.append(config.provider.name) or claude_provider,
+        lambda config: seen.append(config.provider.name) or claude_transport,
     )
 
-    assert resolve_provider_backend(config=_resolved_config("codex")) is codex_provider
-    assert resolve_provider_backend(config=_resolved_config("claude")) is claude_provider
+    codex_provider = resolve_provider_backend(config=_resolved_config("codex"))
+    claude_provider = resolve_provider_backend(config=_resolved_config("claude"))
+
+    assert isinstance(codex_provider, RenderedLLMProvider)
+    assert codex_provider._transport is codex_transport
+    assert isinstance(claude_provider, RenderedLLMProvider)
+    assert claude_provider._transport is claude_transport
     assert seen == ["codex", "claude"]
 
 
@@ -114,7 +115,7 @@ def test_resolve_provider_backend_raises_precise_error_for_unavailable_codex_bac
         resolve_provider_backend(config=_resolved_config("codex"))
 
 
-def test_resolve_provider_backend_returns_real_codex_provider_when_capabilities_are_supported(
+def test_resolve_provider_backend_returns_rendered_codex_provider_when_capabilities_are_supported(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
@@ -136,10 +137,11 @@ def test_resolve_provider_backend_returns_real_codex_provider_when_capabilities_
 
     provider = resolve_provider_backend(config=_resolved_config("codex"))
 
-    assert isinstance(provider, CodexProvider)
+    assert isinstance(provider, RenderedLLMProvider)
+    assert isinstance(provider._transport, CodexTransport)
 
 
-def test_resolve_provider_backend_returns_real_claude_provider(
+def test_resolve_provider_backend_returns_rendered_claude_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
@@ -154,7 +156,62 @@ def test_resolve_provider_backend_returns_real_claude_provider(
 
     provider = resolve_provider_backend(config=_resolved_config("claude"))
 
-    assert isinstance(provider, ClaudeProvider)
+    assert isinstance(provider, RenderedLLMProvider)
+    assert isinstance(provider._transport, ClaudeTransport)
+
+
+@pytest.mark.parametrize(
+    ("module", "banned_tokens"),
+    (
+        (
+            codex_runtime_provider,
+            (
+                "ProducerRequest",
+                "VerifierRequest",
+                "LLMRequest",
+                "ProducerResponse",
+                "OutcomeResponse",
+                "parse_outcome_json",
+                "render_verifier_input",
+                "render_provider_turn",
+                "route_contracts",
+                "available_routes",
+                "required_artifacts",
+                "retry_feedback",
+                "route_handoff",
+                "producer_raw_output",
+                "<producer_raw_output>",
+                "request.raw_output",
+            ),
+        ),
+        (
+            claude_runtime_provider,
+            (
+                "ProducerRequest",
+                "VerifierRequest",
+                "LLMRequest",
+                "ProducerResponse",
+                "OutcomeResponse",
+                "parse_outcome_json",
+                "render_verifier_input",
+                "render_provider_turn",
+                "route_contracts",
+                "available_routes",
+                "required_artifacts",
+                "retry_feedback",
+                "route_handoff",
+                "producer_raw_output",
+                "<producer_raw_output>",
+                "request.raw_output",
+            ),
+        ),
+    ),
+)
+def test_runtime_cli_transport_files_stay_transport_only(module: object, banned_tokens: tuple[str, ...]) -> None:
+    source = Path(module.__file__).read_text(encoding="utf-8")  # type: ignore[attr-defined]
+
+    for token in banned_tokens:
+        assert token not in source, f"{module.__name__} unexpectedly contains {token!r}"
 
 
 def test_resolve_provider_backend_raises_precise_error_for_unsupported_codex_flags(
@@ -258,7 +315,7 @@ def test_resolve_provider_backend_rejects_allow_core_tools_when_claude_cli_lacks
 def test_cli_resolve_provider_uses_builtin_backend_resolver_when_not_injected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sentinel = _StubProvider()
+    sentinel = object()
     config = _resolved_config("codex")
     args = argparse.Namespace()
 
@@ -268,7 +325,7 @@ def test_cli_resolve_provider_uses_builtin_backend_resolver_when_not_injected(
 
 
 def test_cli_resolve_provider_preserves_non_public_injection_seam_precedence() -> None:
-    sentinel = _StubProvider()
+    sentinel = object()
     config = _resolved_config("codex")
     args = argparse.Namespace(provider="claude")
 

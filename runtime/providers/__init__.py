@@ -1,11 +1,11 @@
 """Built-in runtime provider adapters."""
 
-from .claude import ClaudeProvider, build_claude_provider
-from .codex import CodexProvider, build_codex_provider
+from .claude import ClaudeTransport, build_claude_transport
+from .codex import CodexTransport, build_codex_transport
 
 __all__ = [
-    "ClaudeProvider",
-    "CodexProvider",
-    "build_claude_provider",
-    "build_codex_provider",
+    "ClaudeTransport",
+    "CodexTransport",
+    "build_claude_transport",
+    "build_codex_transport",
 ]

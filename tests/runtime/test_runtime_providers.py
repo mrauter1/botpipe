@@ -8,6 +8,8 @@ from autoloop_v3.core.errors import ProviderExecutionError
 from autoloop_v3.core.prompts import ResolvedPrompt
 from autoloop_v3.core.providers.models import LLMRequest, ProducerRequest, VerifierRequest
 from autoloop_v3.core.providers.parsing import parse_outcome_json
+from autoloop_v3.core.providers.rendered import RenderedLLMProvider
+from autoloop_v3.core.providers.turns import RenderedProviderTurn
 from autoloop_v3.core.stores.protocols import SessionBinding
 from autoloop_v3.runtime.config import (
     ClaudeProviderConfig,
@@ -21,18 +23,18 @@ from autoloop_v3.runtime.providers._common import (
     build_session_binding,
     ensure_session_provider_match,
     format_subprocess_streams,
-    render_verifier_input,
     require_prompt_text,
 )
 from autoloop_v3.runtime.providers.claude import (
-    ClaudeProvider,
+    ClaudeTransport,
     claude_permission_args,
     parse_claude_exec_json,
     verify_claude_code_capabilities,
 )
 import autoloop_v3.runtime.providers.claude as claude_runtime_provider
 from autoloop_v3.runtime.providers.codex import (
-    CodexProvider,
+    CodexCLICommand,
+    CodexTransport,
     resolve_codex_cli_commands,
     parse_codex_exec_json,
     verify_codex_exec_capabilities,
@@ -132,6 +134,23 @@ def _llm_request(*, prompt_text: str = "ask", session: SessionBinding | None = N
     )
 
 
+def _rendered_turn(
+    *,
+    step_name: str = "turn",
+    turn_kind: str = "producer",
+    prompt_text: str = "prompt",
+    session: SessionBinding | None = None,
+    expected_response: str = "raw_text",
+) -> RenderedProviderTurn:
+    return RenderedProviderTurn(
+        step_name=step_name,
+        turn_kind=turn_kind,
+        prompt_text=prompt_text,
+        session=session,
+        expected_response=expected_response,
+    )
+
+
 def test_require_prompt_text_rejects_missing_text() -> None:
     with pytest.raises(ProviderExecutionError, match=r"provider 'codex'.*step 'plan'"):
         require_prompt_text(ResolvedPrompt(path="plan.md", text=None), "codex", "plan")
@@ -144,15 +163,6 @@ def test_format_subprocess_streams_renders_empty_streams() -> None:
 def test_ensure_session_provider_match_rejects_cross_provider_resume() -> None:
     with pytest.raises(ProviderExecutionError, match="resuming across providers is forbidden"):
         ensure_session_provider_match("codex", _provider_session("claude"))
-
-
-def test_render_verifier_input_is_explicit_and_deterministic() -> None:
-    rendered = render_verifier_input("Check it", "raw body")
-
-    assert rendered == (
-        "<verifier_prompt>\nCheck it\n</verifier_prompt>\n\n"
-        "<producer_raw_output>\nraw body\n</producer_raw_output>\n"
-    )
 
 
 def test_build_session_binding_preserves_slot_and_canonical_metadata() -> None:
@@ -336,11 +346,12 @@ def test_verify_claude_code_capabilities_rejects_missing_allowed_tools_when_stra
         verify_claude_code_capabilities(ClaudeProviderConfig(permission_strategy="allow_core_tools"))
 
 
-def test_codex_provider_run_producer_uses_start_command_for_placeholder_session(
+def test_codex_transport_sends_rendered_prompt_text_to_cli_stdin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
     calls: list[list[str]] = []
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
 
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
@@ -348,7 +359,7 @@ def test_codex_provider_run_producer_uses_start_command_for_placeholder_session(
             return _completed(args=command, stdout=CODEX_START_HELP)
         if command == ["codex", "exec", "resume", "--help"]:
             return _completed(args=command, stdout=CODEX_RESUME_HELP)
-        assert kwargs["input"] == "prompt"
+        assert kwargs["input"] == prompt_text
         return _completed(
             args=command,
             stdout="\n".join(
@@ -360,9 +371,13 @@ def test_codex_provider_run_producer_uses_start_command_for_placeholder_session(
         )
 
     monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
-    provider = CodexProvider(_config(provider_name="codex"), resolve_codex_cli_commands(_config(provider_name="codex")))
+    transport = CodexTransport(
+        commands=resolve_codex_cli_commands(_config(provider_name="codex")),
+        model="gpt-test",
+        model_effort=None,
+    )
 
-    response = provider.run_producer(_producer_request(session=_placeholder_session()))
+    result = transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
 
     assert calls[-1] == [
         "codex",
@@ -372,20 +387,78 @@ def test_codex_provider_run_producer_uses_start_command_for_placeholder_session(
         "--model",
         "gpt-test",
     ]
-    assert response.raw_output == "producer text"
-    assert response.session is not None
-    assert response.session.session_id == "codex-session-1"
-    assert response.session.metadata["provider"] == "codex"
-    assert response.session.metadata["provider_metadata"] == {
+    assert result.raw_text == "producer text"
+    assert result.session is not None
+    assert result.session.session_id == "codex-session-1"
+    assert result.metadata["provider_metadata"] == {
         "assistant_message_count": 1,
         "jsonl_event_count": 2,
         "malformed_jsonl_lines": 0,
     }
-    assert "thread_id" not in response.session.metadata["provider_metadata"]
-    assert response.metadata["provider_metadata"] == response.session.metadata["provider_metadata"]
 
 
-def test_codex_provider_run_verifier_parses_strict_json_outcome(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_codex_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+    monkeypatch.setattr(
+        codex_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(
+            args=command,
+            stdout='{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"done\\"}"}}',
+        ),
+    )
+
+    result = transport.run_turn(
+        _rendered_turn(step_name="verify", turn_kind="verifier", expected_response="outcome_json")
+    )
+
+    assert result.raw_text == '{"tag":"done"}'
+
+
+def test_rendered_llm_provider_returns_producer_response_with_codex_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
+    monkeypatch.setattr(
+        codex_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(
+            args=command,
+            stdout="\n".join(
+                (
+                    '{"type":"thread.started","thread_id":"codex-session-2"}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
+                )
+            ),
+        ),
+    )
+    provider = RenderedLLMProvider(transport)
+
+    response = provider.run_producer(_producer_request(session=_placeholder_session()))
+
+    assert response.raw_output == "producer text"
+    assert response.session is not None
+    assert response.session.session_id == "codex-session-2"
+    assert response.metadata["mode"] == "start"
+
+
+def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
 
     def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -404,73 +477,38 @@ def test_codex_provider_run_verifier_parses_strict_json_outcome(monkeypatch: pyt
             args=command,
             stdout="\n".join(
                 (
-                    '{"type":"thread.started","thread_id":"codex-session-2"}',
+                    '{"type":"thread.started","thread_id":"codex-session-3"}',
                     '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"pair_ok\\",\\"payload\\":{\\"summary\\":\\"ok\\"}}"}}',
                 )
             ),
         )
 
     monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
-    provider = CodexProvider(_config(provider_name="codex"), resolve_codex_cli_commands(_config(provider_name="codex")))
+    provider = RenderedLLMProvider(
+        CodexTransport(
+            commands=resolve_codex_cli_commands(_config(provider_name="codex")),
+            model="gpt-test",
+            model_effort=None,
+        )
+    )
 
     response = provider.run_verifier(_verifier_request(session=_placeholder_session()))
 
     assert response.outcome.tag == "pair_ok"
     assert response.outcome.payload == {"summary": "ok"}
     assert response.session is not None
-    assert response.session.session_id == "codex-session-2"
+    assert response.session.session_id == "codex-session-3"
 
 
-def test_codex_provider_run_llm_resumes_existing_provider_session_and_preserves_session_id_when_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
-    resumable = _provider_session("codex", session_id="codex-session-existing")
-    calls: list[list[str]] = []
-    seen_input: list[str] = []
-
-    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        calls.append(command)
-        if command == ["codex", "exec", "--help"]:
-            return _completed(args=command, stdout=CODEX_START_HELP)
-        if command == ["codex", "exec", "resume", "--help"]:
-            return _completed(args=command, stdout=CODEX_RESUME_HELP)
-        seen_input.append(str(kwargs["input"]))
-        return _completed(
-            args=command,
-            stdout='{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"done\\"}"}}',
-        )
-
-    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
-    provider = CodexProvider(_config(provider_name="codex"), resolve_codex_cli_commands(_config(provider_name="codex")))
-
-    response = provider.run_llm(_llm_request(session=resumable))
-
-    assert calls[-1] == [
-        "codex",
-        "exec",
-        "resume",
-        "--json",
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--model",
-        "gpt-test",
-        "codex-session-existing",
-        "-",
-    ]
-    assert len(seen_input) == 1
-    assert "# Step: ask" in seen_input[0]
-    assert "## Runtime Step Contract" in seen_input[0]
-    assert "<producer_raw_output>" not in seen_input[0]
-    assert response.outcome.tag == "done"
-    assert response.session is not None
-    assert response.session.session_id == "codex-session-existing"
-
-
-def test_codex_provider_rejects_unusable_jsonl(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = CodexProvider(_config(provider_name="codex"), codex_runtime_provider.CodexCLICommand(
-        start_command=("codex", "exec", "--json"),
-        resume_command=("codex", "exec", "resume", "--json"),
-    ))
+def test_codex_transport_rejects_unusable_jsonl(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
     monkeypatch.setattr(
         codex_runtime_provider.subprocess,
         "run",
@@ -478,14 +516,18 @@ def test_codex_provider_rejects_unusable_jsonl(monkeypatch: pytest.MonkeyPatch) 
     )
 
     with pytest.raises(ProviderExecutionError, match="unusable JSONL output"):
-        provider.run_producer(_producer_request(session=_placeholder_session()))
+        transport.run_turn(_rendered_turn(session=_placeholder_session()))
 
 
-def test_codex_provider_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = CodexProvider(_config(provider_name="codex"), codex_runtime_provider.CodexCLICommand(
-        start_command=("codex", "exec", "--json"),
-        resume_command=("codex", "exec", "resume", "--json"),
-    ))
+def test_codex_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    transport = CodexTransport(
+        commands=CodexCLICommand(
+            start_command=("codex", "exec", "--json"),
+            resume_command=("codex", "exec", "resume", "--json"),
+        ),
+        model="gpt-test",
+        model_effort=None,
+    )
     monkeypatch.setattr(
         codex_runtime_provider.subprocess,
         "run",
@@ -493,101 +535,79 @@ def test_codex_provider_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch)
     )
 
     with pytest.raises(ProviderExecutionError, match=r"exit code 7"):
-        provider.run_producer(_producer_request(session=_placeholder_session()))
+        transport.run_turn(_rendered_turn(session=_placeholder_session()))
 
 
-def test_codex_provider_rejects_cross_provider_resume() -> None:
-    provider = CodexProvider(
-        _config(provider_name="codex"),
-        codex_runtime_provider.CodexCLICommand(
+def test_codex_transport_rejects_cross_provider_resume() -> None:
+    transport = CodexTransport(
+        commands=CodexCLICommand(
             start_command=("codex", "exec", "--json"),
             resume_command=("codex", "exec", "resume", "--json"),
         ),
+        model="gpt-test",
+        model_effort=None,
     )
 
     with pytest.raises(ProviderExecutionError, match="resuming across providers is forbidden"):
-        provider.run_producer(_producer_request(session=_provider_session("claude")))
+        transport.run_turn(_rendered_turn(session=_provider_session("claude")))
 
 
-def test_claude_provider_run_producer_parses_json_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+def test_claude_transport_sends_rendered_prompt_text_to_cli_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    prompt_text = "# Step: produce\n\nShared runtime prompt."
     calls: list[list[str]] = []
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
         return _completed(
             args=command,
             stdout='{"result":"producer text","session_id":"claude-session-1","stop_reason":"end_turn"}',
         )
 
     monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
-    provider = ClaudeProvider(_config(provider_name="claude"))
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
-    response = provider.run_producer(_producer_request(session=_placeholder_session()))
+    result = transport.run_turn(_rendered_turn(step_name="produce", prompt_text=prompt_text, session=_placeholder_session()))
 
-    assert calls[-1] == ["claude", "-p", "prompt", "--output-format", "json", "--model", "claude-test"]
-    assert response.raw_output == "producer text"
-    assert response.session is not None
-    assert response.session.session_id == "claude-session-1"
-    assert response.session.metadata["provider"] == "claude"
-    assert response.session.metadata["provider_metadata"] == {"stop_reason": "end_turn"}
-    assert "thread_id" not in response.session.metadata["provider_metadata"]
+    assert calls[-1] == ["claude", "-p", prompt_text, "--output-format", "json", "--model", "claude-test"]
+    assert result.raw_text == "producer text"
+    assert result.session is not None
+    assert result.session.session_id == "claude-session-1"
+    assert result.session.metadata["provider_metadata"] == {"stop_reason": "end_turn"}
 
 
-def test_claude_provider_run_verifier_parses_strict_json_outcome(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+def test_claude_transport_does_not_parse_workflow_outcome_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(args=command, stdout='{"result":"{\\"tag\\":\\"done\\"}"}'),
+    )
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
-    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
-        rendered_prompt = command[2]
-        assert "# Step: verify" in rendered_prompt
-        assert "## Runtime Step Contract" in rendered_prompt
-        assert "### Available routes" in rendered_prompt
-        assert "<producer_raw_output>" not in rendered_prompt
-        assert "producer output" not in rendered_prompt
-        return _completed(
-            args=command,
-            stdout='{"result":"{\\"tag\\":\\"pair_ok\\",\\"payload\\":{\\"summary\\":\\"ok\\"}}","session_id":"claude-session-2"}',
-        )
+    result = transport.run_turn(
+        _rendered_turn(step_name="ask", turn_kind="llm", expected_response="outcome_json")
+    )
 
-    monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
-    provider = ClaudeProvider(_config(provider_name="claude"))
-
-    response = provider.run_verifier(_verifier_request(session=_placeholder_session()))
-
-    assert response.outcome.tag == "pair_ok"
-    assert response.outcome.payload == {"summary": "ok"}
-    assert response.session is not None
-    assert response.session.session_id == "claude-session-2"
+    assert result.raw_text == '{"tag":"done"}'
 
 
-def test_claude_provider_run_llm_resumes_existing_provider_session_and_preserves_session_id_when_missing(
+def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
     resumable = _provider_session("claude", session_id="claude-session-existing")
     calls: list[list[str]] = []
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HELP)
         return _completed(args=command, stdout='{"result":"{\\"tag\\":\\"done\\"}","stop_reason":"done"}')
 
     monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
-    provider = ClaudeProvider(_config(provider_name="claude", claude_permission_strategy="allow_core_tools"))
+    provider = RenderedLLMProvider(
+        ClaudeTransport(config=_config(provider_name="claude", claude_permission_strategy="allow_core_tools").provider.claude)
+    )
 
     response = provider.run_llm(_llm_request(session=resumable))
 
-    assert calls[-1][:4] == [
-        "claude",
-        "--resume",
-        "claude-session-existing",
-        "-p",
-    ]
+    assert calls[-1][:4] == ["claude", "--resume", "claude-session-existing", "-p"]
     rendered_prompt = calls[-1][4]
     assert "# Step: ask" in rendered_prompt
     assert "## Runtime Step Contract" in rendered_prompt
@@ -606,44 +626,32 @@ def test_claude_provider_run_llm_resumes_existing_provider_session_and_preserves
     assert response.session.metadata["provider_metadata"] == {"stop_reason": "done"}
 
 
-def test_claude_provider_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
-
-    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
-        return _completed(args=command, stdout="{bad-json}")
-
-    monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
-    provider = ClaudeProvider(_config(provider_name="claude"))
-
-    with pytest.raises(ProviderExecutionError, match="malformed JSON output"):
-        provider.run_producer(_producer_request(session=_placeholder_session()))
-
-
-def test_claude_provider_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
-
-    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        if command == ["claude", "--help"]:
-            return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
-        return _completed(args=command, stdout="oops", stderr="bad", returncode=3)
-
-    monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
-    provider = ClaudeProvider(_config(provider_name="claude"))
-
-    with pytest.raises(ProviderExecutionError, match=r"exit code 3"):
-        provider.run_producer(_producer_request(session=_placeholder_session()))
-
-
-def test_claude_provider_rejects_cross_provider_resume(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+def test_claude_transport_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         claude_runtime_provider.subprocess,
         "run",
-        lambda command, **_: _completed(args=command, stdout=CLAUDE_HEADLESS_HELP),
+        lambda command, **_: _completed(args=command, stdout="{bad-json}"),
     )
-    provider = ClaudeProvider(_config(provider_name="claude"))
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
+
+    with pytest.raises(ProviderExecutionError, match="malformed JSON output"):
+        transport.run_turn(_rendered_turn(session=_placeholder_session()))
+
+
+def test_claude_transport_raises_on_non_zero_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(args=command, stdout="oops", stderr="bad", returncode=3),
+    )
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
+
+    with pytest.raises(ProviderExecutionError, match=r"exit code 3"):
+        transport.run_turn(_rendered_turn(session=_placeholder_session()))
+
+
+def test_claude_transport_rejects_cross_provider_resume() -> None:
+    transport = ClaudeTransport(config=_config(provider_name="claude").provider.claude)
 
     with pytest.raises(ProviderExecutionError, match="resuming across providers is forbidden"):
-        provider.run_producer(_producer_request(session=_provider_session("codex")))
+        transport.run_turn(_rendered_turn(session=_provider_session("codex")))

@@ -1,4 +1,4 @@
-"""Runtime-backed Claude Code CLI provider."""
+"""Runtime-backed Claude Code CLI transport."""
 
 from __future__ import annotations
 
@@ -10,9 +10,7 @@ from functools import lru_cache
 from typing import Any
 
 from ...core.errors import ProviderExecutionError
-from ...core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from ...core.providers.protocols import LLMProvider, ProviderTransport
-from ...core.providers.rendered import RenderedLLMProvider
+from ...core.providers.protocols import ProviderTransport
 from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ...core.stores.protocols import SessionBinding
 from ..config import ClaudeProviderConfig, ConfigError, ResolvedRuntimeConfig
@@ -20,7 +18,6 @@ from ._common import (
     build_session_binding,
     ensure_session_provider_match,
     format_subprocess_streams,
-    require_prompt_text,
 )
 
 
@@ -99,45 +96,11 @@ def parse_claude_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, 
     return result, session_id, dict(payload)
 
 
-class ClaudeProvider:
-    """Concrete LLMProvider backed by the Claude Code CLI."""
+class ClaudeTransport(ProviderTransport):
+    """Transport-only Claude CLI executor."""
 
-    def __init__(self, config: ResolvedRuntimeConfig) -> None:
-        verify_claude_code_capabilities(config.provider.claude)
-        self._transport = _ClaudeTransport(
-            config=config,
-            model=config.provider.claude.model,
-            effort=config.provider.claude.effort,
-        )
-        self._rendered = RenderedLLMProvider(self._transport)
-
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
-        prompt_text = require_prompt_text(request.prompt, "claude", request.step_name)
-        result = self._transport.run_turn(
-            RenderedProviderTurn(
-                step_name=request.step_name,
-                turn_kind="producer",
-                prompt_text=prompt_text,
-                session=request.session,
-                expected_response="raw_text",
-            )
-        )
-        return ProducerResponse(raw_output=result.raw_text, session=result.session, metadata=result.metadata)
-
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
-        return self._rendered.run_verifier(request)
-
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        return self._rendered.run_llm(request)
-
-
-class _ClaudeTransport(ProviderTransport):
-    """Transport-only Claude CLI executor used by the semantic compatibility wrapper."""
-
-    def __init__(self, *, config: ResolvedRuntimeConfig, model: str | None, effort: str | None) -> None:
+    def __init__(self, *, config: ClaudeProviderConfig) -> None:
         self._config = config
-        self._model = model
-        self._effort = effort
 
     def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
         ensure_session_provider_match("claude", turn.session)
@@ -147,11 +110,11 @@ class _ClaudeTransport(ProviderTransport):
         if resume_session_id is not None:
             command.extend(["--resume", resume_session_id])
         command.extend(["-p", turn.prompt_text, "--output-format", "json"])
-        if self._model:
-            command.extend(["--model", self._model])
-        if self._effort:
-            command.extend(["--effort", self._effort])
-        command.extend(claude_permission_args(self._config.provider.claude))
+        if self._config.model:
+            command.extend(["--model", self._config.model])
+        if self._config.effort:
+            command.extend(["--effort", self._config.effort])
+        command.extend(claude_permission_args(self._config))
 
         completed = subprocess.run(command, text=True, capture_output=True, check=False)
         if completed.returncode != 0:
@@ -175,8 +138,8 @@ class _ClaudeTransport(ProviderTransport):
                 session_id=resolved_session_id,
                 provider_name="claude",
                 provider_metadata=provider_metadata,
-                model=self._model,
-                effort=self._effort,
+                model=self._config.model,
+                effort=self._config.effort,
             )
             if turn.session is not None and resolved_session_id is not None
             else None
@@ -188,10 +151,11 @@ class _ClaudeTransport(ProviderTransport):
         return ProviderTurnResult(raw_text=result_text, session=binding, metadata=metadata)
 
 
-def build_claude_provider(config: ResolvedRuntimeConfig) -> LLMProvider:
-    """Build the concrete Claude runtime provider."""
+def build_claude_transport(config: ResolvedRuntimeConfig) -> ClaudeTransport:
+    """Build the Claude runtime transport."""
 
-    return ClaudeProvider(config)
+    verify_claude_code_capabilities(config.provider.claude)
+    return ClaudeTransport(config=config.provider.claude)
 
 
 @lru_cache(maxsize=1)

@@ -1,4 +1,4 @@
-"""Runtime-backed Codex CLI provider."""
+"""Runtime-backed Codex CLI transport."""
 
 from __future__ import annotations
 
@@ -10,9 +10,7 @@ from functools import lru_cache
 from typing import Any
 
 from ...core.errors import ProviderExecutionError
-from ...core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from ...core.providers.protocols import LLMProvider, ProviderTransport
-from ...core.providers.rendered import RenderedLLMProvider
+from ...core.providers.protocols import ProviderTransport
 from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ...core.stores.protocols import SessionBinding
 from ..config import ConfigError, ResolvedRuntimeConfig
@@ -20,7 +18,6 @@ from ._common import (
     build_session_binding,
     ensure_session_provider_match,
     format_subprocess_streams,
-    require_prompt_text,
 )
 
 
@@ -147,39 +144,8 @@ def parse_codex_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, A
     return "\n\n".join(assistant_messages), session_id, provider_metadata
 
 
-class CodexProvider:
-    """Concrete LLMProvider backed by the Codex CLI."""
-
-    def __init__(self, config: ResolvedRuntimeConfig, commands: CodexCLICommand) -> None:
-        self._transport = _CodexTransport(
-            commands=commands,
-            model=config.provider.codex.model,
-            model_effort=config.provider.codex.model_effort,
-        )
-        self._rendered = RenderedLLMProvider(self._transport)
-
-    def run_producer(self, request: ProducerRequest) -> ProducerResponse:
-        prompt_text = require_prompt_text(request.prompt, "codex", request.step_name)
-        result = self._transport.run_turn(
-            RenderedProviderTurn(
-                step_name=request.step_name,
-                turn_kind="producer",
-                prompt_text=prompt_text,
-                session=request.session,
-                expected_response="raw_text",
-            )
-        )
-        return ProducerResponse(raw_output=result.raw_text, session=result.session, metadata=result.metadata)
-
-    def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
-        return self._rendered.run_verifier(request)
-
-    def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        return self._rendered.run_llm(request)
-
-
-class _CodexTransport(ProviderTransport):
-    """Transport-only Codex CLI executor used by the semantic compatibility wrapper."""
+class CodexTransport(ProviderTransport):
+    """Transport-only Codex CLI executor."""
 
     def __init__(self, *, commands: CodexCLICommand, model: str | None, model_effort: str | None) -> None:
         self._commands = commands
@@ -236,10 +202,14 @@ class _CodexTransport(ProviderTransport):
         return ProviderTurnResult(raw_text=assistant_text, session=binding, metadata=metadata)
 
 
-def build_codex_provider(config: ResolvedRuntimeConfig) -> LLMProvider:
-    """Build the concrete Codex runtime provider."""
+def build_codex_transport(config: ResolvedRuntimeConfig) -> CodexTransport:
+    """Build the Codex runtime transport."""
 
-    return CodexProvider(config, resolve_codex_cli_commands(config))
+    return CodexTransport(
+        commands=resolve_codex_cli_commands(config),
+        model=config.provider.codex.model,
+        model_effort=config.provider.codex.model_effort,
+    )
 
 
 @lru_cache(maxsize=1)
