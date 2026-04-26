@@ -1288,3 +1288,46 @@ Targeted validation is clean. I ran:
 ```
 
 Result: `161 passed`.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcab5-335a-7580-9146-926cf88f11fe
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+Re-reviewing the final code paths now. I’ve shifted from implementation checking to regression hunting: final git boundary semantics, fatal propagation behavior, and the CLI/runtime-config seam are the only areas likely to still hide a blocker after the second pass.
+
+I don’t see a remaining blocker in the phase-local code after the second pass. I’m marking the criteria complete and appending a short cycle-2 verification note to the feedback artifact so the prior blocking findings are not left ambiguous in the record.
+
+Scope considered
+
+Phase-local re-review of `engine-runner-observability-binding`, centered on the three prior blockers: terminal/fatal git finalization, fatal-path observability failure handling, and the remaining non-git runtime/CLI test surfaces.
+
+What I analyzed
+
+I re-read the updated implementations in `runtime/git_tracking.py`, `runtime/observability.py`, `runtime/runner.py`, `runtime/cli.py`, and `core/engine.py`, plus the phase `implementation_notes.md` and the current `decisions.txt` entries for this phase.
+
+What I reviewed
+
+I verified the finalization ordering change, the selective fatal-error propagation path, and the CLI `runtime_config` wiring. I also reviewed the updated tests that now cover the repaired behavior and the non-git opt-out/init cases, including the consolidated result the implementer recorded: `161 passed`.
+
+Key findings / decisions
+
+The previous blockers are resolved. The runner now finalizes terminal/fatal git tracking after runner-owned terminal metadata writes, the fatal path no longer swallows runtime raise-mode observability failures, and the remaining runtime/CLI tests now explicitly opt out of git tracking or initialize git where needed.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/engine-runner-observability-binding/criteria.md) to fully checked and appended a cycle-2 verification note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/engine-runner-observability-binding/feedback.md).
+
+Open issues / next step
+
+No phase-local blocking issues remain from this review pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -15,3 +15,6 @@
 
 - IMP-003 | blocking | `tests/runtime/test_workspace_and_context.py`, `runtime/runner.py`
   The phase did not complete the required runtime-test migration for the new default git-tracked execution path. Running `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py -q` still produces 13 failures, all because those filesystem-run tests neither initialize a temp git repository nor explicitly disable git tracking. The request and shared decisions explicitly require those tests to opt out rather than weakening the runtime default, so the current branch is not validation-complete. Minimal fix: update the remaining runtime test modules or shared helpers so temp filesystem runs either bootstrap git or pass explicit runtime git opt-out config.
+
+- IMP-004 | non-blocking | Cycle 2 re-review
+  Verified that `IMP-001`, `IMP-002`, and `IMP-003` are addressed in the current implementation. No new actionable findings were identified in the phase-local scope after rechecking the runtime git finalization path, fatal-path observability propagation, CLI runtime-config wiring, and the updated runtime/CLI test surfaces.
