@@ -1054,3 +1054,44 @@ The new tests cover the highest-value failure branch in this phase: preserving t
 Open issues / next step
 
 `python3 -m py_compile tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py` passed. Full `pytest` execution is still blocked here because `pytest` is not installed, so the next step is the auditor re-run in a normal test environment.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+Re-auditing the phase-local test changes after the terminal/fatal additions. I’m checking the updated tests and artifacts now to confirm the earlier blocking gap is actually closed before I mark the audit complete.
+
+The auditor gap is closed in the tests: terminal and fatal branches are now covered directly, and I don’t see a replacement blocking issue in phase scope. I’m updating the audit artifacts to reflect a complete pass.
+
+Scope considered
+
+Phase-local audit of the runtime observability persistence tests and only the audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/`.
+
+What I analyzed
+
+I re-checked the updated runtime tracing and git-tracking tests against the prior blocking finding, the active phase contract, and the shared decisions ledger. The main focus was whether terminal and fatal observability branches are now covered alongside the existing step, resume, static-graph, and ignore-mode paths.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/criteria.md) so all audit gates are checked, and appended a closing audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/feedback.md) stating that no findings remain.
+
+Key findings / decisions
+
+The earlier blocking gap is closed. The suite now directly exercises `RuntimeTraceWriter.terminal()`, `RuntimeTraceWriter.fatal()`, and `RuntimeGitTracker.on_fatal()`, so the requested observability behavior is covered across success, failure, resume, static-graph, and ignore-mode branches. I did not identify a replacement blocking or non-blocking issue in phase scope.
+
+Open issues / next step
+
+No audit-blocking issues remain for this phase. The only remaining limitation is environmental: `pytest` is still unavailable here, so the producer’s validation remains limited to `py_compile` and static review rather than full test execution.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
