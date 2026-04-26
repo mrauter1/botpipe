@@ -14,13 +14,13 @@
       "proof-docs-and-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "portfolio-governance-bootstrap-migration"
+    "current_phase_index": 2,
+    "current_phase_id": "proof-docs-and-memory-closeout"
   },
   "phase_status": {
     "typed-bootstrap-contract-and-first-family": "completed",
-    "portfolio-governance-bootstrap-migration": "in_progress",
-    "proof-docs-and-memory-closeout": "planned"
+    "portfolio-governance-bootstrap-migration": "completed",
+    "proof-docs-and-memory-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260426T044108Z-506b9788",
       "status": "in_progress",
       "ts": "2026-04-26T05:05:41.020081+00:00"
+    },
+    {
+      "phase_id": "portfolio-governance-bootstrap-migration",
+      "run_id": "run-20260426T044108Z-506b9788",
+      "status": "completed",
+      "ts": "2026-04-26T05:22:37.728300+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-and-memory-closeout",
+      "run_id": "run-20260426T044108Z-506b9788",
+      "status": "in_progress",
+      "ts": "2026-04-26T05:22:37.732479+00:00"
     }
   ]
 }
