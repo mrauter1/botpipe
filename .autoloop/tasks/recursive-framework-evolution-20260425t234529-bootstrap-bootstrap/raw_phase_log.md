@@ -328,3 +328,47 @@ Validation passed:
 Open issues / next step
 
 The remaining planned work is still deferred to later phases: backend resolution returning `RenderedLLMProvider(transport)`, transport-purity cleanup, engine-side artifact contract injection, retries, handoff persistence, and docs/baseline updates. The next useful step is a verifier pass to clear `IMP-001` and confirm whether the new policy helper is sufficient to clear `IMP-002`.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+I’m doing the re-review on the updated phase implementation now. I’m confirming the runtime providers no longer own outcome parsing, checking that the policy surface is actually callable, and then I’ll either clear the criteria or append any residual findings to the phase artifacts.
+
+The substantive re-review is looking clean. I’m doing one last validation spot-check from the reviewer side before I clear the criteria, mainly to confirm the runtime providers and the new policy helper behave as described rather than only in the implementation notes.
+
+The re-review is clear: no remaining blocking findings, and the focused validation is green from the reviewer side as well. I’m updating the phase artifacts to reflect completion and noting that the earlier findings are resolved, not still open.
+
+Scope considered
+
+Phase-local re-review of the `provider-boundary-core` implementation only: the new `core/providers/*` modules, the runtime provider methods in `runtime/providers/codex.py` and `runtime/providers/claude.py`, the focused provider tests, and the active phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/provider-boundary-core/`.
+
+What I analyzed
+
+I checked the updated runtime providers to confirm verifier/LLM outcome parsing no longer happens in runtime transport code, verified the render-policy surface is now callable, re-read the shared renderer and core wrapper boundary, and reran the focused validation set covering provider-core, runtime providers, backend resolution, and engine contracts.
+
+What I reviewed
+
+I updated `criteria.md` so all acceptance criteria are marked satisfied. I also updated `feedback.md` with a re-review note that the prior `IMP-001` and `IMP-002` issues are resolved and that there are no remaining findings for this phase slice.
+
+Key findings / decisions
+
+No remaining blocking or non-blocking findings. `IMP-001` is resolved because verifier/LLM parsing now occurs in `RenderedLLMProvider` rather than in the runtime provider methods. `IMP-002` is resolved because `render_provider_turn_with_policy(...)` now exposes the prompt render policy to callers. Reviewer-side validation passed with:
+`.venv/bin/pytest -q tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/runtime/test_provider_backends.py tests/contract/test_engine_contracts.py`
+
+Open issues / next step
+
+This phase is complete. The next work remains the later planned phases: backend resolution returning rendered providers directly, transport-purity cleanup, engine-side artifact/retry/handoff work, and documentation/baseline updates.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
