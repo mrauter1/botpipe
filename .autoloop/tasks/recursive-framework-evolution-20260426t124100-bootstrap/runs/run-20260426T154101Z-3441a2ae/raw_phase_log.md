@@ -528,3 +528,94 @@ Fix `parse_runtime_config()` so the new nested runtime sections only default on 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+I’m resolving the reviewer’s blocking finding only: the new nested runtime config sections need strict shape validation instead of silently treating falsy non-mappings as missing. I’m checking the parser and the config tests again, then I’ll patch the section handling and add the missing regression coverage.
+
+The fix is local: stop defaulting the two new nested runtime sections with `or {}`, keep `None` as the only “missing” case, and add tests that assert booleans are rejected for those sections. I’m applying that now and then I’ll rerun a direct parser smoke check in the same dependency-light way as before.
+
+I’ve patched the parser and added the missing regression tests. I’m doing one direct parser smoke check now to verify the specific reviewer scenario before I close the phase again.
+
+Scope considered
+
+Reviewer feedback only for this phase: strict validation of the new `runtime.git_tracking` and `runtime.tracing` config sections. I did not expand scope into runner binding, observability wiring, or unrelated dirty files.
+
+What I analyzed
+
+I re-read the blocking finding in the phase feedback, checked the nested section parsing in [runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/config.py), and reviewed the existing config tests in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py) to confirm the missing coverage.
+
+What I changed
+
+In [runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/config.py) I changed nested section parsing so only `None` counts as “missing”. `runtime.git_tracking` and `runtime.tracing` now raise `ConfigError` for falsy non-mapping values like `false` instead of silently falling back to defaults. I applied the same explicit `None` handling to the adjacent nested config payload retrieval in the same parser path to keep the type checks honest.
+
+In [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py) I added targeted regression tests for `runtime.git_tracking: false` and `runtime.tracing: false`.
+
+I also updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-config-and-git-primitives/implementation_notes.md) to reflect the stricter validation and the focused verification.
+
+Key findings / decisions
+
+No new shared decision needed. The fix follows the reviewer direction directly: the new nested runtime sections now validate their own shape instead of silently defaulting on invalid falsy values.
+
+Validation was limited to a direct parser smoke check loaded from file path because `pytest` is still unavailable in this environment. That smoke check confirmed:
+- default runtime git/tracing config still resolves correctly
+- `runtime.git_tracking: false` now raises
+- `runtime.tracing: false` now raises
+
+Open issues / next step
+
+The blocking review item should now be re-checked by the verifier. Full `pytest` remains unrun here because the environment still does not have `pytest` installed.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+I’m re-reviewing the same phase scope after the parser fix. I’m checking the updated nested-section handling and the new regression tests against the original reviewer finding, then I’ll mark the phase artifacts complete if nothing new surfaced.
+
+The parser fix matches the original review direction, and the added tests cover the exact misconfiguration cases that were missing before. I’m marking the phase complete in the reviewer artifacts and noting that the earlier blocking finding is resolved.
+
+Scope considered
+
+Phase-local review only: runtime config defaults and validation, mutating CLI flags, git commit-all helpers, the added tests, and the active phase artifacts. I did not broaden scope into later observability work or unrelated dirty files.
+
+What I analyzed
+
+I re-checked the updated nested runtime config parsing in `runtime/config.py`, the focused regression tests added in `tests/runtime/test_provider_backends.py`, and the implementation notes for consistency with the actual fix and validation performed.
+
+What I reviewed
+
+I verified that the original blocking issue is fixed: the new `runtime.git_tracking` and `runtime.tracing` sections no longer collapse falsy non-mapping values into defaults, and the exact reviewer scenarios now have dedicated regression tests. I also rechecked that the phase still satisfies its intended scope and acceptance criteria after the fix.
+
+Key findings / decisions
+
+No remaining findings in this phase scope.
+
+The prior blocking finding `IMP-001` is resolved. I updated the reviewer artifacts accordingly and marked all phase criteria complete.
+
+Open issues / next step
+
+This phase is complete. The next work should proceed into the later runtime-owned observability phases that consume the config surface introduced here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
