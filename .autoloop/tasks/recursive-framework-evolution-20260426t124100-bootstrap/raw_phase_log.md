@@ -917,3 +917,51 @@ No review-blocking issues remain for this phase. Environment limits still mean I
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+This phase is test-only, so I’m checking the current runtime observability tests and the test-phase artifacts first. I want to confirm what coverage already exists for the producer changes before I add or tighten anything.
+
+The current tests cover the main happy paths, but I’m checking the remaining failure and edge behaviors that changed in this phase. The likely gaps are disabled-tracing static graph behavior and git-tracker ignore mode after later step failures, not just init commit failures.
+
+I found three focused gaps worth covering: static graph persistence when tracing is disabled, ignore-mode behavior on post-init trace write failures, and raw-only sequence fallback on resume. I’m adding those tests and then I’ll update the phase test strategy and feedback artifacts to map each behavior to coverage.
+
+The runtime tracing coverage is updated. I’m validating the edited test file now and checking whether this environment can run `pytest`; if not, I’ll record the limitation explicitly in the test artifacts.
+
+I’ve kept the blast radius narrow: one runtime tracing test module plus the phase test artifacts. Next I’m writing the behavior-to-test map so the auditor can see exactly which acceptance-criteria and failure modes are now covered, including the environment limit that `pytest` is not installed here.
+
+Scope considered
+
+Phase-local test work for runtime observability persistence: `tests/runtime/test_runtime_tracing.py` plus the test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/`.
+
+What I analyzed
+
+I reviewed the current runtime observability tests against the phase contract and the now-landed producer fixes. The main uncovered risks were static graph persistence when tracing is disabled, ignore-mode behavior for post-init trace write failures, and resume sequencing when JSONL evidence is unusable and only raw filenames remain.
+
+What I changed
+
+I added three focused tests to [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py):
+`test_runtime_trace_disabled_still_persists_static_step_graph`,
+`test_runtime_trace_failure_mode_ignore_swallows_step_write_errors`, and
+`test_trace_resume_falls_back_to_raw_sequence_when_jsonl_is_missing_or_malformed`.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/test_strategy.md) with an explicit behavior-to-test map across AC-1/2/3, preserved invariants, edge cases, failure paths, flake controls, and known gaps, and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/feedback.md).
+
+Key findings / decisions
+
+The added coverage locks in two important invariants that were easy to regress after the implementation changes: static graph writing is runtime-owned and independent of trace enablement, and ignore-mode tracing must degrade safely on later append failures, not just during initialization. I also added the raw-only resume-sequence fallback because the existing resume test did not actually exercise that branch.
+
+Open issues / next step
+
+Validation is limited by the environment: `python3 -m py_compile tests/runtime/test_runtime_tracing.py` passed, but `python3 -m pytest --version` failed because `pytest` is not installed here. The next step is auditor review, and then full test execution in an environment with the normal Python test dependencies available.

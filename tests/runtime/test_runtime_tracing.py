@@ -223,6 +223,17 @@ def test_runtime_trace_can_be_disabled(tmp_path: Path) -> None:
     assert run_meta["tracing"]["enabled"] is False
 
 
+def test_runtime_trace_disabled_still_persists_static_step_graph(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+
+    _writer(run_dir, config=TracingRuntimeConfig(enabled=False))
+
+    assert not (run_dir / "trace.jsonl").exists()
+    payload = json.loads((run_dir / "static_step_graph.json").read_text(encoding="utf-8"))
+    assert payload["schema"] == "autoloop.workflow_static_step_graph/v1"
+    assert payload["workflow_name"] == "demo"
+
+
 def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     run_dir = _run_dir(tmp_path)
     monkeypatch.setattr(
@@ -243,6 +254,25 @@ def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_pa
     assert isinstance(writer, RuntimeTraceWriter)
     assert run_meta["warnings"][-1]["event_type"] == "runtime_tracing_write_failed"
     assert "graph write failed" in run_meta["warnings"][-1]["message"]
+
+
+def test_runtime_trace_failure_mode_ignore_swallows_step_write_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_dir = _run_dir(tmp_path)
+    writer = _writer(run_dir, config=TracingRuntimeConfig(failure_mode="ignore"))
+    monkeypatch.setattr(
+        writer,
+        "_write",
+        lambda payload: (_ for _ in ()).throw(RuntimeError("trace append failed")),
+    )
+
+    writer.step_finished(sequence=1, event=_step_finish(run_dir), commit_before_step="abc123")
+
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_meta["warnings"][-1]["event_type"] == "runtime_tracing_write_failed"
+    assert "trace append failed" in run_meta["warnings"][-1]["message"]
 
 
 def test_trace_events_include_commit_before_step_not_commit_after_step(tmp_path: Path) -> None:
@@ -283,3 +313,14 @@ def test_trace_resume_uses_next_sequence_and_never_overwrites_raw_files(tmp_path
             event=_step_finish(run_dir, step_name="existing", step_kind="llm", producer_raw_output="clobber\n", verifier_raw_output=None),
             commit_before_step="abc123",
         )
+
+
+def test_trace_resume_falls_back_to_raw_sequence_when_jsonl_is_missing_or_malformed(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+    (run_dir / "trace.jsonl").write_text("not-json\n", encoding="utf-8")
+    (run_dir / "git_tracking.jsonl").write_text(json.dumps({"event_type": "run_initialized"}) + "\n", encoding="utf-8")
+    raw_dir = run_dir / "raw"
+    raw_dir.mkdir()
+    (raw_dir / "000009_existing_llm.txt").write_text("keep\n", encoding="utf-8")
+
+    assert next_observability_sequence(run_dir) == 10
