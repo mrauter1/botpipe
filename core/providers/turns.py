@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from .models import TokenUsage
 from ..stores import SessionBinding
 
 
@@ -26,3 +27,4 @@ class ProviderTurnResult:
     raw_text: str
     session: SessionBinding | None
     metadata: dict[str, Any] = field(default_factory=dict)
+    usage: TokenUsage | None = None

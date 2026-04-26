@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, Mapping
 
 from ...core.errors import ProviderExecutionError
+from ...core.providers.models import TokenUsage
 from ...core.prompts import ResolvedPrompt
 from ...core.stores.protocols import SessionBinding
 
@@ -79,7 +80,7 @@ def build_session_binding(
     metadata["provider_metadata"] = {
         key: deepcopy(value)
         for key, value in dict(provider_metadata).items()
-        if key != "thread_id"
+        if key not in {"thread_id", "usage", "token_usage", "provider_usage"}
     }
     metadata["model_override"] = model
     metadata["effort_override"] = effort
@@ -90,3 +91,71 @@ def build_session_binding(
         provider_metadata=metadata["provider_metadata"],
         metadata=metadata,
     )
+
+
+def extract_token_usage(payload: Any, *, source: str) -> TokenUsage | None:
+    """Extract normalized token usage from a provider payload when present."""
+
+    usage_payload = _find_usage_payload(payload)
+    if usage_payload is None:
+        return None
+    return TokenUsage(
+        input_tokens=_first_int(usage_payload, "input_tokens", "prompt_tokens", "inputTokenCount"),
+        output_tokens=_first_int(usage_payload, "output_tokens", "completion_tokens", "outputTokenCount"),
+        total_tokens=_first_int(usage_payload, "total_tokens", "totalTokenCount"),
+        cached_input_tokens=_first_int(
+            usage_payload,
+            "cached_input_tokens",
+            "cache_read_input_tokens",
+            "cachedPromptTokens",
+        ),
+        reasoning_tokens=_resolve_reasoning_tokens(usage_payload),
+        source=source,
+        provider_raw=deepcopy(dict(usage_payload)),
+    )
+
+
+def _find_usage_payload(payload: Any) -> Mapping[str, Any] | None:
+    if isinstance(payload, Mapping):
+        for key in ("usage", "token_usage", "provider_usage"):
+            value = payload.get(key)
+            if isinstance(value, Mapping):
+                return value
+        for value in payload.values():
+            found = _find_usage_payload(value)
+            if found is not None:
+                return found
+        return None
+    if isinstance(payload, (list, tuple)):
+        for item in payload:
+            found = _find_usage_payload(item)
+            if found is not None:
+                return found
+    return None
+
+
+def _first_int(payload: Mapping[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        value = payload.get(key)
+        resolved = _coerce_int(value)
+        if resolved is not None:
+            return resolved
+    return None
+
+
+def _resolve_reasoning_tokens(payload: Mapping[str, Any]) -> int | None:
+    direct = _first_int(payload, "reasoning_tokens")
+    if direct is not None:
+        return direct
+    details = payload.get("output_tokens_details")
+    if isinstance(details, Mapping):
+        return _first_int(details, "reasoning_tokens")
+    return None
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None

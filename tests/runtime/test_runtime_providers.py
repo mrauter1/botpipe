@@ -6,7 +6,7 @@ import pytest
 
 from autoloop_v3.core.errors import ProviderExecutionError
 from autoloop_v3.core.prompts import ResolvedPrompt
-from autoloop_v3.core.providers.models import LLMRequest, ProducerRequest, VerifierRequest
+from autoloop_v3.core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
 from autoloop_v3.core.providers.parsing import parse_outcome_json
 from autoloop_v3.core.providers.rendered import RenderedLLMProvider
 from autoloop_v3.core.providers.turns import RenderedProviderTurn
@@ -229,7 +229,7 @@ def test_parse_codex_exec_json_ignores_malformed_lines_when_output_is_otherwise_
         )
     )
 
-    assistant_text, session_id, provider_metadata = parse_codex_exec_json(stdout)
+    assistant_text, session_id, provider_metadata, usage = parse_codex_exec_json(stdout)
 
     assert assistant_text == "hello"
     assert session_id == "codex-session-1"
@@ -238,6 +238,34 @@ def test_parse_codex_exec_json_ignores_malformed_lines_when_output_is_otherwise_
         "jsonl_event_count": 2,
         "malformed_jsonl_lines": 1,
     }
+    assert usage is None
+
+
+def test_parse_codex_exec_json_extracts_usage_when_present() -> None:
+    stdout = "\n".join(
+        (
+            '{"type":"thread.started","thread_id":"codex-session-1"}',
+            '{"type":"response.completed","response":{"usage":{"input_tokens":21,"output_tokens":13,"total_tokens":34,"reasoning_tokens":5}}}',
+            '{"type":"item.completed","item":{"type":"agent_message","text":"hello"}}',
+        )
+    )
+
+    _, _, _, usage = parse_codex_exec_json(stdout)
+
+    assert usage == TokenUsage(
+        input_tokens=21,
+        output_tokens=13,
+        total_tokens=34,
+        cached_input_tokens=None,
+        reasoning_tokens=5,
+        source="codex",
+        provider_raw={
+            "input_tokens": 21,
+            "output_tokens": 13,
+            "total_tokens": 34,
+            "reasoning_tokens": 5,
+        },
+    )
 
 
 def test_parse_codex_exec_json_rejects_missing_assistant_text() -> None:
@@ -248,13 +276,44 @@ def test_parse_codex_exec_json_rejects_missing_assistant_text() -> None:
 
 
 def test_parse_claude_exec_json_preserves_provider_metadata() -> None:
-    result, session_id, provider_metadata = parse_claude_exec_json(
+    result, session_id, provider_metadata, usage = parse_claude_exec_json(
         '{"result":"hello","session_id":"claude-session-1","stop_reason":"end_turn"}'
     )
 
     assert result == "hello"
     assert session_id == "claude-session-1"
     assert provider_metadata == {"stop_reason": "end_turn"}
+    assert usage is None
+
+
+def test_parse_claude_exec_json_extracts_usage_when_present() -> None:
+    _, _, provider_metadata, usage = parse_claude_exec_json(
+        '{"result":"hello","session_id":"claude-session-1","usage":{"input_tokens":9,"output_tokens":4,"total_tokens":13,"cached_input_tokens":2},"stop_reason":"end_turn"}'
+    )
+
+    assert provider_metadata == {
+        "usage": {
+            "input_tokens": 9,
+            "output_tokens": 4,
+            "total_tokens": 13,
+            "cached_input_tokens": 2,
+        },
+        "stop_reason": "end_turn",
+    }
+    assert usage == TokenUsage(
+        input_tokens=9,
+        output_tokens=4,
+        total_tokens=13,
+        cached_input_tokens=2,
+        reasoning_tokens=None,
+        source="claude",
+        provider_raw={
+            "input_tokens": 9,
+            "output_tokens": 4,
+            "total_tokens": 13,
+            "cached_input_tokens": 2,
+        },
+    )
 
 
 def test_parse_claude_exec_json_rejects_missing_result() -> None:
@@ -441,6 +500,7 @@ def test_rendered_llm_provider_returns_producer_response_with_codex_transport(
             stdout="\n".join(
                 (
                     '{"type":"thread.started","thread_id":"codex-session-2"}',
+                    '{"type":"response.completed","response":{"usage":{"input_tokens":15,"output_tokens":6,"total_tokens":21}}}',
                     '{"type":"item.completed","item":{"type":"agent_message","text":"producer text"}}',
                 )
             ),
@@ -454,6 +514,15 @@ def test_rendered_llm_provider_returns_producer_response_with_codex_transport(
     assert response.session is not None
     assert response.session.session_id == "codex-session-2"
     assert response.metadata["mode"] == "start"
+    assert response.usage == TokenUsage(
+        input_tokens=15,
+        output_tokens=6,
+        total_tokens=21,
+        cached_input_tokens=None,
+        reasoning_tokens=None,
+        source="codex",
+        provider_raw={"input_tokens": 15, "output_tokens": 6, "total_tokens": 21},
+    )
 
 
 def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
@@ -598,7 +667,10 @@ def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
 
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        return _completed(args=command, stdout='{"result":"{\\"tag\\":\\"done\\"}","stop_reason":"done"}')
+        return _completed(
+            args=command,
+            stdout='{"result":"{\\"tag\\":\\"done\\"}","usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11},"stop_reason":"done"}',
+        )
 
     monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
     provider = RenderedLLMProvider(
@@ -624,6 +696,15 @@ def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
     assert response.session is not None
     assert response.session.session_id == "claude-session-existing"
     assert response.session.metadata["provider_metadata"] == {"stop_reason": "done"}
+    assert response.usage == TokenUsage(
+        input_tokens=8,
+        output_tokens=3,
+        total_tokens=11,
+        cached_input_tokens=None,
+        reasoning_tokens=None,
+        source="claude",
+        provider_raw={"prompt_tokens": 8, "completion_tokens": 3, "total_tokens": 11},
+    )
 
 
 def test_claude_transport_rejects_malformed_json(monkeypatch: pytest.MonkeyPatch) -> None:

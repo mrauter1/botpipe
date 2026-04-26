@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Any
 
 from ...core.errors import ProviderExecutionError
+from ...core.providers.models import TokenUsage
 from ...core.providers.protocols import ProviderTransport
 from ...core.providers.rendered import RenderedLLMProvider
 from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
@@ -18,6 +19,7 @@ from ..config import ClaudeProviderConfig, ConfigError, ResolvedRuntimeConfig
 from ._common import (
     build_session_binding,
     ensure_session_provider_match,
+    extract_token_usage,
     format_subprocess_streams,
 )
 
@@ -75,7 +77,7 @@ def claude_permission_args(config: ClaudeProviderConfig) -> list[str]:
     )
 
 
-def parse_claude_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, Any]]:
+def parse_claude_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, Any], TokenUsage | None]:
     """Parse Claude JSON stdout into result text and canonical session data."""
 
     try:
@@ -94,7 +96,8 @@ def parse_claude_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, 
     if session_id is not None and not isinstance(session_id, str):
         raise ProviderExecutionError("provider 'claude' JSON field 'session_id' must be a string when provided.")
 
-    return result, session_id, dict(payload)
+    provider_metadata = dict(payload)
+    return result, session_id, provider_metadata, extract_token_usage(provider_metadata, source="claude")
 
 
 class ClaudeTransport(ProviderTransport):
@@ -125,7 +128,7 @@ class ClaudeTransport(ProviderTransport):
                 f"(exit code {completed.returncode}): {streams}"
             )
 
-        result_text, resolved_session_id, provider_metadata = parse_claude_exec_json(completed.stdout)
+        result_text, resolved_session_id, provider_metadata, usage = parse_claude_exec_json(completed.stdout)
         if resolved_session_id is None and resume_session_id is not None:
             resolved_session_id = resume_session_id
         if resolved_session_id is None and turn.session is not None:
@@ -149,7 +152,7 @@ class ClaudeTransport(ProviderTransport):
             "mode": "resume" if resume_session_id is not None else "start",
             "provider_metadata": dict(provider_metadata),
         }
-        return ProviderTurnResult(raw_text=result_text, session=binding, metadata=metadata)
+        return ProviderTurnResult(raw_text=result_text, session=binding, metadata=metadata, usage=usage)
 
 
 def build_claude_transport(config: ResolvedRuntimeConfig) -> ClaudeTransport:

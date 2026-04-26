@@ -29,6 +29,7 @@ class RenderedLLMProvider:
             raw_output=result.raw_text,
             session=result.session,
             metadata=result.metadata,
+            usage=result.usage,
         )
 
     def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
@@ -40,6 +41,7 @@ class RenderedLLMProvider:
             outcome=outcome,
             session=result.session,
             metadata=result.metadata,
+            usage=result.usage,
         )
 
     def run_llm(self, request: LLMRequest) -> OutcomeResponse:
@@ -51,6 +53,7 @@ class RenderedLLMProvider:
             outcome=outcome,
             session=result.session,
             metadata=result.metadata,
+            usage=result.usage,
         )
 
 

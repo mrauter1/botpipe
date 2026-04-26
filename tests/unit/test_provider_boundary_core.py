@@ -8,11 +8,16 @@ from autoloop_v3.core.errors import ProviderExecutionError
 from autoloop_v3.core.prompts import ResolvedPrompt
 from autoloop_v3.core.providers.models import (
     LLMRequest,
+    OutcomeResponse,
     ProducerRequest,
+    ProducerResponse,
     ProviderArtifactRef,
     ProviderTurnContext,
+    TokenUsage,
     VerifierRequest,
 )
+from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.core.providers.parsing import parse_outcome_json
 from autoloop_v3.core.providers.rendered import RenderedLLMProvider
 from autoloop_v3.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
 from autoloop_v3.core.providers.rendering import render_provider_turn
@@ -193,6 +198,7 @@ class _TransportStub:
     result_text: str
     session: SessionBinding | None = None
     metadata: dict[str, object] | None = None
+    usage: TokenUsage | None = None
     seen_turns: list[RenderedProviderTurn] | None = None
 
     def __post_init__(self) -> None:
@@ -208,12 +214,79 @@ class _TransportStub:
             raw_text=self.result_text,
             session=self.session,
             metadata=dict(self.metadata or {}),
+            usage=self.usage,
         )
+
+
+def test_token_usage_model_accepts_partial_usage() -> None:
+    usage = TokenUsage(output_tokens=12, source="codex", provider_raw={"output_tokens": 12})
+
+    assert usage.input_tokens is None
+    assert usage.output_tokens == 12
+    assert usage.total_tokens is None
+    assert usage.cached_input_tokens is None
+    assert usage.reasoning_tokens is None
+    assert usage.source == "codex"
+    assert usage.provider_raw == {"output_tokens": 12}
+
+
+def test_producer_response_usage_defaults_to_none() -> None:
+    response = ProducerResponse(raw_output="draft")
+
+    assert response.usage is None
+
+
+def test_outcome_response_usage_defaults_to_none() -> None:
+    response = OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))
+
+    assert response.usage is None
+
+
+def test_fake_provider_can_emit_usage() -> None:
+    producer_usage = TokenUsage(input_tokens=3, output_tokens=5, total_tokens=8, source="fake")
+    verifier_usage = TokenUsage(input_tokens=7, output_tokens=2, total_tokens=9, source="fake")
+    llm_usage = TokenUsage(total_tokens=4, source="fake")
+    provider = ScriptedLLMProvider(
+        producer_turns=[ProducerResponse(raw_output="draft", usage=producer_usage)],
+        verifier_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'), usage=verifier_usage)],
+        llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'), usage=llm_usage)],
+    )
+
+    producer_response = provider.run_producer(
+        ProducerRequest(
+            step_name="draft",
+            prompt=ResolvedPrompt(path="draft.md", text="Write a draft."),
+            context=object(),
+            artifacts=object(),
+        )
+    )
+    verifier_response = provider.run_verifier(
+        VerifierRequest(
+            step_name="verify",
+            prompt=ResolvedPrompt(path="verify.md", text="Verify the draft."),
+            raw_output="draft",
+            context=object(),
+            artifacts=object(),
+        )
+    )
+    llm_response = provider.run_llm(
+        LLMRequest(
+            step_name="ask",
+            prompt=ResolvedPrompt(path="ask.md", text="Answer the question."),
+            context=object(),
+            artifacts=object(),
+        )
+    )
+
+    assert producer_response.usage == producer_usage
+    assert verifier_response.usage == verifier_usage
+    assert llm_response.usage == llm_usage
 
 
 def test_rendered_llm_provider_returns_producer_response() -> None:
     binding = _session_binding()
-    transport = _TransportStub(result_text="producer text", session=binding, metadata={"mode": "resume"})
+    usage = TokenUsage(input_tokens=5, output_tokens=7, total_tokens=12, source="codex")
+    transport = _TransportStub(result_text="producer text", session=binding, metadata={"mode": "resume"}, usage=usage)
     provider = RenderedLLMProvider(transport)
 
     response = provider.run_producer(
@@ -230,12 +303,17 @@ def test_rendered_llm_provider_returns_producer_response() -> None:
     assert response.raw_output == "producer text"
     assert response.session == binding
     assert response.metadata == {"mode": "resume"}
+    assert response.usage == usage
     assert transport.seen_turns is not None
     assert transport.seen_turns[0].expected_response == "raw_text"
 
 
 def test_rendered_llm_provider_parses_verifier_outcome_and_excludes_raw_output_from_prompt() -> None:
-    transport = _TransportStub(result_text='{"tag":"done","reason":"accepted","payload":{"score": 1}}')
+    usage = TokenUsage(input_tokens=11, output_tokens=13, total_tokens=24, source="claude")
+    transport = _TransportStub(
+        result_text='{"tag":"done","reason":"accepted","payload":{"score": 1}}',
+        usage=usage,
+    )
     provider = RenderedLLMProvider(transport)
 
     response = provider.run_verifier(
@@ -253,6 +331,7 @@ def test_rendered_llm_provider_parses_verifier_outcome_and_excludes_raw_output_f
     assert response.outcome.tag == "done"
     assert response.outcome.reason == "accepted"
     assert response.outcome.payload == {"score": 1}
+    assert response.usage == usage
     assert transport.seen_turns is not None
     rendered_prompt = transport.seen_turns[0].prompt_text
     assert "producer raw output that must stay out of the prompt" not in rendered_prompt
@@ -261,7 +340,8 @@ def test_rendered_llm_provider_parses_verifier_outcome_and_excludes_raw_output_f
 
 
 def test_rendered_llm_provider_parses_llm_outcome() -> None:
-    transport = _TransportStub(result_text='```json\n{"tag":"needs_rework","question":"Fix it?"}\n```')
+    usage = TokenUsage(total_tokens=9, source="claude")
+    transport = _TransportStub(result_text='```json\n{"tag":"needs_rework","question":"Fix it?"}\n```', usage=usage)
     provider = RenderedLLMProvider(transport)
 
     response = provider.run_llm(
@@ -276,3 +356,4 @@ def test_rendered_llm_provider_parses_llm_outcome() -> None:
 
     assert response.outcome.tag == "needs_rework"
     assert response.outcome.question == "Fix it?"
+    assert response.usage == usage

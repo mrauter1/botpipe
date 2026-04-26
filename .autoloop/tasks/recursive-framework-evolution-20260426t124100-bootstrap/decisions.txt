@@ -5,3 +5,7 @@ Tests that execute filesystem runs outside initialized git repositories must opt
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260426T154101Z-3441a2ae" ts="2026-04-26T15:47:02.975759+00:00" />
 Treat the run/resume initialization order from the request as a hard contract: git preflight before workspace mutation, then run metadata/static graph/observability initialization, then init commit, then engine execution.
 When resume config disables git tracking after an earlier tracked segment, persist an explicit warning in run.json and continue without backfilling or altering earlier git-tracking records.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="provider-usage-plumbing" pair="implement" turn_seq="1" run_id="run-20260426T154101Z-3441a2ae" ts="2026-04-26T15:50:25.010142+00:00" />
+Normalize provider usage at the rendered transport boundary by extending ProviderTurnResult with optional usage so runtime CLI adapters and fake providers can share one semantic plumbing path.
+Keep StepFinish.provider_usage scoped to pair and llm executions only; system steps continue to emit provider_usage=None and existing raw-output semantics remain unchanged.
+Exclude per-turn usage blobs from persisted session provider_metadata because usage is execution evidence for the current turn, not resumable session identity metadata.

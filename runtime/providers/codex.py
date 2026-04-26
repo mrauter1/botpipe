@@ -10,6 +10,7 @@ from functools import lru_cache
 from typing import Any
 
 from ...core.errors import ProviderExecutionError
+from ...core.providers.models import TokenUsage
 from ...core.providers.protocols import ProviderTransport
 from ...core.providers.rendered import RenderedLLMProvider
 from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
@@ -18,6 +19,7 @@ from ..config import ConfigError, ResolvedRuntimeConfig
 from ._common import (
     build_session_binding,
     ensure_session_provider_match,
+    extract_token_usage,
     format_subprocess_streams,
 )
 
@@ -100,13 +102,14 @@ def resolve_codex_cli_commands(config: ResolvedRuntimeConfig) -> CodexCLICommand
     )
 
 
-def parse_codex_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, Any]]:
+def parse_codex_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, Any], TokenUsage | None]:
     """Parse Codex JSONL stdout into assistant text and canonical session data."""
 
     assistant_messages: list[str] = []
     parsed_line_count = 0
     malformed_line_count = 0
     session_id: str | None = None
+    usage = None
 
     for raw_line in raw_stdout.splitlines():
         if not raw_line.strip():
@@ -126,11 +129,13 @@ def parse_codex_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, A
             thread_id = payload.get("thread_id")
             if isinstance(thread_id, str) and thread_id:
                 session_id = thread_id
-            continue
-        if event_type == "item.completed":
+        elif event_type == "item.completed":
             item = payload.get("item")
             if isinstance(item, dict) and item.get("type") == "agent_message" and isinstance(item.get("text"), str):
                 assistant_messages.append(item["text"])
+        resolved_usage = extract_token_usage(payload, source="codex")
+        if resolved_usage is not None:
+            usage = resolved_usage
 
     if parsed_line_count == 0:
         raise ProviderExecutionError("provider 'codex' returned unusable JSONL output.")
@@ -142,7 +147,7 @@ def parse_codex_exec_json(raw_stdout: str) -> tuple[str, str | None, dict[str, A
         "jsonl_event_count": parsed_line_count,
         "malformed_jsonl_lines": malformed_line_count,
     }
-    return "\n\n".join(assistant_messages), session_id, provider_metadata
+    return "\n\n".join(assistant_messages), session_id, provider_metadata, usage
 
 
 class CodexTransport(ProviderTransport):
@@ -176,7 +181,7 @@ class CodexTransport(ProviderTransport):
                 f"(exit code {completed.returncode}): {streams}"
             )
 
-        assistant_text, resolved_session_id, provider_metadata = parse_codex_exec_json(completed.stdout)
+        assistant_text, resolved_session_id, provider_metadata, usage = parse_codex_exec_json(completed.stdout)
         if resolved_session_id is None and resume_session_id is not None:
             resolved_session_id = resume_session_id
         if resolved_session_id is None and turn.session is not None:
@@ -200,7 +205,7 @@ class CodexTransport(ProviderTransport):
             "mode": "resume" if resume_session_id is not None else "start",
             "provider_metadata": dict(provider_metadata),
         }
-        return ProviderTurnResult(raw_text=assistant_text, session=binding, metadata=metadata)
+        return ProviderTurnResult(raw_text=assistant_text, session=binding, metadata=metadata, usage=usage)
 
 
 def build_codex_transport(config: ResolvedRuntimeConfig) -> CodexTransport:
