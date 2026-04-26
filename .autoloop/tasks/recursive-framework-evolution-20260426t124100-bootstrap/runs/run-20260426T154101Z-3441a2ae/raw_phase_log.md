@@ -1646,3 +1646,90 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+---
+I’m handling the test-phase artifact pass for `regression-coverage-and-docs`. First I’m checking the active test artifacts and the current runtime observability test coverage so I can document the behavior-to-test map accurately and only add repo test changes if there’s still a real gap.
+
+Coverage looks complete: the repo tests already include the required runtime observability cases, explicit non-git opt-outs, and doc baselines. I’m doing one independent targeted pytest pass now, then I’ll record the behavior-to-test map and note that no extra repo test edits were necessary beyond the coverage already landed.
+
+Scope considered
+- Phase-local `regression-coverage-and-docs` test-author turn only.
+- Focused on the landed runtime observability test coverage, explicit non-git opt-outs, doc baseline coverage, and the required phase test artifacts.
+
+What I analyzed
+- Existing runtime observability suites and integration coverage in `tests/runtime/`.
+- The explicit non-git `RunnerOptions(..., runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)))` updates across temp-workspace runtime package tests.
+- The doc baseline assertions in `tests/test_architecture_baseline_docs.py`.
+- The shared decisions ledger and the phase acceptance criteria.
+
+What I changed
+- Updated [.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, flake controls, and known gaps.
+- Appended a concise validation summary to [.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/feedback.md).
+- Appended one phase-local test decision under the current runtime-created header in [.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt).
+- Ran an independent targeted pytest pass for the runtime observability/doc subset: `468 passed in 39.32s`.
+
+Key findings / decisions
+- The repo already contained the required test coverage after the implementation pass, so this turn stayed artifact-focused rather than adding redundant repo test churn.
+- AC-1 through AC-4 are covered by the existing runtime git/tracing/static-graph/optional-extension suites plus the explicit non-git opt-out updates and doc baseline assertions.
+- Validation remained deterministic: fake providers, temp git repos with local identity, and no network dependence.
+
+Open issues / next step
+- No open issues from the test-author turn.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+---
+I’m auditing the phase-local test artifacts and the cited runtime coverage against AC-1 through AC-4. First I’m reading the current test audit artifacts and the referenced strategy/coverage points so I can update criteria and feedback precisely without touching repo code.
+
+The strategy lines up with the actual repo coverage: the named tests exist, the explicit non-git opt-outs are present, and the claimed `468`-test validation target is the right slice for this phase. I don’t see a coverage-quality or flaky-risk issue that rises to a finding, so I’m marking the audit complete in the phase artifacts.
+
+Scope considered
+- Phase-local `regression-coverage-and-docs` test audit only.
+- Audited the test strategy artifact, the phase feedback artifact, and the concrete repo coverage they reference for AC-1 through AC-4.
+
+What I analyzed
+- [.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/test_strategy.md)
+- The referenced runtime observability tests in `tests/runtime/` and doc baseline assertions in `tests/test_architecture_baseline_docs.py`.
+- The explicit non-git opt-out call sites using `RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False))`.
+- The claimed targeted validation slice and its `468 passed` result.
+
+What I reviewed
+- Coverage quality for runtime git tracking, tracing, static graph, plain-workflow end-to-end observability, resume mismatch directions, dirty-repo failure-before-workspace-creation, and workflow-declared GitTracking deprecation handling.
+- Regression protection and edge/failure-path depth.
+- Flake-risk controls around temp git repos, fake providers, and ambient repo-state independence.
+- Behavioral intent safety to ensure the tests do not normalize a reduced runtime contract.
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- Updated [.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/criteria.md) to checked across all audit criteria.
+- Updated [.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/regression-coverage-and-docs/feedback.md) to record that the audit completed with no findings.
+
+Open issues / next step
+- None for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
