@@ -16,12 +16,12 @@
       "regression-coverage-and-docs"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "provider-usage-plumbing"
+    "current_phase_index": 1,
+    "current_phase_id": "runtime-config-and-git-primitives"
   },
   "phase_status": {
-    "provider-usage-plumbing": "in_progress",
-    "runtime-config-and-git-primitives": "planned",
+    "provider-usage-plumbing": "completed",
+    "runtime-config-and-git-primitives": "in_progress",
     "runtime-observability-persistence": "planned",
     "engine-runner-observability-binding": "planned",
     "regression-coverage-and-docs": "planned"
@@ -32,6 +32,19 @@
       "run_id": "run-20260426T154101Z-3441a2ae",
       "status": "in_progress",
       "ts": "2026-04-26T15:50:24.927968+00:00"
+    },
+    {
+      "phase_id": "provider-usage-plumbing",
+      "run_id": "run-20260426T154101Z-3441a2ae",
+      "status": "completed",
+      "ts": "2026-04-26T16:04:45.398407+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "runtime-config-and-git-primitives",
+      "run_id": "run-20260426T154101Z-3441a2ae",
+      "status": "in_progress",
+      "ts": "2026-04-26T16:04:45.400930+00:00"
     }
   ]
 }
