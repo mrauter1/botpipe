@@ -642,3 +642,124 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcb0c-6365-7060-8465-b28a784979f2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcb0c-6365-7060-8465-b28a784979f2
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcb0c-6365-7060-8465-b28a784979f2
+---
+I’m treating this as a proof-and-closeout phase: verify the typed publication migration, update authoring guidance and recursive memory, and keep public behavior unchanged. I’ll audit the relevant workflows/helpers and phase artifacts first, then run the targeted proof suite before editing docs and ledgers.
+
+The worktree is already dirty in unrelated areas, so I’m isolating this phase to the current repo root and the active autoloop artifacts. Next I’m reading the phase contract, prior phase notes, the active plan, and the typed-publication implementation surfaces to decide the exact proof scope and the closeout updates.
+
+The prior phases already landed most of the code movement, so I’m verifying the actual checked-out surfaces instead of assuming the notes are accurate. I’m reading the target contracts, publish handlers, authoring docs, and recursive memory next so the closeout reflects what the code really does today.
+
+I’ve confirmed the migrated publish handlers and the typed artifact contracts are present in the checked-out code. Next I’m running the scoped proof suite for the shared stdlib surface, the three migrated workflows, and the docs baseline before I touch the closeout records.
+
+The proof run is in flight. While that finishes, I’m checking whether the current authoring docs and recursive-memory entries already cover the exact boundary the phase requires or whether they still need a tighter closeout note and explicit metrics.
+
+Most of the boundary language is already present, but I still need to verify that the cycle-closeout records are explicit enough for this phase: proof results, the “no public behavior change” claim, the audit summary, and the remaining deferred debt all need to be easy to find in the memory files.
+
+The code itself looks consistent with the earlier migration notes. I’m doing one last dependency pass through the shared helper seam and the workflow references before editing the closeout docs so I can state the boundaries and deferred debt precisely.
+
+I have the proof result now: the targeted suite passed cleanly. I’m applying a docs-and-memory-only closeout patch next so the audit, final proof bundle, compatibility guarantees, and deferred debt are captured explicitly for this phase.
+
+The closeout patch is in. I’m rerunning the authoritative targeted proof bundle now because the docs baseline is part of scope, and I want the recorded `200 passed` result to reflect the post-edit state rather than the pre-edit state.
+
+The only remaining work after the rerun is to verify the final diff shape and make sure the implementation notes match it. If the suite stays green, I’ll do one quick pass over the changed-file stats and then close the phase.
+
+The closeout content is correct; I’m tightening one metric line so the notes distinguish the tracked diff from the untracked recursive-memory files in this checkout. After that I’ll do the final green rerun check and stop.
+
+**Scope considered**
+- Reviewed the required surfaces before editing: [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflows/`, `tests/`, and `.autoloop_recursive/`.
+- Kept scope phase-local despite an already-dirty worktree; I did not absorb unrelated changes.
+
+**What I analyzed**
+- Verified the typed publication seam in the three scoped workflows:
+  - [workflows/workflow_portfolio_to_operating_system/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/contracts.py)
+  - [workflows/company_operation_to_recursive_improvement_cycle/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/contracts.py)
+  - [workflows/workflow_run_history_to_failure_modes/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/contracts.py)
+- Confirmed the shared helper boundary in [stdlib/json_artifacts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/json_artifacts.py) and [stdlib/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/validation.py), plus unchanged public boundaries in [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py), and [extensions/session_paths.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/extensions/session_paths.py).
+
+**What I changed**
+- Tightened [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) so typed artifact reads are the explicit default publish-handler entrypoint for durable summaries and validated manifests.
+- Added closeout notes to the recursive-memory files:
+  - [.autoloop_recursive/framework_evolution_charter.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_evolution_charter.md)
+  - [.autoloop_recursive/framework_roadmap.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_roadmap.md)
+  - [.autoloop_recursive/framework_gap_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/framework_gap_ledger.md)
+  - [.autoloop_recursive/workflow_candidate_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/workflow_candidate_ledger.md)
+  - [.autoloop_recursive/validation_debt_ledger.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop_recursive/validation_debt_ledger.md)
+- Filled the phase record and decision log:
+  - [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/implement/phases/proof-docs-memory-closeout/implementation_notes.md)
+  - [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt)
+
+**Key findings / decisions**
+- Cycle mode remains `consolidate`.
+- No new workflow is justified; the leverage was in freezing the typed-publication boundary and proving the already-landed migration.
+- Preserved invariants explicitly: no CLI change, no `workflow.toml` semantic change, no runtime/provider boundary change, and no `ctx.invoke_workflow(...)` compatibility change.
+- Targeted proof passed after the edits:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py`
+  - Result: `200 passed`
+- Closeout metrics recorded: files added `0`, files deleted `0`, repeated validation idioms removed `3`, workflows simplified `3`, new helper functions `0`, tracked phase-owned diff `+83 / -0`.
+
+**Open issues / next step**
+- No blocking issue remains for this phase.
+- Deferred debt stays the same: portfolio-shape and helper-cleanup work, with any refinement/decomposition follow-on only if it reuses the same workflow-local typed-artifact seam without adding another abstraction.
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcb0c-6365-7060-8465-b28a784979f2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcb0c-6365-7060-8465-b28a784979f2
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcb0c-6365-7060-8465-b28a784979f2
+---
+I’m reviewing the phase-local artifacts against the requested closeout scope and the actual repo changes. I’ll inspect the diffs, confirm the proof/doc/memory requirements, and then update the phase criteria and feedback files only.
+
+I’ve confirmed the implementation notes and shared decisions align with the scoped plan. Next I’m checking the actual authoring and recursive-memory files for the required boundary language, proof result, and compatibility claims before I mark criteria.
+
+The required boundary language is present in the authoring docs and all recursive-memory files. I’m rerunning the scoped proof bundle myself once before finalizing, so the review does not rely only on the implementation notes.
+
+The independent rerun is green. I’m marking the criteria complete and recording that I found no blocking or non-blocking issues in the phase-local feedback artifact.
+
+I’m normalizing the empty review result into the same stable-ID format the phase expects, so the feedback artifact is mechanically consistent even when there are no defects to report.
+
+Scope considered
+- Phase-local review of the proof/docs/memory closeout, plus request-relevant repo surfaces for regression analysis: `docs/authoring.md`, `.autoloop_recursive/*`, the three migrated workflow families, shared stdlib validation/json-artifact seams, and the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/`.
+
+What I analyzed
+- The accepted plan, active phase contract, and shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt`.
+- The closeout documentation and recursive-memory updates for the typed publication-contract boundary and deferred debt.
+- The scoped proof command required by AC-1.
+
+What I reviewed
+- Verified that `docs/authoring.md` now explicitly prefers workflow-local typed artifact reads as the publish-handler entrypoint for durable summaries/manifests.
+- Verified that the charter, roadmap, gap ledger, workflow candidate ledger, and validation debt ledger all record the boundary, proof outcome, compatibility invariants, and deferred debt.
+- Reran the targeted proof bundle independently: `200 passed`.
+- Updated the phase criteria file to all checked and recorded the review result in the phase feedback file.
+
+Key findings / decisions
+- No blocking or non-blocking defects found in scope.
+- AC-1, AC-2, and AC-3 are satisfied.
+- The closeout stayed within the requested non-behavioral scope and preserved CLI behavior, `workflow.toml` semantics, runtime/provider boundaries, and `ctx.invoke_workflow(...)` compatibility.
+
+Open issues / next step
+- No open issue for this phase.
+- Remaining deferred pressure stays as documented: portfolio-shape and helper-cleanup work, not additional typed-publication framework expansion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
