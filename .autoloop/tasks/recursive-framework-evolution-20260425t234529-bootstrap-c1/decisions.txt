@@ -1,3 +1,5 @@
 <autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260426T044108Z-506b9788" ts="2026-04-26T04:41:09.104301+00:00" />
 Cycle 1 stays in consolidate mode and targets typed bootstrap convergence on ctx.params across existing workflows instead of adding another workflow package.
 Keep ctx.workflow_params as a compatibility dict surface and avoid runtime or root-shim changes; if residual capture duplication still matters after migration, any helper must stay additive under an existing stdlib module.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260426T044108Z-506b9788" ts="2026-04-26T04:48:57.532927+00:00" />
+Framework-evolution closeout must update framework_evolution_charter.md explicitly each cycle; do not treat the charter as an optional memory touch even when the change is only a synchronization note.

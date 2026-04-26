@@ -152,11 +152,12 @@
 ## Recursive memory updates required
 
 - Update:
+  - `.autoloop_recursive/framework_evolution_charter.md`
   - `.autoloop_recursive/framework_roadmap.md`
   - `.autoloop_recursive/framework_gap_ledger.md`
   - `.autoloop_recursive/workflow_candidate_ledger.md`
   - `.autoloop_recursive/validation_debt_ledger.md`
-  - `.autoloop_recursive/framework_evolution_charter.md` only if the cycle discovers a durable standing rule that is not already captured
+- Keep the charter update explicit even if the change is only a short synchronization note confirming that the chosen consolidation still fits the standing doctrine.
 
 ## Deferred debt after this cycle
 

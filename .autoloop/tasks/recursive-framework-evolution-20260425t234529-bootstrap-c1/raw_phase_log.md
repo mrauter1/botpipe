@@ -90,3 +90,28 @@ The planner should revise both `plan.md` and `phase_plan.yaml` so the charter is
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dc817-64df-7782-99b3-61b8f10ab318
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dc817-64df-7782-99b3-61b8f10ab318
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc817-64df-7782-99b3-61b8f10ab318
+---
+I’m applying the verifier feedback now. The fix is narrow: make `.autoloop_recursive/framework_evolution_charter.md` an explicit required recursive-memory update in both the narrative plan and the machine-readable closeout phase, then re-validate the YAML.
+
+I’m making the fix now in both artifacts so the machine-readable phase contract and the narrative plan agree: the charter becomes a required recursive-memory update, not a conditional one.
+
+The first patch partially failed on the YAML because the file was re-serialized without the quoted formatting I originally wrote. I’m re-reading the exact current lines and applying a narrower patch so the charter fix lands cleanly.
+
+The narrative plan and phase contract now agree on the charter requirement. I’m re-validating the YAML and reading back the touched sections so this turn closes with a clean, machine-readable plan.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/plan/feedback.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/decisions.txt).
+
+The fix is narrow: `.autoloop_recursive/framework_evolution_charter.md` is now an explicit required recursive-memory update in both the narrative plan and the `proof-docs-and-memory-closeout` phase, rather than a conditional touch. I also recorded the correction in feedback and the new standing decision for later turns. `phase_plan.yaml` was re-validated successfully with `python3` + `yaml.safe_load`.

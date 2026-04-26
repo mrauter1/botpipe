@@ -90,9 +90,9 @@ phases:
   in_scope:
   - Run the targeted unit, runtime, and architecture-doc baseline tests listed in
     plan.md.
-  - Update framework_roadmap.md, framework_gap_ledger.md, workflow_candidate_ledger.md,
-    and validation_debt_ledger.md with the audit, chosen improvement, and deferred
-    debt.
+  - Update framework_evolution_charter.md, framework_roadmap.md, framework_gap_ledger.md,
+    workflow_candidate_ledger.md, and validation_debt_ledger.md with the audit, chosen
+    improvement, and deferred debt.
   - Record files added/deleted, net line direction, removed validation idioms, workflows
     migrated, and any deferred helper pressure.
   out_of_scope:
@@ -111,7 +111,8 @@ phases:
       deferred duplication.
   deliverables:
   - Verified test results or explicit proof blockers.
-  - Updated recursive memory and cycle-closeout metrics.
+  - Updated recursive memory, including framework_evolution_charter.md, and cycle-closeout
+    metrics.
   risks:
   - Docs or memory can drift from the actual migrated workflow family if updated from
     stale assumptions.
