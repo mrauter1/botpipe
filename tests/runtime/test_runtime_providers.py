@@ -427,13 +427,15 @@ def test_codex_provider_run_llm_resumes_existing_provider_session_and_preserves_
     monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
     resumable = _provider_session("codex", session_id="codex-session-existing")
     calls: list[list[str]] = []
+    seen_input: list[str] = []
 
-    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         calls.append(command)
         if command == ["codex", "exec", "--help"]:
             return _completed(args=command, stdout=CODEX_START_HELP)
         if command == ["codex", "exec", "resume", "--help"]:
             return _completed(args=command, stdout=CODEX_RESUME_HELP)
+        seen_input.append(str(kwargs["input"]))
         return _completed(
             args=command,
             stdout='{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"done\\"}"}}',
@@ -455,6 +457,10 @@ def test_codex_provider_run_llm_resumes_existing_provider_session_and_preserves_
         "codex-session-existing",
         "-",
     ]
+    assert len(seen_input) == 1
+    assert "# Step: ask" in seen_input[0]
+    assert "## Runtime Step Contract" in seen_input[0]
+    assert "<producer_raw_output>" not in seen_input[0]
     assert response.outcome.tag == "done"
     assert response.session is not None
     assert response.session.session_id == "codex-session-existing"

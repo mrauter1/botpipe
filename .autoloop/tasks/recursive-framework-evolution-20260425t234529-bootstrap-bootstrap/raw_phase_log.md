@@ -372,3 +372,49 @@ This phase is complete. The next work remains the later planned phases: backend 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+I’m treating this as a phase-scoped test hardening pass: verify the new provider-boundary behavior is actually covered, then add only the missing regression checks and update the test-phase artifacts. I’m starting by reading the active test strategy/feedback and the current provider-boundary tests so I can tighten gaps instead of churning unrelated files.
+
+I found two worthwhile coverage gaps rather than functional failures: the render-policy default failure path isn’t tested, and only Claude’s LLM resume path currently asserts the new rendered prompt shape. I’m adding those deterministic checks, then I’ll record the coverage map and the test-phase feedback.
+
+I introduced one stray assertion while tightening the Codex LLM prompt check. I’m removing that now, then I’ll run the focused test set and finish the test-phase notes once the new coverage is green.
+
+The coverage additions are in place. I’m running the focused provider-core and runtime-provider tests now to make sure the new assertions are stable before I close out the test strategy and feedback artifacts.
+
+Scope considered
+
+Phase-local `provider-boundary-core` test coverage only. I limited changes to the provider-boundary unit/runtime tests plus the active test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/provider-boundary-core/`.
+
+What I analyzed
+
+I reviewed the current core provider-boundary tests, the runtime provider tests, and the completed implementation to see what was already covered versus what was still missing for AC-1 through AC-3. The main remaining gaps were the render-policy default failure path and Codex LLM prompt-shape coverage on the new rendered boundary.
+
+What I changed
+
+I added a default fail-on-overflow render-policy test in [test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py), alongside the existing explicit truncation-path test. I also tightened [test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py) so the Codex LLM resume path now asserts the shared rendered prompt shape, not just the resume command.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/provider-boundary-core/test_strategy.md) with a behavior-to-coverage map, preserved invariants, failure paths, stabilization notes, and scoped gaps, and I appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/provider-boundary-core/feedback.md).
+
+Key findings / decisions
+
+The added tests stay deterministic by keeping all provider CLI interaction monkeypatched through fixed subprocess fixtures. Focus remained on changed behavior only: shared renderer contract, render-policy behavior, and runtime-provider prompt/path integration after the parser ownership move.
+
+Validation passed:
+`.venv/bin/pytest -q tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py`
+
+Open issues / next step
+
+No blocking test gaps remain within this phase scope. Later phases still need their own coverage for backend resolution returning rendered providers directly, engine-side artifact metadata injection, retry behavior, handoff delivery, and the eventual transport-purity cleanup.

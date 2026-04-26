@@ -180,6 +180,14 @@ def test_render_provider_turn_honors_custom_render_policy() -> None:
     assert turn.prompt_text.endswith("[TRUNCATED BY RUNTIME PROMPT BUDGET]")
 
 
+def test_render_provider_turn_fails_by_default_when_budget_is_exceeded() -> None:
+    with pytest.raises(ProviderExecutionError, match="max_prompt_chars budget"):
+        render_provider_turn_with_policy(
+            _turn_context(prompt_text="B" * 300),
+            policy=ProviderPromptRenderPolicy(max_prompt_chars=120),
+        )
+
+
 @dataclass
 class _TransportStub:
     result_text: str
