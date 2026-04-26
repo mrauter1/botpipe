@@ -163,3 +163,12 @@ No open verifier issues in the planning artifacts. The plan is ready for downstr
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=provider-boundary-core,runtime-cli-transports,engine-provider-retries,route-handoff-persistence,docs-and-regression-suite
+explicit=True
+current_phase_index=0
