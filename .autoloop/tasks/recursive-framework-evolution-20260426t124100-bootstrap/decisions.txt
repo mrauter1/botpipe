@@ -9,3 +9,5 @@ When resume config disables git tracking after an earlier tracked segment, persi
 Normalize provider usage at the rendered transport boundary by extending ProviderTurnResult with optional usage so runtime CLI adapters and fake providers can share one semantic plumbing path.
 Keep StepFinish.provider_usage scoped to pair and llm executions only; system steps continue to emit provider_usage=None and existing raw-output semantics remain unchanged.
 Exclude per-turn usage blobs from persisted session provider_metadata because usage is execution evidence for the current turn, not resumable session identity metadata.
+<autoloop-decisions-header version="1" block_seq="4" owner="test_author" phase_id="provider-usage-plumbing" pair="test" turn_seq="1" run_id="run-20260426T154101Z-3441a2ae" ts="2026-04-26T16:02:17.590855+00:00" />
+Add explicit runtime-provider coverage that per-turn usage fields are stripped from persisted session provider_metadata, because that behavior is intentional and otherwise easy to regress while refactoring provider helpers.

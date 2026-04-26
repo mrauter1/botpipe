@@ -185,6 +185,25 @@ def test_build_session_binding_preserves_slot_and_canonical_metadata() -> None:
     assert binding.metadata["effort_override"] == "medium"
 
 
+def test_build_session_binding_omits_per_turn_usage_fields_from_persisted_session_metadata() -> None:
+    binding = build_session_binding(
+        _placeholder_session(),
+        session_id="provider-session-10",
+        provider_name="claude",
+        provider_metadata={
+            "usage": {"input_tokens": 9},
+            "token_usage": {"total_tokens": 12},
+            "provider_usage": {"output_tokens": 3},
+            "stop_reason": "done",
+        },
+        model="claude-test",
+        effort=None,
+    )
+
+    assert binding.metadata["provider_metadata"] == {"stop_reason": "done"}
+    assert binding.provider_metadata == {"stop_reason": "done"}
+
+
 def test_parse_outcome_json_accepts_plain_object() -> None:
     outcome = parse_outcome_json('{"tag":"done","reason":"ok","payload":{"x":1}}')
 

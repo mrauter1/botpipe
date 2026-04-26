@@ -6,3 +6,6 @@
 - Phase Directory Key: provider-usage-plumbing
 - Phase Title: Provider Usage Plumbing
 - Scope: phase-local authoritative verifier artifact
+
+- Added coverage for typed usage defaults, fake/rendered provider passthrough, Codex/Claude usage extraction, `StepFinish.provider_usage` exposure for pair/llm/system steps, and the persisted-session invariant that transient usage blobs are stripped from `provider_metadata`.
+- Validated with `./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/contract/test_engine_contracts.py -q` -> `161 passed`.
