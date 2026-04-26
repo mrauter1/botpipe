@@ -761,3 +761,123 @@ No open issues in this phase-local audit. The only remaining scope boundary is t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’m implementing the `engine-provider-retries` phase: retry policy metadata, engine-side retry loops, and provider request enrichment, while keeping scope off handoff persistence and CLI behavior. I’ll inspect the active phase artifacts and the current provider/engine code paths first so the edits stay aligned with the existing contracts.
+
+I’ve loaded the phase plan and prior decisions. Next I’m tracing the concrete retry-related surfaces in `core/providers`, `core/steps`, `core/compiler`, `core/validation`, and `core/engine` so the change lands on existing seams rather than adding parallel logic.
+
+The current core already has the additive provider request fields from earlier phases, but the retry policy, compiled metadata, and engine loop aren’t wired yet. I’m drilling into `core/engine.py` now, because that is where the retry classification and checkpoint semantics have to stay precise.
+
+The provider rendering layer is already in place from earlier phases, so this phase can stay focused: add retry policy authoring/compilation, teach the engine to build richer provider request metadata, and classify retryable provider failures without touching runtime transports again. I’m checking the authoring exports and fake provider/test helpers now because they’ll need to expose and verify the new fields cleanly.
+
+I have the main execution path now. The next pass is on stores and test helpers: checkpoint payloads need additive retry-exhaustion context, and the fake provider needs to expose the enriched request fields so the new engine-contract tests can assert retries are rebuilding cleanly.
+
+I’ve finished the execution-path analysis. The edit set is now clear: one new provider retry module, additive step/compiler/export changes, an engine retry loop with explicit retry-kind tagging, and test-helper updates so the new contract fields are observable without broad churn.
+
+I’m starting the code edits with the authoring and compilation surfaces first. That keeps the new retry semantics explicit in the public model before I wire the engine behavior around them.
+
+I’m wiring the engine now. The main constraint is classification: retries should cover only provider-attributable failures, while middleware, system routing, missing inputs, and handler exceptions keep their current single-failure behavior.
+
+The engine loop is in. I’m updating the fake provider next so the new request metadata is visible in tests; then I’ll add the retry-focused contract and validation coverage and run the targeted suite.
+
+I’m patching the tests in two layers: first, preserving existing single-attempt expectations where they were written that way; second, adding explicit coverage for the new default three-attempt behavior and checkpoint metadata on exhaustion.
+
+The code is patched end-to-end for this phase. I’m doing a quick source pass over the edited engine and tests before running pytest so I can catch structural issues locally instead of burning time on avoidable test failures.
+
+I caught a couple of structural issues in the source pass: one missing keyword in the system-step artifact check and one bad test assertion from a bulk edit. I’m fixing those before running the suite.
+
+The core changes are consistent enough to start validation. I’m running the phase-targeted tests first, beginning with validation and engine contracts, because they exercise the new authoring surface, compiled metadata, and retry classification directly.
+
+The first validation pass surfaced two expected adjustments: one stale assertion in the invalid-route test, and one optional-artifact test that now needs `max_attempts=1` because the default retry budget changed. I’m patching those and rerunning the contract suite.
+
+The retry-focused tests are green. I’m running the rest of the phase-targeted suite now to catch any import-surface or compatibility regressions introduced by the new public exports and compiled-step metadata.
+
+The targeted phase suite passed. I’m running the full test suite now to make sure the retry default, compiled metadata, and public exports didn’t shift behavior outside the immediate contract tests.
+
+The full suite is still running. I’m polling it rather than doing more edits so I can see whether any remaining failures cluster around retry defaults or surface areas I haven’t touched yet.
+
+The suite is past the halfway mark and still clean. I’m waiting for completion before I update the phase notes and decisions so those artifacts reflect the final validated state rather than an intermediate guess.
+
+The full suite found one compatibility assertion: the strict authoring-surface test still hardcodes the old `workflow.__all__` list and now needs to include `ProviderRetryPolicy`. I’m updating that expectation and rerunning the full suite.
+
+I’ve applied the last compatibility-test fix and restarted the full suite. I’m waiting for the rerun to finish cleanly before I write the phase artifacts so the notes and decision log reflect the final passing state.
+
+The code and validation work are complete. I’m updating the phase artifacts now so the next turn inherits the actual retry semantics, preserved invariants, and the small non-obvious decisions that matter for avoiding drift.
+
+Scope considered
+
+Phase-local `engine-provider-retries` only: retry policy authoring/compilation, engine-side provider retry semantics, provider request artifact metadata, retry failure checkpoint context, and matching tests/artifacts. I left handoff persistence/delivery, docs wording updates, and CLI behavior unchanged.
+
+What I analyzed
+
+I traced the current provider boundary and retry surfaces through [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/fake.py), and the engine/validation/strictness tests to keep the provider-vs-middleware failure boundary intact.
+
+What I changed
+
+Added [core/providers/retries.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/retries.py) with `ProviderRetryPolicy` and markdown retry feedback generation. Wired `retry_policy` into `LLMStep`/`PairStep`, compiled it onto `CompiledStep`, exported it through [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py) and [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py), and made validation reject it on `SystemStep`.
+
+In [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), I added provider artifact-ref builders, enriched semantic provider requests with required/writable artifacts plus route-required artifact metadata, and wrapped only llm/pair execution in retry loops. Retryable failures now cover illegal routes, invalid payloads, malformed/transport provider failures, and provider-attributable artifact validation failures; exhausted retries checkpoint additive failure context with consumed attempt counts. I updated [core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/fake.py) and the validation/engine/strictness tests to expose and verify the new fields and retry behavior.
+
+Key findings / decisions
+
+Retry exhaustion is stored additively inside existing `failure_context` rather than widening checkpoint schema. Artifact-validation retries are only enabled when the failure is tied to the provider-selected route; middleware-overridden route failures still fail without retry. `ProviderRetryPolicy` is now part of the strict workflow authoring surface, so the strictness expectation was updated accordingly.
+
+Open issues / next step
+
+This phase is complete and validated. The next scoped work is the deferred handoff phase and the later doc/baseline wording updates. Validation run: targeted phase tests passed, and full suite passed with `.venv/bin/pytest -q` (`706 passed`).
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’m reviewing the `engine-provider-retries` phase against the phase contract and the code that changed for it. I’ll inspect the phase artifacts first, then audit the touched core/test files for correctness, retry-boundary fidelity, and regression risk before updating `criteria.md` and `feedback.md`.
+
+I’ve moved from artifact inspection into code-path review. I’m checking the retry classifier against the actual provider/runtime error sources now, because the main regression risk in this phase is silently retrying the wrong failures or missing provider failures that were supposed to retry.
+
+I’ve found a material correctness issue in the retry implementation. I’m updating the phase artifacts with a blocking finding tied to session-bound retries, because the current loop preserves provider transcript state across retry attempts and that violates the accepted retry boundary.
+
+Scope considered
+
+Phase-local review of `engine-provider-retries`: the new retry policy surface, compiled metadata, engine retry loop, provider request enrichment, checkpoint failure context, and the matching tests/artifacts. I did not expand into out-of-phase handoff work except to verify that the current retry behavior does not silently cross that boundary.
+
+What I analyzed
+
+I reviewed the active phase artifacts, shared decisions, and the changed implementation in `core/providers/retries.py`, `core/steps.py`, `core/compiler.py`, `core/validation.py`, `core/engine.py`, `core/providers/fake.py`, the public shims, and the retry-focused tests. I also checked the runtime provider/session behavior to see whether the retry loop actually honors the “no previous transcript” constraint from the accepted plan.
+
+What I reviewed
+
+I updated `criteria.md` and `feedback.md`. I found one blocking issue in the engine retry/session interaction: provider-attributable retries currently reuse the failed attempt’s persisted `SessionBinding`, so session-bound retries resume the same provider transcript instead of rebuilding a transcript-free retry turn.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The implementation satisfies most of the phase contract, and validation coverage is good, but the current retry loop violates AC-3 for session-bound steps because attempt 2 can still carry attempt 1 transcript history through provider session resume. I left the criteria with correctness/safety/compatibility unchecked and recorded the minimal fix direction in feedback.
+
+Open issues / next step
+
+The next implementer turn should fix retry-session handling in `core/engine.py` so provider-attributable retries dispatch without reusing the rejected attempt’s transcript, then add a regression test for a session-bound llm/pair retry path and rerun the affected suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
