@@ -14,12 +14,12 @@
       "proof-docs-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "typed-publication-contracts"
+    "current_phase_index": 1,
+    "current_phase_id": "workflow-publication-migration"
   },
   "phase_status": {
-    "typed-publication-contracts": "in_progress",
-    "workflow-publication-migration": "planned",
+    "typed-publication-contracts": "completed",
+    "workflow-publication-migration": "in_progress",
     "proof-docs-memory-closeout": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260426T175457Z-ff851572",
       "status": "in_progress",
       "ts": "2026-04-26T18:05:10.200660+00:00"
+    },
+    {
+      "phase_id": "typed-publication-contracts",
+      "run_id": "run-20260426T175457Z-ff851572",
+      "status": "completed",
+      "ts": "2026-04-26T18:19:02.469780+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "workflow-publication-migration",
+      "run_id": "run-20260426T175457Z-ff851572",
+      "status": "in_progress",
+      "ts": "2026-04-26T18:19:02.472933+00:00"
     }
   ]
 }
