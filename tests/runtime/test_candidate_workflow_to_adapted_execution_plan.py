@@ -419,6 +419,8 @@ def test_candidate_workflow_to_adapted_execution_plan_bootstrap_reads_typed_ctx_
     assert invocation_contract["selected_workflow_reference"] == "security_finding_to_verified_remediation"
     assert invocation_contract["task_title"] == "Admin impersonation privilege escalation response"
     assert invocation_contract["desired_outcome"] is None
+    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["evidence_expectations"] == next_state.evidence_expectations
 
 
 def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes_terminal_adaptation_artifacts(

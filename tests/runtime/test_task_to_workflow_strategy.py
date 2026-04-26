@@ -410,6 +410,8 @@ def test_task_to_workflow_strategy_bootstrap_reads_typed_ctx_params(monkeypatch,
     assert invocation_contract["task_title"] == "Admin impersonation privilege escalation response"
     assert invocation_contract["sponsor_role"] == "Security Engineering"
     assert invocation_contract["desired_outcome"] is None
+    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["evidence_expectations"] == next_state.evidence_expectations
 
 
 def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_artifacts(tmp_path: Path) -> None:

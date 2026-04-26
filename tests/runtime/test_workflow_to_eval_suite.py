@@ -448,6 +448,8 @@ def test_workflow_to_eval_suite_bootstrap_reads_typed_ctx_params(monkeypatch, tm
     assert invocation_contract["selected_workflow_reference"] == "release_candidate_to_go_no_go"
     assert invocation_contract["task_title"] == "Release readiness evaluation suite"
     assert invocation_contract["desired_outcome"] is None
+    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["evidence_expectations"] == next_state.evidence_expectations
 
 
 def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifacts(

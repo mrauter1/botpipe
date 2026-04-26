@@ -298,3 +298,49 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+I’m treating this as a scoped test-validation pass for the typed-bootstrap migration. I’ll inspect the new test surface, confirm the changed behaviors are covered with deterministic proof, and then update the phase test strategy and feedback artifacts to reflect what is actually covered.
+
+The existing new tests are directionally right, but I want one tighter regression check: each typed-bootstrap test should assert the invocation contract still carries the normalized constraints/evidence payload, not just the headline fields. I’m making that small refinement and then I’ll update the test-phase artifacts and decisions ledger.
+
+The test refinement is in. I’m rerunning the scoped suite now to verify the stronger invocation-contract assertions and the tightened authoring-doc baseline still pass cleanly.
+
+Scope considered
+
+- Phase-local test scope only: the four migrated bootstraps, the authoring-doc contract, and the active test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/test/phases/typed-bootstrap-contract-and-first-family/`.
+
+What I analyzed
+
+- The phase contract and shared decisions.
+- The newly added typed-bootstrap tests in the four runtime suites and the doc-baseline assertion in `tests/test_architecture_baseline_docs.py`.
+- The regression surface around `ctx.params` vs `ctx.workflow_params`, especially whether invocation-contract payloads still preserve normalized repeatable fields.
+
+What I changed
+
+- Tightened the new bootstrap tests so each one now also asserts `constraints` and `evidence_expectations` are preserved in `invocation_contract.json`.
+- Tightened the authoring-doc baseline to require explicit mention of `open_workflow_sessions(...)` and `write_invocation_contract(...)` alongside the `ctx.params` default rule.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/test/phases/typed-bootstrap-contract-and-first-family/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/test/phases/typed-bootstrap-contract-and-first-family/feedback.md:1), and appended the scoped test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/decisions.txt:1).
+
+Key findings / decisions
+
+- The right regression guard for this phase is direct `on_bootstrap(...)` coverage with populated `ctx.params` and empty `workflow_params`; that would fail immediately if the implementation slipped back to raw dict reads.
+- Existing parameter-coercion tests already cover the relevant failure paths for blank required fields and invalid raw workflow mappings, so no extra negative-path duplication was needed.
+- Scoped validation passed: `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` with `126 passed`.
+
+Open issues / next step
+
+- No scoped test gaps remain for the first-family typed-bootstrap migration.
+- Later-family bootstrap adoption remains intentionally out of scope for this phase.
