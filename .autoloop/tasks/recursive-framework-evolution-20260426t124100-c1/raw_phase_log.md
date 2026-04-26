@@ -763,3 +763,64 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcb0c-6365-7060-8465-b28a784979f2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcb0c-6365-7060-8465-b28a784979f2
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcb0c-6365-7060-8465-b28a784979f2
+---
+I’m treating this as a proof-only test phase unless the changed surfaces reveal an uncovered regression risk. I’ll inspect the closeout diff, verify whether the existing docs/runtime/unit tests already cover it, rerun the scoped proof bundle, and then update the phase test artifacts with an explicit coverage map.
+
+The existing baseline tests already cover parts of the closeout language, but they do not pin the new authoring-doc preference sentence. I’m checking that test file now so I can add only the smallest assertion needed to lock in the changed docs surface.
+
+I found one concrete regression guard worth adding: the baseline docs tests should pin the new typed-publication preference and the current-cycle recursive-memory closeout, since those are the only net-new surfaces in this phase. I’m adding that minimal coverage plus the phase test artifacts now.
+
+The new coverage is narrow and intentional: one authoring-doc guard and one recursive-memory closeout guard. I’m running the authoritative targeted proof bundle now to ensure the added assertions stay green alongside the existing unit/runtime suites.
+
+The new test exposed an existing structural hazard in the docs baseline file: a block of deferred-ideas assertions is now stranded under the wrong function boundary. I’m fixing that test-only issue locally and rerunning the same targeted suite.
+
+I split an existing baseline test by inserting the new one in the wrong place. I’m restoring the original cycle-two function boundary and moving the new closeout test below it so the docs suite stays structurally clean.
+
+The test structure is fixed. I’m rerunning the same targeted bundle again; if it’s green, I’ll only do a quick diff sanity check and then close the phase.
+
+The targeted suite is green with the new guards in place. I’m updating the phase test artifacts to reflect the final proof result and then I’ll stop.
+
+Scope considered
+- Phase-local test scope for `proof-docs-memory-closeout`, plus request-relevant regression surfaces in `tests/test_architecture_baseline_docs.py`, the targeted unit/runtime proof suites, `docs/authoring.md`, and `.autoloop_recursive/*`.
+- I did not touch unrelated repo files outside the allowed phase artifacts and one relevant repository test file.
+
+What I analyzed
+- The phase contract, implementation notes, implementer feedback, and shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt`.
+- Existing docs-baseline coverage to see whether the new typed-publication preference and recursive-memory closeout were already pinned.
+- The scoped proof command required by AC-1.
+
+What I changed
+- Updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) with:
+  - one stronger assertion in the typed JSON artifact boundary test for the new “default publish-handler entrypoint” wording
+  - one new recursive-memory baseline test covering the current cycle’s closeout records across the charter, roadmap, gap ledger, workflow candidate ledger, and validation debt ledger
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/test/phases/proof-docs-memory-closeout/test_strategy.md) with the behavior-to-test coverage map, invariants, edge/failure paths, known gaps, and final validation command/result.
+- Updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/test/phases/proof-docs-memory-closeout/feedback.md) with a concise summary of the added coverage and the final proof result.
+- Appended one test-phase decision under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt).
+
+Key findings / decisions
+- The only uncovered regression risk in scope was docs/memory drift, not workflow/runtime behavior drift.
+- Existing targeted runtime/unit coverage already exercises the migrated publish-handler behavior, so I did not add new workflow fixtures.
+- Final targeted proof command passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py`
+  - Result: `201 passed`
+
+Open issues / next step
+- No blocking issue remains for this phase.
+- The remaining deferred pressure is unchanged: portfolio-shape and helper-cleanup work rather than additional typed-publication framework or workflow expansion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
