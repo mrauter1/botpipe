@@ -248,3 +248,53 @@ Open issues / next step
 
 - Deferred debt remains in the later family that still uses raw bootstrap mapping reads: `workflow_run_history_to_failure_modes`, `workflow_portfolio_to_operating_system`, `company_operation_to_recursive_improvement_cycle`, `workflow_and_eval_to_refined_workflow_package`, and `workflow_package_to_composable_building_blocks`.
 - Validation run: `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` with `126 passed in 5.81s`.
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+I’m reviewing the scoped implementation against the phase contract, the decisions ledger, and the changed files/tests. I’ll inspect the criteria and current feedback artifacts first, then verify whether the typed-bootstrap migration actually preserves the bootstrap contracts and stays within scope.
+
+I’ve verified the phase artifacts and the shared decisions. Next I’m checking for regression surfaces outside the edited tests: any direct `on_bootstrap(...)` calls or manual `Context(...)` construction that still depend on these four workflows reading `ctx.workflow_params` would be a real compatibility risk.
+
+I’ve checked the changed bootstraps, the runtime loader/runner parameter path, the updated doc contract, and the new regression tests. I’m not seeing a scoped regression or an out-of-contract behavior change, so I’m marking the phase complete and recording that there are no review findings.
+
+Scope considered
+
+- Active phase scope only: the four migrated workflow bootstraps, `docs/authoring.md`, the scoped runtime/doc tests, the implementation notes, and the shared decisions ledger.
+
+What I analyzed
+
+- The phase contract, acceptance criteria, and decisions in `.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/decisions.txt`.
+- The changed bootstrap handlers, the runtime parameter materialization path in `runtime/loader.py` and `runtime/runner.py`, and the new targeted regression tests.
+- Repo-local regression surfaces for any remaining direct `on_bootstrap(...)` callers that might still depend on raw `ctx.workflow_params`.
+
+What I reviewed
+
+- `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, `candidate_workflow_to_adapted_execution_plan`, and `workflow_to_eval_suite` now read typed bootstrap fields from `ctx.params`.
+- `docs/authoring.md` now states the intended default typed bootstrap surface while preserving `ctx.workflow_params` as the compatibility dict surface.
+- Targeted proof coverage was added and the scoped validation command passed with `126 passed`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The implementation stays within phase scope, preserves explicit lifecycle-helper bootstrap setup, and does not introduce a CLI/runtime/provider or `workflow.toml` contract change.
+
+Open issues / next step
+
+- No scoped review issues remain for this phase.
+- Deferred later-family adoption is noted in the implementation notes and recursive memory, but it is outside this phase’s acceptance boundary.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
