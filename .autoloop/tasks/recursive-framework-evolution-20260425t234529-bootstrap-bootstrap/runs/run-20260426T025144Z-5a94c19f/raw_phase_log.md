@@ -473,3 +473,110 @@ This audit is complete for the current phase scope. Later phases still need thei
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+I’m implementing the `runtime-cli-transports` phase only: refactor Codex and Claude runtime providers into transport-only adapters, then wrap them with `RenderedLLMProvider` in backend resolution. I’ll inspect the current provider/core boundary, phase artifacts, and the affected tests before editing.
+
+I’ve confirmed the core-side `RenderedLLMProvider` already exists from the earlier phase, and the runtime providers are still hybrid wrappers. Next I’m tracing their remaining semantic dependencies and the test expectations so I can cut the boundary cleanly without changing config behavior.
+
+The existing tests already encode most of the new boundary: provider prompts are rendered in core and raw output is excluded. I’m now aligning the runtime files and backend resolver with those expectations, then I’ll add the purity assertions the phase contract calls for.
+
+Plan for this phase:
+- Replace `CodexProvider` and `ClaudeProvider` with public `CodexTransport` and `ClaudeTransport`, keeping only CLI capability checks, subprocess execution, session handling, and envelope parsing.
+- Move wrapping responsibility into `runtime/provider_backends.py` so backend selection returns `RenderedLLMProvider(transport)` without changing provider-name resolution.
+- Rewrite the runtime provider tests around transport behavior and wrapper ownership, then add file-content purity checks for the banned semantic strings.
+
+I’m editing the runtime provider modules now. The change is surgical: strip semantic request/response handling out of the provider files, expose pure transports, and leave all workflow-aware wrapping in the backend resolver.
+
+I’ve finished the production code edits. I’m rewriting the runtime tests around the new seam now: direct transport tests for raw prompt delivery, plus wrapper tests that prove outcome parsing still happens only in core.
+
+The code and tests are aligned to the new boundary. I’m running the runtime-focused test slice now to catch any import drift, wrapper assumptions, or purity-test false positives before I touch the phase notes.
+
+The runtime slice passed cleanly. I’m recording the phase-local decisions and implementation notes now so the next phases don’t accidentally pull the wrapper logic back into `runtime/providers`.
+
+Scope considered
+
+Phase-local `runtime-cli-transports` only: [runtime/providers/codex.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/codex.py), [runtime/providers/claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/claude.py), [runtime/provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/provider_backends.py), [runtime/providers/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/__init__.py), the two runtime test files, and the phase notes/decisions artifacts.
+
+What I analyzed
+
+The existing core boundary was already in place with `RenderedLLMProvider`, `RenderedProviderTurn`, and core-side parsing. The remaining issue was that both runtime provider files still mixed transport logic with semantic-provider wrapping, and backend resolution still returned those hybrid classes directly.
+
+What I changed
+
+`codex.py` and `claude.py` now expose pure `CodexTransport` and `ClaudeTransport` plus transport builders only. They no longer import semantic request/response models or core parsing/rendering helpers.
+
+`runtime/provider_backends.py` now wraps the selected transport with `RenderedLLMProvider`, so backend selection semantics stay the same while semantic handling moves fully to core.
+
+`tests/runtime/test_runtime_providers.py` now tests transport prompt delivery and verifies that outcome parsing still happens in `RenderedLLMProvider`, not in the transports. `tests/runtime/test_provider_backends.py` now asserts backend wrapping and adds file-content purity checks for the banned semantic strings.
+
+Key findings / decisions
+
+The cleanest seam is to make backend resolution the only wrapper site; that keeps `runtime/providers/*` transport-only and avoids reintroducing semantic logic there.
+
+I intentionally left `runtime/providers/_common.py` untouched in this phase. `render_verifier_input(...)` is now dead code, but removing it would be broader cleanup outside the active phase scope.
+
+Validation performed: `.venv/bin/pytest -q tests/runtime/test_runtime_providers.py tests/runtime/test_provider_backends.py tests/unit/test_provider_boundary_core.py` and it passed with `60 passed`.
+
+Open issues / next step
+
+No blocker remains for this phase. The next phase should handle retry/handoff work and can remove the now-unused verifier-packet helper as part of a broader prompt-boundary cleanup.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+I’m reviewing the `runtime-cli-transports` implementation against the phase contract and the actual code/test deltas. I’ll inspect the touched runtime/provider files, the phase artifacts, and the relevant tests before I update `criteria.md` and `feedback.md`.
+
+I’ve confirmed the core mechanical changes and I’m now checking for hidden compatibility or regression risks, especially around import/export surfaces and whether any prior runtime-facing constructors were silently removed.
+
+I found one material regression risk: the implementation removed previously exported runtime-provider symbols instead of preserving them as compatibility shims outside the pure transport files. I’m recording that as a blocking finding and marking the phase criteria accordingly.
+
+Scope considered
+
+Phase-local review of the `runtime-cli-transports` implementation: the runtime transport modules, backend resolver, runtime provider tests, phase notes, and the active decisions/criteria/feedback artifacts.
+
+What I analyzed
+
+I inspected the touched runtime files against the accepted phase contract, checked the updated tests for AC-1 through AC-3 coverage, searched for remaining old provider-name references, and reran the targeted validation slice: `tests/runtime/test_runtime_providers.py`, `tests/runtime/test_provider_backends.py`, and `tests/unit/test_provider_boundary_core.py`.
+
+What I reviewed
+
+The transport split itself is coherent: `codex.py` and `claude.py` are transport-only, backend resolution now wraps transports with `RenderedLLMProvider`, and the tests do prove prompt transport behavior plus core-side outcome parsing ownership.
+
+I also reviewed adjacent compatibility surfaces, especially the previously exported runtime-provider symbols and builder names.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The implementation removed the previously exported `CodexProvider` / `ClaudeProvider` and `build_codex_provider` / `build_claude_provider` symbols, which creates an avoidable import-surface compatibility regression outside the accepted phase scope. The minimal safe fix is to restore compatibility shims for those old names outside the pure transport modules.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/runtime-cli-transports/criteria.md) and appended the blocking review entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/runtime-cli-transports/feedback.md).
+
+Open issues / next step
+
+Restore the old runtime-provider import names as compatibility aliases or shims without reintroducing semantic logic into the transport files, then rerun the same targeted test slice and re-review this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
