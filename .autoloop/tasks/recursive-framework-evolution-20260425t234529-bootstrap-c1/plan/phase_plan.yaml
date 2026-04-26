@@ -1,4 +1,123 @@
 version: 1
 task_id: recursive-framework-evolution-20260425t234529-bootstrap-c1
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/runs/run-20260426T044108Z-506b9788/request.md
-phases: []
+phases:
+- phase_id: typed-bootstrap-contract-and-first-family
+  title: Typed Bootstrap Contract
+  objective: Freeze ctx.params as the default bootstrap authoring surface and migrate
+    the highest-reuse workflow family first.
+  status: planned
+  in_scope:
+  - Update docs/authoring.md so workflows with Parameters default to ctx.params instead
+    of local ctx.workflow_params revalidation.
+  - Migrate task_to_candidate_workflow_set, task_to_workflow_strategy, candidate_workflow_to_adapted_execution_plan,
+    and workflow_to_eval_suite bootstraps to typed params.
+  - Keep bootstrap session setup and invocation-contract writing explicit through
+    existing stdlib lifecycle helpers.
+  out_of_scope:
+  - Any new workflow package.
+  - CLI, runtime-provider, or workflow.toml contract changes.
+  - Prompt README deduplication beyond any minimal wording needed to keep docs accurate.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The migrated workflows read typed bootstrap fields from ctx.params, remove
+      redundant generic normalization from on_bootstrap, and preserve current artifact
+      names, routes, and receipts.
+  - id: AC-2
+    text: docs/authoring.md explicitly states that ctx.params is the default typed
+      authoring surface when a workflow declares Parameters, while ctx.workflow_params
+      remains the compatibility dict surface.
+  deliverables:
+  - Typed bootstrap migrations for the first workflow family.
+  - Updated authoring guidance covering the typed bootstrap rule.
+  risks:
+  - Manual bootstrap normalization may not map 1:1 to current Parameters defaults
+    if workflow-specific transforms are removed too aggressively.
+  - Tests may still implicitly rely on workflow-local bootstrap details rather than
+    stable behavior.
+  rollback:
+  - Revert only the migrated workflow bootstraps and docs updates while leaving existing
+    runtime parameter handling untouched.
+  - Keep ctx.workflow_params compatibility behavior unchanged throughout the phase
+    so rollback is code-local.
+- phase_id: portfolio-governance-bootstrap-migration
+  title: Portfolio Family Migration
+  objective: Extend the typed-bootstrap convergence to the remaining selected-workflow,
+    governance, diagnostic, refinement, and decomposition workflows.
+  status: planned
+  in_scope:
+  - Migrate workflow_run_history_to_failure_modes, workflow_portfolio_to_operating_system,
+    company_operation_to_recursive_improvement_cycle, workflow_and_eval_to_refined_workflow_package,
+    and workflow_package_to_composable_building_blocks bootstraps to ctx.params.
+  - Retain workflow-specific status sorting, publication-boundary checks, and selected-workflow
+    alignment rules locally.
+  - Add or adjust focused helper coverage only if the migration exposes a small residual
+    duplication that clearly belongs in an existing stdlib seam.
+  out_of_scope:
+  - Root workflow shim expansion.
+  - Runtime-owned bootstrap automation or hidden sequencing.
+  - Broad migration of older standalone domain workflows unless required to preserve
+    shared helper consistency.
+  dependencies:
+  - typed-bootstrap-contract-and-first-family
+  acceptance_criteria:
+  - id: AC-1
+    text: The remaining targeted workflow family uses ctx.params for bootstrap state
+      projection while preserving workflow-specific policy checks in publish/system
+      handlers.
+  - id: AC-2
+    text: Any helper addition stays additive under an existing stdlib module and does
+      not widen CLI, runtime, provider, or root authoring contracts.
+  deliverables:
+  - Typed bootstrap migrations for the remaining selected-workflow and governance
+    workflow family.
+  - Focused unit/runtime coverage for any touched helper seam.
+  risks:
+  - The refinement/decomposition workflows may still tempt over-abstraction because
+    their capture/publish steps are structurally similar but semantically different.
+  - Broad workflow edits can drift recursive memory or workflow docs if they are updated
+    late.
+  rollback:
+  - Back out helper additions first if they obscure flow readability.
+  - Revert workflow-local bootstrap changes without touching persisted workflow_params
+    or runtime loader behavior.
+- phase_id: proof-docs-and-memory-closeout
+  title: Proof And Closeout
+  objective: Validate the migration, sync docs and recursive memory, and record the
+    cycle's boilerplate-reduction outcomes.
+  status: planned
+  in_scope:
+  - Run the targeted unit, runtime, and architecture-doc baseline tests listed in
+    plan.md.
+  - Update framework_roadmap.md, framework_gap_ledger.md, workflow_candidate_ledger.md,
+    and validation_debt_ledger.md with the audit, chosen improvement, and deferred
+    debt.
+  - Record files added/deleted, net line direction, removed validation idioms, workflows
+    migrated, and any deferred helper pressure.
+  out_of_scope:
+  - Untested speculative refactors beyond the typed-bootstrap migration.
+  - Any public compatibility break not explicitly authorized by the request.
+  - A new workflow or runtime feature to compensate for documentation gaps.
+  dependencies:
+  - portfolio-governance-bootstrap-migration
+  acceptance_criteria:
+  - id: AC-1
+    text: The targeted proof suites pass, or any blocked proof gap is explicitly documented
+      with the exact failing surface and why it could not be resolved in-cycle.
+  - id: AC-2
+    text: Recursive memory, plan feedback, and closeout metrics clearly state that
+      the cycle chose consolidation over a new workflow and identify any remaining
+      deferred duplication.
+  deliverables:
+  - Verified test results or explicit proof blockers.
+  - Updated recursive memory and cycle-closeout metrics.
+  risks:
+  - Docs or memory can drift from the actual migrated workflow family if updated from
+    stale assumptions.
+  - A partially migrated workflow set would weaken the claimed authoring-surface convergence.
+  rollback:
+  - If proof fails because one workflow family regressed, revert that family's bootstrap
+    migration and keep the rest of the cycle scoped to proven changes.
+  - Do not revert historical recursive-memory blocks; append corrected closeout notes
+    instead.
