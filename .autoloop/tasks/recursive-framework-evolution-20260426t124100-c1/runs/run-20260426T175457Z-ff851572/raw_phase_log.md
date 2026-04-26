@@ -152,3 +152,12 @@ No open verifier issues remain for the planning artifacts. The plan can proceed 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=typed-publication-contracts,workflow-publication-migration,proof-docs-memory-closeout
+explicit=True
+current_phase_index=0
