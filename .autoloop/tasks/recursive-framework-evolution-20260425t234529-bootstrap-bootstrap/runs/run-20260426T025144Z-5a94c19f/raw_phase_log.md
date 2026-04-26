@@ -1295,3 +1295,114 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+I’m using the existing handoff implementation and tests as the baseline and looking for phase-specific gaps in regression coverage. First I’m reading the test-phase artifacts and the current handoff tests to see whether AC-3 and the preserved invariants are fully locked down.
+
+I’m reviewing the handoff test coverage against the phase contract, then I’ll add any missing regression test and update the phase test artifacts with a behavior-to-test map.
+
+I’ve confirmed the phase artifacts still need their test coverage map, and I’m checking whether the existing engine tests already cover every handoff rule or whether one more regression test is warranted.
+
+The current tests cover most of the phase, but there’s still a direct AC-3 gap around dynamic handoffs that initially route into a `SystemStep`; I’m checking the engine path and will lock that down with one focused contract test.
+
+I’ve narrowed the missing coverage to two drop paths: handoffs that resolve into a `SystemStep`, and handoffs that resolve directly to a terminal. I’m wiring both into engine contract tests so the phase acceptance criteria are explicit rather than inferred.
+
+I have the missing cases isolated. I’m editing one contract test file plus the phase test artifacts now, keeping the blast radius limited to route-handoff behavior and its documentation.
+
+The test edits are in place. I’m running focused contract coverage for the handoff paths I added so the phase artifact updates reflect verified behavior rather than planned behavior.
+
+Scope considered
+
+- Phase-local `route-handoff-persistence` test scope only.
+- Request-relevant regression surfaces in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), plus the phase artifacts [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/test_strategy.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/feedback.md>).
+
+What I analyzed
+
+- Existing handoff coverage in engine contract, validation, primitive/store, and runtime compatibility tests.
+- The engine’s handoff scheduling behavior in `core/engine.py`, specifically the drop paths for resolved `SystemStep` and terminal destinations.
+- The active phase artifacts and current shared decisions ledger entry for this test-author turn.
+
+What I changed
+
+- Added two engine contract regressions in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py):
+  - dynamic handoffs targeting a `SystemStep` are dropped and do not leak into a later provider step;
+  - dynamic handoffs targeting terminal `PAUSE` are not persisted in checkpoint `pending_handoffs`.
+- Updated [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/test_strategy.md>) with an explicit behavior-to-test coverage map, invariants, edge cases, failure paths, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/feedback.md>).
+- Appended one test-scope decision under the current header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/decisions.txt>).
+
+Key findings / decisions
+
+- The preexisting coverage already handled combination order, one-time consumption, worklist scoping, and resume-before-dispatch.
+- The missing AC-3 gap was specifically the resolved-destination drop behavior, so I locked that at the engine-contract level instead of duplicating lower-level helper assertions.
+- Targeted validation passed: `./.venv/bin/pytest -q tests/contract/test_engine_contracts.py -k handoff` -> `6 passed, 49 deselected`.
+
+Open issues / next step
+
+- No phase-local test blocker remains from the covered handoff behaviors.
+- Full-suite execution was not run in this turn.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+I’m auditing the phase-local handoff tests against the acceptance criteria and the shared decisions ledger, then I’ll update the test criteria and feedback artifacts to match the actual coverage.
+
+I’m checking one last regression surface before I mark the criteria: the public shim expectations around `workflow` and `workflow.primitives`, because AC-4 is the only place a silent test gap would still matter.
+
+The public shim coverage is already locked: `workflow` exports `Handoff`, `workflow.primitives.Event` is exercised with the new `handoff` field, and there isn’t a remaining material gap in the phase-local test set. I’m updating the auditor artifacts to reflect that.
+
+Scope considered
+
+- Phase-local `route-handoff-persistence` test artifacts and the request-relevant handoff tests only.
+- Coverage across [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), and [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+
+What I analyzed
+
+- The phase acceptance criteria and shared decisions for route handoff persistence.
+- The updated handoff-focused tests, especially the new AC-3 drop-path coverage for `SystemStep` and terminal destinations.
+- The phase artifacts [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/test_strategy.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/feedback.md>).
+
+What I reviewed
+
+- Coverage quality for static and dynamic handoff delivery, one-time consumption, worklist scoping, checkpoint persistence, resume behavior, and public shim availability.
+- Regression protection for the resolved-destination drop cases added in this turn.
+- Reliability and flake risk controls in the phase-local test set.
+- Whether any expectation encoded an unconfirmed behavior break or contradicted the decisions ledger.
+
+Key findings / decisions
+
+- No blocking findings in the reviewed phase-local test scope.
+- The added engine contract tests close the material AC-3 gap by asserting that dynamic handoffs are dropped when the resolved destination is a `SystemStep` or terminal.
+- The public shim surface remains sufficiently protected: `workflow` re-exports `Handoff`, and `workflow.primitives.Event` is exercised with the new `handoff` field.
+- I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/criteria.md>) to mark all criteria satisfied and appended the audit result to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/feedback.md>).
+
+Open issues / next step
+
+- No phase-local test audit blocker remains.
+- The phase can be marked complete on the reviewed test scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

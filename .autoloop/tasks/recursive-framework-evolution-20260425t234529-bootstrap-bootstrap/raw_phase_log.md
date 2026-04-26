@@ -1353,3 +1353,56 @@ Open issues / next step
 
 - No phase-local test blocker remains from the covered handoff behaviors.
 - Full-suite execution was not run in this turn.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+I’m auditing the phase-local handoff tests against the acceptance criteria and the shared decisions ledger, then I’ll update the test criteria and feedback artifacts to match the actual coverage.
+
+I’m checking one last regression surface before I mark the criteria: the public shim expectations around `workflow` and `workflow.primitives`, because AC-4 is the only place a silent test gap would still matter.
+
+The public shim coverage is already locked: `workflow` exports `Handoff`, `workflow.primitives.Event` is exercised with the new `handoff` field, and there isn’t a remaining material gap in the phase-local test set. I’m updating the auditor artifacts to reflect that.
+
+Scope considered
+
+- Phase-local `route-handoff-persistence` test artifacts and the request-relevant handoff tests only.
+- Coverage across [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), and [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+
+What I analyzed
+
+- The phase acceptance criteria and shared decisions for route handoff persistence.
+- The updated handoff-focused tests, especially the new AC-3 drop-path coverage for `SystemStep` and terminal destinations.
+- The phase artifacts [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/test_strategy.md>) and [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/feedback.md>).
+
+What I reviewed
+
+- Coverage quality for static and dynamic handoff delivery, one-time consumption, worklist scoping, checkpoint persistence, resume behavior, and public shim availability.
+- Regression protection for the resolved-destination drop cases added in this turn.
+- Reliability and flake risk controls in the phase-local test set.
+- Whether any expectation encoded an unconfirmed behavior break or contradicted the decisions ledger.
+
+Key findings / decisions
+
+- No blocking findings in the reviewed phase-local test scope.
+- The added engine contract tests close the material AC-3 gap by asserting that dynamic handoffs are dropped when the resolved destination is a `SystemStep` or terminal.
+- The public shim surface remains sufficiently protected: `workflow` re-exports `Handoff`, and `workflow.primitives.Event` is exercised with the new `handoff` field.
+- I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/criteria.md>) to mark all criteria satisfied and appended the audit result to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/route-handoff-persistence/feedback.md>).
+
+Open issues / next step
+
+- No phase-local test audit blocker remains.
+- The phase can be marked complete on the reviewed test scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
