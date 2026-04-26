@@ -533,3 +533,50 @@ Validation performed: `.venv/bin/pytest -q tests/runtime/test_runtime_providers.
 Open issues / next step
 
 No blocker remains for this phase. The next phase should handle retry/handoff work and can remove the now-unused verifier-packet helper as part of a broader prompt-boundary cleanup.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+I’m reviewing the `runtime-cli-transports` implementation against the phase contract and the actual code/test deltas. I’ll inspect the touched runtime/provider files, the phase artifacts, and the relevant tests before I update `criteria.md` and `feedback.md`.
+
+I’ve confirmed the core mechanical changes and I’m now checking for hidden compatibility or regression risks, especially around import/export surfaces and whether any prior runtime-facing constructors were silently removed.
+
+I found one material regression risk: the implementation removed previously exported runtime-provider symbols instead of preserving them as compatibility shims outside the pure transport files. I’m recording that as a blocking finding and marking the phase criteria accordingly.
+
+Scope considered
+
+Phase-local review of the `runtime-cli-transports` implementation: the runtime transport modules, backend resolver, runtime provider tests, phase notes, and the active decisions/criteria/feedback artifacts.
+
+What I analyzed
+
+I inspected the touched runtime files against the accepted phase contract, checked the updated tests for AC-1 through AC-3 coverage, searched for remaining old provider-name references, and reran the targeted validation slice: `tests/runtime/test_runtime_providers.py`, `tests/runtime/test_provider_backends.py`, and `tests/unit/test_provider_boundary_core.py`.
+
+What I reviewed
+
+The transport split itself is coherent: `codex.py` and `claude.py` are transport-only, backend resolution now wraps transports with `RenderedLLMProvider`, and the tests do prove prompt transport behavior plus core-side outcome parsing ownership.
+
+I also reviewed adjacent compatibility surfaces, especially the previously exported runtime-provider symbols and builder names.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The implementation removed the previously exported `CodexProvider` / `ClaudeProvider` and `build_codex_provider` / `build_claude_provider` symbols, which creates an avoidable import-surface compatibility regression outside the accepted phase scope. The minimal safe fix is to restore compatibility shims for those old names outside the pure transport modules.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/runtime-cli-transports/criteria.md) and appended the blocking review entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/runtime-cli-transports/feedback.md).
+
+Open issues / next step
+
+Restore the old runtime-provider import names as compatibility aliases or shims without reintroducing semantic logic into the transport files, then rerun the same targeted test slice and re-review this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
