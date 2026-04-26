@@ -298,3 +298,99 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+I’m treating this as a scoped test-validation pass for the typed-bootstrap migration. I’ll inspect the new test surface, confirm the changed behaviors are covered with deterministic proof, and then update the phase test strategy and feedback artifacts to reflect what is actually covered.
+
+The existing new tests are directionally right, but I want one tighter regression check: each typed-bootstrap test should assert the invocation contract still carries the normalized constraints/evidence payload, not just the headline fields. I’m making that small refinement and then I’ll update the test-phase artifacts and decisions ledger.
+
+The test refinement is in. I’m rerunning the scoped suite now to verify the stronger invocation-contract assertions and the tightened authoring-doc baseline still pass cleanly.
+
+Scope considered
+
+- Phase-local test scope only: the four migrated bootstraps, the authoring-doc contract, and the active test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/test/phases/typed-bootstrap-contract-and-first-family/`.
+
+What I analyzed
+
+- The phase contract and shared decisions.
+- The newly added typed-bootstrap tests in the four runtime suites and the doc-baseline assertion in `tests/test_architecture_baseline_docs.py`.
+- The regression surface around `ctx.params` vs `ctx.workflow_params`, especially whether invocation-contract payloads still preserve normalized repeatable fields.
+
+What I changed
+
+- Tightened the new bootstrap tests so each one now also asserts `constraints` and `evidence_expectations` are preserved in `invocation_contract.json`.
+- Tightened the authoring-doc baseline to require explicit mention of `open_workflow_sessions(...)` and `write_invocation_contract(...)` alongside the `ctx.params` default rule.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/test/phases/typed-bootstrap-contract-and-first-family/test_strategy.md:1), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/test/phases/typed-bootstrap-contract-and-first-family/feedback.md:1), and appended the scoped test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/decisions.txt:1).
+
+Key findings / decisions
+
+- The right regression guard for this phase is direct `on_bootstrap(...)` coverage with populated `ctx.params` and empty `workflow_params`; that would fail immediately if the implementation slipped back to raw dict reads.
+- Existing parameter-coercion tests already cover the relevant failure paths for blank required fields and invalid raw workflow mappings, so no extra negative-path duplication was needed.
+- Scoped validation passed: `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` with `126 passed`.
+
+Open issues / next step
+
+- No scoped test gaps remain for the first-family typed-bootstrap migration.
+- Later-family bootstrap adoption remains intentionally out of scope for this phase.
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+I’m auditing the scoped test work against the phase contract and the shared decisions. I’ll inspect the test-phase artifacts first, then verify that the added tests actually protect the changed `ctx.params` bootstrap behavior and the preserved invocation-contract invariants without introducing flake risk.
+
+I’m not seeing a coverage or flake gap in the scoped test surface. The added tests directly target the changed contract, preserved invocation artifacts, and doc wording, and the existing parameter-coercion suites cover the relevant failure paths.
+
+Scope considered
+
+- Phase-local test scope only: the four new typed-bootstrap runtime tests, the tightened `docs/authoring.md` baseline assertion, the phase test strategy, the phase feedback artifact, and the shared decisions ledger.
+
+What I analyzed
+
+- The active phase contract and acceptance criteria.
+- The new direct `on_bootstrap(...)` tests for `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, `candidate_workflow_to_adapted_execution_plan`, and `workflow_to_eval_suite`.
+- The preserved failure-path coverage already present in the parameter-coercion tests and the flake profile of the scoped proof command.
+
+What I reviewed
+
+- The new tests prove the intended changed behavior by supplying populated `ctx.params` with empty `workflow_params`.
+- The tests also assert the preserved invocation-contract invariants that matter for this phase: normalized `constraints` and `evidence_expectations` still land in `invocation_contract.json`.
+- The authoring-doc baseline now enforces both the `ctx.params` default and the continued explicit bootstrap helper usage.
+- The scoped test strategy and feedback artifacts accurately describe the coverage and validation run.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The test surface is appropriately targeted, deterministic, and aligned with the shared decisions and the phase acceptance criteria.
+- The scoped proof remains green: `126 passed`.
+
+Open issues / next step
+
+- No scoped test-audit issues remain for this phase.
+- Later-family typed-bootstrap adoption remains intentionally out of scope for this test phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
