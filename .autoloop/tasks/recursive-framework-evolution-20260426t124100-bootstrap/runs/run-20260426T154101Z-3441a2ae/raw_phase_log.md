@@ -718,3 +718,105 @@ The only remaining limitation is environmental: `pytest` is unavailable here, so
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+I’m implementing the phase-scoped runtime observability persistence work: runtime-owned git tracking/tracing files, raw-output persistence, static graph writing, and append-safe resume behavior. I’ll inspect the existing runtime/workspace/engine seams, the phase artifacts, and the current git state before editing.
+
+The worktree is heavily dirty outside this phase, so I’m constraining edits to the current root modules and the phase artifacts only. Next I’m reading the runtime/workspace/engine code paths to map the minimal change set and avoid colliding with unrelated deletions.
+
+I’ve confirmed the phase boundaries: provider usage plumbing and git primitives already landed, while runtime/workspace still lacks the observability persistence layer. I’m drilling into workspace creation/open paths now because the clean-start and append-only guarantees depend on how those helpers currently materialize files.
+
+I have the main seam map now: `workspace.py` eagerly creates `run.json`/`events.jsonl`, `extensions/tracing.py` already shows the sidecar schema style, and `workflow_capabilities.py` already knows how to serialize compiled step metadata. I’m moving to implementation next, centered on new runtime-owned tracker/writer modules plus workspace helpers, without touching the later engine-binding phase yet.
+
+I’m starting the file edits now. The first patch will add the workspace-side metadata/sequence helpers and the new runtime modules for git tracking, tracing, and static graph persistence, keeping them decoupled from the later runner/engine binding phase.
+
+The core persistence modules are in place. I’m tightening error-handling paths now and adding direct tests around the append-only contracts, especially sequence discovery and no-overwrite behavior, before I touch any phase artifacts.
+
+The first-pass code and tests are in. I’m running the new targeted suites now to catch interface mismatches before I update the phase notes and decisions.
+
+`pytest` is not on `PATH` here, so I’m rerunning through `python -m pytest`. If the environment lacks pytest entirely, I’ll fall back to syntax/import checks and note that explicitly.
+
+The environment also lacks `pydantic`, so runtime smoke execution isn’t possible here. I can still validate syntax and review the changed code paths directly, which I’m doing now to catch anything that compile-only checks would miss.
+
+I’ve finished the phase-scoped code changes and the new test coverage files. I’m updating the shared decision log and implementation notes now, then I’ll do one last status pass so the final handoff is explicit about what was validated and what remains for the later integration phase.
+
+Scope considered
+
+Phase-local runtime observability persistence only: `runtime/git_tracking.py`, `runtime/tracing.py`, `runtime/static_graph.py`, `runtime/workspace.py`, `runtime/__init__.py`, the new focused runtime tests, and the phase artifacts (`decisions.txt`, `implementation_notes.md`). I did not wire runner/engine binding or workflow-extension filtering in this turn because those are explicitly deferred by the active phase contract.
+
+What I analyzed
+
+I traced the current seams in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [extensions/tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/extensions/tracing.py), [extensions/git/runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/extensions/git/runtime.py), and [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py). The key finding was that workspace metadata creation already exists, but runtime-owned trace/git/static-graph persistence and resume-safe sequencing were still missing and could be added without touching the later binding-order phase.
+
+What I changed
+
+I added [runtime/git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/git_tracking.py) with `RuntimeGitTracker`, deterministic commit messages, clean-start preflight handling, append-only `git_tracking.jsonl` writes, and `run.json` git-tracking summary updates. I added [runtime/tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/tracing.py) with `RuntimeTraceWriter`, runtime-owned `trace.jsonl`, raw-output file persistence under `raw/`, SHA-256/byte refs, provider-usage serialization, and failure-mode-aware warnings. I added [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py) for `static_step_graph.json` payload/write support, and extended [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py) with centralized helpers for `run.json` git/tracing/warning mutation plus `next_observability_sequence()` across trace/git/raw evidence.
+
+I also added focused tests in [tests/runtime/test_runtime_git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_git_tracking.py), [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py), and [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py), and updated the phase notes and shared decisions.
+
+Key findings / decisions
+
+`run.json` now gets centralized git/tracing/warning updates instead of ad hoc writes from persistence code. I recorded the non-obvious decision that lightweight per-step git summaries live under `run.json.git_tracking.steps`, while `git_tracking.jsonl` remains authoritative. I also recorded that resume sequencing uses the max sequence seen across `trace.jsonl`, `git_tracking.jsonl`, and `raw/` filename prefixes, ignoring malformed JSONL lines so partial corruption does not force overwrites.
+
+Open issues / next step
+
+Validation here is partial: `python3 -m py_compile ...` passed for the changed runtime modules and new tests, but `pytest` is unavailable in this environment, and runtime smoke execution is blocked because `pydantic` is missing. The next phase should wire these persistence primitives into runner/engine execution order, workflow `GitTracking` suppression, and end-to-end run/resume tests in an environment with the normal Python test dependencies installed.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+I’m reviewing only the phase-scoped observability persistence changes and the associated artifacts. I’ll compare the implemented runtime modules and workspace helpers against the phase contract, then update `criteria.md` and `feedback.md` with concrete findings.
+
+I have three blocking findings and one smaller design issue. I’m recording them in the phase feedback now and marking the criteria file to reflect that the phase is not yet complete.
+
+Scope considered
+
+Phase-local review of the runtime observability persistence implementation and only the reviewer-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/`.
+
+What I analyzed
+
+I compared the phase contract and acceptance criteria against `runtime/git_tracking.py`, `runtime/tracing.py`, `runtime/static_graph.py`, and the new metadata helpers in `runtime/workspace.py`. I also checked the shared decisions ledger for phase-relevant constraints.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/criteria.md) to reflect that blocking findings remain, and appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/feedback.md).
+
+Key findings / decisions
+
+Three blocking issues remain:
+`IMP-001`: git-tracking `failure_mode="ignore"` is only honored during repo preflight, not during commit or JSONL write failures.
+`IMP-002`: tracing initialization ignores `tracing.failure_mode` and can raise before the best-effort warning path.
+`IMP-003`: `static_step_graph.json` is never actually written by a runtime-owned code path, even though `run.json` advertises it.
+
+I also recorded one non-blocking design issue:
+`IMP-004`: `run.json` now duplicates step-level git history that should remain authoritative only in `git_tracking.jsonl`.
+
+Open issues / next step
+
+The implementation should be revised to honor failure modes across all runtime git/tracing operations and to wire actual static-graph persistence into the phase-owned initialization path. After that, this phase should be re-reviewed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
