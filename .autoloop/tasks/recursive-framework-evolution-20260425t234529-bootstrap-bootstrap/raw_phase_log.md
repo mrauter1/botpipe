@@ -936,3 +936,46 @@ Failed-attempt provider session updates must stay attempt-local until the attemp
 Open issues / next step
 
 No open implementation issues remain in this phase from the reviewer feedback. Validation is clean: targeted suites passed, and the full suite passed with `.venv/bin/pytest -q` (`708 passed in 36.88s`).
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’m rechecking the session-baseline retry fix against the active phase contract and the reviewer artifact state. I’ll verify the engine/test behavior first, then I’ll update `criteria.md` and append the outcome to `feedback.md`.
+
+The key surfaces are narrow: baseline session capture before the retry loop, deferred persistence after accepted attempts, and the two regression tests that exercise session-bound llm/pair retries. I’m reading those exact sections now rather than broadening scope unnecessarily.
+
+The fix matches the intended boundary: retries are transcript-free across attempts, but session chaining still works within a single pair attempt. I’m marking the criteria complete and recording that the prior blocking issue is resolved with no new findings from this re-review.
+
+Scope considered
+
+Phase-local re-review of `engine-provider-retries`, focused on the previously blocking retry/session interaction in `core/engine.py`, the new session-bound retry regression tests, and the reviewer-owned artifacts in the active phase directory.
+
+What I analyzed
+
+I re-read the accepted phase contract, the existing blocking finding in `feedback.md`, the engine retry helpers around `_execute_pair_step`, `_execute_llm_step`, `_run_pair_step`, and `_run_llm_step`, and the new llm/pair session retry tests in `tests/contract/test_engine_contracts.py`. I also checked that the fix still preserves same-attempt producer→verifier session chaining while preventing rejected transcript reuse across retries.
+
+What I reviewed
+
+The implementation now captures a baseline session once per provider-mediated step, uses that baseline for each retry attempt, and defers `_persist_session(...)` until an attempt is accepted. The new tests cover both session-bound `LLMStep` and `PairStep` retry flows and assert the intended baseline reuse plus accepted-attempt persistence. I updated `criteria.md` to mark the phase complete and appended a resolution note to `feedback.md` stating that `IMP-001` is fixed and no new findings were found.
+
+Key findings / decisions
+
+No blocking or non-blocking findings remain for this phase. The current implementation satisfies AC-1 through AC-4, including AC-3’s requirement that retries rebuild provider requests without carrying prior transcript data.
+
+Open issues / next step
+
+No open issues in this phase. Reviewer artifacts are updated and the phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
