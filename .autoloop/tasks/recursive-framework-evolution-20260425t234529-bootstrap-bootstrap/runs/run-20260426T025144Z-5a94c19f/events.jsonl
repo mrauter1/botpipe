@@ -20,3 +20,6 @@
 {"ts": "2026-04-26T03:17:48.093766+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 20, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "provider-boundary-core", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-26T03:17:48.094579+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 21, "event_type": "pair_started", "pair": "test", "phase_id": "provider-boundary-core"}
 {"ts": "2026-04-26T03:17:48.094683+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 22, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-boundary-core"}
+{"ts": "2026-04-26T03:19:19.436494+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-boundary-core"}
+{"ts": "2026-04-26T03:21:03.275473+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-boundary-core"}
+{"ts": "2026-04-26T03:21:03.312916+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-boundary-core"}
