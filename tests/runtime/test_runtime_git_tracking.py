@@ -268,6 +268,8 @@ def test_git_tracking_noop_commit_returns_current_head(tmp_path: Path) -> None:
     (run_dir / "run.json").write_text("{}\n", encoding="utf-8")
     tracker.bind_run_dir(run_dir)
     tracker.commit_run_initialized()
+    _git(tmp_path, "add", "--all")
+    _git(tmp_path, "commit", "-m", "flush runtime metadata")
 
     before_step = tracker.before_step(sequence=1, step_name="ask")
     current_head = _git(tmp_path, "rev-parse", "HEAD").strip()
@@ -330,6 +332,8 @@ def test_git_tracking_resume_appends_without_overwriting(tmp_path: Path) -> None
         "step_name": "existing",
     }
     (run_dir / "git_tracking.jsonl").write_text(json.dumps(existing_record) + "\n", encoding="utf-8")
+    _git(tmp_path, "add", "--all")
+    _git(tmp_path, "commit", "-m", "persist existing run evidence")
 
     tracker = RuntimeGitTracker(
         root=tmp_path,
