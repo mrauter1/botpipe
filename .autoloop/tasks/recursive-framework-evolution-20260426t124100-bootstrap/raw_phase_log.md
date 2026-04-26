@@ -45,3 +45,41 @@ Updated the planning artifacts to make the request implementation-ready: [plan.m
 The main locked decisions are that git cleanliness must be validated before any workspace helper creates run artifacts, runtime observability must bind through engine-level runtime extension factories ahead of workflow extensions without changing existing extension semantics, and non-git runtime tests must explicitly opt out of the new default git tracking instead of weakening the runtime default.
 
 Verification: `phase_plan.yaml` was parsed locally with `python3` + `yaml.safe_load` successfully (`yaml_ok 5`). I did not run the repository test suite.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dca73-86cc-78a0-a26b-4c900df81ac5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dca73-86cc-78a0-a26b-4c900df81ac5
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca73-86cc-78a0-a26b-4c900df81ac5
+---
+I’m auditing the produced planning artifacts against the request contract, with emphasis on mandatory ordering, compatibility breaks, resume behavior, and whether the machine-readable phases are precise enough to implement safely.
+
+I’ve isolated two material gaps. Both are explicit request-contract items rather than preference calls: the plan does not pin the mandatory post-preflight run initialization order, and it does not cover the required resume warning/migration behavior when git tracking config changes between run segments.
+
+Scope considered
+Plan artifacts for the runtime tracking/tracing prerequisite task, plus the shared decisions block and the request’s explicit mandatory ordering and resume-compatibility requirements.
+
+What I analyzed
+I compared [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/plan/phase_plan.yaml) against the request contract, with focus on clean-git preflight ordering, runtime/workflow extension compatibility, resume semantics, rollback, and regression controls. I also parsed `phase_plan.yaml` locally with `python3` + `yaml.safe_load`; it is valid YAML with 5 phases.
+
+What I reviewed
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/plan/criteria.md) to reflect the current state and appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/plan/feedback.md). I also checked [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt); it is consistent with the plan direction and does not add extra conflicts.
+
+Key findings / decisions
+`PLAN-001` blocking: the plan does not explicitly encode the request’s mandatory post-preflight run initialization order, which is necessary to prevent self-created dirtiness and incorrect init commits.
+`PLAN-002` blocking: the plan omits the required resume warning/migration behavior when git tracking is disabled for a run that was previously git-tracked, and it does not make validation for both config-mismatch directions explicit.
+Only `Technical Debt` is currently satisfied in the criteria checklist.
+
+Open issues / next step
+The planner should revise `plan.md` and `phase_plan.yaml` to add the exact ordered run/resume sequencing contract and the missing resume config-mismatch warning behavior, then rerun verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
