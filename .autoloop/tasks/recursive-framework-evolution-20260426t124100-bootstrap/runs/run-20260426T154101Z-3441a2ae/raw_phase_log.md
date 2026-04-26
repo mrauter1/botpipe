@@ -169,3 +169,12 @@ No remaining blocking findings. The plan artifacts are ready for implementation 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=provider-usage-plumbing,runtime-config-and-git-primitives,runtime-observability-persistence,engine-runner-observability-binding,regression-coverage-and-docs
+explicit=True
+current_phase_index=0
