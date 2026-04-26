@@ -55,3 +55,40 @@ Key planning decisions:
 
 Validation:
 - Parsed [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/plan/phase_plan.yaml) successfully with `python3` + `yaml.safe_load` (`yaml-ok 5`).
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7b3-3b32-7eb2-ab4b-51a46fce8a06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dc7b3-3b32-7eb2-ab4b-51a46fce8a06
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7b3-3b32-7eb2-ab4b-51a46fce8a06
+---
+I’ve isolated two material plan gaps: the handoff authoring/export surface is not explicitly covered, and retry-exhaustion checkpoint semantics are not explicitly planned even though the request requires them. I’m recording those in the verifier artifacts and setting the checklist accordingly.
+
+Scope considered
+Planning artifacts for the provider-boundary refactor plus retry/handoff feature: `plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and shared decisions/request context for intent alignment.
+
+What I analyzed
+The immutable request snapshot, the current plan artifacts, the shared decisions block, and the repo surfaces the plan must cover for compatibility and regression safety: provider shims, engine retry/checkpoint behavior, and workflow authoring exports.
+
+What I reviewed
+`plan.md` for intent coverage and compatibility notes, `phase_plan.yaml` for phase quality and YAML validity, `feedback.md` for continuity plus new findings, and `criteria.md` for accurate gating status. I also re-validated `phase_plan.yaml` with `python3` + `yaml.safe_load`.
+
+Key findings / decisions
+Two blocking plan gaps remain.
+`PLAN-001`: the plan does not explicitly include the required public handoff export/shim updates in `core/__init__.py`, `workflow/__init__.py`, and `workflow/primitives.py`.
+`PLAN-002`: the plan does not explicitly require retry-exhaustion checkpoints to persist retry count plus useful failure context, even though the request and acceptance criteria require that behavior.
+I updated `criteria.md` to leave the plan incomplete and appended both findings to `feedback.md`.
+
+Open issues / next step
+The planner needs to revise the artifacts to explicitly cover the handoff public surface and retry-exhaustion checkpoint semantics, then rerun verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
