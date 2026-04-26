@@ -23,3 +23,7 @@
 {"ts": "2026-04-26T03:19:19.436494+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-boundary-core"}
 {"ts": "2026-04-26T03:21:03.275473+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-boundary-core"}
 {"ts": "2026-04-26T03:21:03.312916+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-boundary-core"}
+{"ts": "2026-04-26T03:21:03.377154+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "provider-boundary-core", "phase_mode": "single"}
+{"ts": "2026-04-26T03:21:03.380228+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 27, "event_type": "phase_started", "phase_id": "runtime-cli-transports", "phase_mode": "single"}
+{"ts": "2026-04-26T03:21:03.380955+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "runtime-cli-transports"}
+{"ts": "2026-04-26T03:21:03.381050+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "runtime-cli-transports"}
