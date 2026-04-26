@@ -1026,3 +1026,46 @@ The existing engine contract suite already covered most retry-loop happy/failure
 Open issues / next step
 
 No open test-authoring issues in this phase. Validation passed for `.venv/bin/pytest -q tests/unit/test_provider_retries.py` and `.venv/bin/pytest -q tests/contract/test_engine_contracts.py`.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’m auditing the new retry-policy and retry-feedback coverage against the phase contract and the existing engine tests. I’ll verify that the added tests actually protect the intended regression surfaces, then I’ll update the audit artifacts accordingly.
+
+I’m double-checking one potential gap before I close this: AC-2 explicitly names malformed-output and transport failures, so I want to confirm whether the existing suite already covers those execution paths indirectly or whether that remains only a documented gap.
+
+I found a material remaining gap: the new tests still don’t exercise the engine’s retry behavior for the two AC-2 classes that weren’t already covered elsewhere, namely malformed provider output and provider transport failures. I’m recording that as a blocking audit finding instead of marking the phase complete.
+
+Scope considered
+
+Phase-local audit of the `engine-provider-retries` test work: the new retry-policy gating test, the new `build_retry_feedback(...)` unit tests, the updated `test_strategy.md`, and the existing retry-related engine contract coverage they rely on.
+
+What I analyzed
+
+I checked the active phase contract and acceptance criteria against the current test inventory in `tests/contract/test_engine_contracts.py`, `tests/unit/test_validation.py`, and `tests/unit/test_provider_retries.py`. I also reviewed the engine’s retry-kind classification paths in `core/engine.py`, especially the malformed-output path in `_validate_outcome(...)` and the transport-failure classification path used by the retry loop.
+
+What I reviewed
+
+The added tests are deterministic and useful, and the updated strategy correctly documents what was added. However, the new coverage only directly extends illegal-route policy gating and helper-message rendering. It still does not exercise the engine’s retry loop for malformed provider output or provider transport failures, even though AC-2 explicitly requires those failure classes to retry.
+
+Key findings / decisions
+
+I recorded one blocking gap, `TST-001`, in `feedback.md`. The helper-level assertions for transport and malformed-output messages are not enough because they would still pass if the engine stopped retrying those failure classes entirely. I updated `criteria.md` to leave coverage/regression/failure-path boxes unchecked and marked only reliability and behavioral intent as satisfied.
+
+Open issues / next step
+
+The next test-author turn should add engine-level contract tests for both malformed-output retries and transport-failure retries, then rerun the targeted suites and refresh the phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
