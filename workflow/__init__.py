@@ -13,6 +13,7 @@ try:  # pragma: no branch - prefer installed-package imports when available
         Context,
         FAIL,
         GLOBAL,
+        Handoff,
         LLMStep,
         PAUSE,
         PairStep,
@@ -34,7 +35,7 @@ try:  # pragma: no branch - prefer installed-package imports when available
     if TYPE_CHECKING:
         from autoloop_v3.core.extensions import WorkflowExtension
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from core import Advance, Artifact, BoardMutation, Continuity, Context, FAIL, GLOBAL, LLMStep, PAUSE
+    from core import Advance, Artifact, BoardMutation, Continuity, Context, FAIL, GLOBAL, Handoff, LLMStep, PAUSE
     from core import PairStep, Prompt, ProviderRetryPolicy, Refresh, ResetCompletion, Route, RouteContract, Selector, SetStatus
     from core import Session, SUCCESS, SystemStep, Workflow, WorkItem, Worklist
     if TYPE_CHECKING:
@@ -49,6 +50,7 @@ __all__ = [
     "Context",
     "FAIL",
     "GLOBAL",
+    "Handoff",
     "LLMStep",
     "PAUSE",
     "PairStep",

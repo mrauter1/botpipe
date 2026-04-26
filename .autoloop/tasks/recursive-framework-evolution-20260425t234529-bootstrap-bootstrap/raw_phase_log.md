@@ -1155,3 +1155,89 @@ No open audit issues remain for this phase. The test-phase artifacts are updated
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+I’m implementing the `route-handoff-persistence` phase only. First I’m reading the phase artifacts and the current engine/store/effect surfaces to map how handoffs should be represented, validated, persisted, and delivered without pulling unrelated work into scope.
+
+I’ve confirmed the phase scope and prior implementation decisions. Next I’m reading the concrete handoff-related modules and current tests so I can fit the new state into the existing engine/checkpoint flow instead of layering a parallel path.
+
+The package layout in this workspace has already moved to top-level `core/`, `runtime/`, `workflow/`, etc., and the old `autoloop_v3/...` tree is deleted in the worktree. I’m switching to the current package root and checking the actual files that now define the runtime surfaces.
+
+I have the current engine path now. The key gaps are exactly where expected: no handoff types in primitives/effects, no checkpoint field, no validation for route-to-system handoffs, and no delivery/consumption path in the engine. I’m reading the remaining protocol and test surfaces before editing so the checkpoint schema and public shims stay compatible.
+
+Plan for this phase:
+1. Add the handoff data model and public authoring surface: `Handoff`, `Event.handoff`, `PendingHandoff`, checkpoint payload field, and shim exports.
+2. Wire validation and compilation: accept handoff effects, reject empty messages, reject routes that would deliver handoff to `SystemStep`, and keep terminal destinations non-delivery.
+3. Wire engine/store behavior: persist pending handoffs, scope them by resolved target and active worklist item, inject them into provider requests, consume them after dispatch starts, and preserve them across resume until that point.
+4. Add phase-focused tests and update the phase implementation notes/decision ledger, then run targeted validation for primitives, validation, and engine contracts.
+
+I’ve finished the dependency pass. I’m moving into edits now: adding the handoff types and exports first, then the validation/runtime wiring, then the phase-focused tests so the engine changes stay pinned to explicit behavior.
+
+The engine/store wiring patch was too broad for the current file state, so I’m splitting it into smaller edits. I’m applying the engine changes in narrower chunks now to avoid stomping earlier phase work.
+
+The type/engine/store edits are in place. I’m running a quick syntax pass now before I add the tests, because the handoff state threads through several return signatures and checkpoint calls.
+
+I’ve got the runtime path compiling. I’m adding narrow tests now around the public shim, validation rules, checkpoint persistence, and the engine’s delivery/consumption semantics so the new state machine is locked before I run pytest.
+
+The new tests are in. I’m doing a syntax sweep on the touched test files and then I’ll run the phase-targeted pytest set so we can see whether the handoff behavior holds across validation, checkpoints, and actual engine execution.
+
+The failing case exposed the exact boundary I needed to pin down: I was consuming handoffs on any `run_llm` exception, including pre-dispatch failure. I’m tightening that so only post-response failures consume the persisted handoff, which matches the phase requirement.
+
+The handoff-specific engine tests are green after that fix. I’m running the broader targeted regression slice now so this phase doesn’t leave behind an import or contract break outside the new handoff path.
+
+I’ve finished the code and regression pass. I’m writing the phase artifact updates now so the decision ledger and implementation notes capture the non-obvious handoff behavior that later phases depend on.
+
+Scope considered
+
+- Phase-local `route-handoff-persistence` only.
+- Core/runtime surfaces needed for handoff authoring, validation, checkpoint persistence, engine delivery, and phase-focused regression tests.
+
+What I analyzed
+
+- Current effect/route validation flow in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py).
+- Checkpoint/session primitives and stores in [core/primitives.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/primitives.py), [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py), and [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py).
+- Provider-step execution and retry flow in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py).
+- Existing primitive, validation, runtime-store, and engine contract tests.
+
+What I changed
+
+- Added `Handoff` and `Event.handoff`, plus workflow/core shim exports.
+- Added additive checkpoint state for `PendingHandoff` and filesystem serialization.
+- Wired engine-side handoff scheduling, scoped matching, provider-request injection, one-time consumption, and resume preservation before first successful provider dispatch.
+- Rejected static `Handoff(...)` routes to `SystemStep` during validation.
+- Added regression coverage in:
+  - [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py)
+  - [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py)
+  - [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py)
+  - [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py)
+
+Key findings / decisions
+
+- Pending handoffs stay in checkpoint state until the first provider call returns successfully; retries still reuse the matched handoff text locally.
+- Static `Handoff` messages and dynamic `Event.handoff` messages are combined deterministically as static effects first, then dynamic text, separated by blank lines.
+- Dynamic handoffs aimed at terminal or `SystemStep` destinations are dropped at runtime; static handoff-to-system routes are blocked by validation.
+- Phase notes and ledger were updated in [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/route-handoff-persistence/implementation_notes.md>) and [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/decisions.txt>).
+
+Open issues / next step
+
+- Targeted regressions passed:
+  - `tests/unit/test_primitives_and_stores.py`
+  - `tests/unit/test_validation.py`
+  - `tests/contract/test_engine_contracts.py`
+  - `tests/runtime/test_compatibility_runtime.py`
+  - `tests/runtime/test_runtime_providers.py`
+  - `tests/runtime/test_provider_backends.py`
+  - `tests/test_architecture_baseline_docs.py`
+- Full suite was not run in this turn.

@@ -44,10 +44,22 @@ class BoardMutation:
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class Handoff:
+    message: str
+
+    def __post_init__(self) -> None:
+        message = self.message.strip() if isinstance(self.message, str) else ""
+        if not message:
+            raise ValueError("Handoff.message must be a non-empty string.")
+        object.__setattr__(self, "message", message)
+
+
 __all__ = [
     "Advance",
     "BoardMutation",
     "Effect",
+    "Handoff",
     "Refresh",
     "ResetCompletion",
     "SetStatus",
