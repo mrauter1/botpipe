@@ -773,3 +773,50 @@ Key findings / decisions
 Open issues / next step
 
 Validation here is partial: `python3 -m py_compile ...` passed for the changed runtime modules and new tests, but `pytest` is unavailable in this environment, and runtime smoke execution is blocked because `pydantic` is missing. The next phase should wire these persistence primitives into runner/engine execution order, workflow `GitTracking` suppression, and end-to-end run/resume tests in an environment with the normal Python test dependencies installed.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+I’m reviewing only the phase-scoped observability persistence changes and the associated artifacts. I’ll compare the implemented runtime modules and workspace helpers against the phase contract, then update `criteria.md` and `feedback.md` with concrete findings.
+
+I have three blocking findings and one smaller design issue. I’m recording them in the phase feedback now and marking the criteria file to reflect that the phase is not yet complete.
+
+Scope considered
+
+Phase-local review of the runtime observability persistence implementation and only the reviewer-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/`.
+
+What I analyzed
+
+I compared the phase contract and acceptance criteria against `runtime/git_tracking.py`, `runtime/tracing.py`, `runtime/static_graph.py`, and the new metadata helpers in `runtime/workspace.py`. I also checked the shared decisions ledger for phase-relevant constraints.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/criteria.md) to reflect that blocking findings remain, and appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/feedback.md).
+
+Key findings / decisions
+
+Three blocking issues remain:
+`IMP-001`: git-tracking `failure_mode="ignore"` is only honored during repo preflight, not during commit or JSONL write failures.
+`IMP-002`: tracing initialization ignores `tracing.failure_mode` and can raise before the best-effort warning path.
+`IMP-003`: `static_step_graph.json` is never actually written by a runtime-owned code path, even though `run.json` advertises it.
+
+I also recorded one non-blocking design issue:
+`IMP-004`: `run.json` now duplicates step-level git history that should remain authoritative only in `git_tracking.jsonl`.
+
+Open issues / next step
+
+The implementation should be revised to honor failure modes across all runtime git/tracing operations and to wire actual static-graph persistence into the phase-owned initialization path. After that, this phase should be re-reviewed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
