@@ -483,3 +483,48 @@ Validation: `python3 -m compileall runtime extensions tests` passed. Direct smok
 Open issues / next step
 
 The next phase should consume `ResolvedRuntimeConfig.runtime` from the runner/observability path, add runtime-owned git/tracing persistence, and then rerun the new tests in an environment with `pytest` installed.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+I’m reviewing only the active phase scope: config defaults, CLI overrides, and `GitRepo` commit-all helpers. First I’m reading the phase criteria and the touched implementation so I can map the acceptance criteria directly to concrete code paths and note any regressions before I update the reviewer artifacts.
+
+I found one place where the new config validation likely doesn’t satisfy the phase contract: the nested `runtime.git_tracking` and `runtime.tracing` sections use `... or {}` before type checks, which silently treats falsy non-mappings as “missing” instead of rejecting them. I’m confirming that this isn’t just inherited behavior but a new gap on the new config surface, then I’ll write the review artifacts.
+
+I’ve confirmed the main issue and it’s phase-relevant: the new nested runtime config sections don’t fully validate their own shape. I’m updating the reviewer artifacts with that blocking finding now and leaving the scope otherwise intact.
+
+Scope considered
+
+Phase-local review only: `runtime/config.py`, `runtime/cli.py`, `extensions/git/repo.py`, the added phase tests, and the active phase artifacts. I did not pull unrelated dirty files into scope.
+
+What I analyzed
+
+I compared the implementation against the active phase contract and acceptance criteria, read the new runtime config merge/parse path, the CLI mutating parser surface, the new git helper methods, and the targeted test additions. I also checked the shared decisions file for any phase-relevant constraint that the implementation needed to preserve.
+
+What I reviewed
+
+I verified that the new defaults and CLI flags exist and that `GitRepo.commit_all()` follows the intended `git add --all` model. I also reviewed the new validation path closely for the newly introduced `runtime.git_tracking` and `runtime.tracing` config sections.
+
+Key findings / decisions
+
+One blocking finding was recorded in the phase feedback artifact.
+
+The main issue is that the new nested runtime sections do not fully validate their own shape: falsy non-mapping values like `runtime.git_tracking: false` are silently treated as “missing” and fall back to defaults instead of raising a config error. That conflicts with the phase requirement to add these sections with validation and creates an unintended operational hazard by potentially leaving git tracking or tracing enabled when the config is malformed.
+
+Open issues / next step
+
+Fix `parse_runtime_config()` so the new nested runtime sections only default on `None`, not on arbitrary falsy values, and add regression tests for invalid section types on both `runtime.git_tracking` and `runtime.tracing`. After that, this phase should be re-reviewed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
