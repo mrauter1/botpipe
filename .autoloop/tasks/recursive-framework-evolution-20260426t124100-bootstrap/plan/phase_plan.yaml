@@ -115,9 +115,12 @@ phases:
   - Add runtime_extension_factories support and bind runtime extensions before workflow-declared
     extensions.
   - Refactor runner/workspace preparation so git preflight happens before any run
-    artifact is created or touched.
+    artifact is created or touched and the remaining run/resume initialization follows
+    the mandatory ordered sequence.
   - Ignore workflow-declared GitTracking with an explicit warning event and run.json
     warning entry.
+  - Handle resume git-tracking config mismatches, including warning persistence when
+    a previously git-tracked run is resumed with tracking disabled.
   out_of_scope:
   - Removing workflow-declared Tracing support
   - Changing checkpoint or answer semantics beyond observability integration
@@ -134,6 +137,15 @@ phases:
   - id: AC-3
     text: Existing workflow extension ordering, terminal notifications, and failure
       checkpoint behavior remain valid.
+  - id: AC-4
+    text: 'New-run and resume setup follow the mandatory ordered sequence: git preflight
+      before workspace mutation, then run metadata/static graph/observability initialization,
+      then init commit, then engine execution.'
+  - id: AC-5
+    text: Resume compares prior run git-tracking metadata with current config, records
+      the required warning when tracking is disabled after an earlier tracked segment,
+      and enables tracking from the resume point only when earlier segments lacked
+      it.
   deliverables:
   - Engine runtime-extension binding support
   - Runner/workspace preflight ordering changes
@@ -157,6 +169,8 @@ phases:
     or initialize temporary repos.
   - Document runtime-owned git tracking/tracing, clean-start rules, GitTracking deprecation
     behavior, and replay artifacts.
+  - Add validation for mandatory run/resume ordering and both resume git-tracking
+    config-mismatch directions.
   out_of_scope:
   - Additional observability flags
   - Optimization workflow documentation
@@ -174,6 +188,10 @@ phases:
   - id: AC-3
     text: Tests that do not initialize git opt out explicitly instead of weakening
       runtime defaults.
+  - id: AC-4
+    text: Tests assert failure-before-workspace-creation on dirty repos and cover
+      both resume git-tracking config mismatch directions, including warning persistence
+      in run.json.
   deliverables:
   - Dedicated runtime observability test files and updated existing tests
   - Updated architecture and authoring docs

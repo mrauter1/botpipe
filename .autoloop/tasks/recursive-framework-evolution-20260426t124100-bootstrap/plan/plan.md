@@ -11,6 +11,29 @@ Implement runtime-owned observability for run and resume flows so a normal Autol
 - Resume appends trace/git/raw evidence, advances the shared sequence, and never overwrites existing raw files.
 - Runtime observability must not mutate workflow state or break existing workflow extension ordering and failure semantics.
 
+## Required Execution Ordering
+### New run
+1. Resolve CLI and runtime config overrides.
+2. Resolve the workflow reference and load enough metadata to know `workflow_name`.
+3. If runtime git tracking is enabled, discover the repo, enforce the clean-start rule, and capture `commit_before_run`.
+4. Create task/workflow/run workspace paths and materialize the run workspace only after git eligibility is decided.
+5. Write initial `run.json`.
+6. Write `static_step_graph.json`.
+7. Initialize `trace.jsonl` and `git_tracking.jsonl` if missing.
+8. Create the runtime init commit when `commit_policy` is `run` or `step`.
+9. Start engine execution.
+
+### Resume
+1. Resolve CLI and runtime config overrides.
+2. Resolve the workflow reference and load enough metadata to know `workflow_name`.
+3. If runtime git tracking is enabled, discover the repo and enforce the clean-start rule before appending any resume-created evidence.
+4. Open the existing run directory and load existing `run.json` if present.
+5. Determine the next shared sequence from `trace.jsonl`, `git_tracking.jsonl`, and `raw/`.
+6. Re-initialize append-only observability writers without overwriting prior evidence.
+7. Apply resume compatibility rules for current git-tracking config versus prior run metadata before writing new records.
+8. Create the runtime init/resume commit when `commit_policy` is `run` or `step`.
+9. Resume engine execution.
+
 ## Milestones
 ### 1. Provider Usage And Core Event Plumbing
 - Files: `core/providers/models.py`, `core/providers/fake.py`, `runtime/providers/_common.py`, `runtime/providers/codex.py`, `runtime/providers/claude.py`, `runtime/provider_backends.py`, `core/extensions.py`, `core/engine.py`.
@@ -40,9 +63,10 @@ Implement runtime-owned observability for run and resume flows so a normal Autol
 ### 4. Runner And Engine Binding Integration
 - Files: `runtime/runner.py`, `runtime/workspace.py`, `core/engine.py`, `runtime/observability.py`, `runtime/events.py` where needed.
 - Add `runtime_extension_factories` support to the engine and bind runtime-owned observability before workflow-declared extensions while preserving tuple order within workflow extensions.
-- Refactor runner/workspace preparation so workflow resolution happens first, git preflight happens second, and the existing file-creating helpers are invoked only after git eligibility has been decided.
+- Refactor runner/workspace preparation so workflow resolution happens first, git preflight happens second, and workspace materialization follows the mandatory ordered sequence for new runs and resumes.
 - Add runtime observability binding that assigns/advances sequence numbers, calls git tracker `before_step/after_step/after_run/on_fatal`, and writes runtime tracing without mutating execution state.
 - Ignore workflow-declared `extensions.git.GitTracking`, emit the required deprecation warning to `events.jsonl`, and record the warning in `run.json`; keep workflow-declared `Tracing` bound normally.
+- Implement resume compatibility handling when prior run metadata and current git-tracking config differ, including the required warning when resuming a previously git-tracked run with tracking now disabled.
 - Validation: integration tests for normal run artifact set, run/resume clean-start enforcement, extension ordering/failure behavior, and warning behavior when workflow `GitTracking` is declared.
 - Regression guard: retain existing resume semantics, answer flow behavior, and extension failure checkpoint handling.
 
@@ -95,12 +119,25 @@ Implement runtime-owned observability for run and resume flows so a normal Autol
 - Workflow packages that declare `Tracing` continue to emit their sidecar traces; runtime trace becomes the default authoritative evidence file.
 - Persisted run data grows with new `git_tracking`, `tracing`, warnings, and static-graph metadata in `run.json`; no backfill is required for older runs.
 - Resume may start git tracking mid-run when older runs lacked it, but it must not attempt to reconstruct missing historical commits.
+- If an earlier run segment recorded git tracking and the resumed segment disables it, the runtime must persist an explicit warning in `run.json` and continue without git tracking rather than silently changing replay guarantees.
+
+## Resume Compatibility Rules
+- Previous segment had git tracking enabled, current resume disables it:
+  - Continue the resume without git tracking.
+  - Persist a warning in `run.json` explaining that the resumed segment no longer records git commits.
+  - Do not alter or backfill previous git-tracking records.
+- Previous segment had git tracking disabled, current resume enables it:
+  - Start recording git metadata from the resume point only.
+  - Do not attempt to backfill earlier commits or retroactively mark earlier steps as tracked.
+- Both directions require explicit regression tests for warning persistence, append-only behavior, and preservation of pre-existing evidence.
 
 ## Regression Surfaces And Controls
 - Workspace creation order: current `ensure_workspace/create_run/open_existing_run` helpers write files eagerly, so runner changes must isolate pure path resolution from materialization to preserve the clean-start invariant.
+- Ordered initialization: `run.json`, `static_step_graph.json`, observability file creation, and init commits must occur in the required order so the initial commit captures runtime evidence without the runtime dirtifying the repo before eligibility is checked.
 - Extension semantics: runtime extension factories must preserve existing workflow extension tuple order, binding validation, checkpoint-on-failure behavior, and terminal notifications.
 - Fatal handling: runtime trace/git fatal writes are best-effort according to failure mode, but the original engine exception must still surface.
 - Raw output persistence: sequence assignment must be shared across trace/git/raw so resume cannot collide with existing files even if JSONL has malformed lines.
+- Resume config mismatch: prior and current git-tracking settings must be compared explicitly so a resumed run cannot silently lose git replay guarantees or attempt invalid backfill.
 - Tests: any test running the filesystem runtime outside a git repo must now opt out explicitly with runtime config or CLI overrides.
 
 ## Risk Register
@@ -115,5 +152,7 @@ Implement runtime-owned observability for run and resume flows so a normal Autol
 
 ## Validation And Rollback
 - Validate with targeted runtime/provider/doc tests first, then the broader suite that exercises run/resume and extension behavior.
+- Validation must explicitly assert the mandatory new-run and resume ordering, including failure-before-workspace-creation on dirty repos and correct init commit timing.
+- Validation must explicitly cover both resume git-tracking config mismatch directions and warning persistence in `run.json`.
 - Roll back operationally by disabling runtime git tracking or tracing via config/CLI while preserving the typed provider usage changes if only observability surfaces regress.
 - Roll back code changes in reverse dependency order if needed: docs/tests, runtime observability binding, persistence modules, config/CLI/git helpers, provider usage plumbing.

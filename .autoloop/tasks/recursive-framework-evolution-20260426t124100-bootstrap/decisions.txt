@@ -2,3 +2,6 @@
 Keep git clean-start validation outside the current file-creating workspace helpers; add only the minimal non-mutating path/preflight split needed so no run artifacts exist before runtime git eligibility is decided.
 Use engine-level runtime extension factories to bind runtime observability before workflow extensions while preserving workflow-declared extension tuple order and existing terminal/failure semantics.
 Tests that execute filesystem runs outside initialized git repositories must opt out of runtime git tracking explicitly rather than weakening the new default behavior.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260426T154101Z-3441a2ae" ts="2026-04-26T15:47:02.975759+00:00" />
+Treat the run/resume initialization order from the request as a hard contract: git preflight before workspace mutation, then run metadata/static graph/observability initialization, then init commit, then engine execution.
+When resume config disables git tracking after an earlier tracked segment, persist an explicit warning in run.json and continue without backfilling or altering earlier git-tracking records.

@@ -83,3 +83,50 @@ The planner should revise `plan.md` and `phase_plan.yaml` to add the exact order
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dca73-86cc-78a0-a26b-4c900df81ac5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dca73-86cc-78a0-a26b-4c900df81ac5
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dca73-86cc-78a0-a26b-4c900df81ac5
+---
+I’m addressing the verifier’s blocking gaps directly in the plan artifacts: first I’m checking the current feedback and decision ledger state, then I’ll patch the narrative plan and the phase acceptance criteria so the mandatory sequencing and resume config-mismatch behavior are explicit.
+
+I’ve confirmed the verifier findings are valid and limited in scope. I’m patching the plan now by adding the exact new-run/resume order and the missing resume config-mismatch warning behavior, then I’ll tighten the machine-readable phase acceptance criteria to match.
+
+The narrative plan is fixed. The YAML patch missed because the file was reformatted by the parser, so I’m reopening the relevant phase block and patching against the actual current structure before I rerun the YAML validation.
+
+I’ve patched both artifacts. I’m adding the non-obvious constraints to this turn’s decision block now, then I’ll run the required local YAML parse again to make sure the machine-readable phase file is still valid.
+
+The YAML parse caught a real syntax problem in one of the new acceptance-criteria texts. I’m fixing the scalar quoting now and will rerun `yaml.safe_load` until it passes.
+
+Scope considered
+The existing plan artifacts, verifier findings `PLAN-001` and `PLAN-002`, the immutable request’s mandatory run/resume ordering, and the explicit resume git-tracking compatibility requirements.
+
+What I analyzed
+I rechecked the verifier feedback against the request contract and current plan. The two gaps were valid: the plan had not pinned the mandatory post-preflight initialization order, and it had not fully covered resume behavior when git-tracking config changes across run segments.
+
+What I changed
+I updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/plan/plan.md) to add:
+- an explicit `Required Execution Ordering` section for both new runs and resumes
+- a `Resume Compatibility Rules` section covering both config-mismatch directions
+- validation and regression notes that make ordering and warning persistence mandatory
+
+I updated [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/plan/phase_plan.yaml) to add matching scope and acceptance criteria to the engine/runner and regression/docs phases.
+
+I appended closure context to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/plan/feedback.md) and added the non-obvious constraints for this turn under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt).
+
+Key findings / decisions
+The plan now treats the run/resume initialization order as a hard contract rather than an implementation detail.
+The plan now explicitly requires a `run.json` warning when a previously git-tracked run is resumed with git tracking disabled, and explicitly forbids backfill in either resume mismatch direction.
+`phase_plan.yaml` was revalidated locally after the edits with `python3` + `yaml.safe_load` and now parses successfully (`yaml_ok 5`).
+
+Open issues / next step
+The verifier should rerun against the revised artifacts. I did not run the repository test suite.
