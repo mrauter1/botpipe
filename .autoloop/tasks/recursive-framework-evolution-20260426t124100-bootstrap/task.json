@@ -16,15 +16,15 @@
       "regression-coverage-and-docs"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "regression-coverage-and-docs"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "provider-usage-plumbing": "completed",
     "runtime-config-and-git-primitives": "completed",
     "runtime-observability-persistence": "completed",
     "engine-runner-observability-binding": "completed",
-    "regression-coverage-and-docs": "in_progress"
+    "regression-coverage-and-docs": "completed"
   },
   "phase_history": [
     {
@@ -84,6 +84,13 @@
       "run_id": "run-20260426T154101Z-3441a2ae",
       "status": "in_progress",
       "ts": "2026-04-26T17:37:11.452600+00:00"
+    },
+    {
+      "phase_id": "regression-coverage-and-docs",
+      "run_id": "run-20260426T154101Z-3441a2ae",
+      "status": "completed",
+      "ts": "2026-04-26T17:54:56.927830+00:00",
+      "pair": "test"
     }
   ]
 }
