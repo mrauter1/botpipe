@@ -580,3 +580,89 @@ Restore the old runtime-provider import names as compatibility aliases or shims 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+I’m addressing the reviewer’s compatibility finding only: restore the previous runtime-provider import surface without undoing the transport boundary. I’ll inspect the feedback and then add the smallest shim layer that keeps backend ownership and transport purity intact.
+
+I’ve identified the narrowest safe fix: restore the old provider class and builder names as thin compatibility wrappers over the new transports, while keeping backend resolution unchanged. I’m patching the module surfaces and adding regression tests for those imports now.
+
+I’ve restored the old runtime-provider names as thin wrappers over the new transports and added regression tests for those imports. I’m running the same runtime-focused slice again to make sure the compatibility fix doesn’t leak semantic logic back across the boundary.
+
+Scope considered
+
+Phase-local follow-up for `runtime-cli-transports`: reviewer finding `IMP-001`, the runtime provider module/package export surface, the backend resolver boundary, and the matching runtime tests.
+
+What I analyzed
+
+I reviewed the blocking feedback, rechecked the current transport split in [runtime/providers/codex.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/codex.py), [runtime/providers/claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/claude.py), and [runtime/providers/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/__init__.py), and verified where the old `CodexProvider` / `ClaudeProvider` and `build_*_provider` names used to exist.
+
+What I changed
+
+I restored `CodexProvider`, `ClaudeProvider`, `build_codex_provider`, and `build_claude_provider` as thin compatibility wrappers over the new transports. Backend selection still goes through `RenderedLLMProvider(build_*_transport(...))`; the restored names are just compatibility shims.
+
+I also re-exported those restored names from `runtime/providers/__init__.py` and added regression coverage in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py) to prove both the package re-exports and the old builder names still resolve to rendered wrappers.
+
+Key findings / decisions
+
+The compatibility fix is intentionally narrow: transport execution ownership remains in `CodexTransport` / `ClaudeTransport`, and backend resolution remains the only production path used for provider selection.
+
+I recorded that decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/decisions.txt) and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/runtime-cli-transports/implementation_notes.md).
+
+Open issues / next step
+
+No open blocker remains in this phase from my side. Validation rerun passed: `.venv/bin/pytest -q tests/runtime/test_runtime_providers.py tests/runtime/test_provider_backends.py tests/unit/test_provider_boundary_core.py` with `63 passed`.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+I’m re-reviewing the phase after the compatibility fix, focusing on whether the restored provider names keep the old import surface without violating the transport boundary or the phase acceptance criteria.
+
+The compatibility regression is addressed and the targeted runtime slice still passes. I’m updating the phase artifacts to reflect that `IMP-001` is resolved and that the current revision satisfies the phase criteria.
+
+Scope considered
+
+Phase-local re-review of the `runtime-cli-transports` slice: [runtime/providers/codex.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/codex.py), [runtime/providers/claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/claude.py), [runtime/providers/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/__init__.py), [runtime/provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/provider_backends.py), [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py), and the active phase artifacts.
+
+What I analyzed
+
+I checked whether the compatibility fix restores the previous runtime-provider import surface without undoing the transport-only execution boundary or changing backend resolution semantics. I also verified the updated notes against the actual code and reran the targeted runtime/provider test slice.
+
+What I reviewed
+
+`CodexTransport` and `ClaudeTransport` remain the transport executors. Backend resolution still returns `RenderedLLMProvider` around the selected transport. The restored `CodexProvider` / `ClaudeProvider` and `build_*_provider` names are thin compatibility wrappers, and package re-exports plus compatibility-builder tests now cover that surface.
+
+Key findings / decisions
+
+No remaining findings. The prior blocking issue `IMP-001` is resolved by the restored compatibility shims and targeted regression coverage.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/runtime-cli-transports/criteria.md) to all checked, and appended a re-review resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/runtime-cli-transports/feedback.md).
+
+Open issues / next step
+
+No open issues in this phase. Validation rerun passed: `.venv/bin/pytest -q tests/runtime/test_runtime_providers.py tests/runtime/test_provider_backends.py tests/unit/test_provider_boundary_core.py` with `63 passed`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
