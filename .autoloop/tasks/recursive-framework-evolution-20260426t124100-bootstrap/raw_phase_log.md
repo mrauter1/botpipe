@@ -965,3 +965,46 @@ The added coverage locks in two important invariants that were easy to regress a
 Open issues / next step
 
 Validation is limited by the environment: `python3 -m py_compile tests/runtime/test_runtime_tracing.py` passed, but `python3 -m pytest --version` failed because `pytest` is not installed here. The next step is auditor review, and then full test execution in an environment with the normal Python test dependencies available.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+Auditing the phase-local test additions against the runtime observability contract and the shared decisions ledger. I’m checking the new tracing tests and the test artifacts first so I can decide whether the current coverage is complete or still leaves a material regression path open.
+
+The acceptance criteria are covered, but I’m checking one adjacent regression surface before I finalize: terminal and fatal observability paths. Those are part of the requested runtime writer/tracker API, and if they’re still untested the phase may be missing protection on a material behavior branch.
+
+I found one material gap: the suite still doesn’t protect the terminal/fatal observability branches, which are part of the requested runtime API and the highest-value evidence path when runs fail. I’m recording that as a blocking audit finding and updating the phase criteria accordingly.
+
+Scope considered
+
+Phase-local audit of the runtime observability persistence tests and only the audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/`.
+
+What I analyzed
+
+I reviewed the updated tracing test module, the phase test strategy, the current audit feedback, and the shared decisions ledger for this phase. I focused on whether the suite now protects the runtime-owned observability behaviors requested in scope: git-tracking evidence, trace/raw persistence, static graph writing, resume sequencing, and failure-mode handling.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/criteria.md) to keep the audit gates unchecked for this pass, and appended one blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/feedback.md).
+
+Key findings / decisions
+
+`TST-001` is blocking: the phase-local suite still does not cover `RuntimeTraceWriter.terminal()`, `RuntimeTraceWriter.fatal()`, or `RuntimeGitTracker.on_fatal()`. Those are explicit parts of the requested runtime observability API and are the highest-risk branches when runs fail, so the missing coverage leaves a material regression path open for terminal/fatal evidence and fatal git commit metadata.
+
+Open issues / next step
+
+The next test pass should add focused terminal and fatal-path assertions for both tracing and git tracking, then re-run audit. The current additions around disabled tracing, ignore-mode write failures, and raw-only resume fallback are useful, but they are not enough to close the phase without the terminal/fatal coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

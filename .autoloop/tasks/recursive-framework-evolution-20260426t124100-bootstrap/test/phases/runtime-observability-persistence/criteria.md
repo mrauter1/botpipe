@@ -14,3 +14,5 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Edge Cases / Failure Paths**: Relevant boundary cases, error cases, and failure paths are covered.
 - [ ] **Reliability**: Tests avoid flaky assumptions and use stable setup, timing, ordering, and environment expectations.
 - [ ] **Behavioral Intent**: Tests do not encode a regression, reduced behavior, or compatibility break unless that change is explicitly required by user intent and explicitly confirmed.
+
+Audit result: blocking findings remain in `feedback.md`, so the checkboxes stay unchecked for this audit pass.
