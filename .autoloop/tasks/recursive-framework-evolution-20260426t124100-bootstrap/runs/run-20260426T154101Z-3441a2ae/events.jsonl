@@ -78,3 +78,6 @@
 {"ts": "2026-04-26T17:37:11.453161+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 78, "event_type": "phase_started", "phase_id": "regression-coverage-and-docs", "phase_mode": "single"}
 {"ts": "2026-04-26T17:37:11.454125+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 79, "event_type": "pair_started", "pair": "implement", "phase_id": "regression-coverage-and-docs"}
 {"ts": "2026-04-26T17:37:11.454248+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 80, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "regression-coverage-and-docs"}
+{"ts": "2026-04-26T17:50:00.751351+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 81, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "regression-coverage-and-docs"}
+{"ts": "2026-04-26T17:51:54.917809+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 82, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "regression-coverage-and-docs"}
+{"ts": "2026-04-26T17:51:54.951275+00:00", "run_id": "run-20260426T154101Z-3441a2ae", "seq": 83, "event_type": "pair_completed", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "regression-coverage-and-docs"}

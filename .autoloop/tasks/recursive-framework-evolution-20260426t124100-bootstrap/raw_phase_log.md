@@ -1596,3 +1596,53 @@ The affected suites are green now: `468` targeted tests passed, including the br
 
 **Open issues / next step**
 - No open issues in this phase.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+---
+I’m reviewing the phase-local runtime observability regression/docs changes against the acceptance criteria. First I’m reading the active review artifacts and the implementation diff so I can update criteria and feedback accurately without touching non-phase files.
+
+I’ve got the phase artifacts and implementation notes. Next I’m checking the specific runner ordering change, the new runtime observability integration test, and the doc assertions, then I’ll do an independent pytest pass before I mark criteria.
+
+The runner ordering fix is correct, the new integration coverage closes the missing plain-workflow artifact case, and the broader test updates are explicit per call site rather than hidden behind a weakened default. I don’t see a blocking or non-blocking review finding at this point, so I’m marking the phase complete in the review artifacts.
+
+Scope considered
+- Phase-local `regression-coverage-and-docs` changes only.
+- Reviewed the runtime runner ordering fix, runtime observability/integration tests, broad non-git runtime test updates, and architecture/authoring doc baseline updates.
+
+What I analyzed
+- [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py) around `_resume_git_tracking_warnings(...)` and `RuntimeGitTracker.bind_run_dir(...)`.
+- [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py) for the new plain-workflow observability artifact coverage and resume warning persistence.
+- The runtime package/integration test files updated to pass explicit `RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False))` in temp non-git workspaces.
+- [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+
+What I reviewed
+- Intent fidelity against AC-1 through AC-4.
+- Regression risk from the runner ordering change.
+- Whether test opt-outs were explicit rather than hidden behind a weakened default.
+- Independent validation run:
+  `.venv/bin/python -m pytest ...`
+  Result: `468 passed in 39.72s`.
+
+Key findings / decisions
+- No blocking findings.
+- No non-blocking findings.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/regression-coverage-and-docs/criteria.md) to checked across all criteria.
+- Updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/regression-coverage-and-docs/feedback.md) to record that the phase was verified with no findings.
+
+Open issues / next step
+- None for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
