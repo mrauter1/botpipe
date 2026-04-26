@@ -1589,3 +1589,52 @@ Open issues / next step
 
 - No open issues in phase scope.
 - The added value in this turn is stronger AC-1 regression locking rather than new execution-path coverage.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc80a-9b35-7411-a864-3046f6932f23
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc80a-9b35-7411-a864-3046f6932f23
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc80a-9b35-7411-a864-3046f6932f23
+---
+I’m auditing the phase-local test work against the acceptance criteria and shared decisions. First I’m reading the test artifacts, the strengthened baseline assertion, and the recorded coverage map so I can mark criteria accurately and decide whether any regression risk remains.
+
+The added test work matches the phase’s real residual risk: future wording drift on the AC-1 contract items. I’m marking the audit artifacts now; I don’t see a blocking coverage gap or flaky assumption in the phase-local test changes.
+
+Scope considered
+
+- Phase-local audit of the docs-and-regression-suite test work only.
+- Reviewed the strengthened baseline assertions, the phase test strategy, the shared decisions for this phase, and the recorded validation for the added test coverage.
+
+What I analyzed
+
+- The acceptance criteria, especially AC-1’s requirement to describe required inputs, writable artifacts, route-specific artifact requirements, expected output payloads, optional retry feedback, and optional route handoff.
+- The updated `tests/test_architecture_baseline_docs.py` assertions and the phase-local coverage map in `test_strategy.md`.
+- The shared decision that this phase should lock the explicit Runtime Step Contract item list rather than only the umbrella phrase.
+
+What I reviewed
+
+- [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) for coverage depth and regression-detection quality.
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/docs-and-regression-suite/test_strategy.md) for behavior-to-test mapping, preserved invariants, and known gaps.
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/docs-and-regression-suite/feedback.md) and the phase-local decisions ledger tail for consistency.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings.
+- The added baseline test now directly locks the AC-1 sub-items instead of relying only on the shorthand `compact human-readable step contract` phrase.
+- Updated the phase criteria to fully checked and appended `TST-000` to record that the audit found no actionable defects.
+
+Open issues / next step
+
+- No open issues in phase scope.
+- Test audit result: COMPLETE.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
