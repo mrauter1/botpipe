@@ -277,3 +277,54 @@ This phase should not be marked complete until verifier/LLM parsing is owned by 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+I’m addressing the reviewer’s blocking gap directly: verifier/LLM JSON parsing still sits in the runtime provider layer. I’m re-reading the runtime provider implementations and tests, then I’ll make the smallest internal refactor that moves parsing behind `RenderedLLMProvider` without widening this phase into the later backend-resolution work.
+
+I’ve narrowed the fix: keep `CodexProvider` and `ClaudeProvider` as the public semantic classes for this phase, but move verifier/LLM execution onto a private transport plus `RenderedLLMProvider`, so parsing leaves the runtime layer without dragging backend resolution into scope. I’m patching that now, then I’ll update the focused tests around verifier prompts and the render-policy hook.
+
+The parsing move is patched. I’m running the focused provider and backend tests again now, because verifier prompt contents changed and I need to catch any accidental regressions in the compatibility wrapper behavior before touching the phase notes.
+
+The only failure is expected: the Claude LLM resume test still assumed the old raw `ask` prompt, but `run_llm` now goes through the shared renderer. I’m updating that assertion to check the new rendered prompt contract instead of the old plain prompt, then I’ll rerun the targeted suite and refresh the implementation notes.
+
+The blocker is resolved, and the focused suite is green. I’m doing one small cleanup pass before I close: removing private compatibility helpers I introduced but didn’t end up needing, so the runtime wrappers stay as small as possible and we don’t leave dead indirection behind.
+
+I’ve kept the fix scoped and source-only. I’m updating the phase notes now to reflect the actual second-pass behavior: verifier/LLM turns now route through the core wrapper, producer execution stays on the existing direct prompt path for this phase, and the render-policy surface is now callable.
+
+Scope considered
+
+Phase-local `provider-boundary-core` only. I limited changes to the core provider boundary modules, the runtime provider classes needed to satisfy the reviewer’s AC-3 blocker, the focused provider tests, and the phase implementation notes.
+
+What I analyzed
+
+I re-read the reviewer feedback against `runtime/providers/codex.py`, `runtime/providers/claude.py`, `core/providers/rendered.py`, `core/providers/rendering.py`, and the provider/backend tests. The key gap was that verifier/LLM parsing still happened inside the runtime provider classes even after the parser moved into core.
+
+What I changed
+
+I moved verifier/LLM runtime execution behind `RenderedLLMProvider` by introducing private transport-only executors inside [codex.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/codex.py) and [claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/claude.py). `CodexProvider` and `ClaudeProvider` remain the public semantic classes for this phase, but `run_verifier` and `run_llm` now delegate to the core wrapper, so runtime code no longer parses workflow outcome JSON. Producer turns stay on the existing direct prompt path to avoid widening this phase into backend-resolution work.
+
+I also made the render policy usable by adding `render_provider_turn_with_policy(...)` in [rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py), added a unit test for that policy surface, and updated runtime provider tests to assert that verifier/LLM prompts now cross the shared rendered boundary and exclude producer raw output.
+
+Key findings / decisions
+
+The reviewer’s blocking AC-3 issue is resolved: runtime providers no longer call `parse_outcome_json(...)`; verifier/LLM parsing now happens only in `RenderedLLMProvider`. I kept the public runtime provider classes and backend resolution unchanged for this phase, and I avoided a larger transport/backend refactor by using private transport helpers internally.
+
+Validation passed:
+`.venv/bin/python -m compileall core/providers runtime/providers tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/runtime/test_provider_backends.py`
+`.venv/bin/pytest -q tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/runtime/test_provider_backends.py tests/contract/test_engine_contracts.py`
+
+Open issues / next step
+
+The remaining planned work is still deferred to later phases: backend resolution returning `RenderedLLMProvider(transport)`, transport-purity cleanup, engine-side artifact contract injection, retries, handoff persistence, and docs/baseline updates. The next useful step is a verifier pass to clear `IMP-001` and confirm whether the new policy helper is sufficient to clear `IMP-002`.

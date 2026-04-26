@@ -393,8 +393,13 @@ def test_codex_provider_run_verifier_parses_strict_json_outcome(monkeypatch: pyt
             return _completed(args=command, stdout=CODEX_START_HELP)
         if command == ["codex", "exec", "resume", "--help"]:
             return _completed(args=command, stdout=CODEX_RESUME_HELP)
-        assert "<verifier_prompt>" in str(kwargs["input"])
-        assert "<producer_raw_output>" in str(kwargs["input"])
+        rendered_prompt = str(kwargs["input"])
+        assert "# Step: verify" in rendered_prompt
+        assert "## Runtime Step Contract" in rendered_prompt
+        assert "### Required inputs" in rendered_prompt
+        assert "### Output payload" in rendered_prompt
+        assert "<producer_raw_output>" not in rendered_prompt
+        assert "producer output" not in rendered_prompt
         return _completed(
             args=command,
             stdout="\n".join(
@@ -531,6 +536,12 @@ def test_claude_provider_run_verifier_parses_strict_json_outcome(monkeypatch: py
     def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
         if command == ["claude", "--help"]:
             return _completed(args=command, stdout=CLAUDE_HEADLESS_HELP)
+        rendered_prompt = command[2]
+        assert "# Step: verify" in rendered_prompt
+        assert "## Runtime Step Contract" in rendered_prompt
+        assert "### Available routes" in rendered_prompt
+        assert "<producer_raw_output>" not in rendered_prompt
+        assert "producer output" not in rendered_prompt
         return _completed(
             args=command,
             stdout='{"result":"{\\"tag\\":\\"pair_ok\\",\\"payload\\":{\\"summary\\":\\"ok\\"}}","session_id":"claude-session-2"}',
@@ -565,12 +576,17 @@ def test_claude_provider_run_llm_resumes_existing_provider_session_and_preserves
 
     response = provider.run_llm(_llm_request(session=resumable))
 
-    assert calls[-1] == [
+    assert calls[-1][:4] == [
         "claude",
         "--resume",
         "claude-session-existing",
         "-p",
-        "ask",
+    ]
+    rendered_prompt = calls[-1][4]
+    assert "# Step: ask" in rendered_prompt
+    assert "## Runtime Step Contract" in rendered_prompt
+    assert "<producer_raw_output>" not in rendered_prompt
+    assert calls[-1][5:] == [
         "--output-format",
         "json",
         "--model",

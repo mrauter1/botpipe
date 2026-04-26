@@ -11,15 +11,15 @@ from typing import Any
 
 from ...core.errors import ProviderExecutionError
 from ...core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from ...core.providers.parsing import parse_outcome_json
-from ...core.providers.protocols import LLMProvider
+from ...core.providers.protocols import LLMProvider, ProviderTransport
+from ...core.providers.rendered import RenderedLLMProvider
+from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ...core.stores.protocols import SessionBinding
 from ..config import ClaudeProviderConfig, ConfigError, ResolvedRuntimeConfig
 from ._common import (
     build_session_binding,
     ensure_session_provider_match,
     format_subprocess_streams,
-    render_verifier_input,
     require_prompt_text,
 )
 
@@ -104,52 +104,49 @@ class ClaudeProvider:
 
     def __init__(self, config: ResolvedRuntimeConfig) -> None:
         verify_claude_code_capabilities(config.provider.claude)
-        self._config = config
-        self._model = config.provider.claude.model
-        self._effort = config.provider.claude.effort
+        self._transport = _ClaudeTransport(
+            config=config,
+            model=config.provider.claude.model,
+            effort=config.provider.claude.effort,
+        )
+        self._rendered = RenderedLLMProvider(self._transport)
 
     def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         prompt_text = require_prompt_text(request.prompt, "claude", request.step_name)
-        result_text, binding, metadata = self._run_turn(
-            step_name=request.step_name,
-            prompt_text=prompt_text,
-            session=request.session,
+        result = self._transport.run_turn(
+            RenderedProviderTurn(
+                step_name=request.step_name,
+                turn_kind="producer",
+                prompt_text=prompt_text,
+                session=request.session,
+                expected_response="raw_text",
+            )
         )
-        return ProducerResponse(raw_output=result_text, session=binding, metadata=metadata)
+        return ProducerResponse(raw_output=result.raw_text, session=result.session, metadata=result.metadata)
 
     def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
-        prompt_text = require_prompt_text(request.prompt, "claude", request.step_name)
-        verifier_input = render_verifier_input(prompt_text, request.raw_output)
-        result_text, binding, metadata = self._run_turn(
-            step_name=request.step_name,
-            prompt_text=verifier_input,
-            session=request.session,
-        )
-        return OutcomeResponse(outcome=parse_outcome_json(result_text), session=binding, metadata=metadata)
+        return self._rendered.run_verifier(request)
 
     def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        prompt_text = require_prompt_text(request.prompt, "claude", request.step_name)
-        result_text, binding, metadata = self._run_turn(
-            step_name=request.step_name,
-            prompt_text=prompt_text,
-            session=request.session,
-        )
-        return OutcomeResponse(outcome=parse_outcome_json(result_text), session=binding, metadata=metadata)
+        return self._rendered.run_llm(request)
 
-    def _run_turn(
-        self,
-        *,
-        step_name: str,
-        prompt_text: str,
-        session: SessionBinding | None,
-    ) -> tuple[str, SessionBinding | None, dict[str, Any]]:
-        ensure_session_provider_match("claude", session)
-        resume_session_id = _resumable_session_id("claude", session)
+
+class _ClaudeTransport(ProviderTransport):
+    """Transport-only Claude CLI executor used by the semantic compatibility wrapper."""
+
+    def __init__(self, *, config: ResolvedRuntimeConfig, model: str | None, effort: str | None) -> None:
+        self._config = config
+        self._model = model
+        self._effort = effort
+
+    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        ensure_session_provider_match("claude", turn.session)
+        resume_session_id = _resumable_session_id("claude", turn.session)
 
         command = ["claude"]
         if resume_session_id is not None:
             command.extend(["--resume", resume_session_id])
-        command.extend(["-p", prompt_text, "--output-format", "json"])
+        command.extend(["-p", turn.prompt_text, "--output-format", "json"])
         if self._model:
             command.extend(["--model", self._model])
         if self._effort:
@@ -160,35 +157,35 @@ class ClaudeProvider:
         if completed.returncode != 0:
             streams = format_subprocess_streams(completed.stdout, completed.stderr)
             raise ProviderExecutionError(
-                f"provider 'claude' failed while running step {step_name!r} "
+                f"provider 'claude' failed while running step {turn.step_name!r} "
                 f"(exit code {completed.returncode}): {streams}"
             )
 
         result_text, resolved_session_id, provider_metadata = parse_claude_exec_json(completed.stdout)
         if resolved_session_id is None and resume_session_id is not None:
             resolved_session_id = resume_session_id
-        if resolved_session_id is None and session is not None:
+        if resolved_session_id is None and turn.session is not None:
             raise ProviderExecutionError(
-                f"provider 'claude' did not return a resumable session_id for step {step_name!r}."
+                f"provider 'claude' did not return a resumable session_id for step {turn.step_name!r}."
             )
 
         binding = (
             build_session_binding(
-                session,
+                turn.session,
                 session_id=resolved_session_id,
                 provider_name="claude",
                 provider_metadata=provider_metadata,
                 model=self._model,
                 effort=self._effort,
             )
-            if session is not None and resolved_session_id is not None
+            if turn.session is not None and resolved_session_id is not None
             else None
         )
         metadata = {
             "mode": "resume" if resume_session_id is not None else "start",
             "provider_metadata": dict(provider_metadata),
         }
-        return result_text, binding, metadata
+        return ProviderTurnResult(raw_text=result_text, session=binding, metadata=metadata)
 
 
 def build_claude_provider(config: ResolvedRuntimeConfig) -> LLMProvider:

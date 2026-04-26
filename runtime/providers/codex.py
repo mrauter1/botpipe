@@ -11,15 +11,15 @@ from typing import Any
 
 from ...core.errors import ProviderExecutionError
 from ...core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
-from ...core.providers.parsing import parse_outcome_json
-from ...core.providers.protocols import LLMProvider
+from ...core.providers.protocols import LLMProvider, ProviderTransport
+from ...core.providers.rendered import RenderedLLMProvider
+from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ...core.stores.protocols import SessionBinding
 from ..config import ConfigError, ResolvedRuntimeConfig
 from ._common import (
     build_session_binding,
     ensure_session_provider_match,
     format_subprocess_streams,
-    render_verifier_input,
     require_prompt_text,
 )
 
@@ -151,55 +151,44 @@ class CodexProvider:
     """Concrete LLMProvider backed by the Codex CLI."""
 
     def __init__(self, config: ResolvedRuntimeConfig, commands: CodexCLICommand) -> None:
-        self._commands = commands
-        self._model = config.provider.codex.model
-        self._model_effort = config.provider.codex.model_effort
+        self._transport = _CodexTransport(
+            commands=commands,
+            model=config.provider.codex.model,
+            model_effort=config.provider.codex.model_effort,
+        )
+        self._rendered = RenderedLLMProvider(self._transport)
 
     def run_producer(self, request: ProducerRequest) -> ProducerResponse:
         prompt_text = require_prompt_text(request.prompt, "codex", request.step_name)
-        assistant_text, binding, metadata = self._run_turn(
-            step_name=request.step_name,
-            prompt_text=prompt_text,
-            session=request.session,
+        result = self._transport.run_turn(
+            RenderedProviderTurn(
+                step_name=request.step_name,
+                turn_kind="producer",
+                prompt_text=prompt_text,
+                session=request.session,
+                expected_response="raw_text",
+            )
         )
-        return ProducerResponse(raw_output=assistant_text, session=binding, metadata=metadata)
+        return ProducerResponse(raw_output=result.raw_text, session=result.session, metadata=result.metadata)
 
     def run_verifier(self, request: VerifierRequest) -> OutcomeResponse:
-        prompt_text = require_prompt_text(request.prompt, "codex", request.step_name)
-        verifier_input = render_verifier_input(prompt_text, request.raw_output)
-        assistant_text, binding, metadata = self._run_turn(
-            step_name=request.step_name,
-            prompt_text=verifier_input,
-            session=request.session,
-        )
-        return OutcomeResponse(
-            outcome=parse_outcome_json(assistant_text),
-            session=binding,
-            metadata=metadata,
-        )
+        return self._rendered.run_verifier(request)
 
     def run_llm(self, request: LLMRequest) -> OutcomeResponse:
-        prompt_text = require_prompt_text(request.prompt, "codex", request.step_name)
-        assistant_text, binding, metadata = self._run_turn(
-            step_name=request.step_name,
-            prompt_text=prompt_text,
-            session=request.session,
-        )
-        return OutcomeResponse(
-            outcome=parse_outcome_json(assistant_text),
-            session=binding,
-            metadata=metadata,
-        )
+        return self._rendered.run_llm(request)
 
-    def _run_turn(
-        self,
-        *,
-        step_name: str,
-        prompt_text: str,
-        session: SessionBinding | None,
-    ) -> tuple[str, SessionBinding | None, dict[str, Any]]:
-        ensure_session_provider_match("codex", session)
-        resume_session_id = _resumable_session_id("codex", session)
+
+class _CodexTransport(ProviderTransport):
+    """Transport-only Codex CLI executor used by the semantic compatibility wrapper."""
+
+    def __init__(self, *, commands: CodexCLICommand, model: str | None, model_effort: str | None) -> None:
+        self._commands = commands
+        self._model = model
+        self._model_effort = model_effort
+
+    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        ensure_session_provider_match("codex", turn.session)
+        resume_session_id = _resumable_session_id("codex", turn.session)
 
         if resume_session_id is None:
             command = list(self._commands.start_command)
@@ -208,7 +197,7 @@ class CodexProvider:
 
         completed = subprocess.run(
             command,
-            input=prompt_text,
+            input=turn.prompt_text,
             text=True,
             capture_output=True,
             check=False,
@@ -216,35 +205,35 @@ class CodexProvider:
         if completed.returncode != 0:
             streams = format_subprocess_streams(completed.stdout, completed.stderr)
             raise ProviderExecutionError(
-                f"provider 'codex' failed while running step {step_name!r} "
+                f"provider 'codex' failed while running step {turn.step_name!r} "
                 f"(exit code {completed.returncode}): {streams}"
             )
 
         assistant_text, resolved_session_id, provider_metadata = parse_codex_exec_json(completed.stdout)
         if resolved_session_id is None and resume_session_id is not None:
             resolved_session_id = resume_session_id
-        if resolved_session_id is None and session is not None:
+        if resolved_session_id is None and turn.session is not None:
             raise ProviderExecutionError(
-                f"provider 'codex' did not return a resumable session_id for step {step_name!r}."
+                f"provider 'codex' did not return a resumable session_id for step {turn.step_name!r}."
             )
 
         binding = (
             build_session_binding(
-                session,
+                turn.session,
                 session_id=resolved_session_id,
                 provider_name="codex",
                 provider_metadata=provider_metadata,
                 model=self._model,
                 effort=self._model_effort,
             )
-            if session is not None and resolved_session_id is not None
+            if turn.session is not None and resolved_session_id is not None
             else None
         )
         metadata = {
             "mode": "resume" if resume_session_id is not None else "start",
             "provider_metadata": dict(provider_metadata),
         }
-        return assistant_text, binding, metadata
+        return ProviderTurnResult(raw_text=assistant_text, session=binding, metadata=metadata)
 
 
 def build_codex_provider(config: ResolvedRuntimeConfig) -> LLMProvider:

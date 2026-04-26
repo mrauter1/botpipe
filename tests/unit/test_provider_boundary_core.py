@@ -14,6 +14,7 @@ from autoloop_v3.core.providers.models import (
     VerifierRequest,
 )
 from autoloop_v3.core.providers.rendered import RenderedLLMProvider
+from autoloop_v3.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
 from autoloop_v3.core.providers.rendering import render_provider_turn
 from autoloop_v3.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from autoloop_v3.core.stores.protocols import SessionBinding
@@ -165,6 +166,18 @@ def test_render_provider_turn_rejects_missing_prompt_text() -> None:
 
     with pytest.raises(ProviderExecutionError, match=r"cannot render provider turn for step 'design'"):
         render_provider_turn(context)
+
+
+def test_render_provider_turn_honors_custom_render_policy() -> None:
+    turn = render_provider_turn_with_policy(
+        _turn_context(prompt_text="A" * 300),
+        policy=ProviderPromptRenderPolicy(
+            max_prompt_chars=120,
+            overflow_behavior="truncate_with_marker",
+        ),
+    )
+
+    assert turn.prompt_text.endswith("[TRUNCATED BY RUNTIME PROMPT BUDGET]")
 
 
 @dataclass

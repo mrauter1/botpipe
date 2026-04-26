@@ -21,6 +21,15 @@ class ProviderPromptRenderPolicy:
 
 def render_provider_turn(context: ProviderTurnContext) -> RenderedProviderTurn:
     """Render a provider turn into a shared markdown prompt."""
+    return render_provider_turn_with_policy(context)
+
+
+def render_provider_turn_with_policy(
+    context: ProviderTurnContext,
+    *,
+    policy: ProviderPromptRenderPolicy | None = None,
+) -> RenderedProviderTurn:
+    """Render a provider turn into a shared markdown prompt using the supplied policy."""
 
     prompt_text = _require_prompt_text(context)
     sections = [
@@ -57,10 +66,7 @@ def render_provider_turn(context: ProviderTurnContext) -> RenderedProviderTurn:
 
     rendered_prompt = _apply_render_policy(
         "\n".join(sections),
-        policy=ProviderPromptRenderPolicy(
-            max_prompt_chars=None,
-            overflow_behavior="fail",
-        ),
+        policy=policy or ProviderPromptRenderPolicy(),
     )
     return RenderedProviderTurn(
         step_name=context.step_name,
