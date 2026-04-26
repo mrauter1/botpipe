@@ -1380,3 +1380,48 @@ Result: `91 passed`.
 Open issues / next step
 
 No phase-local test gap remains that looked material after this pass.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcab5-335a-7580-9146-926cf88f11fe
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+Auditing the phase-local test artifacts and the final runtime test surface now. I’m checking whether the added coverage actually closes the high-risk gap without normalizing any new behavior, then I’ll update the test audit artifacts accordingly.
+
+I’m doing one last pass against AC-5 and the preserved extension behavior contract, because those are the easiest places for a test phase to look complete while still missing a material regression.
+
+I found one material gap: the test phase still doesn’t exercise AC-5’s mixed-mode resume behavior. I’m recording that as a blocking audit finding and updating the audit criteria to reflect that the suite is otherwise stable but not coverage-complete for this phase contract.
+
+Scope considered
+
+Phase-local audit of the `engine-runner-observability-binding` test work, with emphasis on runtime git finalization, fatal-path observability propagation, CLI runtime-config coverage, and the explicit acceptance-criterion coverage for resume behavior.
+
+What I analyzed
+
+I reviewed the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/test_strategy.md), the new pause/resume integration coverage in `tests/runtime/test_optional_extensions.py`, and the adjacent runtime/CLI tests that already cover git tracking, tracing, and runtime-config wiring. I also checked the phase contract against the current test surface, especially AC-5.
+
+What I reviewed
+
+The new pause/resume cleanliness test is stable and useful, and the existing tests do cover the repaired terminal/fatal git finalization path, fatal tracing raise-mode propagation, and the CLI `runtime_config` seam. I updated the audit artifacts to reflect one remaining material coverage gap.
+
+Key findings / decisions
+
+`TST-001` is blocking: the test suite still does not exercise AC-5’s mixed-mode resume behavior. There is no integration test showing that a previously git-tracked paused run resumed with tracking disabled persists the required warning and continues without backfilling, nor the inverse case where an earlier untracked paused run resumes with tracking enabled and starts recording git metadata only from the resume point.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/criteria.md) so only `Reliability` and `Behavioral Intent` are checked, and appended the blocking audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/feedback.md).
+
+Open issues / next step
+
+Add the two AC-5 resume-mismatch integration tests, then rerun the relevant runtime suites and re-audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
