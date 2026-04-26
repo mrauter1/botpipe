@@ -60,7 +60,7 @@ The repository already has credible portfolio coverage for this family of work, 
    - Only add a shared stdlib validator if two or more target workflows need the exact same model-independent check after the contract migration.
 3. Proof, docs, and recursive-memory closeout.
    - Update `docs/authoring.md` with the preferred typed publication-artifact pattern.
-   - Update `.autoloop_recursive/framework_roadmap.md`, `.autoloop_recursive/framework_gap_ledger.md`, `.autoloop_recursive/workflow_candidate_ledger.md`, and `.autoloop_recursive/validation_debt_ledger.md`.
+   - Update `.autoloop_recursive/framework_evolution_charter.md`, `.autoloop_recursive/framework_roadmap.md`, `.autoloop_recursive/framework_gap_ledger.md`, `.autoloop_recursive/workflow_candidate_ledger.md`, and `.autoloop_recursive/validation_debt_ledger.md`.
    - Run targeted proof and record boilerplate-reduction metrics.
 
 ## Interface definitions
@@ -136,3 +136,4 @@ The repository already has credible portfolio coverage for this family of work, 
 ## Deferred debt after this cycle
 - `workflow_and_eval_to_refined_workflow_package` and `workflow_package_to_composable_building_blocks` may still warrant a later typed-manifest convergence pass if their publication sections remain materially larger than the converged governance and diagnostic family.
 - No new workflow should be proposed until this remaining publish-surface convergence is re-evaluated.
+- The charter must remain synchronized with the closeout result even if it needs only a review-confirmation note rather than a doctrinal rewrite.

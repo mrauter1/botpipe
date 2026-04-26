@@ -87,8 +87,8 @@ phases:
   in_scope:
   - Run targeted unit, runtime, and docs proof.
   - Update docs/authoring.md with the typed publication-artifact preference.
-  - Update the roadmap, gap ledger, workflow candidate ledger, and validation debt
-    ledger with the audit, outcome, and deferred debt.
+  - Update the charter, roadmap, gap ledger, workflow candidate ledger, and validation
+    debt ledger with the audit, outcome, and deferred debt.
   - Record boilerplate and readability metrics for the cycle closeout.
   out_of_scope:
   - Unrelated memory cleanup
@@ -100,13 +100,16 @@ phases:
     text: The targeted proof suite passes for the migrated workflows and shared stdlib/docs
       coverage.
   - id: AC-2
-    text: Authoring docs and recursive memory explicitly describe the typed publication-contract
+    text: Authoring docs plus the charter, roadmap, gap ledger, workflow candidate
+      ledger, and validation debt ledger explicitly describe the typed publication-contract
       boundary and any remaining deferred debt.
   - id: AC-3
     text: The closeout records that CLI behavior, workflow.toml semantics, runtime/provider
       boundaries, and ctx.invoke_workflow compatibility remain unchanged.
   deliverables:
   - Updated authoring guidance and recursive-memory ledgers.
+  - A synchronized charter update or explicit charter-review note aligned with the
+    cycle outcome.
   - Recorded proof results and cycle metrics.
   risks:
   - Docs or memory may drift from the actual implementation if proof is not run after

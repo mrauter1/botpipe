@@ -85,3 +85,30 @@ Revise the plan so the charter is either explicitly included in the required rec
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+---
+I’m addressing the verifier’s blocking finding by tightening the plan artifacts rather than reopening scope. First step is to confirm the current plan, feedback, and decisions state, then patch the missing charter coverage and keep the machine-readable phases aligned.
+
+I’ve confirmed the verifier’s finding is narrow and mechanical, so I’m patching only the recursive-memory closeout scope. The implementation direction stays the same; this turn is about restoring full intent coverage without widening the cycle.
+
+The first patch only failed because `phase_plan.yaml` was normalized when it was re-read, not because the plan direction changed. I’m reloading the exact current text and applying a narrower patch now.
+
+The blocking gap is patched. I’m validating `phase_plan.yaml` again with `yaml.safe_load` and doing a quick readback to make sure the narrative and machine-readable closeout scopes now match.
+
+Updated the plan artifacts to resolve the verifier’s blocking finding.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/plan/plan.md) now includes `.autoloop_recursive/framework_evolution_charter.md` explicitly in the proof/docs/memory closeout scope, and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/plan/phase_plan.yaml) now reflects that same requirement in `in_scope`, acceptance criteria, and deliverables. I also appended the correction note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/plan/feedback.md) and recorded the non-obvious constraint under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt).
+
+`phase_plan.yaml` was re-validated successfully with `python3` and `yaml.safe_load`.

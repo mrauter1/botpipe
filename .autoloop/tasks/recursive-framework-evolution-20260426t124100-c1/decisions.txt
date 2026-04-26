@@ -3,3 +3,5 @@ Cycle 1 stays in consolidate mode; no new workflow is justified because the live
 Limit the new abstraction to workflow-local typed artifact contracts plus existing stdlib validation helpers; do not add runtime-owned publication machinery or widen CLI, workflow.toml, or root workflow surfaces.
 Preserve artifact filenames, summary keys, receipt names, publication-boundary literals, CLI behavior, and ctx.invoke_workflow compatibility while shortening the target publish handlers.
 Refinement and decomposition publish-surface convergence is secondary; include it only if it reuses the same typed-artifact seam without adding a second abstraction, otherwise record it as deferred debt.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260426T175457Z-ff851572" ts="2026-04-26T18:02:09.646951+00:00" />
+The recursive-memory closeout for this cycle must cover `.autoloop_recursive/framework_evolution_charter.md` explicitly alongside the roadmap, gap ledger, workflow candidate ledger, and validation debt ledger; leaving the charter implicit is treated as intent drift.
