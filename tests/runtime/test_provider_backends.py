@@ -452,6 +452,22 @@ def test_parse_runtime_config_rejects_invalid_git_commit_policy(tmp_path: Path) 
         )
 
 
+def test_parse_runtime_config_rejects_non_mapping_git_tracking_section(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"runtime\.git_tracking must be a mapping"):
+        runtime_config.parse_runtime_config(
+            {"runtime": {"git_tracking": False}},
+            tmp_path / "autoloop.yaml",
+        )
+
+
+def test_parse_runtime_config_rejects_non_mapping_tracing_section(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"runtime\.tracing must be a mapping"):
+        runtime_config.parse_runtime_config(
+            {"runtime": {"tracing": False}},
+            tmp_path / "autoloop.yaml",
+        )
+
+
 def test_resolve_runtime_config_no_git_disables_git_tracking(tmp_path: Path) -> None:
     resolved = resolve_runtime_config(tmp_path, _runtime_args(no_git=True))
 
