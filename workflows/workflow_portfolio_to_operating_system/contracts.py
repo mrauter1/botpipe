@@ -6,6 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import JsonArtifactSpec
+except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import JsonArtifactSpec
+
 from workflow import RouteContract
 
 
@@ -56,6 +61,35 @@ class PortfolioOperatingSystemPayload(BaseModel):
     publication_boundary: PublicationBoundary
     ready_for_publication: bool
     replan_reason: str | None = None
+
+
+class PortfolioLifecycleRecommendationArtifactPayload(BaseModel):
+    """Durable lifecycle recommendation record for portfolio_operating_summary.json."""
+
+    workflow_name: str = Field(min_length=1)
+    lifecycle_posture: str = Field(min_length=1)
+    priority: str = Field(min_length=1)
+
+
+class PortfolioOperatingSummaryArtifactPayload(BaseModel):
+    """Typed contract for portfolio_operating_summary.json."""
+
+    focus_workflows: list[str] = Field(min_length=1)
+    analyzed_workflows: list[str] = Field(min_length=1)
+    lifecycle_recommendations: list[PortfolioLifecycleRecommendationArtifactPayload] = Field(min_length=1)
+    governance_posture_counts: dict[str, int]
+    change_candidate_ids: list[str] = Field(min_length=1)
+    priority_workflows: list[str] = Field(min_length=1)
+    authoritative_artifacts: list[str] = Field(min_length=1)
+    next_action: str = Field(min_length=1)
+    publication_boundary: str = Field(min_length=1)
+    ready_for_publication: bool
+
+
+PORTFOLIO_OPERATING_SUMMARY_ARTIFACT = JsonArtifactSpec(
+    "portfolio_operating_summary.json",
+    PortfolioOperatingSummaryArtifactPayload,
+)
 
 
 FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS = {
@@ -126,9 +160,12 @@ __all__ = [
     "FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS",
     "LifecyclePosture",
     "LifecycleRecommendation",
+    "PORTFOLIO_OPERATING_SUMMARY_ARTIFACT",
     "PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS",
     "PortfolioGovernanceFramingPayload",
+    "PortfolioLifecycleRecommendationArtifactPayload",
     "PortfolioOperatingModelPayload",
+    "PortfolioOperatingSummaryArtifactPayload",
     "PortfolioOperatingSystemPayload",
     "PriorityLevel",
     "PublicationBoundary",

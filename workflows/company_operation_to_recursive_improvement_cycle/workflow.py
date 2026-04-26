@@ -71,6 +71,7 @@ from .contracts import (
     FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS,
     PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS,
     CompanyOperationFramingPayload,
+    RECURSIVE_IMPROVEMENT_SUMMARY_ARTIFACT,
     RecursiveImprovementAnalysisPayload,
     RecursiveImprovementCyclePayload,
 )
@@ -606,9 +607,9 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             if candidate_id not in priority_matrix_text:
                 raise ValueError("recursive_improvement_priority_matrix.md must name each improvement candidate explicitly")
 
-        summary = _read_json(required_paths["recursive_improvement_summary"])
+        summary = RECURSIVE_IMPROVEMENT_SUMMARY_ARTIFACT.read(required_paths["recursive_improvement_summary"])
         summary_focus_task_ids = _require_string_list(
-            summary.get("focus_task_ids"),
+            summary.focus_task_ids,
             "recursive_improvement_summary.json must define focus_task_ids as a non-empty string list",
         )
         if summary_focus_task_ids != scoped_task_ids:
@@ -617,7 +618,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
                 raise ValueError("recursive_improvement_summary.json includes unknown focus-task references")
             raise ValueError("recursive_improvement_summary.json focus_task_ids must match the scoped company context")
         summary_focus_workflows = _require_string_list(
-            summary.get("focus_workflows"),
+            summary.focus_workflows,
             "recursive_improvement_summary.json must define focus_workflows as a non-empty string list",
         )
         if summary_focus_workflows != scoped_workflow_names:
@@ -626,19 +627,19 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
                 raise ValueError("recursive_improvement_summary.json includes unknown focus-workflow references")
             raise ValueError("recursive_improvement_summary.json focus_workflows must match the scoped company context")
         summary_candidate_ids = _require_string_list(
-            summary.get("candidate_ids"),
+            summary.candidate_ids,
             "recursive_improvement_summary.json must define candidate_ids as a non-empty string list",
         )
         if summary_candidate_ids != candidate_ids:
             raise ValueError("recursive_improvement_summary.json candidate_ids must not drift from recursive_improvement_candidates.json")
         priority_item_ids = _require_string_list(
-            summary.get("priority_item_ids"),
+            summary.priority_item_ids,
             "recursive_improvement_summary.json must define priority_item_ids as a non-empty string list",
         )
         if priority_item_ids != candidate_ids:
             raise ValueError("recursive_improvement_summary.json priority_item_ids must match recursive_improvement_candidates.json")
         summary_priority_categories = _require_priority_category_list(
-            summary.get("priority_categories"),
+            summary.priority_categories,
             "recursive_improvement_summary.json must define priority_categories as a non-empty string list",
         )
         if summary_priority_categories != priority_categories:
@@ -646,7 +647,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
                 "recursive_improvement_summary.json priority_categories must not drift from recursive_improvement_candidates.json"
             )
         summary_priority_category_counts = _require_priority_category_count_mapping(
-            summary.get("priority_category_counts"),
+            summary.priority_category_counts,
             "recursive_improvement_summary.json must define priority_category_counts as a JSON object",
         )
         if summary_priority_category_counts != priority_category_counts:
@@ -654,13 +655,13 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
                 "recursive_improvement_summary.json priority_category_counts must not drift from recursive_improvement_candidates.json"
             )
         authoritative_artifacts = validate_authoritative_artifact_subset(
-            summary.get("authoritative_artifacts"),
+            summary.authoritative_artifacts,
             required_artifacts=_AUTHORITATIVE_PACKAGE_ARTIFACTS,
             missing_error_message="recursive_improvement_summary.json must define authoritative_artifacts as a non-empty string list",
             subset_error_message="recursive_improvement_summary.json authoritative_artifacts must include recursive_improvement_cycle, recursive_improvement_summary, recursive_improvement_next_actions, company_pressure_map, recursive_improvement_priority_matrix, and recursive_improvement_candidates",
         )
         next_action = _require_text(
-            summary.get("next_action"),
+            summary.next_action,
             "recursive_improvement_summary.json must define a non-empty next_action",
         )
         validate_no_hidden_execution_signal(
@@ -668,17 +669,17 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             "recursive_improvement_summary.json next_action must not imply hidden downstream execution",
         )
         publication_boundary = validate_publication_boundary(
-            summary.get("publication_boundary"),
+            summary.publication_boundary,
             expected_boundary=_PUBLICATION_BOUNDARY,
             missing_error_message="recursive_improvement_summary.json must define a non-empty publication_boundary",
             mismatch_error_message="recursive_improvement_summary.json publication_boundary must be recursive_improvement_publication_only",
         )
         require_true_flag(
-            summary.get("ready_for_publication"),
+            summary.ready_for_publication,
             "recursive_improvement_summary.json must confirm ready_for_publication=true",
         )
         if _require_text(
-            summary.get("workflow_name"),
+            summary.workflow_name,
             "recursive_improvement_summary.json must define workflow_name",
         ) != ctx.workflow_name:
             raise ValueError("recursive_improvement_summary.json workflow_name must match the workflow")

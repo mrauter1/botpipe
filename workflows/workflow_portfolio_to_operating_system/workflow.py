@@ -68,6 +68,7 @@ from .contracts import (
     ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
     FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
     PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
+    PORTFOLIO_OPERATING_SUMMARY_ARTIFACT,
     PortfolioGovernanceFramingPayload,
     PortfolioOperatingModelPayload,
     PortfolioOperatingSystemPayload,
@@ -486,28 +487,28 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             analyzed_workflows=state.analyzed_workflows or scoped_workflow_names,
         )
 
-        summary = _read_json(required_paths["portfolio_operating_summary"])
+        summary = PORTFOLIO_OPERATING_SUMMARY_ARTIFACT.read(required_paths["portfolio_operating_summary"])
         summary_focus_workflows = _require_string_list(
-            summary.get("focus_workflows"),
+            summary.focus_workflows,
             "portfolio_operating_summary.json must define focus_workflows as a non-empty string list",
         )
         if summary_focus_workflows != scoped_workflow_names:
             raise ValueError("portfolio_operating_summary.json focus_workflows must match the scoped portfolio context")
         analyzed_workflows = _require_string_list(
-            summary.get("analyzed_workflows"),
+            summary.analyzed_workflows,
             "portfolio_operating_summary.json must define analyzed_workflows as a non-empty string list",
         )
         if state.analyzed_workflows and analyzed_workflows != state.analyzed_workflows:
             raise ValueError("portfolio_operating_summary.json analyzed_workflows must match workflow state")
         lifecycle_postures = _validated_lifecycle_recommendations(
-            summary.get("lifecycle_recommendations"),
+            [entry.model_dump(mode="python") for entry in summary.lifecycle_recommendations],
             allowed_workflows=analyzed_workflows,
             error_prefix="portfolio_operating_summary.json",
         )
         if state.lifecycle_postures and lifecycle_postures != state.lifecycle_postures:
             raise ValueError("portfolio_operating_summary.json lifecycle_recommendations must match workflow state")
         governance_posture_counts = _require_count_mapping(
-            summary.get("governance_posture_counts"),
+            summary.governance_posture_counts,
             "portfolio_operating_summary.json must define governance_posture_counts as a JSON object",
         )
         expected_posture_counts = _count_lifecycle_postures(lifecycle_postures)
@@ -516,7 +517,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
                 "portfolio_operating_summary.json governance_posture_counts must not drift from lifecycle_recommendations"
             )
         summary_change_candidate_ids = _require_string_list(
-            summary.get("change_candidate_ids"),
+            summary.change_candidate_ids,
             "portfolio_operating_summary.json must define change_candidate_ids as a non-empty string list",
         )
         if summary_change_candidate_ids != change_candidate_ids:
@@ -524,7 +525,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         if state.change_candidate_ids and summary_change_candidate_ids != state.change_candidate_ids:
             raise ValueError("portfolio_operating_summary.json change_candidate_ids must match workflow state")
         priority_workflows = _require_string_list(
-            summary.get("priority_workflows"),
+            summary.priority_workflows,
             "portfolio_operating_summary.json must define priority_workflows as a non-empty string list",
         )
         if state.priority_workflows and priority_workflows != state.priority_workflows:
@@ -533,13 +534,13 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             if workflow_name not in analyzed_workflows:
                 raise ValueError("portfolio_operating_summary.json priority_workflows must be drawn from analyzed_workflows")
         authoritative_artifacts = validate_authoritative_artifact_subset(
-            summary.get("authoritative_artifacts"),
+            summary.authoritative_artifacts,
             required_artifacts=_AUTHORITATIVE_PACKAGE_ARTIFACTS,
             missing_error_message="portfolio_operating_summary.json must define authoritative_artifacts as a non-empty string list",
             subset_error_message="portfolio_operating_summary.json authoritative_artifacts must include workflow_portfolio_operating_system, portfolio_operating_summary, portfolio_next_actions, workflow_lifecycle_matrix, portfolio_gap_analysis, and portfolio_change_candidates",
         )
         next_action = _require_text(
-            summary.get("next_action"),
+            summary.next_action,
             "portfolio_operating_summary.json must define a non-empty next_action",
         )
         validate_no_hidden_execution_signal(
@@ -547,13 +548,13 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             "portfolio_operating_summary.json next_action must not imply hidden downstream execution",
         )
         publication_boundary = validate_publication_boundary(
-            summary.get("publication_boundary"),
+            summary.publication_boundary,
             expected_boundary=_PUBLICATION_BOUNDARY,
             missing_error_message="portfolio_operating_summary.json must define a non-empty publication_boundary",
             mismatch_error_message="portfolio_operating_summary.json publication_boundary must be operating_system_publication_only",
         )
         require_true_flag(
-            summary.get("ready_for_publication"),
+            summary.ready_for_publication,
             "portfolio_operating_summary.json must confirm ready_for_publication=true",
         )
 

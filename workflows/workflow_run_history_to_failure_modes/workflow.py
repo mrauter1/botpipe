@@ -62,8 +62,10 @@ from workflow.primitives import Event, Outcome
 
 from .contracts import (
     DiagnosticScopePayload,
+    FAILURE_MODE_MANIFEST_ARTIFACT,
     FailureModeMapPayload,
     FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS,
+    IMPROVEMENT_OPPORTUNITIES_SUMMARY_ARTIFACT,
     ImprovementPressurePayload,
     MAP_FAILURE_MODES_ROUTE_CONTRACTS,
     PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS,
@@ -557,21 +559,21 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         if not any(run_id in run_history_scope_text for run_id in evidence_run_ids):
             raise ValueError("run_history_scope.md must reference the filtered run IDs")
 
-        manifest = _read_json(required_paths["failure_mode_manifest"])
+        manifest = FAILURE_MODE_MANIFEST_ARTIFACT.read(required_paths["failure_mode_manifest"])
         validate_selected_workflow_artifact_alignment(
-            manifest,
+            manifest.model_dump(mode="python"),
             artifact_name="failure_mode_manifest.json",
             expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         manifest_evidence_run_ids = _require_string_list(
-            manifest.get("evidence_run_ids"),
+            manifest.evidence_run_ids,
             "failure_mode_manifest.json must define non-empty evidence_run_ids",
         )
         if manifest_evidence_run_ids != evidence_run_ids:
             raise ValueError("failure_mode_manifest.json evidence_run_ids must match selected_workflow_run_history.json")
         manifest_failure_mode_ids = _require_string_list(
-            manifest.get("failure_mode_ids"),
+            manifest.failure_mode_ids,
             "failure_mode_manifest.json must define non-empty failure_mode_ids",
         )
         require_unique_values(
@@ -581,7 +583,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         if state.failure_mode_ids and manifest_failure_mode_ids != state.failure_mode_ids:
             raise ValueError("failure_mode_manifest.json failure_mode_ids must match workflow state")
         manifest_recurring_weak_point_ids = _require_string_list(
-            manifest.get("recurring_weak_point_ids"),
+            manifest.recurring_weak_point_ids,
             "failure_mode_manifest.json must define non-empty recurring_weak_point_ids",
         )
         require_unique_values(
@@ -591,16 +593,13 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         if state.recurring_weak_point_ids and manifest_recurring_weak_point_ids != state.recurring_weak_point_ids:
             raise ValueError("failure_mode_manifest.json recurring_weak_point_ids must match workflow state")
         manifest_workflow_name = _require_text(
-            manifest.get("workflow_name"),
+            manifest.workflow_name,
             "failure_mode_manifest.json must define a non-empty workflow_name",
         )
         if manifest_workflow_name != ctx.workflow_name:
             raise ValueError("failure_mode_manifest.json workflow_name must match the current workflow")
 
-        failure_modes = _require_mapping_list(
-            manifest.get("failure_modes"),
-            "failure_mode_manifest.json failure_modes must be a JSON array of objects",
-        )
+        failure_modes = [entry.model_dump(mode="python") for entry in manifest.failure_modes]
         if len(failure_modes) != len(manifest_failure_mode_ids):
             raise ValueError("failure_mode_manifest.json failure_modes must match failure_mode_ids")
 
@@ -659,27 +658,29 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             if recurring_weak_point_id not in recurring_weak_points_text:
                 raise ValueError("recurring_weak_points.md must reference each recurring_weak_point_id")
 
-        improvement_summary = _read_json(required_paths["improvement_opportunities_summary"])
+        improvement_summary = IMPROVEMENT_OPPORTUNITIES_SUMMARY_ARTIFACT.read(
+            required_paths["improvement_opportunities_summary"]
+        )
         validate_selected_workflow_artifact_alignment(
-            improvement_summary,
+            improvement_summary.model_dump(mode="python"),
             artifact_name="improvement_opportunities.json",
             expected_selected_workflow_name=snapshot_selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         summary_evidence_run_ids = _require_string_list(
-            improvement_summary.get("evidence_run_ids"),
+            improvement_summary.evidence_run_ids,
             "improvement_opportunities.json must define non-empty evidence_run_ids",
         )
         if summary_evidence_run_ids != evidence_run_ids:
             raise ValueError("improvement_opportunities.json evidence_run_ids must match selected_workflow_run_history.json")
         summary_failure_mode_ids = _require_string_list(
-            improvement_summary.get("failure_mode_ids"),
+            improvement_summary.failure_mode_ids,
             "improvement_opportunities.json must define non-empty failure_mode_ids",
         )
         if summary_failure_mode_ids != manifest_failure_mode_ids:
             raise ValueError("improvement_opportunities.json failure_mode_ids must match failure_mode_manifest.json")
         ranked_opportunity_ids = _require_string_list(
-            improvement_summary.get("ranked_opportunity_ids"),
+            improvement_summary.ranked_opportunity_ids,
             "improvement_opportunities.json must define non-empty ranked_opportunity_ids",
         )
         require_unique_values(
@@ -688,10 +689,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         )
         if state.ranked_opportunity_ids and ranked_opportunity_ids != state.ranked_opportunity_ids:
             raise ValueError("improvement_opportunities.json ranked_opportunity_ids must match workflow state")
-        opportunities = _require_mapping_list(
-            improvement_summary.get("opportunities"),
-            "improvement_opportunities.json opportunities must be a JSON array of objects",
-        )
+        opportunities = [entry.model_dump(mode="python") for entry in improvement_summary.opportunities]
         if len(opportunities) != len(ranked_opportunity_ids):
             raise ValueError("improvement_opportunities.json opportunities must match ranked_opportunity_ids")
 
@@ -737,27 +735,27 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             raise ValueError("improvement_opportunities.json ranked_opportunity_ids must match the opportunities entries")
 
         authoritative_artifacts = validate_authoritative_artifact_subset(
-            improvement_summary.get("authoritative_artifacts"),
+            improvement_summary.authoritative_artifacts,
             required_artifacts=_AUTHORITATIVE_PACKAGE_ARTIFACTS,
             missing_error_message="improvement_opportunities.json must define non-empty authoritative_artifacts",
             subset_error_message="improvement_opportunities.json authoritative_artifacts must include improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions, failure_mode_map, failure_mode_manifest, and recurring_weak_points",
         )
         next_action = _require_text(
-            improvement_summary.get("next_action"),
+            improvement_summary.next_action,
             "improvement_opportunities.json must define a non-empty next_action",
         )
         publication_boundary = validate_publication_boundary(
-            improvement_summary.get("publication_boundary"),
+            improvement_summary.publication_boundary,
             expected_boundary=_PUBLICATION_BOUNDARY,
             missing_error_message="improvement_opportunities.json must define a non-empty publication_boundary",
             mismatch_error_message="improvement_opportunities.json publication_boundary must be diagnostic_publication_only",
         )
         require_true_flag(
-            improvement_summary.get("ready_for_publication"),
+            improvement_summary.ready_for_publication,
             "improvement_opportunities.json must confirm ready_for_publication=true",
         )
         summary_workflow_name = _require_text(
-            improvement_summary.get("workflow_name"),
+            improvement_summary.workflow_name,
             "improvement_opportunities.json must define a non-empty workflow_name",
         )
         if summary_workflow_name != ctx.workflow_name:

@@ -6,6 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import JsonArtifactSpec
+except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import JsonArtifactSpec
+
 from workflow import RouteContract
 
 
@@ -66,6 +71,28 @@ class RecursiveImprovementCyclePayload(BaseModel):
     publication_boundary: PublicationBoundary
     ready_for_publication: bool
     replan_reason: str | None = None
+
+
+class RecursiveImprovementSummaryArtifactPayload(BaseModel):
+    """Typed contract for recursive_improvement_summary.json."""
+
+    workflow_name: str = Field(min_length=1)
+    focus_task_ids: list[str] = Field(min_length=1)
+    focus_workflows: list[str] = Field(min_length=1)
+    candidate_ids: list[str] = Field(min_length=1)
+    priority_item_ids: list[str] = Field(min_length=1)
+    priority_categories: list[str] = Field(min_length=1)
+    priority_category_counts: dict[str, int]
+    authoritative_artifacts: list[str] = Field(min_length=1)
+    next_action: str = Field(min_length=1)
+    publication_boundary: str = Field(min_length=1)
+    ready_for_publication: bool
+
+
+RECURSIVE_IMPROVEMENT_SUMMARY_ARTIFACT = JsonArtifactSpec(
+    "recursive_improvement_summary.json",
+    RecursiveImprovementSummaryArtifactPayload,
+)
 
 
 FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS = {
@@ -154,4 +181,6 @@ __all__ = [
     "RecursiveImprovementAnalysisPayload",
     "RecursiveImprovementCyclePayload",
     "RecursiveImprovementPriority",
+    "RECURSIVE_IMPROVEMENT_SUMMARY_ARTIFACT",
+    "RecursiveImprovementSummaryArtifactPayload",
 ]

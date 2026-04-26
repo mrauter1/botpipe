@@ -502,6 +502,7 @@ Typed JSON artifact boundary:
 - use `artifact_spec.validate(path)` or `validate_model_file(path, Model)` for focused proof or readable failure reports when a workflow-local JSON contract needs direct validation
 - use this seam for durable package summaries and validated output manifests; raw proposal or draft inputs may stay workflow-local until a validation step writes the authoritative artifact
 - split durable artifact models from verifier payload models when the on-disk JSON omits verifier-only prose fields such as `summary`
+- keep typed artifact models focused on stable shape and mechanical presence checks; workflow-local allow-lists, publication-boundary policy, cross-artifact drift checks, and receipt shaping should stay in workflow code when they preserve clearer local error semantics
 - keep artifact filenames and top-level JSON keys stable; the typed seam should clarify authoring, not rename surfaces
 - keep cross-artifact alignment, state-drift checks, hidden-execution policy, and receipt shaping in workflow code
 - do not force every intermediate JSON draft through `JsonArtifactSpec(...)` when the workflow has not validated it yet

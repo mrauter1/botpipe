@@ -6,6 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+try:  # pragma: no branch - supports both package and direct repo-root imports
+    from autoloop_v3.stdlib import JsonArtifactSpec
+except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from stdlib import JsonArtifactSpec
+
 from workflow import RouteContract
 
 
@@ -47,6 +52,66 @@ class ImprovementPressurePayload(BaseModel):
     publication_boundary: PublicationBoundary
     ready_for_publication: bool
     replan_reason: str | None = None
+
+
+class FailureModeArtifactPayload(BaseModel):
+    """Durable failure-mode record for failure_mode_manifest.json."""
+
+    failure_mode_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    severity: str = Field(min_length=1)
+    evidence_run_ids: list[str] = Field(min_length=1)
+    symptom_pattern: str = Field(min_length=1)
+    likely_causes: list[str] = Field(min_length=1)
+    supporting_signals: list[str] = Field(min_length=1)
+
+
+class FailureModeManifestArtifactPayload(BaseModel):
+    """Typed contract for failure_mode_manifest.json."""
+
+    selected_workflow_name: str = Field(min_length=1)
+    evidence_run_ids: list[str] = Field(min_length=1)
+    failure_mode_ids: list[str] = Field(min_length=1)
+    failure_modes: list[FailureModeArtifactPayload] = Field(min_length=1)
+    recurring_weak_point_ids: list[str] = Field(min_length=1)
+    workflow_name: str = Field(min_length=1)
+
+
+class ImprovementOpportunityArtifactPayload(BaseModel):
+    """Durable improvement-opportunity record for improvement_opportunities.json."""
+
+    opportunity_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    priority: str = Field(min_length=1)
+    linked_failure_mode_ids: list[str] = Field(min_length=1)
+    recommended_next_step: str = Field(min_length=1)
+    why_now: str = Field(min_length=1)
+    expected_impact: str = Field(min_length=1)
+
+
+class ImprovementOpportunitiesSummaryArtifactPayload(BaseModel):
+    """Typed contract for improvement_opportunities.json."""
+
+    selected_workflow_name: str = Field(min_length=1)
+    evidence_run_ids: list[str] = Field(min_length=1)
+    failure_mode_ids: list[str] = Field(min_length=1)
+    ranked_opportunity_ids: list[str] = Field(min_length=1)
+    opportunities: list[ImprovementOpportunityArtifactPayload] = Field(min_length=1)
+    authoritative_artifacts: list[str] = Field(min_length=1)
+    next_action: str = Field(min_length=1)
+    publication_boundary: str = Field(min_length=1)
+    ready_for_publication: bool
+    workflow_name: str = Field(min_length=1)
+
+
+FAILURE_MODE_MANIFEST_ARTIFACT = JsonArtifactSpec(
+    "failure_mode_manifest.json",
+    FailureModeManifestArtifactPayload,
+)
+IMPROVEMENT_OPPORTUNITIES_SUMMARY_ARTIFACT = JsonArtifactSpec(
+    "improvement_opportunities.json",
+    ImprovementOpportunitiesSummaryArtifactPayload,
+)
 
 
 FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS = {
@@ -106,8 +171,14 @@ PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS = {
 
 __all__ = [
     "DiagnosticScopePayload",
+    "FAILURE_MODE_MANIFEST_ARTIFACT",
+    "FailureModeArtifactPayload",
+    "FailureModeManifestArtifactPayload",
     "FailureModeMapPayload",
     "FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS",
+    "IMPROVEMENT_OPPORTUNITIES_SUMMARY_ARTIFACT",
+    "ImprovementOpportunitiesSummaryArtifactPayload",
+    "ImprovementOpportunityArtifactPayload",
     "ImprovementPressurePayload",
     "MAP_FAILURE_MODES_ROUTE_CONTRACTS",
     "PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS",
