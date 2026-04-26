@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import WorkflowParameterError
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop_v3.runtime.workspace import (
@@ -35,13 +36,21 @@ def _isolate_generated_workflow_modules():
     _clear_workflow_modules()
 
 
+def _runner_options(root: Path, **kwargs: object) -> RunnerOptions:
+    kwargs.setdefault(
+        "runtime_config",
+        RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+    )
+    return RunnerOptions(root=root, **kwargs)
+
+
 def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tmp_path: Path) -> None:
     _write_system_workflow_package(tmp_path, "snapshot_demo", "SnapshotWorkflow")
 
     first_result = run_workflow_package(
         "snapshot_demo",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="task-1", message="First message"),
+        options=_runner_options(tmp_path, task_id="task-1", message="First message"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "task-1"
@@ -68,7 +77,7 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     second_result = run_workflow_package(
         "snapshot_demo",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="task-1", message="Second message"),
+        options=_runner_options(tmp_path, task_id="task-1", message="Second message"),
     )
 
     run_dirs = sorted(path for path in runs_dir.iterdir() if path.is_dir())
@@ -116,8 +125,8 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
     result = run_workflow_package(
         "context_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="context-task",
             message="Inspect runtime context",
             workflow_params={"mode": "strict"},
@@ -179,8 +188,8 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
     paused = run_workflow_package(
         "resume_params_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="task-params",
             message="Need workflow parameters",
             workflow_params={"mode": "strict"},
@@ -194,8 +203,8 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
     resumed = run_workflow_package(
         "resume_params_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="task-params",
             run_id=run_dir.name,
             resume=True,
@@ -250,8 +259,8 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     paused = run_workflow_package(
         "resume_override_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="task-override",
             message="Need workflow parameters",
             workflow_params={"mode": "strict"},
@@ -264,8 +273,8 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     resumed = run_workflow_package(
         "resume_override_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="task-override",
             run_id=run_dir.name,
             resume=True,
@@ -353,8 +362,8 @@ class Parameters(BaseModel):
     paused = run_workflow_package(
         "typed_params_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="task-typed-new",
             message="Need typed params",
             workflow_params={"mode": "focused", "reviewers": ["alice", "bob"]},
@@ -405,8 +414,8 @@ class Parameters(BaseModel):
     paused = run_workflow_package(
         "typed_normalized_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="task-typed-normalized",
             message="Need normalized typed params",
             workflow_params={"retries": "5"},
@@ -472,8 +481,8 @@ class Parameters(BaseModel):
     paused = run_workflow_package(
         "typed_resume_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="task-typed-resume",
             message="Need typed params",
             workflow_params={"mode": "strict"},
@@ -486,8 +495,8 @@ class Parameters(BaseModel):
     resumed = run_workflow_package(
         "typed_resume_demo",
         provider=provider,
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="task-typed-resume",
             run_id=run_dir.name,
             resume=True,
@@ -525,8 +534,8 @@ class Parameters(BaseModel):
         run_workflow_package(
             "typed_invalid_demo",
             provider=ScriptedLLMProvider(),
-            options=RunnerOptions(
-                root=tmp_path,
+            options=_runner_options(
+                tmp_path,
                 task_id="task-invalid-params",
                 message="Need typed params",
                 workflow_params={"unknown": "value"},
@@ -874,7 +883,7 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
                 )[1]
             ]
         ),
-        options=RunnerOptions(root=tmp_path, task_id="subworkflow-class-task", message="Parent request"),
+        options=_runner_options(tmp_path, task_id="subworkflow-class-task", message="Parent request"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-class-task"
@@ -963,7 +972,7 @@ def test_composition_helpers_keep_child_invocation_explicit_and_adopt_selected_a
                 )[1]
             ]
         ),
-        options=RunnerOptions(root=tmp_path, task_id="subworkflow-helper-task", message="Parent request"),
+        options=_runner_options(tmp_path, task_id="subworkflow-helper-task", message="Parent request"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-helper-task"
@@ -1015,7 +1024,7 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
     paused_parent = run_workflow_package(
         "parent_name",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="subworkflow-name-task", message="Parent request"),
+        options=_runner_options(tmp_path, task_id="subworkflow-name-task", message="Parent request"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-name-task"
@@ -1038,8 +1047,8 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
                 )[1]
             ]
         ),
-        options=RunnerOptions(
-            root=tmp_path,
+        options=_runner_options(
+            tmp_path,
             task_id="subworkflow-name-task",
             run_id=parent_run_dir.name,
             resume=True,
@@ -1092,7 +1101,7 @@ def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_c
         run_workflow_package(
             "parent_failing",
             provider=ScriptedLLMProvider(),
-            options=RunnerOptions(root=tmp_path, task_id="subworkflow-fatal-task", message="Parent request"),
+            options=_runner_options(tmp_path, task_id="subworkflow-fatal-task", message="Parent request"),
         )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-fatal-task"
@@ -1135,7 +1144,7 @@ def test_context_invoke_workflow_supports_typed_child_input_and_output(tmp_path:
     result = run_workflow_package(
         "parent_typed",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="subworkflow-typed-task", message="Parent request"),
+        options=_runner_options(tmp_path, task_id="subworkflow-typed-task", message="Parent request"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-typed-task"
@@ -1183,7 +1192,7 @@ def test_context_invoke_workflow_records_typed_child_output_validation_failures(
     result = run_workflow_package(
         "parent_typed_invalid",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="subworkflow-typed-invalid-task", message="Parent request"),
+        options=_runner_options(tmp_path, task_id="subworkflow-typed-invalid-task", message="Parent request"),
     )
 
     task_dir = tmp_path / ".autoloop" / "tasks" / "subworkflow-typed-invalid-task"

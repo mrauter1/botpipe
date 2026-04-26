@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -61,6 +62,24 @@ class _UnusedProvider:
 
 def _provider_factory(**_: object) -> _UnusedProvider:
     return _UnusedProvider()
+
+
+def _git(root: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout
+
+
+def _init_repo(root: Path) -> None:
+    _git(root, "init")
+    _git(root, "config", "user.email", "test@example.com")
+    _git(root, "config", "user.name", "Test")
+    _git(root, "add", "workflows")
+    _git(root, "commit", "-m", "baseline")
 
 
 def _write_workflow_package(
@@ -404,6 +423,7 @@ class Parameters(BaseModel):
             str(tmp_path),
             "--message",
             "Serialize defaults",
+            "--no-git",
         ],
         provider_factory=_provider_factory,
     )
@@ -439,6 +459,7 @@ def test_cli_mutating_commands_accept_non_public_provider_factory_injection_seam
             str(tmp_path),
             "--message",
             "Run with a non-public injected provider factory",
+            "--no-git",
         ],
         provider_factory=_provider_factory,
     )
@@ -475,6 +496,7 @@ def test_cli_mutating_commands_route_public_provider_selection_through_typed_con
             str(tmp_path),
             "--message",
             "Run with a public provider selection path",
+            "--no-git",
             "--provider",
             "claude",
             "--model",
@@ -511,6 +533,7 @@ def test_cli_mutating_commands_route_runtime_git_and_trace_overrides_through_typ
         workflow_name="runtime_configured",
         class_name="RuntimeConfiguredWorkflow",
     )
+    _init_repo(tmp_path)
 
     exit_code = cli.main(
         [
@@ -601,6 +624,7 @@ class Parameters(BaseModel):
             str(tmp_path),
             "--message",
             "Review this change",
+            "--no-git",
             "-wf",
             "mode",
             "focused",
@@ -656,7 +680,7 @@ class Parameters(BaseModel):
     assert "raw log output is missing" in raw_logs_captured.err
 
     resume_exit = cli.main(
-        ["resume", "review", "task-42", "--root", str(tmp_path)],
+        ["resume", "review", "task-42", "--root", str(tmp_path), "--no-git"],
         provider_factory=_provider_factory,
     )
     resume_output = json.loads(capsys.readouterr().out)
@@ -667,7 +691,7 @@ class Parameters(BaseModel):
     assert len(list((run_dir.parent).iterdir())) == 1
 
     answer_exit = cli.main(
-        ["answer", "review", "task-42", "--root", str(tmp_path), "--answer", "Use OAuth"],
+        ["answer", "review", "task-42", "--root", str(tmp_path), "--answer", "Use OAuth", "--no-git"],
         provider_factory=_provider_factory,
     )
     answer_output = json.loads(capsys.readouterr().out)
@@ -702,12 +726,12 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
     )
 
     first_exit = cli.main(
-        ["run", "review", "task-runs", "--root", str(tmp_path), "--message", "First request"],
+        ["run", "review", "task-runs", "--root", str(tmp_path), "--message", "First request", "--no-git"],
         provider_factory=_provider_factory,
     )
     first_run = json.loads(capsys.readouterr().out)
     second_exit = cli.main(
-        ["run", "review", "task-runs", "--root", str(tmp_path), "--message", "Second request"],
+        ["run", "review", "task-runs", "--root", str(tmp_path), "--message", "Second request", "--no-git"],
         provider_factory=_provider_factory,
     )
     second_run = json.loads(capsys.readouterr().out)
@@ -724,7 +748,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
     assert latest_show["status"] == "paused"
 
     latest_resume_exit = cli.main(
-        ["resume", "review", "task-runs", "--root", str(tmp_path)],
+        ["resume", "review", "task-runs", "--root", str(tmp_path), "--no-git"],
         provider_factory=_provider_factory,
     )
     latest_resume = json.loads(capsys.readouterr().out)
@@ -744,6 +768,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
             first_run["run_id"],
             "--answer",
             "Resolve the older run explicitly",
+            "--no-git",
         ],
         provider_factory=_provider_factory,
     )

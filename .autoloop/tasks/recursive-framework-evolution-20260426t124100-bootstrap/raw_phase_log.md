@@ -1221,3 +1221,70 @@ Address the three blocking findings, then rerun the targeted phase tests plus th
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcab5-335a-7580-9146-926cf88f11fe
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+I’m checking the existing git-tracking tests and runner contracts before editing. The main design pressure is the self-referential `commit_after_run` metadata: I need a fix that preserves the requested semantics without adding a second execution model or weakening clean-start rules.
+
+I’ve settled the repair direction. I’m moving final git commits out of the engine hook and into the runner’s post-run/fatal path, then I’ll add a metadata-flush commit to avoid leaving runtime-owned files dirty. After that I’ll sweep the remaining runtime tests to opt out explicitly instead of weakening the default.
+
+I’m editing the runtime pieces now. The changes are concentrated in `runtime/git_tracking.py`, `runtime/observability.py`, `runtime/runner.py`, and the fatal-hook path in `core/engine.py`, plus the remaining runtime tests that need explicit git opt-out.
+
+I’ve moved the fatal propagation and final-commit wiring. I’m tightening the error shape now so raise-mode fatal trace failures surface as the real exception, then I’ll add explicit coverage for that path before running the targeted suite.
+
+The code edits are in. I’m running the targeted suites now to catch any contract regressions in the new finalization order, especially around pause/fatal handling and the extra metadata commit.
+
+The first pass is clean. I’m widening the validation slightly to the tracing and provider/runtime suites that sit adjacent to this phase, since the runner’s terminal ordering changed and that’s a plausible regression surface.
+
+The adjacent CLI suite exposed one more regression surface: several command tests still assume non-git temp roots, and one override test is now a good canary for the runner’s new terminal finalization order. I’m reproducing one of those directly so I can fix the right layer instead of papering over the symptoms.
+
+The CLI failures are a real code bug, not just stale tests. The CLI resolves the typed runtime config but never passes it into `RunnerOptions`, so `--no-git`, `--git-commit-policy`, and `--no-trace` were effectively ignored on the run path. I’m fixing that wiring now.
+
+The CLI seam is fixed too. I’m doing one final consolidated run across the phase tests plus the adjacent runtime modules I had to touch, then I’ll update the phase notes and decision ledger.
+
+I’m updating the phase artifacts now. The remaining notes need to reflect two non-obvious choices: the metadata follow-up commit that keeps the repo clean at terminal/fatal boundaries, and the selective fatal-error propagation that keeps workflow extension semantics intact while honoring runtime raise-mode.
+
+Scope considered
+
+Phase-local engine/runner observability binding, focused on the three verifier findings: dirty post-terminal git metadata, swallowed fatal-path observability failures, and the remaining non-git runtime/CLI tests.
+
+What I analyzed
+
+I re-checked [runtime/git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/git_tracking.py), [runtime/observability.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/observability.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), and the CLI wiring in [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py). I also traced the affected tests in [tests/runtime/test_runtime_git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_git_tracking.py), [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py), [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py), and [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py).
+
+What I changed
+
+I moved terminal/fatal git finalization out of the engine lifecycle hook and into the runner’s post-run/post-fatal path, so runner-owned `run_finished` metadata is written before the final git boundary commit. To keep `run.json` and `git_tracking.jsonl` summaries from leaving the repo dirty, terminal/fatal paths now add a deterministic follow-up metadata commit: `autoloop: metadata <workflow_name> <run_id>`.
+
+I changed fatal-path handling so runtime observability can propagate raise-mode failures while workflow-declared extension fatal hooks remain best-effort. I also fixed the CLI wiring so resolved runtime config is actually passed into `RunnerOptions`; before this, `--no-git`, `--git-commit-policy`, and `--no-trace` were parsed but ignored on `run`/`resume`/`answer`.
+
+I updated the remaining runtime and CLI tests to either opt out of git tracking explicitly or initialize git when the test is specifically exercising git-enabled CLI behavior, and I refreshed the phase implementation notes plus the shared decision ledger.
+
+Key findings / decisions
+
+The cleanest way to resolve the self-referential terminal metadata problem without weakening `git add --all` or special-casing paths was a metadata-only follow-up commit after terminal/fatal summaries are written.
+
+Selective fatal propagation was necessary to preserve prior workflow extension semantics: runtime observability can fail the run in raise-mode, but ordinary workflow extension fatal handlers still do not override the original engine behavior.
+
+The CLI had a real bug independent of the tests: runtime config resolution existed, but `RunnerOptions` never received it.
+
+Open issues / next step
+
+Targeted validation is clean. I ran:
+
+```bash
+.venv/bin/python -m pytest tests/runtime/test_runtime_git_tracking.py tests/runtime/test_runtime_tracing.py tests/runtime/test_optional_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_package_cli.py tests/runtime/test_provider_backends.py tests/contract/test_engine_contracts.py -q
+```
+
+Result: `161 passed`.

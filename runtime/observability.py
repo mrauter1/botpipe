@@ -10,6 +10,8 @@ from .tracing import RuntimeTraceWriter
 class BoundRuntimeObservability:
     """Bind runtime git tracking and tracing into engine lifecycle hooks."""
 
+    propagate_fatal_exceptions = True
+
     def __init__(
         self,
         *,
@@ -22,6 +24,7 @@ class BoundRuntimeObservability:
         self._next_sequence = initial_sequence
         self._active_sequence: int | None = None
         self._active_commit_before_step: str | None = None
+        self._fatal_step_name: str | None = None
 
     def before_step(self, event: StepStart) -> None:
         sequence = self._next_sequence
@@ -60,17 +63,26 @@ class BoundRuntimeObservability:
         if event.terminal == "fatal":
             return
         self._trace_writer.terminal(event=event)
-        self._git_tracker.after_run(terminal=event.terminal)
 
     def on_fatal(self, event: TerminalFinish, error: BaseException) -> None:
+        self._fatal_step_name = event.step_name
+        errors: list[Exception] = []
         try:
             self._trace_writer.fatal(event=event, error=error)
-        except Exception:
-            pass
-        try:
-            self._git_tracker.on_fatal(step_name=event.step_name, error=error)
-        except Exception:
-            pass
+        except Exception as exc:
+            errors.append(exc)
+        if len(errors) == 1:
+            raise errors[0]
+        if errors:
+            raise ExceptionGroup("runtime observability fatal persistence failed", errors)
+
+    def commit_terminal(self, *, terminal: str | None) -> dict[str, object]:
+        return self._git_tracker.after_run(terminal=terminal)
+
+    def commit_fatal(self, *, error: BaseException) -> dict[str, object]:
+        payload = self._git_tracker.on_fatal(step_name=self._fatal_step_name, error=error)
+        self._fatal_step_name = None
+        return payload
 
 
 __all__ = ["BoundRuntimeObservability"]

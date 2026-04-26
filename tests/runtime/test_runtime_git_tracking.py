@@ -131,7 +131,7 @@ def test_git_tracking_run_policy_commits_at_run_boundaries(tmp_path: Path) -> No
     (run_dir / "result.txt").write_text("done\n", encoding="utf-8")
     finish_payload = tracker.after_run(terminal="SUCCESS")
 
-    log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:3]
+    log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:4]
     git_tracking_lines = [
         json.loads(line)
         for line in (run_dir / "git_tracking.jsonl").read_text(encoding="utf-8").splitlines()
@@ -145,6 +145,7 @@ def test_git_tracking_run_policy_commits_at_run_boundaries(tmp_path: Path) -> No
     assert step_payload["created_commit"] is False
     assert finish_payload["created_commit"] is True
     assert log_messages == [
+        "autoloop: metadata demo run-1",
         "autoloop: finish demo run-1 SUCCESS",
         "autoloop: init demo run-1",
         "init",
@@ -156,6 +157,7 @@ def test_git_tracking_run_policy_commits_at_run_boundaries(tmp_path: Path) -> No
     ]
     assert run_meta["git_tracking"]["commit_after_run"] == finish_payload["commit_after_run"]
     assert "steps" not in run_meta["git_tracking"]
+    assert _git(tmp_path, "status", "--porcelain=v1", "--untracked-files=all").strip() == ""
 
 
 def test_git_tracking_step_policy_commits_after_each_step(tmp_path: Path) -> None:
@@ -181,16 +183,18 @@ def test_git_tracking_step_policy_commits_after_each_step(tmp_path: Path) -> Non
     (run_dir / "step-2.txt").write_text("two\n", encoding="utf-8")
     tracker.after_run(terminal="SUCCESS")
 
-    log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:4]
+    log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:5]
 
     assert after_step["event_type"] == "step_committed"
     assert after_step["created_commit"] is True
     assert log_messages == [
+        "autoloop: metadata demo run-1",
         "autoloop: finish demo run-1 SUCCESS",
         "autoloop: step demo run-1 1 ask",
         "autoloop: init demo run-1",
         "init",
     ]
+    assert _git(tmp_path, "status", "--porcelain=v1", "--untracked-files=all").strip() == ""
 
 
 def test_git_tracking_commit_all_tracks_untracked_files(tmp_path: Path) -> None:
@@ -380,7 +384,7 @@ def test_git_tracking_fatal_commits_and_records_run_metadata(tmp_path: Path) -> 
 
     payload = tracker.on_fatal(step_name="assessment", error=RuntimeError("boom"))
 
-    log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:3]
+    log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:4]
     lines = [
         json.loads(line)
         for line in (run_dir / "git_tracking.jsonl").read_text(encoding="utf-8").splitlines()
@@ -397,7 +401,9 @@ def test_git_tracking_fatal_commits_and_records_run_metadata(tmp_path: Path) -> 
     assert lines[-1]["commit_after_run"] == payload["commit_after_run"]
     assert run_meta["git_tracking"]["commit_after_run"] == payload["commit_after_run"]
     assert log_messages == [
+        "autoloop: metadata demo run-1",
         "autoloop: fatal demo run-1",
         "autoloop: init demo run-1",
         "init",
     ]
+    assert _git(tmp_path, "status", "--porcelain=v1", "--untracked-files=all").strip() == ""

@@ -225,6 +225,7 @@ class RuntimeGitTracker:
             created_commit=created_commit,
         )
         update_run_git_tracking(self._require_run_dir(), {"commit_after_run": commit_after_run})
+        self._flush_runtime_metadata()
         return payload
 
     def _fatal_operation(self, *, step_name: str | None, error: BaseException) -> dict[str, object]:
@@ -238,6 +239,7 @@ class RuntimeGitTracker:
             created_commit=created_commit,
         )
         update_run_git_tracking(self._require_run_dir(), {"commit_after_run": commit_after_run})
+        self._flush_runtime_metadata()
         return payload
 
     def _operate(self, operation):
@@ -288,6 +290,12 @@ class RuntimeGitTracker:
 
     def _fatal_commit_message(self) -> str:
         return f"autoloop: fatal {self._workflow_name} {self._run_id}"
+
+    def _flush_runtime_metadata(self) -> None:
+        self._repo.commit_all(self._metadata_commit_message())
+
+    def _metadata_commit_message(self) -> str:
+        return f"autoloop: metadata {self._workflow_name} {self._run_id}"
 
 
 def _utcnow() -> str:
