@@ -838,3 +838,46 @@ Retry exhaustion is stored additively inside existing `failure_context` rather t
 Open issues / next step
 
 This phase is complete and validated. The next scoped work is the deferred handoff phase and the later doc/baseline wording updates. Validation run: targeted phase tests passed, and full suite passed with `.venv/bin/pytest -q` (`706 passed`).
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’m reviewing the `engine-provider-retries` phase against the phase contract and the code that changed for it. I’ll inspect the phase artifacts first, then audit the touched core/test files for correctness, retry-boundary fidelity, and regression risk before updating `criteria.md` and `feedback.md`.
+
+I’ve moved from artifact inspection into code-path review. I’m checking the retry classifier against the actual provider/runtime error sources now, because the main regression risk in this phase is silently retrying the wrong failures or missing provider failures that were supposed to retry.
+
+I’ve found a material correctness issue in the retry implementation. I’m updating the phase artifacts with a blocking finding tied to session-bound retries, because the current loop preserves provider transcript state across retry attempts and that violates the accepted retry boundary.
+
+Scope considered
+
+Phase-local review of `engine-provider-retries`: the new retry policy surface, compiled metadata, engine retry loop, provider request enrichment, checkpoint failure context, and the matching tests/artifacts. I did not expand into out-of-phase handoff work except to verify that the current retry behavior does not silently cross that boundary.
+
+What I analyzed
+
+I reviewed the active phase artifacts, shared decisions, and the changed implementation in `core/providers/retries.py`, `core/steps.py`, `core/compiler.py`, `core/validation.py`, `core/engine.py`, `core/providers/fake.py`, the public shims, and the retry-focused tests. I also checked the runtime provider/session behavior to see whether the retry loop actually honors the “no previous transcript” constraint from the accepted plan.
+
+What I reviewed
+
+I updated `criteria.md` and `feedback.md`. I found one blocking issue in the engine retry/session interaction: provider-attributable retries currently reuse the failed attempt’s persisted `SessionBinding`, so session-bound retries resume the same provider transcript instead of rebuilding a transcript-free retry turn.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The implementation satisfies most of the phase contract, and validation coverage is good, but the current retry loop violates AC-3 for session-bound steps because attempt 2 can still carry attempt 1 transcript history through provider session resume. I left the criteria with correctness/safety/compatibility unchecked and recorded the minimal fix direction in feedback.
+
+Open issues / next step
+
+The next implementer turn should fix retry-session handling in `core/engine.py` so provider-attributable retries dispatch without reusing the rejected attempt’s transcript, then add a regression test for a session-bound llm/pair retry path and rerun the affected suite.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
