@@ -412,3 +412,68 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcb04-31d8-7f82-bfef-843a912e19e9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcb04-31d8-7f82-bfef-843a912e19e9
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcb04-31d8-7f82-bfef-843a912e19e9
+---
+I’m treating this as a scoped consolidation pass on publish handlers. I’ll inspect the phase artifacts, the existing typed publication contract work, the target workflows, shared validators, docs, and tests first, then I’ll choose the smallest migration that preserves behavior and update the recursive memory and implementation notes.
+
+I’ve got the plan and prior typed-contract phase context. Next I’m reading the target workflows, their contract modules, the current authoring guidance, and adjacent tests to verify whether this phase is already partially implemented or still missing the handler migration and closeout updates.
+
+The target workflow files already show signs of typed-summary migration, so I’m checking whether the current code fully satisfies the phase contract or whether there are remaining raw manifest/summary reads, missing tests, or closeout artifacts that still need to be added in this turn.
+
+The code path itself looks phase-complete, but I still need to prove it and bring the phase-local artifacts in sync. I’m checking whether the recursive-memory files already capture this migration cleanly; if not, I’ll update only the cycle-closeout lines instead of reopening the helper seam.
+
+Plan for this turn:
+1. Verify the migrated publish handlers against the phase contract and confirm there are no remaining raw summary/manifest entry reads in scope.
+2. Run the scoped proof for the three runtime suites plus the doc baseline.
+3. Sync the phase-local artifacts for this turn: `implementation_notes.md` and any needed decision-memory line under the current header.
+4. If proof exposes a gap, patch only the scoped workflow/tests/docs files needed to close it.
+
+The scoped runtime proof is running. If it stays green, this turn likely collapses to closeout-only documentation for the phase rather than another code patch, because the publish-handler migration is already present and behavior-compatible in the checked-out code.
+
+I’ve confirmed the scoped handlers already meet the migration contract and the targeted proof is green. I’m only editing the phase-local notes, decisions, and recursive-memory closeout files now so this phase’s state matches the checked-out code and proof.
+
+The closeout patch missed the current roadmap tail, so I’m re-reading the exact end sections and then I’ll apply a narrower documentation-only patch.
+
+The phase closeout files are patched. I’m doing one fast verification pass on the notes and diff, then I’ll summarize the scope and outcome with the exact proof results.
+
+Scope considered
+
+- Verified the scoped publish surface for `workflow_portfolio_to_operating_system`, `company_operation_to_recursive_improvement_cycle`, and `workflow_run_history_to_failure_modes`, plus the phase artifacts, `docs/architecture.md`, `docs/authoring.md`, relevant tests, and recursive-memory ledgers.
+- Kept scope phase-local: no unrelated dirty files were brought into work.
+
+What I analyzed
+
+- Confirmed the three target publish handlers already start from workflow-local typed artifact reads in their current checked-out code.
+- Confirmed the remaining inline logic is the intended local policy: cross-artifact drift, workflow-state alignment, unknown-reference rejection, markdown-boundary checks, hidden-execution checks, and receipt shaping.
+- Ran:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/test_architecture_baseline_docs.py` -> `105 passed`
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` -> `93 passed`
+
+What I changed
+
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/implement/phases/workflow-publication-migration/implementation_notes.md) with the audit, checklist mapping, invariants, validation, and closeout rationale.
+- Appended the phase decision under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt).
+- Synced the recursive-memory files under `.autoloop_recursive/` to record this workflow-publication-migration follow-on explicitly.
+
+Key findings / decisions
+
+- No workflow/runtime/test code patch was needed in this turn; the scoped migration was already landed in the checkout and already satisfies AC-1 through AC-3.
+- This phase closes as consolidation-only verification and documentation sync.
+- The typed-artifact seam remains the correct boundary; no new helper seam, runtime publication layer, CLI change, `workflow.toml` change, or `ctx.invoke_workflow(...)` change was introduced.
+
+Open issues / next step
+
+- No open issue inside this phase scope.
+- Remaining deferred pressure is broader portfolio-shape and authoring-surface cleanup, not additional publish-handler migration in this workflow family.
