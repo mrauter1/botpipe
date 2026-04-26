@@ -11,6 +11,7 @@ from typing import Any
 
 from ...core.errors import ProviderExecutionError
 from ...core.providers.models import LLMRequest, OutcomeResponse, ProducerRequest, ProducerResponse, VerifierRequest
+from ...core.providers.parsing import parse_outcome_json
 from ...core.providers.protocols import LLMProvider
 from ...core.stores.protocols import SessionBinding
 from ..config import ClaudeProviderConfig, ConfigError, ResolvedRuntimeConfig
@@ -18,7 +19,6 @@ from ._common import (
     build_session_binding,
     ensure_session_provider_match,
     format_subprocess_streams,
-    parse_outcome_json,
     render_verifier_input,
     require_prompt_text,
 )

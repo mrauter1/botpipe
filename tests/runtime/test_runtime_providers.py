@@ -7,6 +7,7 @@ import pytest
 from autoloop_v3.core.errors import ProviderExecutionError
 from autoloop_v3.core.prompts import ResolvedPrompt
 from autoloop_v3.core.providers.models import LLMRequest, ProducerRequest, VerifierRequest
+from autoloop_v3.core.providers.parsing import parse_outcome_json
 from autoloop_v3.core.stores.protocols import SessionBinding
 from autoloop_v3.runtime.config import (
     ClaudeProviderConfig,
@@ -20,7 +21,6 @@ from autoloop_v3.runtime.providers._common import (
     build_session_binding,
     ensure_session_provider_match,
     format_subprocess_streams,
-    parse_outcome_json,
     render_verifier_input,
     require_prompt_text,
 )

@@ -6,3 +6,6 @@ Raw provider output remains telemetry for logs, traces, StepFinish, and failure 
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260426T025144Z-5a94c19f" ts="2026-04-26T02:58:29.139283+00:00" />
 Public workflow authoring compatibility for this change includes exporting Handoff through core/workflow shims and exposing Event.handoff through workflow/primitives rather than leaving the new surface core-only.
 Retry exhaustion must persist consumed-attempt data together with useful failure context in checkpoints so resume/debug flows and changed failure tests can distinguish exhausted retries from first-attempt failures.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="provider-boundary-core" pair="implement" turn_seq="1" run_id="run-20260426T025144Z-5a94c19f" ts="2026-04-26T03:01:17.721436+00:00" />
+Core provider rendering keeps every runtime-contract section present with deterministic markdown tables and placeholder rows when a step has no declared inputs, outputs, routes, or payload fields.
+Outcome JSON parsing moved to core/providers/parsing.py in this phase, while runtime verifier packet rendering remains runtime-local until the later transport-purity phase.
