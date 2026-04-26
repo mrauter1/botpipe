@@ -58,3 +58,7 @@
 {"ts": "2026-04-26T04:06:08.488236+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 58, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "engine-provider-retries"}
 {"ts": "2026-04-26T04:06:57.351029+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 59, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "engine-provider-retries"}
 {"ts": "2026-04-26T04:06:57.396992+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 60, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "engine-provider-retries"}
+{"ts": "2026-04-26T04:06:57.462399+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 61, "event_type": "phase_completed", "pair": "test", "phase_id": "engine-provider-retries", "phase_mode": "single"}
+{"ts": "2026-04-26T04:06:57.466240+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 62, "event_type": "phase_started", "phase_id": "route-handoff-persistence", "phase_mode": "single"}
+{"ts": "2026-04-26T04:06:57.467296+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 63, "event_type": "pair_started", "pair": "implement", "phase_id": "route-handoff-persistence"}
+{"ts": "2026-04-26T04:06:57.467436+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 64, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "route-handoff-persistence"}
