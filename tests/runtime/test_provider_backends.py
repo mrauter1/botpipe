@@ -48,6 +48,20 @@ def _resolved_config(provider_name: str = "codex") -> ResolvedRuntimeConfig:
     )
 
 
+def _runtime_args(**overrides: object) -> argparse.Namespace:
+    payload = {
+        "provider": None,
+        "model": None,
+        "model_effort": None,
+        "max_steps": None,
+        "no_git": False,
+        "git_commit_policy": None,
+        "no_trace": False,
+    }
+    payload.update(overrides)
+    return argparse.Namespace(**payload)
+
+
 @pytest.fixture(autouse=True)
 def _clear_provider_cli_caches() -> None:
     codex_runtime_provider._probe_codex_exec_surface.cache_clear()
@@ -417,6 +431,62 @@ def test_cli_resolve_provider_preserves_non_public_injection_seam_precedence() -
     assert provider is sentinel
 
 
+def test_resolve_runtime_config_defaults_enable_git_tracking_and_tracing(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(tmp_path, _runtime_args())
+
+    assert resolved.runtime.max_steps == 100
+    assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.commit_policy == "step"
+    assert resolved.runtime.git_tracking.failure_mode == "raise"
+    assert resolved.runtime.tracing.enabled is True
+    assert resolved.runtime.tracing.path == "trace.jsonl"
+    assert resolved.runtime.tracing.failure_mode == "raise"
+    assert resolved.runtime.tracing.include_state_snapshots is True
+
+
+def test_parse_runtime_config_rejects_invalid_git_commit_policy(tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match=r"runtime\.git_tracking\.commit_policy"):
+        runtime_config.parse_runtime_config(
+            {"runtime": {"git_tracking": {"commit_policy": "invalid"}}},
+            tmp_path / "autoloop.yaml",
+        )
+
+
+def test_resolve_runtime_config_no_git_disables_git_tracking(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(tmp_path, _runtime_args(no_git=True))
+
+    assert resolved.runtime.git_tracking.enabled is False
+    assert resolved.runtime.git_tracking.commit_policy == "step"
+
+
+def test_resolve_runtime_config_git_commit_policy_off_disables_git_tracking(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(tmp_path, _runtime_args(git_commit_policy="off"))
+
+    assert resolved.runtime.git_tracking.enabled is False
+    assert resolved.runtime.git_tracking.commit_policy == "off"
+
+
+def test_resolve_runtime_config_git_commit_policy_run_enables_run_policy(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(tmp_path, _runtime_args(git_commit_policy="run"))
+
+    assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.commit_policy == "run"
+
+
+def test_resolve_runtime_config_git_commit_policy_step_enables_step_policy(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(tmp_path, _runtime_args(git_commit_policy="step", no_git=True))
+
+    assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.commit_policy == "step"
+
+
+def test_resolve_runtime_config_no_trace_disables_tracing(tmp_path: Path) -> None:
+    resolved = resolve_runtime_config(tmp_path, _runtime_args(no_trace=True))
+
+    assert resolved.runtime.tracing.enabled is False
+    assert resolved.runtime.tracing.path == "trace.jsonl"
+
+
 def test_resolve_runtime_config_routes_generic_file_overrides_to_selected_provider(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -448,7 +518,7 @@ def test_resolve_runtime_config_routes_generic_file_overrides_to_selected_provid
 
     resolved = resolve_runtime_config(
         tmp_path,
-        argparse.Namespace(provider=None, model=None, model_effort=None, max_steps=None),
+        _runtime_args(),
     )
 
     assert resolved.provider.name == "claude"
@@ -491,7 +561,7 @@ def test_resolve_runtime_config_preserves_later_provider_specific_override_prece
 
     resolved = resolve_runtime_config(
         tmp_path,
-        argparse.Namespace(provider=None, model=None, model_effort=None, max_steps=None),
+        _runtime_args(),
     )
 
     assert resolved.provider.name == "claude"
@@ -521,7 +591,7 @@ def test_resolve_runtime_config_applies_generic_file_override_to_cli_selected_pr
 
     resolved = resolve_runtime_config(
         tmp_path,
-        argparse.Namespace(provider="claude", model=None, model_effort=None, max_steps=None),
+        _runtime_args(provider="claude"),
     )
 
     assert resolved.provider.name == "claude"
@@ -558,7 +628,7 @@ def test_resolve_runtime_config_applies_cli_override_after_provider_specific_fil
 
     resolved = resolve_runtime_config(
         tmp_path,
-        argparse.Namespace(provider="claude", model="cli-model", model_effort="max", max_steps=None),
+        _runtime_args(provider="claude", model="cli-model", model_effort="max"),
     )
 
     assert resolved.provider.name == "claude"
@@ -569,7 +639,7 @@ def test_resolve_runtime_config_applies_cli_override_after_provider_specific_fil
 def test_resolve_runtime_config_routes_cli_overrides_to_selected_provider(tmp_path: Path) -> None:
     resolved = resolve_runtime_config(
         tmp_path,
-        argparse.Namespace(provider="claude", model="claude-opus", model_effort="max", max_steps=None),
+        _runtime_args(provider="claude", model="claude-opus", model_effort="max"),
     )
 
     assert resolved.provider.name == "claude"

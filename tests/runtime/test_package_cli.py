@@ -17,10 +17,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_PROVIDER_FACTORY_FLAG = "--provider" + "-factory"
 LEGACY_WRAPPER_MODE = "AUTOLOOP_" + "CLI_MODE"
 LEGACY_WRAPPER_DETECT = "detect_auto" + "loop_cli_mode"
-LEGACY_INTENT_FLAG = "--in" + "tent"
-LEGACY_PAIRS_FLAG = "--pa" + "irs"
 LEGACY_REPO_LAYOUT = "src/auto" + "loop/"
-LEGACY_TASK_ID_FLAG = "--task" + "-id"
+GLOBAL_INTENT_FLAG = "--in" + "tent"
+GLOBAL_PAIRS_FLAG = "--pa" + "irs"
+GLOBAL_TASK_ID_FLAG = "--task" + "-id"
 
 
 def _read_recursive_template(name: str) -> str:
@@ -209,6 +209,9 @@ def test_cli_mutating_command_help_exposes_provider_and_hides_provider_factory(c
         assert excinfo.value.code == 0
         help_text = capsys.readouterr().out
         assert "--provider" in help_text
+        assert "--no-git" in help_text
+        assert "--git-commit-policy" in help_text
+        assert "--no-trace" in help_text
         assert PUBLIC_PROVIDER_FACTORY_FLAG not in help_text
 
 
@@ -490,6 +493,50 @@ def test_cli_mutating_commands_route_public_provider_selection_through_typed_con
     assert config.provider.name == "claude"
     assert config.provider.claude.model == "claude-opus"
     assert config.provider.claude.effort == "max"
+
+
+def test_cli_mutating_commands_route_runtime_git_and_trace_overrides_through_typed_config(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    seen_configs: list[object] = []
+
+    def inspect_provider_factory(**kwargs: object) -> _UnusedProvider:
+        seen_configs.append(kwargs["config"])
+        return _UnusedProvider()
+
+    _write_workflow_package(
+        tmp_path,
+        "runtime_configured",
+        workflow_name="runtime_configured",
+        class_name="RuntimeConfiguredWorkflow",
+    )
+
+    exit_code = cli.main(
+        [
+            "run",
+            "runtime_configured",
+            "task-runtime-configured",
+            "--root",
+            str(tmp_path),
+            "--message",
+            "Run with runtime git and trace overrides",
+            "--no-git",
+            "--git-commit-policy",
+            "run",
+            "--no-trace",
+        ],
+        provider_factory=inspect_provider_factory,
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["workflow"] == "runtime_configured"
+    assert len(seen_configs) == 1
+    config = seen_configs[0]
+    assert config.runtime.git_tracking.enabled is True
+    assert config.runtime.git_tracking.commit_policy == "run"
+    assert config.runtime.tracing.enabled is False
 
 
 def test_cli_run_rejects_public_provider_factory_flag(
@@ -851,34 +898,36 @@ def test_cli_init_workflow_defaults_to_flow_specs_shape(tmp_path: Path, capsys) 
     assert (tmp_path / "workflows" / "child_workflow" / "specs.py").exists()
 
 
-def test_recursive_wrapper_targets_the_package_cli_contract() -> None:
+def test_recursive_wrapper_targets_the_global_cli_contract() -> None:
     script = (REPO_ROOT / "recursive_autoloop" / "run_recursive_autoloop.sh").read_text(encoding="utf-8")
 
-    cli_guard_section = _shell_function_section(script, "require_package_autoloop_cli", "resolve_task_dir")
+    cli_guard_section = _shell_function_section(script, "require_global_autoloop_cli", "resolve_task_dir")
     start_cli_section = _shell_function_section(script, "run_autoloop_start_cli", "run_autoloop_resume_cli")
     resume_cli_section = _shell_function_section(script, "run_autoloop_resume_cli", "latest_autoloop_run_dir")
 
     assert LEGACY_WRAPPER_MODE not in script
     assert LEGACY_WRAPPER_DETECT not in script
-    assert LEGACY_INTENT_FLAG not in script
-    assert LEGACY_PAIRS_FLAG not in script
     assert "legacy)" not in script
-    assert '"workflows"' in cli_guard_section
-    assert '"runs"' in cli_guard_section
-    assert '"answer"' in cli_guard_section
-    assert 'fatal "autoloop on PATH does not expose the package CLI surface required by recursive_autoloop."' in cli_guard_section
-    assert "\nrequire_package_autoloop_cli\n" in script
-    assert 'Direct Autoloop resume hint: autoloop resume \\"$AUTOLOOP_WORKFLOW_NAME\\" \\"$task_id\\" --root \\"$WORKSPACE\\"' in script
-    assert 'run \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE" \\\n    --message "$message"' in start_cli_section
-    assert LEGACY_TASK_ID_FLAG not in start_cli_section
-    assert "--workspace" not in start_cli_section
-    assert 'resume \\\n    "$AUTOLOOP_WORKFLOW_NAME" \\\n    "$task_id" \\\n    --root "$WORKSPACE"' in resume_cli_section
-    assert "--resume" not in resume_cli_section
-    assert LEGACY_TASK_ID_FLAG not in resume_cli_section
-    assert "--workspace" not in resume_cli_section
+    assert '"--workspace"' in cli_guard_section
+    assert '"--task-id"' in cli_guard_section
+    assert '"--intent"' in cli_guard_section
+    assert '"--intent-mode"' in cli_guard_section
+    assert '"--pairs"' in cli_guard_section
+    assert '"--resume"' in cli_guard_section
+    assert 'fatal "autoloop on PATH does not expose the global CLI surface required by recursive_autoloop."' in cli_guard_section
+    assert "\nrequire_global_autoloop_cli\n" in script
+    assert 'Direct Autoloop resume hint: autoloop --workspace \\"$WORKSPACE\\" --task-id \\"$task_id\\" --resume' in script
+    assert '--workspace "$WORKSPACE"' in start_cli_section
+    assert f'{GLOBAL_TASK_ID_FLAG} "$task_id"' in start_cli_section
+    assert f'{GLOBAL_INTENT_FLAG} "$message"' in start_cli_section
+    assert "--intent-mode replace" in start_cli_section
+    assert f'{GLOBAL_PAIRS_FLAG} "$pair_selection"' in start_cli_section
+    assert '--workspace "$WORKSPACE"' in resume_cli_section
+    assert f'{GLOBAL_TASK_ID_FLAG} "$task_id"' in resume_cli_section
+    assert "--resume" in resume_cli_section
 
 
-def test_recursive_templates_reference_current_package_repo_layout_only() -> None:
+def test_recursive_templates_reference_current_global_cli_contract() -> None:
     templates = {
         name: _read_recursive_template(name)
         for name in (
@@ -915,20 +964,20 @@ def test_recursive_templates_reference_current_package_repo_layout_only() -> Non
             ".autoloop_recursive/",
             "greenfield",
             "feature compatibility",
-            "autoloop run <workflow> <task-id> --root ... --message ...",
-            "autoloop resume <workflow> <task-id> --root ...",
+            "autoloop --workspace ... --task-id ... --intent ... --pairs ...",
+            "autoloop --workspace ... --task-id ... --resume",
             "ctx.invoke_workflow(...)",
         ):
             assert required in text
 
     for required in (
         "workflows/",
+        "flow.py",
+        "specs.py",
         "workflow.toml",
         "workflow.py",
-        "prompts/",
-        "assets/",
-        "autoloop run <workflow> <task-id> --root ... --message ...",
-        "autoloop answer <workflow> <task-id> --root ... --answer ...",
+        "autoloop --workspace ... --task-id ... --intent ... --pairs ...",
+        "autoloop --workspace ... --task-id ... --resume",
         "greenfield",
     ):
         assert required in charter_lower
@@ -937,26 +986,28 @@ def test_recursive_templates_reference_current_package_repo_layout_only() -> Non
         "runtime/cli.py",
         "runtime/runner.py",
         "workflows/",
-        "autoloop run/resume/answer",
+        "autoloop --workspace ... --task-id ... --intent ... --pairs ...",
+        "autoloop --workspace ... --task-id ... --resume",
         "greenfield",
         "feature compatibility only",
+        "workflow surfaces remain ordinary python modules or packages",
     ):
         assert required in roadmap_lower
 
     for required in (
-        "workflows/<name>/",
+        "single-file workflow",
+        "flow.py",
         "autoloop run/resume/answer",
         "ctx.invoke_workflow(...)",
     ):
         assert required in doctrine_lower
 
     for required in (
-        "workflows/<name>/",
+        "workflows/<name>.py",
+        "flow.py",
+        "specs.py",
         "workflow.toml",
-        "workflow.py",
-        "prompts/",
-        "assets/",
-        "autoloop run <workflow> <task-id> --root ... --message ...",
+        "autoloop --workspace ... --task-id ... --intent ... --pairs ...",
         "ctx.invoke_workflow(...)",
     ):
         assert required in examples_lower

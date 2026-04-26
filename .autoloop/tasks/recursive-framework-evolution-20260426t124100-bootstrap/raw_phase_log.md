@@ -412,3 +412,74 @@ No open test-audit issues for this phase. The test artifacts are complete for th
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+I’m scoping the active phase to runtime config, CLI overrides, and git commit-all primitives. First I’m reading the phase artifacts and the existing config/CLI/git helper code to align the change with the accepted plan and avoid spilling into later observability work.
+
+I’ve confirmed this phase is narrower than the full request: only config defaults, CLI overrides on mutating commands, and the low-level git commit-all helpers are in scope here. Next I’m checking the existing tests and config merge patterns so the changes land in the current style instead of inventing a parallel path.
+
+The config layer already has the right merge shape, so I’m extending that rather than adding a separate override path. I’m now reading the existing runtime config tests and git repo unit tests to patch the assertions in-place and add only the new coverage this phase requires.
+
+I’ve reached the point where the implementation is concrete: the config change is a nested extension of the existing runtime config dataclasses, and the CLI flags belong on the shared mutating-command parser. I’m checking one more detail in the git tests now, then I’ll edit the config, CLI, tests, and the GitRepo helper in one pass.
+
+I’ve got the concrete edit set. I’m applying four changes now: extend runtime config parsing/merging, add the CLI flags on mutating commands, add commit-all helpers to `GitRepo`, and add focused tests that lock the new behavior down without pulling later observability work into scope.
+
+I’m moving from config and parser changes into the git primitive now. The helper stays inside the existing `GitRepo` abstraction, and I’m keeping the workflow-scoped commit path untouched so the new runtime commit-all behavior is additive rather than a silent compatibility break.
+
+The code is in. I’m doing a quick structural pass on the touched files before running tests, mainly to catch merge/typing issues in `runtime/config.py` and to make sure the new tests are asserting the intended precedence rather than an accidental parser quirk.
+
+I’m in verification now. I’m running the focused runtime-config, CLI, and git helper tests first, because this phase shouldn’t need broader engine coverage and any failure here will usually point to an interface mismatch rather than downstream behavior.
+
+`pytest` isn’t on PATH in this environment, so I’m retrying through the interpreter instead of assuming the toolchain layout. If that also fails I’ll stop at the exact dependency gap rather than pretending verification happened.
+
+The environment has Python but not `pytest`, and the repo doesn’t expose a local test runner wrapper. I’m switching to smoke verification: import/compile checks plus a small direct script that exercises the new runtime config merge and `GitRepo.commit_all` behavior.
+
+The first smoke script tripped over missing runtime dependencies because importing the package executes `runtime/__init__.py`. I’m reloading the touched modules directly from file paths so I can still validate the changed logic in isolation without assuming the full dev environment is installed.
+
+I’ve finished the code path and smoke validation. I’m writing the phase notes and the one non-obvious decision now: the CLI treats `--git-commit-policy` as more specific than `--no-git`, so combined flags resolve deterministically without depending on argv order.
+
+The compile check dirtied tracked `__pycache__` files in this repo. Those are verification byproducts from my command, not part of the phase, so I’m restoring them before I stop to keep the change set focused on the actual implementation.
+
+I found a lot of unrelated preexisting cache churn in the worktree, so I’m only cleaning the cache files my verification step clearly touched: modified or newly created `__pycache__` entries under the current source tree. I’m leaving unrelated tracked deletions alone.
+
+Scope considered
+
+Phase-local work only: runtime config defaults, mutating CLI overrides, and `GitRepo` commit-all primitives. I left runner/engine observability binding, workflow `GitTracking` filtering, and runtime trace persistence for later phases. The worktree already had broad unrelated churn outside this phase; I did not touch it.
+
+What I analyzed
+
+I read the active phase artifacts, the current config merge path in [runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/config.py), mutating CLI setup in [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py), git mechanics in [extensions/git/repo.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/extensions/git/repo.py), and the existing runtime/config and git unit coverage in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+
+What I changed
+
+In [runtime/config.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/config.py) I added nested runtime git/tracing config models and overrides, YAML parsing/validation for `runtime.git_tracking` and `runtime.tracing`, and CLI merge support for `--no-git`, `--git-commit-policy`, and `--no-trace`. Defaults now resolve to git tracking enabled with `step` policy and tracing enabled with `trace.jsonl`.
+
+In [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py) I added those flags to the shared mutating parser used by `run`, `resume`, and `answer`.
+
+In [extensions/git/repo.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/extensions/git/repo.py) I added `status_porcelain()`, `is_dirty()`, `add_all()`, and `commit_all()`, with `commit_all()` using `git add --all`, committing untracked files, and returning `(head, False)` without creating empty commits when nothing changed.
+
+I also added focused coverage in the three test files above, and updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-config-and-git-primitives/implementation_notes.md) plus the phase decision entry in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+`--git-commit-policy` now wins over `--no-git` when both are passed. That keeps CLI resolution deterministic without depending on argv ordering, and matches the more specific override.
+
+I did not wire the new runtime config into runner execution yet. This phase only establishes the config surface and git primitive behavior needed by later runtime-owned observability work.
+
+Validation: `python3 -m compileall runtime extensions tests` passed. Direct smoke checks for config resolution and `GitRepo.commit_all()` passed. Full `pytest` could not run here because `pytest` is not installed in the environment.
+
+Open issues / next step
+
+The next phase should consume `ResolvedRuntimeConfig.runtime` from the runner/observability path, add runtime-owned git/tracing persistence, and then rerun the new tests in an environment with `pytest` installed.
