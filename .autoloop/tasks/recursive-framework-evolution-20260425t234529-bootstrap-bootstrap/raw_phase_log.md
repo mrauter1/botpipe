@@ -666,3 +666,48 @@ No open issues in this phase. Validation rerun passed: `.venv/bin/pytest -q test
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+I’m handling the test phase for `runtime-cli-transports`: I’ll inspect the current runtime test coverage and phase artifacts, then add only the extra regression checks needed to lock down the restored compatibility surface and document the coverage map.
+
+The runtime tests already cover backend wrapping, transport purity, and builder compatibility. I’m adding one more compatibility layer check now for the restored class constructors themselves, with emphasis on Codex’s old `(config, commands)` shape because that’s the highest-regression surface.
+
+I’ve added direct constructor coverage for the restored compatibility classes. Next I’m recording the behavior-to-test map and the specific regression surfaces this phase now exercises so later phases don’t accidentally narrow the provider import surface again.
+
+The coverage map and feedback artifacts are updated. I’m rerunning the runtime-focused provider slice now to verify the new constructor-compatibility tests are stable and don’t overconstrain the transport boundary.
+
+Scope considered
+
+Phase-local test work for `runtime-cli-transports`: [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/runtime-cli-transports/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/runtime-cli-transports/feedback.md), and the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/decisions.txt).
+
+What I analyzed
+
+I checked the existing runtime coverage for the transport split, backend wrapping, purity constraints, and the restored compatibility shims. The remaining regression surface was the direct provider-class constructor API, especially Codex’s prior `(config, commands)` shape.
+
+What I changed
+
+I added two constructor-focused regression tests in `tests/runtime/test_provider_backends.py`: one for `CodexProvider(_resolved_config("codex"), commands)` and one for `ClaudeProvider(_resolved_config("claude"))`, both asserting they still resolve to `RenderedLLMProvider` wrappers over the correct transports.
+
+I also updated `test_strategy.md` with an explicit behavior-to-coverage map, preserved invariants, failure paths, stability notes, and known gaps, then appended a concise summary entry to the phase `feedback.md`.
+
+Key findings / decisions
+
+The key additional test decision was to lock down the restored compatibility class constructors directly, not just the builder functions and package re-exports. That closes the most likely silent regression left by the refactor.
+
+Validation rerun passed: `.venv/bin/pytest -q tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/unit/test_provider_boundary_core.py` with `65 passed`.
+
+Open issues / next step
+
+No blocker in this phase-local test turn. The known gap is only that I did not run the full suite from the test phase; coverage here stays intentionally scoped to the changed runtime provider boundary.

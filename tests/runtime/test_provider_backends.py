@@ -194,6 +194,19 @@ def test_compatibility_build_codex_provider_returns_rendered_wrapper(
     assert isinstance(provider._transport, CodexTransport)
 
 
+def test_compatibility_codex_provider_preserves_legacy_constructor_shape() -> None:
+    commands = codex_runtime_provider.CodexCLICommand(
+        start_command=("codex", "exec", "--json"),
+        resume_command=("codex", "exec", "resume", "--json"),
+    )
+
+    provider = CodexProvider(_resolved_config("codex"), commands)
+
+    assert isinstance(provider, RenderedLLMProvider)
+    assert isinstance(provider._transport, CodexTransport)
+    assert provider._transport._commands == commands
+
+
 def test_compatibility_build_claude_provider_returns_rendered_wrapper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -205,6 +218,22 @@ def test_compatibility_build_claude_provider_returns_rendered_wrapper(
     )
 
     provider = build_claude_provider(_resolved_config("claude"))
+
+    assert isinstance(provider, RenderedLLMProvider)
+    assert isinstance(provider._transport, ClaudeTransport)
+
+
+def test_compatibility_claude_provider_constructor_returns_rendered_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(args=command, stdout=CLAUDE_HEADLESS_HELP),
+    )
+
+    provider = ClaudeProvider(_resolved_config("claude"))
 
     assert isinstance(provider, RenderedLLMProvider)
     assert isinstance(provider._transport, ClaudeTransport)
