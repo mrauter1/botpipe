@@ -197,7 +197,8 @@ def test_candidate_workflow_to_adapted_execution_plan_prompt_readme_uses_shared_
         "`needs_replan`",
         "`frame_producer.md` / `frame_verifier.md`",
         "AdaptedExecutionPlanPayload",
-        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+        "compact human-readable step contract",
+        "Provider raw output is runtime telemetry",
     ):
         assert required in text
 

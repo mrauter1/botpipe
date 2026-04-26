@@ -69,7 +69,7 @@
 ## Evidence
 
 - Treat `candidate_decomposition_manifest.json` and `candidate_building_block_index.json` as the authoritative candidate boundary.
-- Keep the runtime/provider boundary crisp: prompt templates own the operational evaluation guidance; the runtime injects only narrow control metadata.
+- Keep the runtime/provider boundary crisp: prompt templates own the operational evaluation guidance, while the runtime injects the compact human-readable step contract and raw provider output never re-enters prompts.
 - Make the outputs specific enough that the publish step can validate them mechanically.
 
 ## Routes

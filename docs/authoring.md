@@ -12,6 +12,7 @@ from workflow import (
     Prompt,
     Route,
     RouteContract,
+    Handoff,
     Advance,
     Refresh,
     ResetCompletion,
@@ -23,6 +24,7 @@ from workflow import (
     PairStep,
     LLMStep,
     SystemStep,
+    ProviderRetryPolicy,
     SUCCESS,
     PAUSE,
     FAIL,
@@ -119,7 +121,7 @@ When the same parameter bundle appears in more than one workflow, prefer additiv
 
 ## Step Control Contracts
 
-Provider-owned steps may declare narrow machine-readable control contracts directly on `PairStep` and `LLMStep`.
+Provider-owned steps may declare structured control contracts directly on `PairStep` and `LLMStep`. The runtime renders those declarations into one shared human-readable Runtime Step Contract before CLI-backed providers run.
 
 ```python
 from pydantic import BaseModel
@@ -151,11 +153,13 @@ Runtime behavior:
 - `route_contracts` is optional step-owned metadata for legal application routes only
 - route contracts normalize to `summary`, `required_artifacts`, and `work_item_effect`
 - mapping-style declarations remain valid; legacy `state_effect` values normalize to `work_item_effect`
+- `retry_policy` controls provider-attributable retries and defaults to `ProviderRetryPolicy(max_attempts=3)` on `PairStep` and `LLMStep`
+- the rendered Runtime Step Contract can also include resolved-target route handoff text and retry feedback when the engine supplies them
 
 Authoring rules:
 
 - keep provider-facing operational guidance in the prompt templates, not in runtime-only metadata
-- reserve runtime-injected control data for `expected_output_schema`, `available_routes`, and `route_contracts`
+- reserve runtime-injected control data for the shared Runtime Step Contract: required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback
 - continue using `Outcome.tag` as the route carrier
 - use `needs_rework` when the current work-item boundary still holds and `needs_replan` when the boundary changed materially
 - do not declare `expected_output_schema` or `route_contracts` on `SystemStep`
@@ -218,12 +222,12 @@ Prompt files should not re-explain family-wide notes when the same wording alrea
 Prompt-style rules:
 
 - keep provider-facing operational guidance in prompt files, not runtime-only metadata
-- keep the runtime-injected contract narrow; the runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`
-- The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- the runtime injects a compact human-readable step contract with required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback
+- provider raw output is runtime telemetry: it is persisted for logs, traces, extension events, debugging, and replay, but it is not rendered into provider prompts
 - prefer compact artifact tables when they shorten the prompt materially, such as `Artifact | Read/Write | Purpose | Handling`
 - keep route guidance concise and local to the decision the current step must justify
 - do not restate machine-readable route contracts verbatim when the runtime already injects them
-- do not introduce a prompt template engine, shared runtime prompt renderer, or hidden prompt abstraction just to remove repeated prose
+- do not add workflow-local prompt template engines or competing prompt-renderer abstractions on top of the shared runtime renderer just to remove repeated prose
 
 `prompts/README.md` is a workflow-local documentation seam, not a runtime input. Shared prompt text belongs there before it belongs in runtime behavior.
 
@@ -377,12 +381,18 @@ transitions = {
             SetStatus(gates, "completed"),
             Advance(gates),
         ),
-        "needs_rework": Route.to(assess, ResetCompletion(gates)),
+        "needs_rework": Route.to(
+            assess,
+            ResetCompletion(gates),
+            Handoff("Repair the findings and preserve the current work-item boundary."),
+        ),
     }
 }
 ```
 
 Use `Route.to(...)`, `Route.complete(...)`, `Route.pause(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
+
+`Handoff(...)` adds source-step-to-target-step text that the runtime delivers only to the resolved provider-mediated target step. Dynamic handoff text may also be returned through `Event(tag="needs_rework", handoff="...")`. Handoffs are text-only and the current Runtime Step Contract remains authoritative.
 
 ## Worklists And Scoped Steps
 
@@ -444,7 +454,7 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 
 - these helpers do not create hidden runtime sequencing or automatic system steps
 - they only operate on the workflow-owned `ctx` surface and `ctx.workflow_folder`
-- they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- they do not broaden the shared runtime step contract or move provider-facing prompt rendering into authoring helpers
 - publication-artifact validation and any workflow-specific receipt semantics still belong in workflow code
 
 ## Typed JSON Artifact Contracts
@@ -658,7 +668,7 @@ Adaptation helper boundary:
 - `write_selected_workflow_capability_snapshot(...)` writes the authoritative compiled selected-workflow payload built in `core/workflow_capabilities.py`, so adaptation flows share the same capability surface used by later refinement, decomposition, and validation helpers
 - they accept the same workflow references the shared loader resolves, including canonical names, aliases, and main workflow classes
 - they are authoring-only support for explicit workflow code; they do not add CLI syntax, manifest fields, runtime-owned adaptation, or automatic downstream execution
-- they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- they do not broaden the shared runtime step contract or move provider-facing prompt rendering into authoring helpers
 - portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics in workflow code and prompt templates
 - the helper does not import runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
 
@@ -739,7 +749,7 @@ Candidate-surface helper boundary:
 - they do not own refinement-specific evaluation alignment, decomposition-specific evidence capture, building-block extraction policy, or publication receipt shaping
 - they do not mutate, auto-promote, auto-decompose, auto-refine, or auto-run the selected workflow
 - they do not add CLI flags, new `workflow.toml` fields, runtime-owned publication automation, or hidden downstream routing
-- they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- they do not broaden the shared runtime step contract or move provider-facing prompt rendering into authoring helpers
 - workflow code and prompt templates still own domain-specific publication policy, evidence requirements, allowed-path rules, and promotion or rollback decisions
 
 ## Optional Diagnostic Snapshot Helpers
@@ -883,7 +893,7 @@ Composition helper boundary:
 - `require_child_workflow_result(...)` validates the expected child status, terminal route, and required artifacts before parent-local adoption
 - `adopt_child_artifacts(...)` copies explicitly named child artifacts into `ctx.workflow_folder`
 - these helpers do not create hidden runtime sequencing, automatic system steps, or new child-run metadata
-- they do not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
+- they do not broaden the shared runtime step contract or move provider-facing prompt rendering into authoring helpers
 - parent workflows still own explicit `question` and `blocked` routing for child runs; the validation helper does not propagate or translate those routes automatically
 - parent workflows still own which child artifacts are adopted, where they land, and whether overwriting those parent-local files is acceptable
 

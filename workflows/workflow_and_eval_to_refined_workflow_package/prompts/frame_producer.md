@@ -58,7 +58,7 @@
 ## Evidence
 
 - Anchor the request in `selected_workflow_capability`, `selected_workflow_authoring_surface`, `baseline_workflow_manifest`, and the copied baseline evidence artifacts.
-- Keep the runtime/provider boundary crisp: runtime owns only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can choose file-level changes and regression guardrails without widening the selected workflow boundary.
 
 ## Routes

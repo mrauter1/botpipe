@@ -40,7 +40,7 @@
 
 - Base the decision on the durable framing artifacts, not on unwritten expectations about the investigation.
 - Treat missing scope boundaries, downstream objectives, or source constraints as real framing defects.
-- Keep the runtime/provider boundary crisp: runtime owns only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 
 ## Routes
 

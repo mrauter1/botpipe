@@ -56,7 +56,7 @@
 ## Evidence
 
 - Anchor the request in `selected_workflow_decomposition_surface`, `baseline_parent_manifest`, and `decomposition_evidence_manifest`.
-- Keep the runtime/provider boundary crisp: runtime owns only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can choose extraction boundaries, interface contracts, and parent rewrite changes without widening the selected workflow boundary.
 
 ## Routes

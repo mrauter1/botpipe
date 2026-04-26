@@ -98,7 +98,7 @@ Turn a release candidate into a durable go/no-go package that captures scope, ev
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing, evidence assembly, assessment, and package assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, and `route_contracts` only.
+- Keep runtime control data human-readable and mechanical: required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
 - Publish a deterministic decision receipt only after the final package exists.
 
 ### Provider-owned cognitive responsibilities
@@ -166,11 +166,18 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects only:
+The runtime injects a compact human-readable step contract containing:
 
-- `expected_output_schema`
-- `available_routes`
-- `route_contracts`
+- required inputs
+- writable artifacts
+- route-specific artifact requirements
+- expected output payload requirements
+- available routes
+- route contracts
+- optional route handoff for the resolved target step only
+- optional retry feedback for accepted retries only
+
+Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
 
 Payload models used by the package:
 

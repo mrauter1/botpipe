@@ -124,7 +124,7 @@ Turn an investigation request into a durable evidence pack that another workflow
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing and evidence-pack assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, and `route_contracts` only.
+- Keep runtime control data human-readable and mechanical: required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
 - Publish a deterministic evidence-pack receipt only after the terminal artifacts exist.
 
 ### Provider-owned cognitive responsibilities
@@ -189,11 +189,18 @@ Authoritative precedence:
 
 ### Runtime-injected control contract
 
-The runtime injects only:
+The runtime injects a compact human-readable step contract containing:
 
-- `expected_output_schema`
-- `available_routes`
-- `route_contracts`
+- required inputs
+- writable artifacts
+- route-specific artifact requirements
+- expected output payload requirements
+- available routes
+- route contracts
+- optional route handoff for the resolved target step only
+- optional retry feedback for accepted retries only
+
+Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
 
 Payload models used by the package:
 

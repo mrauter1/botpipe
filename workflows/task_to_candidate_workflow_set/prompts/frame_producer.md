@@ -52,7 +52,7 @@
 ## Evidence
 
 - Anchor the framing in the current workflow capability snapshot and the run-local invocation contract.
-- Keep the runtime/provider boundary crisp: runtime owns only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the criteria specific enough that at least three candidate workflows can be compared when the portfolio size permits.
 
 ## Routes

@@ -56,7 +56,7 @@
 ## Evidence
 
 - Anchor the framing in `workflow_capability_snapshot`, `workflow_portfolio_health_snapshot`, and `company_operation_snapshot`.
-- Keep the runtime/provider boundary crisp: runtime owns only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Keep scoped task ids and workflow names explicit and consistent across the framing artifacts.
 
 ## Routes

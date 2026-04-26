@@ -1406,3 +1406,82 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc80a-9b35-7411-a864-3046f6932f23
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc80a-9b35-7411-a864-3046f6932f23
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc80a-9b35-7411-a864-3046f6932f23
+---
+I’m treating this as the docs-and-regression sweep on top of the prior provider/retry/handoff phases. First I’m reading the phase artifacts, the current implementation surfaces, and the relevant tests so I can update only the intended docs and fix any remaining regression gaps.
+
+I’ve confirmed the repo still has many baseline references to the old narrow contract wording, including workflow prompt READMEs and runtime scenario tests. Next I’m reading the baseline test and the implemented provider/retry/handoff tests to align the doc updates with what the code now actually does.
+
+The implemented core renderer already matches the intended boundary, so this phase is mostly baseline alignment plus any missing regression coverage. I’m checking the existing doc assertions and the new contract tests together before editing, because the main risk here is updating docs incompletely and leaving contradictory prompt guidance behind.
+
+The remaining mismatch is straightforward: docs still describe the old narrow control contract while the engine and renderer tests already assert retry and handoff behavior. I’m reading the dedicated provider-boundary tests and the workflow prompt READMEs now so I can update the phrasing consistently instead of patching it piecemeal.
+
+I found the expected prompt README repetition and a second class of stale guidance inside specific prompt files and runtime scenario tests. I’m doing one more targeted search before editing so the sweep covers the contradiction set, not just the files already named in the phase contract.
+
+The stale language is concentrated in exactly the surfaces this phase owns: architecture/authoring docs, prompt READMEs, scenario workflow prompt files, and baseline assertions. I’m narrowing the edit set to those files plus any test strings that pin the old wording, then I’ll run the targeted suite before touching the full run.
+
+I’ve got the edit set pinned. Before patching, I’m checking one workflow doc end-to-end to keep the replacements structurally consistent instead of dropping in disconnected sentence swaps.
+
+I’ve identified one more real doc bug beyond the stale wording: `authoring.md` still warns against adding a shared runtime prompt renderer even though that renderer now exists by design. I’m patching the docs and their assertions together so the README/test sweep reflects the actual architecture instead of just swapping one sentence for another.
+
+I’m editing the core docs now. The changes are limited to the documented provider boundary, prompt-contract guidance, and the new retry/handoff authoring surface so the regression suite can validate the actual implementation contract instead of the pre-refactor wording.
+
+I’ve finished the architecture/authoring baseline edits. Next I’m sweeping the repeated workflow-facing contract text in one pass across prompt READMEs, prompt files, workflow docs, and their runtime assertions so the suite fails only on real regressions, not on leftover wording drift.
+
+The doc/test sweep is in place. I’m running the targeted pytest set now to catch wording drift, missing baseline assertions, or any hidden regressions from the earlier provider/retry/handoff phases before I commit this phase’s notes.
+
+The targeted set is clean, including the new baseline docs assertions. I’m running the full suite now; if anything fails it’s likely to be an adjacent doc or compatibility surface outside the phase-local list rather than the provider/retry/handoff core itself.
+
+The full suite is still running. While it finishes, I’m checking the phase bookkeeping files so I can record the final scope, validation, and any non-obvious decisions without touching unrelated dirty state.
+
+The full suite is progressing cleanly through the mid-point. I’m waiting on completion now, then I’ll write the phase notes and append the turn-local decision block with the doc/baseline scope so later phases don’t drift the wording back.
+
+The full suite exposed one remaining compatibility lock: `tests/strictness/test_no_compat.py` still freezes the pre-handoff `workflow.__all__` export list. I’m updating that strictness assertion to match the now-public `Handoff`/`ProviderRetryPolicy` authoring surface and then rerunning the failing test plus the full suite.
+
+The strictness regression is fixed. The full suite rerun is back underway from a clean targeted pass, and I’ll record the bookkeeping once it finishes so this phase leaves an explicit trail of the updated contract language.
+
+The full suite is clean. I’m writing the phase artifacts now: a concise implementation note mapping the edits to the phase checklist, plus a short decision block so later turns don’t accidentally drift the updated public wording or remove the new `Handoff` export from the strict shim.
+
+Scope considered
+
+- Phase-local docs-and-regression sweep for the provider-boundary refactor, retries, handoffs, and prompt-contract baselines.
+- In scope: [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), `docs/workflows/*.md`, scoped `workflows/*/prompts/README.md`, stale prompt boundary reminders, baseline/runtime assertions, and phase artifacts.
+
+What I analyzed
+
+- Current shared renderer/retry/handoff behavior in the repo and the doc assertions pinned by [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- Runtime workflow tests that still expected the old `expected_output_schema` / `available_routes` / `route_contracts`-only wording.
+- Strictness coverage for the root `workflow` shim after `Handoff` became part of the public authoring surface.
+
+What I changed
+
+- Updated architecture and authoring docs to describe `RenderedLLMProvider`/`ProviderTransport`, the shared human-readable Runtime Step Contract, raw-output telemetry boundaries, `ProviderRetryPolicy`, `Handoff`, and `Event.handoff`.
+- Swept workflow package docs, prompt READMEs, and prompt files off the stale narrow-contract wording and onto one consistent contract/telemetry phrasing.
+- Updated baseline/runtime assertions to match the new wording.
+- Fixed one full-suite regression in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) so `workflow.__all__` now intentionally includes `Handoff`.
+- Recorded the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/docs-and-regression-suite/implementation_notes.md).
+
+Key findings / decisions
+
+- The main remaining drift was documentation, not engine/runtime behavior.
+- One outdated authoring warning explicitly said not to add a shared runtime prompt renderer; that is now corrected to reflect the implemented design.
+- The strict root shim export list needed to move with the already-landed public `Handoff` surface.
+
+Open issues / next step
+
+- No open issues in this phase scope.
+- Validation completed:
+  - targeted pytest set from the request: all passed
+  - full suite: `729 passed`

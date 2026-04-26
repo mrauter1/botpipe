@@ -174,7 +174,8 @@ def test_workflow_run_history_to_failure_modes_prompt_readme_uses_shared_contrac
         "`needs_replan`",
         "`frame_producer.md` / `frame_verifier.md`",
         "ImprovementPressurePayload",
-        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+        "compact human-readable step contract",
+        "Provider raw output is runtime telemetry",
     ):
         assert required in text
 

@@ -101,7 +101,7 @@ Turn an arbitrary software-work task into a reusable candidate-workflow-set pack
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Capture a deterministic workflow-capability snapshot through the additive capability-inspection seam.
 - Hold request framing, candidate analysis, and candidate-set packaging as separate work items.
-- Keep runtime-injected control data narrow and mechanical: `expected_output_schema`, `available_routes`, and `route_contracts`.
+- Keep runtime control data human-readable and mechanical: required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
 - Publish a deterministic receipt only after the candidate-workflow-set package, machine-readable summary, and next-action artifact all exist and pass validation.
 
 ### Provider-owned cognitive responsibilities
@@ -170,11 +170,18 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects only:
+The runtime injects a compact human-readable step contract containing:
 
-- `expected_output_schema`
-- `available_routes`
-- `route_contracts`
+- required inputs
+- writable artifacts
+- route-specific artifact requirements
+- expected output payload requirements
+- available routes
+- route contracts
+- optional route handoff for the resolved target step only
+- optional retry feedback for accepted retries only
+
+Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
 
 Payload models used by the package:
 

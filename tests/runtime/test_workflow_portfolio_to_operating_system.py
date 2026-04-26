@@ -167,7 +167,8 @@ def test_workflow_portfolio_to_operating_system_prompt_readme_uses_shared_contra
         "`needs_replan`",
         "`frame_producer.md` / `frame_verifier.md`",
         "PortfolioOperatingSystemPayload",
-        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+        "compact human-readable step contract",
+        "Provider raw output is runtime telemetry",
     ):
         assert required in text
 

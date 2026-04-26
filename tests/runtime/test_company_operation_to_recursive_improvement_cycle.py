@@ -206,7 +206,8 @@ def test_company_operation_to_recursive_improvement_cycle_prompt_readme_uses_sha
         "`needs_replan`",
         "`frame_producer.md` / `frame_verifier.md`",
         "RecursiveImprovementCyclePayload",
-        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+        "compact human-readable step contract",
+        "Provider raw output is runtime telemetry",
     ):
         assert required in text
 

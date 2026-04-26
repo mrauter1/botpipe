@@ -170,7 +170,8 @@ def test_investigation_evidence_pack_prompt_readme_uses_shared_contract_sections
         "`needs_replan`",
         "`frame_producer.md` / `frame_verifier.md`",
         "InvestigationEvidencePackPayload",
-        "The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.",
+        "compact human-readable step contract",
+        "Provider raw output is runtime telemetry",
     ):
         assert required in text
 

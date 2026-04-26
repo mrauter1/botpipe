@@ -170,11 +170,18 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects only:
+The runtime injects a compact human-readable step contract containing:
 
-- `expected_output_schema`
-- `available_routes`
-- `route_contracts`
+- required inputs
+- writable artifacts
+- route-specific artifact requirements
+- expected output payload requirements
+- available routes
+- route contracts
+- optional route handoff for the resolved target step only
+- optional retry feedback for accepted retries only
+
+Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
 
 Payload models used by the package:
 

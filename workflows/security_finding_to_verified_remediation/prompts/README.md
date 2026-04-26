@@ -5,7 +5,8 @@
 - This README keeps the family-wide prompt contract in one place so individual prompt files can stay step-local.
 - Prompt files still own the step role, purpose, current work-item boundary, exact artifact read/write set, and any evidence or route guidance that changes the local decision.
 - Keep provider-facing operational guidance in prompt files, but keep repeated family-wide reminders here.
-- The runtime injects only `expected_output_schema`, `available_routes`, and `route_contracts`.
+- The runtime injects a compact human-readable step contract with required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
+- Provider raw output is runtime telemetry. It is persisted for logs, traces, extension events, debugging, and replay, but it is not rendered into provider prompts.
 - Provider prose is control metadata unless it is written into a declared artifact.
 - `compose_evidence_pack` is explicit child-workflow composition with no prompt files in this package; it must stay workflow-owned and deterministic.
 - Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.

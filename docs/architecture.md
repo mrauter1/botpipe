@@ -153,11 +153,19 @@ Contract:
 - CLI overrides use `--provider`, `--model`, and `--model-effort`
 - provider construction is framework-owned and resolved from the typed provider name
 
-Built-in runtime adapters live under `runtime/providers/` and are selected only through `runtime/provider_backends.py`. Those adapters satisfy the existing `LLMProvider` protocol directly:
+Built-in runtime adapters live under `runtime/providers/` and are selected only through `runtime/provider_backends.py`.
 
-- `run_producer(...) -> ProducerResponse`
-- `run_verifier(...) -> OutcomeResponse`
-- `run_llm(...) -> OutcomeResponse`
+CLI-backed providers now cross the runtime boundary through a shared layered seam:
+
+- `LLMProvider`: the existing semantic engine-facing surface
+- `RenderedLLMProvider`: shared runtime prompt rendering plus verifier/LLM outcome parsing
+- `ProviderTransport`: CLI transport only
+
+That means Codex and Claude transports receive only shared rendered turns and return only raw assistant text plus session metadata. They do not render workflow prompts, inject workflow contracts, or parse workflow outcome JSON themselves.
+
+The shared renderer injects a compact human-readable Runtime Step Contract with required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
+
+Provider raw output is runtime telemetry. It remains available to logs, traces, extension events, debugging, and replay, but it is not rendered back into provider prompts.
 
 Provider loading is not a public factory surface. Operators stay on typed config plus the generic CLI flags above.
 

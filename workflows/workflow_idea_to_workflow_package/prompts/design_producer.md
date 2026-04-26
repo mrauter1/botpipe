@@ -64,7 +64,7 @@
 
 ## Evidence
 
-- Keep the runtime/provider boundary crisp: only `expected_output_schema`, `available_routes`, and `route_contracts` belong in runtime-injected control data.
+- Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Reuse the existing scaffold contract from `runtime_cli_module`; do not invent a hidden generator layer.
 - Make rework vs replan rules explicit and tied to role, artifact, and acceptance boundaries.
 
