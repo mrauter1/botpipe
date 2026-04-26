@@ -6,3 +6,26 @@
 - Phase Directory Key: route-handoff-persistence
 - Phase Title: Route Handoff Delivery
 - Scope: phase-local producer artifact
+- Behaviors covered:
+  - `tests/unit/test_primitives_and_stores.py`: `Handoff` and `Event.handoff` reject empty text; checkpoint payloads preserve `PendingHandoff`; public strict/workflow shims expose the new surface.
+  - `tests/unit/test_validation.py`: static `Handoff(...)` routes compile for provider-mediated targets and are rejected for `SystemStep` targets.
+  - `tests/runtime/test_compatibility_runtime.py`: filesystem checkpoint serialization round-trips `pending_handoffs`.
+  - `tests/contract/test_engine_contracts.py`: static and dynamic handoffs combine deterministically, are consumed once after accepted dispatch, remain scoped to the active worklist item, survive resume before first dispatch, and are dropped when the resolved destination is a `SystemStep` or terminal.
+- Preserved invariants checked:
+  - Handoffs reach only the resolved provider-mediated target step.
+  - Handoffs do not leak across worklist items or into later unrelated provider turns.
+  - Pending handoffs survive checkpoint/resume until first successful provider dispatch, then stop persisting.
+  - Workflow authors can import `Handoff` and the updated `Event` surface through public workflow shims.
+- Edge cases:
+  - Combined static `Handoff` effect plus dynamic `Event.handoff` ordering.
+  - Resume after a pre-dispatch crash with checkpointed pending handoff state.
+  - Terminal `PAUSE` destination does not accumulate stale pending handoffs.
+- Failure and negative paths:
+  - Empty `Handoff.message` and empty `Event.handoff` raise `ValueError`.
+  - Static handoff-to-`SystemStep` validation fails at compile time.
+  - Dynamic handoff targeting a `SystemStep` is dropped and does not reach a later provider step.
+- Flake control:
+  - Tests use `ScriptedLLMProvider`, in-memory stores, and temporary workspaces only; no time, network, subprocess, or nondeterministic ordering dependencies.
+- Known gaps:
+  - Prompt rendering of `route_handoff` text is covered by the provider-boundary phases rather than this phase-local test set.
+  - Full-suite execution is deferred; this phase runs targeted regression coverage for handoff behavior.
