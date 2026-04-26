@@ -1241,3 +1241,57 @@ Open issues / next step
   - `tests/runtime/test_provider_backends.py`
   - `tests/test_architecture_baseline_docs.py`
 - Full suite was not run in this turn.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7f8-1742-7163-b90b-963cf3c51a8d
+---
+I’m reviewing the `route-handoff-persistence` phase artifacts against the implementation and the acceptance criteria. First I’m reading the reviewer-owned criteria/feedback files and the handoff-related code/tests to check for correctness gaps, regressions, or scope drift before I write the review result.
+
+The core handoff path is in place. I’m checking the checkpoint store format and the new tests now, focusing on whether the implementation actually proves the acceptance criteria rather than only the happy path.
+
+I don’t see a blocking correctness or regression gap in the reviewed phase-local scope. I’m marking the criteria complete and writing a no-findings review note to the verifier artifact files now.
+
+Scope considered
+
+- Phase-local `route-handoff-persistence` artifacts and the request-relevant implementation surfaces only.
+- Core/runtime files touched for handoff effect modeling, validation, checkpoint persistence, engine delivery/consumption, and public workflow shims.
+
+What I analyzed
+
+- Handoff primitive/effect additions in `core/effects.py`, `core/primitives.py`, and `core/stores/protocols.py`.
+- Validation and public-surface wiring in `core/validation.py`, `core/__init__.py`, `workflow/__init__.py`, and `workflow/primitives.py`.
+- Delivery, scoping, consumption, and resume behavior in `core/engine.py`.
+- Filesystem checkpoint persistence in `runtime/stores/filesystem.py`.
+- New phase-focused tests in `tests/unit/test_primitives_and_stores.py`, `tests/unit/test_validation.py`, `tests/runtime/test_compatibility_runtime.py`, and `tests/contract/test_engine_contracts.py`.
+
+What I reviewed
+
+- Intent fidelity against the phase contract and shared decisions ledger.
+- Behavioral safety around target resolution, terminal/system-step exclusion, worklist/item scoping, and checkpoint/resume persistence.
+- Validation coverage for empty handoffs and static handoff-to-`SystemStep` rejection.
+- Regression signals from the targeted pytest runs already exercised for the touched scope.
+
+Key findings / decisions
+
+- No blocking findings in the reviewed phase-local scope.
+- The implementation matches the accepted handoff semantics closely: additive checkpoint persistence, resolved-target delivery, worklist/item scoping, one-time consumption after successful provider dispatch, and public shim exposure for `Handoff` and `Event.handoff`.
+- Reviewer artifacts were updated: criteria are fully checked and feedback records no findings.
+
+Open issues / next step
+
+- No review blockers for this phase.
+- The phase can proceed as complete on the reviewed scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
