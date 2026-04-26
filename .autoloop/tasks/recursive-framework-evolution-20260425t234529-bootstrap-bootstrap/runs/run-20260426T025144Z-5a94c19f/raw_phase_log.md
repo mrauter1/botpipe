@@ -172,3 +172,108 @@ phase_mode=single
 phase_ids=provider-boundary-core,runtime-cli-transports,engine-provider-retries,route-handoff-persistence,docs-and-regression-suite
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+I’m treating this as a phase-scoped core refactor: add the rendered turn boundary, shared renderer/parser, and the semantic wrapper without pulling runtime transport refactors into scope. I’m starting by reading the active phase artifacts and the current provider model/layout so I can fit the changes to existing contracts before editing.
+
+I’ve confirmed the active phase is narrower than the full plan: core provider boundary only. Next I’m reading the existing provider models, runtime helper split, and the current tests so the new abstractions land without drifting the semantic interface.
+
+The existing split is clear now: `runtime/providers/_common.py` currently holds both transport-safe helpers and workflow-aware helpers, and the runtime providers are still semantic. I’m checking the exact `Outcome`, prompt, and session models next so the new core modules can preserve types and metadata shape instead of inventing new ones.
+
+I have enough context to start the core edit slice. I’m going to add the new provider-boundary modules first, then make the smallest runtime import/test updates needed to point outcome parsing at core without pulling the transport refactor into this phase.
+
+The core boundary modules are in place. I’m doing the compatibility pass now: runtime providers will keep their current transport behavior for this phase, but outcome parsing will point at the new core module so the workflow-aware parser stops living under `runtime/providers`.
+
+I’ve kept the runtime side intentionally narrow: only the parser import boundary changed there. I’m adding focused tests around the new core renderer and wrapper now, and I’ll retarget the existing parser tests to the core module instead of duplicating them under runtime helpers.
+
+I’ve hit one environment quirk: plain `python` isn’t on PATH here, so I’m using the repo’s `.venv` for validation. I’m running the focused provider tests first to catch import/contract issues before touching notes or broader checks.
+
+The core tests passed, and the existing runtime provider tests still pass with the parser moved to core. I’m doing one more regression pass on backend resolution and engine contracts because the request models changed shape, even though engine behavior shouldn’t change in this phase.
+
+The code path changes are stable. One cleanup remains: `compileall` refreshed checked-in `__pycache__` artifacts in this repo, and I’m removing only those generated binary diffs so the change set stays source-only.
+
+The code is done; I’m writing the phase artifact notes now. I’m recording one non-obvious boundary decision in the shared ledger as required, then I’ll do a last source-only diff review before closing.
+
+**Scope considered**
+
+Phase-scoped core provider boundary only: new rendered turn abstractions, shared core renderer/parser, semantic wrapper, and the smallest runtime/test updates needed to consume the core parser without doing the transport refactor. Main files: [models.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/models.py), [turns.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/turns.py), [rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py), [parsing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/parsing.py), [rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendered.py).
+
+**What I analyzed**
+
+I reviewed the existing semantic provider surface, the workflow-aware helpers in `runtime/providers/_common.py`, the current Codex/Claude runtime providers, backend resolution, and the provider/engine tests to keep this phase additive and default-compatible.
+
+**What I changed**
+
+I added `RenderedProviderTurn`, `ProviderTurnResult`, `ProviderTransport`, `ProviderArtifactRef`, and `ProviderTurnContext`, and extended the semantic request models with defaulted artifact/retry/handoff metadata. I added a shared markdown renderer and a shared `parse_outcome_json(...)` in core, then added `RenderedLLMProvider` to translate semantic requests into rendered turns while keeping `VerifierRequest.raw_output` as deprecated telemetry only.
+
+I also moved runtime outcome parsing usage onto the new core parser with minimal runtime edits in [codex.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/codex.py) and [claude.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/providers/claude.py), and added focused tests in [test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py) plus updated parser imports in [test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py).
+
+**Key findings / decisions**
+
+The runtime transport refactor is still intentionally deferred: Codex/Claude remain semantic providers in this phase. The shared renderer excludes raw provider output and related telemetry, and it keeps the runtime contract sections deterministic by always rendering the tables, including placeholder rows when a section is empty. `VerifierRequest.raw_output` remains on the request model for compatibility, but `RenderedLLMProvider` ignores it when building the shared prompt.
+
+Validation passed with:
+`.venv/bin/python -m compileall core/providers runtime/providers tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py`
+`.venv/bin/pytest -q tests/unit/test_provider_boundary_core.py`
+`.venv/bin/pytest -q tests/runtime/test_runtime_providers.py`
+`.venv/bin/pytest -q tests/runtime/test_provider_backends.py`
+`.venv/bin/pytest -q tests/contract/test_engine_contracts.py`
+
+**Open issues / next step**
+
+The next phase should replace the semantic Codex/Claude runtime providers with pure `ProviderTransport` implementations and update backend resolution to return `RenderedLLMProvider(transport)`. Engine-side artifact contract injection, retry behavior, handoff delivery, and docs/baseline updates are still pending by design for later phases.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+I’m reviewing the phase-scoped provider-boundary changes against the active criteria and the shared decisions ledger. I’ll inspect the changed core provider files, confirm the runtime parser boundary move, then update the phase criteria and feedback with any findings.
+
+I’ve got the phase artifacts and ledger. Now I’m reading the new core provider modules and the small runtime parser rewiring in detail to check for intent gaps, hidden regressions, and whether AC-1 through AC-3 are actually met.
+
+I found one material acceptance gap and one smaller design issue. I’m recording both now and leaving the phase incomplete because AC-3 is not actually met by the current runtime behavior.
+
+Scope considered
+
+Phase-local review of the `provider-boundary-core` implementation only: the new `core/providers/*` boundary modules, the minimal runtime parser rewiring in `runtime/providers/*`, the related tests, and the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/provider-boundary-core/`.
+
+What I analyzed
+
+I compared the active phase contract and shared decisions ledger against the changed provider models, parser, renderer, semantic wrapper, runtime helper/runtime provider usage, and the new focused tests. I also checked whether the implementation actually satisfies AC-1 through AC-3 rather than only adding the requested files.
+
+What I reviewed
+
+I updated `criteria.md` to reflect that compatibility/validation are acceptable but correctness, behavioral safety, and simplicity are not yet fully satisfied. I appended two findings to `feedback.md`: one blocking acceptance gap around runtime-side outcome parsing still living in the runtime provider layer, and one non-blocking issue about the inert render-policy surface.
+
+Key findings / decisions
+
+The blocking issue is that `CodexProvider` and `ClaudeProvider` still call `parse_outcome_json(...)` in `run_verifier`/`run_llm`, so AC-3 is not met even though the parser function was moved into `core/providers/parsing.py`. The non-blocking issue is that `ProviderPromptRenderPolicy` exists but cannot be supplied to `render_provider_turn(...)`, so the requested render-policy hook is present only as dead surface.
+
+Open issues / next step
+
+This phase should not be marked complete until verifier/LLM parsing is owned by the new core rendered-provider boundary rather than by the runtime providers. After that, the renderer API should expose the new prompt policy object so later engine integration does not require another interface change.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
