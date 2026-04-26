@@ -820,3 +820,100 @@ The implementation should be revised to honor failure modes across all runtime g
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+I’m addressing the reviewer’s blocking findings in the phase-scoped observability persistence code: git/tracing failure-mode handling and actual static-graph persistence. I’ll re-read the feedback against the current runtime modules, then patch the smallest cohesive fix set and update the phase notes/decisions.
+
+I’ve got the fix direction: centralize ignore-mode handling inside the tracker/writer themselves, and make the trace writer own static-graph persistence when it’s initialized. I’m patching those modules and the targeted tests now, and I’ll also trim `run.json` back to aggregate/latest git metadata instead of duplicating full step history.
+
+The structural fixes are in. I’m checking the patched modules for any regressions from the refactor, then I’ll extend the tests to cover the reviewer’s scenarios directly: ignore-mode failures and actual static-graph persistence.
+
+I found one test-facing regression from the first fix pass: I had introduced an extra trace event during initialization that the schema never asked for. I removed that and I’m now adding the direct regression tests for ignore-mode behavior and writer-owned static-graph persistence.
+
+I’ve finished the reviewer-driven fixes. I’m doing a compile-only validation pass on the patched runtime modules and tests now, then I’ll update the shared decisions and implementation notes to reflect the final shape.
+
+I’ve updated the shared decisions and notes. I’m doing one final compile pass and status check now so the handoff is clean and only reflects the post-review fix set.
+
+Scope considered
+
+Phase-local runtime observability persistence only: I fixed the reviewer findings in `runtime/git_tracking.py`, `runtime/tracing.py`, `runtime/static_graph.py`, the summary helper in `runtime/workspace.py`, the focused runtime tests, and the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/`.
+
+What I analyzed
+
+I re-read the reviewer findings against the current tracker/writer implementations, checked the shared decisions ledger, and verified where failure-mode handling and static-graph persistence were actually executed versus only declared in metadata.
+
+What I changed
+
+I centralized post-preflight git-tracking error handling in `RuntimeGitTracker`, so `failure_mode="ignore"` now disables tracking for the rest of the run and updates `run.json` instead of only guarding repo discovery. I reworked `RuntimeTraceWriter` initialization so constructor-time filesystem work is routed through the same ignore-mode path, and it now persists `static_step_graph.json` during initialization via the runtime static-graph helper.
+
+I also changed `append_run_git_step()` to keep `run.json.git_tracking` summary-only with `latest_step` / `latest_sequence` instead of duplicating full step history, and I extended the focused tests to cover ignore-mode commit failures, ignore-mode tracing init failures, writer-owned static-graph persistence, and the revised run metadata summary shape.
+
+Key findings / decisions
+
+The reviewer’s three blocking issues are addressed in code:
+git-tracking ignore mode now applies beyond preflight.
+Tracing ignore mode now covers constructor-time writes.
+The runtime-owned path now actually writes `static_step_graph.json`.
+
+I also superseded the earlier step-history duplication choice in `run.json`; the full authoritative history stays in `git_tracking.jsonl`, and `run.json` keeps only latest-summary fields.
+
+Open issues / next step
+
+Validation remains environment-limited: `python3 -m py_compile ...` passed on the changed runtime modules and tests, but `pytest` is unavailable here, and runtime smoke execution is still blocked by missing `pydantic`. The next step is a verifier re-run in an environment with the normal Python test dependencies.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+I’m re-reviewing the phase after the follow-up fixes, again limiting edits to the reviewer-owned artifacts. I’ll check the updated tracker/writer behavior against the prior findings and the phase contract, then refresh `criteria.md` and `feedback.md` accordingly.
+
+Reviewing the producer’s follow-up changes against the phase contract and the previous blocking findings. I’m checking the current reviewer artifacts now so I can update them accurately without touching source files.
+
+The previous blocking findings are fixed in the touched paths; I’m doing one more pass for regressions or a replacement issue before I update the review artifacts. The key checks are that the static graph is now written on the runtime-owned path and that `run.json` stayed summary-only.
+
+I’ve finished the re-check. The previous findings are resolved in the current diff, and I did not find a replacement blocking issue in phase scope, so I’m updating the reviewer artifacts to reflect a complete pass.
+
+Scope considered
+
+Phase-local review of the runtime observability persistence changes and only the reviewer-owned artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/`.
+
+What I analyzed
+
+I re-checked the producer’s fixes against the prior blocking findings, the active phase contract, and the shared decisions ledger. I focused on `runtime/git_tracking.py`, `runtime/tracing.py`, `runtime/static_graph.py`, `runtime/workspace.py`, and the targeted runtime tests to verify that the fixes cover the requested behavior without introducing a replacement issue in scope.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/criteria.md) so all review gates are checked, and appended a second-pass resolution section to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/runtime-observability-persistence/feedback.md) documenting that `IMP-001` through `IMP-004` are resolved.
+
+Key findings / decisions
+
+The previous blocking findings are addressed by the current diff. Runtime git tracking now honors `failure_mode="ignore"` beyond preflight, tracing initialization now degrades to warnings under ignore mode instead of failing eagerly, the runtime-owned path now writes `static_step_graph.json`, and `run.json.git_tracking` is back to summary-only metadata while `git_tracking.jsonl` remains authoritative. I did not identify a new blocking or non-blocking issue within the phase scope.
+
+Open issues / next step
+
+No review-blocking issues remain for this phase. Environment limits still mean I did not independently run `pytest`, but the phase-local code and test changes are consistent with the request, reviewer feedback, and current repository conventions.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

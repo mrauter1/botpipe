@@ -20,3 +20,12 @@ The phase objective and in-scope contract require persisting `static_step_graph.
 
 ### IMP-004 — non-blocking — `run.json` now duplicates per-step git history instead of staying aggregate/latest
 `append_run_git_step()` stores every step record under `run.json.git_tracking.steps`, even though the request explicitly positions `git_tracking.jsonl` as the authoritative append-only step history and `run.json` as aggregate/latest metadata. This adds a second per-step history format to maintain and will bloat `run.json` on long or resumed runs. Minimal fix: keep only summary/latest git-tracking fields in `run.json` and leave step-by-step history exclusively in `git_tracking.jsonl`.
+
+## Review Pass 2
+
+No remaining blocking or non-blocking findings in phase scope after the cycle-2 producer changes.
+
+- IMP-001 resolved: `RuntimeGitTracker` now routes post-preflight commit and metadata-write failures through a single `failure_mode="ignore"` handler, disabling tracking for the remainder of the run and updating `run.json`.
+- IMP-002 resolved: `RuntimeTraceWriter` constructor-time filesystem and metadata work now runs through the same guarded failure path, so `tracing.failure_mode="ignore"` can degrade to a warning instead of aborting construction.
+- IMP-003 resolved: the runtime-owned initialization path now persists `static_step_graph.json` via `write_static_step_graph_payload(...)` before advertising the file in `run.json`.
+- IMP-004 resolved: `run.json.git_tracking` is summary-only again through `latest_step` and `latest_sequence`, while `git_tracking.jsonl` remains the authoritative append-only history.
