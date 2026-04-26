@@ -761,3 +761,80 @@ No open issues in this phase-local audit. The only remaining scope boundary is t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’m implementing the `engine-provider-retries` phase: retry policy metadata, engine-side retry loops, and provider request enrichment, while keeping scope off handoff persistence and CLI behavior. I’ll inspect the active phase artifacts and the current provider/engine code paths first so the edits stay aligned with the existing contracts.
+
+I’ve loaded the phase plan and prior decisions. Next I’m tracing the concrete retry-related surfaces in `core/providers`, `core/steps`, `core/compiler`, `core/validation`, and `core/engine` so the change lands on existing seams rather than adding parallel logic.
+
+The current core already has the additive provider request fields from earlier phases, but the retry policy, compiled metadata, and engine loop aren’t wired yet. I’m drilling into `core/engine.py` now, because that is where the retry classification and checkpoint semantics have to stay precise.
+
+The provider rendering layer is already in place from earlier phases, so this phase can stay focused: add retry policy authoring/compilation, teach the engine to build richer provider request metadata, and classify retryable provider failures without touching runtime transports again. I’m checking the authoring exports and fake provider/test helpers now because they’ll need to expose and verify the new fields cleanly.
+
+I have the main execution path now. The next pass is on stores and test helpers: checkpoint payloads need additive retry-exhaustion context, and the fake provider needs to expose the enriched request fields so the new engine-contract tests can assert retries are rebuilding cleanly.
+
+I’ve finished the execution-path analysis. The edit set is now clear: one new provider retry module, additive step/compiler/export changes, an engine retry loop with explicit retry-kind tagging, and test-helper updates so the new contract fields are observable without broad churn.
+
+I’m starting the code edits with the authoring and compilation surfaces first. That keeps the new retry semantics explicit in the public model before I wire the engine behavior around them.
+
+I’m wiring the engine now. The main constraint is classification: retries should cover only provider-attributable failures, while middleware, system routing, missing inputs, and handler exceptions keep their current single-failure behavior.
+
+The engine loop is in. I’m updating the fake provider next so the new request metadata is visible in tests; then I’ll add the retry-focused contract and validation coverage and run the targeted suite.
+
+I’m patching the tests in two layers: first, preserving existing single-attempt expectations where they were written that way; second, adding explicit coverage for the new default three-attempt behavior and checkpoint metadata on exhaustion.
+
+The code is patched end-to-end for this phase. I’m doing a quick source pass over the edited engine and tests before running pytest so I can catch structural issues locally instead of burning time on avoidable test failures.
+
+I caught a couple of structural issues in the source pass: one missing keyword in the system-step artifact check and one bad test assertion from a bulk edit. I’m fixing those before running the suite.
+
+The core changes are consistent enough to start validation. I’m running the phase-targeted tests first, beginning with validation and engine contracts, because they exercise the new authoring surface, compiled metadata, and retry classification directly.
+
+The first validation pass surfaced two expected adjustments: one stale assertion in the invalid-route test, and one optional-artifact test that now needs `max_attempts=1` because the default retry budget changed. I’m patching those and rerunning the contract suite.
+
+The retry-focused tests are green. I’m running the rest of the phase-targeted suite now to catch any import-surface or compatibility regressions introduced by the new public exports and compiled-step metadata.
+
+The targeted phase suite passed. I’m running the full test suite now to make sure the retry default, compiled metadata, and public exports didn’t shift behavior outside the immediate contract tests.
+
+The full suite is still running. I’m polling it rather than doing more edits so I can see whether any remaining failures cluster around retry defaults or surface areas I haven’t touched yet.
+
+The suite is past the halfway mark and still clean. I’m waiting for completion before I update the phase notes and decisions so those artifacts reflect the final validated state rather than an intermediate guess.
+
+The full suite found one compatibility assertion: the strict authoring-surface test still hardcodes the old `workflow.__all__` list and now needs to include `ProviderRetryPolicy`. I’m updating that expectation and rerunning the full suite.
+
+I’ve applied the last compatibility-test fix and restarted the full suite. I’m waiting for the rerun to finish cleanly before I write the phase artifacts so the notes and decision log reflect the final passing state.
+
+The code and validation work are complete. I’m updating the phase artifacts now so the next turn inherits the actual retry semantics, preserved invariants, and the small non-obvious decisions that matter for avoiding drift.
+
+Scope considered
+
+Phase-local `engine-provider-retries` only: retry policy authoring/compilation, engine-side provider retry semantics, provider request artifact metadata, retry failure checkpoint context, and matching tests/artifacts. I left handoff persistence/delivery, docs wording updates, and CLI behavior unchanged.
+
+What I analyzed
+
+I traced the current provider boundary and retry surfaces through [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/fake.py), and the engine/validation/strictness tests to keep the provider-vs-middleware failure boundary intact.
+
+What I changed
+
+Added [core/providers/retries.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/retries.py) with `ProviderRetryPolicy` and markdown retry feedback generation. Wired `retry_policy` into `LLMStep`/`PairStep`, compiled it onto `CompiledStep`, exported it through [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py) and [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py), and made validation reject it on `SystemStep`.
+
+In [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), I added provider artifact-ref builders, enriched semantic provider requests with required/writable artifacts plus route-required artifact metadata, and wrapped only llm/pair execution in retry loops. Retryable failures now cover illegal routes, invalid payloads, malformed/transport provider failures, and provider-attributable artifact validation failures; exhausted retries checkpoint additive failure context with consumed attempt counts. I updated [core/providers/fake.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/fake.py) and the validation/engine/strictness tests to expose and verify the new fields and retry behavior.
+
+Key findings / decisions
+
+Retry exhaustion is stored additively inside existing `failure_context` rather than widening checkpoint schema. Artifact-validation retries are only enabled when the failure is tied to the provider-selected route; middleware-overridden route failures still fail without retry. `ProviderRetryPolicy` is now part of the strict workflow authoring surface, so the strictness expectation was updated accordingly.
+
+Open issues / next step
+
+This phase is complete and validated. The next scoped work is the deferred handoff phase and the later doc/baseline wording updates. Validation run: targeted phase tests passed, and full suite passed with `.venv/bin/pytest -q` (`706 passed`).

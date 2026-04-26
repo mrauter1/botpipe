@@ -17,6 +17,7 @@ try:  # pragma: no branch - prefer installed-package imports when available
         PAUSE,
         PairStep,
         Prompt,
+        ProviderRetryPolicy,
         Refresh,
         ResetCompletion,
         Route,
@@ -34,7 +35,7 @@ try:  # pragma: no branch - prefer installed-package imports when available
         from autoloop_v3.core.extensions import WorkflowExtension
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from core import Advance, Artifact, BoardMutation, Continuity, Context, FAIL, GLOBAL, LLMStep, PAUSE
-    from core import PairStep, Prompt, Refresh, ResetCompletion, Route, RouteContract, Selector, SetStatus
+    from core import PairStep, Prompt, ProviderRetryPolicy, Refresh, ResetCompletion, Route, RouteContract, Selector, SetStatus
     from core import Session, SUCCESS, SystemStep, Workflow, WorkItem, Worklist
     if TYPE_CHECKING:
         from core.extensions import WorkflowExtension
@@ -52,6 +53,7 @@ __all__ = [
     "PAUSE",
     "PairStep",
     "Prompt",
+    "ProviderRetryPolicy",
     "Refresh",
     "ResetCompletion",
     "Route",
