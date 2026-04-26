@@ -14,12 +14,12 @@
       "proof-docs-and-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "typed-bootstrap-contract-and-first-family"
+    "current_phase_index": 1,
+    "current_phase_id": "portfolio-governance-bootstrap-migration"
   },
   "phase_status": {
-    "typed-bootstrap-contract-and-first-family": "in_progress",
-    "portfolio-governance-bootstrap-migration": "planned",
+    "typed-bootstrap-contract-and-first-family": "completed",
+    "portfolio-governance-bootstrap-migration": "in_progress",
     "proof-docs-and-memory-closeout": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260426T044108Z-506b9788",
       "status": "in_progress",
       "ts": "2026-04-26T04:51:26.132759+00:00"
+    },
+    {
+      "phase_id": "typed-bootstrap-contract-and-first-family",
+      "run_id": "run-20260426T044108Z-506b9788",
+      "status": "completed",
+      "ts": "2026-04-26T05:05:41.015341+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "portfolio-governance-bootstrap-migration",
+      "run_id": "run-20260426T044108Z-506b9788",
+      "status": "in_progress",
+      "ts": "2026-04-26T05:05:41.020081+00:00"
     }
   ]
 }
