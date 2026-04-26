@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
@@ -933,6 +934,21 @@ def test_workflow_portfolio_to_operating_system_publish_rejects_summary_drift(
     )
 
     with pytest.raises(ValueError, match="must not drift from lifecycle_recommendations"):
+        workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
+
+
+def test_workflow_portfolio_to_operating_system_publish_rejects_missing_typed_summary_field(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_portfolio_operating_system_test_context(tmp_path, monkeypatch)
+
+    summary_path = ctx.workflow_folder / "portfolio_operating_summary.json"
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    payload.pop("governance_posture_counts")
+    summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="governance_posture_counts"):
         workflow_pkg.WorkflowPortfolioToOperatingSystem.on_publish_portfolio_operating_system(state, ctx)
 
 

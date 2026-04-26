@@ -531,3 +531,64 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcb04-31d8-7f82-bfef-843a912e19e9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcb04-31d8-7f82-bfef-843a912e19e9
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcb04-31d8-7f82-bfef-843a912e19e9
+---
+I’m checking the scoped runtime and unit tests against the publish-migration contract before deciding whether this phase still needs new assertions or only a test-strategy closeout. I’ll compare the target publish paths, current test coverage, and the shared decisions first.
+
+The scoped tests are already green. I’m checking whether the unit suite already includes explicit typed-artifact failure coverage for all three migrated contracts; if one of the company or portfolio specs is still implicit-only, I’ll add the smallest missing assertion there.
+
+The existing unit suite already validates the artifact specs, but the runtime suites do not yet prove that the portfolio and company publish handlers fail through typed-summary reads when required fields are missing. I’m adding the smallest two runtime regression tests for that exact seam.
+
+I found one real coverage gap worth closing: the runtime suites did not explicitly prove that the portfolio and company publish handlers now fail through typed-summary reads when required summary fields are missing. I’m adding those two assertions plus the phase test notes now.
+
+The added runtime assertions are in place. I’m re-running the scoped publish suites now to make sure the new typed-summary failure tests pass alongside the existing drift and receipt coverage.
+
+Scope considered
+
+- Phase-local test work for `workflow-publication-migration`.
+- Reviewed the three scoped publish handlers, their existing runtime suites, the typed-artifact unit coverage, the shared decisions ledger, and the phase test artifacts.
+
+What I analyzed
+
+- Confirmed the checked-out code already uses typed artifact reads in:
+  - `workflow_portfolio_to_operating_system`
+  - `company_operation_to_recursive_improvement_cycle`
+  - `workflow_run_history_to_failure_modes`
+- Checked existing runtime coverage for happy-path publish, drift rejection, hidden-execution rejection, and receipt compatibility.
+- Found one remaining proof gap: runtime tests already proved typed-artifact failure on the diagnostic workflow, but not yet on the portfolio and company publish handlers.
+
+What I changed
+
+- Added runtime regression tests:
+  - [test_workflow_portfolio_to_operating_system.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_portfolio_to_operating_system.py)
+  - [test_company_operation_to_recursive_improvement_cycle.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_company_operation_to_recursive_improvement_cycle.py)
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/test/phases/workflow-publication-migration/test_strategy.md) with an explicit behavior-to-test coverage map.
+- Appended the test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/test/phases/workflow-publication-migration/feedback.md).
+- Appended the non-obvious test decision under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt).
+
+Key findings / decisions
+
+- Added the smallest missing runtime proof for AC-1:
+  - portfolio publish now has a test that missing `governance_posture_counts` fails through typed summary validation
+  - company publish now has a test that missing `priority_category_counts` fails through typed summary validation
+- Existing diagnostic runtime coverage already proved the same seam for missing required typed fields, so no new diagnostic test was needed.
+- Scoped proof passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/unit/test_stdlib_and_extensions.py`
+  - Result: `166 passed`
+
+Open issues / next step
+
+- No open issue in this phase scope.
+- Refinement/decomposition publish-handler tests remain intentionally untouched because that family is out of scope for this phase unless it reuses the exact same seam.

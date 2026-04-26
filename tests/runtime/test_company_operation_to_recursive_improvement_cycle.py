@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
@@ -949,6 +950,21 @@ def test_company_operation_to_recursive_improvement_cycle_publish_rejects_summar
     )
 
     with pytest.raises(ValueError, match="must not drift from recursive_improvement_candidates.json"):
+        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
+
+
+def test_company_operation_to_recursive_improvement_cycle_publish_rejects_missing_typed_summary_field(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workflow_pkg, state, ctx = _make_publish_company_operation_cycle_test_context(tmp_path, monkeypatch)
+
+    summary_path = ctx.workflow_folder / "recursive_improvement_summary.json"
+    payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    payload.pop("priority_category_counts")
+    summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="priority_category_counts"):
         workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_publish_recursive_improvement_cycle(state, ctx)
 
 
