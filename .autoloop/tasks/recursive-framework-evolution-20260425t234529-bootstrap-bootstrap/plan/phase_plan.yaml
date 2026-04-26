@@ -1,4 +1,195 @@
 version: 1
 task_id: recursive-framework-evolution-20260425t234529-bootstrap-bootstrap
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/runs/run-20260426T025144Z-5a94c19f/request.md
-phases: []
+phases:
+- phase_id: provider-boundary-core
+  title: Core Provider Boundary
+  objective: Introduce the rendered provider turn abstractions, shared renderer/parser,
+    and core wrapper that preserves the existing semantic provider protocol.
+  status: planned
+  in_scope:
+  - Add RenderedProviderTurn, ProviderTurnResult, ProviderTransport, ProviderArtifactRef,
+    and ProviderTurnContext.
+  - Add shared markdown rendering with render policy and shared outcome parsing in
+    core/providers.
+  - Add RenderedLLMProvider and export updates while preserving semantic provider
+    support.
+  out_of_scope:
+  - Runtime CLI transport refactors.
+  - Engine retry loop and handoff persistence.
+  - Public CLI or config changes.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Core provider modules define the new rendered transport boundary without
+      changing the engine-facing LLMProvider protocol.
+  - id: AC-2
+    text: Shared renderer emits human-readable markdown contracts and explicitly excludes
+      raw provider output and related telemetry.
+  - id: AC-3
+    text: Verifier and LLM outcome JSON parsing moves to core and no longer belongs
+      to runtime transport code.
+  deliverables:
+  - New core/providers modules for turns, rendering, parsing, and rendered provider
+    wrapping.
+  - Extended provider request/context models and exports.
+  risks:
+  - Shared renderer could overfit current verifier packet behavior and accidentally
+    preserve raw-output coupling.
+  - Moving parsing out of runtime/_common.py can break existing imports unless tests
+    are updated in the same slice.
+  rollback:
+  - Keep thin compatibility imports or wrappers until runtime callers are updated,
+    then remove them once tests pass.
+- phase_id: runtime-cli-transports
+  title: Runtime CLI Transports
+  objective: Refactor Codex and Claude runtime providers into transport-only adapters
+    and update backend resolution to wrap them with RenderedLLMProvider.
+  status: planned
+  in_scope:
+  - Convert runtime/providers/codex.py to transport-only execution over RenderedProviderTurn.
+  - Convert runtime/providers/claude.py to transport-only execution over RenderedProviderTurn.
+  - Update runtime/provider_backends.py and runtime provider tests for the new wrapper
+    plus purity constraints.
+  out_of_scope:
+  - Retry semantics and retry feedback rendering.
+  - Handoff effect/event/checkpoint work.
+  - Changes to ScriptedLLMProvider.
+  dependencies:
+  - provider-boundary-core
+  acceptance_criteria:
+  - id: AC-1
+    text: Codex and Claude runtime provider files no longer import semantic provider
+      request/response types or shared outcome parsing/rendering helpers.
+  - id: AC-2
+    text: Runtime backend resolution returns RenderedLLMProvider around the selected
+      CLI transport without changing provider selection semantics.
+  - id: AC-3
+    text: Runtime tests prove prompt_text transport behavior and core-side outcome
+      parsing ownership.
+  deliverables:
+  - Pure CodexTransport and ClaudeTransport implementations.
+  - Updated backend resolver and transport purity tests.
+  risks:
+  - Session resume handling may regress when semantic provider logic moves behind
+    the wrapper.
+  - Capability probing tests may still assert concrete provider classes and need coordinated
+    updates.
+  rollback:
+  - Keep compatibility aliases for old provider class names while the backend resolver
+    and tests transition.
+- phase_id: engine-provider-retries
+  title: Engine Retry Semantics
+  objective: Add provider retry policy metadata, engine-side artifact contract rendering
+    inputs, and retry loops for provider-mediated failures only.
+  status: planned
+  in_scope:
+  - Add ProviderRetryPolicy and retry feedback generation.
+  - Add retry_policy to LLMStep and PairStep, compile and validate it, and export
+    it through public authoring surfaces.
+  - Teach the engine to build provider artifact metadata and retry provider-mediated
+    failures with rebuilt requests.
+  out_of_scope:
+  - Route handoff persistence and delivery.
+  - Public CLI behavior changes.
+  - Retrying SystemStep, middleware, extension, or missing-input failures.
+  dependencies:
+  - runtime-cli-transports
+  acceptance_criteria:
+  - id: AC-1
+    text: Default provider retry attempts are 3 and max_attempts=1 preserves legacy
+      single-attempt behavior.
+  - id: AC-2
+    text: Only provider-attributable route, payload, artifact, malformed-output, and
+      transport failures retry.
+  - id: AC-3
+    text: PairStep retries restart from producer and rebuild the full provider request
+      without including prior raw output or transcript data.
+  deliverables:
+  - Provider retry policy module and retry feedback rendering.
+  - Compiled step retry metadata plus engine retry loop and artifact-ref request enrichment.
+  - Retry-focused engine contract tests.
+  risks:
+  - Broad ProviderExecutionError handling could accidentally retry unrelated runtime
+    failures.
+  - Retry feedback could drift from the authoritative runtime contract if request
+    rebuilding is incomplete.
+  rollback:
+  - Force affected tests/workflows to max_attempts=1 while narrowing retry classification
+    logic.
+- phase_id: route-handoff-persistence
+  title: Route Handoff Delivery
+  objective: Introduce Handoff effects, Event.handoff, checkpointed pending handoffs,
+    and scoped delivery to the resolved provider-mediated target step.
+  status: planned
+  in_scope:
+  - Add Handoff effect and validation that rejects empty messages and SystemStep targets.
+  - Add Event.handoff and PendingHandoff checkpoint state.
+  - Persist, restore, scope, deliver, and consume handoffs in engine and checkpoint
+    stores.
+  out_of_scope:
+  - Prompt-size controls beyond renderer policy.
+  - SystemStep handoff consumption.
+  - Any max_chars field on Handoff or Event.
+  dependencies:
+  - engine-provider-retries
+  acceptance_criteria:
+  - id: AC-1
+    text: Static Handoff effects and dynamic Event.handoff values both reach only
+      the resolved provider-mediated target step.
+  - id: AC-2
+    text: Pending handoffs survive checkpoint/resume, are scoped to worklist item
+      identity when relevant, and do not leak to unrelated steps.
+  - id: AC-3
+    text: Handoffs are consumed once dispatch begins and are not delivered to terminal
+      destinations or SystemStep targets.
+  deliverables:
+  - Effect, primitive, compiler, validation, engine, and store updates for pending
+    handoffs.
+  - Handoff-focused unit and engine tests.
+  risks:
+  - Resolved-target scoping may leak across worklist items if persisted keys are incomplete.
+  - Checkpoint save/load and clone helpers may diverge if pending_handoffs is added
+    inconsistently.
+  rollback:
+  - Temporarily disable persisted handoff delivery while keeping validation and prompt
+    rendering scaffolding intact.
+- phase_id: docs-and-regression-suite
+  title: Docs And Regression Sweep
+  objective: Update baseline docs/prompts and land the full regression suite for provider
+    purity, rendering, retries, handoffs, and checkpoint compatibility.
+  status: planned
+  in_scope:
+  - Update architecture/authoring docs, workflow prompt READMEs, and baseline tests
+    to describe the broader human-readable runtime contract.
+  - Sweep adjacent stale narrow-contract references that would otherwise contradict
+    the new boundary.
+  - Run the targeted test set followed by the full test suite.
+  out_of_scope:
+  - New authoring features beyond the requested retry and handoff surfaces.
+  - Additional provider backends.
+  - Public CLI redesign.
+  dependencies:
+  - route-handoff-persistence
+  acceptance_criteria:
+  - id: AC-1
+    text: Baseline docs and prompt README tests describe required inputs, writable
+      artifacts, route-specific artifact requirements, expected output payloads, optional
+      retry feedback, and optional route handoff.
+  - id: AC-2
+    text: Renderer, transport purity, retry, handoff, and checkpoint persistence tests
+      all pass in targeted runs.
+  - id: AC-3
+    text: The full pytest suite passes without reintroducing raw provider output into
+      prompts or changing public CLI behavior.
+  deliverables:
+  - Updated docs, prompt READMEs, and baseline assertions.
+  - Passing targeted and full test runs.
+  risks:
+  - Stale contract wording outside the primary files can leave contradictory docs
+    even if baseline tests pass.
+  - Large cross-cutting changes may surface unrelated failures late unless targeted
+    suites run first.
+  rollback:
+  - Land doc/test updates in the final slice only after code behavior stabilizes,
+    and revert doc wording changes if implementation scope narrows.

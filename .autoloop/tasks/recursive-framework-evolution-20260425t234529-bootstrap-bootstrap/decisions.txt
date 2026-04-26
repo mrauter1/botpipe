@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260426T025144Z-5a94c19f" ts="2026-04-26T02:51:44.908288+00:00" />
+Keep the existing semantic LLMProvider surface for the engine and ScriptedLLMProvider; only CLI-backed runtime providers move behind a new core-side RenderedLLMProvider plus ProviderTransport boundary.
+Provider retries apply only to provider-attributable transport, malformed-output, illegal-route, invalid-payload, and output-artifact failures; PairStep retries restart from producer and max_attempts defaults to 3 unless a step overrides it.
+Handoff delivery is resolved-target only, scoped by worklist/item identity when relevant, persisted additively in checkpoints, and rejected for SystemStep targets in this implementation pass.
+Raw provider output remains telemetry for logs, traces, StepFinish, and failure context, but must be fully excluded from shared rendered provider prompts and retry inputs.
