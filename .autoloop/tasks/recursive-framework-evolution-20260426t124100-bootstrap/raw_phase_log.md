@@ -1170,3 +1170,54 @@ with `89 passed`.
 Open issues / next step
 
 I did not do the full repo-wide test migration. A sampled broader module, `tests/runtime/test_workspace_and_context.py`, still fails because many older runtime tests now need either temp git repo initialization or explicit git opt-out under the new default.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcab5-335a-7580-9146-926cf88f11fe
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+I’m reviewing the runtime binding and preflight changes against the phase contract, with emphasis on ordering, duplicate-commit avoidance, and resume safety. I’ll inspect the changed runtime/engine paths and then update the phase criteria and feedback with only scope-relevant findings.
+
+Reviewing the phase artifacts and the changed runtime binding paths now. I’m checking the implemented behavior against the phase acceptance criteria, then I’ll update the phase `criteria.md` and `feedback.md` with any concrete findings.
+
+The main risks are in the git terminal/init commit path and the fatal-path failure handling. I’m pulling exact symbol references and then I’ll write the review findings with minimal fix directions.
+
+I confirmed the broader regression surface is real rather than hypothetical. I’m running the sampled runtime module once so the feedback can point to an actual failing coverage gap instead of a guessed one.
+
+I have enough to write the review artifacts. The acceptance gaps are concrete: terminal/init metadata leaves the repo dirty, fatal-path raise-mode is neutralized, and the broader runtime test suite still has unupdated non-git callers.
+
+Scope considered
+
+Phase-local review of `engine-runner-observability-binding`, focused on runtime extension binding, runner preflight ordering, workflow `GitTracking` suppression, fatal-path observability behavior, and the test surface affected by the new default git-tracked runtime.
+
+What I analyzed
+
+`runtime/git_tracking.py`, `runtime/observability.py`, `runtime/runner.py`, `core/engine.py`, the active phase `implementation_notes.md`, and the shared `decisions.txt` entries for this task. I also checked the broader runtime regression surface in `tests/runtime/test_workspace_and_context.py`.
+
+What I reviewed
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/engine-runner-observability-binding/feedback.md) with three blocking findings. `criteria.md` remains fully unchecked because the current implementation does not yet satisfy the phase acceptance bar.
+
+Key findings / decisions
+
+`IMP-001` is blocking: init/finish/fatal git-tracking metadata is written after `commit_all()`, so runtime-owned files can leave the repo dirty and cause later resume preflight failures on the runtime’s own artifacts.
+
+`IMP-002` is blocking: fatal-path observability failures are swallowed even under `failure_mode="raise"`, which conflicts with the required failure-mode semantics.
+
+`IMP-003` is blocking: the runtime test migration is incomplete. I confirmed `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py -q` still fails with 13 git-preflight errors because those tests neither initialize git nor explicitly disable runtime git tracking.
+
+Open issues / next step
+
+Address the three blocking findings, then rerun the targeted phase tests plus the broader runtime module that still assumes non-git temp roots.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
