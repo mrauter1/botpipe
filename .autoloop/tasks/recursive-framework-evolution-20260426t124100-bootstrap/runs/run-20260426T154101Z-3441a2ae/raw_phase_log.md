@@ -1425,3 +1425,117 @@ Add the two AC-5 resume-mismatch integration tests, then rerun the relevant runt
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcab5-335a-7580-9146-926cf88f11fe
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+Closing the AC-5 gap now. I’m inspecting the resume warning path in the runner and the existing pause/resume helpers so I can add two integration tests: previously tracked -> disabled, and previously untracked -> enabled from the resume point.
+
+I’ve got the exact AC-5 seam. I’m adding the two mixed-mode resume integration tests now: one for tracked -> disabled with warning/no backfill, and one for untracked -> enabled after the repo is manually cleaned so runtime tracking can legitimately start from the resume point.
+
+I’m closing the AC-5 gap by keeping the new mixed-mode resume coverage in place and verifying whether the failure is a test issue or an implementation regression. Next I’m checking the updated test file and phase artifacts, then I’ll record the result without weakening the expectation.
+
+The new AC-5 tests are in place; I’m reading the mixed-mode resume cases and then I’ll update the phase artifacts to reflect that one of them is now exposing a real runtime warning-persistence bug rather than a weak expectation.
+
+I confirmed the gap is no longer about missing coverage. The tracked→disabled resume test is correctly failing against the current runtime, so I’m updating the phase artifacts to record that AC-5 coverage was added and that validation is blocked by the implementation’s missing warning persistence.
+
+I’m only touching the phase artifacts now: the coverage map, the feedback note, and the shared decision line for why the failing AC-5 warning assertion is intentional. After that I’ll rerun the focused file to keep the failure signal explicit.
+
+The AC-5 test suite is running now. I’m waiting for the final result so the close-out can distinguish between a coverage gap and an implementation regression with an exact failing assertion.
+
+Scope considered
+
+Phase-local AC-5 test coverage for `engine-runner-observability-binding`, specifically the mixed-mode resume cases the auditor flagged: tracked->disabled resume warnings and untracked->enabled resume start-from-resume behavior.
+
+What I analyzed
+
+I reviewed the existing runtime/contract coverage around `tests/runtime/test_optional_extensions.py` and the phase-local audit artifacts in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/feedback.md). I also traced the failing resume-warning path back to the runner’s resume metadata flow so I could confirm the new assertion is exposing a real regression rather than a weak test.
+
+What I changed
+
+I extended [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py) with the missing AC-5 integration coverage:
+- tracked paused run resumed with git tracking disabled must persist `runtime_git_tracking_disabled_on_resume` and must not backfill or append `git_tracking.jsonl`
+- untracked paused run resumed with git tracking enabled must start git tracking from the resume point only
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/test_strategy.md) to map those behaviors explicitly, updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/feedback.md) with the new coverage and blocked validation result, and appended the non-obvious test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The AC-5 coverage gap is now closed at the test level. One of the new tests fails correctly against the current implementation, so I did not weaken the expectation.
+
+Validation command:
+```bash
+.venv/bin/python -m pytest tests/runtime/test_optional_extensions.py tests/runtime/test_runtime_git_tracking.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py -q
+```
+
+Result:
+```text
+1 failed, 92 passed
+```
+
+Failing test:
+`test_resume_with_git_tracking_disabled_after_tracked_segment_records_warning_without_backfill`
+
+Observed failure:
+`run.json` has no `warnings` entry after resume, so the required `runtime_git_tracking_disabled_on_resume` payload is not being persisted.
+
+Open issues / next step
+
+The remaining blocker is implementation, not coverage: the runner currently fails to persist the required tracked->disabled resume warning before resume metadata rewrites the run’s git-tracking summary. Once that runtime bug is fixed, this phase’s new AC-5 tests should pass without further expectation changes.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcab5-335a-7580-9146-926cf88f11fe
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+I’m auditing whether the new AC-5 tests actually close the coverage gap without weakening expectations. First I’m checking the mixed-mode resume tests and the phase audit artifacts, then I’ll update the audit result based on test quality rather than the underlying implementation failure.
+
+The new coverage is materially better: the prior gap is now closed, and the remaining failure is the intended signal from the new tracked->disabled resume assertion. I’m updating the audit artifacts to mark the test phase complete and to note that `TST-001` is resolved by coverage, not by making the runtime pass.
+
+Scope considered
+
+Phase-local audit of the `engine-runner-observability-binding` test updates, focused on the AC-5 mixed-mode resume behaviors the previous audit marked as missing.
+
+What I analyzed
+
+I reviewed the new integration coverage in `tests/runtime/test_optional_extensions.py`, the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/test_strategy.md), the current [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/feedback.md), and the shared decision note explaining why the tracked->disabled warning assertion must remain strict.
+
+What I reviewed
+
+The new tests now cover both AC-5 branches at the appropriate integration level:
+- previously tracked paused run resumed with git disabled must persist the warning and avoid backfill
+- previously untracked paused run resumed with git enabled must begin git tracking from the resume point only
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/criteria.md) to fully checked and appended the audit resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/engine-runner-observability-binding/feedback.md).
+
+Key findings / decisions
+
+No blocking test-audit issues remain. The prior `TST-001` coverage gap is resolved.
+
+The remaining `1 failed, 92 passed` result is not a test-quality problem. The failing tracked->disabled resume test is the correct regression detector for the current runtime implementation bug, and keeping that expectation is consistent with AC-5 and the shared decision ledger.
+
+Open issues / next step
+
+No further phase-local test artifact changes are needed from this audit pass. The next step is implementation-side: fix the missing `runtime_git_tracking_disabled_on_resume` persistence so the new AC-5 regression test passes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
