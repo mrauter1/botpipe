@@ -12,6 +12,7 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
@@ -590,6 +591,7 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
                     "reports/test-summary-2026.04.md",
                 ],
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 

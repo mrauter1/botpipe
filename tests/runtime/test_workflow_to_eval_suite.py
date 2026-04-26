@@ -13,6 +13,7 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowDiscoveryError,
     WorkflowParameterError,
@@ -750,6 +751,7 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
                     "Need a validated manifest and downstream next action.",
                 ],
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 

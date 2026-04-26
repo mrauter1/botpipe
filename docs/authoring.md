@@ -203,6 +203,24 @@ Concrete runtime adapters live under `runtime/providers/`, but that package is f
 
 For `PairStep` verifiers and `LLMStep` prompts, treat the provider-facing completion contract as strict JSON. The runtime now validates verifier and single-LLM outcomes locally, so prompts should ask for one JSON object matching the declared routes and payload contract rather than free-form prose.
 
+## Runtime Observability Defaults
+
+Runtime tracing is enabled by default.
+
+Runtime git tracking is runtime-owned and enabled by default when the repository is clean.
+
+Workflow authors do not need `GitTracking` or `Tracing` declarations for normal observability.
+
+Workflow-declared `GitTracking` is ignored with a deprecation warning because runtime git tracking is authoritative.
+
+Workflow-declared `Tracing` remains sidecar-compatible when a workflow wants an extra trace sink beyond the runtime default.
+
+Runtime-owned observability writes `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` outputs under the run folder.
+
+Provider raw output is runtime telemetry and runtime-owned evidence for debugging and replay, not a workflow-authored prompt surface.
+
+Git commits are the workspace replay boundary, so operators should start from a clean repository before a git-tracked run or resume.
+
 ## Compact Prompt Contract Style
 
 Keep prompt families explicit without repeating the same boilerplate in every file.

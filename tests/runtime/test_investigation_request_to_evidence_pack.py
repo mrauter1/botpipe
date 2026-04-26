@@ -12,6 +12,7 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
@@ -315,6 +316,7 @@ def test_investigation_evidence_pack_package_runs_and_emits_terminal_receipt(tmp
                     "Treat missing production audit proof as a gap, not a pass.",
                 ],
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 
@@ -426,6 +428,7 @@ def test_investigation_evidence_pack_package_can_be_composed_through_helper_seam
             root=tmp_path,
             task_id="investigation-composition-task",
             message="Prepare the parent release evidence packet.",
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 

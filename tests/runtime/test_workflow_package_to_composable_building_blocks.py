@@ -14,6 +14,7 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
@@ -761,6 +762,7 @@ def test_workflow_package_to_composable_building_blocks_routes_to_blocked_for_un
                 "target_test_command": TARGET_TEST_COMMAND,
                 "max_candidate_building_blocks": 2,
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 
@@ -1215,6 +1217,7 @@ def _run_successful_decomposition_workflow(
             task_id=TASK_ID,
             message="Decompose the release workflow into reusable building blocks.",
             workflow_params=workflow_params,
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 

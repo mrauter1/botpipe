@@ -10,6 +10,7 @@ import pytest
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
@@ -526,6 +527,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(
                 "aliases": ["release-go-no-go"],
                 "target_test_command": "pytest -q",
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 

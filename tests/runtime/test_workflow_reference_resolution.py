@@ -9,6 +9,7 @@ import pytest
 
 from autoloop_v3.core.errors import WorkflowExecutionError
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import WorkflowDiscoveryError, resolve_workflow_reference
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from workflow.primitives import Outcome
@@ -80,7 +81,12 @@ class ReleaseReview(Workflow):
     result = run_workflow_package(
         "examples/release_review.py",
         provider=provider,
-        options=RunnerOptions(root=tmp_path, task_id="single-file-task", message="Inspect single-file workflow"),
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="single-file-task",
+            message="Inspect single-file workflow",
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
     )
 
     assert result.terminal == "SUCCESS"
@@ -190,6 +196,7 @@ class ReleaseReview(Workflow):
             task_id="flow-package-task",
             message="Inspect flow package workflow",
             workflow_params={"mode": "strict"},
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 
@@ -301,7 +308,12 @@ class ModuleReviewWorkflow(Workflow):
     result = run_workflow_package(
         "workflows.module_review.flow:ModuleReviewWorkflow",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="module-task", message="Run module reference"),
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="module-task",
+            message="Run module reference",
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
     )
 
     assert result.terminal == "SUCCESS"
@@ -727,7 +739,12 @@ class ReleaseReview(Workflow):
     first_result = run_workflow_package(
         "examples/alpha/release_review.py",
         provider=ScriptedLLMProvider(),
-        options=RunnerOptions(root=tmp_path, task_id="collision-task", message="First origin"),
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="collision-task",
+            message="First origin",
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
     )
     assert first_result.terminal == "SUCCESS"
 
@@ -735,5 +752,10 @@ class ReleaseReview(Workflow):
         run_workflow_package(
             "examples/beta/release_review.py",
             provider=ScriptedLLMProvider(),
-            options=RunnerOptions(root=tmp_path, task_id="collision-task", message="Second origin"),
+            options=RunnerOptions(
+                root=tmp_path,
+                task_id="collision-task",
+                message="Second origin",
+                runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+            ),
         )

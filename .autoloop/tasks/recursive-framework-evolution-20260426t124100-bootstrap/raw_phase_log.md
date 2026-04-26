@@ -1539,3 +1539,60 @@ No further phase-local test artifact changes are needed from this audit pass. Th
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcadd-e140-7253-9b4f-2807a4ad6d65
+---
+I’m handling the `regression-coverage-and-docs` phase. First I’m reading the active phase artifacts and the current runtime observability code/tests so I can add coverage and doc updates without widening scope.
+
+I’ve confirmed prior phases already landed core runtime changes and there’s an open decisions header for this turn. Next I’m reading the current runtime tests, docs, and observability code to identify missing coverage and any tests that still assume a non-git workspace.
+
+The repo already has dedicated runtime git/tracing/static-graph suites and several integration checks. I’m narrowing the remaining work to gaps in coverage, tests that still rely on non-git defaults, and doc assertions that don’t yet mention the new runtime-owned observability contract.
+
+The targeted suites are present, but I can’t run them with plain `pytest` because this environment doesn’t have that entrypoint on `PATH`. I’m checking the local test runner and auditing broader runtime tests for places that still create runs outside git without opting out.
+
+There isn’t a local `pytest` installation or virtualenv metadata in the workspace, so I can’t execute the suites directly yet. I’m continuing with static audit and patching; validation will have to be limited to syntax/import checks unless a project test environment exists elsewhere in the repo.
+
+I found the project venv and started the targeted regression/doc suites under `.venv/bin/python`. I’m waiting on the results now; if failures point to specific gaps, I’ll patch those directly rather than broadening the scope.
+
+I found a real bug, not just a missing test: the resume warning for “previous segment tracked git, resumed segment disables git” is being computed after the current disabled tracker rewrites `run.json`, so the previous tracked state is lost before the warning check. I’m patching that ordering issue, then I’ll broaden the audit to runtime tests that still rely on non-git defaults and update the docs/baselines to lock the new behavior in.
+
+I’ve narrowed the remaining edits to three concrete areas: fix the resume-warning persistence bug in `runtime/runner.py`, add one end-to-end integration test that asserts the runtime-owned artifact set without workflow declarations, and update the broader runtime tests that run in temp directories so they opt out of git tracking explicitly instead of failing the new default.
+
+The broader runtime audit turned up exactly what the phase contract warned about: a set of temp-repo tests were still relying on the old non-git default. I’ve updated those tests to opt out explicitly and I’m now rerunning the affected suites, including the resume-warning case that exposed the runner ordering bug.
+
+The affected suites are green now: `468` targeted tests passed, including the broader workflow package/runtime coverage that was previously broken by the new default git preflight. I’m finishing the phase artifacts next: recording the non-obvious decisions for later turns and summarizing the exact scope/validation in the implementation notes.
+
+**Scope considered**
+- Phase-local `regression-coverage-and-docs` only: runtime observability regression coverage, non-git test opt-outs, resume-warning persistence, and docs/baseline updates.
+
+**What I analyzed**
+- Resume warning flow in [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py) and `run.json` mutation order.
+- Existing runtime observability tests in [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py), [tests/runtime/test_runtime_git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_git_tracking.py), and [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py).
+- Runtime package/integration tests that execute in temp directories without initializing git.
+- Doc coverage and baseline assertions in [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+
+**What I changed**
+- Fixed the resume tracked-to-disabled warning bug in [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py) by computing mismatch warnings before binding the current tracker can overwrite prior `run.json.git_tracking` state.
+- Added an end-to-end integration assertion that a plain workflow with no observability declarations still writes `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` in [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py).
+- Updated the non-git runtime package tests to pass `RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False))` explicitly at each `RunnerOptions(...)` call site instead of relying on old defaults.
+- Expanded [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) to lock in runtime-owned git/tracing defaults, clean-start rules, GitTracking deprecation behavior, replay boundary, and future optimization artifacts.
+- Updated the phase artifacts in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/regression-coverage-and-docs/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt).
+
+**Key findings / decisions**
+- The missing resume warning was a production ordering bug, not just a test gap.
+- Explicit per-call-site git opt-outs are the right test fix; a shared default would weaken the new runtime contract.
+- Targeted validation passed: `468 passed` with `.venv/bin/python -m pytest` across the affected runtime/doc suites.
+
+**Open issues / next step**
+- No open issues in this phase.

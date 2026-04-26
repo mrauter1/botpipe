@@ -13,6 +13,7 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowDiscoveryError,
     WorkflowParameterError,
@@ -677,6 +678,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
                     "Keep the selected workflow package unchanged.",
                 ],
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 

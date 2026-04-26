@@ -13,6 +13,7 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
@@ -799,6 +800,7 @@ def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_
                     "Keep the rejected routes explicit.",
                 ],
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 
@@ -1347,6 +1349,7 @@ def test_task_to_workflow_strategy_runs_and_publishes_concrete_adapt_handoff_wit
                     "Keep downstream workflow execution explicit.",
                 ],
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 

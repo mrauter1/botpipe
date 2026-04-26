@@ -235,6 +235,33 @@ Semantics:
 
 The task `request.md` is the latest rendered request snapshot for the task. Each run also stores its own immutable `request.md` snapshot at run start.
 
+## Runtime Observability
+
+Runtime observability is runtime-owned and enabled by default.
+
+- Runtime git tracking uses `git add --all` plus deterministic `autoloop: ...` commit messages.
+- The repository must be clean before a git-tracked run or resume starts.
+- Git commits are the workspace replay boundary.
+- Autoloop does not classify changed paths for replay.
+- `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` outputs are written without requiring workflow declarations.
+
+Normal runs write runtime-owned evidence under each run folder:
+
+- `trace.jsonl`
+- `git_tracking.jsonl`
+- `static_step_graph.json`
+- `raw/`
+
+`run.json` summarizes the runtime-owned tracing and git-tracking state.
+
+Workflows do not need `GitTracking` or `Tracing` declarations for normal observability.
+
+Workflow-declared `GitTracking` is ignored with a deprecation warning because runtime git tracking is authoritative.
+
+Workflow-declared `Tracing` remains sidecar-compatible for workflows that still want an extra trace sink.
+
+Future optimization workflows consume `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/`.
+
 ## Recursive Operation
 
 Recursive automation under `recursive_autoloop/` keeps the globally installed Autoloop CLI contract.

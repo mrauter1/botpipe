@@ -14,6 +14,7 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
@@ -717,6 +718,7 @@ def test_workflow_and_eval_to_refined_workflow_package_rejects_source_evaluation
                     ],
                     "target_test_command": TARGET_TEST_COMMAND,
                 },
+                runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
             ),
         )
 
@@ -1104,6 +1106,7 @@ def _run_successful_refinement_workflow(tmp_path: Path, monkeypatch: pytest.Monk
                 ],
                 "target_test_command": TARGET_TEST_COMMAND,
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 

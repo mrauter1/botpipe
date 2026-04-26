@@ -12,6 +12,7 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import ChildWorkflowResult, Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemorySessionStore
+from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
@@ -354,6 +355,7 @@ def test_security_remediation_package_runs_and_emits_terminal_receipt(tmp_path: 
                     "Avoid schema changes in the same patch.",
                 ],
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 
@@ -495,6 +497,7 @@ def test_security_remediation_package_propagates_child_question_without_adopting
                 "affected_system": "delegated admin impersonation",
                 "sponsor_role": "security engineering",
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 
@@ -557,6 +560,7 @@ def test_security_remediation_package_blocks_when_child_publishes_not_ready_pack
                     "Avoid schema changes in the same patch.",
                 ],
             },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
 
