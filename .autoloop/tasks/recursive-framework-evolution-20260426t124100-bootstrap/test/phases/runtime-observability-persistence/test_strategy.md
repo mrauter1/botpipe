@@ -13,6 +13,7 @@
   - `tests/runtime/test_runtime_git_tracking.py::test_git_tracking_run_policy_commits_at_run_boundaries`
   - `tests/runtime/test_runtime_git_tracking.py::test_git_tracking_step_policy_commits_after_each_step`
   - `tests/runtime/test_runtime_git_tracking.py::test_git_tracking_jsonl_records_step_commit_metadata`
+  - `tests/runtime/test_runtime_git_tracking.py::test_git_tracking_fatal_commits_and_records_run_metadata`
   - `tests/runtime/test_runtime_tracing.py::test_trace_events_include_commit_before_step_not_commit_after_step`
 - AC-2 Runtime-owned raw outputs and trace refs are persisted with stable metadata
   - `tests/runtime/test_runtime_tracing.py::test_runtime_trace_writes_pair_raw_producer_and_verifier_files`
@@ -32,6 +33,10 @@
 - Runtime tracing initialization and append failure-mode degrade path
   - `tests/runtime/test_runtime_tracing.py::test_runtime_trace_failure_mode_ignore_swallows_initialization_errors`
   - `tests/runtime/test_runtime_tracing.py::test_runtime_trace_failure_mode_ignore_swallows_step_write_errors`
+- Terminal and fatal runtime observability payloads
+  - `tests/runtime/test_runtime_tracing.py::test_runtime_trace_terminal_writes_terminal_event_payload`
+  - `tests/runtime/test_runtime_tracing.py::test_runtime_trace_fatal_writes_error_payload`
+  - `tests/runtime/test_runtime_git_tracking.py::test_git_tracking_fatal_commits_and_records_run_metadata`
 - Static step graph persistence from the runtime-owned path
   - `tests/runtime/test_runtime_tracing.py::test_runtime_trace_initialization_persists_static_step_graph`
   - `tests/runtime/test_runtime_tracing.py::test_runtime_trace_disabled_still_persists_static_step_graph`
@@ -58,6 +63,7 @@
 - Missing git repository or dirty workspace raises under the default git-tracking failure mode.
 - Raw-output filename collisions raise `RuntimeTraceError` instead of overwriting prior evidence.
 - Runtime git/tracing ignore modes degrade to metadata or warning updates instead of aborting the run.
+- Fatal run termination still records runtime-owned trace/git evidence instead of silently dropping the final error snapshot.
 
 ## Flake-risk controls
 
@@ -66,5 +72,5 @@
 
 ## Known gaps
 
-- Full `pytest` execution is not possible in this environment because `pytest` is not installed, so validation here is limited to static review and `python3 -m py_compile tests/runtime/test_runtime_tracing.py`.
+- Full `pytest` execution is not possible in this environment because `pytest` is not installed, so validation here is limited to static review and `python3 -m py_compile tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py`.
 - Runner/engine integration coverage remains deferred to the later observability binding phase and is intentionally out of scope here.

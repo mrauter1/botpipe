@@ -275,6 +275,34 @@ def test_runtime_trace_failure_mode_ignore_swallows_step_write_errors(
     assert "trace append failed" in run_meta["warnings"][-1]["message"]
 
 
+def test_runtime_trace_terminal_writes_terminal_event_payload(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+    writer = _writer(run_dir)
+
+    writer.terminal(event=_terminal(run_dir, terminal="SUCCESS"))
+
+    record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert record["event_type"] == "terminal"
+    assert record["terminal"] == "SUCCESS"
+    assert record["step_name"] == "assessment"
+    assert record["state"]["note"] == "done"
+    assert record["outcome"]["tag"] == "ready"
+
+
+def test_runtime_trace_fatal_writes_error_payload(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+    writer = _writer(run_dir)
+
+    writer.fatal(event=_terminal(run_dir, terminal="FAILED"), error=RuntimeError("boom"))
+
+    record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert record["event_type"] == "fatal"
+    assert record["step_name"] == "assessment"
+    assert record["error_type"] == "RuntimeError"
+    assert record["error_message"] == "boom"
+    assert record["state"]["note"] == "done"
+
+
 def test_trace_events_include_commit_before_step_not_commit_after_step(tmp_path: Path) -> None:
     run_dir = _run_dir(tmp_path)
     writer = _writer(run_dir)

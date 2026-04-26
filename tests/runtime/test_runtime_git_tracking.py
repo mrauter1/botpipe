@@ -354,3 +354,46 @@ def test_git_tracking_resume_appends_without_overwriting(tmp_path: Path) -> None
 
     assert lines[0] == existing_record
     assert any(line.get("sequence") == 2 and line.get("step_name") == "resume" for line in lines)
+
+
+def test_git_tracking_fatal_commits_and_records_run_metadata(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    tracker = RuntimeGitTracker(
+        root=tmp_path,
+        run_dir=None,
+        workflow_name="demo",
+        task_id="task-1",
+        run_id="run-1",
+        config=GitTrackingRuntimeConfig(commit_policy="step"),
+    )
+    tracker.prepare_before_workspace_creation()
+    run_dir = _run_dir(tmp_path)
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.json").write_text("{}\n", encoding="utf-8")
+    tracker.bind_run_dir(run_dir)
+    tracker.commit_run_initialized()
+    (run_dir / "fatal.txt").write_text("boom\n", encoding="utf-8")
+
+    payload = tracker.on_fatal(step_name="assessment", error=RuntimeError("boom"))
+
+    log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:3]
+    lines = [
+        json.loads(line)
+        for line in (run_dir / "git_tracking.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert payload["event_type"] == "fatal_committed"
+    assert payload["step_name"] == "assessment"
+    assert payload["error_type"] == "RuntimeError"
+    assert payload["error_message"] == "boom"
+    assert payload["created_commit"] is True
+    assert lines[-1]["event_type"] == "fatal_committed"
+    assert lines[-1]["commit_after_run"] == payload["commit_after_run"]
+    assert run_meta["git_tracking"]["commit_after_run"] == payload["commit_after_run"]
+    assert log_messages == [
+        "autoloop: fatal demo run-1",
+        "autoloop: init demo run-1",
+        "init",
+    ]

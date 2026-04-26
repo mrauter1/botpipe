@@ -1008,3 +1008,49 @@ The next test pass should add focused terminal and fatal-path assertions for bot
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dca99-5963-7ce1-803d-abec9a9f8f04
+---
+The auditor’s gap is valid: terminal and fatal observability branches are still unprotected. I’m tightening the runtime tracing and git-tracking suites around those paths now, then I’ll update the phase test map and feedback to reflect the added coverage.
+
+I’ve mapped the missing branches to concrete tests: one for terminal trace payloads, one for fatal trace payloads, and one for fatal git-tracking commit metadata. I’m adding those now and then I’ll tighten the strategy/feedback so the auditor can see the gap is closed.
+
+The missing branches are covered now. I’m doing a quick syntax pass over the two edited test modules and then I’ll summarize the exact coverage change and the remaining environment limitation.
+
+I’ve closed the auditor’s specific gap in the tests themselves. I’m appending a short note to the phase feedback that maps the new tests directly back to `TST-001`, so the next audit pass can clear it quickly.
+
+Scope considered
+
+Phase-local test work for runtime observability persistence: [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py), [tests/runtime/test_runtime_git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_git_tracking.py), and the test-phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/`.
+
+What I analyzed
+
+I worked directly from the auditor’s blocking finding. The missing risk was terminal/fatal observability coverage: enabled terminal trace emission, enabled fatal trace emission, and fatal git-tracking commit metadata persistence.
+
+What I changed
+
+I added three focused regression tests:
+`test_runtime_trace_terminal_writes_terminal_event_payload`,
+`test_runtime_trace_fatal_writes_error_payload`, and
+`test_git_tracking_fatal_commits_and_records_run_metadata`.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/test_strategy.md) so terminal/fatal coverage is explicitly mapped, and appended to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-observability-persistence/feedback.md) with both the new additions and a direct note that `TST-001` has been addressed.
+
+Key findings / decisions
+
+The new tests cover the highest-value failure branch in this phase: preserving terminal/fatal runtime evidence when a run ends abnormally. The git test asserts the fatal commit message, `fatal_committed` JSONL record, and `run.json.git_tracking.commit_after_run`; the tracing tests assert terminal/fatal event types and the expected payload fields.
+
+Open issues / next step
+
+`python3 -m py_compile tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py` passed. Full `pytest` execution is still blocked here because `pytest` is not installed, so the next step is the auditor re-run in a normal test environment.
