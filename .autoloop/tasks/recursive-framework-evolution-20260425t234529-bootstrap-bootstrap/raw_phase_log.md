@@ -92,3 +92,35 @@ The planner needs to revise the artifacts to explicitly cover the handoff public
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dc7b3-3b32-7eb2-ab4b-51a46fce8a06
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dc7b3-3b32-7eb2-ab4b-51a46fce8a06
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc7b3-3b32-7eb2-ab4b-51a46fce8a06
+---
+I’m revising the plan against the verifier’s two blocking findings: the missing public handoff export surface and the missing retry-exhaustion checkpoint semantics. First I’m checking the current artifacts and the latest decisions header so I only append within this turn’s block.
+
+I’ve got the exact corrections. I’m updating the narrative plan and machine-readable phases so they explicitly cover the workflow-facing handoff exports and retry-exhaustion checkpoint data, then I’ll re-validate the YAML.
+
+The corrections are in. I’m re-reading the updated sections and re-validating `phase_plan.yaml` with `yaml.safe_load` so the machine-readable plan stays clean after the additions.
+
+Updated the plan artifacts to close both verifier findings.
+
+`plan.md` now explicitly covers:
+- public handoff authoring/export work in `core/__init__.py`, `workflow/__init__.py`, and `workflow/primitives.py`
+- retry-exhaustion checkpoint semantics, including persisted attempt-consumption data alongside useful failure context
+
+`phase_plan.yaml` now includes those requirements in the relevant phases’ `in_scope`, `acceptance_criteria`, and `deliverables`.
+
+I also appended a concise resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/plan/feedback.md) and recorded the non-obvious compatibility/checkpoint constraints under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/decisions.txt).
+
+Validation:
+- Parsed [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/plan/phase_plan.yaml) successfully with `python3` + `yaml.safe_load` (`yaml-ok 5`).

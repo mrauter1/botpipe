@@ -89,6 +89,8 @@ phases:
     it through public authoring surfaces.
   - Teach the engine to build provider artifact metadata and retry provider-mediated
     failures with rebuilt requests.
+  - Persist retry-exhaustion checkpoint data with useful failure context and consumed-attempt
+    counts.
   out_of_scope:
   - Route handoff persistence and delivery.
   - Public CLI behavior changes.
@@ -105,9 +107,13 @@ phases:
   - id: AC-3
     text: PairStep retries restart from producer and rebuild the full provider request
       without including prior raw output or transcript data.
+  - id: AC-4
+    text: Exhausted provider retries save checkpoint/failure-context data that records
+      useful failure details plus retry-attempt consumption.
   deliverables:
   - Provider retry policy module and retry feedback rendering.
   - Compiled step retry metadata plus engine retry loop and artifact-ref request enrichment.
+  - Engine/checkpoint updates for retry-exhaustion metadata and changed failure tests.
   - Retry-focused engine contract tests.
   risks:
   - Broad ProviderExecutionError handling could accidentally retry unrelated runtime
@@ -125,6 +131,8 @@ phases:
   in_scope:
   - Add Handoff effect and validation that rejects empty messages and SystemStep targets.
   - Add Event.handoff and PendingHandoff checkpoint state.
+  - Update core and workflow authoring exports so Handoff and the updated Event surface
+    are available through the public shims.
   - Persist, restore, scope, deliver, and consume handoffs in engine and checkpoint
     stores.
   out_of_scope:
@@ -143,9 +151,13 @@ phases:
   - id: AC-3
     text: Handoffs are consumed once dispatch begins and are not delivered to terminal
       destinations or SystemStep targets.
+  - id: AC-4
+    text: Workflow authors can import Handoff and the updated Event surface through
+      the documented public workflow shims rather than core-only modules.
   deliverables:
   - Effect, primitive, compiler, validation, engine, and store updates for pending
     handoffs.
+  - Public shim/export updates in core/__init__.py, workflow/__init__.py, and workflow/primitives.py.
   - Handoff-focused unit and engine tests.
   risks:
   - Resolved-target scoping may leak across worklist items if persisted keys are incomplete.

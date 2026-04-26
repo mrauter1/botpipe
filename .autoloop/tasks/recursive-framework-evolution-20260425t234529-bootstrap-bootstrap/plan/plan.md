@@ -32,11 +32,13 @@
 - Add `retry_policy` to `LLMStep` and `PairStep`, compile it into `CompiledStep`, export it through `core/__init__.py` and `workflow/__init__.py`, and reject it on `SystemStep`.
 - Build provider artifact metadata in `core/engine.py` so requests carry required inputs, writable outputs, route-required artifacts, retry feedback, handoff text, attempt, and max-attempt metadata.
 - Wrap only provider-mediated execution (`LLMStep`, `PairStep`) in a retry loop. Pair retries must restart from producer, not verifier.
+- On final retry exhaustion, persist checkpoint failure data that includes useful failure context plus retry-attempt consumption so resume/debug surfaces and changed failure tests can distinguish first-failure from exhausted-retry failure.
 - Preserve the current distinction between provider failures and middleware/system/required-input failures so only provider-attributable failures retry.
 
 ### 4. Add Route Handoff Effect, Event Data, And Persistence
 - Add `Handoff` to `core/effects.py` and validation/compile support in `core/routes.py`, `core/compiler.py`, and `core/validation.py`.
 - Extend `Event` with `handoff: str | None` and validate non-empty stripped text only.
+- Expose `Handoff` on the public authoring surface through `core/__init__.py` and `workflow/__init__.py`, and expose the updated `Event` primitive through `workflow/primitives.py` so workflow authors can use the new surface without reaching into core internals.
 - Add `PendingHandoff` to checkpoint primitives and persist `pending_handoffs` through in-memory and filesystem checkpoint stores.
 - Resolve handoffs only after route resolution, ignore them for terminal destinations, reject handoff-to-`SystemStep` during validation, scope them by worklist/item identity when present, and consume them only after provider dispatch begins.
 
@@ -68,18 +70,25 @@
   - `build_retry_feedback(...)`
 - `core/steps.py` / `core/compiler.py`
   - additive `retry_policy` on provider-mediated steps only
+- `core/__init__.py` / `workflow/__init__.py`
+  - export `ProviderRetryPolicy`
+  - export `Handoff`
 - `core/effects.py` / `core/primitives.py`
   - `Handoff`
   - `Event.handoff`
   - `PendingHandoff`
   - additive `Checkpoint.pending_handoffs`
+- `workflow/primitives.py`
+  - re-export the updated `Event` surface with `handoff`
 
 ## Compatibility Notes
 - Semantic in-process providers remain on the current `LLMProvider` protocol. Only CLI-backed runtime providers move behind `ProviderTransport`.
 - `ScriptedLLMProvider` remains a semantic provider and should keep existing test ergonomics.
 - Raw provider output remains visible on `Outcome.raw_output`, `StepFinish.producer_raw_output`, `StepFinish.verifier_raw_output`, log artifacts, tracing payloads, and failure context. The renderer must never consume it.
 - Checkpoint schema changes are additive. Old checkpoints must continue to load with `pending_handoffs=()`.
+- Retry exhaustion changes checkpoint failure payload content additively: old checkpoints continue to load, and new exhausted-provider failures must record retry consumption without changing resume entrypoints.
 - Public CLI, runtime config keys, and session slot selection behavior stay unchanged.
+- Public workflow authoring imports must stay coherent: `Handoff` and `ProviderRetryPolicy` are available from the same top-level surfaces as the existing step/effect primitives, and `workflow.primitives.Event` exposes `handoff`.
 - Default retry behavior changes to `3` attempts for `LLMStep` and `PairStep`; single-attempt legacy expectations must become explicit with `ProviderRetryPolicy(max_attempts=1)`.
 - Handoff to terminal destinations is dropped after target resolution. Handoff to `SystemStep` is intentionally rejected in validation for this implementation pass.
 
@@ -88,6 +97,7 @@
 - Rebuild each retry request from current artifacts, current route contract, current context, pending handoff, and retry feedback only. Do not include previous raw output, previous full prompt, transcript, log paths, or digests.
 - Preserve existing pair-step telemetry ordering: producer raw output is still logged before verifier execution, verifier raw output still reaches `StepFinish`, and LLM raw output still appends to log artifacts.
 - Classify retryable failures explicitly so missing required input artifacts, middleware bad routes, `SystemStep` bad routes, extension failures, handler exceptions, and worklist errors do not retry.
+- Persist retry exhaustion data in the same engine/checkpoint path that already records failure context so retry counts cannot drift between in-memory checkpoints, filesystem checkpoints, and changed failure tests.
 - Consume pending handoffs after provider dispatch begins, not before, so a pre-dispatch crash/resume does not lose them.
 - Search and update stale doc/prompt phrases in the same implementation slice as the code change to avoid tests passing while guidance stays contradictory.
 
@@ -112,9 +122,15 @@
 - Handoff leakage risk: pending handoffs could bleed across unrelated steps or worklist items.
   - Mitigation: persist `source_step`, `route_tag`, `target_step`, `worklist_name`, and `item_id`; deliver only on exact target/item match; add non-leakage tests.
   - Rollback: disable handoff persistence while keeping static validation if delivery semantics prove unsafe.
+- Public-surface compatibility risk: internal handoff support could land without matching shim/export updates, leaving workflow authors unable to use the new surface.
+  - Mitigation: include `core/__init__.py`, `workflow/__init__.py`, and `workflow/primitives.py` in the handoff phase acceptance criteria and compatibility review.
+  - Rollback: preserve temporary compatibility aliases or re-exports until authoring-surface tests pass.
 - Checkpoint compatibility risk: additive schema changes must stay aligned across protocol, memory store, filesystem store, engine save/load, and clone helpers.
   - Mitigation: update all checkpoint serializers/deserializers together and add resume tests.
   - Rollback: gate new fields behind safe defaults and preserve unknown-field tolerance in filesystem loading.
+- Retry-exhaustion observability risk: retries could work but checkpoint/failure surfaces might omit consumed-attempt data, weakening resume/debug behavior and acceptance-test coverage.
+  - Mitigation: add explicit engine tests for exhausted retries and persist attempt counters in additive failure context/checkpoint data.
+  - Rollback: keep existing failure-context shape plus a separate additive retry-count field if a shared structure change proves too invasive.
 - Docs/baseline drift risk: old “narrow contract only” wording appears in multiple docs and prompt readmes.
   - Mitigation: use repo-wide search to update all baseline-covered instances in the same phase as test changes.
   - Rollback: if wider doc updates become noisy, limit the first change set to files covered by baseline tests and add a tracked follow-up doc sweep.
