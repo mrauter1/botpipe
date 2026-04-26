@@ -155,6 +155,7 @@ def test_git_tracking_run_policy_commits_at_run_boundaries(tmp_path: Path) -> No
         "run_finished",
     ]
     assert run_meta["git_tracking"]["commit_after_run"] == finish_payload["commit_after_run"]
+    assert "steps" not in run_meta["git_tracking"]
 
 
 def test_git_tracking_step_policy_commits_after_each_step(tmp_path: Path) -> None:
@@ -219,6 +220,38 @@ def test_git_tracking_commit_all_tracks_untracked_files(tmp_path: Path) -> None:
     assert ".autoloop/tasks/task-1/wf_demo/runs/run-1/untracked.txt" in committed_files
 
 
+def test_git_tracking_runtime_failure_mode_ignore_disables_tracking_after_commit_error(tmp_path: Path) -> None:
+    _init_repo(tmp_path)
+    tracker = RuntimeGitTracker(
+        root=tmp_path,
+        run_dir=None,
+        workflow_name="demo",
+        task_id="task-1",
+        run_id="run-1",
+        config=GitTrackingRuntimeConfig(commit_policy="run", failure_mode="ignore"),
+    )
+    tracker.prepare_before_workspace_creation()
+    run_dir = _run_dir(tmp_path)
+    run_dir.mkdir(parents=True)
+    (run_dir / "run.json").write_text("{}\n", encoding="utf-8")
+    tracker.bind_run_dir(run_dir)
+
+    class _BrokenRepo:
+        def commit_all(self, message: str) -> tuple[str, bool]:
+            raise RuntimeError("commit rejected")
+
+    tracker._repo = _BrokenRepo()  # type: ignore[assignment]
+
+    payload = tracker.commit_run_initialized()
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert payload["enabled"] is False
+    assert payload["eligible"] is False
+    assert "commit rejected" in payload["error"]
+    assert run_meta["git_tracking"]["enabled"] is False
+    assert "commit rejected" in run_meta["git_tracking"]["error"]
+
+
 def test_git_tracking_noop_commit_returns_current_head(tmp_path: Path) -> None:
     _init_repo(tmp_path)
     tracker = RuntimeGitTracker(
@@ -275,12 +308,14 @@ def test_git_tracking_jsonl_records_step_commit_metadata(tmp_path: Path) -> None
         for line in (run_dir / "git_tracking.jsonl").read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
     assert lines[-1]["event_type"] == "step_committed"
     assert lines[-1]["sequence"] == 3
     assert lines[-1]["step_name"] == "assessment"
     assert lines[-1]["commit_before_step"] == payload["commit_before_step"]
     assert lines[-1]["commit_after_step"] == payload["commit_after_step"]
+    assert run_meta["git_tracking"]["latest_step"]["sequence"] == 3
 
 
 def test_git_tracking_resume_appends_without_overwriting(tmp_path: Path) -> None:

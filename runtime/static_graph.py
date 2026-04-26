@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from ..core.compiler import CompiledWorkflow
 from ..core.prompts import Prompt
@@ -53,10 +53,14 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
 
 
 def write_static_step_graph(run_dir: Path, compiled: CompiledWorkflow) -> Path:
+    return write_static_step_graph_payload(run_dir, workflow_static_step_graph_payload(compiled))
+
+
+def write_static_step_graph_payload(run_dir: Path, payload: dict[str, Any] | Mapping[str, Any]) -> Path:
     output_path = run_dir / STATIC_GRAPH_FILENAME
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        json.dumps(workflow_static_step_graph_payload(compiled), indent=2, ensure_ascii=False) + "\n",
+        json.dumps(dict(payload), indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
     return output_path
@@ -68,4 +72,3 @@ def _prompt_path(prompt: str | Prompt | None) -> str | None:
     if isinstance(prompt, Prompt):
         return prompt.path
     return prompt
-

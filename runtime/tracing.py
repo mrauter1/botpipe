@@ -14,6 +14,7 @@ from ..core.extensions import StepFinish, StepStart, TerminalFinish
 from ..core.providers.models import StepProviderUsage
 from ..core.primitives import Event, Outcome
 from .config import TracingRuntimeConfig
+from .static_graph import STATIC_GRAPH_FILENAME, write_static_step_graph_payload
 from .workspace import append_run_warning, update_run_tracing
 
 
@@ -42,13 +43,9 @@ class RuntimeTraceWriter:
         self._task_id = task_id
         self._run_id = run_id
         self._config = config
-        self._static_step_graph = static_step_graph
+        self._static_step_graph = dict(static_step_graph)
         self._trace_path = _resolve_trace_path(self._run_dir, config.path)
-        if self._config.enabled:
-            self._trace_path.parent.mkdir(parents=True, exist_ok=True)
-            self._trace_path.touch(exist_ok=True)
-            self._raw_dir.mkdir(parents=True, exist_ok=True)
-        self._update_metadata()
+        self._run_guarded(self._initialize)
 
     def step_started(
         self,
@@ -59,19 +56,31 @@ class RuntimeTraceWriter:
     ) -> None:
         if not self._config.enabled:
             return
-        try:
-            payload = self._base_payload(
-                event_type="step_started",
+        self._run_guarded(
+            lambda: self._write_step_started(
                 sequence=sequence,
-                step_name=event.step_name,
-                step_kind=event.step_kind,
-                git={"commit_before_step": commit_before_step},
+                event=event,
+                commit_before_step=commit_before_step,
             )
-            if self._config.include_state_snapshots:
-                payload["state"] = event.state.model_dump(mode="json")
-            self._write(payload)
-        except Exception as exc:
-            self._handle_failure(exc)
+        )
+
+    def _write_step_started(
+        self,
+        *,
+        sequence: int,
+        event: StepStart,
+        commit_before_step: str | None,
+    ) -> None:
+        payload = self._base_payload(
+            event_type="step_started",
+            sequence=sequence,
+            step_name=event.step_name,
+            step_kind=event.step_kind,
+            git={"commit_before_step": commit_before_step},
+        )
+        if self._config.include_state_snapshots:
+            payload["state"] = event.state.model_dump(mode="json")
+        self._write(payload)
 
     def step_finished(
         self,
@@ -82,25 +91,37 @@ class RuntimeTraceWriter:
     ) -> None:
         if not self._config.enabled:
             return
-        try:
-            raw_output_refs = self._persist_raw_outputs(sequence=sequence, event=event)
-            payload = self._base_payload(
-                event_type="step_finished",
+        self._run_guarded(
+            lambda: self._write_step_finished(
                 sequence=sequence,
-                step_name=event.step_name,
-                step_kind=event.step_kind,
-                git={"commit_before_step": commit_before_step},
-                event=self._serialize_event(event.event),
-                outcome=self._serialize_outcome(event.outcome),
-                raw_output_refs=raw_output_refs,
-                provider_usage=self._serialize_provider_usage(event.provider_usage),
+                event=event,
+                commit_before_step=commit_before_step,
             )
-            if self._config.include_state_snapshots:
-                payload["state_before"] = event.state_before.model_dump(mode="json")
-                payload["state_after"] = event.state_after.model_dump(mode="json")
-            self._write(payload)
-        except Exception as exc:
-            self._handle_failure(exc)
+        )
+
+    def _write_step_finished(
+        self,
+        *,
+        sequence: int,
+        event: StepFinish,
+        commit_before_step: str | None,
+    ) -> None:
+        raw_output_refs = self._persist_raw_outputs(sequence=sequence, event=event)
+        payload = self._base_payload(
+            event_type="step_finished",
+            sequence=sequence,
+            step_name=event.step_name,
+            step_kind=event.step_kind,
+            git={"commit_before_step": commit_before_step},
+            event=self._serialize_event(event.event),
+            outcome=self._serialize_outcome(event.outcome),
+            raw_output_refs=raw_output_refs,
+            provider_usage=self._serialize_provider_usage(event.provider_usage),
+        )
+        if self._config.include_state_snapshots:
+            payload["state_before"] = event.state_before.model_dump(mode="json")
+            payload["state_after"] = event.state_after.model_dump(mode="json")
+        self._write(payload)
 
     def terminal(
         self,
@@ -109,19 +130,23 @@ class RuntimeTraceWriter:
     ) -> None:
         if not self._config.enabled:
             return
-        try:
-            payload = self._base_payload(
-                event_type="terminal",
-                terminal=event.terminal,
-                step_name=event.step_name,
-                event=self._serialize_event(event.event),
-                outcome=self._serialize_outcome(event.outcome),
-            )
-            if self._config.include_state_snapshots and event.state is not None:
-                payload["state"] = event.state.model_dump(mode="json")
-            self._write(payload)
-        except Exception as exc:
-            self._handle_failure(exc)
+        self._run_guarded(lambda: self._write_terminal(event=event))
+
+    def _write_terminal(
+        self,
+        *,
+        event: TerminalFinish,
+    ) -> None:
+        payload = self._base_payload(
+            event_type="terminal",
+            terminal=event.terminal,
+            step_name=event.step_name,
+            event=self._serialize_event(event.event),
+            outcome=self._serialize_outcome(event.outcome),
+        )
+        if self._config.include_state_snapshots and event.state is not None:
+            payload["state"] = event.state.model_dump(mode="json")
+        self._write(payload)
 
     def fatal(
         self,
@@ -131,22 +156,35 @@ class RuntimeTraceWriter:
     ) -> None:
         if not self._config.enabled:
             return
-        try:
-            payload = self._base_payload(
-                event_type="fatal",
-                step_name=event.step_name,
-                error_type=type(error).__name__,
-                error_message=str(error),
-            )
-            if self._config.include_state_snapshots and event.state is not None:
-                payload["state"] = event.state.model_dump(mode="json")
-            self._write(payload)
-        except Exception as exc:
-            self._handle_failure(exc)
+        self._run_guarded(lambda: self._write_fatal(event=event, error=error))
+
+    def _write_fatal(
+        self,
+        *,
+        event: TerminalFinish,
+        error: BaseException,
+    ) -> None:
+        payload = self._base_payload(
+            event_type="fatal",
+            step_name=event.step_name,
+            error_type=type(error).__name__,
+            error_message=str(error),
+        )
+        if self._config.include_state_snapshots and event.state is not None:
+            payload["state"] = event.state.model_dump(mode="json")
+        self._write(payload)
 
     @property
     def _raw_dir(self) -> Path:
         return self._run_dir / RAW_DIRNAME
+
+    def _initialize(self) -> None:
+        if self._config.enabled:
+            self._trace_path.parent.mkdir(parents=True, exist_ok=True)
+            self._trace_path.touch(exist_ok=True)
+            self._raw_dir.mkdir(parents=True, exist_ok=True)
+        write_static_step_graph_payload(self._run_dir, self._static_step_graph)
+        self._update_metadata()
 
     def _base_payload(self, *, event_type: str, **fields: object) -> dict[str, object]:
         return {
@@ -230,7 +268,7 @@ class RuntimeTraceWriter:
                 "enabled": self._config.enabled,
                 "trace_file": trace_file_value,
                 "raw_dir": RAW_DIRNAME,
-                "static_step_graph_file": "static_step_graph.json",
+                "static_step_graph_file": STATIC_GRAPH_FILENAME,
                 "schema": TRACE_SCHEMA,
             },
         )
@@ -240,15 +278,24 @@ class RuntimeTraceWriter:
         with self._trace_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(dict(payload), ensure_ascii=False) + "\n")
 
+    def _run_guarded(self, operation) -> None:
+        try:
+            operation()
+        except Exception as exc:
+            self._handle_failure(exc)
+
     def _handle_failure(self, exc: Exception) -> None:
         if self._config.failure_mode == "ignore":
-            append_run_warning(
-                self._run_dir,
-                {
-                    "event_type": "runtime_tracing_write_failed",
-                    "message": str(exc),
-                },
-            )
+            try:
+                append_run_warning(
+                    self._run_dir,
+                    {
+                        "event_type": "runtime_tracing_write_failed",
+                        "message": str(exc),
+                    },
+                )
+            except Exception:
+                return
             return
         if isinstance(exc, RuntimeTraceError):
             raise exc

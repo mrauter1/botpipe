@@ -18,3 +18,7 @@ Add explicit coverage for nested runtime file-config merging and for `GitRepo.co
 <autoloop-decisions-header version="1" block_seq="7" owner="implementer" phase_id="runtime-observability-persistence" pair="implement" turn_seq="1" run_id="run-20260426T154101Z-3441a2ae" ts="2026-04-26T16:22:20.261706+00:00" />
 Store lightweight per-step git summaries under `run.json.git_tracking.steps`, while keeping `git_tracking.jsonl` as the authoritative append-only step/event log.
 Compute the next observability sequence as the max sequence seen across `trace.jsonl`, `git_tracking.jsonl`, and `raw/` filename prefixes while ignoring malformed JSONL lines, so resume stays append-safe under partial evidence corruption.
+<autoloop-decisions-header version="1" block_seq="8" owner="implementer" phase_id="runtime-observability-persistence" pair="implement" turn_seq="2" run_id="run-20260426T154101Z-3441a2ae" ts="2026-04-26T16:37:12.536205+00:00" />
+Handle post-preflight git tracking errors through a single runtime wrapper that disables tracking for the remainder of the run under `failure_mode="ignore"` and updates `run.json` with the disablement reason.
+Persist `static_step_graph.json` from `RuntimeTraceWriter` initialization so the phase-local runtime-owned path writes the advertised file even before later runner integration work lands.
+Keep `run.json.git_tracking` summary-only via `latest_step` and `latest_sequence`; leave full step history exclusively in `git_tracking.jsonl`.

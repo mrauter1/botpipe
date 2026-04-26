@@ -48,7 +48,12 @@ def _writer(run_dir: Path, *, config: TracingRuntimeConfig | None = None) -> Run
         task_id="task-1",
         run_id=run_dir.name,
         config=config or TracingRuntimeConfig(),
-        static_step_graph={},
+        static_step_graph={
+            "schema": "autoloop.workflow_static_step_graph/v1",
+            "workflow_name": "demo",
+            "steps": [],
+            "transitions": {"steps": {}, "global": {}},
+        },
     )
 
 
@@ -105,6 +110,16 @@ def test_runtime_trace_enabled_by_default_writes_trace_jsonl(tmp_path: Path) -> 
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert run_meta["tracing"]["enabled"] is True
     assert run_meta["tracing"]["trace_file"] == "trace.jsonl"
+
+
+def test_runtime_trace_initialization_persists_static_step_graph(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+    _writer(run_dir)
+
+    payload = json.loads((run_dir / "static_step_graph.json").read_text(encoding="utf-8"))
+
+    assert payload["schema"] == "autoloop.workflow_static_step_graph/v1"
+    assert payload["workflow_name"] == "demo"
 
 
 def test_runtime_trace_records_step_started_and_finished(tmp_path: Path) -> None:
@@ -206,6 +221,28 @@ def test_runtime_trace_can_be_disabled(tmp_path: Path) -> None:
     assert not (run_dir / "trace.jsonl").exists()
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     assert run_meta["tracing"]["enabled"] is False
+
+
+def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    run_dir = _run_dir(tmp_path)
+    monkeypatch.setattr(
+        "autoloop_v3.runtime.tracing.write_static_step_graph_payload",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("graph write failed")),
+    )
+
+    writer = RuntimeTraceWriter(
+        run_dir=run_dir,
+        workflow_name="demo",
+        task_id="task-1",
+        run_id=run_dir.name,
+        config=TracingRuntimeConfig(failure_mode="ignore"),
+        static_step_graph={"schema": "autoloop.workflow_static_step_graph/v1"},
+    )
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+    assert isinstance(writer, RuntimeTraceWriter)
+    assert run_meta["warnings"][-1]["event_type"] == "runtime_tracing_write_failed"
+    assert "graph write failed" in run_meta["warnings"][-1]["message"]
 
 
 def test_trace_events_include_commit_before_step_not_commit_after_step(tmp_path: Path) -> None:
