@@ -498,6 +498,7 @@ PACKAGE_SUMMARY_ARTIFACT = JsonArtifactSpec(
 Typed JSON artifact boundary:
 
 - declare workflow-local `JsonArtifactSpec(...)` surfaces in `contracts.py` when the JSON artifact belongs to one workflow family
+- treat that typed read as the default publish-handler entrypoint for durable package summaries and validated output manifests
 - prefer `artifact_spec.read(path)` or `read_model_file(path, Model)` for publish-step reads so the workflow starts from a validated model, not `summary.get(...)`
 - use `artifact_spec.validate(path)` or `validate_model_file(path, Model)` for focused proof or readable failure reports when a workflow-local JSON contract needs direct validation
 - use this seam for durable package summaries and validated output manifests; raw proposal or draft inputs may stay workflow-local until a validation step writes the authoritative artifact
