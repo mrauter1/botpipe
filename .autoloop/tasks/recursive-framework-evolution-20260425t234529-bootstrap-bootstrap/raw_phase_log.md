@@ -1535,3 +1535,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc80a-9b35-7411-a864-3046f6932f23
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc80a-9b35-7411-a864-3046f6932f23
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc80a-9b35-7411-a864-3046f6932f23
+---
+I’m checking the phase-local test artifacts and the final test surfaces before I decide whether any extra regression lock is needed. The main risk here is not failing logic, it’s under-specified doc tests that could let retry/handoff wording drift later.
+
+The existing baseline test only locked the umbrella phrase, not the individual handoff/retry/output-contract elements called out in AC-1. I’m strengthening that baseline now so a future wording edit can’t keep the slogan while silently dropping one of the required contract surfaces.
+
+I’ve tightened the baseline to lock the actual AC-1 contract items, not just the shorthand phrase. I’m running the updated baseline test now, then I’ll record the coverage map and the one non-obvious test decision in the phase artifacts.
+
+Scope considered
+
+- Phase-local test work for docs-and-regression-suite only.
+- Focused on the updated docs/prompt baselines and adjacent regression risk in the test surface, not new runtime/provider logic.
+
+What I analyzed
+
+- The accepted phase contract and shared decisions for the broader human-readable Runtime Step Contract.
+- The current baseline assertions in `tests/test_architecture_baseline_docs.py`.
+- The updated prompt README wording to check whether AC-1’s specific contract items were actually locked by tests or only implied by a shorthand phrase.
+
+What I changed
+
+- Strengthened [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) so the baseline now asserts:
+  - `required inputs`
+  - `writable artifacts`
+  - `route-specific artifact requirements`
+  - `expected output payload requirements`
+  - `optional route handoff`
+  - `optional retry feedback`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/docs-and-regression-suite/test_strategy.md) with the behavior-to-coverage map, preserved invariants, edge cases, validation, and known gaps.
+- Appended the phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/docs-and-regression-suite/feedback.md).
+- Appended one turn-local test decision to `decisions.txt` to preserve why the explicit contract item list is now pinned.
+
+Key findings / decisions
+
+- The existing baseline covered the umbrella phrase `compact human-readable step contract`, but it did not directly lock all AC-1 sub-items.
+- The added baseline assertions close that drift risk without widening scope into already-covered engine/runtime execution paths.
+- Validation run for this turn: `33 passed` in `tests/test_architecture_baseline_docs.py`.
+
+Open issues / next step
+
+- No open issues in phase scope.
+- The added value in this turn is stronger AC-1 regression locking rather than new execution-path coverage.
