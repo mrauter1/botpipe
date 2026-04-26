@@ -8,8 +8,6 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
         require_string_list,
@@ -26,8 +24,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
         require_string_list,
@@ -237,27 +233,16 @@ class WorkflowToEvalSuite(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        selected_workflow_reference = require_non_empty_string(
-            payload.get("selected_workflow"),
-            error_message="workflow_to_eval_suite requires workflow parameter 'selected_workflow'",
-            coerce=True,
-        )
-        task_title = require_non_empty_string(
-            payload.get("task_title"),
-            error_message="workflow_to_eval_suite requires workflow parameter 'task_title'",
-            coerce=True,
-        )
-
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "selected_workflow_reference": selected_workflow_reference,
+                "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
-                "task_title": task_title,
-                "sponsor_role": normalize_optional_string(payload.get("sponsor_role")),
-                "desired_outcome": normalize_optional_string(payload.get("desired_outcome")),
-                "constraints": normalize_unique_strings(payload.get("constraints")),
-                "evidence_expectations": normalize_unique_strings(payload.get("evidence_expectations")),
+                "task_title": params.task_title,
+                "sponsor_role": params.sponsor_role,
+                "desired_outcome": params.desired_outcome,
+                "constraints": list(params.constraints),
+                "evidence_expectations": list(params.evidence_expectations),
                 "framing_status": None,
                 "design_status": None,
                 "packaging_status": None,

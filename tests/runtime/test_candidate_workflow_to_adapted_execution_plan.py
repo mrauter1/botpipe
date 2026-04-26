@@ -341,6 +341,86 @@ def test_candidate_workflow_to_adapted_execution_plan_package_normalizes_repeata
     }
 
 
+def test_candidate_workflow_to_adapted_execution_plan_bootstrap_reads_typed_ctx_params(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "candidate_workflow_to_adapted_execution_plan").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "selected_workflow": " security_finding_to_verified_remediation ",
+                "task_title": " Admin impersonation privilege escalation response ",
+                "sponsor_role": " Security Engineering ",
+                "desired_outcome": " ",
+                "constraints": [
+                    " preserve the workflow boundary ",
+                    "",
+                    "preserve the workflow boundary",
+                    "Prefer validated workflow parameters over workflow edits.",
+                ],
+                "evidence_expectations": [
+                    " publish a validated adapted plan ",
+                    "",
+                    "publish a validated adapted plan",
+                    "Keep the selected workflow package unchanged.",
+                ],
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_candidate_workflow_to_adapted_execution_plan"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="candidate_workflow_to_adapted_execution_plan",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "candidate_workflow_to_adapted_execution_plan",
+        state=workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={},
+    )
+
+    next_state, event = workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_bootstrap(
+        workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.selected_workflow_reference == "security_finding_to_verified_remediation"
+    assert next_state.task_title == "Admin impersonation privilege escalation response"
+    assert next_state.sponsor_role == "Security Engineering"
+    assert next_state.desired_outcome is None
+    assert next_state.constraints == [
+        "preserve the workflow boundary",
+        "Prefer validated workflow parameters over workflow edits.",
+    ]
+    assert next_state.evidence_expectations == [
+        "publish a validated adapted plan",
+        "Keep the selected workflow package unchanged.",
+    ]
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["selected_workflow_reference"] == "security_finding_to_verified_remediation"
+    assert invocation_contract["task_title"] == "Admin impersonation privilege escalation response"
+    assert invocation_contract["desired_outcome"] is None
+
+
 def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes_terminal_adaptation_artifacts(
     tmp_path: Path,
 ) -> None:

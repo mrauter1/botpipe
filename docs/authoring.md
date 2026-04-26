@@ -117,6 +117,12 @@ ctx.workflow_params["mode"]
 
 `ctx.params` is the typed `Parameters` model for the workflow. `ctx.workflow_params` remains the compatibility dict surface.
 
+When a workflow declares `Parameters`, treat `ctx.params` as the default typed bootstrap surface and workflow-authoring surface.
+
+Bootstrap handlers should project already-typed values from `ctx.params` into workflow state and invocation artifacts instead of re-reading and re-normalizing `ctx.workflow_params`.
+
+`ctx.workflow_params` remains the compatibility/raw-mapping dict surface. Keep using the existing lifecycle helpers such as `open_workflow_sessions(...)` and `write_invocation_contract(...)` explicitly from workflow code rather than hiding bootstrap setup in runtime behavior.
+
 When the same parameter bundle appears in more than one workflow, prefer additive stdlib-owned parameter models under `stdlib/parameters.py` before copying the same field scaffold again. Shared task framing, selected-workflow framing, and portfolio-review bundles belong there; workflow-specific identifier rules, literal pre-normalization, allow-lists, defaults, and order-sensitive output should stay in the local `params.py`.
 
 ## Step Control Contracts

@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
-        normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
@@ -21,7 +20,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
-        normalize_optional_string,
         normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
@@ -212,22 +210,14 @@ class TaskToCandidateWorkflowSet(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        task_title = require_non_empty_string(
-            payload.get("task_title"),
-            error_message="task_to_candidate_workflow_set requires workflow parameter 'task_title'",
-            coerce=True,
-        )
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "task_title": task_title,
-                "sponsor_role": normalize_optional_string(payload.get("sponsor_role")),
-                "desired_outcome": normalize_optional_string(payload.get("desired_outcome")),
-                "constraints": normalize_unique_strings(payload.get("constraints"), allow_scalar=True),
-                "evidence_expectations": normalize_unique_strings(
-                    payload.get("evidence_expectations"),
-                    allow_scalar=True,
-                ),
+                "task_title": params.task_title,
+                "sponsor_role": params.sponsor_role,
+                "desired_outcome": params.desired_outcome,
+                "constraints": list(params.constraints),
+                "evidence_expectations": list(params.evidence_expectations),
                 "framing_status": None,
                 "analysis_status": None,
                 "packaging_status": None,

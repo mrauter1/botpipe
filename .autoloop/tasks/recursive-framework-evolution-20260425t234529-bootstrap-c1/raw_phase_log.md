@@ -174,3 +174,77 @@ phase_mode=single
 phase_ids=typed-bootstrap-contract-and-first-family,portfolio-governance-bootstrap-migration,proof-docs-and-memory-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc820-cf6f-72b0-b382-18c5c1a320a8
+---
+I’m treating this as a scoped architecture-consolidation pass for typed bootstrap parameters. I’ll inspect the phase artifacts, the authoring/runtime/workflow surfaces, and the targeted workflow family first, then I’ll migrate only the bootstraps that can move cleanly to `ctx.params` without changing routes, artifacts, or receipts.
+
+I’ve confirmed the phase plan is a consolidation pass, not a workflow-addition pass. Next I’m reading the typed-parameter contract, the targeted workflow family, and the adjacent tests so the bootstrap migration stays behavior-preserving.
+
+The active phase contract is narrower than the broader cycle plan: I’m keeping code edits to `task_to_candidate_workflow_set`, `task_to_workflow_strategy`, `candidate_workflow_to_adapted_execution_plan`, `workflow_to_eval_suite`, plus authoring docs and required notes/memory updates. I’m reading their parameter models and runtime tests now to preserve current coercion and receipts exactly.
+
+I’ve got the main duplication isolated: each target bootstrap is manually unpacking `ctx.workflow_params` despite already declaring the shared `Parameters` model. I’m checking the recursive memory files and authoring/docs tests now so I can land the code, docs, and phase notes in one coherent change set.
+
+Plan:
+1. Migrate the four scoped bootstraps to read typed fields from `ctx.params` and remove generic bootstrap normalization imports.
+2. Add focused regression tests that prove those bootstraps work from the typed parameter surface, not just the raw compatibility dict.
+3. Update `docs/authoring.md`, recursive memory, `implementation_notes.md`, and the current decisions block so the phase audit and scope are recorded with the new default contract.
+
+I’ve finished the audit and I’m at the edit point. I’m updating the four scoped bootstraps to project typed `ctx.params` fields directly, then I’ll add focused tests that fail under the old `ctx.workflow_params`-only behavior.
+
+I hit a patch-context mismatch in the test files, so I’m splitting the edit into smaller patches. I’m landing the workflow/doc changes first, then I’ll patch the tests against the current file contents directly.
+
+The code and test edits are in. I’m running the scoped runtime suites plus the architecture-doc baseline now to catch any contract drift before I touch the closeout summary.
+
+The scoped test run is still progressing; the initial chunk is clean so far. I’m waiting for completion and then I’ll do a quick diff/status pass to verify the exact changed surface and closeout details.
+
+The scoped proof passed: `126 passed`. I’m doing one last status pass on the files I touched so the closeout can report the exact surface and any caveat from the dirty worktree accurately.
+
+Scope considered
+
+- Phase-local scope only: the four bootstraps in [task_to_candidate_workflow_set/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_candidate_workflow_set/workflow.py:212), [task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:247), [candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py:220), [workflow_to_eval_suite/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py:236), plus [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:111), targeted tests, phase notes, decisions, and the required `.autoloop_recursive` memory files.
+- No CLI, runtime/provider, `workflow.toml`, or new workflow-package work.
+
+What I analyzed
+
+- The phase plan, current decisions, authoring/runtime parameter surfaces, and the scoped workflow family.
+- The repeated bootstrap pattern: each scoped workflow still re-read `ctx.workflow_params` and re-normalized fields already covered by shared `Parameters`.
+- The targeted runtime suites and doc-baseline coverage needed to prove the change without altering artifacts, routes, or receipts.
+
+What I changed
+
+- Switched the four scoped `on_bootstrap(...)` handlers to project from typed `ctx.params` while keeping explicit lifecycle setup intact in the same workflow files above.
+- Updated [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:111) to state that `ctx.params` is the default typed bootstrap/authoring surface and `ctx.workflow_params` is the compatibility/raw dict surface.
+- Added focused bootstrap tests in:
+  - [test_task_to_candidate_workflow_set.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_candidate_workflow_set.py:307)
+  - [test_task_to_workflow_strategy.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_task_to_workflow_strategy.py:340)
+  - [test_candidate_workflow_to_adapted_execution_plan.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py:344)
+  - [test_workflow_to_eval_suite.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_to_eval_suite.py:377)
+- Added doc-baseline coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:198).
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/implement/phases/typed-bootstrap-contract-and-first-family/implementation_notes.md:1), the current decisions block, and the five required `.autoloop_recursive` memory files.
+
+Key findings / decisions
+
+- Cycle mode stayed `consolidate`; no new workflow was necessary.
+- New helpers introduced: `0`.
+- Files added/deleted: `0/0`.
+- Repeated bootstrap-time validation idioms removed from the first family: required string extraction, optional text normalization, and deduped list normalization blocks.
+- Workflows simplified to shared surfaces: `4` now use `ctx.params`; explicit `open_workflow_sessions(...)` and `write_invocation_contract(...)` stayed local.
+- Core-flow readability improved from “raw param unpacking + normalization + setup” to “typed state projection + explicit setup”.
+- Practical line-count summary for tracked files: workflow handlers were net negative (`-50` lines); the full tracked diff was net positive because of the added regression tests and notes.
+
+Open issues / next step
+
+- Deferred debt remains in the later family that still uses raw bootstrap mapping reads: `workflow_run_history_to_failure_modes`, `workflow_portfolio_to_operating_system`, `company_operation_to_recursive_improvement_cycle`, `workflow_and_eval_to_refined_workflow_package`, and `workflow_package_to_composable_building_blocks`.
+- Validation run: `.venv/bin/pytest -q tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/test_architecture_baseline_docs.py` with `126 passed in 5.81s`.

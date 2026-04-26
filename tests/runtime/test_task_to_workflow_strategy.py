@@ -337,6 +337,81 @@ def test_task_to_workflow_strategy_package_normalizes_repeatable_inputs(tmp_path
     }
 
 
+def test_task_to_workflow_strategy_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.task_to_workflow_strategy")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "task_to_workflow_strategy").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "task_title": " Admin impersonation privilege escalation response ",
+                "sponsor_role": " Security Engineering ",
+                "desired_outcome": " ",
+                "constraints": [
+                    " prefer reuse over new authoring ",
+                    "",
+                    "prefer reuse over new authoring",
+                    "Keep the front door at strategy publication.",
+                ],
+                "evidence_expectations": [
+                    " deliver a verified remediation package ",
+                    "",
+                    "deliver a verified remediation package",
+                    "Keep rejected routes explicit.",
+                ],
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_task_to_workflow_strategy"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="task_to_workflow_strategy",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "task_to_workflow_strategy",
+        state=workflow_pkg.TaskToWorkflowStrategy.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={},
+    )
+
+    next_state, event = workflow_pkg.TaskToWorkflowStrategy.on_bootstrap(
+        workflow_pkg.TaskToWorkflowStrategy.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.task_title == "Admin impersonation privilege escalation response"
+    assert next_state.sponsor_role == "Security Engineering"
+    assert next_state.desired_outcome is None
+    assert next_state.constraints == [
+        "prefer reuse over new authoring",
+        "Keep the front door at strategy publication.",
+    ]
+    assert next_state.evidence_expectations == [
+        "deliver a verified remediation package",
+        "Keep rejected routes explicit.",
+    ]
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["task_title"] == "Admin impersonation privilege escalation response"
+    assert invocation_contract["sponsor_role"] == "Security Engineering"
+    assert invocation_contract["desired_outcome"] is None
+
+
 def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_artifacts(tmp_path: Path) -> None:
     _install_repo_task_to_workflow_strategy_package(tmp_path)
 
