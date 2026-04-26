@@ -306,3 +306,109 @@ No open review issues for this phase. The phase can advance.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+---
+I’m validating the phase-scoped provider-usage coverage rather than broadening into runtime observability. I’ll inspect the active test artifacts and the newly added provider/engine tests first, then run the targeted suite and update the test strategy/feedback with an explicit coverage map.
+
+The existing suite already covers the requested plumbing, but there is one non-obvious behavior worth pinning down: the new decision to strip per-turn usage blobs from persisted session metadata. I’m adding a small deterministic regression test for that helper-level contract before I update the phase strategy and feedback.
+
+Scope considered
+
+Phase-local `provider-usage-plumbing` test scope only. I stayed on provider usage models, rendered/runtime provider plumbing, `StepFinish.provider_usage`, and adjacent compatibility/session metadata behavior.
+
+What I analyzed
+
+I reviewed the existing added coverage in `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_providers.py`, `tests/contract/test_engine_contracts.py`, and the shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt`. I also checked the compatibility/runtime test surface because the implementation intentionally filters transient usage fields out of persisted session metadata.
+
+What I changed
+
+I added one deterministic regression test in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py) to lock in the non-obvious invariant that per-turn usage blobs are omitted from persisted `SessionBinding.provider_metadata`.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/provider-usage-plumbing/test_strategy.md) with an explicit behavior-to-test coverage map and appended a concise validation summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/provider-usage-plumbing/feedback.md). I also recorded the non-obvious test decision under the latest test-author header in `decisions.txt`.
+
+Key findings / decisions
+
+The phase coverage is now explicit across:
+- usage model defaults and sparse payload handling
+- fake/rendered provider passthrough
+- Codex/Claude usage extraction
+- `StepFinish.provider_usage` behavior for pair, llm, and system steps
+- session metadata compatibility after the helper change
+
+Validation passed with:
+`./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/contract/test_engine_contracts.py -q`
+Result: `161 passed`
+
+Open issues / next step
+
+No open test blockers in this phase. The provider-usage slice now has targeted happy-path, edge-case, failure-path, and compatibility coverage without widening into out-of-scope runtime observability behavior.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca7c-1fd7-7f92-8024-a272cebfe692
+---
+I’m auditing the phase-local test coverage and artifact quality only. I’ll inspect the active criteria/feedback/strategy plus the targeted tests and validation command, then update the audit artifacts based on whether the current suite actually protects the scoped provider-usage changes.
+
+The targeted tests look aligned with scope and the strategy is specific. I’m running the same focused suite the test author cited so I can verify the claimed green state and then I’ll finalize the audit artifacts.
+
+Scope considered
+
+Phase-local test audit for `provider-usage-plumbing` only. I limited the audit to the active test artifacts, the changed provider/engine regression tests, and the targeted validation command relevant to this slice.
+
+What I analyzed
+
+I reviewed the phase strategy and feedback artifacts, then inspected the new and changed tests in `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_providers.py`, and `tests/contract/test_engine_contracts.py`. I also considered the adjacent compatibility surface covered by `tests/runtime/test_compatibility_runtime.py` and `tests/runtime/test_provider_backends.py`.
+
+What I reviewed
+
+I verified that the tests cover:
+- typed usage model defaults and sparse payloads
+- fake/rendered provider passthrough
+- Codex and Claude runtime usage extraction
+- persisted session metadata filtering for transient usage blobs
+- `StepFinish.provider_usage` exposure for pair, llm, and system steps
+- preserved failure behavior for malformed provider output and cross-provider resume
+
+I reran the cited validation command:
+`./.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_provider_backends.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_providers.py tests/contract/test_engine_contracts.py -q`
+Result: `161 passed in 0.67s`
+
+Key findings / decisions
+
+No blocking or non-blocking audit defects were identified.
+
+The tests are appropriately layered:
+- unit tests pin local model/rendered-provider semantics
+- runtime provider tests pin CLI parsing and session metadata behavior
+- contract tests pin engine-visible `StepFinish.provider_usage` behavior
+
+The suite also avoids flake risks by using mocked subprocesses, scripted providers, and temp directories only.
+
+Open issues / next step
+
+No open test-audit issues for this phase. The test artifacts are complete for the approved provider-usage scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
