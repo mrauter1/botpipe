@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added direct compatibility coverage in `tests/runtime/test_provider_backends.py` for the restored `CodexProvider` and `ClaudeProvider` constructor surfaces, including Codex’s legacy `(config, commands)` shape. Existing runtime tests already cover transport prompt delivery, core-side parsing ownership, backend wrapping, and file-level purity constraints.
+- Audit result: no findings. The current runtime/provider test slice covers the changed transport boundary, restored compatibility shims, preserved backend selection semantics, and the primary failure paths with deterministic monkeypatched CLI probes.

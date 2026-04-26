@@ -711,3 +711,53 @@ Validation rerun passed: `.venv/bin/pytest -q tests/runtime/test_provider_backen
 Open issues / next step
 
 No blocker in this phase-local test turn. The known gap is only that I did not run the full suite from the test phase; coverage here stays intentionally scoped to the changed runtime provider boundary.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7ce-111f-79d0-87e9-1bac75dfc0c9
+---
+I’m auditing the runtime transport test slice against the accepted phase contract and the shared decisions, with emphasis on whether the tests now catch both the transport boundary and the restored compatibility surface without normalizing regressions.
+
+The added constructor tests close the remaining material regression gap I was looking for, and the runtime/provider slice stays deterministic and green. I’m marking the test-phase criteria as satisfied and recording that this audit found no remaining issues.
+
+Scope considered
+
+Phase-local audit of the `runtime-cli-transports` test slice: [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py), [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py), the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/runtime-cli-transports/test_strategy.md), and the shared decisions relevant to the compatibility shim follow-up.
+
+What I analyzed
+
+I checked the tests against the accepted phase contract and the shared decisions, especially the restored compatibility requirement for `CodexProvider` / `ClaudeProvider` and the preserved boundary that backend resolution remains `RenderedLLMProvider(transport)`. I also reran the targeted runtime/provider validation slice.
+
+What I reviewed
+
+The test suite now covers:
+- transport purity via file-content bans for semantic request/response types and core parsing/rendering helper names
+- backend wrapping via `resolve_provider_backend(...)`
+- direct prompt transport behavior and core-side parsing ownership
+- restored compatibility builders and package re-exports
+- direct constructor coverage for `CodexProvider(config, commands)` and `ClaudeProvider(config)`
+
+The targeted validation rerun passed: `.venv/bin/pytest -q tests/runtime/test_provider_backends.py tests/runtime/test_runtime_providers.py tests/unit/test_provider_boundary_core.py` with `65 passed`.
+
+Key findings / decisions
+
+No findings. The added constructor coverage closes the remaining material regression risk around the restored compatibility surface, and the tests remain deterministic through monkeypatched CLI capability probes and subprocess calls.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/runtime-cli-transports/criteria.md) to all checked and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/runtime-cli-transports/feedback.md).
+
+Open issues / next step
+
+No open issues in this phase-local audit. The only remaining scope boundary is that this test turn stayed on the targeted runtime/provider slice rather than a full-suite rerun.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -36,3 +36,6 @@
 {"ts": "2026-04-26T03:35:21.876858+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 36, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "runtime-cli-transports", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-26T03:35:21.877901+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 37, "event_type": "pair_started", "pair": "test", "phase_id": "runtime-cli-transports"}
 {"ts": "2026-04-26T03:35:21.878022+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 38, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "runtime-cli-transports"}
+{"ts": "2026-04-26T03:36:49.772495+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-cli-transports"}
+{"ts": "2026-04-26T03:37:46.996917+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 40, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-cli-transports"}
+{"ts": "2026-04-26T03:37:47.039889+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 41, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "runtime-cli-transports"}
