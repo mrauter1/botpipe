@@ -824,3 +824,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcb0c-6365-7060-8465-b28a784979f2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcb0c-6365-7060-8465-b28a784979f2
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcb0c-6365-7060-8465-b28a784979f2
+---
+I’m auditing the added test coverage against the phase contract and the actual closeout surfaces. I’ll inspect the new assertions and phase test artifacts, rerun the scoped proof bundle once, and then update only the audit criteria and feedback files.
+
+The added coverage is scoped correctly to docs and recursive-memory drift, and it matches the shared decisions. I’m rerunning the same targeted proof bundle once to verify the test result independently before I mark the audit complete.
+
+The independent rerun is green, and the new assertions line up with the closeout scope without normalizing any behavior change. I’m marking the audit criteria complete and recording the no-findings result in the phase feedback file now.
+
+Scope considered
+- Phase-local audit of the `proof-docs-memory-closeout` test work, plus request-relevant regression surfaces in `tests/test_architecture_baseline_docs.py`, the scoped unit/runtime proof suites, and the shared decisions ledger.
+- I did not review unrelated dirty files beyond dependency-aware regression checks.
+
+What I analyzed
+- The phase contract, the current test strategy and feedback artifacts, and the shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt`.
+- The newly added docs-baseline assertions for the typed-publication preference and recursive-memory closeout.
+- The targeted proof command used by the phase.
+
+What I reviewed
+- Verified that the new coverage matches the actual changed surfaces:
+  - `docs/authoring.md` wording for the typed publication-artifact preference
+  - current-cycle recursive-memory closeout records across the charter, roadmap, gap ledger, workflow candidate ledger, and validation debt ledger
+- Verified that the test strategy records behavior coverage, invariants, failure paths, flake posture, and the final validation run.
+- Reran the targeted proof bundle independently and confirmed `201 passed`.
+- Updated the phase criteria and appended the audit result to the phase feedback file.
+
+Key findings / decisions
+- No blocking or non-blocking defects found in the test coverage.
+- The added assertions are proportionate to the phase: they protect the only new regression surface, which is docs/memory drift, while reusing existing runtime/unit coverage for the already-landed publish-handler behavior.
+- The tests do not normalize any compatibility break or unconfirmed behavior change.
+
+Open issues / next step
+- No open issue remains for this phase.
+- The phase-local test audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
