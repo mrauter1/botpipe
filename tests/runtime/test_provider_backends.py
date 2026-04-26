@@ -503,6 +503,46 @@ def test_resolve_runtime_config_no_trace_disables_tracing(tmp_path: Path) -> Non
     assert resolved.runtime.tracing.path == "trace.jsonl"
 
 
+def test_resolve_runtime_config_merges_runtime_file_overrides_and_preserves_defaults(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    global_config_dir = tmp_path / "global-config"
+    local_config_path = tmp_path / "autoloop.yaml"
+    global_config_path = global_config_dir / "autoloop.yaml"
+    global_config_dir.mkdir(parents=True)
+    global_config_path.write_text("", encoding="utf-8")
+    local_config_path.write_text("", encoding="utf-8")
+
+    payloads = {
+        global_config_path: {
+            "runtime": {
+                "git_tracking": {"failure_mode": "ignore"},
+                "tracing": {"path": "custom-trace.jsonl"},
+            }
+        },
+        local_config_path: {
+            "runtime": {
+                "git_tracking": {"commit_policy": "run"},
+                "tracing": {"include_state_snapshots": False},
+            }
+        },
+    }
+    monkeypatch.setattr(runtime_config, "user_config_dir", lambda: global_config_dir)
+    monkeypatch.setattr(runtime_config, "load_runtime_config_file", lambda path: payloads[path])
+
+    resolved = resolve_runtime_config(tmp_path, _runtime_args())
+
+    assert resolved.runtime.max_steps == 100
+    assert resolved.runtime.git_tracking.enabled is True
+    assert resolved.runtime.git_tracking.commit_policy == "run"
+    assert resolved.runtime.git_tracking.failure_mode == "ignore"
+    assert resolved.runtime.tracing.enabled is True
+    assert resolved.runtime.tracing.path == "custom-trace.jsonl"
+    assert resolved.runtime.tracing.failure_mode == "raise"
+    assert resolved.runtime.tracing.include_state_snapshots is False
+
+
 def test_resolve_runtime_config_routes_generic_file_overrides_to_selected_provider(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -619,3 +619,52 @@ This phase is complete. The next work should proceed into the later runtime-owne
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dca89-40b9-78c0-8754-80dd371fd5e5
+---
+I’m scoping the test phase against the already-implemented behavior rather than re-testing the whole repository. First I’m reading the phase test artifacts and the current runtime-config/git tests so I can fill any real coverage gaps, then I’ll update the strategy and feedback with the exact behavior map.
+
+The implementation tests already cover defaults, CLI toggles, invalid section types, and commit-all noop/untracked cases. I’m adding two higher-signal regression tests now: one for file-based nested runtime config merging, and one that proves `commit_all()` really snapshots both tracked and untracked workspace changes together.
+
+I’ve added the two missing regression tests. I’m updating the phase test artifacts now with an explicit behavior-to-coverage map and a short note about the focused additions and the remaining environment limitation around actually running `pytest` here.
+
+I found one non-obvious coverage choice worth preserving for later turns: defaults-only tests would miss regressions in nested file-config merging and in `commit_all()` handling mixed tracked/untracked workspaces. I’m recording that in the shared decisions ledger before I finish.
+
+Scope considered
+
+Phase-local test work only: runtime config defaults and validation, mutating CLI override coverage, and `GitRepo` commit-all helper coverage. I did not broaden into later observability wiring or unrelated repository churn.
+
+What I analyzed
+
+I reviewed the existing runtime-config tests in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py), the CLI tests in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), the git helper tests in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), and the shared decisions plus active phase artifacts.
+
+What I changed
+
+I added one runtime-config regression test in [tests/runtime/test_provider_backends.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_provider_backends.py) that verifies nested runtime file-config values merge correctly across layers while unspecified fields keep their defaults.
+
+I added one git helper regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) that proves `GitRepo.commit_all()` snapshots both a tracked file modification and an untracked file in the same commit, tightening the “full workspace” contract.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-config-and-git-primitives/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/test/phases/runtime-config-and-git-primitives/feedback.md), and appended the non-obvious coverage decision under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The main remaining coverage gaps were not in defaults or CLI parsing, but in:
+- nested runtime file-config merging for the new `git_tracking` and `tracing` sections
+- mixed tracked/untracked behavior for `commit_all()`
+
+Validation here was limited to `python3 -m compileall` on the touched test files. `pytest` is still unavailable in this environment, so I did not run the test suite.
+
+Open issues / next step
+
+The next step is a normal test/audit pass in an environment with `pytest` installed so the added coverage can be executed, not just syntax-checked.
