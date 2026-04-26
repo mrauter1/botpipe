@@ -19,3 +19,5 @@ Test coverage for the compatibility fix explicitly exercises the restored provid
 <autoloop-decisions-header version="1" block_seq="7" owner="implementer" phase_id="engine-provider-retries" pair="implement" turn_seq="1" run_id="run-20260426T025144Z-5a94c19f" ts="2026-04-26T03:37:47.181864+00:00" />
 Retry exhaustion is recorded additively inside existing checkpoint failure_context with retry_attempts_consumed, retry_max_attempts, and retry_exhausted instead of widening the checkpoint schema for this phase.
 Provider-attributable artifact retries are limited to artifact validation on the provider-selected route; middleware-overridden route failures still surface without retry to preserve the provider-vs-middleware failure boundary.
+<autoloop-decisions-header version="1" block_seq="8" owner="implementer" phase_id="engine-provider-retries" pair="implement" turn_seq="2" run_id="run-20260426T025144Z-5a94c19f" ts="2026-04-26T03:54:35.228343+00:00" />
+Failed-attempt provider session updates remain attempt-local until a pair/llm attempt is accepted, so retries reuse the pre-step baseline session instead of resuming rejected transcript history.

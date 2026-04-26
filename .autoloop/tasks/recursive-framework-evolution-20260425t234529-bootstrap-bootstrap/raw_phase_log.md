@@ -881,3 +881,58 @@ The next implementer turn should fix retry-session handling in `core/engine.py` 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’ve reviewed the blocking feedback. The fix path is to keep failed-attempt session updates attempt-local: reuse the pre-step baseline binding on retry, still thread producer→verifier within one pair attempt, and only persist the session after a successful accepted attempt.
+
+I’ve confirmed the fix shape in the current engine: baseline session outside the retry loop, attempt-local session chaining inside one attempt, and persistence only after an accepted attempt. I’m patching that now and then adding explicit session-bound retry regression tests for both llm and pair flows.
+
+The retry/session fix is in. I’m validating the engine contracts first because the new behavior is all in `core/engine.py`, and the added regression tests specifically target the reviewer’s session-bound retry case.
+
+The code path is behaving as intended; the failures are in the new regression tests. I’m fixing those assertions to read the active `main` binding instead of the default slot and importing the missing `ProducerResponse` symbol.
+
+The session-bound retry regressions are fixed in the contract suite. I’m rerunning the broader targeted set and then the full suite to make sure the delayed session persistence didn’t break runtime session semantics elsewhere.
+
+The targeted rerun is clean, including strictness. I’m running the full suite again to verify the session-baseline change across the broader workflow/session matrix.
+
+Review finding is narrowed to retry/session handling, and I’m verifying the fix against the running full-suite pass before I close the phase. After that I’ll update the phase notes with the session-baseline change and regression coverage if needed.
+
+The full suite is clean now. I’m checking the phase notes and shared decision log so the reviewer-visible artifacts reflect the retry-session fix instead of only the earlier implementation pass.
+
+I’ve confirmed the reviewer’s scenario and the fix path: failed-attempt session updates now need to stay attempt-local until an attempt is accepted. I’m recording that explicitly in the phase artifacts so the next verifier turn sees the corrected contract and test coverage.
+
+The code path is settled now: retries use the pre-step session baseline, while accepted attempts still persist the updated session. I’m doing one last read of the touched engine/test diffs to make sure the close-out matches the actual behavior and the reviewer’s scenario.
+
+Scope considered
+
+Phase-local `engine-provider-retries` only. I addressed the reviewer’s blocking retry/session issue in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), added regression coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), and updated the phase notes plus shared decision log.
+
+What I analyzed
+
+I rechecked the reviewer finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/engine-provider-retries/feedback.md), then traced the llm/pair retry paths to confirm where failed-attempt `SessionBinding` values were being persisted and reused. I also validated that the accepted plan still requires same-attempt producer→verifier session chaining while forbidding rejected transcript reuse across retry attempts.
+
+What I changed
+
+In [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), retries now keep a pre-step baseline session and only persist provider session updates after an llm/pair attempt is accepted. Failed attempts no longer update the stored session state used by later retries, while pair attempts still pass the producer-returned session into the verifier inside the same attempt.
+
+In [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), I added session-bound retry regressions for both `LLMStep` and `PairStep`. They assert that retries reuse the pre-step session baseline, that pair verifier calls still see the producer session from the same attempt, and that the accepted attempt’s final session is what gets persisted.
+
+Key findings / decisions
+
+Failed-attempt provider session updates must stay attempt-local until the attempt is accepted; otherwise retries silently resume rejected transcript history and violate AC-3. I recorded that rule in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/decisions.txt) and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/engine-provider-retries/implementation_notes.md) to reflect the fix and added coverage.
+
+Open issues / next step
+
+No open implementation issues remain in this phase from the reviewer feedback. Validation is clean: targeted suites passed, and the full suite passed with `.venv/bin/pytest -q` (`708 passed in 36.88s`).
