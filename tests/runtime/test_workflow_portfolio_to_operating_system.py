@@ -454,6 +454,9 @@ def test_workflow_portfolio_to_operating_system_bootstrap_reads_typed_ctx_params
         "task_to_workflow_strategy",
     ]
     assert next_state.max_runs_per_workflow == 12
+    assert ctx.get_session("frame_session") is not None
+    assert ctx.get_session("analysis_session") is not None
+    assert ctx.get_session("package_session") is not None
 
     invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
     assert invocation_contract["task_title"] == "Workflow portfolio operating-system review"

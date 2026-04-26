@@ -570,6 +570,10 @@ def test_workflow_package_to_composable_building_blocks_bootstrap_reads_typed_ct
     assert next_state.constraints == ["keep runtime control narrow", "Stop before promotion."]
     assert next_state.target_test_command == TARGET_TEST_COMMAND
     assert next_state.max_candidate_building_blocks == 2
+    assert ctx.get_session("frame_session") is not None
+    assert ctx.get_session("design_session") is not None
+    assert ctx.get_session("build_session") is not None
+    assert ctx.get_session("evaluate_session") is not None
 
     invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
     assert invocation_contract["selected_workflow_reference"] == "release_candidate_to_go_no_go"

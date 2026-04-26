@@ -521,6 +521,10 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
         "Do not mutate the authoritative workflow package.",
     ]
     assert next_state.target_test_command == TARGET_TEST_COMMAND
+    assert ctx.get_session("frame_session") is not None
+    assert ctx.get_session("design_session") is not None
+    assert ctx.get_session("build_session") is not None
+    assert ctx.get_session("evaluate_session") is not None
 
     invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
     assert invocation_contract["selected_workflow_reference"] == "release_candidate_to_go_no_go"

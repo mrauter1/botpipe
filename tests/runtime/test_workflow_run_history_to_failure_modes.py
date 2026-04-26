@@ -440,6 +440,9 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
         "keep runtime control narrow",
         "Stop at diagnostic publication.",
     ]
+    assert ctx.get_session("frame_session") is not None
+    assert ctx.get_session("analysis_session") is not None
+    assert ctx.get_session("package_session") is not None
 
     invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
     assert invocation_contract["selected_workflow_reference"] == "release_candidate_to_go_no_go"

@@ -509,3 +509,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc82d-db19-76c2-bcfe-cfa88dc4bd47
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc82d-db19-76c2-bcfe-cfa88dc4bd47
+
+
+---
+run_id=run-20260426T044108Z-506b9788 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc82d-db19-76c2-bcfe-cfa88dc4bd47
+---
+I’m treating this as a phase-local test coverage pass for the typed-bootstrap migration. First I’m reading the active test strategy and feedback artifacts, then I’m checking the new bootstrap tests and the adjacent runtime path so I can decide whether any further regression coverage is still missing before I touch the test-phase artifacts.
+
+The direct bootstrap tests already pin typed state projection and invocation-contract output, but they don’t yet assert one preserved invariant from the phase contract: explicit session setup still happens in bootstrap. I’m checking whether the existing test helpers can verify that cheaply; if so, I’ll tighten the new bootstrap tests instead of leaving the lifecycle side-effect implicit.
+
+I found a small but worthwhile regression check to add: each new bootstrap test should also assert that the declared sessions were opened, since preserving explicit lifecycle setup was part of the contract. I’m tightening the five new tests with that invariant now, then I’ll rerun the scoped suites and write the phase test strategy/feedback around the final coverage map.
+
+The coverage change is small and specific: I added explicit session-open assertions to the new typed-bootstrap tests so they now verify both typed projection and preserved lifecycle setup. I’m rerunning the same scoped proof set now, then I’ll write the behavior-to-test map and test-phase feedback with the final coverage summary.
+
+Scope considered
+- Phase-local test coverage for `portfolio-governance-bootstrap-migration`.
+- Focused on the five migrated workflow bootstraps, their adjacent preserved lifecycle behavior, the active test artifacts, and the shared decisions ledger.
+
+What I analyzed
+- Reviewed the new typed-bootstrap tests already added for:
+  - `workflow_run_history_to_failure_modes`
+  - `workflow_portfolio_to_operating_system`
+  - `company_operation_to_recursive_improvement_cycle`
+  - `workflow_and_eval_to_refined_workflow_package`
+  - `workflow_package_to_composable_building_blocks`
+- Checked the phase contract and decisions to confirm the preserved invariant that bootstrap still opens declared sessions explicitly.
+- Verified the runtime path still materializes typed params before bootstrap.
+
+What I changed
+- Tightened the five new runtime bootstrap tests to also assert that the declared workflow sessions were opened.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/test/phases/portfolio-governance-bootstrap-migration/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, flake controls, and known gaps.
+- Appended the scoped test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-c1/test/phases/portfolio-governance-bootstrap-migration/feedback.md).
+- Appended one test-phase decision to `decisions.txt` under this turn’s header.
+
+Key findings / decisions
+- The added session assertions close the main remaining regression gap in the new bootstrap tests: typed state projection is now verified together with preserved explicit lifecycle setup.
+- No new unit helper seam tests were added because this phase did not introduce or modify a shared helper seam.
+- Scoped proof passed: `.venv/bin/pytest -q tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/test_architecture_baseline_docs.py` with `158 passed`.
+
+Open issues / next step
+- No blocking test gaps remain for this phase.
+- Next step is auditor verification of the updated test artifacts and the tightened bootstrap coverage.
