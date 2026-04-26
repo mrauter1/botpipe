@@ -1114,3 +1114,44 @@ The auditor was right that helper-only assertions were insufficient for AC-2. Th
 Open issues / next step
 
 No open test-authoring issues remain from the auditor feedback. Validation rerun passed with `.venv/bin/pytest -q tests/contract/test_engine_contracts.py` (`49 passed`) and `.venv/bin/pytest -q tests/unit/test_provider_retries.py` (`7 passed`).
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’m re-auditing the AC-2 gap the last turn fixed, then I’ll close the audit artifacts if the new malformed-output and transport-failure tests actually hit the engine retry boundary as intended.
+
+The missing AC-2 execution paths are now covered at the right level, and the strategy note matches the actual tests. I’m closing out the audit artifacts with the resolved finding and complete criteria.
+
+Scope considered
+
+Phase-local re-audit of the `engine-provider-retries` test work, focused on the previously missing AC-2 execution coverage for malformed provider output and provider transport failures, plus the corresponding test-phase artifacts.
+
+What I analyzed
+
+I reviewed the updated engine contract tests in `tests/contract/test_engine_contracts.py`, the helper coverage in `tests/unit/test_provider_retries.py`, the phase `test_strategy.md`, and the prior blocking finding in `feedback.md`. I verified that the new malformed-output and transport-failure cases now execute through the engine retry loop itself rather than only through helper-level message assertions.
+
+What I reviewed
+
+The added tests now cover the two previously missing provider-attributable retry classes at the engine boundary. `test_llm_step_retries_malformed_provider_output_twice_and_succeeds_on_third_attempt` exercises `_validate_outcome(...)` retry behavior for non-`Outcome` provider output, and `test_llm_step_retries_provider_transport_failure_twice_and_succeeds_on_third_attempt` exercises transport-failure classification and retry behavior from a raised `ProviderExecutionError`. The updated `test_strategy.md` accurately maps those additions back to AC-2, and the validation rerun is recorded.
+
+Key findings / decisions
+
+No blocking or non-blocking findings remain. I updated `criteria.md` to mark all audit criteria satisfied and appended a resolution note to `feedback.md` stating that `TST-001` is resolved.
+
+Open issues / next step
+
+No open audit issues remain for this phase. The test-phase artifacts are updated and the phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
