@@ -39,3 +39,7 @@
 {"ts": "2026-04-26T03:36:49.772495+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-cli-transports"}
 {"ts": "2026-04-26T03:37:46.996917+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 40, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "runtime-cli-transports"}
 {"ts": "2026-04-26T03:37:47.039889+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 41, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "runtime-cli-transports"}
+{"ts": "2026-04-26T03:37:47.110579+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 42, "event_type": "phase_completed", "pair": "test", "phase_id": "runtime-cli-transports", "phase_mode": "single"}
+{"ts": "2026-04-26T03:37:47.115357+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 43, "event_type": "phase_started", "phase_id": "engine-provider-retries", "phase_mode": "single"}
+{"ts": "2026-04-26T03:37:47.117042+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 44, "event_type": "pair_started", "pair": "implement", "phase_id": "engine-provider-retries"}
+{"ts": "2026-04-26T03:37:47.117204+00:00", "run_id": "run-20260426T025144Z-5a94c19f", "seq": 45, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "engine-provider-retries"}

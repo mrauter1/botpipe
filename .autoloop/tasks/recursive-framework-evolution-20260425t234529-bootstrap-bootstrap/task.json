@@ -16,13 +16,13 @@
       "docs-and-regression-suite"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "runtime-cli-transports"
+    "current_phase_index": 2,
+    "current_phase_id": "engine-provider-retries"
   },
   "phase_status": {
     "provider-boundary-core": "completed",
-    "runtime-cli-transports": "in_progress",
-    "engine-provider-retries": "planned",
+    "runtime-cli-transports": "completed",
+    "engine-provider-retries": "in_progress",
     "route-handoff-persistence": "planned",
     "docs-and-regression-suite": "planned"
   },
@@ -45,6 +45,19 @@
       "run_id": "run-20260426T025144Z-5a94c19f",
       "status": "in_progress",
       "ts": "2026-04-26T03:21:03.379633+00:00"
+    },
+    {
+      "phase_id": "runtime-cli-transports",
+      "run_id": "run-20260426T025144Z-5a94c19f",
+      "status": "completed",
+      "ts": "2026-04-26T03:37:47.109655+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "engine-provider-retries",
+      "run_id": "run-20260426T025144Z-5a94c19f",
+      "status": "in_progress",
+      "ts": "2026-04-26T03:37:47.114618+00:00"
     }
   ]
 }
