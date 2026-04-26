@@ -371,6 +371,100 @@ def test_workflow_portfolio_to_operating_system_normalizes_repeatable_inputs(tmp
     }
 
 
+def test_workflow_portfolio_to_operating_system_bootstrap_reads_typed_ctx_params(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_portfolio_to_operating_system")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_portfolio_to_operating_system").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "task_title": " Workflow portfolio operating-system review ",
+                "sponsor_role": " Workflow Platform ",
+                "desired_outcome": " ",
+                "decision_drivers": [
+                    " prioritize recursive leverage ",
+                    "",
+                    "prioritize recursive leverage",
+                    "Prefer reusable governance pressure over hidden automation.",
+                ],
+                "constraints": [
+                    " keep runtime control narrow ",
+                    "",
+                    "keep runtime control narrow",
+                    "Stop at governance publication.",
+                ],
+                "focus_workflows": [
+                    " workflow_idea_to_workflow_package ",
+                    "",
+                    "task_to_workflow_strategy",
+                    "workflow_idea_to_workflow_package",
+                ],
+                "max_runs_per_workflow": 12,
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_workflow_portfolio_to_operating_system"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="workflow_portfolio_to_operating_system",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "workflow_portfolio_to_operating_system",
+        state=workflow_pkg.WorkflowPortfolioToOperatingSystem.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={},
+    )
+
+    next_state, event = workflow_pkg.WorkflowPortfolioToOperatingSystem.on_bootstrap(
+        workflow_pkg.WorkflowPortfolioToOperatingSystem.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.task_title == "Workflow portfolio operating-system review"
+    assert next_state.sponsor_role == "Workflow Platform"
+    assert next_state.desired_outcome is None
+    assert next_state.decision_drivers == [
+        "prioritize recursive leverage",
+        "Prefer reusable governance pressure over hidden automation.",
+    ]
+    assert next_state.constraints == [
+        "keep runtime control narrow",
+        "Stop at governance publication.",
+    ]
+    assert next_state.focus_workflow_references == [
+        "workflow_idea_to_workflow_package",
+        "task_to_workflow_strategy",
+    ]
+    assert next_state.max_runs_per_workflow == 12
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["task_title"] == "Workflow portfolio operating-system review"
+    assert invocation_contract["sponsor_role"] == "Workflow Platform"
+    assert invocation_contract["desired_outcome"] is None
+    assert invocation_contract["decision_drivers"] == next_state.decision_drivers
+    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["focus_workflow_references"] == next_state.focus_workflow_references
+    assert invocation_contract["max_runs_per_workflow"] == 12
+
+
 def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_governance_artifacts(
     tmp_path: Path,
 ) -> None:

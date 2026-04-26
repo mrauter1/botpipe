@@ -432,6 +432,112 @@ def test_company_operation_to_recursive_improvement_cycle_normalizes_repeatable_
     }
 
 
+def test_company_operation_to_recursive_improvement_cycle_bootstrap_reads_typed_ctx_params(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.company_operation_to_recursive_improvement_cycle")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "company_operation_to_recursive_improvement_cycle").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "task_title": " Company recursive-improvement review ",
+                "sponsor_role": " Workflow Platform ",
+                "desired_outcome": " ",
+                "decision_drivers": [
+                    " prioritize reusable leverage ",
+                    "",
+                    "prioritize reusable leverage",
+                    "Keep runtime control narrow and stop at publication.",
+                ],
+                "constraints": [
+                    " do not auto-run downstream workflows ",
+                    "",
+                    "do not auto-run downstream workflows",
+                    "Keep next actions explicit.",
+                ],
+                "focus_tasks": [" recursive-alpha ", "", "recursive-beta", "recursive-alpha"],
+                "focus_workflows": [
+                    " workflow_portfolio_to_operating_system ",
+                    "",
+                    "workflow_package_to_composable_building_blocks",
+                    "workflow_portfolio_to_operating_system",
+                ],
+                "statuses": [" success ", "", "paused", "success"],
+                "max_tasks": 12,
+                "max_runs_per_workflow": 4,
+                "max_messages_per_task": 3,
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_company_operation_to_recursive_improvement_cycle"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="company_operation_to_recursive_improvement_cycle",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "company_operation_to_recursive_improvement_cycle",
+        state=workflow_pkg.CompanyOperationToRecursiveImprovementCycle.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={},
+    )
+
+    next_state, event = workflow_pkg.CompanyOperationToRecursiveImprovementCycle.on_bootstrap(
+        workflow_pkg.CompanyOperationToRecursiveImprovementCycle.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.task_title == "Company recursive-improvement review"
+    assert next_state.sponsor_role == "Workflow Platform"
+    assert next_state.desired_outcome is None
+    assert next_state.decision_drivers == [
+        "prioritize reusable leverage",
+        "Keep runtime control narrow and stop at publication.",
+    ]
+    assert next_state.constraints == [
+        "do not auto-run downstream workflows",
+        "Keep next actions explicit.",
+    ]
+    assert next_state.focus_task_references == ["recursive-alpha", "recursive-beta"]
+    assert next_state.focus_workflow_references == [
+        "workflow_portfolio_to_operating_system",
+        "workflow_package_to_composable_building_blocks",
+    ]
+    assert next_state.statuses == ["success", "paused"]
+    assert next_state.max_tasks == 12
+    assert next_state.max_runs_per_workflow == 4
+    assert next_state.max_messages_per_task == 3
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["task_title"] == "Company recursive-improvement review"
+    assert invocation_contract["sponsor_role"] == "Workflow Platform"
+    assert invocation_contract["desired_outcome"] is None
+    assert invocation_contract["decision_drivers"] == next_state.decision_drivers
+    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["focus_task_references"] == next_state.focus_task_references
+    assert invocation_contract["focus_workflow_references"] == next_state.focus_workflow_references
+    assert invocation_contract["statuses"] == next_state.statuses
+    assert invocation_contract["max_tasks"] == 12
+    assert invocation_contract["max_runs_per_workflow"] == 4
+    assert invocation_contract["max_messages_per_task"] == 3
+
+
 def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_terminal_cycle_artifacts(
     tmp_path: Path,
 ) -> None:

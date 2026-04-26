@@ -288,36 +288,20 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        task_title = _require_text(
-            payload.get("task_title"),
-            "company_operation_to_recursive_improvement_cycle requires workflow parameter 'task_title'",
-        )
-        max_tasks = _require_positive_int(
-            payload.get("max_tasks"),
-            "company_operation_to_recursive_improvement_cycle requires workflow parameter 'max_tasks' as a positive integer",
-        )
-        max_runs_per_workflow = _require_positive_int(
-            payload.get("max_runs_per_workflow"),
-            "company_operation_to_recursive_improvement_cycle requires workflow parameter 'max_runs_per_workflow' as a positive integer",
-        )
-        max_messages_per_task = _require_positive_int(
-            payload.get("max_messages_per_task"),
-            "company_operation_to_recursive_improvement_cycle requires workflow parameter 'max_messages_per_task' as a positive integer",
-        )
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "task_title": task_title,
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "decision_drivers": _normalize_unique_strings(payload.get("decision_drivers")),
-                "constraints": _normalize_unique_strings(payload.get("constraints")),
-                "focus_task_references": _normalize_unique_strings(payload.get("focus_tasks")),
-                "focus_workflow_references": _normalize_unique_strings(payload.get("focus_workflows")),
-                "statuses": _normalize_unique_strings(payload.get("statuses")),
-                "max_tasks": max_tasks,
-                "max_runs_per_workflow": max_runs_per_workflow,
-                "max_messages_per_task": max_messages_per_task,
+                "task_title": params.task_title,
+                "sponsor_role": params.sponsor_role,
+                "desired_outcome": params.desired_outcome,
+                "decision_drivers": list(params.decision_drivers),
+                "constraints": list(params.constraints),
+                "focus_task_references": list(params.focus_tasks),
+                "focus_workflow_references": list(params.focus_workflows),
+                "statuses": list(params.statuses),
+                "max_tasks": params.max_tasks,
+                "max_runs_per_workflow": params.max_runs_per_workflow,
+                "max_messages_per_task": params.max_messages_per_task,
                 "scoped_task_ids": [],
                 "focus_workflows": [],
                 "framing_status": None,

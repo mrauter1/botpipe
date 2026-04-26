@@ -450,6 +450,89 @@ def test_workflow_and_eval_to_refined_workflow_package_normalizes_repeatable_inp
     }
 
 
+def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx_params(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_and_eval_to_refined_workflow_package")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_and_eval_to_refined_workflow_package").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "selected_workflow": " release_candidate_to_go_no_go ",
+                "task_title": " Release workflow refinement ",
+                "evaluation_summary_path": " .autoloop/evals/summary.json ",
+                "evaluation_findings_path": " .autoloop/evals/findings.md ",
+                "failure_modes_path": " ",
+                "sponsor_role": " Engineering Productivity ",
+                "desired_outcome": " ",
+                "constraints": [
+                    " keep candidate publication explicit ",
+                    "",
+                    "keep candidate publication explicit",
+                    "Do not mutate the authoritative workflow package.",
+                ],
+                "target_test_command": f" {TARGET_TEST_COMMAND} ",
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_workflow_and_eval_to_refined_workflow_package"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="workflow_and_eval_to_refined_workflow_package",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "workflow_and_eval_to_refined_workflow_package",
+        state=workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={},
+    )
+
+    next_state, event = workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.on_bootstrap(
+        workflow_pkg.WorkflowAndEvalToRefinedWorkflowPackage.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.selected_workflow_reference == "release_candidate_to_go_no_go"
+    assert next_state.task_title == "Release workflow refinement"
+    assert next_state.evaluation_summary_path == ".autoloop/evals/summary.json"
+    assert next_state.evaluation_findings_path == ".autoloop/evals/findings.md"
+    assert next_state.failure_modes_path is None
+    assert next_state.sponsor_role == "Engineering Productivity"
+    assert next_state.desired_outcome is None
+    assert next_state.constraints == [
+        "keep candidate publication explicit",
+        "Do not mutate the authoritative workflow package.",
+    ]
+    assert next_state.target_test_command == TARGET_TEST_COMMAND
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["selected_workflow_reference"] == "release_candidate_to_go_no_go"
+    assert invocation_contract["task_title"] == "Release workflow refinement"
+    assert invocation_contract["evaluation_summary_path"] == ".autoloop/evals/summary.json"
+    assert invocation_contract["evaluation_findings_path"] == ".autoloop/evals/findings.md"
+    assert invocation_contract["failure_modes_path"] is None
+    assert invocation_contract["desired_outcome"] is None
+    assert invocation_contract["constraints"] == next_state.constraints
+    assert invocation_contract["target_test_command"] == TARGET_TEST_COMMAND
+
+
 def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candidate_refinement_artifacts(
     tmp_path: Path,
     monkeypatch,

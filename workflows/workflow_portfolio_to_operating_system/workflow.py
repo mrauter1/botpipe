@@ -267,25 +267,17 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        task_title = _require_text(
-            payload.get("task_title"),
-            "workflow_portfolio_to_operating_system requires workflow parameter 'task_title'",
-        )
-        max_runs_per_workflow = _require_positive_int(
-            payload.get("max_runs_per_workflow"),
-            "workflow_portfolio_to_operating_system requires workflow parameter 'max_runs_per_workflow' as a positive integer",
-        )
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "task_title": task_title,
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "decision_drivers": _normalize_unique_strings(payload.get("decision_drivers")),
-                "constraints": _normalize_unique_strings(payload.get("constraints")),
-                "focus_workflow_references": _normalize_unique_strings(payload.get("focus_workflows")),
+                "task_title": params.task_title,
+                "sponsor_role": params.sponsor_role,
+                "desired_outcome": params.desired_outcome,
+                "decision_drivers": list(params.decision_drivers),
+                "constraints": list(params.constraints),
+                "focus_workflow_references": list(params.focus_workflows),
                 "focus_workflows": [],
-                "max_runs_per_workflow": max_runs_per_workflow,
+                "max_runs_per_workflow": params.max_runs_per_workflow,
                 "framing_status": None,
                 "analysis_status": None,
                 "packaging_status": None,

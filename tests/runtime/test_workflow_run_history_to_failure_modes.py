@@ -373,6 +373,83 @@ def test_workflow_run_history_to_failure_modes_package_normalizes_repeatable_inp
     }
 
 
+def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_run_history_to_failure_modes")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_run_history_to_failure_modes").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "selected_workflow": " release_candidate_to_go_no_go ",
+                "task_title": " Release workflow failure-mode diagnosis ",
+                "statuses": [" failed ", "", "paused", "blocked", "paused"],
+                "max_runs": 12,
+                "sponsor_role": " Workflow Platform ",
+                "desired_outcome": " ",
+                "constraints": [
+                    " keep runtime control narrow ",
+                    "",
+                    "keep runtime control narrow",
+                    "Stop at diagnostic publication.",
+                ],
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_workflow_run_history_to_failure_modes"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="workflow_run_history_to_failure_modes",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "workflow_run_history_to_failure_modes",
+        state=workflow_pkg.WorkflowRunHistoryToFailureModes.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={},
+    )
+
+    next_state, event = workflow_pkg.WorkflowRunHistoryToFailureModes.on_bootstrap(
+        workflow_pkg.WorkflowRunHistoryToFailureModes.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.selected_workflow_reference == "release_candidate_to_go_no_go"
+    assert next_state.task_title == "Release workflow failure-mode diagnosis"
+    assert next_state.statuses == ["blocked", "failed", "paused"]
+    assert next_state.max_runs == 12
+    assert next_state.sponsor_role == "Workflow Platform"
+    assert next_state.desired_outcome is None
+    assert next_state.constraints == [
+        "keep runtime control narrow",
+        "Stop at diagnostic publication.",
+    ]
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["selected_workflow_reference"] == "release_candidate_to_go_no_go"
+    assert invocation_contract["task_title"] == "Release workflow failure-mode diagnosis"
+    assert invocation_contract["statuses"] == ["blocked", "failed", "paused"]
+    assert invocation_contract["max_runs"] == 12
+    assert invocation_contract["desired_outcome"] is None
+    assert invocation_contract["constraints"] == next_state.constraints
+
+
 def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_terminal_diagnostic_artifacts(
     tmp_path: Path,
 ) -> None:

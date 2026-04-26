@@ -17,7 +17,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         normalize_candidate_surface_overlay_result,
         normalize_candidate_surface_boundary,
         normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_mapping,
         require_non_empty_string,
@@ -46,7 +45,6 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         normalize_candidate_surface_overlay_result,
         normalize_candidate_surface_boundary,
         normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_mapping,
         require_non_empty_string,
@@ -331,42 +329,20 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        selected_workflow_reference = _require_text(
-            payload.get("selected_workflow"),
-            "workflow_and_eval_to_refined_workflow_package requires workflow parameter 'selected_workflow'",
-        )
-        task_title = _require_text(
-            payload.get("task_title"),
-            "workflow_and_eval_to_refined_workflow_package requires workflow parameter 'task_title'",
-        )
-        evaluation_summary_path = _require_text(
-            payload.get("evaluation_summary_path"),
-            "workflow_and_eval_to_refined_workflow_package requires workflow parameter 'evaluation_summary_path'",
-        )
-        evaluation_findings_path = _require_text(
-            payload.get("evaluation_findings_path"),
-            "workflow_and_eval_to_refined_workflow_package requires workflow parameter 'evaluation_findings_path'",
-        )
-        target_test_command = _require_text(
-            payload.get("target_test_command") or "pytest -q",
-            "workflow_and_eval_to_refined_workflow_package requires a non-empty target_test_command",
-        )
+        params = ctx.params
 
         next_state = state.model_copy(
             update={
-                "selected_workflow_reference": selected_workflow_reference,
+                "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
-                "task_title": task_title,
-                "evaluation_summary_path": evaluation_summary_path,
-                "evaluation_findings_path": evaluation_findings_path,
-                "failure_modes_path": _normalize_optional_text(payload.get("failure_modes_path")),
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "constraints": normalize_unique_strings(payload.get("constraints"))
-                if isinstance(payload.get("constraints"), list)
-                else [],
-                "target_test_command": target_test_command,
+                "task_title": params.task_title,
+                "evaluation_summary_path": params.evaluation_summary_path,
+                "evaluation_findings_path": params.evaluation_findings_path,
+                "failure_modes_path": params.failure_modes_path,
+                "sponsor_role": params.sponsor_role,
+                "desired_outcome": params.desired_outcome,
+                "constraints": list(params.constraints),
+                "target_test_command": params.target_test_command,
                 "framing_status": None,
                 "planning_status": None,
                 "build_status": None,

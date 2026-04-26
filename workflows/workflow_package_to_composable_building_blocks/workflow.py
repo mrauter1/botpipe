@@ -321,35 +321,19 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        selected_workflow_reference = _require_text(
-            payload.get("selected_workflow"),
-            "workflow_package_to_composable_building_blocks requires workflow parameter 'selected_workflow'",
-        )
-        task_title = _require_text(
-            payload.get("task_title"),
-            "workflow_package_to_composable_building_blocks requires workflow parameter 'task_title'",
-        )
-        target_test_command = _require_text(
-            payload.get("target_test_command") or "pytest -q",
-            "workflow_package_to_composable_building_blocks requires a non-empty target_test_command",
-        )
-        max_candidate_building_blocks = _require_positive_int(
-            payload.get("max_candidate_building_blocks") or 3,
-            "workflow_package_to_composable_building_blocks requires max_candidate_building_blocks >= 1",
-        )
+        params = ctx.params
 
         next_state = state.model_copy(
             update={
-                "selected_workflow_reference": selected_workflow_reference,
+                "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
-                "task_title": task_title,
-                "evidence_paths": _normalize_unique_strings(payload.get("evidence_paths")),
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "constraints": _normalize_unique_strings(payload.get("constraints")),
-                "target_test_command": target_test_command,
-                "max_candidate_building_blocks": max_candidate_building_blocks,
+                "task_title": params.task_title,
+                "evidence_paths": list(params.evidence_paths),
+                "sponsor_role": params.sponsor_role,
+                "desired_outcome": params.desired_outcome,
+                "constraints": list(params.constraints),
+                "target_test_command": params.target_test_command,
+                "max_candidate_building_blocks": params.max_candidate_building_blocks,
                 "framing_status": None,
                 "planning_status": None,
                 "build_status": None,

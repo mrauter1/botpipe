@@ -10,8 +10,6 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         read_required_text,
         require_existing_artifact_paths,
@@ -38,8 +36,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         read_required_text,
         require_existing_artifact_paths,
@@ -260,32 +256,18 @@ class WorkflowRunHistoryToFailureModes(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        selected_workflow_reference = _require_text(
-            payload.get("selected_workflow"),
-            "workflow_run_history_to_failure_modes requires workflow parameter 'selected_workflow'",
-        )
-        task_title = _require_text(
-            payload.get("task_title"),
-            "workflow_run_history_to_failure_modes requires workflow parameter 'task_title'",
-        )
-        max_runs = _require_positive_int(
-            payload.get("max_runs"),
-            "workflow_run_history_to_failure_modes requires workflow parameter 'max_runs' as a positive integer",
-        )
+        params = ctx.params
 
         next_state = state.model_copy(
             update={
-                "selected_workflow_reference": selected_workflow_reference,
+                "selected_workflow_reference": params.selected_workflow,
                 "selected_workflow_name": None,
-                "task_title": task_title,
-                "statuses": _normalize_status_filters(payload.get("statuses")),
-                "max_runs": max_runs,
-                "sponsor_role": _normalize_optional_text(payload.get("sponsor_role")),
-                "desired_outcome": _normalize_optional_text(payload.get("desired_outcome")),
-                "constraints": normalize_unique_strings(payload.get("constraints"))
-                if isinstance(payload.get("constraints"), list)
-                else [],
+                "task_title": params.task_title,
+                "statuses": list(params.statuses),
+                "max_runs": params.max_runs,
+                "sponsor_role": params.sponsor_role,
+                "desired_outcome": params.desired_outcome,
+                "constraints": list(params.constraints),
                 "framing_status": None,
                 "mapping_status": None,
                 "packaging_status": None,
@@ -851,18 +833,11 @@ class WorkflowRunHistoryToFailureModes(Workflow):
 
 
 _require_text = partial(require_non_empty_string, coerce=True)
-_normalize_optional_text = normalize_optional_string
 _require_positive_int = require_positive_int
 _require_string_list = partial(require_string_list, coerce=True)
 _require_mapping = require_mapping
 _require_mapping_list = require_mapping_list
 _read_json = read_json_object
-
-
-def _normalize_status_filters(values: Any) -> list[str]:
-    if not isinstance(values, list):
-        return []
-    return sorted(normalize_unique_strings(values))
 
 
 def _extract_history_run_ids(value: Any, *, allow_empty: bool) -> list[str]:
