@@ -85,3 +85,70 @@ Revise the plan so the charter is either explicitly included in the required rec
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+---
+I’m addressing the verifier’s blocking finding by tightening the plan artifacts rather than reopening scope. First step is to confirm the current plan, feedback, and decisions state, then patch the missing charter coverage and keep the machine-readable phases aligned.
+
+I’ve confirmed the verifier’s finding is narrow and mechanical, so I’m patching only the recursive-memory closeout scope. The implementation direction stays the same; this turn is about restoring full intent coverage without widening the cycle.
+
+The first patch only failed because `phase_plan.yaml` was normalized when it was re-read, not because the plan direction changed. I’m reloading the exact current text and applying a narrower patch now.
+
+The blocking gap is patched. I’m validating `phase_plan.yaml` again with `yaml.safe_load` and doing a quick readback to make sure the narrative and machine-readable closeout scopes now match.
+
+Updated the plan artifacts to resolve the verifier’s blocking finding.
+
+[plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/plan/plan.md) now includes `.autoloop_recursive/framework_evolution_charter.md` explicitly in the proof/docs/memory closeout scope, and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/plan/phase_plan.yaml) now reflects that same requirement in `in_scope`, acceptance criteria, and deliverables. I also appended the correction note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/plan/feedback.md) and recorded the non-obvious constraint under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt).
+
+`phase_plan.yaml` was re-validated successfully with `python3` and `yaml.safe_load`.
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcaee-25a8-7060-a8c1-752fa60d7227
+---
+I’m re-verifying only the corrected scope and the gating files now. The blocking gap appears resolved, so I’m updating the criteria and feedback to reflect closure unless the readback reveals a new issue.
+
+The corrected plan now covers the charter explicitly and the machine-readable phases stay coherent. I’m marking the gate file complete and appending a closure note for `PLAN-001` so the feedback history shows why the promise can move to `COMPLETE`.
+
+The gating file and feedback history are updated. I’m doing one last readback so the final status matches the written artifacts before I close with `COMPLETE`.
+
+Scope considered
+The current plan artifacts, the immutable request snapshot, the raw phase log, the shared decisions ledger, and the verifier-owned gating files for the `plan` pair.
+
+What I analyzed
+The corrected recursive-memory closeout scope, the updated charter coverage in both the narrative and machine-readable plans, the phase boundaries and dependencies in `phase_plan.yaml`, and the compatibility, rollback, and validation commitments for the chosen consolidation work.
+
+What I reviewed
+`plan.md`, `phase_plan.yaml`, `feedback.md`, `criteria.md`, and `decisions.txt`. I also re-validated that `phase_plan.yaml` parses successfully and that the runtime-owned metadata keys remain unchanged.
+
+Key findings / decisions
+No blocking findings remain.
+`PLAN-001` is now closed: the plan and phase contract both require explicit charter coverage during closeout, which resolves the prior intent-fidelity gap.
+`criteria.md` now has every verification checkbox checked, consistent with a complete re-verification pass.
+
+Open issues / next step
+No open verifier issues remain for the planning artifacts. The plan can proceed to the next phase on the current implementation direction.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
