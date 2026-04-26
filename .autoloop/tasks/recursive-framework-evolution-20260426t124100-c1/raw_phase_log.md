@@ -361,3 +361,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcaf7-7ef5-7492-b6af-02d777971509
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcaf7-7ef5-7492-b6af-02d777971509
+
+
+---
+run_id=run-20260426T175457Z-ff851572 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcaf7-7ef5-7492-b6af-02d777971509
+---
+I’m auditing the scoped test additions against the phase contract, the shared decisions, and the existing runtime coverage first, then I’ll update the test audit artifacts with the actual outcome.
+
+The test audit is clean: the new unit failure checks complement the existing runtime suites without changing intent or adding flaky setup. I’m recording that in the audit artifacts now.
+
+Scope considered
+
+- Phase-local test audit against the typed publication-contract phase contract, the shared decisions ledger, the updated unit test coverage, and the behavior-to-test map in `test_strategy.md`.
+- Existing runtime suites were checked only as regression context for preserved workflow-local publication policy coverage.
+
+What I analyzed
+
+- The new unit failure-path test in `tests/unit/test_stdlib_and_extensions.py`
+- The coverage plan recorded in `.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/test/phases/typed-publication-contracts/test_strategy.md`
+- The shared decisions in `.autoloop/tasks/recursive-framework-evolution-20260426t124100-c1/decisions.txt`
+
+What I reviewed
+
+- Whether the changed behavior is covered at the correct level.
+- Whether preserved workflow-local policy still has regression protection.
+- Whether the new tests cover meaningful edge and failure paths.
+- Whether the tests avoid flaky assumptions and do not encode behavior drift.
+
+Key findings / decisions
+
+- No blocking findings.
+- The new unit-level validation-failure cases cover the main regression surface introduced by the typed artifact specs: missing required durable fields.
+- The reliance on existing runtime suites for publication-boundary, drift, hidden-execution, and workflow-local policy remains appropriate and aligned with the shared test-phase decision.
+- I updated `criteria.md` to all checked and appended a no-findings audit entry to `feedback.md` as `TST-000`.
+
+Open issues / next step
+
+- No open blocking issues for this phase.
+- Remaining follow-on test work, if any, belongs to later refinement/decomposition publication-surface phases rather than this scoped contract phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
