@@ -234,3 +234,46 @@ Validation passed with:
 **Open issues / next step**
 
 The next phase should replace the semantic Codex/Claude runtime providers with pure `ProviderTransport` implementations and update backend resolution to return `RenderedLLMProvider(transport)`. Engine-side artifact contract injection, retry behavior, handoff delivery, and docs/baseline updates are still pending by design for later phases.
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7bb-f901-7d52-99e4-70d625a97fa0
+---
+I’m reviewing the phase-scoped provider-boundary changes against the active criteria and the shared decisions ledger. I’ll inspect the changed core provider files, confirm the runtime parser boundary move, then update the phase criteria and feedback with any findings.
+
+I’ve got the phase artifacts and ledger. Now I’m reading the new core provider modules and the small runtime parser rewiring in detail to check for intent gaps, hidden regressions, and whether AC-1 through AC-3 are actually met.
+
+I found one material acceptance gap and one smaller design issue. I’m recording both now and leaving the phase incomplete because AC-3 is not actually met by the current runtime behavior.
+
+Scope considered
+
+Phase-local review of the `provider-boundary-core` implementation only: the new `core/providers/*` boundary modules, the minimal runtime parser rewiring in `runtime/providers/*`, the related tests, and the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/implement/phases/provider-boundary-core/`.
+
+What I analyzed
+
+I compared the active phase contract and shared decisions ledger against the changed provider models, parser, renderer, semantic wrapper, runtime helper/runtime provider usage, and the new focused tests. I also checked whether the implementation actually satisfies AC-1 through AC-3 rather than only adding the requested files.
+
+What I reviewed
+
+I updated `criteria.md` to reflect that compatibility/validation are acceptable but correctness, behavioral safety, and simplicity are not yet fully satisfied. I appended two findings to `feedback.md`: one blocking acceptance gap around runtime-side outcome parsing still living in the runtime provider layer, and one non-blocking issue about the inert render-policy surface.
+
+Key findings / decisions
+
+The blocking issue is that `CodexProvider` and `ClaudeProvider` still call `parse_outcome_json(...)` in `run_verifier`/`run_llm`, so AC-3 is not met even though the parser function was moved into `core/providers/parsing.py`. The non-blocking issue is that `ProviderPromptRenderPolicy` exists but cannot be supplied to `render_provider_turn(...)`, so the requested render-policy hook is present only as dead surface.
+
+Open issues / next step
+
+This phase should not be marked complete until verifier/LLM parsing is owned by the new core rendered-provider boundary rather than by the runtime providers. After that, the renderer API should expose the new prompt policy object so later engine integration does not require another interface change.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
