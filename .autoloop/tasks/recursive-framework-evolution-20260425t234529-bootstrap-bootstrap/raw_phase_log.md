@@ -979,3 +979,50 @@ No open issues in this phase. Reviewer artifacts are updated and the phase is re
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+
+
+---
+run_id=run-20260426T025144Z-5a94c19f | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dc7dd-61ac-7082-8923-2bbae028d6f5
+---
+I’m reviewing the retry-semantic coverage that landed during implement, then I’ll fill any material gaps with deterministic tests and update the phase test artifacts. The main question is whether the current suite fully locks down provider-only retry boundaries and the session/transcript invariants from AC-3.
+
+The current suite already covers most happy-path retry cases, but it’s thinner on direct helper semantics and policy toggles. I’m checking whether a small set of focused tests can close that gap without duplicating the engine contract tests that already exist.
+
+There isn’t direct coverage for the new retry-feedback helper yet, and that’s a public phase deliverable rather than just an internal detail. I’m reading that helper to see if a small unit test file can lock its markdown shape and specialized messages without duplicating the engine tests.
+
+I’m adding two focused layers rather than broad new integration churn: one engine contract test to prove policy flags actually disable a retry class, and one direct unit test file for the retry-feedback helper’s markdown/message variants. That closes the main uncovered phase surfaces without duplicating the existing retry-loop tests.
+
+I’ve added one engine policy-toggle regression and one direct helper test file. I’m running a tight validation set around those surfaces before I write the test strategy map and feedback summary.
+
+The new tests passed cleanly. I’m checking the shared decision ledger header for this test turn, then I’ll update the test-phase artifacts with the behavior-to-test map and a concise summary of the added coverage.
+
+Scope considered
+
+Phase-local `engine-provider-retries` test work only. I focused on the remaining uncovered retry-policy and retry-feedback surfaces in the repository tests, then updated the phase test artifacts.
+
+What I analyzed
+
+I reviewed the active phase contract, the existing retry coverage in `tests/contract/test_engine_contracts.py` and `tests/unit/test_validation.py`, the new session-baseline retry tests from implement, and the helper behavior in `core/providers/retries.py`. The main gap was direct coverage for retry-policy gating and for the `build_retry_feedback(...)` helper’s specialized markdown output.
+
+What I changed
+
+I added `test_retry_policy_can_disable_illegal_route_retries` to [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) so a step with `retry_illegal_route=False` fails on the first illegal route even when `max_attempts` is still `3`. That locks down the policy metadata as behavioral, not dead config.
+
+I added [tests/unit/test_provider_retries.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_retries.py) with direct helper coverage for `build_retry_feedback(...)`, including illegal route, invalid payload, missing required output artifact, invalid output artifact, provider transport failure, malformed provider output, and fallback messaging. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/engine-provider-retries/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/test/phases/engine-provider-retries/feedback.md), and appended the test-scope decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260425t234529-bootstrap-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The existing engine contract suite already covered most retry-loop happy/failure paths, so I avoided duplicating those flows and instead added direct locks on the two thinner surfaces: policy gating and helper rendering. The new tests are deterministic and use only scripted providers or direct helper calls, so there’s no added flake risk from timing, subprocesses, or ordering.
+
+Open issues / next step
+
+No open test-authoring issues in this phase. Validation passed for `.venv/bin/pytest -q tests/unit/test_provider_retries.py` and `.venv/bin/pytest -q tests/contract/test_engine_contracts.py`.
