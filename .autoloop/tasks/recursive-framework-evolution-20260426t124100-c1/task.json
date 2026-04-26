@@ -14,13 +14,13 @@
       "proof-docs-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "workflow-publication-migration"
+    "current_phase_index": 2,
+    "current_phase_id": "proof-docs-memory-closeout"
   },
   "phase_status": {
     "typed-publication-contracts": "completed",
-    "workflow-publication-migration": "in_progress",
-    "proof-docs-memory-closeout": "planned"
+    "workflow-publication-migration": "completed",
+    "proof-docs-memory-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260426T175457Z-ff851572",
       "status": "in_progress",
       "ts": "2026-04-26T18:19:02.472933+00:00"
+    },
+    {
+      "phase_id": "workflow-publication-migration",
+      "run_id": "run-20260426T175457Z-ff851572",
+      "status": "completed",
+      "ts": "2026-04-26T18:27:59.407234+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-memory-closeout",
+      "run_id": "run-20260426T175457Z-ff851572",
+      "status": "in_progress",
+      "ts": "2026-04-26T18:27:59.410279+00:00"
     }
   ]
 }
