@@ -16,15 +16,15 @@
       "docs-and-regression-suite"
     ],
     "explicit": true,
-    "current_phase_index": 3,
-    "current_phase_id": "route-handoff-persistence"
+    "current_phase_index": 4,
+    "current_phase_id": "docs-and-regression-suite"
   },
   "phase_status": {
     "provider-boundary-core": "completed",
     "runtime-cli-transports": "completed",
     "engine-provider-retries": "completed",
-    "route-handoff-persistence": "in_progress",
-    "docs-and-regression-suite": "planned"
+    "route-handoff-persistence": "completed",
+    "docs-and-regression-suite": "in_progress"
   },
   "phase_history": [
     {
@@ -71,6 +71,19 @@
       "run_id": "run-20260426T025144Z-5a94c19f",
       "status": "in_progress",
       "ts": "2026-04-26T04:06:57.465236+00:00"
+    },
+    {
+      "phase_id": "route-handoff-persistence",
+      "run_id": "run-20260426T025144Z-5a94c19f",
+      "status": "completed",
+      "ts": "2026-04-26T04:27:10.963461+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "docs-and-regression-suite",
+      "run_id": "run-20260426T025144Z-5a94c19f",
+      "status": "in_progress",
+      "ts": "2026-04-26T04:27:10.966090+00:00"
     }
   ]
 }
