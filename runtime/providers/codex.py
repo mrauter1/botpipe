@@ -11,6 +11,7 @@ from typing import Any
 
 from ...core.errors import ProviderExecutionError
 from ...core.providers.protocols import ProviderTransport
+from ...core.providers.rendered import RenderedLLMProvider
 from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ...core.stores.protocols import SessionBinding
 from ..config import ConfigError, ResolvedRuntimeConfig
@@ -210,6 +211,25 @@ def build_codex_transport(config: ResolvedRuntimeConfig) -> CodexTransport:
         model=config.provider.codex.model,
         model_effort=config.provider.codex.model_effort,
     )
+
+
+class CodexProvider(RenderedLLMProvider):
+    """Compatibility semantic provider backed by CodexTransport."""
+
+    def __init__(self, config: ResolvedRuntimeConfig, commands: CodexCLICommand | None = None) -> None:
+        super().__init__(
+            CodexTransport(
+                commands=commands or resolve_codex_cli_commands(config),
+                model=config.provider.codex.model,
+                model_effort=config.provider.codex.model_effort,
+            )
+        )
+
+
+def build_codex_provider(config: ResolvedRuntimeConfig) -> CodexProvider:
+    """Build the compatibility Codex semantic provider wrapper."""
+
+    return CodexProvider(config)
 
 
 @lru_cache(maxsize=1)

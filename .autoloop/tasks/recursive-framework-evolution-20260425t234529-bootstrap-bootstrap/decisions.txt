@@ -12,3 +12,5 @@ Outcome JSON parsing moved to core/providers/parsing.py in this phase, while run
 <autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="runtime-cli-transports" pair="implement" turn_seq="1" run_id="run-20260426T025144Z-5a94c19f" ts="2026-04-26T03:21:03.459466+00:00" />
 Backend resolution is now the only place that wraps CLI transports with RenderedLLMProvider; runtime/providers/codex.py and claude.py export transport builders only.
 Transport-purity cleanup in this phase is limited to runtime provider modules and their tests; runtime/providers/_common.py retains the legacy verifier-packet helper as dead code for now to avoid cross-phase behavioral churn.
+<autoloop-decisions-header version="1" block_seq="5" owner="implementer" phase_id="runtime-cli-transports" pair="implement" turn_seq="2" run_id="run-20260426T025144Z-5a94c19f" ts="2026-04-26T03:31:27.188047+00:00" />
+Compatibility shims for CodexProvider/ClaudeProvider and build_codex_provider/build_claude_provider are restored as thin RenderedLLMProvider wrappers over the new transports so prior imports keep working without changing backend ownership.

@@ -11,6 +11,7 @@ from typing import Any
 
 from ...core.errors import ProviderExecutionError
 from ...core.providers.protocols import ProviderTransport
+from ...core.providers.rendered import RenderedLLMProvider
 from ...core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from ...core.stores.protocols import SessionBinding
 from ..config import ClaudeProviderConfig, ConfigError, ResolvedRuntimeConfig
@@ -156,6 +157,19 @@ def build_claude_transport(config: ResolvedRuntimeConfig) -> ClaudeTransport:
 
     verify_claude_code_capabilities(config.provider.claude)
     return ClaudeTransport(config=config.provider.claude)
+
+
+class ClaudeProvider(RenderedLLMProvider):
+    """Compatibility semantic provider backed by ClaudeTransport."""
+
+    def __init__(self, config: ResolvedRuntimeConfig) -> None:
+        super().__init__(build_claude_transport(config))
+
+
+def build_claude_provider(config: ResolvedRuntimeConfig) -> ClaudeProvider:
+    """Build the compatibility Claude semantic provider wrapper."""
+
+    return ClaudeProvider(config)
 
 
 @lru_cache(maxsize=1)

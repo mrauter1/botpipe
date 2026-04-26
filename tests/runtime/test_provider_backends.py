@@ -10,9 +10,10 @@ import pytest
 from autoloop_v3.core.providers.rendered import RenderedLLMProvider
 from autoloop_v3.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from autoloop_v3.runtime import cli
-from autoloop_v3.runtime.providers.claude import ClaudeTransport
+from autoloop_v3.runtime import providers as runtime_providers
+from autoloop_v3.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
 import autoloop_v3.runtime.providers.claude as claude_runtime_provider
-from autoloop_v3.runtime.providers.codex import CodexTransport
+from autoloop_v3.runtime.providers.codex import CodexProvider, CodexTransport, build_codex_provider
 import autoloop_v3.runtime.providers.codex as codex_runtime_provider
 from autoloop_v3.runtime.config import (
     ClaudeProviderConfig,
@@ -155,6 +156,55 @@ def test_resolve_provider_backend_returns_rendered_claude_provider(
     )
 
     provider = resolve_provider_backend(config=_resolved_config("claude"))
+
+    assert isinstance(provider, RenderedLLMProvider)
+    assert isinstance(provider._transport, ClaudeTransport)
+
+
+def test_runtime_provider_package_reexports_compatibility_names() -> None:
+    assert runtime_providers.CodexProvider is CodexProvider
+    assert runtime_providers.ClaudeProvider is ClaudeProvider
+    assert runtime_providers.build_codex_provider is build_codex_provider
+    assert runtime_providers.build_claude_provider is build_claude_provider
+
+
+def test_compatibility_build_codex_provider_returns_rendered_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(codex_runtime_provider.shutil, "which", lambda name: "/usr/bin/codex")
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        if command == ["codex", "exec", "--help"]:
+            return _completed(
+                args=command,
+                stdout="--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n",
+            )
+        if command == ["codex", "exec", "resume", "--help"]:
+            return _completed(
+                args=command,
+                stdout="--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n",
+            )
+        raise AssertionError(f"unexpected command: {command!r}")
+
+    monkeypatch.setattr(codex_runtime_provider.subprocess, "run", fake_run)
+
+    provider = build_codex_provider(_resolved_config("codex"))
+
+    assert isinstance(provider, RenderedLLMProvider)
+    assert isinstance(provider._transport, CodexTransport)
+
+
+def test_compatibility_build_claude_provider_returns_rendered_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(claude_runtime_provider.shutil, "which", lambda name: "/usr/bin/claude")
+    monkeypatch.setattr(
+        claude_runtime_provider.subprocess,
+        "run",
+        lambda command, **_: _completed(args=command, stdout=CLAUDE_HEADLESS_HELP),
+    )
+
+    provider = build_claude_provider(_resolved_config("claude"))
 
     assert isinstance(provider, RenderedLLMProvider)
     assert isinstance(provider._transport, ClaudeTransport)
