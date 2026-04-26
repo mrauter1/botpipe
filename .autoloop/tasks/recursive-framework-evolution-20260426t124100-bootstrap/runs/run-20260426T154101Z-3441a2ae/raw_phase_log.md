@@ -1095,3 +1095,129 @@ No audit-blocking issues remain for this phase. The only remaining limitation is
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcab5-335a-7580-9146-926cf88f11fe
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+I’m binding the runtime observability path into the engine and runner, with the main risk concentrated in run-start ordering and extension compatibility. I’ll inspect the active phase artifacts and the current engine/runner/workspace wiring first, then make the smallest changes that satisfy the preflight and binding requirements.
+
+The existing persistence pieces are already present, so I’m narrowing the delta to engine binding, runner ordering, and resume compatibility handling. Next I’m reading the engine, runner, workspace, and the new runtime observability modules together to align their contracts before editing.
+
+I’ve confirmed the current runner still mutates `.autoloop` too early: `ensure_workspace`, workflow metadata, and run creation all happen before any runtime git preflight. I’m checking the remaining observability pieces and the current tests now so the refactor lands with matching coverage instead of changing behavior blindly.
+
+The main implementation choice is to keep the engine generic and push the policy-heavy parts into the runner: preflight, workflow `GitTracking` filtering, and the runtime observability factory all fit there cleanly. I’m editing `workspace.py`, `runner.py`, `engine.py`, and a new `runtime/observability.py` together so the sequencing and extension order stay coherent.
+
+I’m applying the structural edits now: pure workspace planning helpers, engine support for runtime-bound extensions, and the runner-owned observability setup and warnings. After that I’ll add focused tests for clean-start ordering, extension ordering, and workflow `GitTracking` suppression.
+
+I found one likely regression surface outside the main path: child workflow invocations inherit the runtime now, so if parent execution dirties the repo mid-step, a nested child run would hit the same clean-start rule. I’m checking the existing child-run tests before deciding whether that needs a scoped exception or whether the current suite already avoids that pattern.
+
+The code shape is in place. I’m running a tight test slice now to catch integration mistakes before I expand into the behavior tests, because the biggest remaining risk is a subtle sequencing or constructor mismatch rather than business logic.
+
+The environment doesn’t have `python`; I’m switching to `python3` and keeping the scope narrow until the runner changes stabilize. After the first failure list I’ll patch tests and any missed compatibility points together.
+
+I hit a real runtime bug rather than just a stale assertion: workflow resolution is probably creating `__pycache__` under `workflows/`, which makes a clean repo look dirty before preflight. I’m fixing that at the loader boundary now, because otherwise the new clean-start rule is impossible to satisfy in normal repo-backed runs.
+
+The remaining failure still dirties a clean repo before preflight, so I’m checking the exact file list rather than guessing. If the loader fix isn’t enough, the last mutation point is likely import-time cache files or test scaffolding that isn’t committed.
+
+The focused slices are green now. I’m checking one broader runtime module next to see whether the new default git tracking needs a shared test fixture strategy, or whether only the observability-specific tests needed updates.
+
+The active-phase paths are stable now: engine, runner, loader, and the observability modules all exercised cleanly in the targeted slices. I’m doing one syntax pass and then I’ll write the phase notes with the two non-obvious decisions this turn introduced.
+
+I’m adding two small regression tests before I stop: one for engine binding order and one for runner preflight ordering. Those are the phase-specific contracts that weren’t covered strongly enough by the existing slices.
+
+Scope considered
+
+Engine and runner observability binding for the active phase: runtime extension factory support, preflight-safe workspace planning, workflow `GitTracking` suppression with warnings, resume mismatch warning handling, and the import-time repo-dirty regression caused by workflow resolution.
+
+What I analyzed
+
+`core/engine.py`, `runtime/runner.py`, `runtime/workspace.py`, `runtime/loader.py`, the runtime git/tracing modules, and the extension compatibility tests. I also sampled a broader runtime module and confirmed there are still older tests that assume non-git temp roots.
+
+What I changed
+
+Added runtime extension factory support in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py) and bound runtime extensions before workflow extensions, with a fatal-hook path for runtime observability.
+
+Created [runtime/observability.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/observability.py) and wired it from [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), including sequence assignment, trace writes, and git tracker hooks.
+
+Split workspace planning from mutation in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py) and refactored the runner so git preflight happens before task/workflow/run materialization.
+
+Filtered workflow-declared `GitTracking` in the runner, emitted the required deprecation warning event, and persisted warnings into `run.json`.
+
+Fixed workflow resolution in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py) so runtime imports no longer leave `__pycache__` dirt that breaks clean-repo preflight.
+
+Updated targeted tests in [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py), [tests/runtime/test_runtime_git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_git_tracking.py), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+
+Key findings / decisions
+
+Workflow resolution itself was dirtying clean repos via Python bytecode caches, so preflight could never succeed reliably until that was cleaned up.
+
+I kept workflow `GitTracking` filtering in the runner by cloning the compiled extension tuple, which keeps the engine generic and avoids duplicate commits.
+
+Targeted validation passed:
+`.venv/bin/python -m pytest tests/runtime/test_runtime_git_tracking.py tests/runtime/test_runtime_tracing.py tests/runtime/test_optional_extensions.py tests/contract/test_engine_contracts.py -q`
+with `89 passed`.
+
+Open issues / next step
+
+I did not do the full repo-wide test migration. A sampled broader module, `tests/runtime/test_workspace_and_context.py`, still fails because many older runtime tests now need either temp git repo initialization or explicit git opt-out under the new default.
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcab5-335a-7580-9146-926cf88f11fe
+
+
+---
+run_id=run-20260426T154101Z-3441a2ae | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcab5-335a-7580-9146-926cf88f11fe
+---
+I’m reviewing the runtime binding and preflight changes against the phase contract, with emphasis on ordering, duplicate-commit avoidance, and resume safety. I’ll inspect the changed runtime/engine paths and then update the phase criteria and feedback with only scope-relevant findings.
+
+Reviewing the phase artifacts and the changed runtime binding paths now. I’m checking the implemented behavior against the phase acceptance criteria, then I’ll update the phase `criteria.md` and `feedback.md` with any concrete findings.
+
+The main risks are in the git terminal/init commit path and the fatal-path failure handling. I’m pulling exact symbol references and then I’ll write the review findings with minimal fix directions.
+
+I confirmed the broader regression surface is real rather than hypothetical. I’m running the sampled runtime module once so the feedback can point to an actual failing coverage gap instead of a guessed one.
+
+I have enough to write the review artifacts. The acceptance gaps are concrete: terminal/init metadata leaves the repo dirty, fatal-path raise-mode is neutralized, and the broader runtime test suite still has unupdated non-git callers.
+
+Scope considered
+
+Phase-local review of `engine-runner-observability-binding`, focused on runtime extension binding, runner preflight ordering, workflow `GitTracking` suppression, fatal-path observability behavior, and the test surface affected by the new default git-tracked runtime.
+
+What I analyzed
+
+`runtime/git_tracking.py`, `runtime/observability.py`, `runtime/runner.py`, `core/engine.py`, the active phase `implementation_notes.md`, and the shared `decisions.txt` entries for this task. I also checked the broader runtime regression surface in `tests/runtime/test_workspace_and_context.py`.
+
+What I reviewed
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t124100-bootstrap/implement/phases/engine-runner-observability-binding/feedback.md) with three blocking findings. `criteria.md` remains fully unchecked because the current implementation does not yet satisfy the phase acceptance bar.
+
+Key findings / decisions
+
+`IMP-001` is blocking: init/finish/fatal git-tracking metadata is written after `commit_all()`, so runtime-owned files can leave the repo dirty and cause later resume preflight failures on the runtime’s own artifacts.
+
+`IMP-002` is blocking: fatal-path observability failures are swallowed even under `failure_mode="raise"`, which conflicts with the required failure-mode semantics.
+
+`IMP-003` is blocking: the runtime test migration is incomplete. I confirmed `.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py -q` still fails with 13 git-preflight errors because those tests neither initialize git nor explicitly disable runtime git tracking.
+
+Open issues / next step
+
+Address the three blocking findings, then rerun the targeted phase tests plus the broader runtime module that still assumes non-git temp roots.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
