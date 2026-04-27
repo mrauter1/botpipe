@@ -1255,3 +1255,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+Addressing the single blocking test gap from audit: direct `workflow_step(...)` coverage for child `FAIL` and generic blocked pause mapping. Then I’ll update the phase test notes to reflect the expanded surface.
+
+The missing assertions are isolated to the generated child-result mapping. I’m adding only those handler-level checks and updating the phase notes to say that `failed` and `blocked` propagation are now covered.
+
+The missing child-terminal mapping assertions are in. I’m rerunning the focused `workflow_step(...)` unit slice now so the update is backed by an executable check, not just a test diff.
+
+Scope considered
+
+- Phase-local `simple-lowering` test additions only.
+- I addressed the auditor’s single blocking gap in `workflow_step(...)` child-terminal mapping coverage.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/test_strategy.md)
+
+What I changed
+
+- Added direct handler-level tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) for the remaining `workflow_step(...)` child-terminal branches:
+  - child `terminal="FAIL"` returns `Event("failed")`
+  - paused child without a `question` event returns `Event("blocked")`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/test_strategy.md) so the coverage map now explicitly includes reserved `question`/`blocked`/`failed` route propagation.
+- Appended a concise test-addition note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md).
+
+Key findings / decisions
+
+- The missing regression protection was narrow and best covered at the generated-handler level, not by broader runtime fixtures.
+- I kept the tests deterministic with the same fake-context pattern already used in this file, so there is no added timing, network, or ordering risk.
+
+Open issues / next step
+
+- Focused validation completed with:
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k "workflow_step"`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`
+- I did not run the full repository suite.

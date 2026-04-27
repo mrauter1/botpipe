@@ -370,6 +370,74 @@ def test_simple_workflow_step_child_question_maps_to_reserved_question_route(tmp
     assert event.question == "Need approval?"
 
 
+def test_simple_workflow_step_child_failure_maps_to_reserved_failed_route(tmp_path: Path) -> None:
+    class ChildWorkflow(Workflow):
+        note = step("Write the note.")
+
+    class ParentWorkflow(Workflow):
+        launch = workflow_step(ChildWorkflow, message="Run child workflow")
+        flow = chain(launch)
+
+    compiled = compile_workflow(ParentWorkflow)
+
+    @dataclass
+    class _FakeChildResult:
+        workflow_name: str = "child_workflow"
+        run_id: str = "run-child-4"
+        terminal: str = "FAIL"
+        status: str = "failed"
+        last_event: Event | None = Event("failed")
+        output_artifacts: dict[str, Path] | None = None
+        output_metadata: dict[str, object] | None = None
+
+    class _FakeContext:
+        def __init__(self) -> None:
+            self.workflow_folder = tmp_path / "parent"
+            self.workflow_folder.mkdir(parents=True, exist_ok=True)
+
+        def invoke_workflow(self, workflow, *, message, parameters=None, input=None):
+            return _FakeChildResult()
+
+    _, event = ParentWorkflow.on_launch(compiled.new_state(), _FakeContext())
+
+    assert compiled.routes["launch"]["failed"].target == "FAIL"
+    assert event.tag == "failed"
+
+
+def test_simple_workflow_step_child_pause_without_question_maps_to_reserved_blocked_route(tmp_path: Path) -> None:
+    class ChildWorkflow(Workflow):
+        note = step("Write the note.")
+
+    class ParentWorkflow(Workflow):
+        launch = workflow_step(ChildWorkflow, message="Run child workflow")
+        flow = chain(launch)
+
+    compiled = compile_workflow(ParentWorkflow)
+
+    @dataclass
+    class _FakeChildResult:
+        workflow_name: str = "child_workflow"
+        run_id: str = "run-child-5"
+        terminal: str = "PAUSE"
+        status: str = "paused"
+        last_event: Event | None = Event("blocked")
+        output_artifacts: dict[str, Path] | None = None
+        output_metadata: dict[str, object] | None = None
+
+    class _FakeContext:
+        def __init__(self) -> None:
+            self.workflow_folder = tmp_path / "parent"
+            self.workflow_folder.mkdir(parents=True, exist_ok=True)
+
+        def invoke_workflow(self, workflow, *, message, parameters=None, input=None):
+            return _FakeChildResult()
+
+    _, event = ParentWorkflow.on_launch(compiled.new_state(), _FakeContext())
+
+    assert compiled.routes["launch"]["blocked"].target == "PAUSE"
+    assert event.tag == "blocked"
+
+
 def test_simple_workflow_step_rejects_unknown_message_from_reference() -> None:
     class ChildWorkflow(Workflow):
         note = step("Write the note.")

@@ -12,7 +12,7 @@
 - Simple-surface imports and prompt primitives: cover repo-root and staged-package imports plus `Prompt.inline(...)` and file-backed prompt origin metadata.
 - Simple lowering happy paths: cover step-name binding, inferred step-local artifact paths, inferred entry for one-step and chained workflows, review-step accepted/rework lowering, and absence of implicit provider control schemas.
 - Placeholder inference: cover unambiguous inline/file prompt reads, conservative ambiguity handling, and preserved non-inference of `requires`.
-- `workflow_step(...)` lowering: cover compile-time lowering to the existing system-step model, generated child invocation, reserved `question` route mapping, and `message_from` artifact loading.
+- `workflow_step(...)` lowering: cover compile-time lowering to the existing system-step model, generated child invocation, reserved `question`/`blocked`/`failed` route mapping, and `message_from` artifact loading.
 
 ## Preserved Invariants Checked
 
@@ -25,6 +25,7 @@
 - Bare placeholder ambiguity against `State` fields does not create reads.
 - `workflow_step(message_from=...)` rejects unknown artifact references with a compile-time validation error.
 - Child workflows that pause with a `question` event map back to the reserved parent `question -> PAUSE` route.
+- Child workflows that fail or pause without a `question` event map back to the reserved parent `failed -> FAIL` and `blocked -> PAUSE` routes.
 
 ## Stability Notes
 
