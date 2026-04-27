@@ -168,3 +168,151 @@ phase_mode=single
 phase_ids=optimization-helper-consolidation,proof-docs-memory-closeout
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+---
+I’m auditing the repository and the phase artifacts first so I can choose the smallest consolidation that satisfies the optimizer-helper scope without drifting into unrelated refactors.
+
+I’ve confirmed the planned scope and the existing phase decisions. Next I’m reading the optimizer workflow, its helper module, adjacent refinement usage, and the standing memory/docs so I can extract only deterministic mechanics.
+
+I have the architectural context now. I’m drilling into the optimizer’s helper tails and the existing tests to isolate the repeated pass-finalization and publication checks before I edit anything.
+
+The repo is dirty in many unrelated areas, so I’m staying narrowly on the optimizer files, tests, and the required recursive-memory docs. I’m reading the exact publication and helper branches now to keep the refactor behavior-preserving.
+
+Plan:
+1. Extract the optimizer’s deterministic context and publication mechanics into `stdlib/optimization.py`, keeping workflow-specific routing and policy in the workflow package.
+2. Refactor `workflows/workflow_run_traces_to_optimization_candidates/workflow.py` to use those helpers so the flow reads as capture → rank → mine → optional passes → package → publish.
+3. Add or update focused unit/runtime coverage for the helper seam and publication invariants, then sync the required recursive-memory and implementation-note artifacts.
+
+I’ve got the seam now: one helper for frame-context capture, one helper for optional-pass finalization, and one helper for scorecard publication validation. I’m checking the existing stdlib exports and artifact readers before patching so I don’t introduce a circular import or a leaky abstraction.
+
+The supporting stdlib seams already exist for selected-workflow snapshots, so I can layer the optimizer helper on top of them without widening the root authoring surface. I’m checking the publish-path tests next so the helper extraction preserves the same drift and scorecard failures.
+
+I’m consolidating the helpers in a way that keeps the workflow package authoritative for its contract readers and empty-payload shapes, while moving the repetitive mechanics into `stdlib/optimization.py`. That avoids a stdlib dependency on workflow package internals but still gives the optimizer one pass registry and one publication path.
+
+I’m at the edit point. The stdlib patch will add the shared frame-capture and publication helpers first, then I’ll collapse the workflow onto that seam so the behavior stays identical while the file gets shorter.
+
+I’ve finished the workflow refactor against the new helper seam. I’m adding focused unit coverage for the helper registry/finalization logic now, then I’ll run the optimizer tests before touching the recursive-memory files.
+
+The refactor is in place. I’m running the optimizer unit and runtime suites now to catch any circular-import or behavior drift before I update the memory and closeout artifacts.
+
+The helper unit suite is green. The runtime optimizer suite is still running; I’m waiting on that before I sync docs and recursive memory so I only record verified behavior.
+
+The optimizer suites passed, so I’m on the final slice: syncing the standing recursive-memory files, the phase implementation notes, and one workflow doc note so the new helper boundary is recorded alongside the code.
+
+The code and memory sync are done. I’m running the refinement-handoff and baseline-doc suites now so the closeout covers both the optimizer behavior and the documentation state I just updated.
+
+The baseline-doc suite found three wording regressions. I’m restoring the exact expected charter and workflow-doc phrases without changing the consolidation itself, then I’ll rerun the doc proof.
+
+Two exact-string assertions are still strict. I’m restoring those literal phrases verbatim and rerunning the doc proof one more time.
+
+I’ve finished the proof bundle. I’m pulling the scoped diff stats now so the closeout can report the net change and the exact files touched without mixing in the unrelated dirty worktree.
+
+Scope considered
+
+- Phase-local optimizer-helper consolidation only.
+- Code paths analyzed: [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py), [optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/optimization.py), adjacent refinement handoff, optimizer tests, required docs, and the standing `.autoloop_recursive/` memory files.
+- I left unrelated dirty files out of scope.
+
+What I analyzed
+
+- The optimizer’s repeated deterministic tails in frame capture, optional-pass skip/finalization, and scorecard publication validation.
+- Existing selected-workflow snapshot helpers and refinement evidence consumption.
+- The required baseline-doc expectations so the memory/doc sync stayed compatible.
+
+What I changed
+
+- Moved the shared deterministic optimizer mechanics into [optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/optimization.py):
+  - `capture_optimization_frame_context(...)`
+  - `finalize_optional_optimization_artifact(...)`
+  - `collect_optimization_publication_surface(...)`
+  - `validate_optimization_scorecard_publication(...)`
+  - supporting spec/result dataclasses
+- Refactored [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py) to consume that seam, removing the large workflow-local capture/publication/helper tail while preserving artifact names, route tags, source-drift checks, and refinement handoff behavior.
+- Added focused helper coverage in [test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py).
+- Updated `docs/workflows/workflow_run_traces_to_optimization_candidates.md`, the required `.autoloop_recursive/` files, the phase `implementation_notes.md`, and the current turn block in `decisions.txt`.
+
+Key findings / decisions
+
+- The right seam was contract-driven stdlib mechanics, not a new workflow and not a stdlib dependency on workflow package contracts. The workflow now passes artifact specs into stdlib.
+- Optimizer-only policy stayed local: no-eligible packaging behavior, packet text shaping, and route semantics were not pushed into stdlib.
+- Scoped tracked diff: 6 tracked files changed, `+712/-463` lines, net `+249`. No tracked files were added or deleted in scope. The required recursive-memory files were also updated, but they sit outside the tracked baseline in this checkout.
+- Validation passed:
+  - `.venv/bin/pytest -q tests/unit/test_optimization_helpers.py` `22 passed`
+  - `.venv/bin/pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py` `43 passed`
+  - `.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` `31 passed`
+  - `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` `41 passed`
+
+Open issues / next step
+
+- No blocking issues from this phase.
+- Deferred debt remains broader portfolio-shape work and any later adjacent optimizer-family adoption of the same helper seam.
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+---
+I’m reviewing the scoped optimizer refactor diff, the phase artifacts, and the preserved-contract surfaces now, then I’ll update the verifier criteria and feedback files with the result.
+
+I’ve loaded the phase criteria and the implementation decisions. I’m spot-checking the final helper APIs and the refactored workflow paths directly now to confirm the preserved contracts rather than relying only on the test outputs.
+
+The helper seam and workflow refactor line up with the phase decisions and the preserved contracts, and the targeted proof bundle covers the main regression surfaces. I’m marking the criteria complete and recording a no-findings review outcome in the phase feedback.
+
+Scope considered
+
+- Scoped review of the optimizer-helper consolidation only.
+- Reviewed the implementation diff in `stdlib/optimization.py`, `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`, the optimizer helper tests, the workflow doc note, and the required phase-local artifacts.
+- Checked the refactor against the phase contract and the shared decisions file. Unrelated dirty files stayed out of scope.
+
+What I analyzed
+
+- Whether deterministic selected-workflow context capture, optional-pass finalization, and scorecard publication validation actually moved behind a narrow helper surface.
+- Whether optimizer-only route semantics, packet shaping, and candidate-policy behavior stayed package-local.
+- Whether preserved contracts still held: artifact filenames, route tags, candidate-only publication, source-drift rejection, malformed-artifact rejection, scorecard count mismatch rejection, and refinement handoff shape.
+
+What I reviewed
+
+- The helper extraction shape in `stdlib/optimization.py`, including the contract-driven artifact spec approach.
+- The workflow refactor in `workflows/workflow_run_traces_to_optimization_candidates/workflow.py` to confirm the top-level flow remained obvious and behavior-preserving.
+- The recorded proof bundle:
+  - `tests/unit/test_optimization_helpers.py`
+  - `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
+  - `tests/test_architecture_baseline_docs.py`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The implementation matches the accepted consolidation plan and the decisions ledger.
+- The phase criteria were marked complete in `criteria.md`.
+- The review outcome was recorded in `feedback.md` as no findings.
+
+Open issues / next step
+
+- No open issues from the scoped review.
+- Phase review is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
