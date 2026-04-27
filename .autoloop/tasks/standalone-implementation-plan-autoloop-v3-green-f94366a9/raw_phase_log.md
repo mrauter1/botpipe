@@ -1525,3 +1525,53 @@ Open issues / next step
 
 - No blocking issues remain for this phase.
 - Phase notes and decision ledger were updated in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/workflow-migration-docs-and-proof/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/decisions.txt).
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+---
+I’m auditing the phase artifacts and the request-relevant code paths now. First I’m checking the reviewer-owned criteria/feedback files and then I’ll sample the implemented runtime, stdlib, docs, and test surfaces that changed in this phase.
+
+I’ve confirmed the shared decisions and the reviewer artifact state. Next I’m sampling the concrete implementation seams that changed the behavior contract: authoritative capability payloads, child artifact aliasing, and the stdlib consumer normalization around them.
+
+The request-relevant runtime and proof surfaces look internally consistent with the shared decisions: authoritative qualified payloads are matched by alias recovery in stdlib consumers, and the verification evidence is present. I’m marking the phase complete in the reviewer artifacts unless a final spot check turns up something material.
+
+Scope considered
+
+- Active phase scope only: changed runtime/stdlib capability surfaces, child-workflow result plumbing, bundled workflow packages, active docs/templates, and the proof tests/greps tied to this phase.
+- Reviewer-owned artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/workflow-migration-docs-and-proof/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/workflow-migration-docs-and-proof/feedback.md).
+
+What I analyzed
+
+- Shared decisions and phase notes for the intended authoritative payload shape and grep boundary.
+- `core/workflow_capabilities.py`, `runtime/runner.py`, `stdlib/evaluation.py`, `stdlib/composition.py`, and `core/validation.py` for the request-relevant behavior changes.
+- Active docs/template wording and the updated tests covering capability payloads, docs vocabulary, runtime behavior, and stdlib consumers.
+
+What I reviewed
+
+- Conformance to the greenfield request: active removal of legacy route-contract terminology, authoritative qualified artifact naming, reserved-route normalization, and no new workflow-expansion command surface.
+- Validation evidence: full suite `929 passed`, targeted docs/runtime reruns, and removed-term grep clean outside archived `legacy_docs/`.
+- Reviewer artifacts updated: all criteria boxes checked and feedback appended with the review result.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings beyond recording the clean review result.
+- The implementation is consistent with the explicit shared decisions about authoritative capability payloads and alias recovery in stdlib consumers.
+
+Open issues / next step
+
+- No open reviewer issues for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
