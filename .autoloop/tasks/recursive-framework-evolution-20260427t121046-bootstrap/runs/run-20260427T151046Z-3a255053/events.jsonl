@@ -36,3 +36,7 @@
 {"ts": "2026-04-27T15:56:41.794303+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "prompts-docs-and-report"}
 {"ts": "2026-04-27T15:57:36.490410+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "prompts-docs-and-report"}
 {"ts": "2026-04-27T15:57:36.525266+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "prompts-docs-and-report"}
+{"ts": "2026-04-27T15:57:36.620528+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 39, "event_type": "phase_completed", "pair": "test", "phase_id": "prompts-docs-and-report", "phase_mode": "single"}
+{"ts": "2026-04-27T15:57:36.624300+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 40, "event_type": "phase_started", "phase_id": "tests-and-verification", "phase_mode": "single"}
+{"ts": "2026-04-27T15:57:36.625895+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 41, "event_type": "pair_started", "pair": "implement", "phase_id": "tests-and-verification"}
+{"ts": "2026-04-27T15:57:36.626112+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 42, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "tests-and-verification"}
