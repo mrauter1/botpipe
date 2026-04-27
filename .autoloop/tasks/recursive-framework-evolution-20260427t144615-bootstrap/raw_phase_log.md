@@ -745,3 +745,50 @@ The focused suite passed:
 `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -q`
 
 No open blocker remains from the current reviewer feedback. The next step is reviewer re-check of the phase artifacts and code paths.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+I’m re-reviewing the `contract-migration` slice after the reviewer-fix pass, focusing on the two reported gaps and the adjacent validation/rendering behavior they affect. Then I’ll update the phase criteria and feedback to reflect the current state.
+
+I’ve verified the previously reported gaps are closed. I’m doing one last sweep for any new regressions introduced by the fix itself, especially around legacy route-contract behavior and the updated phase notes, before I mark the phase complete.
+
+I don’t see any remaining blocking code issues in the scoped runtime/compiler/provider path. I’m updating the artifacts now so the historical blocking feedback is explicitly marked resolved and the criteria reflect the current state.
+
+Scope considered
+
+Phase-local `contract-migration` only: the changed validation/compiler/provider/rendering/runtime-static-graph surfaces, the new focused tests, and the active phase artifacts under `.autoloop/.../contract-migration/`.
+
+What I analyzed
+
+I re-checked the two previously reported gaps against the current code in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) and [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py), then verified the new regressions in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py). I also checked the implementation notes and shared decisions for drift.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/contract-migration/criteria.md) so all phase criteria now reflect the current passing state, and I appended resolution notes to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/contract-migration/feedback.md). The blocking route-required-output hole is closed, and the required-input rendering mismatch is also closed.
+
+Key findings / decisions
+
+`IMP-001` is resolved. Route-required outputs are now restricted to artifacts produced by the current step, for both explicit `Route.required_outputs` and legacy `route_contracts.required_artifacts`.
+
+`IMP-002` is resolved. The provider “Required inputs” table now reflects runtime precondition semantics instead of artifact output optionality.
+
+I found no remaining scoped findings after the fix pass and the focused regression coverage.
+
+Open issues / next step
+
+No open blocker remains in this phase-local review. The criteria are fully checked, feedback records the resolved findings, and the phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -687,3 +687,108 @@ The phase is not ready to close. The implementation should add produced-by-curre
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+I’m addressing the reviewer findings in `contract-migration`: the blocking fix is to enforce route-required outputs as artifacts produced by the current step, and I’ll also align required-input rendering with runtime precondition semantics while keeping the legacy aliases intact.
+
+I’ve got the fix shape. I’m keeping it narrow: centralize the produced-by-source-step check inside the existing route-required-output normalizer, and resolve the prompt mismatch by rendering all entries in the required-inputs section as required instead of conflating that with artifact optionality.
+
+I’m editing the validation seam now. The fix is to validate route-required outputs against the current step’s produced surfaces at the same central normalization point that both legacy contracts and explicit `Route(...)` metadata already flow through.
+
+I’m adding focused regressions for both fixes so the next pass can’t silently re-open them: one validation test for route-required outputs that reference non-produced artifacts, and one rendering test that proves required-input rows stay marked required even when the artifact declaration itself is optional.
+
+The fixes are in. I’m rerunning the focused suite so the reviewer-reported cases and the surrounding engine/provider/static-graph behavior are all validated together before I update the phase notes.
+
+The focused suite is green again. I’m recording the non-obvious contract decisions from this reviewer-fix pass in the shared ledger and tightening the implementation notes so the next turn has the exact semantics that were preserved.
+
+Scope considered
+
+The reviewer-reported gaps in `contract-migration`: route-required-output validation in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), required-input rendering in [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py), plus the focused validation/provider/engine/static-graph tests and phase artifacts.
+
+What I analyzed
+
+I re-read the active [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/contract-migration/feedback.md), then traced how `route_required_outputs` is normalized and enforced, and how `required_artifacts` rows are rendered in provider prompts. I also checked existing route-contract tests to make sure the fix would preserve legacy compatibility.
+
+What I changed
+
+In [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), I tightened `_normalize_route_required_outputs(...)` so both explicit `Route.required_outputs` and legacy `route_contracts.required_artifacts` must resolve to artifacts produced by the current step. That closes the hole where a route output obligation could be satisfied by a pre-existing input or upstream artifact.
+
+In [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py), I changed the “Required inputs” table to render `yes` for every row, so the section reflects runtime precondition semantics instead of the artifact declaration’s output-optional `required` bit.
+
+I added focused regressions in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) for both explicit and legacy route-required-output misuse, plus a rendering regression in [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py). I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/contract-migration/implementation_notes.md) and appended the non-obvious semantics to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+Route-level required outputs now remain true output obligations: they must come from `step.produces`, regardless of whether they originated from the new route metadata path or the legacy route-contract compatibility path.
+
+The provider prompt now treats “Required inputs” as a runtime contract surface, not an artifact-schema surface. That keeps the new reads-vs-requires vocabulary coherent without adding another compatibility field to provider models.
+
+Open issues / next step
+
+The focused suite passed:
+
+`.venv/bin/python -m pytest tests/unit/test_validation.py -q`  
+`.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py -q`  
+`.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q`  
+`.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -q`
+
+No open blocker remains from the current reviewer feedback. The next step is reviewer re-check of the phase artifacts and code paths.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+I’m re-reviewing the `contract-migration` slice after the reviewer-fix pass, focusing on the two reported gaps and the adjacent validation/rendering behavior they affect. Then I’ll update the phase criteria and feedback to reflect the current state.
+
+I’ve verified the previously reported gaps are closed. I’m doing one last sweep for any new regressions introduced by the fix itself, especially around legacy route-contract behavior and the updated phase notes, before I mark the phase complete.
+
+I don’t see any remaining blocking code issues in the scoped runtime/compiler/provider path. I’m updating the artifacts now so the historical blocking feedback is explicitly marked resolved and the criteria reflect the current state.
+
+Scope considered
+
+Phase-local `contract-migration` only: the changed validation/compiler/provider/rendering/runtime-static-graph surfaces, the new focused tests, and the active phase artifacts under `.autoloop/.../contract-migration/`.
+
+What I analyzed
+
+I re-checked the two previously reported gaps against the current code in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) and [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py), then verified the new regressions in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py). I also checked the implementation notes and shared decisions for drift.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/contract-migration/criteria.md) so all phase criteria now reflect the current passing state, and I appended resolution notes to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/contract-migration/feedback.md). The blocking route-required-output hole is closed, and the required-input rendering mismatch is also closed.
+
+Key findings / decisions
+
+`IMP-001` is resolved. Route-required outputs are now restricted to artifacts produced by the current step, for both explicit `Route.required_outputs` and legacy `route_contracts.required_artifacts`.
+
+`IMP-002` is resolved. The provider “Required inputs” table now reflects runtime precondition semantics instead of artifact output optionality.
+
+I found no remaining scoped findings after the fix pass and the focused regression coverage.
+
+Open issues / next step
+
+No open blocker remains in this phase-local review. The criteria are fully checked, feedback records the resolved findings, and the phase is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
