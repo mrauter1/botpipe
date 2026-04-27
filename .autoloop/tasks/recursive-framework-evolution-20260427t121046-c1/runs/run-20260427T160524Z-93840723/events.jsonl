@@ -20,3 +20,7 @@
 {"ts": "2026-04-27T16:33:32.311005+00:00", "run_id": "run-20260427T160524Z-93840723", "seq": 20, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "optimization-helper-consolidation"}
 {"ts": "2026-04-27T16:34:19.129954+00:00", "run_id": "run-20260427T160524Z-93840723", "seq": 21, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "optimization-helper-consolidation"}
 {"ts": "2026-04-27T16:34:19.172248+00:00", "run_id": "run-20260427T160524Z-93840723", "seq": 22, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "optimization-helper-consolidation"}
+{"ts": "2026-04-27T16:34:19.255604+00:00", "run_id": "run-20260427T160524Z-93840723", "seq": 23, "event_type": "phase_completed", "pair": "test", "phase_id": "optimization-helper-consolidation", "phase_mode": "single"}
+{"ts": "2026-04-27T16:34:19.260775+00:00", "run_id": "run-20260427T160524Z-93840723", "seq": 24, "event_type": "phase_started", "phase_id": "proof-docs-memory-closeout", "phase_mode": "single"}
+{"ts": "2026-04-27T16:34:19.262151+00:00", "run_id": "run-20260427T160524Z-93840723", "seq": 25, "event_type": "pair_started", "pair": "implement", "phase_id": "proof-docs-memory-closeout"}
+{"ts": "2026-04-27T16:34:19.262250+00:00", "run_id": "run-20260427T160524Z-93840723", "seq": 26, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "proof-docs-memory-closeout"}

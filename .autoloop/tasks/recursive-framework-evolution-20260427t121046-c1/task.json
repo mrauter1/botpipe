@@ -13,12 +13,12 @@
       "proof-docs-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "optimization-helper-consolidation"
+    "current_phase_index": 1,
+    "current_phase_id": "proof-docs-memory-closeout"
   },
   "phase_status": {
-    "optimization-helper-consolidation": "in_progress",
-    "proof-docs-memory-closeout": "planned"
+    "optimization-helper-consolidation": "completed",
+    "proof-docs-memory-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -26,6 +26,19 @@
       "run_id": "run-20260427T160524Z-93840723",
       "status": "in_progress",
       "ts": "2026-04-27T16:15:51.390692+00:00"
+    },
+    {
+      "phase_id": "optimization-helper-consolidation",
+      "run_id": "run-20260427T160524Z-93840723",
+      "status": "completed",
+      "ts": "2026-04-27T16:34:19.254780+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-memory-closeout",
+      "run_id": "run-20260427T160524Z-93840723",
+      "status": "in_progress",
+      "ts": "2026-04-27T16:34:19.258594+00:00"
     }
   ]
 }
