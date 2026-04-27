@@ -46,4 +46,4 @@ Fixed workflow optimization semantics so accepted LLM-authored artifacts are val
 - `.venv/bin/python -m pytest tests/unit/test_optimization_helpers.py` — passed
 - `.venv/bin/python -m pytest tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` — passed
 - `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py` — failed on pre-existing recursive-memory charter assertions unrelated to this patch
-- `.venv/bin/python -m pytest` — 872 passed, 2 failed; both failures were the same pre-existing recursive-memory charter assertions from `tests/test_architecture_baseline_docs.py`
+- `.venv/bin/python -m pytest` — 888 passed, 2 failed; both failures were the same pre-existing recursive-memory charter assertions from `tests/test_architecture_baseline_docs.py`
