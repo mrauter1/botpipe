@@ -39,10 +39,16 @@ def render_provider_turn_with_policy(
         "",
         "## Runtime Step Contract",
         "",
+        "### Readable inputs",
+        _render_readable_inputs(context),
+        "",
         "### Required inputs",
         _render_required_inputs(context),
         "",
-        "### Artifacts this step may write",
+        "### Declared artifacts this step may write",
+        "Declared writable artifacts are governed output surfaces, not an exclusive allow-list. "
+        "Other workspace files remain writable unless runtime policy says otherwise.",
+        "",
         _render_writable_artifacts(context),
         "",
         "### Available routes",
@@ -93,13 +99,20 @@ def _required_by_routes(context: ProviderTurnContext, artifact_name: str) -> str
     required_by = [
         route
         for route in context.available_routes
-        if artifact_name in context.route_required_artifacts.get(route, ())
+        if artifact_name in _route_required_outputs(context, route)
     ]
     return ", ".join(required_by) if required_by else "none"
 
 
+def _route_required_outputs(context: ProviderTurnContext, route: str) -> tuple[str, ...]:
+    required = context.route_required_outputs.get(route)
+    if required is not None:
+        return tuple(required)
+    return tuple(context.route_required_artifacts.get(route, ()))
+
+
 def _route_required_artifacts(context: ProviderTurnContext, route: str) -> str:
-    required = context.route_required_artifacts.get(route, ())
+    required = _route_required_outputs(context, route)
     return ", ".join(required) if required else "none"
 
 
@@ -110,7 +123,10 @@ def _schema_name(ref: ProviderArtifactRef) -> str:
 def _render_expected_output_schema(schema: Mapping[str, Any] | None) -> str:
     headers = ("Field", "Required", "Type", "Notes")
     if not isinstance(schema, Mapping):
-        return _markdown_table(headers, (("payload", "no", "object", "No structured output payload contract declared."),))
+        return _markdown_table(
+            headers,
+            (("payload", "no", "object", "No structured control payload is required beyond selecting a legal route."),),
+        )
 
     properties = schema.get("properties")
     required = schema.get("required")
@@ -180,6 +196,21 @@ def _render_required_inputs(context: ProviderTurnContext) -> str:
     return _markdown_table(("Artifact", "Path", "Required", "Notes"), rows)
 
 
+def _render_readable_inputs(context: ProviderTurnContext) -> str:
+    rows = [
+        (
+            ref.name,
+            ref.path,
+            _yes_no(ref.exists),
+            _artifact_notes(ref),
+        )
+        for ref in context.readable_artifacts
+    ]
+    if not rows:
+        rows.append(("none", "n/a", "no", "No optional readable artifacts were declared."))
+    return _markdown_table(("Artifact", "Path", "Exists", "Notes"), rows)
+
+
 def _render_writable_artifacts(context: ProviderTurnContext) -> str:
     rows = [
         (
@@ -207,10 +238,19 @@ def _render_routes(context: ProviderTurnContext) -> str:
     ]
     if not rows:
         rows.append(("none", "No routes were declared.", "none"))
-    return _markdown_table(("Route", "Meaning", "Required artifacts before choosing this route"), rows)
+    return _markdown_table(("Route", "Meaning", "Required outputs for this route"), rows)
 
 
 def _route_summary(context: ProviderTurnContext, route: str) -> str:
+    info = context.route_infos.get(route)
+    if isinstance(info, Mapping):
+        summary = info.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+    elif info is not None:
+        summary = info.summary
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
     contract = context.route_contracts.get(route)
     if isinstance(contract, Mapping):
         summary = contract.get("summary")

@@ -21,6 +21,7 @@ from autoloop_v3.core.providers.parsing import parse_outcome_json
 from autoloop_v3.core.providers.rendered import RenderedLLMProvider
 from autoloop_v3.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
 from autoloop_v3.core.providers.rendering import render_provider_turn
+from autoloop_v3.core.routes import RouteInfo
 from autoloop_v3.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from autoloop_v3.core.stores.protocols import SessionBinding
 
@@ -75,10 +76,17 @@ def _turn_context(
             },
         },
         available_routes=("done", "needs_rework"),
+        route_infos={
+            "done": RouteInfo(summary="Package the accepted design.", required_outputs=("design_doc", "decision_record")),
+            "needs_rework": RouteInfo(summary="Repair the current design before packaging.", required_outputs=("design_doc",)),
+        },
         route_contracts={
             "done": {"summary": "Package the accepted design."},
             "needs_rework": {"summary": "Repair the current design before packaging."},
         },
+        readable_artifacts=(
+            _artifact_ref("previous_decision", path="/tmp/previous-decision.md", required=False, exists=False),
+        ),
         required_artifacts=(
             _artifact_ref("request", path="/tmp/request.md"),
             _artifact_ref("constraints", path="/tmp/constraints.json", kind="json", schema_name="Constraints"),
@@ -95,6 +103,10 @@ def _turn_context(
             ),
         ),
         route_required_artifacts={
+            "done": ("design_doc", "decision_record"),
+            "needs_rework": ("design_doc",),
+        },
+        route_required_outputs={
             "done": ("design_doc", "decision_record"),
             "needs_rework": ("design_doc",),
         },
@@ -118,10 +130,13 @@ def test_render_provider_turn_renders_markdown_contract_without_raw_output() -> 
     assert turn.expected_response == "outcome_json"
     assert "# Step: design" in turn.prompt_text
     assert "## Runtime Step Contract" in turn.prompt_text
+    assert "### Readable inputs" in turn.prompt_text
     assert "### Required inputs" in turn.prompt_text
-    assert "### Artifacts this step may write" in turn.prompt_text
+    assert "### Declared artifacts this step may write" in turn.prompt_text
+    assert "not an exclusive allow-list" in turn.prompt_text
     assert "### Available routes" in turn.prompt_text
     assert "### Output payload" in turn.prompt_text
+    assert "previous_decision" in turn.prompt_text
     assert "request" in turn.prompt_text
     assert "/tmp/design.md" in turn.prompt_text
     assert "done" in turn.prompt_text
@@ -159,9 +174,12 @@ def test_render_provider_turn_rejects_missing_prompt_text() -> None:
         session=context.session,
         expected_output_schema=context.expected_output_schema,
         available_routes=context.available_routes,
+        route_infos=context.route_infos,
         route_contracts=context.route_contracts,
+        readable_artifacts=context.readable_artifacts,
         required_artifacts=context.required_artifacts,
         writable_artifacts=context.writable_artifacts,
+        route_required_outputs=context.route_required_outputs,
         route_required_artifacts=context.route_required_artifacts,
         retry_feedback=context.retry_feedback,
         route_handoff=context.route_handoff,

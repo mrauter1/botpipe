@@ -16,6 +16,7 @@ from typing import Annotated, Any, Union, get_args, get_origin
 from pydantic import BaseModel
 
 from .compiler import CompiledWorkflow, compile_workflow
+from .routes import RouteInfo
 from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog
 
 
@@ -60,11 +61,14 @@ class WorkflowStepCapability:
     name: str
     kind: str
     session_name: str | None
+    reads: tuple[str, ...]
     requires: tuple[str, ...]
     produces: tuple[str, ...]
     log_artifacts: tuple[str, ...]
     available_routes: tuple[str, ...]
     expected_output_schema: dict[str, Any] | None
+    route_infos: dict[str, RouteInfo]
+    route_required_outputs: dict[str, tuple[str, ...]]
     route_contracts: dict[str, dict[str, Any]]
     producer_prompt: str | None
     verifier_prompt: str | None
@@ -320,7 +324,20 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
                 "name": step.name,
                 "producer_prompt": step.producer_prompt,
                 "produces": list(step.produces),
+                "reads": list(step.reads),
                 "requires": list(step.requires),
+                "route_infos": {
+                    route_name: {
+                        "summary": info.summary,
+                        "required_outputs": list(info.required_outputs),
+                        "handoff": info.handoff,
+                    }
+                    for route_name, info in step.route_infos.items()
+                },
+                "route_required_outputs": {
+                    route_name: list(required_outputs)
+                    for route_name, required_outputs in step.route_required_outputs.items()
+                },
                 "route_contracts": {
                     route_name: dict(contract)
                     for route_name, contract in step.route_contracts.items()
@@ -655,11 +672,14 @@ def _compiled_step_capability(step, *, default_session_name: str) -> WorkflowSte
         name=step.name,
         kind=step.kind,
         session_name=None if step.session_name == default_session_name else step.session_name,
+        reads=step.reads,
         requires=step.requires,
         produces=step.produces,
         log_artifacts=step.log_artifacts,
         available_routes=step.available_routes,
         expected_output_schema=step.expected_output_schema,
+        route_infos=dict(step.route_infos),
+        route_required_outputs=dict(step.route_required_outputs),
         route_contracts={route_name: dict(contract) for route_name, contract in step.route_contracts.items()},
         producer_prompt=_prompt_path(step.producer_prompt),
         verifier_prompt=_prompt_path(step.verifier_prompt),
@@ -701,7 +721,20 @@ def _compiled_step_payload(
         "producer_prompt": step.producer_prompt,
         "producer_prompt_repo_relative": _prompt_repo_relative(repo_root, package_dir, step.producer_prompt),
         "produces": list(step.produces),
+        "reads": list(step.reads),
         "requires": list(step.requires),
+        "route_infos": {
+            route_name: {
+                "summary": info.summary,
+                "required_outputs": list(info.required_outputs),
+                "handoff": info.handoff,
+            }
+            for route_name, info in step.route_infos.items()
+        },
+        "route_required_outputs": {
+            route_name: list(required_outputs)
+            for route_name, required_outputs in step.route_required_outputs.items()
+        },
         "route_contracts": {route_name: dict(contract) for route_name, contract in step.route_contracts.items()},
         "route_targets": dict(route_targets),
         "session_name": step.session_name,

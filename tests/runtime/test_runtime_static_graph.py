@@ -72,6 +72,7 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     assert assessment["kind"] == "pair"
     assert assessment["producer_prompt"] == "prompts/assessment_producer.md"
     assert assessment["verifier_prompt"] == "prompts/assessment_verifier.md"
+    assert assessment["reads"] == []
     assert assessment["requires"] == ["request"]
     assert assessment["produces"] == ["note"]
     assert assessment["log_artifacts"] == ["transcript"]
@@ -87,6 +88,8 @@ def test_static_step_graph_includes_route_contracts_and_schema_presence(tmp_path
     payload = json.loads((tmp_path / "static_step_graph.json").read_text(encoding="utf-8"))
     assessment = next(step for step in payload["steps"] if step["name"] == "assessment")
 
+    assert assessment["route_infos"]["assessment_ready"]["summary"] == "assessment completed"
+    assert assessment["route_required_outputs"]["assessment_ready"] == []
     assert assessment["route_contracts"]["assessment_ready"]["summary"] == "assessment completed"
     assert assessment["has_expected_output_schema"] is True
     assert payload["transitions"]["steps"]["assessment"]["assessment_ready"] == "finish"

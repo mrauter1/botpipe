@@ -24,10 +24,23 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
                 "kind": step.kind,
                 "producer_prompt": _prompt_path(step.producer_prompt),
                 "verifier_prompt": _prompt_path(step.verifier_prompt),
+                "reads": list(step.reads),
                 "requires": list(step.requires),
                 "produces": list(step.produces),
                 "log_artifacts": list(step.log_artifacts),
                 "available_routes": list(step.available_routes),
+                "route_infos": {
+                    route_name: {
+                        "summary": info.summary,
+                        "required_outputs": list(info.required_outputs),
+                        "handoff": info.handoff,
+                    }
+                    for route_name, info in step.route_infos.items()
+                },
+                "route_required_outputs": {
+                    route_name: list(required_outputs)
+                    for route_name, required_outputs in step.route_required_outputs.items()
+                },
                 "route_contracts": {
                     route_name: dict(contract)
                     for route_name, contract in step.route_contracts.items()
