@@ -232,7 +232,7 @@ def test_simple_file_prompt_infers_reads_from_unambiguous_placeholders(tmp_path:
     assert compiled.steps["publish"].requires == ()
 
 
-def test_simple_workflow_step_compiles_and_generated_handler_invokes_child_workflow(tmp_path: Path) -> None:
+def test_simple_workflow_step_compiles_as_workflow_kind_and_generated_handler_invokes_child_workflow(tmp_path: Path) -> None:
     class ChildWorkflow(Workflow):
         note = step("Write the note.")
 
@@ -254,7 +254,7 @@ def test_simple_workflow_step_compiles_and_generated_handler_invokes_child_workf
     assert compiled.routes["launch"]["done"].target == "SUCCESS"
     assert compiled.routes["launch"]["failed"].target == "FAIL"
     assert compiled.routes["launch"]["blocked"].target == "PAUSE"
-    assert compiled.steps["launch"].kind == "system"
+    assert compiled.steps["launch"].kind == "workflow"
 
     @dataclass
     class _FakeChildResult:

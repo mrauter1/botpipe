@@ -191,6 +191,31 @@ def test_runtime_trace_records_outcome_route_tag(tmp_path: Path) -> None:
     assert "raw_output" not in record["outcome"]
 
 
+def test_runtime_trace_records_hook_route_override_metadata(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+    writer = _writer(run_dir)
+    event = _step_finish(run_dir)
+    event = StepFinish(
+        binding=event.binding,
+        step_name=event.step_name,
+        step_kind=event.step_kind,
+        state_before=event.state_before,
+        state_after=event.state_after,
+        event=Event(tag="question", question="Need approval?"),
+        outcome=event.outcome,
+        producer_raw_output=event.producer_raw_output,
+        verifier_raw_output=event.verifier_raw_output,
+        provider_usage=event.provider_usage,
+        hook_route_override_from="ready",
+        hook_route_override_to="question",
+    )
+
+    writer.step_finished(sequence=1, event=event, commit_before_step="abc123")
+
+    record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert record["hook_route_override"] == {"from": "ready", "to": "question"}
+
+
 def test_runtime_trace_records_provider_usage_when_available(tmp_path: Path) -> None:
     run_dir = _run_dir(tmp_path)
     writer = _writer(run_dir)
