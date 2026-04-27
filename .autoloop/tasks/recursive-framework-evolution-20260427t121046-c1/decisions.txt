@@ -2,3 +2,6 @@
 Treat `workflow_run_traces_to_optimization_candidates` as the primary cycle-1 target because it is now the largest workflow surface and current recursive memory has not absorbed it yet.
 Stay in consolidate mode for this cycle; do not add a new workflow or widen runtime/root authoring surfaces.
 Any optimizer refactor must preserve existing artifact filenames, route tags, candidate-only publication rules, selected-workflow source immutability checks, and `workflow_refinement_evidence.json` handoff semantics.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260427T160524Z-93840723" ts="2026-04-27T16:11:53.662832+00:00" />
+Update `.autoloop_recursive/framework_evolution_charter.md` in the same closeout slice as the roadmap and ledgers so the full standing memory set stays aligned.
+Only clearly reusable deterministic optimizer mechanics should move into `stdlib/optimization.py`; optimizer-only route, prompt, and candidate-policy behavior should stay package-local if reuse is not explicit.

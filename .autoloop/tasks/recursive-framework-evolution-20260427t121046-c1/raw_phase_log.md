@@ -90,3 +90,28 @@ The planner needs to revise the plan so the charter update requirement is explic
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dcfb0-35a7-7a10-8eb3-3e7ca10085ce
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dcfb0-35a7-7a10-8eb3-3e7ca10085ce
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcfb0-35a7-7a10-8eb3-3e7ca10085ce
+---
+I’m revising the plan against the verifier findings, focused on intent fidelity and avoiding unnecessary stdlib spread. First I’m checking the latest feedback and decision-log state, then I’ll tighten the memory-update scope and helper-boundary language without changing the chosen consolidation target.
+
+I’ve isolated the two fixes: add the charter explicitly to the closeout scope, and narrow the optimizer-helper seam so stdlib only absorbs clearly reusable deterministic mechanics. I’m updating the plan, phase file, feedback history, and the new decision block now.
+
+The phase file formatting drifted from the original quoted form, so I’m patching the narrative and YAML separately against their current contents to avoid accidental metadata edits.
+
+The revisions are in. I’m doing one last pass on the phase file and the updated plan text, then I’ll re-validate the YAML with `python3` + `yaml.safe_load` so the machine-readable contract is clean again.
+
+Revised the plan artifacts to address the verifier feedback.
+
+`plan.md` now explicitly includes `.autoloop_recursive/framework_evolution_charter.md` in the standing-memory closeout scope and narrows the helper strategy so only clearly reusable deterministic optimizer mechanics move into `stdlib/optimization.py`; optimizer-only route, prompt, and candidate-policy logic can stay package-local. `phase_plan.yaml` was updated to match that narrower boundary and to require charter updates in the proof/docs/memory phase. I also appended the revision note to `feedback.md`, added the two non-obvious constraints under the latest decisions header in `decisions.txt`, and re-validated `phase_plan.yaml` locally with `python3` + `yaml.safe_load`.

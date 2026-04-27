@@ -4,15 +4,16 @@ request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/r
 phases:
 - phase_id: optimization-helper-consolidation
   title: Consolidate Optimizer Helpers
-  objective: Move deterministic optimizer context and publication mechanics out of
-    the monolithic workflow file while preserving all existing workflow contracts.
+  objective: Move clearly reusable deterministic optimizer context and publication
+    mechanics out of the monolithic workflow file while preserving all existing workflow
+    contracts.
   status: planned
   in_scope:
   - Refactor `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`
     to consume shared deterministic helpers instead of carrying repeated pass-finalization
     and publication-validation logic inline.
-  - Extend `stdlib/optimization.py` with the authoritative optimization pass/context/publication
-    seam needed by the optimizer.
+  - Extend `stdlib/optimization.py` only for deterministic mechanics that clearly
+    reduce repeated capture/publication logic.
   - Preserve the optimizer's current artifact filenames, route tags, publication boundary,
     and refinement-handoff schema.
   out_of_scope:
@@ -26,7 +27,8 @@ phases:
       remains obvious without changing public artifact or route contracts.
   - id: AC-2
     text: Deterministic selected-workflow context capture, optional-pass finalization,
-      and scorecard publication validation live behind one authoritative helper surface.
+      and scorecard publication validation live behind a narrow helper surface, while
+      optimizer-only policy stays package-local.
   - id: AC-3
     text: The optimizer still rejects source drift, malformed candidate artifacts,
       and scorecard count mismatches exactly as before.
@@ -50,8 +52,9 @@ phases:
   status: planned
   in_scope:
   - Run targeted optimizer, refinement-integration, and docs baseline tests.
-  - Update recursive memory files to record the optimizer as an active portfolio surface
-    and this consolidation as the cycle outcome.
+  - Update `.autoloop_recursive/framework_evolution_charter.md`, the roadmap, and
+    the active ledgers to record the optimizer as an active portfolio surface and
+    this consolidation as the cycle outcome.
   - Record closeout metrics required by the recursive architecture request.
   out_of_scope:
   - Broader portfolio reshaping beyond documenting deferred debt.
@@ -63,14 +66,15 @@ phases:
     text: Targeted proof passes for optimizer helpers, optimizer runtime behavior,
       refinement evidence handoff, and architecture-doc baselines.
   - id: AC-2
-    text: Recursive memory files mention the optimizer and the new consolidation seam
-      without contradicting the live codebase.
+    text: The charter, recursive memory files, and docs mention the optimizer and
+      the new consolidation seam without contradicting the live codebase.
   - id: AC-3
     text: Closeout notes report boilerplate reduction and confirm no CLI, runtime/provider,
       or composition compatibility break.
   deliverables:
   - Passing targeted test record.
-  - Updated roadmap, gap ledger, candidate ledger, and validation debt ledger.
+  - Updated framework evolution charter, roadmap, gap ledger, candidate ledger, and
+    validation debt ledger.
   - Cycle closeout metrics captured in the recursive memory artifacts.
   risks:
   - Recursive memory may stay stale if code lands without matching ledger updates.
