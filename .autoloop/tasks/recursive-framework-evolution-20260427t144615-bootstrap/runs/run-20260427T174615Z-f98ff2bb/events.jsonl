@@ -1,0 +1,3 @@
+{"ts": "2026-04-27T17:46:15.976129+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 1, "event_type": "run_started", "workspace": "/home/rauter/autoloop_v3_bkp/autoloop_v3", "pairs": ["plan", "implement", "test"], "max_iterations": 15, "use_git": true, "task_id": "recursive-framework-evolution-20260427t144615-bootstrap", "task_root": ".autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap"}
+{"ts": "2026-04-27T17:46:15.979397+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 2, "event_type": "pair_started", "pair": "plan", "phase_id": null}
+{"ts": "2026-04-27T17:46:15.979804+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 3, "event_type": "cycle_started", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
