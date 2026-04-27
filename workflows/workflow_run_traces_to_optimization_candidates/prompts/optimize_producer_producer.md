@@ -10,6 +10,7 @@
 
 | Artifact | Direction | Notes |
 | --- | --- | --- |
+| `workflow_optimization_scope` | Read | Requested depth and soft candidate budget. |
 | `selected_workflow_authoring_surface` | Read | Canonical editable producer surfaces. |
 | `workflow_failure_scenarios` | Read | Failure surfaces to address. |
 | `step_optimization_priority_report` | Read | Target-step boundary. |
@@ -18,7 +19,11 @@
 ## Output Requirements
 
 - Write `producer_prompt_optimization_candidates`.
+- Read `workflow_optimization_scope`.
+- Apply `optimization_depth`.
+- Treat `max_candidates_per_pass` as a soft candidate budget.
 - Candidate changes may include prompt instructions, evidence discipline, artifact instructions, or output-shape guidance.
+- Prefer the highest-leverage candidates. Do not pad the list. If you exceed the budget, explain why in the candidate rationale or summary.
 - Keep candidates candidate-only and non-mutating.
 
 ## Evidence
@@ -36,3 +41,4 @@
 
 - Do not propose verifier/rubric or route-contract changes in this pass.
 - Do not propose direct source mutation.
+- Do not mutate source files. Write only the required candidate artifact.

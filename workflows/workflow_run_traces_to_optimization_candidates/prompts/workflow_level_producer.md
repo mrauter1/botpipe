@@ -13,6 +13,7 @@
 | `selected_workflow_capability` | Read | Canonical compiled workflow graph. |
 | `selected_workflow_authoring_surface` | Read | Canonical editable surfaces. |
 | `selected_workflow_decomposition_surface` | Read | Cross-step surface and docs/tests. |
+| `workflow_optimization_scope` | Read | Requested depth and soft candidate budget. |
 | `workflow_optimization_trace_corpus` | Read | Runtime evidence and handoff pressure. |
 | `step_optimization_priority_report` | Read | Local-first ranking boundary. |
 | `workflow_level_optimization_candidates` | Write | Workflow-level candidates only. |
@@ -20,7 +21,11 @@
 ## Output Requirements
 
 - Write `workflow_level_optimization_candidates`.
+- Read `workflow_optimization_scope`.
+- Apply `optimization_depth`.
+- Treat `max_candidates_per_pass` as a soft candidate budget.
 - Allowed targets include artifact handoff, route contract, split/merge, prompt README, context rendering, session policy, workflow parameter, workflow code, eval gap, input quality gap, and operator process gap.
+- Prefer the highest-leverage candidates. Do not pad the list. If you exceed the budget, explain why in the candidate rationale or summary.
 - Keep candidate-only language and note when refinement workflow or ablation would be required.
 
 ## Evidence
@@ -37,3 +42,4 @@
 ## Forbidden
 
 - Do not invent source mutations, hidden reruns, or automatic promotion.
+- Do not mutate source files. Write only the required candidate artifact.

@@ -16,6 +16,28 @@
 - Provider prose is control metadata unless it is written into a declared artifact.
 - Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.
 
+## LLM-authored Artifact Ownership
+
+- Deterministic helpers may prepare trace corpora, metrics, rankings, and failure-scenario seeds.
+- Once a producer writes a failure or candidate artifact and the verifier accepts it, workflow handlers validate and publish that artifact; they do not deterministically rewrite it.
+
+## Failure Scenario Seeds
+
+- `workflow_failure_scenario_seeds.json` is deterministic input evidence.
+- `workflow_failure_scenarios.json` is the producer-authored final failure-scenario artifact.
+
+## Optimization Depth
+
+- `cheap`: Use existing traces only. Produce concise, high-leverage candidates. Avoid speculative expansion.
+- `standard`: Use existing traces only. Perform deeper cross-checking across trace corpus, selected workflow surfaces, priority report, and candidate artifacts. Lower confidence when evidence is thin.
+- `ablation`: Do not run ablations. Treat this as ablation-planning mode only. Mark candidates that should be ablated before promotion and include ablation-oriented rationale where useful.
+
+## Candidate Budget
+
+- `workflow_optimization_scope.max_candidates_per_pass` is a soft authoring budget.
+- Try to keep each candidate-producing pass within that number.
+- This is not a hard schema limit. Use judgment if additional candidates are necessary, but explain why.
+
 ## Keep In Each Prompt
 
 - role and step name

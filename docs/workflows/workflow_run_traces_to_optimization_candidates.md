@@ -43,6 +43,10 @@ autoloop run workflow_run_traces_to_optimization_candidates <task-id> \
 - `include_adversarial_generation`, `include_token_optimization`, and `include_workflow_level_candidates` are optional booleans that short-circuit their passes explicitly when disabled.
 - `max_failure_scenarios`, `max_candidates_per_pass`, `focus`, `sponsor_role`, `desired_outcome`, and `constraints` are optional.
 
+## Artifact Ownership
+
+The optimizer uses deterministic helpers to prepare trace corpora, step metrics, source manifests, and failure-scenario seeds. LLM producers author failure and candidate artifacts. Workflow handlers validate accepted LLM-authored artifacts and leave them in place; they do not deterministically rewrite them.
+
 ## Artifacts
 
 Frame artifacts:
@@ -59,6 +63,7 @@ Analysis and candidate artifacts:
 
 - `step_trace_metrics.json`
 - `step_optimization_priority_report.json`
+- `workflow_failure_scenario_seeds.json`
 - `workflow_failure_scenarios.json`
 - `producer_prompt_optimization_candidates.json`
 - `verifier_rubric_optimization_candidates.json`
@@ -93,7 +98,7 @@ Supported `pairs` subsets must be ordered prefixes only.
 
 - `frame` resolves the selected workflow, writes selected-workflow snapshots, captures `selected_workflow_source_manifest.json`, filters eligible runs, excludes historical runs missing Plan-1 observability, and writes the trace corpus.
 - `rank_targets` combines deterministic metrics with LLM attribution to rank highest-leverage upstream steps rather than downstream symptoms.
-- `mine_failures` turns trace observations into explicit failure scenarios.
+- `mine_failures` consumes deterministic failure-scenario seeds and turns them into explicit producer-authored failure scenarios.
 - `optimize_producer` proposes producer-side candidates only.
 - `optimize_verifier_rubric` is one merged acceptance-function pass covering verifier prompt, rubric, and route-contract pressure.
 - `optimize_tokens` proposes token reductions and classifies them by risk instead of treating compression as automatically safe.
@@ -104,11 +109,19 @@ Supported `pairs` subsets must be ordered prefixes only.
 - `workflow_level` runs after local passes and proposes cross-step candidates such as artifact handoff changes, route-contract updates, context rendering changes, or workflow-parameter adjustments.
 - `package` validates candidate artifacts, verifies the selected workflow source manifest is unchanged, writes the scorecard and packet, and publishes `workflow_refinement_evidence.json`.
 
-## Optional ablation boundary
+## Failure Scenario Seeds
 
-- `cheap` and `standard` use existing traces only.
-- `ablation` marks candidates that should receive later ablation attention, but this workflow still does not execute ablations.
-- Any later ablation workflow is separate and explicit.
+`workflow_failure_scenario_seeds.json` is deterministic input. `workflow_failure_scenarios.json` is the final producer-authored failure-scenario artifact.
+
+## Optimization Depth
+
+- `cheap`: existing traces only; concise candidate generation.
+- `standard`: existing traces only; deeper LLM cross-checking; no reruns.
+- `ablation`: ablation planning mode only; no ablation execution.
+
+## Candidate Budget
+
+`max_candidates_per_pass` is a soft prompt budget. It is not a schema limit and is not deterministically enforced. Verifiers may treat over-budget output as a focus concern, but the workflow does not reject solely on candidate count.
 
 ## Refinement handoff
 

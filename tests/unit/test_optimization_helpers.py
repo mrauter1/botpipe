@@ -365,11 +365,12 @@ def test_extract_failure_scenario_seeds_limits_to_max_scenarios() -> None:
     )
 
     assert payload["schema"] == "autoloop.workflow_optimization.failure_scenario_seeds/v1"
-    assert len(payload["failure_scenario_seeds"]) == 2
+    assert len(payload["seeds"]) == 2
     assert any(
         "repeated_same_step_needs_rework_loop" in seed["seed_reasons"]
-        for seed in payload["failure_scenario_seeds"]
+        for seed in payload["seeds"]
     )
+    assert all(isinstance(seed["suggested_failure_kind"], str) and seed["suggested_failure_kind"] for seed in payload["seeds"])
 
 
 def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) -> None:

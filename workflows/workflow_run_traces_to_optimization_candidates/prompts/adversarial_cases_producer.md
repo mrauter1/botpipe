@@ -10,6 +10,7 @@
 
 | Artifact | Direction | Notes |
 | --- | --- | --- |
+| `workflow_optimization_scope` | Read | Requested depth and soft candidate budget. |
 | `workflow_failure_scenarios` | Read | Failure modes to stress. |
 | `step_optimization_priority_report` | Read | Ranked-step boundary. |
 | `adversarial_case_candidates` | Write | Candidate cases only. |
@@ -17,7 +18,11 @@
 ## Output Requirements
 
 - Write `adversarial_case_candidates`.
+- Read `workflow_optimization_scope`.
+- Apply `optimization_depth`.
+- Treat `max_candidates_per_pass` as a soft candidate budget.
 - Keep cases grounded in observed failure modes and explicit expected routes.
+- Prefer the highest-leverage cases. Do not pad the list. If you exceed the budget, explain why in the case rationale or summary.
 - Keep candidate-only posture; no hidden eval-suite mutation.
 
 ## Evidence
@@ -35,3 +40,4 @@
 
 - Do not materialize eval-suite changes.
 - Do not claim reruns, ablations, or source edits happened.
+- Do not mutate source files. Write only the required candidate artifact.

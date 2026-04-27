@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | `workflow_optimization_trace_corpus` | Read | Deterministic evidence. |
 | `step_optimization_priority_report` | Read | Ranked target boundary. |
+| `workflow_failure_scenario_seeds` | Read | Input evidence only, not the authoritative final artifact. |
 | `workflow_failure_scenarios` | Read | Candidate failure scenarios. |
 
 ## Output Requirements
@@ -22,8 +23,9 @@
 ## Evidence
 
 - Accept grounded scenarios even when some evidence-reference arrays are omitted.
-- Treat the precomputed scenario artifact as authoritative unless the same evidence clearly requires local repair.
-- Reject invented evidence or invalid failure kinds.
+- Validate the producer-authored `workflow_failure_scenarios`.
+- Reject invented evidence, invalid schema, wrong selected workflow, or invalid failure kinds.
+- Do not reject solely because evidence-reference arrays are absent.
 
 ## Route Guidance
 

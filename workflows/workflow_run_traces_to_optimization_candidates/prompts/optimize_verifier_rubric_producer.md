@@ -10,6 +10,7 @@
 
 | Artifact | Direction | Notes |
 | --- | --- | --- |
+| `workflow_optimization_scope` | Read | Requested depth and soft candidate budget. |
 | `selected_workflow_authoring_surface` | Read | Canonical editable verifier surfaces. |
 | `workflow_failure_scenarios` | Read | Failure evidence for acceptance-function changes. |
 | `step_optimization_priority_report` | Read | Ranked steps and likely surfaces. |
@@ -18,7 +19,11 @@
 ## Output Requirements
 
 - Write `verifier_rubric_optimization_candidates`.
+- Read `workflow_optimization_scope`.
+- Apply `optimization_depth`.
+- Treat `max_candidates_per_pass` as a soft candidate budget.
 - Treat verifier prompt, rubric text, feedback specificity, required-artifact interpretation, and route contracts as one acceptance-function surface.
+- Prefer the highest-leverage candidates. Do not pad the list. If you exceed the budget, explain why in the candidate rationale or summary.
 - Keep candidates candidate-only and non-mutating.
 
 ## Evidence
@@ -36,3 +41,4 @@
 
 - Do not collapse producer and verifier/rubric passes into one blended local change set.
 - Do not propose direct source mutation or automatic promotion.
+- Do not mutate source files. Write only the required candidate artifact.

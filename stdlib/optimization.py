@@ -571,14 +571,23 @@ def extract_failure_scenario_seeds(
         for route in ("needs_rework", "needs_replan"):
             grouped = route_groups.get(route, [])
             if len(grouped) > 1:
+                seed_reasons = [f"repeated_same_step_{route}_loop"]
+                suggested_failure_kind = _classify_seed_failure_kind(seed_reasons)
                 seeds.append(
                     {
                         "seed_id": f"{step_name}:{route}:loop",
                         "step_name": step_name,
+                        "seed_kind": route,
                         "route": route,
-                        "observation_ids": [_optional_text(item.get("observation_id")) for item in grouped if _optional_text(item.get("observation_id"))],
+                        "observation_ids": [
+                            _optional_text(item.get("observation_id"))
+                            for item in grouped
+                            if _optional_text(item.get("observation_id"))
+                        ],
                         "frequency": len(grouped),
-                        "seed_reasons": [f"repeated_same_step_{route}_loop"],
+                        "seed_reasons": seed_reasons,
+                        "summary": f"{step_name} repeatedly returned {route} across ranked observations.",
+                        "suggested_failure_kind": suggested_failure_kind,
                     }
                 )
 
@@ -601,16 +610,24 @@ def extract_failure_scenario_seeds(
             reasons.append("terminal_failure_after_local_pass")
         if not reasons:
             continue
+        suggested_failure_kind = _classify_seed_failure_kind(reasons)
         seeds.append(
             {
                 "seed_id": _optional_text(observation.get("observation_id")) or f"{step_name}:{route}:seed",
                 "step_name": step_name,
+                "seed_kind": route,
                 "route": route,
-                "observation_ids": [_optional_text(observation.get("observation_id"))] if _optional_text(observation.get("observation_id")) else [],
+                "observation_ids": (
+                    [_optional_text(observation.get("observation_id"))]
+                    if _optional_text(observation.get("observation_id"))
+                    else []
+                ),
                 "frequency": 1,
                 "seed_reasons": reasons,
                 "local_outcome": _optional_text(observation.get("local_outcome")) or "unknown",
                 "downstream_outcome": _optional_text(observation.get("downstream_outcome")) or "unknown",
+                "summary": f"{step_name} observed {route} with ranked optimization pressure.",
+                "suggested_failure_kind": suggested_failure_kind,
             }
         )
     seeds.sort(key=_failure_seed_sort_key)
@@ -619,7 +636,7 @@ def extract_failure_scenario_seeds(
     return {
         "schema": FAILURE_SCENARIO_SEEDS_SCHEMA,
         "selected_workflow": selected_workflow,
-        "failure_scenario_seeds": seeds,
+        "seeds": seeds,
     }
 
 
@@ -749,6 +766,28 @@ def _normalize_raw_output_refs(value: Any) -> dict[str, str]:
         if isinstance(path, str) and path:
             normalized[role] = path
     return normalized
+
+
+def _classify_seed_failure_kind(reasons: Sequence[str]) -> str:
+    if any(reason == "repeated_same_step_needs_rework_loop" for reason in reasons):
+        return "needs_rework_loop"
+    if any(reason == "repeated_same_step_needs_replan_loop" for reason in reasons):
+        return "needs_replan_loop"
+    if "terminal_failure_after_local_pass" in reasons:
+        return "downstream_failure_after_local_pass"
+    if "route:blocked" in reasons:
+        return "blocked_missing_context"
+    if "route:failed" in reasons:
+        return "artifact_invalid"
+    if "high_token_usage_without_success" in reasons:
+        return "token_bloat"
+    if "missing_raw_output_reference" in reasons:
+        return "artifact_missing"
+    if "route:needs_replan" in reasons:
+        return "input_quality_gap"
+    if "route:needs_rework" in reasons:
+        return "producer_failed_verifier"
+    return "insufficient_evidence"
 
 
 def _normalize_provider_usage(value: Any) -> dict[str, int]:

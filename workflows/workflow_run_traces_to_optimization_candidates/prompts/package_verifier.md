@@ -26,6 +26,8 @@
 
 - Confirm the packet is candidate-only and does not imply hidden execution.
 - Confirm the scorecard stays honest about no-op or low-confidence outcomes when evidence is thin.
+- Do not reject solely because candidate count exceeds `max_candidates_per_pass`.
+- Treat over-budget output as a quality concern only when it becomes unfocused, duplicative, or ungrounded.
 
 ## Route Guidance
 
@@ -36,4 +38,5 @@
 ## Forbidden
 
 - Reject outputs that omit required schema fields.
-- Reject outputs that invent candidate artifacts, source mutations, reruns, or automatic promotion behavior.
+- Reject direct source mutation, hidden execution claims, invented rerun or ablation claims, invalid schema, wrong selected workflow, or collapsed optimization surfaces.
+- Reject outputs that invent candidate artifacts or automatic promotion behavior.

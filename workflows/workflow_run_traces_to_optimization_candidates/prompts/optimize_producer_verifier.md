@@ -23,6 +23,8 @@
 
 - Confirm every candidate stays on producer-facing surfaces only.
 - Reject pass-rate chasing that merely weakens the verifier indirectly.
+- Do not reject solely because candidate count exceeds `max_candidates_per_pass`.
+- Treat over-budget output as a quality concern only when it becomes unfocused, duplicative, or ungrounded.
 
 ## Route Guidance
 
@@ -33,4 +35,5 @@
 ## Forbidden
 
 - Reject verifier/rubric, route-contract, workflow-topology, or hidden-execution changes in this pass.
+- Reject direct source mutation, invented rerun or ablation claims, invalid schema, wrong selected workflow, or collapsed optimization surfaces.
 - Reject payloads missing required schema fields.

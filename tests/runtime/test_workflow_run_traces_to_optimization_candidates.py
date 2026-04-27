@@ -122,6 +122,7 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
         "workflow_optimization_scope",
         "workflow_optimization_trace_corpus",
         "excluded_run_report",
+        "workflow_failure_scenario_seeds",
     ]
     package_step = compiled.steps["package"]
     assert package_step.route_contracts["optimization_packet_ready"]["required_artifacts"] == [
@@ -304,21 +305,39 @@ def test_workflow_level_can_be_skipped(tmp_path: Path, monkeypatch) -> None:
     del params
 
 
-def test_mine_failures_writes_failure_scenarios(tmp_path: Path, monkeypatch) -> None:
+def test_failure_scenario_seeds_are_written_separately_from_failure_scenarios(tmp_path: Path, monkeypatch) -> None:
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
     params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
     state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
 
+    seeds_payload = json.loads((ctx.workflow_folder / "workflow_failure_scenario_seeds.json").read_text(encoding="utf-8"))
+    assert seeds_payload["schema"] == "autoloop.workflow_optimization.failure_scenario_seeds/v1"
+    assert seeds_payload["selected_workflow"] == "release_candidate_to_go_no_go"
+    assert isinstance(seeds_payload["seeds"], list)
+
+    provider_payload = {
+        "schema": "autoloop.workflow_optimization.failure_scenarios/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "failure_scenarios": [
+            {
+                "failure_id": "provider-authored-001",
+                "step_name": "assessment",
+                "failure_kind": "producer_failed_verifier",
+                "severity": "medium",
+                "frequency": 1,
+                "evidence_observation_ids": ["release-good/run-good:000003:assessment"],
+            }
+        ],
+    }
+    (ctx.workflow_folder / "workflow_failure_scenarios.json").write_text(
+        json.dumps(provider_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
     artifacts = SimpleNamespace(
-        workflow_optimization_internal_trace_corpus=_JsonHandle(
-            ctx.workflow_folder / "_workflow_optimization_internal_trace_corpus.json"
-        ),
-        workflow_optimization_trace_corpus=_JsonHandle(ctx.workflow_folder / "workflow_optimization_trace_corpus.json"),
-        step_optimization_priority_report=_JsonHandle(ctx.workflow_folder / "step_optimization_priority_report.json"),
         workflow_failure_scenarios=_JsonHandle(ctx.workflow_folder / "workflow_failure_scenarios.json"),
     )
-    next_state = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
+    workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
         state,
         Outcome(
             raw_output="failure scenarios grounded\n",
@@ -333,15 +352,135 @@ def test_mine_failures_writes_failure_scenarios(tmp_path: Path, monkeypatch) -> 
         artifacts,
     )
 
-    payload = json.loads((ctx.workflow_folder / "workflow_failure_scenarios.json").read_text(encoding="utf-8"))
-    assert next_state.failure_status == "failure_scenarios_mined"
-    assert payload["schema"] == "autoloop.workflow_optimization.failure_scenarios/v1"
-    assert payload["failure_scenarios"][0]["step_name"] == "assessment"
-    assert payload["failure_scenarios"][0]["failure_kind"] in {
-        "producer_failed_verifier",
-        "token_bloat",
-        "downstream_failure_after_local_pass",
+    final_payload = json.loads((ctx.workflow_folder / "workflow_failure_scenarios.json").read_text(encoding="utf-8"))
+    assert final_payload == provider_payload
+    assert seeds_payload["schema"] != final_payload["schema"]
+    del params
+
+
+def test_mine_failures_preserves_provider_authored_failure_scenarios(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+
+    provider_payload = {
+        "schema": "autoloop.workflow_optimization.failure_scenarios/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "failure_scenarios": [
+            {
+                "failure_id": "provider-distinctive-001",
+                "step_name": "assessment",
+                "failure_kind": "producer_failed_verifier",
+                "severity": "medium",
+                "frequency": 7,
+                "evidence_observation_ids": ["distinctive-observation"],
+                "producer_gap": "Distinctive provider-authored content.",
+            }
+        ],
     }
+    final_path = ctx.workflow_folder / "workflow_failure_scenarios.json"
+    final_path.write_text(json.dumps(provider_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    next_state = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
+        state,
+        Outcome(
+            raw_output="failure scenarios grounded\n",
+            tag="failure_scenarios_mined",
+            payload={
+                "summary": "Failure scenarios were mined from the ranked target set.",
+                "selected_workflow_name": "release_candidate_to_go_no_go",
+                "target_steps": ["assessment"],
+                "failure_ids": ["provider-distinctive-001"],
+            },
+        ),
+        SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
+    )
+
+    seeds_payload = json.loads((ctx.workflow_folder / "workflow_failure_scenario_seeds.json").read_text(encoding="utf-8"))
+    preserved_payload = json.loads(final_path.read_text(encoding="utf-8"))
+
+    assert next_state.failure_status == "failure_scenarios_mined"
+    assert preserved_payload == provider_payload
+    assert preserved_payload != seeds_payload
+    del params
+
+
+def test_mine_failures_writes_empty_artifact_only_for_no_failure_scenarios_when_missing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+
+    final_path = ctx.workflow_folder / "workflow_failure_scenarios.json"
+    final_path.unlink(missing_ok=True)
+
+    next_state = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
+        state,
+        Outcome(
+            raw_output="no failure scenarios\n",
+            tag="no_failure_scenarios",
+            payload={
+                "summary": "No credible failure scenarios were mined.",
+                "selected_workflow_name": "release_candidate_to_go_no_go",
+                "target_steps": ["assessment"],
+                "failure_ids": [],
+            },
+        ),
+        SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
+    )
+
+    payload = json.loads(final_path.read_text(encoding="utf-8"))
+    assert next_state.failure_status == "no_failure_scenarios"
+    assert payload == {
+        "schema": "autoloop.workflow_optimization.failure_scenarios/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "failure_scenarios": [],
+    }
+    del params
+
+
+def test_mine_failures_malformed_artifact_is_not_replaced(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+
+    final_path = ctx.workflow_folder / "workflow_failure_scenarios.json"
+    final_path.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.failure_scenarios/v1",
+                "selected_workflow": "wrong_workflow",
+                "failure_scenarios": [],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    original_text = final_path.read_text(encoding="utf-8")
+    with pytest.raises(ValueError, match="workflow_failure_scenarios.json selected_workflow must match"):
+        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
+            state,
+            Outcome(
+                raw_output="failure scenarios grounded\n",
+                tag="failure_scenarios_mined",
+                payload={
+                    "summary": "Failure scenarios were mined from the ranked target set.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "target_steps": ["assessment"],
+                    "failure_ids": [],
+                },
+            ),
+            SimpleNamespace(workflow_failure_scenarios=_JsonHandle(final_path)),
+        )
+
+    assert final_path.read_text(encoding="utf-8") == original_text
     del params
 
 
@@ -355,6 +494,80 @@ def test_optimize_producer_writes_candidate_artifact(tmp_path: Path) -> None:
     assert payload["schema"] == "autoloop.workflow_optimization.producer_candidates/v1"
     assert payload["candidates"][0]["candidate_id"] == "producer-assessment-001"
     assert payload["candidates"][0]["step_name"] == "assessment"
+
+
+def test_max_candidates_per_pass_is_prompt_guidance_not_schema_limit(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(
+        tmp_path,
+        monkeypatch,
+        max_candidates_per_pass=1,
+    )
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+
+    payload = {
+        "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "target_steps": ["assessment"],
+        "candidates": [
+            {
+                "candidate_id": "producer-assessment-001",
+                "step_name": "assessment",
+                "target_surface": "producer_prompt",
+                "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
+                "diagnosis": "First high-leverage candidate.",
+                "proposed_change_summary": "Tighten evidence requirements.",
+                "confidence": 0.7,
+                "evidence_strength": "medium",
+                "risks": [],
+                "requires_ablation": False,
+            },
+            {
+                "candidate_id": "producer-assessment-002",
+                "step_name": "assessment",
+                "target_surface": "producer_prompt",
+                "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
+                "diagnosis": "Second candidate kept intentionally over budget.",
+                "proposed_change_summary": "Add explicit unsupported-claim handling.",
+                "confidence": 0.65,
+                "evidence_strength": "medium",
+                "risks": [],
+                "requires_ablation": False,
+            },
+        ],
+    }
+    artifact_path = ctx.workflow_folder / "producer_prompt_optimization_candidates.json"
+    artifact_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    next_state = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_optimize_producer(
+        state,
+        Outcome(
+            raw_output="producer candidates ready\n",
+            tag="producer_candidates_ready",
+            payload={
+                "summary": "Two grounded candidates remain useful even though the soft budget is one.",
+                "selected_workflow_name": "release_candidate_to_go_no_go",
+                "target_steps": ["assessment"],
+                "candidate_ids": ["producer-assessment-001", "producer-assessment-002"],
+            },
+        ),
+        SimpleNamespace(producer_prompt_optimization_candidates=_JsonHandle(artifact_path)),
+    )
+
+    scope = json.loads((ctx.workflow_folder / "workflow_optimization_scope.json").read_text(encoding="utf-8"))
+    final_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+
+    assert next_state.producer_status == "producer_candidates_ready"
+    assert scope["max_candidates_per_pass"] == 1
+    assert len(final_payload["candidates"]) == 2
+    assert [candidate["candidate_id"] for candidate in final_payload["candidates"]] == [
+        "producer-assessment-001",
+        "producer-assessment-002",
+    ]
+    del params
 
 
 def test_optimize_verifier_rubric_writes_merged_acceptance_candidates(tmp_path: Path) -> None:
@@ -657,7 +870,8 @@ def test_insufficient_evidence_short_circuit_does_not_publish_failure_scenarios(
     evidence = json.loads((workflow_dir / "workflow_refinement_evidence.json").read_text(encoding="utf-8"))
 
     assert result.terminal == "SUCCESS"
-    assert (workflow_dir / "workflow_failure_scenarios.json").exists()
+    assert (workflow_dir / "workflow_failure_scenario_seeds.json").exists()
+    assert not (workflow_dir / "workflow_failure_scenarios.json").exists()
     assert all(entry["kind"] != "workflow_failure_scenarios" for entry in evidence["evidence_entries"])
 
 
@@ -718,6 +932,13 @@ def test_package_writes_scorecard_refinement_evidence_packet_and_receipt(tmp_pat
     assert next_state.published is True
     assert (ctx.workflow_folder / "workflow_refinement_evidence.json").exists()
     assert (ctx.workflow_folder / "optimization_publication_receipt.json").exists()
+    scorecard = json.loads((ctx.workflow_folder / "workflow_optimization_scorecard.json").read_text(encoding="utf-8"))
+    packet = (ctx.workflow_folder / "workflow_optimization_packet.md").read_text(encoding="utf-8")
+    assert scorecard["optimization_depth"] == "cheap"
+    assert scorecard["ablation_executed"] is False
+    assert "## Optimization Depth" in packet
+    assert "Target workflow reruns executed: no" in packet
+    assert "Ablations executed: no" in packet
     del params
 
 
@@ -815,7 +1036,31 @@ def test_package_rejects_malformed_candidate_artifact(tmp_path: Path, monkeypatc
     del params
 
 
-def test_optimization_depth_ablation_does_not_execute_ablation(tmp_path: Path) -> None:
+def test_optimization_depth_standard_is_recorded_and_no_reruns_execute(tmp_path: Path) -> None:
+    result, provider, workflow_dir = _run_enabled_candidate_workflow(
+        tmp_path,
+        workflow_params_overrides={"optimization_depth": "standard"},
+    )
+
+    scope = json.loads((workflow_dir / "workflow_optimization_scope.json").read_text(encoding="utf-8"))
+    scorecard = json.loads((workflow_dir / "workflow_optimization_scorecard.json").read_text(encoding="utf-8"))
+    packet = (workflow_dir / "workflow_optimization_packet.md").read_text(encoding="utf-8")
+    selected_workflow_runs = list(
+        (tmp_path / ".autoloop" / "tasks" / "release-good" / "wf_release_candidate_to_go_no_go" / "runs").iterdir()
+    )
+
+    assert result.terminal == "SUCCESS"
+    assert "package" in [call.step_name for call in provider.calls]
+    assert scope["optimization_depth"] == "standard"
+    assert scorecard["optimization_depth"] == "standard"
+    assert scorecard["ablation_executed"] is False
+    assert "Requested depth: `standard`" in packet
+    assert "Target workflow reruns executed: no" in packet
+    assert "Ablations executed: no" in packet
+    assert len(selected_workflow_runs) == 1
+
+
+def test_optimization_depth_ablation_records_planning_mode_without_executing_ablation(tmp_path: Path) -> None:
     _install_repo_optimizer_package(tmp_path)
     _write_minimal_run_metadata(tmp_path, "release-old", "release_candidate_to_go_no_go", "run-old", "failed")
 
@@ -885,8 +1130,25 @@ def test_optimization_depth_ablation_does_not_execute_ablation(tmp_path: Path) -
             / "optimization_publication_receipt.json"
         ).read_text(encoding="utf-8")
     )
+    workflow_dir = (
+        tmp_path
+        / ".autoloop"
+        / "tasks"
+        / "optimizer-task"
+        / "wf_workflow_run_traces_to_optimization_candidates"
+    )
+    scope = json.loads((workflow_dir / "workflow_optimization_scope.json").read_text(encoding="utf-8"))
+    scorecard = json.loads((workflow_dir / "workflow_optimization_scorecard.json").read_text(encoding="utf-8"))
+    packet = (workflow_dir / "workflow_optimization_packet.md").read_text(encoding="utf-8")
     assert result.terminal == "SUCCESS"
+    assert scope["optimization_depth"] == "ablation"
+    assert scorecard["optimization_depth"] == "ablation"
+    assert scorecard["ablation_executed"] is False
     assert receipt["optimization_depth"] == "ablation"
+    assert "Requested depth: `ablation`" in packet
+    assert "Target workflow reruns executed: no" in packet
+    assert "Ablations executed: no" in packet
+    assert "Ablation mode produced ablation recommendations only. It did not execute ablation runs." in packet
     assert not (
         tmp_path / ".autoloop" / "tasks" / "optimizer-task" / "wf_workflow_optimization_candidates_to_ablation_results"
     ).exists()
@@ -896,6 +1158,7 @@ def _run_enabled_candidate_workflow(
     tmp_path: Path,
     *,
     install_repo: bool = True,
+    workflow_params_overrides: dict[str, object] | None = None,
 ) -> tuple[object, ScriptedLLMProvider, Path]:
     if install_repo:
         _install_repo_optimizer_package(tmp_path)
@@ -905,7 +1168,7 @@ def _run_enabled_candidate_workflow(
         producer_turns=[
             lambda request: "frame reviewed\n",
             lambda request: "ranking reviewed\n",
-            lambda request: "failure scenarios reviewed\n",
+            _produce_failure_scenarios,
             _produce_producer_candidates,
             _produce_verifier_rubric_candidates,
             _produce_token_candidates,
@@ -1030,7 +1293,8 @@ def _run_enabled_candidate_workflow(
                 "task_title": "Release workflow optimization",
                 "run_statuses": ["failed", "paused", "blocked"],
                 "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
-            },
+            }
+            | (workflow_params_overrides or {}),
             runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
@@ -1043,6 +1307,8 @@ def _bootstrap_context(
     monkeypatch: pytest.MonkeyPatch,
     *,
     route_tags: list[str] | None = None,
+    optimization_depth: str = "cheap",
+    max_candidates_per_pass: int = 3,
 ):
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
@@ -1053,6 +1319,8 @@ def _bootstrap_context(
         task_title="Release workflow optimization",
         run_statuses=["failed", "paused", "blocked"],
         route_tags=route_tags or ["needs_rework", "needs_replan", "failed", "blocked"],
+        optimization_depth=optimization_depth,
+        max_candidates_per_pass=max_candidates_per_pass,
     )
     task_folder = tmp_path / ".autoloop" / "tasks" / "optimizer-task"
     workflow_folder = task_folder / "wf_workflow_run_traces_to_optimization_candidates"
@@ -1083,6 +1351,7 @@ def _bootstrap_context(
 def _produce_noop_package(request) -> str:
     corpus = json.loads(request.artifacts.workflow_optimization_trace_corpus.read_text())
     excluded = json.loads(request.artifacts.excluded_run_report.read_text())
+    scope = json.loads(request.artifacts.workflow_optimization_scope.read_text())
     request.artifacts.workflow_optimization_scorecard.write_text(
         json.dumps(
             {
@@ -1099,6 +1368,8 @@ def _produce_noop_package(request) -> str:
                     "adversarial_cases": 0,
                     "workflow_level": 0,
                 },
+                "optimization_depth": scope["optimization_depth"],
+                "ablation_executed": False,
                 "recommended_next_action": "Collect eligible Plan-1 observability bundles, then rerun the optimizer.",
                 "highest_priority_candidate_ids": [],
                 "requires_ablation_before_promotion": False,
@@ -1135,6 +1406,7 @@ def _produce_noop_package(request) -> str:
 
 
 def _produce_insufficient_evidence_package(request) -> str:
+    scope = json.loads(request.artifacts.workflow_optimization_scope.read_text())
     request.artifacts.workflow_optimization_scorecard.write_text(
         json.dumps(
             {
@@ -1151,6 +1423,8 @@ def _produce_insufficient_evidence_package(request) -> str:
                     "adversarial_cases": 0,
                     "workflow_level": 0,
                 },
+                "optimization_depth": scope["optimization_depth"],
+                "ablation_executed": False,
                 "recommended_next_action": "Collect more representative trace evidence before attempting optimization.",
                 "highest_priority_candidate_ids": [],
                 "requires_ablation_before_promotion": False,
@@ -1187,6 +1461,7 @@ def _produce_insufficient_evidence_package(request) -> str:
 
 
 def _produce_skipped_optional_passes_package(request) -> str:
+    scope = json.loads(request.artifacts.workflow_optimization_scope.read_text())
     request.artifacts.workflow_optimization_scorecard.write_text(
         json.dumps(
             {
@@ -1203,6 +1478,8 @@ def _produce_skipped_optional_passes_package(request) -> str:
                     "adversarial_cases": 0,
                     "workflow_level": 0,
                 },
+                "optimization_depth": scope["optimization_depth"],
+                "ablation_executed": False,
                 "recommended_next_action": "Review the ranked scope before enabling optional candidate passes.",
                 "highest_priority_candidate_ids": [],
                 "requires_ablation_before_promotion": False,
@@ -1277,6 +1554,35 @@ def _produce_producer_candidates(request) -> str:
         + "\n"
     )
     return "wrote producer optimization candidates\n"
+
+
+def _produce_failure_scenarios(request) -> str:
+    request.artifacts.workflow_failure_scenarios.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.failure_scenarios/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "failure_scenarios": [
+                    {
+                        "failure_id": "assessment_missing_rollback_evidence",
+                        "step_name": "assessment",
+                        "failure_kind": "producer_failed_verifier",
+                        "severity": "medium",
+                        "frequency": 2,
+                        "evidence_observation_ids": ["release-good/run-good:000003:assessment"],
+                        "producer_gap": "Assessment does not reliably separate observed rollback evidence from inference.",
+                        "verifier_behavior": "Verifier correctly pushes unsupported rollback claims to needs_rework.",
+                        "likely_fix_surfaces": ["producer_prompt", "verifier_rubric"],
+                        "downstream_effect": "The workflow loops locally before packaging can proceed cleanly.",
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return "wrote failure scenarios\n"
 
 
 def _produce_verifier_rubric_candidates(request) -> str:
@@ -1419,6 +1725,7 @@ def _produce_workflow_level_candidates(request) -> str:
 
 
 def _produce_full_candidate_package(request) -> str:
+    scope = json.loads(request.artifacts.workflow_optimization_scope.read_text())
     request.artifacts.workflow_optimization_scorecard.write_text(
         json.dumps(
             {
@@ -1435,6 +1742,8 @@ def _produce_full_candidate_package(request) -> str:
                     "adversarial_cases": 1,
                     "workflow_level": 1,
                 },
+                "optimization_depth": scope["optimization_depth"],
+                "ablation_executed": False,
                 "recommended_next_action": "Run workflow_and_eval_to_refined_workflow_package with this refinement evidence.",
                 "highest_priority_candidate_ids": [
                     "verifier-rubric-assessment-001",
@@ -1477,6 +1786,7 @@ def _write_publishable_package(
     ctx: Context,
     *,
     scorecard_overrides: dict[str, object] | None = None,
+    optimization_depth: str = "cheap",
 ) -> None:
     payload: dict[str, object] = {
         "schema": "autoloop.workflow_optimization.scorecard/v1",
@@ -1492,6 +1802,8 @@ def _write_publishable_package(
             "adversarial_cases": 0,
             "workflow_level": 0,
         },
+        "optimization_depth": optimization_depth,
+        "ablation_executed": False,
         "recommended_next_action": "Run workflow_and_eval_to_refined_workflow_package with this refinement evidence.",
         "highest_priority_candidate_ids": [],
         "requires_ablation_before_promotion": False,

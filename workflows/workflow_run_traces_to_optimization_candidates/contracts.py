@@ -71,6 +71,7 @@ class WorkflowOptimizationScopeArtifactPayload(BaseModel):
     include_adversarial_generation: bool
     include_token_optimization: bool
     include_workflow_level_candidates: bool
+    max_candidates_per_pass: int = Field(ge=1)
     focus: str | None = None
     constraints: list[str] = Field(default_factory=list)
 
@@ -170,6 +171,8 @@ class WorkflowOptimizationScorecardArtifactPayload(BaseModel):
     target_steps_ranked: int = Field(ge=0)
     failure_scenarios: int = Field(ge=0)
     candidate_counts: dict[str, int] = Field(default_factory=dict)
+    optimization_depth: OptimizationDepth
+    ablation_executed: Literal[False]
     recommended_next_action: str = Field(min_length=1)
     highest_priority_candidate_ids: list[str] = Field(default_factory=list)
     requires_ablation_before_promotion: bool
@@ -249,6 +252,26 @@ class WorkflowFailureScenariosArtifactPayload(BaseModel):
     schema: str = Field(min_length=1)
     selected_workflow: str = Field(min_length=1)
     failure_scenarios: list[WorkflowFailureScenarioArtifactPayload] = Field(default_factory=list)
+
+
+class WorkflowFailureScenarioSeedArtifactPayload(BaseModel):
+    seed_id: str | None = None
+    step_name: str | None = None
+    seed_kind: str | None = None
+    route: str | None = None
+    observation_ids: list[str] = Field(default_factory=list)
+    frequency: int | None = Field(default=None, ge=0)
+    seed_reasons: list[str] = Field(default_factory=list)
+    local_outcome: str | None = None
+    downstream_outcome: str | None = None
+    summary: str | None = None
+    suggested_failure_kind: FailureKind | None = None
+
+
+class WorkflowFailureScenarioSeedsArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    seeds: list[WorkflowFailureScenarioSeedArtifactPayload] = Field(default_factory=list)
 
 
 class ProducerPromptOptimizationCandidatePayload(BaseModel):
@@ -443,6 +466,10 @@ WORKFLOW_FAILURE_SCENARIOS_ARTIFACT = JsonArtifactSpec(
     "workflow_failure_scenarios.json",
     WorkflowFailureScenariosArtifactPayload,
 )
+WORKFLOW_FAILURE_SCENARIO_SEEDS_ARTIFACT = JsonArtifactSpec(
+    "workflow_failure_scenario_seeds.json",
+    WorkflowFailureScenarioSeedsArtifactPayload,
+)
 PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT = JsonArtifactSpec(
     "producer_prompt_optimization_candidates.json",
     ProducerPromptOptimizationCandidatesArtifactPayload,
@@ -484,6 +511,7 @@ FRAME_ROUTE_CONTRACTS = {
             "workflow_optimization_scope",
             "workflow_optimization_trace_corpus",
             "excluded_run_report",
+            "workflow_failure_scenario_seeds",
         ),
         work_item_effect="Locks the optimizer scope on the authoritative workflow and filtered trace corpus without mutating source.",
     ),
@@ -497,6 +525,7 @@ FRAME_ROUTE_CONTRACTS = {
             "workflow_optimization_scope",
             "workflow_optimization_trace_corpus",
             "excluded_run_report",
+            "workflow_failure_scenario_seeds",
         ),
         work_item_effect="Short-circuits the workflow to no-op packaging rather than inventing optimization evidence or failing the run.",
     ),
@@ -506,6 +535,7 @@ FRAME_ROUTE_CONTRACTS = {
             "workflow_optimization_scope",
             "workflow_optimization_trace_corpus",
             "excluded_run_report",
+            "workflow_failure_scenario_seeds",
         ),
         work_item_effect="Keeps the work local to optimizer framing without changing the selected workflow or rerunning the target workflow.",
     ),
@@ -698,6 +728,7 @@ __all__ = [
     "VerifierRubricOptimizationCandidatePayload",
     "VerifierRubricOptimizationCandidatesArtifactPayload",
     "WORKFLOW_FAILURE_SCENARIOS_ARTIFACT",
+    "WORKFLOW_FAILURE_SCENARIO_SEEDS_ARTIFACT",
     "WORKFLOW_LEVEL_ROUTE_CONTRACTS",
     "WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT",
     "WorkflowLevelCandidateKind",
@@ -710,5 +741,7 @@ __all__ = [
     "WorkflowOptimizationScorecardArtifactPayload",
     "WorkflowOptimizationTraceCorpusArtifactPayload",
     "WorkflowFailureScenarioArtifactPayload",
+    "WorkflowFailureScenarioSeedArtifactPayload",
+    "WorkflowFailureScenarioSeedsArtifactPayload",
     "WorkflowFailureScenariosArtifactPayload",
 ]

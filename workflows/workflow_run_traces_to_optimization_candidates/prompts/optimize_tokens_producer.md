@@ -10,6 +10,7 @@
 
 | Artifact | Direction | Notes |
 | --- | --- | --- |
+| `workflow_optimization_scope` | Read | Requested depth and soft candidate budget. |
 | `selected_workflow_authoring_surface` | Read | Canonical editable prompt surfaces. |
 | `workflow_optimization_trace_corpus` | Read | Token usage evidence. |
 | `step_optimization_priority_report` | Read | Ranked target boundary. |
@@ -18,7 +19,11 @@
 ## Output Requirements
 
 - Write `token_optimization_candidates`.
+- Read `workflow_optimization_scope`.
+- Apply `optimization_depth`.
+- Treat `max_candidates_per_pass` as a soft candidate budget.
 - Classify every candidate as `safe_compression`, `risky_compression`, or `semantic_behavior_change_disguised_as_compression`.
+- Prefer the highest-leverage candidates. Do not pad the list. If you exceed the budget, explain why in the candidate rationale or summary.
 - Keep candidate-only language and avoid hidden semantic changes.
 
 ## Evidence
@@ -36,3 +41,4 @@
 
 - Do not present risky semantic changes as safe compression.
 - Do not claim reruns, tests, or ablations happened.
+- Do not mutate source files. Write only the required candidate artifact.

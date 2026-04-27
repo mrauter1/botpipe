@@ -22,6 +22,8 @@
 
 - Reject safe-compression labels when the candidate materially changes semantics.
 - Accept `token_pass_not_applicable` when the evidence or configuration says compression should be skipped.
+- Do not reject solely because candidate count exceeds `max_candidates_per_pass`.
+- Treat over-budget output as a quality concern only when it becomes unfocused, duplicative, or ungrounded.
 
 ## Route Guidance
 
@@ -31,5 +33,6 @@
 
 ## Forbidden
 
-- Reject invented token savings, hidden execution, or source mutation.
+- Reject direct source mutation, hidden execution claims, invented rerun or ablation claims, invalid schema, wrong selected workflow, or collapsed optimization surfaces.
+- Reject invented token savings.
 - Reject payloads missing required schema fields.

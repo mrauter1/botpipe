@@ -24,6 +24,8 @@
 
 - Reject workflow-level changes that are really local producer or verifier issues.
 - Accept `workflow_level_pass_not_applicable` when the evidence does not justify workflow-level changes.
+- Do not reject solely because candidate count exceeds `max_candidates_per_pass`.
+- Treat over-budget output as a quality concern only when it becomes unfocused, duplicative, or ungrounded.
 
 ## Route Guidance
 
@@ -33,4 +35,5 @@
 
 ## Forbidden
 
-- Reject hidden execution, direct source mutation, or payloads missing required fields.
+- Reject direct source mutation, hidden execution claims, invented rerun or ablation claims, invalid schema, wrong selected workflow, or collapsed optimization surfaces.
+- Reject payloads missing required fields.

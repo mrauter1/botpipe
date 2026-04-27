@@ -23,6 +23,8 @@
 
 - Reject acceptance-function changes that simply soften correct verifier behavior.
 - Accept candidate-only acceptance changes when they remain grounded and explicit about risks.
+- Do not reject solely because candidate count exceeds `max_candidates_per_pass`.
+- Treat over-budget output as a quality concern only when it becomes unfocused, duplicative, or ungrounded.
 
 ## Route Guidance
 
@@ -32,5 +34,6 @@
 
 ## Forbidden
 
-- Reject invented evidence, source mutation, automatic promotion, or fake reruns.
+- Reject direct source mutation, hidden execution claims, invented rerun or ablation claims, invalid schema, wrong selected workflow, or collapsed optimization surfaces.
+- Reject invented evidence, automatic promotion, or fake reruns.
 - Reject payloads missing required schema fields.
