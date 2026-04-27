@@ -21,7 +21,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -109,17 +109,17 @@ def test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["company_operation_framed"]["required_artifacts"] == [
-        "company_operation_brief",
-        "recursive_improvement_criteria",
+    assert list(frame_step.route_required_outputs["company_operation_framed"]) == [
+        "frame_company_operation.company_operation_brief",
+        "frame_company_operation.recursive_improvement_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["analyze_recursive_improvement_pressures"]
-    assert analysis_step.route_contracts["recursive_improvement_pressures_analyzed"]["required_artifacts"] == [
-        "company_pressure_map",
-        "recursive_improvement_priority_matrix",
-        "recursive_improvement_candidates",
+    assert list(analysis_step.route_required_outputs["recursive_improvement_pressures_analyzed"]) == [
+        "analyze_recursive_improvement_pressures.company_pressure_map",
+        "analyze_recursive_improvement_pressures.recursive_improvement_priority_matrix",
+        "analyze_recursive_improvement_pressures.recursive_improvement_candidates",
     ]
     assert analysis_step.expected_output_schema is not None
     assert set(analysis_step.expected_output_schema["required"]) >= {
@@ -131,10 +131,10 @@ def test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit
     }
 
     package_step = compiled.steps["package_recursive_improvement_cycle"]
-    assert package_step.route_contracts["recursive_improvement_cycle_ready"]["required_artifacts"] == [
-        "recursive_improvement_cycle",
-        "recursive_improvement_summary",
-        "recursive_improvement_next_actions",
+    assert list(package_step.route_required_outputs["recursive_improvement_cycle_ready"]) == [
+        "package_recursive_improvement_cycle.recursive_improvement_cycle",
+        "package_recursive_improvement_cycle.recursive_improvement_summary",
+        "package_recursive_improvement_cycle.recursive_improvement_next_actions",
     ]
     assert package_step.expected_output_schema is not None
     assert set(package_step.expected_output_schema["required"]) >= {
@@ -152,15 +152,15 @@ def test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit
 
     publish_step = compiled.steps["publish_recursive_improvement_cycle"]
     assert publish_step.requires == (
-        "workflow_capability_snapshot",
-        "workflow_portfolio_health_snapshot",
-        "company_operation_snapshot",
-        "company_pressure_map",
-        "recursive_improvement_priority_matrix",
-        "recursive_improvement_candidates",
-        "recursive_improvement_cycle",
-        "recursive_improvement_summary",
-        "recursive_improvement_next_actions",
+        "capture_company_operation_context.workflow_capability_snapshot",
+        "capture_company_operation_context.workflow_portfolio_health_snapshot",
+        "capture_company_operation_context.company_operation_snapshot",
+        "analyze_recursive_improvement_pressures.company_pressure_map",
+        "analyze_recursive_improvement_pressures.recursive_improvement_priority_matrix",
+        "analyze_recursive_improvement_pressures.recursive_improvement_candidates",
+        "package_recursive_improvement_cycle.recursive_improvement_cycle",
+        "package_recursive_improvement_cycle.recursive_improvement_summary",
+        "package_recursive_improvement_cycle.recursive_improvement_next_actions",
     )
 
 
@@ -866,10 +866,10 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
         "blocked",
         "failed",
     )
-    assert provider.calls[5].route_contracts["recursive_improvement_cycle_ready"]["required_artifacts"] == [
-        "recursive_improvement_cycle",
-        "recursive_improvement_summary",
-        "recursive_improvement_next_actions",
+    assert list(provider.calls[5].route_required_outputs["recursive_improvement_cycle_ready"]) == [
+        "package_recursive_improvement_cycle.recursive_improvement_cycle",
+        "package_recursive_improvement_cycle.recursive_improvement_summary",
+        "package_recursive_improvement_cycle.recursive_improvement_next_actions",
     ]
     assert health_by_workflow["workflow_portfolio_to_operating_system"]["recent_runs"][0]["request_file"] == str(
         seeded_paths["portfolio_paused"] / "request.md"

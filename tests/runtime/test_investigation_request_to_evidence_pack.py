@@ -20,7 +20,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -102,12 +102,12 @@ def test_investigation_evidence_pack_package_compiles_with_explicit_control_cont
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["investigation_framed"]["required_artifacts"] == [
-        "investigation_scope_brief",
-        "investigation_objectives",
-        "evidence_intake_register",
+    assert list(frame_step.route_required_outputs["investigation_framed"]) == [
+        "frame_investigation.investigation_scope_brief",
+        "frame_investigation.investigation_objectives",
+        "frame_investigation.evidence_intake_register",
     ]
-    assert frame_step.route_contracts["investigation_framed"]["work_item_effect"] == (
+    assert frame_step.route_infos["investigation_framed"].handoff == (
         "Locks the investigation framing so evidence assembly can proceed against a fixed boundary."
     )
     assert frame_step.expected_output_schema is not None
@@ -121,13 +121,13 @@ def test_investigation_evidence_pack_package_compiles_with_explicit_control_cont
         "blocked",
         "failed",
     )
-    assert evidence_step.route_contracts["evidence_pack_ready"]["required_artifacts"] == [
-        "evidence_source_inventory",
-        "evidence_coverage_matrix",
-        "evidence_findings",
-        "evidence_gap_register",
-        "evidence_pack",
-        "evidence_pack_summary",
+    assert list(evidence_step.route_required_outputs["evidence_pack_ready"]) == [
+        "assemble_evidence_pack.evidence_source_inventory",
+        "assemble_evidence_pack.evidence_coverage_matrix",
+        "assemble_evidence_pack.evidence_findings",
+        "assemble_evidence_pack.evidence_gap_register",
+        "assemble_evidence_pack.evidence_pack",
+        "assemble_evidence_pack.evidence_pack_summary",
     ]
     assert evidence_step.expected_output_schema is not None
 
@@ -1086,8 +1086,8 @@ import json
 from pydantic import BaseModel
 
 from autoloop_v3.stdlib import adopt_child_artifacts, run_child_workflow
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class ParentInvestigationComposer(Workflow):

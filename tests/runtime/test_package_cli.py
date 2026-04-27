@@ -125,8 +125,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import GLOBAL, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import GLOBAL, SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class {class_name}(Workflow):
@@ -176,8 +176,8 @@ import json
 
 from pydantic import BaseModel
 
-from workflow import GLOBAL, PAUSE, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import GLOBAL, PAUSE, SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class {class_name}(Workflow):
@@ -268,7 +268,17 @@ class Parameters(BaseModel):
     assert payload["parameters_supported"] is True
     assert payload["workflow_class"] == "ReviewWorkflow"
     assert payload["state_model"].endswith("ReviewWorkflow.State")
-    assert payload["transitions"] == {"global": {}, "steps": {"bootstrap": {"ready": "SUCCESS"}}}
+    assert payload["transitions"] == {
+        "global": {},
+        "steps": {
+            "bootstrap": {
+                "ready": "SUCCESS",
+                "question": "PAUSE",
+                "blocked": "PAUSE",
+                "failed": "FAIL",
+            }
+        },
+    }
     assert payload["parameters"] == [
         {"default": "strict", "name": "mode", "repeated": False, "required": False, "type": "str"},
         {"default": [], "name": "reviewers", "repeated": True, "required": False, "type": "list[str]"},

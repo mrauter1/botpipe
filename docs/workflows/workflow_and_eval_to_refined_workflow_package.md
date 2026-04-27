@@ -1,6 +1,6 @@
 # `workflow_and_eval_to_refined_workflow_package`
 
-`workflow_and_eval_to_refined_workflow_package` is a reusable closed-loop refinement building block that turns one selected workflow plus explicit evaluation evidence into a baseline snapshot, a workflow-local candidate workflow surface, verification artifacts, and a deterministic refinement receipt. It can also consume optional optimization refinement evidence as candidate-only input, but it still stops before promotion so later publication and rollback remain explicit and inspectable.
+`workflow_and_eval_to_refined_workflow_package` is a reusable closed-loop refinement building block that turns one selected workflow plus explicit evaluation evidence into a baseline snapshot, a workflow-local candidate workflow surface, verification artifacts, and a deterministic refinement receipt. It stops before promotion so later publication and rollback remain explicit and inspectable.
 
 ## Problem and value
 
@@ -25,7 +25,6 @@ autoloop run workflow_and_eval_to_refined_workflow_package <task-id> \
   -wf evaluation_summary_path .autoloop/evals/release_go_no_go_eval_summary.json \
   -wf evaluation_findings_path .autoloop/evals/release_go_no_go_eval_findings.md \
   -wf failure_modes_path .autoloop/evals/release_go_no_go_failure_modes.md \
-  -wf refinement_evidence_path .autoloop/optimization/release_go_no_go_optimization_refinement_evidence.json \
   -wf sponsor_role "engineering productivity" \
   -wf desired_outcome "Publish a verified refinement candidate package and promotion bundle for the selected workflow." \
   -wf constraints "Keep runtime control narrow, preserve explicit baseline/candidate separation, and stop before promotion." \
@@ -39,23 +38,10 @@ Parameters:
 - `evaluation_summary_path` required; the JSON must include `selected_workflow_name` matching `selected_workflow`
 - `evaluation_findings_path` required
 - `failure_modes_path` optional
-- `refinement_evidence_path` optional; when supplied it must point to `workflow_refinement_evidence.json` with `target_workflow_id` matching the selected workflow and supported optimization evidence kinds only
 - `sponsor_role` optional
 - `desired_outcome` optional
 - `constraints` optional and repeatable
 - `target_test_command` optional, default `pytest -q`
-
-Accepted optimization evidence kinds:
-
-- `step_optimization_priority_report`
-- `workflow_failure_scenarios`
-- `producer_prompt_optimization_candidates`
-- `verifier_rubric_optimization_candidates`
-- `token_optimization_candidates`
-- `adversarial_case_candidates`
-- `workflow_level_optimization_candidates`
-- `workflow_optimization_scorecard`
-- `optimization_ablation_results`
 
 ## Candidate additions considered
 
@@ -80,9 +66,9 @@ Accepted optimization evidence kinds:
 - Alternatives considered:
 - auto-discover the latest evaluation artifacts from run history
 - auto-run `workflow_to_eval_suite` or a future evaluation runner inside refinement
-- require explicit evaluation evidence artifact paths as the legal input contract, with optional optimization refinement evidence as candidate-only sidecar input
+- require explicit evaluation evidence artifact paths as the legal input contract
 - Selected: explicit evaluation evidence artifact paths
-- Why: it keeps the refinement workflow inspectable, avoids hidden downstream execution, and works before the repository has a runtime-owned evaluation runner. Optional optimization evidence can bias prioritization without being mistaken for proof.
+- Why: it keeps the refinement workflow inspectable, avoids hidden downstream execution, and works before the repository has a runtime-owned evaluation runner.
 
 ### 2. Publication boundary
 
@@ -119,7 +105,7 @@ Turn one selected workflow plus explicit evaluation evidence into a candidate re
 ### Global deterministic workflow responsibilities
 
 - Bootstrap the run-local invocation contract.
-- Capture authoritative local copies of the supplied evaluation evidence, optional optimization refinement evidence, one selected workflow’s compiled contract, one selected workflow’s editable authoring surface, and an explicit baseline workflow surface plus manifest.
+- Capture authoritative local copies of the supplied evaluation evidence, one selected workflow’s compiled contract, one selected workflow’s editable authoring surface, and an explicit baseline workflow surface plus manifest.
 - Keep framing, planning, implementation, evaluation, and publication as separate work items.
 - Derive `candidate_workflow_manifest.json` deterministically from `candidate_workflow_surface/`.
 - Validate baseline/candidate boundaries, authoritative-source immutability, and candidate overlay compilation or test proof before publishing the refinement receipt.
@@ -186,7 +172,7 @@ Application routes:
 | Step | Required reads | Required writes | Authority / downstream use |
 | --- | --- | --- | --- |
 | `bootstrap` | `request.md`, workflow params | `invocation_contract.json` | authoritative run-local input snapshot |
-| `capture_refinement_context` | request, invocation contract, selected-workflow reference, explicit evaluation-evidence paths, optional `refinement_evidence_path` | `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, `baseline_workflow_surface/`, `baseline_workflow_manifest.json`, `baseline_evaluation_summary.json`, `baseline_evaluation_findings.md`, `baseline_failure_modes.md`, `baseline_refinement_evidence.json`, `baseline_refinement_evidence.md` | authoritative refinement input bundle plus explicit baseline snapshot |
+| `capture_refinement_context` | request, invocation contract, selected-workflow reference, explicit evaluation-evidence paths | `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, `baseline_workflow_surface/`, `baseline_workflow_manifest.json`, `baseline_evaluation_summary.json`, `baseline_evaluation_findings.md`, `baseline_failure_modes.md` | authoritative refinement input bundle plus explicit baseline snapshot |
 | `frame_refinement_request` | request, invocation contract, captured context, baseline evidence, framework docs | `refinement_request_brief.md`, `refinement_acceptance_criteria.md` | authoritative refinement framing package |
 | `design_refinement_plan` | request, invocation contract, captured context, framing artifacts | `refinement_strategy.md`, `workflow_change_plan.md`, `regression_guardrails.md` | authoritative change strategy and regression plan |
 | `implement_refined_workflow` | captured context, planning artifacts, baseline workflow surface | `candidate_workflow_surface/`, `refinement_build_report.md`, `candidate_diff_summary.md`, deterministic `candidate_workflow_manifest.json` | authoritative candidate workflow package plus machine-readable manifest |
@@ -195,18 +181,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Payload models used by the package:
 
@@ -223,21 +202,13 @@ Payload models used by the package:
 - `prompts/design_verifier.md`: role `refinement-plan verifier`; checks that the change plan is concrete, scoped, and evidence-driven.
 - `prompts/implement_producer.md`: role `workflow refiner`; creates `candidate_workflow_surface/` and the build evidence without mutating the authoritative selected workflow package.
 - `prompts/implement_verifier.md`: role `refinement-build verifier`; checks that the candidate surface is explicit enough for deterministic candidate-manifest derivation and later evaluation.
-- `prompts/evaluate_producer.md`: role `workflow refinement evaluator`; writes the verification report, evaluation delta, promotion record, and rollback plan while keeping optimization candidates unproven unless stronger evidence exists.
+- `prompts/evaluate_producer.md`: role `workflow refinement evaluator`; writes the verification report, evaluation delta, promotion record, and rollback plan.
 - `prompts/evaluate_verifier.md`: role `refinement-release verifier`; checks that the evaluation package is publication-ready and still stops before promotion.
-
-## Optimization evidence handoff
-
-- `baseline_refinement_evidence.md` is a workflow-local summary of optional optimization evidence entries.
-- Optimization candidates remain candidate-only input. They help prioritize refinement scope, but they are not proof of improvement.
-- `optimization_ablation_results`, when present, are stronger evidence than candidate estimates.
-- Token optimization candidates must preserve semantics before any later materialization.
-- `adversarial_case_candidates` should usually feed `workflow_to_eval_suite`; this refinement workflow does not auto-materialize eval suites or adversarial cases.
 
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose route summaries, route-required outputs, and payload schemas for the four pair steps.
+- Compilation must expose typed route metadata and payload schemas for the four pair steps.
 - Runtime proof must cover:
 - successful terminal publication of a baseline snapshot, candidate workflow surface, candidate manifest, and refinement receipt without mutating the authoritative selected workflow package
 - stable publication of `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, `baseline_workflow_manifest.json`, `candidate_workflow_manifest.json`, `evaluation_delta_report.md`, and `workflow_refinement_receipt.json`

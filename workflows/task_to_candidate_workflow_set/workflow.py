@@ -29,8 +29,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
@@ -122,7 +122,7 @@ class TaskToCandidateWorkflowSet(Workflow):
             "candidate_selection_criteria": candidate_selection_criteria,
         },
         expected_output_schema=CandidateRequestFramingPayload,
-        route_contracts=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
+        route_infos=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
     )
     analyze_candidate_workflows = PairStep(
         name="analyze_candidate_workflows",
@@ -142,7 +142,7 @@ class TaskToCandidateWorkflowSet(Workflow):
             "candidate_route_posture": candidate_route_posture,
         },
         expected_output_schema=CandidateWorkflowAnalysisPayload,
-        route_contracts=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
+        route_infos=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
     )
     package_candidate_workflow_set = PairStep(
         name="package_candidate_workflow_set",
@@ -166,7 +166,7 @@ class TaskToCandidateWorkflowSet(Workflow):
             "candidate_next_action": candidate_next_action,
         },
         expected_output_schema=CandidateWorkflowSetPayload,
-        route_contracts=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
+        route_infos=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
     )
     publish_candidate_workflow_set = SystemStep(
         name="publish_candidate_workflow_set",

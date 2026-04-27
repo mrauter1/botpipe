@@ -170,18 +170,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Payload models used by the package:
 
@@ -201,7 +194,7 @@ Payload models used by the package:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose route summaries, route-required outputs, and payload schemas for the three pair steps.
+- Compilation must expose typed route metadata and payload schemas for the three pair steps.
 - Runtime proof must cover:
 - successful end-to-end publication of the suite package, summary, next-action artifact, validated eval-case manifest, and receipt
 - proof that the selected workflow is not auto-run during suite publication
@@ -219,7 +212,6 @@ Payload models used by the package:
 
 - `workflow_idea_to_workflow_package` remains the standing greenfield authoring path and was reconsidered before shipping this narrower evaluation layer.
 - The package relies on the cycle-7 `stdlib/evaluation.py` seam instead of inventing runtime-owned evaluation execution or widening `workflow.toml`.
-- `adversarial_case_candidates` from `workflow_run_traces_to_optimization_candidates` should usually be materialized here rather than inside refinement; optimization candidates stay candidate-only until this workflow or another explicit authoring step turns them into durable eval-suite artifacts.
 - Future cycles can now build `workflow_and_eval_to_refined_workflow_package`, run-history diagnostics, or broader portfolio operating workflows on top of explicit eval-suite publication instead of re-deriving evaluation artifacts from scratch.
 
 ## Evidence

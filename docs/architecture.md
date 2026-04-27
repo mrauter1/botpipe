@@ -1,6 +1,6 @@
 # Architecture
 
-This architecture is additive rather than greenfield. Public compatibility matters: the CLI, package discovery, `workflow.toml` metadata-only behavior, `ctx.invoke_workflow(...)`, `ctx.open_session(..., scope=...)`, checkpoint/resume behavior, tracing, and provider/session boundaries remain part of the contract while the authoring surface grows more capable.
+This project is greenfield. The runtime keeps deterministic execution, package discovery, `workflow.toml` metadata-only behavior, `ctx.invoke_workflow(...)`, checkpoint/resume behavior, tracing, and provider/session boundaries while exposing one active public authoring surface.
 
 ## Internal Layout
 
@@ -11,36 +11,17 @@ The internal workflow kernel lives under:
 - `stdlib/`
 - `extensions/`
 
-The public authoring contract does not point workflow authors at internal modules. Authors import the strict root shims:
-
-- `autoloop.simple`
-- `workflow`
-- `workflow.primitives`
+The public authoring contract does not point workflow authors at internal modules.
+Public workflow code imports from `autoloop.simple` or `autoloop`.
 
 `autoloop.simple` is the preferred progressive authoring surface:
 
 - `Workflow`, `StrictWorkflow`
 - `step`, `review_step`, `workflow_step`, `system_step`, `chain`
 - `Json`, `Md`, `Text`, `Raw`
-- `Prompt`, `Route`, `RouteInfo`
+- `Prompt`, `Route`, `RouteInfo`, `AfterHookResult`
 
-The root `workflow` shim remains the explicit strict compatibility surface:
-
-- `Workflow`, `Context`, `Session`, `Continuity`, `Artifact`, `Prompt`
-- `PairStep`, `LLMStep`, `SystemStep`
-- `Route`, `SUCCESS`, `PAUSE`, `FAIL`, `GLOBAL`
-- `SetStatus`, `Advance`, `Refresh`, `ResetCompletion`
-- `WorkItem`, `Worklist`, `Selector`
-
-Low-level runtime values stay under `workflow.primitives`:
-
-- `Event`
-- `Outcome`
-- `Checkpoint`
-- `ResolvedArtifacts`
-- `ChildWorkflowResult`
-
-`workflow` does not re-export engine/compiler/store/provider internals such as `Engine`, `compile_workflow`, or `WorkflowMeta`.
+`core/*` remains the internal kernel for strict runtime code and tests. It is not a second public authoring API.
 
 ## Workflow Surfaces
 

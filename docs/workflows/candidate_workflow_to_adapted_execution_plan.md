@@ -172,18 +172,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Payload models used by the package:
 
@@ -203,7 +196,7 @@ Payload models used by the package:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose route summaries and route-required outputs for the three pair steps.
+- Compilation must expose the typed route metadata for the three pair steps.
 - Runtime proof must cover:
 - successful end-to-end publication of the adapted plan, summary, next-action artifact, validated workflow parameters, and receipt
 - stable publication of `selected_workflow_capability.json`, `adapted_execution_summary.json`, and `validated_workflow_parameters.json`

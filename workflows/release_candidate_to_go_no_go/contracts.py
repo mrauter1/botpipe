@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from workflow import RouteContract
+from core import RouteInfo
 
 
 class ReleaseFramingPayload(BaseModel):
@@ -49,80 +49,76 @@ class ReleaseDecisionPackagePayload(BaseModel):
 
 
 FRAME_RELEASE_ROUTE_CONTRACTS = {
-    "release_framed": RouteContract(
+    "release_framed": RouteInfo(
         summary="The release boundary, decision criteria, and evidence intake plan are explicit and authoritative.",
-        required_artifacts=("release_scope_brief", "decision_criteria", "evidence_intake_register"),
-        work_item_effect="Locks the release framing so evidence assembly can proceed against a fixed gate.",
+        required_outputs=("release_scope_brief", "decision_criteria", "evidence_intake_register"),
+        handoff="Locks the release framing so evidence assembly can proceed against a fixed gate.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same release framing boundary holds, but the brief or criteria need local repair.",
-        required_artifacts=("release_scope_brief", "decision_criteria"),
-        work_item_effect="Keeps the framing boundary intact and reruns the same step for local correction.",
+        required_outputs=("release_scope_brief", "decision_criteria"),
+        handoff="Keeps the framing boundary intact and reruns the same step for local correction.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The release boundary, target outcome, or evidence intake surface changed materially and must be reframed.",
-        required_artifacts=("release_scope_brief", "decision_criteria", "evidence_intake_register"),
-        work_item_effect="Resets the release framing boundary before downstream evidence work continues.",
+        handoff="Resets the release framing boundary before downstream evidence work continues.",
     ),
 }
 
 ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS = {
-    "evidence_pack_ready": RouteContract(
+    "evidence_pack_ready": RouteInfo(
         summary="The release evidence pack captures scope, test proof, operational readiness, rollback readiness, and blockers.",
-        required_artifacts=(
+        required_outputs=(
             "release_inventory",
             "test_evidence_pack",
             "operational_readiness",
             "rollback_readiness",
             "blocking_issues",
         ),
-        work_item_effect="Promotes the release evidence pack to readiness assessment.",
+        handoff="Promotes the release evidence pack to readiness assessment.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same evidence assembly boundary holds, but the evidence pack or blocker analysis needs local repair.",
-        required_artifacts=("release_inventory", "test_evidence_pack", "blocking_issues"),
-        work_item_effect="Keeps evidence assembly local and reruns the same step for tighter proof collection.",
+        required_outputs=("release_inventory", "test_evidence_pack", "blocking_issues"),
+        handoff="Keeps evidence assembly local and reruns the same step for tighter proof collection.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The evidence plan, release boundary, or decision gate changed materially and framing must be revisited.",
-        required_artifacts=("release_scope_brief", "decision_criteria", "evidence_intake_register"),
-        work_item_effect="Routes back to release framing because the evidence contract is no longer authoritative.",
+        handoff="Routes back to release framing because the evidence contract is no longer authoritative.",
     ),
 }
 
 ASSESS_GO_NO_GO_ROUTE_CONTRACTS = {
-    "assessment_ready": RouteContract(
+    "assessment_ready": RouteInfo(
         summary="The workflow has an explicit recommendation, ranked risks, and machine-readable decision summary.",
-        required_artifacts=("go_no_go_assessment", "risk_register", "decision_summary"),
-        work_item_effect="Promotes the assessed release candidate to final package assembly.",
+        required_outputs=("go_no_go_assessment", "risk_register", "decision_summary"),
+        handoff="Promotes the assessed release candidate to final package assembly.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same assessment boundary holds, but the synthesis, risk ranking, or recommendation needs local repair.",
-        required_artifacts=("go_no_go_assessment", "risk_register", "decision_summary"),
-        work_item_effect="Keeps the readiness assessment local and reruns the same step with tighter synthesis.",
+        required_outputs=("go_no_go_assessment", "risk_register", "decision_summary"),
+        handoff="Keeps the readiness assessment local and reruns the same step with tighter synthesis.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The evidence or decision surface changed materially enough that the release must be reframed before reassessment.",
-        required_artifacts=("decision_criteria", "blocking_issues", "go_no_go_assessment"),
-        work_item_effect="Returns the workflow to release framing because the current assessment contract is materially wrong.",
+        handoff="Returns the workflow to release framing because the current assessment contract is materially wrong.",
     ),
 }
 
 PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS = {
-    "decision_package_ready": RouteContract(
+    "decision_package_ready": RouteInfo(
         summary="The final release decision package and stakeholder communication draft are complete and aligned to the assessment.",
-        required_artifacts=("release_decision_package", "release_communications_draft"),
-        work_item_effect="Advances the release workflow to deterministic publication of the terminal receipt.",
+        required_outputs=("release_decision_package", "release_communications_draft"),
+        handoff="Advances the release workflow to deterministic publication of the terminal receipt.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same package assembly boundary holds, but the package or communications draft needs local repair.",
-        required_artifacts=("release_decision_package", "release_communications_draft"),
-        work_item_effect="Keeps package assembly local and reruns the same step for final polish.",
+        required_outputs=("release_decision_package", "release_communications_draft"),
+        handoff="Keeps package assembly local and reruns the same step for final polish.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Package assembly proved the recommendation or evidence story changed materially and assessment must be revisited.",
-        required_artifacts=("go_no_go_assessment", "decision_summary", "release_decision_package"),
-        work_item_effect="Routes back to readiness assessment because the package no longer matches the assessed recommendation.",
+        handoff="Routes back to readiness assessment because the package no longer matches the assessed recommendation.",
     ),
 }
 

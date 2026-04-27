@@ -61,8 +61,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
@@ -177,7 +177,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             "portfolio_decision_criteria": portfolio_decision_criteria,
         },
         expected_output_schema=PortfolioGovernanceFramingPayload,
-        route_contracts=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
+        route_infos=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
     )
     analyze_portfolio_operating_model = PairStep(
         name="analyze_portfolio_operating_model",
@@ -198,7 +198,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             "portfolio_change_candidates": portfolio_change_candidates,
         },
         expected_output_schema=PortfolioOperatingModelPayload,
-        route_contracts=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
+        route_infos=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
     )
     package_portfolio_operating_system = PairStep(
         name="package_portfolio_operating_system",
@@ -223,7 +223,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             "portfolio_next_actions": portfolio_next_actions,
         },
         expected_output_schema=PortfolioOperatingSystemPayload,
-        route_contracts=PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
+        route_infos=PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
     )
     publish_portfolio_operating_system = SystemStep(
         name="publish_portfolio_operating_system",

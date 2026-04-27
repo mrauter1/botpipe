@@ -7,8 +7,8 @@ from pydantic import BaseModel
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.runtime.static_graph import write_static_step_graph, workflow_static_step_graph_payload
-from workflow import Artifact, PairStep, RouteContract, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, PairStep, RouteInfo, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 
 class _AssessmentPayload(BaseModel):
@@ -32,7 +32,7 @@ class _StaticGraphWorkflow(Workflow):
         produces={"note": note},
         log_artifacts=[transcript],
         expected_output_schema=_AssessmentPayload,
-        route_contracts={"assessment_ready": RouteContract(summary="assessment completed")},
+        route_infos={"assessment_ready": RouteInfo(summary="assessment completed")},
     )
     finish = SystemStep(name="finish")
     entry = assessment
@@ -74,14 +74,14 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     assert assessment["verifier_prompt"] == "prompts/assessment_verifier.md"
     assert assessment["reads"] == []
     assert assessment["requires"] == ["request"]
-    assert assessment["produces"] == ["note"]
+    assert assessment["produces"] == ["assessment.note"]
     assert assessment["log_artifacts"] == ["transcript"]
     assert "assessment_ready" in assessment["available_routes"]
     assert finish["producer_prompt"] is None
     assert finish["verifier_prompt"] is None
 
 
-def test_static_step_graph_includes_route_contracts_and_schema_presence(tmp_path: Path) -> None:
+def test_static_step_graph_includes_route_infos_and_schema_presence(tmp_path: Path) -> None:
     compiled = compile_workflow(_StaticGraphWorkflow)
     write_static_step_graph(tmp_path, compiled)
 
@@ -90,7 +90,7 @@ def test_static_step_graph_includes_route_contracts_and_schema_presence(tmp_path
 
     assert assessment["route_infos"]["assessment_ready"]["summary"] == "assessment completed"
     assert assessment["route_required_outputs"]["assessment_ready"] == []
-    assert assessment["route_contracts"]["assessment_ready"]["summary"] == "assessment completed"
+    assert assessment["route_infos"]["assessment_ready"]["summary"] == "assessment completed"
     assert assessment["has_expected_output_schema"] is True
     assert payload["transitions"]["steps"]["assessment"]["assessment_ready"] == "finish"
     assert payload["transitions"]["steps"]["finish"]["done"] == "SUCCESS"

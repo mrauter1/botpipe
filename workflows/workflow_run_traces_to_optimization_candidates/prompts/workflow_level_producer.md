@@ -24,7 +24,7 @@
 - Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
-- Allowed targets include artifact handoff, route contract, split/merge, prompt README, context rendering, session policy, workflow parameter, workflow code, eval gap, input quality gap, and operator process gap.
+- Allowed targets include artifact handoff, route metadata, split/merge, prompt README, context rendering, session policy, workflow parameter, workflow code, eval gap, input quality gap, and operator process gap.
 - Prefer the highest-leverage candidates. Do not pad the list. If you exceed the budget, explain why in the candidate rationale or summary.
 - Keep candidate-only language and note when refinement workflow or ablation would be required.
 

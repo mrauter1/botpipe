@@ -47,7 +47,7 @@ Parameters:
 
 | Candidate | Benefits | Trade-offs | Decision |
 | --- | --- | --- | --- |
-| Route metadata with inferred summaries and route-required outputs | Makes release-gating semantics explicit while keeping the runtime control surface mechanical | Needed additive validation and compiler normalization | Chosen and exercised by this package |
+| Typed and normalized `route_infos` | Makes release-gating semantics explicit and keeps runtime control data narrow | Needed additive validation and compiler normalization | Chosen in the preceding route-metadata phase and exercised by this package |
 | Artifact-bundle helper for grouped release evidence | Could reduce repeated path prefixes | Hides artifact meaning behind a new abstraction | Rejected |
 | Declarative child-workflow release composition | Could help future portfolios | Too much runtime machinery for the first domain workflow | Rejected |
 
@@ -71,14 +71,14 @@ Parameters:
 - Selected: deterministic `publish_decision`
 - Why: the workflow needs an inspectable terminal receipt without expanding runtime behavior.
 
-### 3. Route metadata expression
+### 3. Route-contract expression
 
 - Alternatives considered:
-- compatibility-only legacy route metadata dicts
+- freeform dict route metadata only
 - prompt-only route guidance
-- `Route(...)` metadata with inferred summaries and explicit required outputs
-- Selected: `Route(...)` metadata plus inferred route summaries
-- Why: the release workflow needs explicit evidence gates and route-local output obligations while staying inside the narrow runtime contract surface.
+- typed route metadata with normalized runtime shape
+- Selected: typed `RouteInfo` metadata
+- Why: the release workflow needs explicit evidence and work-item-effect semantics while staying inside the narrow runtime contract surface.
 
 ## Implementation candidates considered
 
@@ -98,7 +98,7 @@ Turn a release candidate into a durable go/no-go package that captures scope, ev
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing, evidence assembly, assessment, and package assembly as separate work items.
-- Keep runtime control data human-readable and mechanical: readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, `route_infos`, and `route_required_outputs` only.
 - Publish a deterministic decision receipt only after the final package exists.
 
 ### Provider-owned cognitive responsibilities
@@ -166,19 +166,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- readable inputs
-- required inputs
-- writable artifacts
-- route-specific output requirements
-- explicit expected output payload requirements
-- available routes
-- route summaries and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Payload models used by the package:
 
@@ -203,7 +195,7 @@ The package includes explicit step prompts for:
 ### Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose route summaries and route-required outputs as normalized runtime metadata.
+- Compilation must expose the typed route metadata as normalized runtime metadata.
 - A scripted-provider runtime test must prove legal route flow and creation of:
 - `invocation_contract.json`
 - `decision_summary.json`

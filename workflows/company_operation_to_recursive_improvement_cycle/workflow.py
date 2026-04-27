@@ -63,8 +63,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS,
@@ -195,7 +195,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             "recursive_improvement_criteria": recursive_improvement_criteria,
         },
         expected_output_schema=CompanyOperationFramingPayload,
-        route_contracts=FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS,
+        route_infos=FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS,
     )
     analyze_recursive_improvement_pressures = PairStep(
         name="analyze_recursive_improvement_pressures",
@@ -217,7 +217,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             "recursive_improvement_candidates": recursive_improvement_candidates,
         },
         expected_output_schema=RecursiveImprovementAnalysisPayload,
-        route_contracts=ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS,
+        route_infos=ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS,
     )
     package_recursive_improvement_cycle = PairStep(
         name="package_recursive_improvement_cycle",
@@ -243,7 +243,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             "recursive_improvement_next_actions": recursive_improvement_next_actions,
         },
         expected_output_schema=RecursiveImprovementCyclePayload,
-        route_contracts=PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS,
+        route_infos=PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS,
     )
     publish_recursive_improvement_cycle = SystemStep(
         name="publish_recursive_improvement_cycle",

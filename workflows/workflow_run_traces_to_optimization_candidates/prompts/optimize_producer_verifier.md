@@ -34,6 +34,6 @@
 
 ## Forbidden
 
-- Reject verifier/rubric, route-contract, workflow-topology, or hidden-execution changes in this pass.
+- Reject verifier/rubric, route-metadata, workflow-topology, or hidden-execution changes in this pass.
 - Reject direct source mutation, invented rerun or ablation claims, invalid schema, wrong selected workflow, or collapsed optimization surfaces.
 - Reject payloads missing required schema fields.

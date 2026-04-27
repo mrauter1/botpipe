@@ -100,7 +100,7 @@ Turn a concrete incident into a durable hardening program and response package t
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing, evidence assembly, analysis, and package assembly as separate work items.
-- Keep runtime control data human-readable and mechanical: readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, `route_infos`, and `route_required_outputs` only.
 - Publish a deterministic incident receipt only after the final package exists.
 
 ### Provider-owned cognitive responsibilities
@@ -168,18 +168,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Payload models used by the package:
 
@@ -204,7 +197,7 @@ The package includes explicit step prompts for:
 ### Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose route summaries and route-required outputs as normalized runtime metadata.
+- Compilation must expose the typed route metadata as normalized runtime metadata.
 - A scripted-provider runtime test must prove legal route flow and creation of:
 - `invocation_contract.json`
 - `incident_summary.json`

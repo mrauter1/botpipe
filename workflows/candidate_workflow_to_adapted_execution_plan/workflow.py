@@ -37,8 +37,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     ADAPTED_EXECUTION_SUMMARY_ARTIFACT,
@@ -132,7 +132,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             "adaptation_success_criteria": adaptation_success_criteria,
         },
         expected_output_schema=AdaptationRequestFramingPayload,
-        route_contracts=FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS,
+        route_infos=FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS,
     )
     analyze_adaptation_surface = PairStep(
         name="analyze_adaptation_surface",
@@ -151,7 +151,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             "step_adaptation_matrix": step_adaptation_matrix,
         },
         expected_output_schema=AdaptationSurfaceAnalysisPayload,
-        route_contracts=ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS,
+        route_infos=ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS,
     )
     package_adapted_execution_plan = PairStep(
         name="package_adapted_execution_plan",
@@ -175,7 +175,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             "adapted_execution_next_action": adapted_execution_next_action,
         },
         expected_output_schema=AdaptedExecutionPlanPayload,
-        route_contracts=PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS,
+        route_infos=PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS,
     )
     publish_adapted_execution_plan = SystemStep(
         name="publish_adapted_execution_plan",

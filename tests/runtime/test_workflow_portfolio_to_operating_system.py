@@ -21,7 +21,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -83,25 +83,25 @@ def test_workflow_portfolio_to_operating_system_compiles_with_explicit_control_c
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["portfolio_governance_framed"]["required_artifacts"] == [
-        "portfolio_governance_brief",
-        "portfolio_decision_criteria",
+    assert list(frame_step.route_required_outputs["portfolio_governance_framed"]) == [
+        "frame_portfolio_governance.portfolio_governance_brief",
+        "frame_portfolio_governance.portfolio_decision_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["analyze_portfolio_operating_model"]
-    assert analysis_step.route_contracts["portfolio_operating_model_analyzed"]["required_artifacts"] == [
-        "workflow_lifecycle_matrix",
-        "portfolio_gap_analysis",
-        "portfolio_change_candidates",
+    assert list(analysis_step.route_required_outputs["portfolio_operating_model_analyzed"]) == [
+        "analyze_portfolio_operating_model.workflow_lifecycle_matrix",
+        "analyze_portfolio_operating_model.portfolio_gap_analysis",
+        "analyze_portfolio_operating_model.portfolio_change_candidates",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_portfolio_operating_system"]
-    assert package_step.route_contracts["portfolio_operating_system_ready"]["required_artifacts"] == [
-        "workflow_portfolio_operating_system",
-        "portfolio_operating_summary",
-        "portfolio_next_actions",
+    assert list(package_step.route_required_outputs["portfolio_operating_system_ready"]) == [
+        "package_portfolio_operating_system.workflow_portfolio_operating_system",
+        "package_portfolio_operating_system.portfolio_operating_summary",
+        "package_portfolio_operating_system.portfolio_next_actions",
     ]
     assert package_step.expected_output_schema is not None
     assert set(package_step.expected_output_schema["required"]) >= {
@@ -118,14 +118,14 @@ def test_workflow_portfolio_to_operating_system_compiles_with_explicit_control_c
 
     publish_step = compiled.steps["publish_portfolio_operating_system"]
     assert publish_step.requires == (
-        "workflow_capability_snapshot",
-        "workflow_portfolio_health_snapshot",
-        "workflow_lifecycle_matrix",
-        "portfolio_gap_analysis",
-        "portfolio_change_candidates",
-        "workflow_portfolio_operating_system",
-        "portfolio_operating_summary",
-        "portfolio_next_actions",
+        "capture_portfolio_context.workflow_capability_snapshot",
+        "capture_portfolio_context.workflow_portfolio_health_snapshot",
+        "analyze_portfolio_operating_model.workflow_lifecycle_matrix",
+        "analyze_portfolio_operating_model.portfolio_gap_analysis",
+        "analyze_portfolio_operating_model.portfolio_change_candidates",
+        "package_portfolio_operating_system.workflow_portfolio_operating_system",
+        "package_portfolio_operating_system.portfolio_operating_summary",
+        "package_portfolio_operating_system.portfolio_next_actions",
     )
 
 
@@ -869,10 +869,10 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
         "blocked",
         "failed",
     )
-    assert provider.calls[5].route_contracts["portfolio_operating_system_ready"]["required_artifacts"] == [
-        "workflow_portfolio_operating_system",
-        "portfolio_operating_summary",
-        "portfolio_next_actions",
+    assert list(provider.calls[5].route_required_outputs["portfolio_operating_system_ready"]) == [
+        "package_portfolio_operating_system.workflow_portfolio_operating_system",
+        "package_portfolio_operating_system.portfolio_operating_summary",
+        "package_portfolio_operating_system.portfolio_next_actions",
     ]
     assert (run_dir / "run.json").exists()
 

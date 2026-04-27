@@ -23,7 +23,7 @@ from autoloop_v3.runtime.loader import (
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop_v3.stdlib import write_selected_workflow_capability_snapshot
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -83,27 +83,27 @@ def test_workflow_to_eval_suite_package_compiles_with_explicit_control_contracts
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["evaluation_target_framed"]["required_artifacts"] == [
-        "evaluation_request_brief",
-        "evaluation_dimensions",
+    assert list(frame_step.route_required_outputs["evaluation_target_framed"]) == [
+        "frame_evaluation_target.evaluation_request_brief",
+        "frame_evaluation_target.evaluation_dimensions",
     ]
     assert frame_step.expected_output_schema is not None
 
     design_step = compiled.steps["design_eval_cases"]
-    assert design_step.route_contracts["eval_cases_designed"]["required_artifacts"] == [
-        "benchmark_case_matrix",
-        "edge_case_matrix",
-        "adversarial_case_matrix",
-        "eval_case_manifest",
-        "eval_rubric",
+    assert list(design_step.route_required_outputs["eval_cases_designed"]) == [
+        "design_eval_cases.benchmark_case_matrix",
+        "design_eval_cases.edge_case_matrix",
+        "design_eval_cases.adversarial_case_matrix",
+        "design_eval_cases.eval_case_manifest",
+        "design_eval_cases.eval_rubric",
     ]
     assert design_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_workflow_eval_suite"]
-    assert package_step.route_contracts["workflow_eval_suite_ready"]["required_artifacts"] == [
-        "workflow_eval_suite",
-        "workflow_eval_suite_summary",
-        "workflow_eval_next_action",
+    assert list(package_step.route_required_outputs["workflow_eval_suite_ready"]) == [
+        "package_workflow_eval_suite.workflow_eval_suite",
+        "package_workflow_eval_suite.workflow_eval_suite_summary",
+        "package_workflow_eval_suite.workflow_eval_next_action",
     ]
     assert package_step.expected_output_schema is not None
     assert set(package_step.expected_output_schema["required"]) >= {
@@ -122,15 +122,15 @@ def test_workflow_to_eval_suite_package_compiles_with_explicit_control_contracts
 
     publish_step = compiled.steps["publish_workflow_eval_suite"]
     assert publish_step.requires == (
-        "selected_workflow_capability",
-        "benchmark_case_matrix",
-        "edge_case_matrix",
-        "adversarial_case_matrix",
-        "eval_case_manifest",
-        "eval_rubric",
-        "workflow_eval_suite",
-        "workflow_eval_suite_summary",
-        "workflow_eval_next_action",
+        "capture_selected_workflow_contract.selected_workflow_capability",
+        "design_eval_cases.benchmark_case_matrix",
+        "design_eval_cases.edge_case_matrix",
+        "design_eval_cases.adversarial_case_matrix",
+        "design_eval_cases.eval_case_manifest",
+        "design_eval_cases.eval_rubric",
+        "package_workflow_eval_suite.workflow_eval_suite",
+        "package_workflow_eval_suite.workflow_eval_suite_summary",
+        "package_workflow_eval_suite.workflow_eval_next_action",
     )
 
 
@@ -957,9 +957,9 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
         "package_workflow_eval_suite",
         "package_workflow_eval_suite",
     ]
-    assert provider.calls[1].route_contracts["evaluation_target_framed"]["required_artifacts"] == [
-        "evaluation_request_brief",
-        "evaluation_dimensions",
+    assert list(provider.calls[1].route_required_outputs["evaluation_target_framed"]) == [
+        "frame_evaluation_target.evaluation_request_brief",
+        "frame_evaluation_target.evaluation_dimensions",
     ]
     assert provider.calls[3].available_routes == (
         "eval_cases_designed",
@@ -969,10 +969,10 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
         "blocked",
         "failed",
     )
-    assert provider.calls[5].route_contracts["workflow_eval_suite_ready"]["required_artifacts"] == [
-        "workflow_eval_suite",
-        "workflow_eval_suite_summary",
-        "workflow_eval_next_action",
+    assert list(provider.calls[5].route_required_outputs["workflow_eval_suite_ready"]) == [
+        "package_workflow_eval_suite.workflow_eval_suite",
+        "package_workflow_eval_suite.workflow_eval_suite_summary",
+        "package_workflow_eval_suite.workflow_eval_next_action",
     ]
 
 

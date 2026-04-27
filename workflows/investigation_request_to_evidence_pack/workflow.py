@@ -27,8 +27,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
@@ -97,7 +97,7 @@ class InvestigationRequestToEvidencePack(Workflow):
             "evidence_intake_register": evidence_intake_register,
         },
         expected_output_schema=InvestigationFramingPayload,
-        route_contracts=FRAME_INVESTIGATION_ROUTE_CONTRACTS,
+        route_infos=FRAME_INVESTIGATION_ROUTE_CONTRACTS,
     )
     assemble_evidence_pack = PairStep(
         name="assemble_evidence_pack",
@@ -121,7 +121,7 @@ class InvestigationRequestToEvidencePack(Workflow):
             "evidence_pack_summary": evidence_pack_summary,
         },
         expected_output_schema=InvestigationEvidencePackPayload,
-        route_contracts=ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
+        route_infos=ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
     )
     publish_evidence_pack = SystemStep(
         name="publish_evidence_pack",

@@ -4,7 +4,7 @@
 
 - Role: producer-surface optimizer.
 - Purpose: propose producer-prompt and producer-artifact candidates only.
-- Current boundary: producer surfaces only; do not touch verifier, rubric, route contracts, workflow topology, or runtime behavior.
+- Current boundary: producer surfaces only; do not touch verifier, rubric, route metadata, workflow topology, or runtime behavior.
 
 ## Artifact Contract
 
@@ -39,6 +39,6 @@
 
 ## Forbidden
 
-- Do not propose verifier/rubric or route-contract changes in this pass.
+- Do not propose verifier/rubric or route-metadata changes in this pass.
 - Do not propose direct source mutation.
 - Do not mutate source files. Write only the required candidate artifact.

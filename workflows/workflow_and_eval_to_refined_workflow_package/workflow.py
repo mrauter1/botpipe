@@ -62,8 +62,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
@@ -215,7 +215,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "refinement_acceptance_criteria": refinement_acceptance_criteria,
         },
         expected_output_schema=RefinementRequestFramingPayload,
-        route_contracts=FRAME_REFINEMENT_REQUEST_ROUTE_CONTRACTS,
+        route_infos=FRAME_REFINEMENT_REQUEST_ROUTE_CONTRACTS,
     )
     design_refinement_plan = PairStep(
         name="design_refinement_plan",
@@ -241,7 +241,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "regression_guardrails": regression_guardrails,
         },
         expected_output_schema=WorkflowRefinementPlanPayload,
-        route_contracts=DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
+        route_infos=DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
     )
     implement_refined_workflow = PairStep(
         name="implement_refined_workflow",
@@ -266,7 +266,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "candidate_diff_summary": candidate_diff_summary,
         },
         expected_output_schema=WorkflowRefinementBuildPayload,
-        route_contracts=IMPLEMENT_REFINED_WORKFLOW_ROUTE_CONTRACTS,
+        route_infos=IMPLEMENT_REFINED_WORKFLOW_ROUTE_CONTRACTS,
     )
     evaluate_refined_workflow = PairStep(
         name="evaluate_refined_workflow",
@@ -299,7 +299,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "rollback_plan": rollback_plan,
         },
         expected_output_schema=WorkflowRefinementEvaluationPayload,
-        route_contracts=EVALUATE_REFINED_WORKFLOW_ROUTE_CONTRACTS,
+        route_infos=EVALUATE_REFINED_WORKFLOW_ROUTE_CONTRACTS,
     )
     publish_refined_workflow = SystemStep(
         name="publish_refined_workflow",

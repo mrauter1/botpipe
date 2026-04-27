@@ -184,18 +184,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Payload models used by the package:
 
@@ -215,7 +208,7 @@ Payload models used by the package:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and aliases.
-- Compilation must expose route summaries, route-required outputs, and payload schemas for the three pair steps.
+- Compilation must expose typed route metadata and payload schemas for the three pair steps.
 - Runtime proof must cover:
 - successful publication of `workflow_capability_snapshot.json`, `workflow_portfolio_health_snapshot.json`, `company_operation_snapshot.json`, `company_pressure_map.md`, `recursive_improvement_priority_matrix.md`, `recursive_improvement_candidates.json`, `recursive_improvement_cycle.md`, `recursive_improvement_summary.json`, `recursive_improvement_next_actions.md`, and `recursive_improvement_cycle_receipt.json`
 - deterministic capture of bounded task history, recent messages, and scoped workflow telemetry from the current `.autoloop` task/run records without mutating task or run state

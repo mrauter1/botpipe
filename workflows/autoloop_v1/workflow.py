@@ -13,8 +13,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from extensions import SessionPaths
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
 
-from workflow import Artifact, FAIL, GLOBAL, PAUSE, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, GLOBAL, PAUSE, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .conventions import AutoloopV1SessionPathStrategy, phase_dir_key
 from .parity import AutoloopV1Parity

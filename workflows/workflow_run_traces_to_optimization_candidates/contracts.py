@@ -11,7 +11,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import JsonArtifactSpec
 
-from workflow import RouteContract
+from core import RouteInfo
 
 
 EvidenceStrength = Literal["low", "medium", "high"]
@@ -501,9 +501,9 @@ WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT = JsonArtifactSpec(
 
 
 FRAME_ROUTE_CONTRACTS = {
-    "optimization_scope_framed": RouteContract(
+    "optimization_scope_framed": RouteInfo(
         summary="The selected workflow, trace-evidence boundary, and optimization scope are explicit enough for downstream ranking.",
-        required_artifacts=(
+        required_outputs=(
             "selected_workflow_capability",
             "selected_workflow_authoring_surface",
             "selected_workflow_decomposition_surface",
@@ -513,11 +513,11 @@ FRAME_ROUTE_CONTRACTS = {
             "excluded_run_report",
             "workflow_failure_scenario_seeds",
         ),
-        work_item_effect="Locks the optimizer scope on the authoritative workflow and filtered trace corpus without mutating source.",
+        handoff="Locks the optimizer scope on the authoritative workflow and filtered trace corpus without mutating source.",
     ),
-    "no_eligible_trace_evidence": RouteContract(
+    "no_eligible_trace_evidence": RouteInfo(
         summary="No eligible Plan-1 observability bundles remained after deterministic filtering, so the workflow should publish a no-op optimization packet.",
-        required_artifacts=(
+        required_outputs=(
             "selected_workflow_capability",
             "selected_workflow_authoring_surface",
             "selected_workflow_decomposition_surface",
@@ -527,156 +527,156 @@ FRAME_ROUTE_CONTRACTS = {
             "excluded_run_report",
             "workflow_failure_scenario_seeds",
         ),
-        work_item_effect="Short-circuits the workflow to no-op packaging rather than inventing optimization evidence or failing the run.",
+        handoff="Short-circuits the workflow to no-op packaging rather than inventing optimization evidence or failing the run.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The optimization scope still holds, but the framing rationale or evidence interpretation needs local repair.",
-        required_artifacts=(
+        required_outputs=(
             "workflow_optimization_scope",
             "workflow_optimization_trace_corpus",
             "excluded_run_report",
             "workflow_failure_scenario_seeds",
         ),
-        work_item_effect="Keeps the work local to optimizer framing without changing the selected workflow or rerunning the target workflow.",
+        handoff="Keeps the work local to optimizer framing without changing the selected workflow or rerunning the target workflow.",
     ),
 }
 
 RANK_TARGETS_ROUTE_CONTRACTS = {
-    "targets_ranked": RouteContract(
+    "targets_ranked": RouteInfo(
         summary="The deterministic evidence and framing are strong enough to rank the highest-leverage optimization targets.",
-        required_artifacts=("step_trace_metrics", "step_optimization_priority_report"),
-        work_item_effect="Advances the workflow into failure-scenario mining for the ranked target set.",
+        required_outputs=("step_trace_metrics", "step_optimization_priority_report"),
+        handoff="Advances the workflow into failure-scenario mining for the ranked target set.",
     ),
-    "insufficient_evidence": RouteContract(
+    "insufficient_evidence": RouteInfo(
         summary="The corpus is real but too thin to rank credible targets, so the workflow should package a conservative no-op or low-confidence output.",
-        required_artifacts=("step_trace_metrics", "step_optimization_priority_report"),
-        work_item_effect="Short-circuits candidate generation without claiming optimization confidence that the evidence does not support.",
+        required_outputs=("step_trace_metrics", "step_optimization_priority_report"),
+        handoff="Short-circuits candidate generation without claiming optimization confidence that the evidence does not support.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same ranking boundary still holds, but the attribution or ranking rationale needs local repair.",
-        required_artifacts=("step_trace_metrics", "step_optimization_priority_report"),
-        work_item_effect="Keeps ranking local to the same trace corpus and selected workflow boundary.",
+        required_outputs=("step_trace_metrics", "step_optimization_priority_report"),
+        handoff="Keeps ranking local to the same trace corpus and selected workflow boundary.",
     ),
 }
 
 MINE_FAILURES_ROUTE_CONTRACTS = {
-    "failure_scenarios_mined": RouteContract(
+    "failure_scenarios_mined": RouteInfo(
         summary="Failure scenarios are explicit enough to drive producer-side candidate generation.",
-        required_artifacts=("workflow_failure_scenarios",),
-        work_item_effect="Advances to producer-prompt candidate generation against mined failure surfaces.",
+        required_outputs=("workflow_failure_scenarios",),
+        handoff="Advances to producer-prompt candidate generation against mined failure surfaces.",
     ),
-    "no_failure_scenarios": RouteContract(
+    "no_failure_scenarios": RouteInfo(
         summary="The ranked targets did not yield concrete failure scenarios, so the workflow should skip directly to token analysis.",
-        required_artifacts=("workflow_failure_scenarios",),
-        work_item_effect="Skips producer-side candidate generation without fabricating failure scenarios.",
+        required_outputs=("workflow_failure_scenarios",),
+        handoff="Skips producer-side candidate generation without fabricating failure scenarios.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same failure-scenario boundary still holds, but the mined scenarios need local repair.",
-        required_artifacts=("workflow_failure_scenarios",),
-        work_item_effect="Keeps failure analysis local to the same ranked target set.",
+        required_outputs=("workflow_failure_scenarios",),
+        handoff="Keeps failure analysis local to the same ranked target set.",
     ),
 }
 
 OPTIMIZE_PRODUCER_ROUTE_CONTRACTS = {
-    "producer_candidates_ready": RouteContract(
+    "producer_candidates_ready": RouteInfo(
         summary="Producer-side optimization candidates are ready for downstream acceptance-function review.",
-        required_artifacts=("producer_prompt_optimization_candidates",),
-        work_item_effect="Advances to verifier/rubric candidate generation while keeping producer and acceptance surfaces separate.",
+        required_outputs=("producer_prompt_optimization_candidates",),
+        handoff="Advances to verifier/rubric candidate generation while keeping producer and acceptance surfaces separate.",
     ),
-    "producer_pass_not_applicable": RouteContract(
+    "producer_pass_not_applicable": RouteInfo(
         summary="Producer-side changes are not justified by the evidence, so the workflow should continue to acceptance-function review without forcing producer changes.",
-        required_artifacts=("producer_prompt_optimization_candidates",),
-        work_item_effect="Preserves candidate-only discipline by explicitly recording that the producer pass was not applicable.",
+        required_outputs=("producer_prompt_optimization_candidates",),
+        handoff="Preserves candidate-only discipline by explicitly recording that the producer pass was not applicable.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="Producer-side candidate generation needs local repair under the same failure-surface boundary.",
-        required_artifacts=("producer_prompt_optimization_candidates",),
-        work_item_effect="Keeps candidate generation local to producer-facing surfaces only.",
+        required_outputs=("producer_prompt_optimization_candidates",),
+        handoff="Keeps candidate generation local to producer-facing surfaces only.",
     ),
 }
 
 OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS = {
-    "verifier_rubric_candidates_ready": RouteContract(
+    "verifier_rubric_candidates_ready": RouteInfo(
         summary="Acceptance-function candidates are ready for downstream token analysis.",
-        required_artifacts=("verifier_rubric_optimization_candidates",),
-        work_item_effect="Advances to token analysis while keeping verifier, rubric, and route-contract changes merged on one surface.",
+        required_outputs=("verifier_rubric_optimization_candidates",),
+        handoff="Advances to token analysis while keeping verifier, rubric, and route-metadata changes merged on one surface.",
     ),
-    "verifier_rubric_pass_not_applicable": RouteContract(
+    "verifier_rubric_pass_not_applicable": RouteInfo(
         summary="The evidence does not justify acceptance-function changes, so the workflow should continue without forcing verifier or rubric edits.",
-        required_artifacts=("verifier_rubric_optimization_candidates",),
-        work_item_effect="Preserves the rule that verifier/rubric changes must be evidence-backed rather than pass-rate chasing.",
+        required_outputs=("verifier_rubric_optimization_candidates",),
+        handoff="Preserves the rule that verifier/rubric changes must be evidence-backed rather than pass-rate chasing.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="Acceptance-function candidate generation needs local repair under the same mined-failure boundary.",
-        required_artifacts=("verifier_rubric_optimization_candidates",),
-        work_item_effect="Keeps verifier/rubric work local to the same ranked target and failure set.",
+        required_outputs=("verifier_rubric_optimization_candidates",),
+        handoff="Keeps verifier/rubric work local to the same ranked target and failure set.",
     ),
 }
 
 OPTIMIZE_TOKENS_ROUTE_CONTRACTS = {
-    "token_candidates_ready": RouteContract(
+    "token_candidates_ready": RouteInfo(
         summary="Token-compression candidates are ready and classified by risk for downstream adversarial analysis.",
-        required_artifacts=("token_optimization_candidates",),
-        work_item_effect="Advances to adversarial-case generation after explicitly classifying safe versus risky compression ideas.",
+        required_outputs=("token_optimization_candidates",),
+        handoff="Advances to adversarial-case generation after explicitly classifying safe versus risky compression ideas.",
     ),
-    "token_pass_not_applicable": RouteContract(
+    "token_pass_not_applicable": RouteInfo(
         summary="Token optimization is disabled or not justified by the current evidence, so the workflow should continue without compression claims.",
-        required_artifacts=("token_optimization_candidates",),
-        work_item_effect="Skips token compression without silently changing semantics or inventing savings.",
+        required_outputs=("token_optimization_candidates",),
+        handoff="Skips token compression without silently changing semantics or inventing savings.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="Token candidate generation needs local repair while preserving the current optimization boundary.",
-        required_artifacts=("token_optimization_candidates",),
-        work_item_effect="Keeps token analysis local to compression classification and prompt-shape pressure only.",
+        required_outputs=("token_optimization_candidates",),
+        handoff="Keeps token analysis local to compression classification and prompt-shape pressure only.",
     ),
 }
 
 ADVERSARIAL_CASES_ROUTE_CONTRACTS = {
-    "adversarial_cases_ready": RouteContract(
+    "adversarial_cases_ready": RouteInfo(
         summary="Adversarial case candidates are ready for workflow-level analysis and later eval-suite consideration.",
-        required_artifacts=("adversarial_case_candidates",),
-        work_item_effect="Advances to workflow-level analysis without materializing the cases into an eval suite automatically.",
+        required_outputs=("adversarial_case_candidates",),
+        handoff="Advances to workflow-level analysis without materializing the cases into an eval suite automatically.",
     ),
-    "adversarial_generation_skipped": RouteContract(
+    "adversarial_generation_skipped": RouteInfo(
         summary="Adversarial generation is disabled, so the workflow should continue directly to workflow-level analysis.",
-        required_artifacts=("adversarial_case_candidates",),
-        work_item_effect="Keeps the skip explicit rather than implying that adversarial work happened.",
+        required_outputs=("adversarial_case_candidates",),
+        handoff="Keeps the skip explicit rather than implying that adversarial work happened.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="Adversarial-case generation needs local repair without widening the optimization boundary.",
-        required_artifacts=("adversarial_case_candidates",),
-        work_item_effect="Keeps adversarial work local to observed failure modes only.",
+        required_outputs=("adversarial_case_candidates",),
+        handoff="Keeps adversarial work local to observed failure modes only.",
     ),
 }
 
 WORKFLOW_LEVEL_ROUTE_CONTRACTS = {
-    "workflow_level_candidates_ready": RouteContract(
+    "workflow_level_candidates_ready": RouteInfo(
         summary="Workflow-level candidates are ready for packaging alongside any local optimization outputs.",
-        required_artifacts=("workflow_level_optimization_candidates",),
-        work_item_effect="Advances to packaging after local and cross-step evidence has been made explicit.",
+        required_outputs=("workflow_level_optimization_candidates",),
+        handoff="Advances to packaging after local and cross-step evidence has been made explicit.",
     ),
-    "workflow_level_pass_not_applicable": RouteContract(
+    "workflow_level_pass_not_applicable": RouteInfo(
         summary="The evidence does not justify workflow-level changes, so the workflow should package only local or no-op findings.",
-        required_artifacts=("workflow_level_optimization_candidates",),
-        work_item_effect="Preserves the rule to prefer local fixes unless workflow-level causes are explicit.",
+        required_outputs=("workflow_level_optimization_candidates",),
+        handoff="Preserves the rule to prefer local fixes unless workflow-level causes are explicit.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="Workflow-level candidate generation needs local repair under the same optimization boundary.",
-        required_artifacts=("workflow_level_optimization_candidates",),
-        work_item_effect="Keeps workflow-level analysis local and evidence-driven.",
+        required_outputs=("workflow_level_optimization_candidates",),
+        handoff="Keeps workflow-level analysis local and evidence-driven.",
     ),
 }
 
 PACKAGE_ROUTE_CONTRACTS = {
-    "optimization_packet_ready": RouteContract(
+    "optimization_packet_ready": RouteInfo(
         summary="The optimization packet and scorecard are aligned and ready for deterministic publication checks and receipt writing.",
-        required_artifacts=("workflow_optimization_scorecard", "workflow_optimization_packet"),
-        work_item_effect="Advances to deterministic publication checks, refinement-evidence writing, and receipt publication without mutating the selected workflow.",
+        required_outputs=("workflow_optimization_scorecard", "workflow_optimization_packet"),
+        handoff="Advances to deterministic publication checks, refinement-evidence writing, and receipt publication without mutating the selected workflow.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The package artifacts need local repair before publication can proceed.",
-        required_artifacts=("workflow_optimization_scorecard", "workflow_optimization_packet"),
-        work_item_effect="Keeps packaging local and candidate-only without inventing downstream execution.",
+        required_outputs=("workflow_optimization_scorecard", "workflow_optimization_packet"),
+        handoff="Keeps packaging local and candidate-only without inventing downstream execution.",
     ),
 }
 

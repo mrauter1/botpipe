@@ -22,7 +22,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -140,27 +140,27 @@ def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_c
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["decomposition_request_framed"]["required_artifacts"] == [
-        "decomposition_request_brief",
-        "decomposition_acceptance_criteria",
+    assert list(frame_step.route_required_outputs["decomposition_request_framed"]) == [
+        "frame_decomposition_request.decomposition_request_brief",
+        "frame_decomposition_request.decomposition_acceptance_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     design_step = compiled.steps["design_decomposition_plan"]
-    assert design_step.route_contracts["decomposition_plan_designed"]["required_artifacts"] == [
-        "extraction_strategy",
-        "building_block_interface_contracts",
-        "parent_rewrite_plan",
-        "regression_guardrails",
+    assert list(design_step.route_required_outputs["decomposition_plan_designed"]) == [
+        "design_decomposition_plan.extraction_strategy",
+        "design_decomposition_plan.building_block_interface_contracts",
+        "design_decomposition_plan.parent_rewrite_plan",
+        "design_decomposition_plan.regression_guardrails",
     ]
     assert design_step.expected_output_schema is not None
 
     implement_step = compiled.steps["implement_candidate_decomposition"]
-    assert implement_step.route_contracts["candidate_decomposition_built"]["required_artifacts"] == [
-        "candidate_decomposition_surface",
-        "candidate_building_block_index",
-        "decomposition_build_report",
-        "candidate_diff_summary",
+    assert list(implement_step.route_required_outputs["candidate_decomposition_built"]) == [
+        "implement_candidate_decomposition.candidate_decomposition_surface",
+        "implement_candidate_decomposition.candidate_building_block_index",
+        "implement_candidate_decomposition.decomposition_build_report",
+        "implement_candidate_decomposition.candidate_diff_summary",
     ]
     assert implement_step.expected_output_schema is not None
     assert set(implement_step.expected_output_schema["required"]) >= {
@@ -172,11 +172,11 @@ def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_c
     }
 
     evaluate_step = compiled.steps["evaluate_candidate_decomposition"]
-    assert evaluate_step.route_contracts["candidate_decomposition_evaluated"]["required_artifacts"] == [
-        "decomposition_verification_report",
-        "composition_migration_guide",
-        "promotion_record",
-        "rollback_plan",
+    assert list(evaluate_step.route_required_outputs["candidate_decomposition_evaluated"]) == [
+        "evaluate_candidate_decomposition.decomposition_verification_report",
+        "evaluate_candidate_decomposition.composition_migration_guide",
+        "evaluate_candidate_decomposition.promotion_record",
+        "evaluate_candidate_decomposition.rollback_plan",
     ]
     assert evaluate_step.expected_output_schema is not None
     assert set(evaluate_step.expected_output_schema["required"]) >= {
@@ -192,15 +192,15 @@ def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_c
 
     publish_step = compiled.steps["publish_candidate_decomposition"]
     assert publish_step.requires == (
-        "selected_workflow_decomposition_surface",
-        "baseline_parent_manifest",
-        "decomposition_evidence_manifest",
+        "capture_decomposition_context.selected_workflow_decomposition_surface",
+        "capture_decomposition_context.baseline_parent_manifest",
+        "capture_decomposition_context.decomposition_evidence_manifest",
         "candidate_decomposition_manifest",
-        "candidate_building_block_index",
-        "decomposition_verification_report",
-        "composition_migration_guide",
-        "promotion_record",
-        "rollback_plan",
+        "implement_candidate_decomposition.candidate_building_block_index",
+        "evaluate_candidate_decomposition.decomposition_verification_report",
+        "evaluate_candidate_decomposition.composition_migration_guide",
+        "evaluate_candidate_decomposition.promotion_record",
+        "evaluate_candidate_decomposition.rollback_plan",
     )
 
 
@@ -703,9 +703,9 @@ def test_workflow_package_to_composable_building_blocks_runs_and_publishes_candi
         "evaluate_candidate_decomposition",
         "evaluate_candidate_decomposition",
     ]
-    assert run.provider.calls[1].route_contracts["decomposition_request_framed"]["required_artifacts"] == [
-        "decomposition_request_brief",
-        "decomposition_acceptance_criteria",
+    assert list(run.provider.calls[1].route_required_outputs["decomposition_request_framed"]) == [
+        "frame_decomposition_request.decomposition_request_brief",
+        "frame_decomposition_request.decomposition_acceptance_criteria",
     ]
     assert run.provider.calls[5].available_routes == (
         "candidate_decomposition_built",
@@ -715,11 +715,11 @@ def test_workflow_package_to_composable_building_blocks_runs_and_publishes_candi
         "blocked",
         "failed",
     )
-    assert run.provider.calls[7].route_contracts["candidate_decomposition_evaluated"]["required_artifacts"] == [
-        "decomposition_verification_report",
-        "composition_migration_guide",
-        "promotion_record",
-        "rollback_plan",
+    assert list(run.provider.calls[7].route_required_outputs["candidate_decomposition_evaluated"]) == [
+        "evaluate_candidate_decomposition.decomposition_verification_report",
+        "evaluate_candidate_decomposition.composition_migration_guide",
+        "evaluate_candidate_decomposition.promotion_record",
+        "evaluate_candidate_decomposition.rollback_plan",
     ]
 
 
@@ -1405,8 +1405,8 @@ def _write_candidate_decomposition_surface(request) -> str:
                 "",
                 "from pydantic import BaseModel",
                 "",
-                "from workflow import Artifact, SUCCESS, SystemStep, Workflow",
-                "from workflow.primitives import Event",
+                "from core import Artifact, SUCCESS, SystemStep, Workflow",
+                "from core.primitives import Event",
                 "",
                 "",
                 "class ReleaseDecisionEvidencePack(Workflow):",

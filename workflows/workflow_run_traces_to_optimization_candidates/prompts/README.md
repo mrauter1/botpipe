@@ -11,7 +11,8 @@
 - Verifier/rubric changes are one merged acceptance-function surface.
 - Token compression must be classified by quality risk.
 - Prompt files still own the step role, current work-item boundary, exact artifact read/write set, route posture, and forbidden actions.
-- The runtime injects a compact human-readable step contract with required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, optional route handoff, and optional retry feedback.
+- The runtime injects a compact human-readable step contract with required inputs, writable artifacts, route-specific required outputs, expected output payload requirements, optional route handoff, and optional retry feedback.
+- Route metadata remains the authoritative source for route summaries, required outputs, and handoff wording.
 - Provider raw output is runtime telemetry. It is persisted for logs, traces, debugging, and replay, but it is not rendered into provider prompts.
 - Provider prose is control metadata unless it is written into a declared artifact.
 - Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.

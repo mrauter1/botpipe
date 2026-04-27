@@ -18,7 +18,7 @@ from autoloop_v3.core.stores import InMemorySessionStore
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import discover_workflow_packages, resolve_workflow_reference
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -114,20 +114,20 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["no_eligible_trace_evidence"]["required_artifacts"] == [
-        "selected_workflow_capability",
-        "selected_workflow_authoring_surface",
-        "selected_workflow_decomposition_surface",
-        "selected_workflow_source_manifest",
-        "workflow_optimization_scope",
-        "workflow_optimization_trace_corpus",
-        "excluded_run_report",
-        "workflow_failure_scenario_seeds",
+    assert list(frame_step.route_required_outputs["no_eligible_trace_evidence"]) == [
+        "capture_frame_context.selected_workflow_capability",
+        "capture_frame_context.selected_workflow_authoring_surface",
+        "capture_frame_context.selected_workflow_decomposition_surface",
+        "capture_frame_context.selected_workflow_source_manifest",
+        "capture_frame_context.workflow_optimization_scope",
+        "capture_frame_context.workflow_optimization_trace_corpus",
+        "capture_frame_context.excluded_run_report",
+        "capture_frame_context.workflow_failure_scenario_seeds",
     ]
     package_step = compiled.steps["package"]
-    assert package_step.route_contracts["optimization_packet_ready"]["required_artifacts"] == [
-        "workflow_optimization_scorecard",
-        "workflow_optimization_packet",
+    assert list(package_step.route_required_outputs["optimization_packet_ready"]) == [
+        "package.workflow_optimization_scorecard",
+        "package.workflow_optimization_packet",
     ]
 
 

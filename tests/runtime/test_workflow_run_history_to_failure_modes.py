@@ -25,7 +25,7 @@ from autoloop_v3.stdlib import (
     write_selected_workflow_capability_snapshot,
     write_selected_workflow_run_history_snapshot,
 )
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -87,25 +87,25 @@ def test_workflow_run_history_to_failure_modes_package_compiles_with_explicit_co
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["diagnostic_scope_framed"]["required_artifacts"] == [
-        "diagnostic_scope_brief",
-        "run_history_scope",
+    assert list(frame_step.route_required_outputs["diagnostic_scope_framed"]) == [
+        "frame_diagnostic_scope.diagnostic_scope_brief",
+        "frame_diagnostic_scope.run_history_scope",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["map_failure_modes"]
-    assert analysis_step.route_contracts["failure_modes_mapped"]["required_artifacts"] == [
-        "failure_mode_map",
-        "failure_mode_manifest",
-        "recurring_weak_points",
+    assert list(analysis_step.route_required_outputs["failure_modes_mapped"]) == [
+        "map_failure_modes.failure_mode_map",
+        "map_failure_modes.failure_mode_manifest",
+        "map_failure_modes.recurring_weak_points",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_improvement_pressure"]
-    assert package_step.route_contracts["improvement_pressure_packaged"]["required_artifacts"] == [
-        "improvement_opportunities",
-        "improvement_opportunities_summary",
-        "diagnostic_next_actions",
+    assert list(package_step.route_required_outputs["improvement_pressure_packaged"]) == [
+        "package_improvement_pressure.improvement_opportunities",
+        "package_improvement_pressure.improvement_opportunities_summary",
+        "package_improvement_pressure.diagnostic_next_actions",
     ]
     assert package_step.expected_output_schema is not None
     assert set(package_step.expected_output_schema["required"]) >= {
@@ -122,16 +122,16 @@ def test_workflow_run_history_to_failure_modes_package_compiles_with_explicit_co
 
     publish_step = compiled.steps["publish_failure_mode_package"]
     assert publish_step.requires == (
-        "selected_workflow_capability",
-        "selected_workflow_run_history",
-        "diagnostic_scope_brief",
-        "run_history_scope",
-        "failure_mode_map",
-        "failure_mode_manifest",
-        "recurring_weak_points",
-        "improvement_opportunities",
-        "improvement_opportunities_summary",
-        "diagnostic_next_actions",
+        "capture_run_history_context.selected_workflow_capability",
+        "capture_run_history_context.selected_workflow_run_history",
+        "frame_diagnostic_scope.diagnostic_scope_brief",
+        "frame_diagnostic_scope.run_history_scope",
+        "map_failure_modes.failure_mode_map",
+        "map_failure_modes.failure_mode_manifest",
+        "map_failure_modes.recurring_weak_points",
+        "package_improvement_pressure.improvement_opportunities",
+        "package_improvement_pressure.improvement_opportunities_summary",
+        "package_improvement_pressure.diagnostic_next_actions",
     )
 
 
@@ -1182,9 +1182,9 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
         "package_improvement_pressure",
         "package_improvement_pressure",
     ]
-    assert provider.calls[1].route_contracts["diagnostic_scope_framed"]["required_artifacts"] == [
-        "diagnostic_scope_brief",
-        "run_history_scope",
+    assert list(provider.calls[1].route_required_outputs["diagnostic_scope_framed"]) == [
+        "frame_diagnostic_scope.diagnostic_scope_brief",
+        "frame_diagnostic_scope.run_history_scope",
     ]
     assert provider.calls[3].available_routes == (
         "failure_modes_mapped",
@@ -1194,10 +1194,10 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
         "blocked",
         "failed",
     )
-    assert provider.calls[5].route_contracts["improvement_pressure_packaged"]["required_artifacts"] == [
-        "improvement_opportunities",
-        "improvement_opportunities_summary",
-        "diagnostic_next_actions",
+    assert list(provider.calls[5].route_required_outputs["improvement_pressure_packaged"]) == [
+        "package_improvement_pressure.improvement_opportunities",
+        "package_improvement_pressure.improvement_opportunities_summary",
+        "package_improvement_pressure.diagnostic_next_actions",
     ]
 
 

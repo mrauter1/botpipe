@@ -20,7 +20,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -104,28 +104,28 @@ def test_release_go_no_go_package_compiles_with_explicit_control_contracts(monke
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["release_framed"]["required_artifacts"] == [
-        "release_scope_brief",
-        "decision_criteria",
-        "evidence_intake_register",
+    assert list(frame_step.route_required_outputs["release_framed"]) == [
+        "frame_release.release_scope_brief",
+        "frame_release.decision_criteria",
+        "frame_release.evidence_intake_register",
     ]
-    assert frame_step.route_contracts["release_framed"]["work_item_effect"] == (
+    assert frame_step.route_infos["release_framed"].handoff == (
         "Locks the release framing so evidence assembly can proceed against a fixed gate."
     )
     assert frame_step.expected_output_schema is not None
 
     assessment_step = compiled.steps["assess_go_no_go"]
-    assert assessment_step.route_contracts["assessment_ready"]["required_artifacts"] == [
-        "go_no_go_assessment",
-        "risk_register",
-        "decision_summary",
+    assert list(assessment_step.route_required_outputs["assessment_ready"]) == [
+        "assess_go_no_go.go_no_go_assessment",
+        "assess_go_no_go.risk_register",
+        "assess_go_no_go.decision_summary",
     ]
     assert assessment_step.expected_output_schema is not None
 
     package_step = compiled.steps["prepare_decision_package"]
-    assert package_step.route_contracts["decision_package_ready"]["required_artifacts"] == [
-        "release_decision_package",
-        "release_communications_draft",
+    assert list(package_step.route_required_outputs["decision_package_ready"]) == [
+        "prepare_decision_package.release_decision_package",
+        "prepare_decision_package.release_communications_draft",
     ]
 
 
@@ -746,11 +746,11 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
         "blocked",
         "failed",
     )
-    assert provider.calls[7].route_contracts["decision_package_ready"]["required_artifacts"] == [
-        "release_decision_package",
-        "release_communications_draft",
+    assert list(provider.calls[7].route_required_outputs["decision_package_ready"]) == [
+        "prepare_decision_package.release_decision_package",
+        "prepare_decision_package.release_communications_draft",
     ]
-    assert provider.calls[7].route_contracts["decision_package_ready"]["work_item_effect"] == (
+    assert provider.calls[7].route_infos["decision_package_ready"].handoff == (
         "Advances the release workflow to deterministic publication of the terminal receipt."
     )
     assert (run_dir / "run.json").exists()

@@ -20,7 +20,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Event, Outcome
+from core.primitives import Event, Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -104,30 +104,30 @@ def test_security_remediation_package_compiles_with_explicit_control_contracts(m
         "blocked",
         "failed",
     )
-    assert assess_step.route_contracts["finding_assessed"]["required_artifacts"] == [
-        "exploit_summary",
-        "affected_surface",
-        "root_cause_analysis",
-        "remediation_options",
-        "assessment_summary",
+    assert list(assess_step.route_required_outputs["finding_assessed"]) == [
+        "assess_security_finding.exploit_summary",
+        "assess_security_finding.affected_surface",
+        "assess_security_finding.root_cause_analysis",
+        "assess_security_finding.remediation_options",
+        "assess_security_finding.assessment_summary",
     ]
     assert assess_step.expected_output_schema is not None
 
     remediation_step = compiled.steps["plan_verified_remediation"]
-    assert remediation_step.route_contracts["remediation_planned"]["required_artifacts"] == [
-        "selected_remediation_plan",
-        "verification_plan",
-        "rollout_plan",
-        "rollback_safety_plan",
-        "remediation_summary",
+    assert list(remediation_step.route_required_outputs["remediation_planned"]) == [
+        "plan_verified_remediation.selected_remediation_plan",
+        "plan_verified_remediation.verification_plan",
+        "plan_verified_remediation.rollout_plan",
+        "plan_verified_remediation.rollback_safety_plan",
+        "plan_verified_remediation.remediation_summary",
     ]
     assert remediation_step.expected_output_schema is not None
 
     closure_step = compiled.steps["prepare_closure_package"]
-    assert closure_step.route_contracts["closure_package_ready"]["required_artifacts"] == [
-        "security_remediation_package",
-        "stakeholder_communication_draft",
-        "closure_evidence_requirements",
+    assert list(closure_step.route_required_outputs["closure_package_ready"]) == [
+        "prepare_closure_package.security_remediation_package",
+        "prepare_closure_package.stakeholder_communication_draft",
+        "prepare_closure_package.closure_evidence_requirements",
     ]
     assert closure_step.expected_output_schema is not None
 
@@ -559,17 +559,17 @@ def test_security_remediation_package_runs_and_emits_terminal_receipt(tmp_path: 
         "prepare_closure_package",
         "prepare_closure_package",
     ]
-    assert provider.calls[5].route_contracts["finding_assessed"]["required_artifacts"] == [
-        "exploit_summary",
-        "affected_surface",
-        "root_cause_analysis",
-        "remediation_options",
-        "assessment_summary",
+    assert list(provider.calls[5].route_required_outputs["finding_assessed"]) == [
+        "assess_security_finding.exploit_summary",
+        "assess_security_finding.affected_surface",
+        "assess_security_finding.root_cause_analysis",
+        "assess_security_finding.remediation_options",
+        "assess_security_finding.assessment_summary",
     ]
-    assert provider.calls[9].route_contracts["closure_package_ready"]["required_artifacts"] == [
-        "security_remediation_package",
-        "stakeholder_communication_draft",
-        "closure_evidence_requirements",
+    assert list(provider.calls[9].route_required_outputs["closure_package_ready"]) == [
+        "prepare_closure_package.security_remediation_package",
+        "prepare_closure_package.stakeholder_communication_draft",
+        "prepare_closure_package.closure_evidence_requirements",
     ]
 
 

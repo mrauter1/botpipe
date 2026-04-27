@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from workflow import RouteContract
+from core import RouteInfo
 
 
 class SecurityAssessmentPayload(BaseModel):
@@ -41,98 +41,85 @@ class SecurityClosurePackagePayload(BaseModel):
 
 
 ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS = {
-    "finding_assessed": RouteContract(
+    "finding_assessed": RouteInfo(
         summary="The finding has an explicit exploit summary, affected-surface map, root-cause analysis, remediation options, and machine-readable assessment summary.",
-        required_artifacts=(
+        required_outputs=(
             "exploit_summary",
             "affected_surface",
             "root_cause_analysis",
             "remediation_options",
             "assessment_summary",
         ),
-        work_item_effect="Locks the security assessment so remediation planning can proceed against an explicit exploit and evidence boundary.",
+        handoff="Locks the security assessment so remediation planning can proceed against an explicit exploit and evidence boundary.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same assessment boundary still holds, but the exploit analysis, root-cause reasoning, or remediation options need local repair.",
-        required_artifacts=(
+        required_outputs=(
             "exploit_summary",
             "affected_surface",
             "root_cause_analysis",
             "remediation_options",
             "assessment_summary",
         ),
-        work_item_effect="Keeps the security assessment local and reruns the same step for tighter exploit analysis and option comparison.",
+        handoff="Keeps the security assessment local and reruns the same step for tighter exploit analysis and option comparison.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The evidence boundary, affected surface, or remediation framing changed materially and the evidence-pack stage must be revisited.",
-        required_artifacts=(
-            "finding_scope_brief",
-            "security_evidence_pack",
-            "security_evidence_pack_summary",
-            "security_evidence_gap_register",
-        ),
-        work_item_effect="Routes back to evidence-pack composition because the current security-assessment boundary is no longer authoritative.",
+        handoff="Routes back to evidence-pack composition because the current security-assessment boundary is no longer authoritative.",
     ),
 }
 
 PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS = {
-    "remediation_planned": RouteContract(
+    "remediation_planned": RouteInfo(
         summary="The workflow has a selected remediation plan, verification strategy, rollout guidance, rollback safety plan, and machine-readable remediation summary.",
-        required_artifacts=(
+        required_outputs=(
             "selected_remediation_plan",
             "verification_plan",
             "rollout_plan",
             "rollback_safety_plan",
             "remediation_summary",
         ),
-        work_item_effect="Promotes the security finding from assessment into execution-ready remediation planning.",
+        handoff="Promotes the security finding from assessment into execution-ready remediation planning.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same remediation-planning boundary holds, but the chosen remediation, verification plan, or rollout detail needs local repair.",
-        required_artifacts=(
+        required_outputs=(
             "selected_remediation_plan",
             "verification_plan",
             "rollout_plan",
             "rollback_safety_plan",
             "remediation_summary",
         ),
-        work_item_effect="Keeps remediation planning local and reruns the same step for tighter implementation and verification planning.",
+        handoff="Keeps remediation planning local and reruns the same step for tighter implementation and verification planning.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The assessment conclusion or fix strategy changed materially enough that the security finding must be reassessed before planning continues.",
-        required_artifacts=("exploit_summary", "root_cause_analysis", "remediation_options", "assessment_summary"),
-        work_item_effect="Returns the workflow to the security-assessment step because the current remediation boundary is materially wrong.",
+        handoff="Returns the workflow to the security-assessment step because the current remediation boundary is materially wrong.",
     ),
 }
 
 PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS = {
-    "closure_package_ready": RouteContract(
+    "closure_package_ready": RouteInfo(
         summary="The final remediation package, stakeholder communication draft, and closure-evidence requirements are aligned to the selected remediation plan.",
-        required_artifacts=(
+        required_outputs=(
             "security_remediation_package",
             "stakeholder_communication_draft",
             "closure_evidence_requirements",
         ),
-        work_item_effect="Advances the workflow to deterministic publication of the closure-ready remediation receipt.",
+        handoff="Advances the workflow to deterministic publication of the closure-ready remediation receipt.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same closure-packaging boundary holds, but the package, communication draft, or closure evidence contract needs local repair.",
-        required_artifacts=(
+        required_outputs=(
             "security_remediation_package",
             "stakeholder_communication_draft",
             "closure_evidence_requirements",
         ),
-        work_item_effect="Keeps closure packaging local and reruns the same step for final packaging corrections.",
+        handoff="Keeps closure packaging local and reruns the same step for final packaging corrections.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Closure packaging revealed a material change in the remediation or verification story and planning must be revisited.",
-        required_artifacts=(
-            "selected_remediation_plan",
-            "verification_plan",
-            "rollout_plan",
-            "remediation_summary",
-        ),
-        work_item_effect="Routes back to remediation planning because the closure package no longer matches the planned fix and proof contract.",
+        handoff="Routes back to remediation planning because the closure package no longer matches the planned fix and proof contract.",
     ),
 }
 

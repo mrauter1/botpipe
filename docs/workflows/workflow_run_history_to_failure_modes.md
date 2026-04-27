@@ -174,18 +174,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Payload models used by the package:
 
@@ -205,7 +198,7 @@ Payload models used by the package:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose route summaries, route-required outputs, and payload schemas for the three pair steps.
+- Compilation must expose typed route metadata and payload schemas for the three pair steps.
 - Runtime proof must cover:
 - successful publication of `selected_workflow_run_history.json`, `failure_mode_map.md`, `failure_mode_manifest.json`, `recurring_weak_points.md`, `improvement_opportunities.md`, `improvement_opportunities.json`, `diagnostic_next_actions.md`, and `failure_mode_diagnostic_receipt.json`
 - deterministic capture of filtered run-history evidence, including request text, parsed events, parsed child-run records, and parsed parent-run metadata when present
@@ -223,7 +216,6 @@ Payload models used by the package:
 
 - `workflow_idea_to_workflow_package` remains the standing greenfield authoring baseline and was reconsidered before shipping this narrower diagnostic layer.
 - The package relies on the cycle-9 `stdlib/diagnostics.py` seam instead of inventing runtime-owned diagnostics automation or widening `workflow.toml`.
-- `workflow_run_traces_to_optimization_candidates` is the follow-on consumer when trace, git-tracking, static-step-graph, and raw-output observability should be turned into candidate-only optimization evidence; this diagnostic workflow still stops at explicit publication.
 - Later cycles can now layer `workflow_and_eval_to_refined_workflow_package` or broader portfolio operating workflows on top of an explicit failure-mode package instead of inferring failure pressure from raw run logs.
 
 ## Evidence

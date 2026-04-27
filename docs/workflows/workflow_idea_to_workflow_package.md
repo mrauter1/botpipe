@@ -1,13 +1,13 @@
 # `workflow_idea_to_workflow_package`
 
-`workflow_idea_to_workflow_package` is the repository's first explicit workflow-builder package. It turns an ambiguous workflow idea into a concrete Autoloop workflow plus design, verification, promotion, and rollback evidence.
+`workflow_idea_to_workflow_package` is the repository's first explicit workflow-builder package. It turns an ambiguous workflow idea into a concrete Autoloop workflow package plus design, verification, promotion, and rollback evidence.
 
 ## Problem and value
 
-- Problem solved: turn a valuable workflow idea or reusable recipe concept into a workflow another team can discover, inspect, run, and extend.
+- Problem solved: turn a valuable workflow idea or reusable recipe concept into a package another team can discover, inspect, run, and extend.
 - Why it matters: the repo previously had only `autoloop init workflow <name>` plus manual discipline, not a credible builder workflow.
 - Likely sponsors: framework owners, internal platform teams, engineering productivity groups, or consulting organizations building repeatable delivery playbooks.
-- Classification: end-to-end workflow. The trigger is a workflow idea; the terminal result is a workflow surface and evidence pack.
+- Classification: end-to-end workflow. The trigger is a workflow idea; the terminal result is a workflow package and evidence pack.
 - Why Autoloop fits: the work spans candidate analysis, explicit design, repository edits, and verification evidence across multiple durable artifacts.
 - Why one-shot is insufficient: the package needs comparison, design, build, evaluation, and a deterministic publish gate with rework versus replan logic.
 
@@ -22,7 +22,6 @@ autoloop run workflow_idea_to_workflow_package <task-id> \
   --message "We need a workflow for release readiness reviews." \
   -wf package_name release_candidate_to_go_no_go \
   -wf workflow_kind end_to_end \
-  -wf authoring_shape flow_specs \
   -wf aliases release-go-no-go \
   -wf target_test_command "pytest -q"
 ```
@@ -32,7 +31,6 @@ Parameters:
 - `package_name` required
 - `package_title` optional
 - `workflow_kind` required: `end_to_end` or `building_block`
-- `authoring_shape` optional: `single`, `flow_specs`, or `package`; defaults to `flow_specs`
 - `aliases` optional and repeatable
 - `target_test_command` optional, default `pytest`
 
@@ -54,14 +52,14 @@ Parameters:
 
 ## Meaningful design decisions
 
-### 1. Output shape
+### 1. Package shape
 
 - Alternatives considered:
-- force every generated workflow into one mature package shape
-- allow single-file, flow-first, and mature package outputs
-- keep the builder itself as the standing baseline
-- Selected: allow `single`, `flow_specs`, and `package` outputs while keeping the builder itself as an end-to-end workflow
-- Why: the repository had no credible builder capability, and the new doctrine requires flow-first outputs without mandatory manifest or prompt clutter.
+- ship only a reusable helper or scaffold recipe
+- ship a domain workflow first
+- ship the workflow-builder itself
+- Selected: ship the workflow-builder itself as an end-to-end workflow package
+- Why: the repository had no credible builder capability, so shipping the builder is the highest-leverage addition.
 
 ### 2. Input capture strategy
 
@@ -72,13 +70,13 @@ Parameters:
 - Selected: deterministic bootstrap step
 - Why: it creates an authoritative run-local input artifact, opens sessions mechanically, and gives later artifact templates stable `state.package_name` access without hidden runtime behavior.
 
-### 3. Generated workflow output strategy
+### 3. Generated package output strategy
 
 - Alternatives considered:
 - hidden generator helper or runtime subsystem
 - only a directory-level output with no explicit index
-- direct repository file creation plus a generated layout summary and build report
-- Selected: direct repository file creation plus explicit generated-layout and build-report artifacts
+- direct repository file creation plus a build report that enumerates concrete generated files
+- Selected: direct repository file creation plus explicit build report
 - Why: it reuses the current scaffold contract, keeps outputs inspectable, and avoids introducing a new framework layer.
 
 ## Implementation candidates considered
@@ -93,7 +91,7 @@ Parameters:
 
 ### Objective
 
-Turn a workflow idea into a concrete Autoloop workflow surface with the requested authoring shape and promotion/rollback evidence.
+Turn a workflow idea into a concrete Autoloop workflow package with prompts, docs, tests, and promotion/rollback evidence.
 
 ### Global deterministic responsibilities
 
@@ -107,14 +105,14 @@ Turn a workflow idea into a concrete Autoloop workflow surface with the requeste
 
 - Analyze candidate workflows.
 - Author the design artifacts.
-- Create the requested workflow files plus only the support files the chosen shape actually needs.
+- Create package files, prompts, docs, and tests.
 - Gather verification evidence and recommend publication.
 
 ### Work-item boundary doctrine
 
 - `frame_candidate`: candidate comparison and selection only.
-- `design_package`: authoritative workflow contract only.
-- `build_package`: repository workflow file creation and updates only.
+- `design_package`: authoritative package contract only.
+- `build_package`: repository file creation and updates only.
 - `evaluate_package`: evidence gathering and promotion/rollback recommendation only.
 - `needs_rework`: same accepted design or work-item boundary still holds.
 - `needs_replan`: the selected addition, topology, artifact graph, or verification surface changed materially.
@@ -174,26 +172,17 @@ Stable workflow-local artifacts:
 
 Generated package roots:
 
-- `workflows/<package_name>.py`
-- `workflows/<package_name>/flow.py`
-- `workflows/<package_name>/specs.py`
-- `workflows/<package_name>/workflow.toml` only when the chosen shape needs it
-- `generated_layout.json` records the selected shape and concrete created paths
+- `workflows/<package_name>/`
+- `docs/workflows/<package_name>.md`
+- `tests/runtime/test_<package_name>.py`
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Payload models used by the package:
 
@@ -221,7 +210,7 @@ Each prompt names the role, purpose, current work item, required reads, required
 
 - The package must be discoverable through workflow discovery.
 - The compiled workflow must expose step-owned control contracts on the pair steps.
-- A scripted-provider test must exercise the workflow end to end and prove it can emit compilable `single`, `flow_specs`, and `package` outputs.
+- A scripted-provider test must exercise the workflow end to end and prove it can emit a compilable generated package.
 
 ### Rework / replan / block / fail policy
 

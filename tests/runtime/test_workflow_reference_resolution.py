@@ -12,7 +12,7 @@ from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import WorkflowDiscoveryError, inspect_workflow_reference, resolve_workflow_reference
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 def _clear_generated_modules() -> None:
@@ -40,7 +40,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import Artifact, LLMStep, SUCCESS, Workflow
+from core import Artifact, LLMStep, SUCCESS, Workflow
 
 
 class ReleaseReview(Workflow):
@@ -139,7 +139,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import Artifact, LLMStep, SUCCESS, Workflow
+from core import Artifact, LLMStep, SUCCESS, Workflow
 
 from .specs import Parameters
 
@@ -221,8 +221,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class DemoWorkflow(Workflow):
@@ -317,8 +317,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class ModuleReviewWorkflow(Workflow):
@@ -370,8 +370,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class AlphaWorkflow(Workflow):
@@ -423,8 +423,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class PackageReleaseReview(Workflow):
@@ -450,8 +450,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class FileReleaseReview(Workflow):
@@ -489,8 +489,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class ClassParamsWorkflow(Workflow):
@@ -520,8 +520,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class Parameters(BaseModel):
@@ -569,8 +569,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class PackageParamsWorkflow(Workflow):
@@ -610,8 +610,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class LegacyParamsWorkflow(Workflow):
@@ -638,8 +638,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class NoParamsWorkflow(Workflow):
@@ -716,8 +716,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class PackagePathParamsWorkflow(Workflow):
@@ -755,8 +755,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class ReleaseReview(Workflow):

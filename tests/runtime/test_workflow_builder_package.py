@@ -20,7 +20,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -104,25 +104,25 @@ def test_workflow_builder_package_compiles_with_explicit_control_contracts(monke
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["candidate_selected"]["required_artifacts"] == [
-        "candidate_comparison",
-        "selected_workflow_brief",
+    assert list(frame_step.route_required_outputs["candidate_selected"]) == [
+        "frame_candidate.candidate_comparison",
+        "frame_candidate.selected_workflow_brief",
     ]
-    assert frame_step.route_contracts["candidate_selected"]["work_item_effect"] == (
+    assert frame_step.route_infos["candidate_selected"].handoff == (
         "Locks the selected addition and its classification for downstream design."
     )
     assert frame_step.expected_output_schema is not None
 
     build_step = compiled.steps["build_package"]
     assert "package_built" in build_step.available_routes
-    assert "needs_replan" in build_step.route_contracts
+    assert "needs_replan" in build_step.route_infos
     assert build_step.expected_output_schema is not None
 
     evaluate_step = compiled.steps["evaluate_package"]
-    assert evaluate_step.route_contracts["evaluation_passed"]["required_artifacts"] == [
-        "verification_report",
-        "promotion_record",
-        "rollback_plan",
+    assert list(evaluate_step.route_required_outputs["evaluation_passed"]) == [
+        "evaluate_package.verification_report",
+        "evaluate_package.promotion_record",
+        "evaluate_package.rollback_plan",
     ]
 
 
@@ -455,7 +455,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(
                             "Objective: build a release-readiness workflow package.",
                             f"Authoring shape: {authoring_shape}.",
                             "Control flow: bootstrap -> review -> verify -> publish.",
-                            "Runtime control contract: only expected_output_schema, available_routes, and route_contracts.",
+                            "Runtime control contract: only expected_output_schema, available_routes, route_infos, and route_required_outputs.",
                             "",
                         )
                     )
@@ -689,11 +689,11 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(
         "blocked",
         "failed",
     )
-    assert provider.calls[5].route_contracts["package_built"]["required_artifacts"] == [
-        "generated_layout",
-        "build_report",
+    assert list(provider.calls[5].route_required_outputs["package_built"]) == [
+        "build_package.generated_layout",
+        "build_package.build_report",
     ]
-    assert provider.calls[5].route_contracts["package_built"]["work_item_effect"] == (
+    assert provider.calls[5].route_infos["package_built"].handoff == (
         "Promotes the generated workflow surface to evaluation."
     )
     assert (run_dir / "run.json").exists()
@@ -746,8 +746,8 @@ def _write_generated_workflow(request, package_name: str, authoring_shape: str) 
                     "",
                     "from pydantic import BaseModel",
                     "",
-                    "from workflow import GLOBAL, SUCCESS, SystemStep, Workflow",
-                    "from workflow.primitives import Event",
+                    "from core import GLOBAL, SUCCESS, SystemStep, Workflow",
+                    "from core.primitives import Event",
                     "",
                     "",
                     f"class {class_name}(Workflow):",
@@ -778,8 +778,8 @@ def _write_generated_workflow(request, package_name: str, authoring_shape: str) 
                 (
                     "from __future__ import annotations",
                     "",
-                    "from workflow import GLOBAL, SUCCESS, SystemStep, Workflow",
-                    "from workflow.primitives import Event",
+                    "from core import GLOBAL, SUCCESS, SystemStep, Workflow",
+                    "from core.primitives import Event",
                     "",
                     "from .specs import State",
                     "",

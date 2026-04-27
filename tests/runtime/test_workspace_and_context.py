@@ -19,7 +19,7 @@ from autoloop_v3.runtime.workspace import (
     list_workflow_run_summaries,
     resolve_run_workflow_input,
 )
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 def _clear_workflow_modules() -> None:
@@ -927,7 +927,10 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
             "status": "success",
             "last_event": {"tag": "done", "reason": "", "question": None},
             "output_metadata": {"summary": "child complete"},
-            "output_artifacts": {"child_dump": str(child_run_dir / "child.json")},
+            "output_artifacts": {
+                "ask.child_dump": str(child_run_dir / "child.json"),
+                "child_dump": str(child_run_dir / "child.json"),
+            },
             "task_folder": str(task_dir),
             "workflow_folder": str(task_dir / "wf_child_success"),
             "run_folder": str(child_run_dir),
@@ -941,7 +944,10 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
             "raw_dir": str(child_run_dir / "raw"),
             "parent_file": str(child_run_dir / "parent.json"),
             "output": None,
-            "artifacts": {"child_dump": str(child_run_dir / "child.json")},
+            "artifacts": {
+                "ask.child_dump": str(child_run_dir / "child.json"),
+                "child_dump": str(child_run_dir / "child.json"),
+            },
             "metadata": {},
             "ts": child_records[0]["ts"],
         }
@@ -1012,7 +1018,10 @@ def test_composition_helpers_keep_child_invocation_explicit_and_adopt_selected_a
     assert child_records[0]["workflow_name"] == "child_success"
     assert child_records[0]["status"] == "success"
     assert child_records[0]["output"] is None
-    assert child_records[0]["output_artifacts"] == {"child_dump": str(child_run_dir / "child.json")}
+    assert child_records[0]["output_artifacts"] == {
+        "ask.child_dump": str(child_run_dir / "child.json"),
+        "child_dump": str(child_run_dir / "child.json"),
+    }
     assert child_records[0]["artifacts"] == child_records[0]["output_artifacts"]
     assert child_records[0]["metadata"] == {}
 
@@ -1164,7 +1173,10 @@ def test_context_invoke_workflow_supports_typed_child_input_and_output(tmp_path:
     assert parent_payload["child_status"] == "success"
     assert parent_payload["child_output"] == {"summary": "alpha:strict:2", "ready": True}
     assert parent_payload["child_output_metadata"] == {}
-    assert parent_payload["child_artifacts"] == {"child_dump": str(child_run_dir / "typed-child.json")}
+    assert parent_payload["child_artifacts"] == {
+        "child_dump": str(child_run_dir / "typed-child.json"),
+        "plan.child_dump": str(child_run_dir / "typed-child.json"),
+    }
     assert parent_payload["child_artifacts_alias"] == parent_payload["child_artifacts"]
     assert parent_payload["child_metadata"]["typed_output"]["declared"] is True
     assert parent_payload["child_metadata"]["typed_output"]["available"] is True
@@ -1176,7 +1188,10 @@ def test_context_invoke_workflow_supports_typed_child_input_and_output(tmp_path:
     assert len(child_records) == 1
     assert child_records[0]["output"] == {"summary": "alpha:strict:2", "ready": True}
     assert child_records[0]["output_metadata"] == {}
-    assert child_records[0]["output_artifacts"] == {"child_dump": str(child_run_dir / "typed-child.json")}
+    assert child_records[0]["output_artifacts"] == {
+        "child_dump": str(child_run_dir / "typed-child.json"),
+        "plan.child_dump": str(child_run_dir / "typed-child.json"),
+    }
     assert child_records[0]["artifacts"] == child_records[0]["output_artifacts"]
     assert child_records[0]["metadata"]["typed_output"]["available"] is True
 
@@ -1311,9 +1326,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
+from core.primitives import Event
 
 
 class {class_name}(Workflow):
@@ -1351,7 +1366,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import Artifact, LLMStep, SUCCESS, Workflow
+from core import Artifact, LLMStep, SUCCESS, Workflow
 
 
 class {class_name}(Workflow):
@@ -1417,8 +1432,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import Artifact, LLMStep, SUCCESS, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, LLMStep, SUCCESS, Workflow
+from core.primitives import Event, Outcome
 
 
 class {class_name}(Workflow):
@@ -1481,7 +1496,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import Artifact, LLMStep, Session, SUCCESS, Workflow
+from core import Artifact, LLMStep, Session, SUCCESS, Workflow
 
 
 class ChildWorkflow(Workflow):
@@ -1524,8 +1539,8 @@ import json
 
 from pydantic import BaseModel
 
-from workflow import Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 from workflows.child_success import ChildWorkflow
 
 
@@ -1585,8 +1600,8 @@ import json
 from pydantic import BaseModel
 
 from autoloop_v3.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class ParentCompositionHelperWorkflow(Workflow):
@@ -1611,7 +1626,7 @@ class ParentCompositionHelperWorkflow(Workflow):
             child,
             status="success",
             last_event="done",
-            required_artifacts=("child_dump",),
+            required_outputs=("child_dump",),
         )
         adopted = adopt_child_artifacts(
             ctx,
@@ -1666,8 +1681,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from workflow import Artifact, LLMStep, Session, Workflow
-from workflow.primitives import Event
+from core import Artifact, LLMStep, Session, Workflow
+from core.primitives import Event
 
 
 class ChildPauseWorkflow(Workflow):
@@ -1716,8 +1731,8 @@ import json
 
 from pydantic import BaseModel
 
-from workflow import PAUSE, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import PAUSE, SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class ParentNameWorkflow(Workflow):
@@ -1767,7 +1782,7 @@ def _write_child_failing_workflow_package(root: Path) -> None:
 from __future__ import annotations
 
 from pydantic import BaseModel
-from workflow import SUCCESS, SystemStep, Workflow
+from core import SUCCESS, SystemStep, Workflow
 
 
 class ChildFailingWorkflow(Workflow):
@@ -1824,8 +1839,8 @@ import json
 
 from pydantic import BaseModel
 
-from workflow import Artifact, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import Artifact, SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class ChildTypedWorkflow(Workflow):
@@ -1886,8 +1901,8 @@ import json
 
 from pydantic import BaseModel
 
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 from workflows.{child_package_name} import ChildTypedWorkflow
 
 
@@ -1942,8 +1957,8 @@ def _write_parent_failing_invoker_workflow_package(root: Path) -> None:
 from __future__ import annotations
 
 from pydantic import BaseModel
-from workflow import SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event
+from core import SUCCESS, SystemStep, Workflow
+from core.primitives import Event
 
 
 class ParentFailingWorkflow(Workflow):

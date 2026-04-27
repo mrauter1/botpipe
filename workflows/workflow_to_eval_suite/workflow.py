@@ -39,8 +39,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
@@ -140,7 +140,7 @@ class WorkflowToEvalSuite(Workflow):
             "evaluation_dimensions": evaluation_dimensions,
         },
         expected_output_schema=EvaluationTargetFramingPayload,
-        route_contracts=FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS,
+        route_infos=FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS,
     )
     design_eval_cases = PairStep(
         name="design_eval_cases",
@@ -162,7 +162,7 @@ class WorkflowToEvalSuite(Workflow):
             "eval_rubric": eval_rubric,
         },
         expected_output_schema=EvalCaseDesignPayload,
-        route_contracts=DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
+        route_infos=DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
     )
     package_workflow_eval_suite = PairStep(
         name="package_workflow_eval_suite",
@@ -188,7 +188,7 @@ class WorkflowToEvalSuite(Workflow):
             "workflow_eval_next_action": workflow_eval_next_action,
         },
         expected_output_schema=WorkflowEvalSuitePayload,
-        route_contracts=PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS,
+        route_infos=PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS,
     )
     publish_workflow_eval_suite = SystemStep(
         name="publish_workflow_eval_suite",

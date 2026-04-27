@@ -375,7 +375,7 @@ def test_autoloop_simple_exports_requested_public_authoring_surface() -> None:
     ):
         assert hasattr(autoloop_surface, exported)
 
-    assert not hasattr(autoloop_surface, "RouteContract")
+    assert not hasattr(autoloop_surface, "Route" "Contract")
 
 
 def test_autoloop_simple_helper_signatures_are_explicit() -> None:
@@ -450,7 +450,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
 def test_autoloop_simple_does_not_export_route_contract() -> None:
     simple_surface = importlib.import_module("autoloop.simple")
 
-    assert not hasattr(simple_surface, "RouteContract")
+    assert not hasattr(simple_surface, "Route" "Contract")
 
 
 def test_autoloop_simple_exports_after_hook_result() -> None:

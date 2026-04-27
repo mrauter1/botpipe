@@ -11,7 +11,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import JsonArtifactSpec
 
-from workflow import RouteContract
+from core import RouteInfo
 
 
 PublicationBoundary = Literal["diagnostic_publication_only"]
@@ -115,56 +115,53 @@ IMPROVEMENT_OPPORTUNITIES_SUMMARY_ARTIFACT = JsonArtifactSpec(
 
 
 FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS = {
-    "diagnostic_scope_framed": RouteContract(
+    "diagnostic_scope_framed": RouteInfo(
         summary="The selected workflow, filtered run window, and diagnostic acceptance boundary are explicit enough for failure-mode clustering.",
-        required_artifacts=("diagnostic_scope_brief", "run_history_scope"),
-        work_item_effect="Locks the diagnostic framing so failure-mode clustering can proceed against an explicit run-history boundary.",
+        required_outputs=("diagnostic_scope_brief", "run_history_scope"),
+        handoff="Locks the diagnostic framing so failure-mode clustering can proceed against an explicit run-history boundary.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same diagnostic framing boundary still holds, but the scope brief or run-history boundary needs local repair.",
-        required_artifacts=("diagnostic_scope_brief", "run_history_scope"),
-        work_item_effect="Keeps diagnostic framing local and reruns the same step for stronger evidence scoping only.",
+        required_outputs=("diagnostic_scope_brief", "run_history_scope"),
+        handoff="Keeps diagnostic framing local and reruns the same step for stronger evidence scoping only.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The selected workflow, filtered history boundary, or diagnostic objective changed materially and framing must restart.",
-        required_artifacts=("diagnostic_scope_brief", "run_history_scope"),
-        work_item_effect="Routes back to diagnostic framing because the current evidence boundary is no longer authoritative.",
+        handoff="Routes back to diagnostic framing because the current evidence boundary is no longer authoritative.",
     ),
 }
 
 MAP_FAILURE_MODES_ROUTE_CONTRACTS = {
-    "failure_modes_mapped": RouteContract(
+    "failure_modes_mapped": RouteInfo(
         summary="The failure-mode map, machine-readable manifest, and recurring weak-points artifact cluster the selected workflow's history explicitly and are ready for improvement packaging.",
-        required_artifacts=("failure_mode_map", "failure_mode_manifest", "recurring_weak_points"),
-        work_item_effect="Locks the failure clusters and recurring weak points so the workflow can rank improvement pressure without reinterpreting the run history.",
+        required_outputs=("failure_mode_map", "failure_mode_manifest", "recurring_weak_points"),
+        handoff="Locks the failure clusters and recurring weak points so the workflow can rank improvement pressure without reinterpreting the run history.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same failure-mode mapping boundary still holds, but the clusters, manifest, or weak-points artifact need local repair.",
-        required_artifacts=("failure_mode_map", "failure_mode_manifest", "recurring_weak_points"),
-        work_item_effect="Keeps failure-mode mapping local and reruns the same step for clearer clustering or evidence linkage.",
+        required_outputs=("failure_mode_map", "failure_mode_manifest", "recurring_weak_points"),
+        handoff="Keeps failure-mode mapping local and reruns the same step for clearer clustering or evidence linkage.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Failure-mode mapping revealed that the selected workflow boundary or evidence window changed materially and framing must be revisited.",
-        required_artifacts=("diagnostic_scope_brief", "run_history_scope"),
-        work_item_effect="Routes back to framing because the current failure clustering boundary is no longer credible.",
+        handoff="Routes back to framing because the current failure clustering boundary is no longer credible.",
     ),
 }
 
 PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS = {
-    "improvement_pressure_packaged": RouteContract(
+    "improvement_pressure_packaged": RouteInfo(
         summary="The ranked improvement package, machine-readable summary, and next-action artifact are aligned and ready for deterministic diagnostic publication.",
-        required_artifacts=("improvement_opportunities", "improvement_opportunities_summary", "diagnostic_next_actions"),
-        work_item_effect="Advances the building block to deterministic publication of the diagnostic receipt without hidden downstream execution.",
+        required_outputs=("improvement_opportunities", "improvement_opportunities_summary", "diagnostic_next_actions"),
+        handoff="Advances the building block to deterministic publication of the diagnostic receipt without hidden downstream execution.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same improvement-packaging boundary still holds, but the ranked package or next actions need local repair before publication.",
-        required_artifacts=("improvement_opportunities", "improvement_opportunities_summary", "diagnostic_next_actions"),
-        work_item_effect="Keeps improvement packaging local and reruns the same step for packaging corrections only.",
+        required_outputs=("improvement_opportunities", "improvement_opportunities_summary", "diagnostic_next_actions"),
+        handoff="Keeps improvement packaging local and reruns the same step for packaging corrections only.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Packaging revealed that the mapped failure modes or recurring weak points changed materially and failure-mode mapping must be revisited.",
-        required_artifacts=("failure_mode_map", "failure_mode_manifest", "recurring_weak_points"),
-        work_item_effect="Routes back to failure-mode mapping because the current ranked package no longer matches the authoritative diagnostic surface.",
+        handoff="Routes back to failure-mode mapping because the current ranked package no longer matches the authoritative diagnostic surface.",
     ),
 }
 

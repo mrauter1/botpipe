@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from workflow import RouteContract
+from core import RouteInfo
 
 
 class RefinementRequestFramingPayload(BaseModel):
@@ -51,84 +51,80 @@ class WorkflowRefinementEvaluationPayload(BaseModel):
 
 
 FRAME_REFINEMENT_REQUEST_ROUTE_CONTRACTS = {
-    "refinement_request_framed": RouteContract(
+    "refinement_request_framed": RouteInfo(
         summary="The selected workflow, baseline evidence, target refinement boundary, and acceptance surface are explicit enough for concrete change planning.",
-        required_artifacts=("refinement_request_brief", "refinement_acceptance_criteria"),
-        work_item_effect="Locks the refinement boundary so the workflow can design a file-level change plan against explicit baseline evidence.",
+        required_outputs=("refinement_request_brief", "refinement_acceptance_criteria"),
+        handoff="Locks the refinement boundary so the workflow can design a file-level change plan against explicit baseline evidence.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same refinement-request framing boundary still holds, but the framing artifacts need local repair.",
-        required_artifacts=("refinement_request_brief", "refinement_acceptance_criteria"),
-        work_item_effect="Keeps refinement framing local and reruns the same step for clearer boundaries and acceptance criteria.",
+        required_outputs=("refinement_request_brief", "refinement_acceptance_criteria"),
+        handoff="Keeps refinement framing local and reruns the same step for clearer boundaries and acceptance criteria.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The selected workflow, evidence interpretation, or refinement boundary changed materially and the framing must restart.",
-        required_artifacts=("refinement_request_brief", "refinement_acceptance_criteria"),
-        work_item_effect="Routes back to refinement framing because the current boundary is no longer authoritative.",
+        handoff="Routes back to refinement framing because the current boundary is no longer authoritative.",
     ),
 }
 
 DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS = {
-    "refinement_plan_designed": RouteContract(
+    "refinement_plan_designed": RouteInfo(
         summary="The refinement strategy, concrete workflow change plan, and regression guardrails are explicit enough for candidate implementation.",
-        required_artifacts=("refinement_strategy", "workflow_change_plan", "regression_guardrails"),
-        work_item_effect="Locks the change plan so the selected workflow can be refined inside an explicit candidate surface.",
+        required_outputs=("refinement_strategy", "workflow_change_plan", "regression_guardrails"),
+        handoff="Locks the change plan so the selected workflow can be refined inside an explicit candidate surface.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same refinement-planning boundary still holds, but the strategy, change plan, or regression guardrails need local repair.",
-        required_artifacts=("refinement_strategy", "workflow_change_plan", "regression_guardrails"),
-        work_item_effect="Keeps refinement planning local and reruns the same step for clearer change and regression guidance.",
+        required_outputs=("refinement_strategy", "workflow_change_plan", "regression_guardrails"),
+        handoff="Keeps refinement planning local and reruns the same step for clearer change and regression guidance.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Planning proved the selected workflow, evidence boundary, or acceptance surface changed materially and framing must be revisited.",
-        required_artifacts=("refinement_request_brief", "refinement_acceptance_criteria"),
-        work_item_effect="Routes back to framing because the current refinement plan is no longer credible as stated.",
+        handoff="Routes back to framing because the current refinement plan is no longer credible as stated.",
     ),
 }
 
 IMPLEMENT_REFINED_WORKFLOW_ROUTE_CONTRACTS = {
-    "workflow_refinement_applied": RouteContract(
+    "workflow_refinement_applied": RouteInfo(
         summary="The candidate workflow surface, build report, and diff summary are complete and ready for explicit evaluation against the baseline evidence.",
-        required_artifacts=("candidate_workflow_surface", "refinement_build_report", "candidate_diff_summary"),
-        work_item_effect="Advances the workflow to candidate verification and promotion or rollback analysis.",
+        required_outputs=("candidate_workflow_surface", "refinement_build_report", "candidate_diff_summary"),
+        handoff="Advances the workflow to candidate verification and promotion or rollback analysis.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same candidate-implementation boundary still holds, but the candidate files or build artifacts need local repair.",
-        required_artifacts=("candidate_workflow_surface", "refinement_build_report", "candidate_diff_summary"),
-        work_item_effect="Keeps candidate implementation local and reruns the same step for tighter workflow-surface changes.",
+        required_outputs=("candidate_workflow_surface", "refinement_build_report", "candidate_diff_summary"),
+        handoff="Keeps candidate implementation local and reruns the same step for tighter workflow-surface changes.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Implementation exposed a material change to the selected workflow boundary, artifact graph, or accepted plan and planning must be revisited.",
-        required_artifacts=("refinement_strategy", "workflow_change_plan", "regression_guardrails"),
-        work_item_effect="Routes back to planning because the current candidate no longer fits the accepted refinement strategy.",
+        handoff="Routes back to planning because the current candidate no longer fits the accepted refinement strategy.",
     ),
 }
 
 EVALUATE_REFINED_WORKFLOW_ROUTE_CONTRACTS = {
-    "workflow_refinement_evaluated": RouteContract(
+    "workflow_refinement_evaluated": RouteInfo(
         summary="The refinement verification report, evaluation delta, promotion record, and rollback plan are complete and ready for deterministic publication of the candidate receipt.",
-        required_artifacts=(
+        required_outputs=(
             "refinement_verification_report",
             "evaluation_delta_report",
             "promotion_record",
             "rollback_plan",
         ),
-        work_item_effect="Advances the workflow to deterministic publication of the candidate refinement receipt after overlay validation.",
+        handoff="Advances the workflow to deterministic publication of the candidate refinement receipt after overlay validation.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same selected workflow and accepted refinement boundary still hold, but the candidate package needs local repair before publication.",
-        required_artifacts=(
+        required_outputs=(
             "refinement_verification_report",
             "evaluation_delta_report",
             "promotion_record",
             "rollback_plan",
         ),
-        work_item_effect="Routes back to implementation because the candidate still fits the same refinement boundary but needs local repair.",
+        handoff="Routes back to implementation because the candidate still fits the same refinement boundary but needs local repair.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Evaluation showed the accepted refinement boundary or change plan changed materially and planning must be revisited.",
-        required_artifacts=("refinement_strategy", "workflow_change_plan", "regression_guardrails"),
-        work_item_effect="Routes back to planning because the evaluated candidate no longer matches the accepted refinement strategy.",
+        handoff="Routes back to planning because the evaluated candidate no longer matches the accepted refinement strategy.",
     ),
 }
 

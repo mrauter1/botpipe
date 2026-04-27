@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from workflow import RouteContract
+from core import RouteInfo
 
 
 class InvestigationFramingPayload(BaseModel):
@@ -29,27 +29,26 @@ class InvestigationEvidencePackPayload(BaseModel):
 
 
 FRAME_INVESTIGATION_ROUTE_CONTRACTS = {
-    "investigation_framed": RouteContract(
+    "investigation_framed": RouteInfo(
         summary="The investigation boundary, objectives, and evidence intake plan are explicit and authoritative.",
-        required_artifacts=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
-        work_item_effect="Locks the investigation framing so evidence assembly can proceed against a fixed boundary.",
+        required_outputs=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
+        handoff="Locks the investigation framing so evidence assembly can proceed against a fixed boundary.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same investigation framing boundary holds, but the scope brief or objectives need local repair.",
-        required_artifacts=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
-        work_item_effect="Keeps the investigation framing boundary intact and reruns the same step for local correction.",
+        required_outputs=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
+        handoff="Keeps the investigation framing boundary intact and reruns the same step for local correction.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The investigation trigger, downstream consumer, or evidence surface changed materially and must be reframed.",
-        required_artifacts=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
-        work_item_effect="Resets the investigation framing boundary before downstream evidence work continues.",
+        handoff="Resets the investigation framing boundary before downstream evidence work continues.",
     ),
 }
 
 ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS = {
-    "evidence_pack_ready": RouteContract(
+    "evidence_pack_ready": RouteInfo(
         summary="The evidence pack captures inspected sources, coverage, findings, unresolved gaps, and a machine-readable summary.",
-        required_artifacts=(
+        required_outputs=(
             "evidence_source_inventory",
             "evidence_coverage_matrix",
             "evidence_findings",
@@ -57,22 +56,21 @@ ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS = {
             "evidence_pack",
             "evidence_pack_summary",
         ),
-        work_item_effect="Promotes the investigation evidence pack to deterministic publication and downstream reuse.",
+        handoff="Promotes the investigation evidence pack to deterministic publication and downstream reuse.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same evidence-pack boundary holds, but source tracing, coverage, or gap handling needs local repair.",
-        required_artifacts=(
+        required_outputs=(
             "evidence_source_inventory",
             "evidence_findings",
             "evidence_gap_register",
             "evidence_pack_summary",
         ),
-        work_item_effect="Keeps evidence assembly local and reruns the same step for tighter source tracing and packaging.",
+        handoff="Keeps evidence assembly local and reruns the same step for tighter source tracing and packaging.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The investigation boundary or evidence plan changed materially enough that framing must be revisited.",
-        required_artifacts=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
-        work_item_effect="Routes back to investigation framing because the evidence contract is no longer authoritative.",
+        handoff="Routes back to investigation framing because the evidence contract is no longer authoritative.",
     ),
 }
 

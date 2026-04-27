@@ -64,8 +64,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     CandidateDecompositionBuildPayload,
@@ -187,7 +187,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             "decomposition_acceptance_criteria": decomposition_acceptance_criteria,
         },
         expected_output_schema=DecompositionRequestFramingPayload,
-        route_contracts=FRAME_DECOMPOSITION_REQUEST_ROUTE_CONTRACTS,
+        route_infos=FRAME_DECOMPOSITION_REQUEST_ROUTE_CONTRACTS,
     )
     design_decomposition_plan = PairStep(
         name="design_decomposition_plan",
@@ -211,7 +211,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             "regression_guardrails": regression_guardrails,
         },
         expected_output_schema=DecompositionPlanPayload,
-        route_contracts=DESIGN_DECOMPOSITION_PLAN_ROUTE_CONTRACTS,
+        route_infos=DESIGN_DECOMPOSITION_PLAN_ROUTE_CONTRACTS,
     )
     implement_candidate_decomposition = PairStep(
         name="implement_candidate_decomposition",
@@ -239,7 +239,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             "candidate_diff_summary": candidate_diff_summary,
         },
         expected_output_schema=CandidateDecompositionBuildPayload,
-        route_contracts=IMPLEMENT_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
+        route_infos=IMPLEMENT_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
     )
     evaluate_candidate_decomposition = PairStep(
         name="evaluate_candidate_decomposition",
@@ -272,7 +272,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             "rollback_plan": rollback_plan,
         },
         expected_output_schema=CandidateDecompositionEvaluationPayload,
-        route_contracts=EVALUATE_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
+        route_infos=EVALUATE_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
     )
     publish_candidate_decomposition = SystemStep(
         name="publish_candidate_decomposition",

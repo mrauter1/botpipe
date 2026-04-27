@@ -25,8 +25,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
@@ -113,7 +113,7 @@ class IncidentToHardeningProgram(Workflow):
             "evidence_intake_register": evidence_intake_register,
         },
         expected_output_schema=IncidentFramingPayload,
-        route_contracts=FRAME_INCIDENT_ROUTE_CONTRACTS,
+        route_infos=FRAME_INCIDENT_ROUTE_CONTRACTS,
     )
     assemble_evidence_pack = PairStep(
         name="assemble_evidence_pack",
@@ -133,7 +133,7 @@ class IncidentToHardeningProgram(Workflow):
             "evidence_gap_register": evidence_gap_register,
         },
         expected_output_schema=IncidentEvidencePayload,
-        route_contracts=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
+        route_infos=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
     )
     rank_cause_hypotheses = PairStep(
         name="rank_cause_hypotheses",
@@ -156,7 +156,7 @@ class IncidentToHardeningProgram(Workflow):
             "incident_summary": incident_summary,
         },
         expected_output_schema=IncidentHypothesisPayload,
-        route_contracts=RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS,
+        route_infos=RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS,
     )
     prepare_hardening_program = PairStep(
         name="prepare_hardening_program",
@@ -185,7 +185,7 @@ class IncidentToHardeningProgram(Workflow):
             "incident_resolution_package": incident_resolution_package,
         },
         expected_output_schema=IncidentHardeningProgramPayload,
-        route_contracts=PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS,
+        route_infos=PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS,
     )
     publish_incident_package = SystemStep(
         name="publish_incident_package",

@@ -23,8 +23,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
@@ -106,7 +106,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             "evidence_intake_register": evidence_intake_register,
         },
         expected_output_schema=ReleaseFramingPayload,
-        route_contracts=FRAME_RELEASE_ROUTE_CONTRACTS,
+        route_infos=FRAME_RELEASE_ROUTE_CONTRACTS,
     )
     assemble_evidence_pack = PairStep(
         name="assemble_evidence_pack",
@@ -128,7 +128,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             "blocking_issues": blocking_issues,
         },
         expected_output_schema=ReleaseEvidencePayload,
-        route_contracts=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
+        route_infos=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
     )
     assess_go_no_go = PairStep(
         name="assess_go_no_go",
@@ -151,7 +151,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             "decision_summary": decision_summary,
         },
         expected_output_schema=ReleaseAssessmentPayload,
-        route_contracts=ASSESS_GO_NO_GO_ROUTE_CONTRACTS,
+        route_infos=ASSESS_GO_NO_GO_ROUTE_CONTRACTS,
     )
     prepare_decision_package = PairStep(
         name="prepare_decision_package",
@@ -178,7 +178,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             "release_communications_draft": release_communications_draft,
         },
         expected_output_schema=ReleaseDecisionPackagePayload,
-        route_contracts=PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS,
+        route_infos=PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS,
     )
     publish_decision = SystemStep(
         name="publish_decision",

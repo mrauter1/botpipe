@@ -2,7 +2,7 @@
 
 ## Simple Surface
 
-`autoloop.simple` is the additive simplified authoring surface under active implementation.
+`autoloop.simple` is the active public authoring surface.
 
 Use:
 
@@ -11,47 +11,19 @@ from autoloop.simple import Workflow, StrictWorkflow, Prompt, Route, RouteInfo
 from autoloop.simple import Json, Md, Text, Raw, step, review_step, workflow_step, system_step, chain
 ```
 
-Import compatibility is explicit for the repository's two supported execution modes in practice:
+Use `from autoloop.simple import ...` or `from autoloop import ...` in public workflow code and examples.
+`core/*` remains the internal kernel surface for strict runtime code and tests; it is not the public authoring API.
 
-- installed-package execution, where a package install exposes top-level `autoloop.simple` without depending on the repo root being the working directory
-- repo-root execution, where the same public surface falls back to root-level `core/*` modules
+Greenfield authoring defaults:
 
-The root `workflow` shim remains the strict compatibility surface during the migration window. The simple surface is additive and lowers into the same runtime model rather than introducing a second engine.
-
-Use the strict root `workflow` shim when you need the explicit compatibility surface:
-
-```python
-from workflow import (
-    Workflow,
-    Context,
-    Session,
-    Continuity,
-    Artifact,
-    Prompt,
-    Route,
-    Handoff,
-    Advance,
-    Refresh,
-    ResetCompletion,
-    SetStatus,
-    WorkItem,
-    Worklist,
-    Selector,
-    PairStep,
-    LLMStep,
-    SystemStep,
-    ProviderRetryPolicy,
-    SUCCESS,
-    PAUSE,
-    FAIL,
-    GLOBAL,
-)
-from workflow.primitives import Event, Outcome, Checkpoint, ResolvedArtifacts, ChildWorkflowResult
-```
-
-Compatibility-only legacy exports remain available on `workflow`, but the documented authoring path is route metadata on `Route(...)` and the higher-level `autoloop.simple` helpers above.
-
-Keep the root surface strict: do not import engine internals, compiler helpers, or compatibility modules from `workflow`.
+- `State` is optional on `autoloop.simple.Workflow`.
+- prompt files are optional; inline prompts are first-class.
+- `reads` are optional context and do not fail when missing.
+- `requires` are hard input preconditions.
+- artifact schemas validate files and stay distinct from provider `control_schema`.
+- `system_step(fn)` does not require an `on_<step>` handler.
+- `workflow_step(...)` lowers to a real `WorkflowStep`.
+- there is no `autoloop eject` or workflow source-expansion command.
 
 ## Workflow Shapes
 

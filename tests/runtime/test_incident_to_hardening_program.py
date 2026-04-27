@@ -20,7 +20,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -104,32 +104,32 @@ def test_incident_hardening_package_compiles_with_explicit_control_contracts(mon
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["incident_framed"]["required_artifacts"] == [
-        "incident_scope_brief",
-        "response_objectives",
-        "evidence_intake_register",
+    assert list(frame_step.route_required_outputs["incident_framed"]) == [
+        "frame_incident.incident_scope_brief",
+        "frame_incident.response_objectives",
+        "frame_incident.evidence_intake_register",
     ]
-    assert frame_step.route_contracts["incident_framed"]["work_item_effect"] == (
+    assert frame_step.route_infos["incident_framed"].handoff == (
         "Locks the incident framing so evidence assembly can proceed against a fixed scope and objective set."
     )
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["rank_cause_hypotheses"]
-    assert analysis_step.route_contracts["hypotheses_ranked"]["required_artifacts"] == [
-        "cause_hypothesis_ranking",
-        "immediate_mitigation_plan",
-        "validation_plan",
-        "incident_summary",
+    assert list(analysis_step.route_required_outputs["hypotheses_ranked"]) == [
+        "rank_cause_hypotheses.cause_hypothesis_ranking",
+        "rank_cause_hypotheses.immediate_mitigation_plan",
+        "rank_cause_hypotheses.validation_plan",
+        "rank_cause_hypotheses.incident_summary",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["prepare_hardening_program"]
-    assert package_step.route_contracts["hardening_program_ready"]["required_artifacts"] == [
-        "hardening_program",
-        "hardening_backlog",
-        "follow_up_owners",
-        "stakeholder_communications_draft",
-        "incident_resolution_package",
+    assert list(package_step.route_required_outputs["hardening_program_ready"]) == [
+        "prepare_hardening_program.hardening_program",
+        "prepare_hardening_program.hardening_backlog",
+        "prepare_hardening_program.follow_up_owners",
+        "prepare_hardening_program.stakeholder_communications_draft",
+        "prepare_hardening_program.incident_resolution_package",
     ]
 
 
@@ -833,14 +833,14 @@ def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Pa
         "blocked",
         "failed",
     )
-    assert provider.calls[7].route_contracts["hardening_program_ready"]["required_artifacts"] == [
-        "hardening_program",
-        "hardening_backlog",
-        "follow_up_owners",
-        "stakeholder_communications_draft",
-        "incident_resolution_package",
+    assert list(provider.calls[7].route_required_outputs["hardening_program_ready"]) == [
+        "prepare_hardening_program.hardening_program",
+        "prepare_hardening_program.hardening_backlog",
+        "prepare_hardening_program.follow_up_owners",
+        "prepare_hardening_program.stakeholder_communications_draft",
+        "prepare_hardening_program.incident_resolution_package",
     ]
-    assert provider.calls[7].route_contracts["hardening_program_ready"]["work_item_effect"] == (
+    assert provider.calls[7].route_infos["hardening_program_ready"].handoff == (
         "Advances the incident workflow to deterministic publication of the terminal receipt."
     )
     assert (run_dir / "run.json").exists()

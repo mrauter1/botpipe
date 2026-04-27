@@ -23,7 +23,7 @@ from autoloop_v3.runtime.loader import (
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop_v3.stdlib import write_selected_workflow_capability_snapshot
-from workflow.primitives import Outcome
+from core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -109,25 +109,25 @@ def test_candidate_workflow_to_adapted_execution_plan_package_compiles_with_expl
         "blocked",
         "failed",
     )
-    assert frame_step.route_contracts["adaptation_request_framed"]["required_artifacts"] == [
-        "adaptation_request_brief",
-        "adaptation_success_criteria",
+    assert list(frame_step.route_required_outputs["adaptation_request_framed"]) == [
+        "frame_adaptation_request.adaptation_request_brief",
+        "frame_adaptation_request.adaptation_success_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["analyze_adaptation_surface"]
-    assert analysis_step.route_contracts["adaptation_surface_analyzed"]["required_artifacts"] == [
-        "workflow_fit_assessment",
-        "step_adaptation_matrix",
+    assert list(analysis_step.route_required_outputs["adaptation_surface_analyzed"]) == [
+        "analyze_adaptation_surface.workflow_fit_assessment",
+        "analyze_adaptation_surface.step_adaptation_matrix",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_adapted_execution_plan"]
-    assert package_step.route_contracts["adapted_execution_plan_ready"]["required_artifacts"] == [
-        "adapted_execution_plan",
-        "proposed_workflow_parameters",
-        "adapted_execution_summary",
-        "adapted_execution_next_action",
+    assert list(package_step.route_required_outputs["adapted_execution_plan_ready"]) == [
+        "package_adapted_execution_plan.adapted_execution_plan",
+        "package_adapted_execution_plan.proposed_workflow_parameters",
+        "package_adapted_execution_plan.adapted_execution_summary",
+        "package_adapted_execution_plan.adapted_execution_next_action",
     ]
     assert package_step.expected_output_schema is not None
     assert set(package_step.expected_output_schema["required"]) >= {
@@ -144,13 +144,13 @@ def test_candidate_workflow_to_adapted_execution_plan_package_compiles_with_expl
 
     publish_step = compiled.steps["publish_adapted_execution_plan"]
     assert publish_step.requires == (
-        "selected_workflow_capability",
-        "workflow_fit_assessment",
-        "step_adaptation_matrix",
-        "adapted_execution_plan",
-        "proposed_workflow_parameters",
-        "adapted_execution_summary",
-        "adapted_execution_next_action",
+        "capture_selected_workflow_contract.selected_workflow_capability",
+        "analyze_adaptation_surface.workflow_fit_assessment",
+        "analyze_adaptation_surface.step_adaptation_matrix",
+        "package_adapted_execution_plan.adapted_execution_plan",
+        "package_adapted_execution_plan.proposed_workflow_parameters",
+        "package_adapted_execution_plan.adapted_execution_summary",
+        "package_adapted_execution_plan.adapted_execution_next_action",
     )
 
 
@@ -825,9 +825,9 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
         "package_adapted_execution_plan",
         "package_adapted_execution_plan",
     ]
-    assert provider.calls[1].route_contracts["adaptation_request_framed"]["required_artifacts"] == [
-        "adaptation_request_brief",
-        "adaptation_success_criteria",
+    assert list(provider.calls[1].route_required_outputs["adaptation_request_framed"]) == [
+        "frame_adaptation_request.adaptation_request_brief",
+        "frame_adaptation_request.adaptation_success_criteria",
     ]
     assert provider.calls[3].available_routes == (
         "adaptation_surface_analyzed",
@@ -837,11 +837,11 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
         "blocked",
         "failed",
     )
-    assert provider.calls[5].route_contracts["adapted_execution_plan_ready"]["required_artifacts"] == [
-        "adapted_execution_plan",
-        "proposed_workflow_parameters",
-        "adapted_execution_summary",
-        "adapted_execution_next_action",
+    assert list(provider.calls[5].route_required_outputs["adapted_execution_plan_ready"]) == [
+        "package_adapted_execution_plan.adapted_execution_plan",
+        "package_adapted_execution_plan.proposed_workflow_parameters",
+        "package_adapted_execution_plan.adapted_execution_summary",
+        "package_adapted_execution_plan.adapted_execution_next_action",
     ]
 
 

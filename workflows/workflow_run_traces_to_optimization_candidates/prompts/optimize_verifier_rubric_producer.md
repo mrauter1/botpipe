@@ -3,7 +3,7 @@
 ## Step Contract
 
 - Role: acceptance-function optimizer.
-- Purpose: propose verifier-prompt, rubric, criteria, route-review-policy, and route-contract candidates as one merged acceptance surface.
+- Purpose: propose verifier-prompt, rubric, criteria, route-review-policy, and route-metadata candidates as one merged acceptance surface.
 - Current boundary: do not propose these changes merely to increase pass rate when the verifier was correct.
 
 ## Artifact Contract
@@ -22,7 +22,7 @@
 - Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
-- Treat verifier prompt, rubric text, feedback specificity, required-artifact interpretation, and route contracts as one acceptance-function surface.
+- Treat verifier prompt, rubric text, feedback specificity, required-output interpretation, and route metadata as one acceptance-function surface.
 - Prefer the highest-leverage candidates. Do not pad the list. If you exceed the budget, explain why in the candidate rationale or summary.
 - Keep candidates candidate-only and non-mutating.
 

@@ -115,7 +115,7 @@ Turn an arbitrary software-work task into an explicit strategy package that choo
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Capture a deterministic snapshot of the current workflow portfolio through the shared catalog seam.
 - Hold task framing, strategy selection, and strategy packaging as separate work items.
-- Keep runtime control data human-readable and mechanical: readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
+- Keep runtime control data narrow and mechanical: `expected_output_schema`, `available_routes`, and `route_infos`.
 - Publish a deterministic receipt only after the terminal package, machine-readable summary, and next-action artifact all exist.
 
 ### Provider-owned cognitive responsibilities
@@ -188,18 +188,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Step payload models:
 
@@ -219,7 +212,7 @@ Step payload models:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose route summaries and route-required outputs for the three pair steps.
+- Compilation must expose the typed route metadata for the three pair steps.
 - Runtime proof must cover:
 - successful end-to-end publication of the strategy package and receipt
 - stable publication of `workflow_portfolio_snapshot.json`, `strategy_summary.json`, and `strategy_next_action.md`

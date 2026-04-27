@@ -144,31 +144,72 @@ def _normalize_workflow_parameters(case_id: str, value: Any, parameters_cls: typ
 
 
 def _workflow_artifact_surface(capability: Mapping[str, Any]) -> set[str]:
+    artifact_entries = capability.get("artifacts")
     steps = capability.get("steps")
+    artifacts: set[str] = set()
+    if artifact_entries is not None:
+        if not isinstance(artifact_entries, list):
+            raise ValueError("selected_workflow_capability.json must define selected_workflow_capability.artifacts as a JSON array")
+        for index, raw_artifact in enumerate(artifact_entries):
+            artifact = require_mapping(
+                raw_artifact,
+                f"selected_workflow_capability.json artifacts[{index}] must be a JSON object",
+            )
+            artifact_name = artifact.get("name")
+            if artifact_name is not None:
+                artifacts.add(
+                    require_non_empty_string(
+                        artifact_name,
+                        (
+                            "selected_workflow_capability.json "
+                            f"artifacts[{index}].name must be a non-empty string when present"
+                        ),
+                    )
+                )
     if not isinstance(steps, list):
         raise ValueError("selected_workflow_capability.json must define selected_workflow_capability.steps as a JSON array")
 
-    artifacts: set[str] = set()
+    qualified_candidates: list[str] = []
+
     for index, raw_step in enumerate(steps):
         step = require_mapping(
             raw_step,
             f"selected_workflow_capability.json steps[{index}] must be a JSON object",
         )
         for key in ("requires", "produces", "log_artifacts"):
-            artifacts.update(_optional_string_list(step.get(key), key))
-        route_contracts = step.get("route_contracts")
-        if route_contracts is None:
+            names = _optional_string_list(step.get(key), key)
+            artifacts.update(names)
+            qualified_candidates.extend(name for name in names if "." in name)
+        route_required_outputs = step.get("route_required_outputs")
+        if route_required_outputs is None:
             continue
-        if not isinstance(route_contracts, Mapping):
+        if not isinstance(route_required_outputs, Mapping):
             raise ValueError(
-                "selected_workflow_capability.json route_contracts must be a JSON object when present"
+                "selected_workflow_capability.json route_required_outputs must be a JSON object when present"
             )
-        for route_name, raw_contract in route_contracts.items():
-            contract = require_mapping(
-                raw_contract,
-                f"selected_workflow_capability.json route_contracts[{route_name!r}] must be a JSON object",
-            )
-            artifacts.update(_optional_string_list(contract.get("required_artifacts"), "required_artifacts"))
+        for route_name, raw_required_outputs in route_required_outputs.items():
+            names = require_string_list(
+                    raw_required_outputs,
+                    (
+                        "selected_workflow_capability.json "
+                        f"route_required_outputs[{route_name!r}] must be a string list when present"
+                    ),
+                    min_length=0,
+                    dedupe=True,
+                    sort_output=True,
+                )
+            artifacts.update(names)
+            qualified_candidates.extend(name for name in names if "." in name)
+
+    unique_qualified_candidates = set(qualified_candidates)
+    suffix_counts: dict[str, int] = {}
+    for name in unique_qualified_candidates:
+        suffix = name.rsplit(".", 1)[-1]
+        suffix_counts[suffix] = suffix_counts.get(suffix, 0) + 1
+    for name in unique_qualified_candidates:
+        suffix = name.rsplit(".", 1)[-1]
+        if suffix_counts.get(suffix) == 1:
+            artifacts.add(suffix)
     return artifacts
 
 

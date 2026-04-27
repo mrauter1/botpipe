@@ -11,7 +11,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import JsonArtifactSpec
 
-from workflow import RouteContract
+from core import RouteInfo
 
 
 PriorityLevel = Literal["P1", "P2", "P3"]
@@ -96,76 +96,69 @@ RECURSIVE_IMPROVEMENT_SUMMARY_ARTIFACT = JsonArtifactSpec(
 
 
 FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS = {
-    "company_operation_framed": RouteContract(
+    "company_operation_framed": RouteInfo(
         summary="The company scope, sponsor pressure, and recursive-improvement criteria are explicit enough for priority analysis.",
-        required_artifacts=("company_operation_brief", "recursive_improvement_criteria"),
-        work_item_effect="Locks the company framing so recursive-improvement analysis can proceed against an explicit scope and acceptance surface.",
+        required_outputs=("company_operation_brief", "recursive_improvement_criteria"),
+        handoff="Locks the company framing so recursive-improvement analysis can proceed against an explicit scope and acceptance surface.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same framing boundary still holds, but the company brief or recursive-improvement criteria need local repair.",
-        required_artifacts=("company_operation_brief", "recursive_improvement_criteria"),
-        work_item_effect="Keeps company framing local and reruns the same step for tighter scope or criteria articulation only.",
+        required_outputs=("company_operation_brief", "recursive_improvement_criteria"),
+        handoff="Keeps company framing local and reruns the same step for tighter scope or criteria articulation only.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="The company scope, sponsor pressure, or recursive-improvement objective changed materially and framing must restart.",
-        required_artifacts=("company_operation_brief", "recursive_improvement_criteria"),
-        work_item_effect="Routes back to company framing because the current scope boundary is no longer authoritative.",
+        handoff="Routes back to company framing because the current scope boundary is no longer authoritative.",
     ),
 }
 
 ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS = {
-    "recursive_improvement_pressures_analyzed": RouteContract(
+    "recursive_improvement_pressures_analyzed": RouteInfo(
         summary="The pressure map, priority matrix, and machine-readable candidate set rank the scoped recursive-improvement work explicitly and are ready for cycle packaging.",
-        required_artifacts=(
+        required_outputs=(
             "company_pressure_map",
             "recursive_improvement_priority_matrix",
             "recursive_improvement_candidates",
         ),
-        work_item_effect="Locks the scoped pressure map, ranked candidate set, and priority categories so packaging can publish the cycle package without reinterpreting evidence.",
+        handoff="Locks the scoped pressure map, ranked candidate set, and priority categories so packaging can publish the cycle package without reinterpreting evidence.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same recursive-improvement analysis boundary still holds, but the pressure map, priority matrix, or candidate manifest need local repair.",
-        required_artifacts=(
+        required_outputs=(
             "company_pressure_map",
             "recursive_improvement_priority_matrix",
             "recursive_improvement_candidates",
         ),
-        work_item_effect="Keeps recursive-improvement analysis local and reruns the same step for clearer evidence-backed priorities only.",
+        handoff="Keeps recursive-improvement analysis local and reruns the same step for clearer evidence-backed priorities only.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Pressure analysis showed that the company scope, task slice, or workflow slice changed materially and framing must be revisited.",
-        required_artifacts=("company_operation_brief", "recursive_improvement_criteria"),
-        work_item_effect="Routes back to framing because the current recursive-improvement analysis scope is no longer credible.",
+        handoff="Routes back to framing because the current recursive-improvement analysis scope is no longer credible.",
     ),
 }
 
 PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS = {
-    "recursive_improvement_cycle_ready": RouteContract(
+    "recursive_improvement_cycle_ready": RouteInfo(
         summary="The recursive-improvement cycle package, machine-readable summary, and next-actions artifact are aligned and ready for deterministic publication.",
-        required_artifacts=(
+        required_outputs=(
             "recursive_improvement_cycle",
             "recursive_improvement_summary",
             "recursive_improvement_next_actions",
         ),
-        work_item_effect="Advances the workflow to deterministic recursive-improvement publication without hidden downstream execution.",
+        handoff="Advances the workflow to deterministic recursive-improvement publication without hidden downstream execution.",
     ),
-    "needs_rework": RouteContract(
+    "needs_rework": RouteInfo(
         summary="The same cycle-packaging boundary still holds, but the cycle package, summary, or next-actions artifact need local repair before publication.",
-        required_artifacts=(
+        required_outputs=(
             "recursive_improvement_cycle",
             "recursive_improvement_summary",
             "recursive_improvement_next_actions",
         ),
-        work_item_effect="Keeps cycle packaging local and reruns the same step for packaging corrections only.",
+        handoff="Keeps cycle packaging local and reruns the same step for packaging corrections only.",
     ),
-    "needs_replan": RouteContract(
+    "needs_replan": RouteInfo(
         summary="Packaging showed that the ranked improvement set or candidate categories changed materially and recursive-improvement analysis must be revisited.",
-        required_artifacts=(
-            "company_pressure_map",
-            "recursive_improvement_priority_matrix",
-            "recursive_improvement_candidates",
-        ),
-        work_item_effect="Routes back to recursive-improvement analysis because the current cycle package no longer matches the authoritative pressure map.",
+        handoff="Routes back to recursive-improvement analysis because the current cycle package no longer matches the authoritative pressure map.",
     ),
 }
 

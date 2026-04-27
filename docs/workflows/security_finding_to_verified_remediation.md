@@ -111,7 +111,7 @@ Turn a security finding into an execution-ready remediation and closure package 
 - Keep child `question` and `blocked` propagation explicit in workflow code.
 - Require the child workflow to succeed, reach `evidence_pack_published`, and produce the expected artifacts before parent-local adoption.
 - Hold security assessment, remediation planning, and closure packaging as separate work items.
-- Keep runtime control data human-readable and mechanical: readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, and `route_infos`.
 - Publish a deterministic remediation receipt only after the terminal package artifacts and machine-readable summaries exist.
 
 ### Provider-owned cognitive responsibilities
@@ -196,18 +196,11 @@ Application routes:
 
 ### Runtime-injected control contract
 
-The runtime injects a compact human-readable step contract containing:
+The runtime injects only:
 
-- required inputs
-- writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
-- available routes
-- route metadata and route-required outputs
-- optional route handoff for the resolved target step only
-- optional retry feedback for accepted retries only
-
-Provider raw output remains runtime telemetry for logs, traces, extension events, debugging, and replay. It is not rendered into provider prompts.
+- `expected_output_schema`
+- `available_routes`
+- `route_infos`
 
 Step payload models:
 
@@ -227,7 +220,7 @@ Step payload models:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose route summaries and route-required outputs for the three pair steps.
+- Compilation must expose the typed route metadata for the three pair steps.
 - Runtime proof must cover:
 - successful end-to-end execution with explicit child-workflow composition
 - deterministic parent-local adoption of child evidence artifacts
@@ -245,7 +238,7 @@ Step payload models:
 
 ## Recursive self-improvement policy
 
-- The workflow follows the standing flow-first authoring doctrine and uses the cycle-3 child-result helper seam without widening runtime behavior.
+- The workflow follows the builder-era package doctrine and uses the cycle-3 child-result helper seam without widening runtime behavior.
 - Candidate improvements to prompts or artifact contracts remain evidence-gated through workflow-local tests and the standing recursive memory ledgers.
 - The workflow does not hide portfolio or routing policy inside the runtime; a future `task_to_workflow_strategy` workflow remains the explicit portfolio-level follow-up.
 

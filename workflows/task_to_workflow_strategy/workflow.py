@@ -35,8 +35,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT,
@@ -128,7 +128,7 @@ class TaskToWorkflowStrategy(Workflow):
             "workflow_selection_criteria": workflow_selection_criteria,
         },
         expected_output_schema=TaskFramingPayload,
-        route_contracts=FRAME_TASK_ROUTE_CONTRACTS,
+        route_infos=FRAME_TASK_ROUTE_CONTRACTS,
     )
     build_candidate_workflow_set = SystemStep(
         name="build_candidate_workflow_set",
@@ -168,7 +168,7 @@ class TaskToWorkflowStrategy(Workflow):
         ],
         produces={"strategy_decision": strategy_decision},
         expected_output_schema=StrategySelectionPayload,
-        route_contracts=SELECT_STRATEGY_ROUTE_CONTRACTS,
+        route_infos=SELECT_STRATEGY_ROUTE_CONTRACTS,
     )
     package_strategy = PairStep(
         name="package_strategy",
@@ -196,7 +196,7 @@ class TaskToWorkflowStrategy(Workflow):
             "strategy_next_action": strategy_next_action,
         },
         expected_output_schema=StrategyPackagePayload,
-        route_contracts=PACKAGE_STRATEGY_ROUTE_CONTRACTS,
+        route_infos=PACKAGE_STRATEGY_ROUTE_CONTRACTS,
     )
     publish_strategy = SystemStep(
         name="publish_strategy",

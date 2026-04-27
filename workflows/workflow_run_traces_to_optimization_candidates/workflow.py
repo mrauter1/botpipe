@@ -69,8 +69,9 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_optimization_refinement_evidence,
     )
 
-from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from workflow.primitives import Event, Outcome
+from core import RouteInfo
+from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
+from core.primitives import Event, Outcome
 
 from .contracts import (
     ADVERSARIAL_CASES_ROUTE_CONTRACTS,
@@ -300,7 +301,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "workflow_failure_scenario_seeds": workflow_failure_scenario_seeds,
         },
         expected_output_schema=FrameOptimizationPayload,
-        route_contracts=FRAME_ROUTE_CONTRACTS,
+        route_infos=FRAME_ROUTE_CONTRACTS,
     )
     rank_targets = PairStep(
         name="rank_targets",
@@ -321,7 +322,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "step_optimization_priority_report": step_optimization_priority_report,
         },
         expected_output_schema=RankTargetsPayload,
-        route_contracts=RANK_TARGETS_ROUTE_CONTRACTS,
+        route_infos=RANK_TARGETS_ROUTE_CONTRACTS,
     )
     mine_failures = PairStep(
         name="mine_failures",
@@ -340,7 +341,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         ],
         produces={"workflow_failure_scenarios": workflow_failure_scenarios},
         expected_output_schema=FailureScenarioPayload,
-        route_contracts=MINE_FAILURES_ROUTE_CONTRACTS,
+        route_infos=MINE_FAILURES_ROUTE_CONTRACTS,
     )
     optimize_producer = PairStep(
         name="optimize_producer",
@@ -359,7 +360,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "producer_prompt_optimization_candidates": producer_prompt_optimization_candidates,
         },
         expected_output_schema=CandidatePassPayload,
-        route_contracts=OPTIMIZE_PRODUCER_ROUTE_CONTRACTS,
+        route_infos=OPTIMIZE_PRODUCER_ROUTE_CONTRACTS,
     )
     optimize_verifier_rubric = PairStep(
         name="optimize_verifier_rubric",
@@ -378,19 +379,19 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "verifier_rubric_optimization_candidates": verifier_rubric_optimization_candidates,
         },
         expected_output_schema=CandidatePassPayload,
-        route_contracts=OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS,
+        route_infos=OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS,
     )
     route_optimize_tokens = SystemStep(
         name="route_optimize_tokens",
         produces={"token_optimization_candidates": token_optimization_candidates},
-        route_contracts={
-            "token_optimization_enabled": {
-                "summary": "Token optimization remains enabled, so the workflow continues into the token candidate pass.",
-            },
-            "token_pass_not_applicable": {
-                "summary": "Token optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                "required_artifacts": ("token_optimization_candidates",),
-            },
+        route_infos={
+            "token_optimization_enabled": RouteInfo(
+                summary="Token optimization remains enabled, so the workflow continues into the token candidate pass.",
+            ),
+            "token_pass_not_applicable": RouteInfo(
+                summary="Token optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
+                required_outputs=("token_optimization_candidates",),
+            ),
         },
     )
     optimize_tokens = PairStep(
@@ -408,19 +409,19 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         ],
         produces={"token_optimization_candidates": token_optimization_candidates},
         expected_output_schema=CandidatePassPayload,
-        route_contracts=OPTIMIZE_TOKENS_ROUTE_CONTRACTS,
+        route_infos=OPTIMIZE_TOKENS_ROUTE_CONTRACTS,
     )
     route_adversarial_cases = SystemStep(
         name="route_adversarial_cases",
         produces={"adversarial_case_candidates": adversarial_case_candidates},
-        route_contracts={
-            "adversarial_generation_enabled": {
-                "summary": "Adversarial case generation remains enabled, so the workflow continues into the adversarial candidate pass.",
-            },
-            "adversarial_generation_skipped": {
-                "summary": "Adversarial case generation was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                "required_artifacts": ("adversarial_case_candidates",),
-            },
+        route_infos={
+            "adversarial_generation_enabled": RouteInfo(
+                summary="Adversarial case generation remains enabled, so the workflow continues into the adversarial candidate pass.",
+            ),
+            "adversarial_generation_skipped": RouteInfo(
+                summary="Adversarial case generation was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
+                required_outputs=("adversarial_case_candidates",),
+            ),
         },
     )
     adversarial_cases = PairStep(
@@ -437,21 +438,21 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         ],
         produces={"adversarial_case_candidates": adversarial_case_candidates},
         expected_output_schema=AdversarialCasesPayload,
-        route_contracts=ADVERSARIAL_CASES_ROUTE_CONTRACTS,
+        route_infos=ADVERSARIAL_CASES_ROUTE_CONTRACTS,
     )
     route_workflow_level = SystemStep(
         name="route_workflow_level",
         produces={
             "workflow_level_optimization_candidates": workflow_level_optimization_candidates,
         },
-        route_contracts={
-            "workflow_level_enabled": {
-                "summary": "Workflow-level optimization remains enabled, so the workflow continues into the cross-step candidate pass.",
-            },
-            "workflow_level_pass_not_applicable": {
-                "summary": "Workflow-level optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                "required_artifacts": ("workflow_level_optimization_candidates",),
-            },
+        route_infos={
+            "workflow_level_enabled": RouteInfo(
+                summary="Workflow-level optimization remains enabled, so the workflow continues into the cross-step candidate pass.",
+            ),
+            "workflow_level_pass_not_applicable": RouteInfo(
+                summary="Workflow-level optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
+                required_outputs=("workflow_level_optimization_candidates",),
+            ),
         },
     )
     workflow_level = PairStep(
@@ -473,7 +474,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "workflow_level_optimization_candidates": workflow_level_optimization_candidates,
         },
         expected_output_schema=CandidatePassPayload,
-        route_contracts=WORKFLOW_LEVEL_ROUTE_CONTRACTS,
+        route_infos=WORKFLOW_LEVEL_ROUTE_CONTRACTS,
     )
     package = PairStep(
         name="package",
@@ -497,7 +498,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "workflow_optimization_packet": workflow_optimization_packet,
         },
         expected_output_schema=OptimizationPackagePayload,
-        route_contracts=PACKAGE_ROUTE_CONTRACTS,
+        route_infos=PACKAGE_ROUTE_CONTRACTS,
     )
     publish_optimization_packet = SystemStep(
         name="publish_optimization_packet",
