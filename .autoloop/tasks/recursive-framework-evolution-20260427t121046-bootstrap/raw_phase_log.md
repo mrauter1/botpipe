@@ -554,3 +554,59 @@ No blocking issues remain for this phase. The only validation note carried forwa
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcfa2-8341-79b0-9d59-07c39c7b4de1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcfa2-8341-79b0-9d59-07c39c7b4de1
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfa2-8341-79b0-9d59-07c39c7b4de1
+---
+I’m handling the phase-local test work for the prompt/docs/report changes. First I’m checking the existing phase strategy and the current docs/prompt coverage so I can add the smallest deterministic tests that actually lock the new wording and boundaries in place.
+
+I found the cleanest regression surface: the docs baseline suite already validates prompt and workflow documentation text, so I’m extending that file rather than creating a new test harness. The new coverage will pin the README guidance, the step-prompt contract language, and the report/doc boundary statements introduced in this phase.
+
+The new coverage is in the existing docs-baseline suite. I’m running the new tests directly first to confirm the contract text is pinned correctly, then I’ll update the phase strategy and feedback with the exact coverage and validation result.
+
+The new tests pass, and the full docs-baseline run still only shows the same pre-existing recursive-memory failures. I’m documenting the coverage map and the validation outcome in the phase artifacts now.
+
+Scope considered
+
+Phase-local test work for the optimizer prompt/docs/report changes only. I stayed within the request-relevant documentation and prompt contract surfaces plus the phase-local `test_strategy.md` and `feedback.md` artifacts.
+
+What I analyzed
+
+I reviewed the active phase contract, the shared decisions, the updated optimizer prompt/doc/report files, and the existing coverage in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py). That file already owns repository-wide docs contract checks, so it was the right place to pin these new prompt and documentation semantics.
+
+What I changed
+
+I added three deterministic docs-baseline tests in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py):
+- `test_optimizer_prompt_readme_freezes_seed_ownership_depth_and_budget_guidance`
+- `test_optimizer_step_prompts_freeze_scope_and_over_budget_guidance`
+- `test_optimizer_workflow_doc_and_report_freeze_publication_boundaries`
+
+These lock in:
+- README guidance for LLM-authored artifact ownership, deterministic failure seeds, `optimization_depth`, and soft candidate budgets.
+- Producer prompt requirements to read `workflow_optimization_scope.json`, apply `optimization_depth`, and treat `max_candidates_per_pass` as soft guidance.
+- Verifier prompt requirements to avoid rejecting solely on over-budget candidate count and to reject hidden execution or ownership violations.
+- Workflow doc and `report.md` wording for validation-only publication, deterministic seed ownership, and no-rerun/no-ablation semantics.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/prompts-docs-and-report/test_strategy.md) with the behavior-to-coverage map and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/prompts-docs-and-report/feedback.md) with the test-addition summary.
+
+Key findings / decisions
+
+The cleanest regression guard was to extend the existing docs-baseline suite instead of creating a separate prompt-only test module. That keeps ownership centralized and avoids duplicating file-reading helpers or introducing a new test surface for static text contracts.
+
+Validation:
+- `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k "optimizer_prompt_readme_freezes_seed_ownership_depth_and_budget_guidance or optimizer_step_prompts_freeze_scope_and_over_budget_guidance or optimizer_workflow_doc_and_report_freeze_publication_boundaries"` passed.
+- `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py` still fails only on the two known unrelated recursive-memory charter assertions.
+
+Open issues / next step
+
+No phase-local test gaps remain for the prompt/docs/report changes. The only remaining failures in the docs-baseline suite are the pre-existing recursive-memory charter assertions, which are outside this phase scope.
