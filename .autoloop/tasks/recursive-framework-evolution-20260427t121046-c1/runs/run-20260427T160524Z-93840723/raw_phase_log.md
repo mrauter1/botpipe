@@ -316,3 +316,119 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+---
+I’m auditing the helper-refactor coverage first, then I’ll fill the phase test strategy and add only the smallest missing regression test surface needed for the new stdlib seam.
+
+I’m checking the new helper seam against the existing unit/runtime tests now, then I’ll either add the smallest missing regression case or document that the current coverage already closes the refactor risk.
+
+The helper tests already hit the main happy paths. I’m drilling into the publication-validator failure cases now, because that’s the most likely place a refactor can look fine but stop rejecting bad artifacts.
+
+The runtime suite already covers source drift and count mismatches. What it does not pin down yet is the helper-level rejection of bogus `highest_priority_candidate_ids` and ablation metadata, which are exactly the kind of silent regression a consolidation can miss.
+
+I’ve narrowed the gap to two helper-level failure paths: bogus priority IDs and ablation-flag drift. I’m adding those tests and then I’ll record the exact behavior-to-test map in the phase artifacts.
+
+I’ve added the narrow regression cases. Next I’m running the helper suite to confirm the new failure-path assertions line up with the current publication contract and didn’t overfit the refactor.
+
+Scope considered
+
+- Phase-local test work for `optimization-helper-consolidation`.
+- Reviewed the refactored helper seam in `stdlib/optimization.py`, the optimizer workflow runtime coverage, and the new helper tests in [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py).
+- Updated only the scoped phase artifacts in `.autoloop/tasks/.../test/phases/optimization-helper-consolidation/`.
+
+What I analyzed
+
+- Whether the new shared publication-validator seam already had coverage for the preserved rejection paths called out in AC-3.
+- Existing runtime coverage for source drift, malformed candidate artifacts, candidate-count mismatches, skipped optional passes, and trace-corpus capture behavior.
+- The remaining gap after the refactor: helper-level rejection of bogus `highest_priority_candidate_ids` and ablation-flag drift.
+
+What I changed
+
+- Added two unit regression tests in [test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py):
+  - `test_validate_optimization_scorecard_publication_rejects_unknown_high_priority_candidate_ids`
+  - `test_validate_optimization_scorecard_publication_rejects_ablation_flag_mismatch`
+- Filled in the behavior-to-test coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c1/test/phases/optimization-helper-consolidation/test_strategy.md).
+- Appended the scoped test summary in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c1/test/phases/optimization-helper-consolidation/feedback.md).
+
+Key findings / decisions
+
+- The runtime suite already covered the major workflow-level invariants, including source drift and count mismatch rejection.
+- The missing regression surface was narrower and deterministic, so unit tests at the helper seam were the right place to lock it down instead of adding more runtime scaffolding.
+- Validation run: `.venv/bin/pytest -q tests/unit/test_optimization_helpers.py` -> `24 passed`.
+
+Open issues / next step
+
+- No blocking test gaps remain in the scoped helper-consolidation phase.
+- Broader reuse coverage for future optimizer-family adopters of this stdlib seam remains follow-on work, not a blocker for this phase.
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfb9-c6ec-7eb2-9ed4-2b0404cbab7d
+---
+I’m auditing the new optimizer-helper test coverage against the phase contract now, then I’ll update the test-phase criteria and feedback with either concrete findings or a clean pass.
+
+The added cases are exactly where I’d expect a helper refactor to go soft, so I’m re-running the touched unit suite before I mark the audit complete.
+
+I’ve verified the touched suite passes. The remaining step is bookkeeping: mark the audit criteria accurately and record a no-findings outcome in the phase feedback with a stable test-audit ID.
+
+Scope considered
+
+- Scoped test audit for `optimization-helper-consolidation` only.
+- Reviewed the added helper tests in `tests/unit/test_optimization_helpers.py` and the updated phase artifacts in `.autoloop/tasks/recursive-framework-evolution-20260427t121046-c1/test/phases/optimization-helper-consolidation/`.
+- Unrelated repository changes stayed out of scope.
+
+What I analyzed
+
+- Whether the new shared optimizer helper seam has regression coverage at the right level for preserved publication behavior.
+- Whether the test strategy maps changed behavior, preserved invariants, and failure paths back to concrete tests.
+- Whether the added expectations encode any unconfirmed behavior change or flaky assumption.
+
+What I reviewed
+
+- The new unit tests for:
+  - unknown `highest_priority_candidate_ids`
+  - `requires_ablation_before_promotion` mismatch
+- The existing runtime coverage already cited for:
+  - source drift rejection
+  - malformed candidate artifact rejection
+  - candidate-count mismatch rejection
+  - optional-pass skip/finalization behavior
+- Test execution result:
+  - `.venv/bin/pytest -q tests/unit/test_optimization_helpers.py` -> `24 passed`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings beyond the recorded `TST-000` clean-pass note.
+- The criteria file was updated to fully checked because coverage quality, regression protection, edge/failure-path depth, reliability, and behavioral intent are all satisfied for the scoped phase.
+- The feedback file was updated with a stable audit entry documenting the no-findings outcome.
+
+Open issues / next step
+
+- No open issues in the scoped test audit.
+- This phase is ready to close.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

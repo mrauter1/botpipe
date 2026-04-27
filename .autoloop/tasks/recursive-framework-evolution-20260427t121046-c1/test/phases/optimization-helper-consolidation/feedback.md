@@ -9,3 +9,4 @@
 
 - Added helper-regression coverage for scorecard publication drift: unknown `highest_priority_candidate_ids` and `requires_ablation_before_promotion` mismatches now fail directly in `tests/unit/test_optimization_helpers.py`.
 - Recorded the phase coverage map in `test_strategy.md`, including preserved invariants, failure paths, and the deliberate unit-vs-runtime split for deterministic helper branches.
+- `TST-000` `non-blocking`: No audit findings. The added helper-level failure-path tests close the material regression gap introduced by the publication-validator extraction, and the touched suite passed with `24 passed`.
