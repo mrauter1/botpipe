@@ -214,11 +214,12 @@ def test_parse_outcome_json_accepts_plain_object() -> None:
 
 
 def test_parse_outcome_json_accepts_fenced_json_block() -> None:
-    raw = '```json\n{"tag":"question","question":"Proceed?"}\n```'
+    raw = '```json\n{"tag":"question","reason":"Need user input.","question":"Proceed?"}\n```'
 
     outcome = parse_outcome_json(raw)
 
     assert outcome.tag == "question"
+    assert outcome.reason == "Need user input."
     assert outcome.question == "Proceed?"
     assert outcome.payload == {}
     assert outcome.raw_output == raw
@@ -232,6 +233,11 @@ def test_parse_outcome_json_rejects_invalid_json() -> None:
 def test_parse_outcome_json_rejects_missing_tag() -> None:
     with pytest.raises(ProviderExecutionError, match="must contain a non-empty string 'tag'"):
         parse_outcome_json('{"reason":"missing"}')
+
+
+def test_parse_outcome_json_rejects_missing_reason() -> None:
+    with pytest.raises(ProviderExecutionError, match="must contain a non-empty string 'reason'"):
+        parse_outcome_json('{"tag":"done"}')
 
 
 def test_parse_outcome_json_rejects_non_object_payload() -> None:
@@ -558,7 +564,7 @@ def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
         assert "# Step: verify" in rendered_prompt
         assert "## Runtime Step Contract" in rendered_prompt
         assert "### Required inputs" in rendered_prompt
-        assert "### Output payload" in rendered_prompt
+        assert "### Control response" in rendered_prompt
         assert "<producer_raw_output>" not in rendered_prompt
         assert "producer output" not in rendered_prompt
         return _completed(
@@ -566,7 +572,7 @@ def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
             stdout="\n".join(
                 (
                     '{"type":"thread.started","thread_id":"codex-session-3"}',
-                    '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"pair_ok\\",\\"payload\\":{\\"summary\\":\\"ok\\"}}"}}',
+                    '{"type":"item.completed","item":{"type":"agent_message","text":"{\\"tag\\":\\"pair_ok\\",\\"reason\\":\\"accepted\\",\\"payload\\":{\\"summary\\":\\"ok\\"}}"}}',
                 )
             ),
         )
@@ -583,6 +589,7 @@ def test_rendered_llm_provider_parses_codex_verifier_outcome_in_core(
     response = provider.run_verifier(_verifier_request(session=_placeholder_session()))
 
     assert response.outcome.tag == "pair_ok"
+    assert response.outcome.reason == "accepted"
     assert response.outcome.payload == {"summary": "ok"}
     assert response.session is not None
     assert response.session.session_id == "codex-session-3"
@@ -688,7 +695,7 @@ def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
         calls.append(command)
         return _completed(
             args=command,
-            stdout='{"result":"{\\"tag\\":\\"done\\"}","usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11},"stop_reason":"done"}',
+            stdout='{"result":"{\\"tag\\":\\"done\\",\\"reason\\":\\"completed\\"}","usage":{"prompt_tokens":8,"completion_tokens":3,"total_tokens":11},"stop_reason":"done"}',
         )
 
     monkeypatch.setattr(claude_runtime_provider.subprocess, "run", fake_run)
@@ -712,6 +719,7 @@ def test_rendered_llm_provider_parses_claude_llm_outcome_in_core(
         "Read,Write,Edit,Glob,Grep,Bash",
     ]
     assert response.outcome.tag == "done"
+    assert response.outcome.reason == "completed"
     assert response.session is not None
     assert response.session.session_id == "claude-session-existing"
     assert response.session.metadata["provider_metadata"] == {"stop_reason": "done"}

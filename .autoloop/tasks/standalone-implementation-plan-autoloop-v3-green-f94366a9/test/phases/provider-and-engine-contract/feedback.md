@@ -6,3 +6,5 @@
 - Phase Directory Key: provider-and-engine-contract
 - Phase Title: Provider and engine contract
 - Scope: phase-local authoritative verifier artifact
+
+- Added phase-local coverage for the stricter rendered-provider control-response shape (`reason` now required in runtime parser fixtures and assertions) and for low-level `Engine` relative file prompts failing without a prompt registry but succeeding with `FilesystemPromptRegistry`.
