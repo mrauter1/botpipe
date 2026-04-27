@@ -6,8 +6,6 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
         require_non_negative_int,
@@ -21,8 +19,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
         require_non_negative_int,
@@ -40,19 +36,6 @@ from .contracts import (
     InvestigationEvidencePackPayload,
     InvestigationFramingPayload,
 )
-
-
-_INVESTIGATION_KINDS = frozenset(
-    {
-        "release_readiness",
-        "incident_response",
-        "security_remediation",
-        "delivery_recovery",
-        "customer_escalation",
-        "general",
-    }
-)
-
 
 class InvestigationRequestToEvidencePack(Workflow):
     """Turn an investigation request into a durable evidence pack."""
@@ -178,24 +161,14 @@ class InvestigationRequestToEvidencePack(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        investigation_title = require_non_empty_string(
-            payload.get("investigation_title"),
-            error_message="investigation_request_to_evidence_pack requires workflow parameter 'investigation_title'",
-            coerce=True,
-        )
-        investigation_kind = _normalize_investigation_kind(payload.get("investigation_kind"))
-        sponsor_role = normalize_optional_string(payload.get("sponsor_role"))
-        evidence_paths = normalize_unique_strings(payload.get("evidence_paths"), allow_scalar=True)
-        source_constraints = normalize_unique_strings(payload.get("source_constraints"), allow_scalar=True)
-
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "investigation_title": investigation_title,
-                "investigation_kind": investigation_kind,
-                "sponsor_role": sponsor_role,
-                "evidence_paths": evidence_paths,
-                "source_constraints": source_constraints,
+                "investigation_title": params.investigation_title,
+                "investigation_kind": params.investigation_kind,
+                "sponsor_role": params.sponsor_role,
+                "evidence_paths": list(params.evidence_paths),
+                "source_constraints": list(params.source_constraints),
                 "framing_status": None,
                 "evidence_status": None,
                 "ready_for_downstream_assessment": False,
@@ -312,18 +285,6 @@ class InvestigationRequestToEvidencePack(Workflow):
         ), Event("evidence_pack_published")
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
-
-
-def _normalize_investigation_kind(value) -> str:
-    normalized = require_non_empty_string(
-        value,
-        error_message="investigation_request_to_evidence_pack requires workflow parameter 'investigation_kind'",
-        coerce=True,
-    )
-    if normalized not in _INVESTIGATION_KINDS:
-        supported = ", ".join(sorted(_INVESTIGATION_KINDS))
-        raise ValueError(f"investigation_kind must be one of: {supported}")
-    return normalized
 
 
 __all__ = ["InvestigationRequestToEvidencePack"]

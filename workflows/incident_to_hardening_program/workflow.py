@@ -6,8 +6,6 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
         require_non_negative_int,
@@ -20,8 +18,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
         require_non_negative_int,
@@ -236,21 +232,15 @@ class IncidentToHardeningProgram(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        incident_title = require_non_empty_string(
-            payload.get("incident_title"),
-            error_message="incident_to_hardening_program requires workflow parameter 'incident_title'",
-            coerce=True,
-        )
-
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "incident_title": incident_title,
-                "incident_window": normalize_optional_string(payload.get("incident_window")),
-                "affected_system": normalize_optional_string(payload.get("affected_system")),
-                "severity": normalize_optional_string(payload.get("severity")),
-                "incident_commander": normalize_optional_string(payload.get("incident_commander")),
-                "evidence_paths": normalize_unique_strings(payload.get("evidence_paths"), allow_scalar=True),
+                "incident_title": params.incident_title,
+                "incident_window": params.incident_window,
+                "affected_system": params.affected_system,
+                "severity": params.severity,
+                "incident_commander": params.incident_commander,
+                "evidence_paths": list(params.evidence_paths),
                 "framing_status": None,
                 "evidence_status": None,
                 "analysis_status": None,

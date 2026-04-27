@@ -328,6 +328,85 @@ def test_release_go_no_go_package_normalizes_repeatable_evidence_paths(tmp_path:
     }
 
 
+def test_release_go_no_go_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.release_candidate_to_go_no_go")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "release_candidate_to_go_no_go").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "release_name": " 2026.04 ",
+                "target_date": " 2026-05-01 ",
+                "deployment_environment": " staging ",
+                "release_owner": " Release Captain ",
+                "evidence_paths": [
+                    " docs/releases/2026.04.md ",
+                    "",
+                    "docs/releases/2026.04.md",
+                    "reports/test-summary-2026.04.md",
+                ],
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_release_candidate_to_go_no_go"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="release_candidate_to_go_no_go",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "release_candidate_to_go_no_go",
+        state=workflow_pkg.ReleaseCandidateToGoNoGo.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={
+            "release_name": "wrong release",
+            "target_date": "wrong-date",
+            "deployment_environment": "production",
+            "release_owner": "Wrong Owner",
+            "evidence_paths": ["wrong/path.md"],
+        },
+    )
+
+    next_state, event = workflow_pkg.ReleaseCandidateToGoNoGo.on_bootstrap(
+        workflow_pkg.ReleaseCandidateToGoNoGo.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.release_name == "2026.04"
+    assert next_state.target_date == "2026-05-01"
+    assert next_state.deployment_environment == "staging"
+    assert next_state.release_owner == "Release Captain"
+    assert next_state.evidence_paths == [
+        "docs/releases/2026.04.md",
+        "reports/test-summary-2026.04.md",
+    ]
+    assert ctx.get_session("frame_session") is not None
+    assert ctx.get_session("evidence_session") is not None
+    assert ctx.get_session("assessment_session") is not None
+    assert ctx.get_session("package_session") is not None
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["release_name"] == "2026.04"
+    assert invocation_contract["target_date"] == "2026-05-01"
+    assert invocation_contract["deployment_environment"] == "staging"
+    assert invocation_contract["release_owner"] == "Release Captain"
+    assert invocation_contract["evidence_paths"] == next_state.evidence_paths
+
+
 def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:
     _install_repo_release_package(tmp_path)
 

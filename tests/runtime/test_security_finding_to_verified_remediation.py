@@ -329,6 +329,100 @@ def test_security_remediation_package_normalizes_repeatable_inputs(tmp_path: Pat
     }
 
 
+def test_security_remediation_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.security_finding_to_verified_remediation")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "security_finding_to_verified_remediation").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "finding_title": " Admin impersonation privilege escalation ",
+                "finding_source": " pentest ",
+                "severity": " high ",
+                "affected_system": " delegated admin impersonation ",
+                "sponsor_role": " Security Engineering ",
+                "evidence_paths": [
+                    " pentest/findings/admin-impersonation.md ",
+                    "",
+                    "pentest/findings/admin-impersonation.md",
+                    "src/auth/impersonation.py",
+                ],
+                "deployment_constraints": [
+                    " preserve emergency admin access during rollout ",
+                    "",
+                    "preserve emergency admin access during rollout",
+                    "Avoid schema changes in the same patch.",
+                ],
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_security_finding_to_verified_remediation"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="security_finding_to_verified_remediation",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "security_finding_to_verified_remediation",
+        state=workflow_pkg.SecurityFindingToVerifiedRemediation.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={
+            "finding_title": "wrong finding",
+            "finding_source": "other",
+            "severity": "low",
+            "affected_system": "wrong system",
+            "sponsor_role": "Wrong Sponsor",
+            "evidence_paths": ["wrong/path.md"],
+            "deployment_constraints": ["wrong constraint"],
+        },
+    )
+
+    next_state, event = workflow_pkg.SecurityFindingToVerifiedRemediation.on_bootstrap(
+        workflow_pkg.SecurityFindingToVerifiedRemediation.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.finding_title == "Admin impersonation privilege escalation"
+    assert next_state.finding_source == "pentest"
+    assert next_state.severity == "high"
+    assert next_state.affected_system == "delegated admin impersonation"
+    assert next_state.sponsor_role == "Security Engineering"
+    assert next_state.evidence_paths == [
+        "pentest/findings/admin-impersonation.md",
+        "src/auth/impersonation.py",
+    ]
+    assert next_state.deployment_constraints == [
+        "preserve emergency admin access during rollout",
+        "Avoid schema changes in the same patch.",
+    ]
+    assert ctx.get_session("assessment_session") is not None
+    assert ctx.get_session("remediation_session") is not None
+    assert ctx.get_session("closure_session") is not None
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["finding_title"] == "Admin impersonation privilege escalation"
+    assert invocation_contract["finding_source"] == "pentest"
+    assert invocation_contract["severity"] == "high"
+    assert invocation_contract["affected_system"] == "delegated admin impersonation"
+    assert invocation_contract["sponsor_role"] == "Security Engineering"
+    assert invocation_contract["evidence_paths"] == next_state.evidence_paths
+    assert invocation_contract["deployment_constraints"] == next_state.deployment_constraints
+
+
 def test_security_remediation_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:
     _install_repo_security_package(tmp_path)
     provider = _successful_security_remediation_provider()

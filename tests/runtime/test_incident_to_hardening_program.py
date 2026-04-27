@@ -334,6 +334,89 @@ def test_incident_hardening_package_normalizes_repeatable_evidence_paths(tmp_pat
     }
 
 
+def test_incident_hardening_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.incident_to_hardening_program")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "incident_to_hardening_program").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "incident_title": " Payments API 500 spike ",
+                "incident_window": " 2026-04-22 02:11Z to 02:58Z ",
+                "affected_system": " payments-api ",
+                "severity": " sev1 ",
+                "incident_commander": " Incident Lead ",
+                "evidence_paths": [
+                    " incidents/2026-04-22-payments.md ",
+                    "",
+                    "incidents/2026-04-22-payments.md",
+                    "dashboards/payments-api-errors.md",
+                ],
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_incident_to_hardening_program"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="incident_to_hardening_program",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "incident_to_hardening_program",
+        state=workflow_pkg.IncidentToHardeningProgram.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={
+            "incident_title": "wrong incident",
+            "incident_window": "wrong window",
+            "affected_system": "wrong system",
+            "severity": "sev9",
+            "incident_commander": "Wrong Lead",
+            "evidence_paths": ["wrong/path.md"],
+        },
+    )
+
+    next_state, event = workflow_pkg.IncidentToHardeningProgram.on_bootstrap(
+        workflow_pkg.IncidentToHardeningProgram.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.incident_title == "Payments API 500 spike"
+    assert next_state.incident_window == "2026-04-22 02:11Z to 02:58Z"
+    assert next_state.affected_system == "payments-api"
+    assert next_state.severity == "sev1"
+    assert next_state.incident_commander == "Incident Lead"
+    assert next_state.evidence_paths == [
+        "incidents/2026-04-22-payments.md",
+        "dashboards/payments-api-errors.md",
+    ]
+    assert ctx.get_session("frame_session") is not None
+    assert ctx.get_session("evidence_session") is not None
+    assert ctx.get_session("analysis_session") is not None
+    assert ctx.get_session("program_session") is not None
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["incident_title"] == "Payments API 500 spike"
+    assert invocation_contract["incident_window"] == "2026-04-22 02:11Z to 02:58Z"
+    assert invocation_contract["affected_system"] == "payments-api"
+    assert invocation_contract["severity"] == "sev1"
+    assert invocation_contract["incident_commander"] == "Incident Lead"
+    assert invocation_contract["evidence_paths"] == next_state.evidence_paths
+
+
 def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:
     _install_repo_incident_package(tmp_path)
 

@@ -249,22 +249,15 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        package_name = str(payload.get("package_name") or "").strip()
-        workflow_kind = str(payload.get("workflow_kind") or "").strip()
-        if not package_name or not workflow_kind:
-            raise ValueError(
-                "workflow_idea_to_workflow_package requires workflow parameters 'package_name' and 'workflow_kind'"
-            )
-
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "package_name": package_name,
-                "package_title": payload.get("package_title"),
-                "workflow_kind": workflow_kind,
-                "authoring_shape": str(payload.get("authoring_shape") or "flow_specs").strip() or "flow_specs",
-                "aliases": list(payload.get("aliases") or []),
-                "target_test_command": str(payload.get("target_test_command") or "pytest").strip() or "pytest",
+                "package_name": params.package_name,
+                "package_title": params.package_title,
+                "workflow_kind": params.workflow_kind,
+                "authoring_shape": params.authoring_shape,
+                "aliases": list(params.aliases),
+                "target_test_command": params.target_test_command,
                 "selected_candidate": None,
                 "selected_candidate_kind": None,
                 "design_status": None,

@@ -98,3 +98,62 @@ phase_mode=single
 phase_ids=remaining-typed-bootstrap-convergence
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260427T033024Z-f4648cdd | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcd04-7321-7db0-9cee-ec4ec66e064e
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcd04-7321-7db0-9cee-ec4ec66e064e
+
+
+---
+run_id=run-20260427T033024Z-f4648cdd | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcd04-7321-7db0-9cee-ec4ec66e064e
+---
+I’m auditing the repository and phase artifacts first so I can identify the remaining raw bootstrap sites, the shared pattern they use, and the narrowest safe migration path before editing.
+
+I’ve confirmed the plan and the active scope. Next I’m tracing the remaining `ctx.workflow_params` bootstrap sites against `Context.params`, parameter models, docs, and the targeted tests so the migration stays behavior-preserving.
+
+I’ve confirmed the framework already treats `ctx.params` as the intended seam and that recursive memory is currently overstating completion. I’m reading the five remaining workflow families and their tests side by side so I can preserve payload shape while deleting only redundant normalization.
+
+I have the exact before-state now. The remaining five bootstraps all follow the same redundant pattern, but one of them still carries workflow-specific literal normalization in `params.py`, so I’m comparing against already-migrated workflows before I edit to keep that boundary clean.
+
+The remaining work is now clear: code migration in five bootstraps, five matching typed-bootstrap tests, and a memory/docs correction because the ledgers currently claim the bootstrap convergence is already finished. I’m moving into edits on that exact slice.
+
+I’m editing the five workflow bootstraps now. The code change is mechanical, but I’m pairing it with explicit typed-bootstrap tests so the proof catches any accidental fallback to raw `workflow_params`.
+
+I hit the first workflow and found exactly the kind of cleanup hazard this phase is about: a leftover raw-normalization line after the conversion. I’m correcting those bootstraps as a single pass before moving on to tests.
+
+The bootstrap conversions are in place. I’m doing a compile-level sanity pass and trimming any now-dead workflow-local normalization remnants before I add the proof tests.
+
+I’m updating the recursive memory alongside the code, not after it. The existing ledgers explicitly overstate completion, so I’m correcting the history and adding a closeout note for the actual remaining-five convergence.
+
+The code and memory changes are synced. I’m adding one baseline-doc assertion for this closeout so the repository now protects the corrected migration scope instead of only protecting the earlier partial closeout.
+
+One targeted suite is failing. I’m reading the failing assertion before changing anything else so I can fix the contract mismatch rather than paper over it.
+
+The failures are valid: `write_invocation_contract(...)` includes shared runtime metadata, so the new tests were asserting an over-narrow payload. I’m tightening those assertions to check the typed fields specifically while still proving the raw dict is ignored.
+
+The targeted proof is green. I’m finishing the bookkeeping now: filling the recursive-memory proof line with the exact test command and writing the implementation notes/decision ledger with the final scope and invariants.
+
+I’ve got the final proof numbers and diff metrics. I’m replacing the temporary placeholders in recursive memory and then I’ll write the phase notes and decision line so the next turn sees the actual closeout state.
+
+**Scope considered**
+Consolidate-only slice: the five remaining raw bootstrap workflows, their targeted runtime proof, `docs/architecture.md`, `docs/authoring.md`, `core/context.py`, `runtime/loader.py`, `stdlib/lifecycle.py`, and the standing recursive-memory files.
+
+**What I analyzed**
+I compared the remaining `on_bootstrap(...)` handlers against the already-migrated `ctx.params` pattern and checked that the only repeated residue was bootstrap-time re-reading of `ctx.workflow_params`. I also verified that invocation-contract writing, artifact names, route names, receipts, and child composition did not need behavioral changes.
+
+**What I changed**
+The remaining bootstraps in [release_candidate_to_go_no_go](</home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py:218>), [investigation_request_to_evidence_pack](</home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/investigation_request_to_evidence_pack/workflow.py:161>), [security_finding_to_verified_remediation](</home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py:235>), [incident_to_hardening_program](</home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/incident_to_hardening_program/workflow.py:232>), and [workflow_idea_to_workflow_package](</home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/workflow.py:249>) now project directly from `ctx.params`. I removed the dead investigation-kind bootstrap helper, added typed-bootstrap regression tests to the five runtime suites, updated [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:687), and corrected the recursive-memory closeout records plus [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-c1/implement/phases/remaining-typed-bootstrap-convergence/implementation_notes.md:1>).
+
+**Key findings / decisions**
+Cycle mode stayed `consolidate`. No new workflow and no new helper seam were added; `Context.workflow_params` stays as the compatibility/raw dict surface, while `ctx.params` is now the fully converged bootstrap surface across the remaining five workflows. Metrics: files added `0`, files deleted `0`, net line change `+329`, repeated validation idioms removed `5`, workflows migrated `5`, new helpers `0`.
+
+Validation passed with:
+`.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_incident_to_hardening_program.py tests/runtime/test_workflow_builder_package.py tests/test_architecture_baseline_docs.py` (`136 passed`).
+
+**Open issues / next step**
+No functional blockers in this slice. Remaining pressure is portfolio-shape and helper-cleanup work, not typed-bootstrap migration.

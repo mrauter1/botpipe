@@ -7,8 +7,6 @@ from pydantic import BaseModel, Field
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
         adopt_child_artifacts,
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_child_workflow_result,
         require_non_empty_string,
@@ -25,8 +23,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
         adopt_child_artifacts,
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_child_workflow_result,
         require_non_empty_string,
@@ -239,30 +235,16 @@ class SecurityFindingToVerifiedRemediation(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        finding_title = require_non_empty_string(
-            payload.get("finding_title"),
-            error_message="security_finding_to_verified_remediation requires workflow parameter 'finding_title'",
-            coerce=True,
-        )
-        finding_source = require_non_empty_string(
-            payload.get("finding_source"),
-            error_message="security_finding_to_verified_remediation requires workflow parameter 'finding_source'",
-            coerce=True,
-        )
-        severity = normalize_optional_string(payload.get("severity")) or "unknown"
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "finding_title": finding_title,
-                "finding_source": finding_source,
-                "severity": severity,
-                "affected_system": normalize_optional_string(payload.get("affected_system")),
-                "sponsor_role": normalize_optional_string(payload.get("sponsor_role")),
-                "evidence_paths": normalize_unique_strings(payload.get("evidence_paths"), allow_scalar=True),
-                "deployment_constraints": normalize_unique_strings(
-                    payload.get("deployment_constraints"),
-                    allow_scalar=True,
-                ),
+                "finding_title": params.finding_title,
+                "finding_source": params.finding_source,
+                "severity": params.severity,
+                "affected_system": params.affected_system,
+                "sponsor_role": params.sponsor_role,
+                "evidence_paths": list(params.evidence_paths),
+                "deployment_constraints": list(params.deployment_constraints),
                 "evidence_pack_status": None,
                 "evidence_pack_child_run_id": None,
                 "ready_for_downstream_assessment": False,

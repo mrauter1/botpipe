@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.core.compiler import compile_workflow
+from autoloop_v3.core.context import Context
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.core.stores import InMemorySessionStore
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
@@ -320,6 +322,81 @@ def test_workflow_builder_package_normalizes_optional_title_aliases_and_target_c
         "target_test_command": "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py",
         "workflow_kind": "end_to_end",
     }
+
+
+def test_workflow_builder_package_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_idea_to_workflow_package")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "workflow_idea_to_workflow_package").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "package_name": " release_candidate_to_go_no_go ",
+                "package_title": " Release Candidate To Go / No-Go ",
+                "workflow_kind": "end_to_end",
+                "authoring_shape": "flow-specs",
+                "aliases": [" release-go-no-go ", "", "release-go-no-go", "release-decision"],
+                "target_test_command": " pytest -q tests/runtime/test_release_candidate_to_go_no_go.py ",
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_workflow_idea_to_workflow_package"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="workflow_idea_to_workflow_package",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "workflow_idea_to_workflow_package",
+        state=workflow_pkg.WorkflowIdeaToWorkflowPackage.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={
+            "package_name": "wrong_package",
+            "package_title": "Wrong Title",
+            "workflow_kind": "building_block",
+            "authoring_shape": "single",
+            "aliases": ["wrong-alias"],
+            "target_test_command": "pytest wrong_test.py",
+        },
+    )
+
+    next_state, event = workflow_pkg.WorkflowIdeaToWorkflowPackage.on_bootstrap(
+        workflow_pkg.WorkflowIdeaToWorkflowPackage.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.package_name == "release_candidate_to_go_no_go"
+    assert next_state.package_title == "Release Candidate To Go / No-Go"
+    assert next_state.workflow_kind == "end_to_end"
+    assert next_state.authoring_shape == "flow_specs"
+    assert next_state.aliases == ["release-go-no-go", "release-decision"]
+    assert next_state.target_test_command == "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py"
+    assert ctx.get_session("frame_session") is not None
+    assert ctx.get_session("design_session") is not None
+    assert ctx.get_session("build_session") is not None
+    assert ctx.get_session("evaluate_session") is not None
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["package_name"] == "release_candidate_to_go_no_go"
+    assert invocation_contract["package_title"] == "Release Candidate To Go / No-Go"
+    assert invocation_contract["workflow_kind"] == "end_to_end"
+    assert invocation_contract["authoring_shape"] == "flow_specs"
+    assert invocation_contract["aliases"] == next_state.aliases
+    assert invocation_contract["target_test_command"] == "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py"
 
 
 @pytest.mark.parametrize(

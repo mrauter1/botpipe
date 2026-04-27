@@ -6,8 +6,6 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
     )
@@ -19,8 +17,6 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
-        normalize_optional_string,
-        normalize_unique_strings,
         read_json_object,
         require_non_empty_string,
     )
@@ -222,25 +218,14 @@ class ReleaseCandidateToGoNoGo(Workflow):
 
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
-        payload = dict(ctx.workflow_params)
-        release_name = require_non_empty_string(
-            payload.get("release_name"),
-            error_message="release_candidate_to_go_no_go requires workflow parameter 'release_name'",
-            coerce=True,
-        )
-
-        target_date = normalize_optional_string(payload.get("target_date"))
-        deployment_environment = normalize_optional_string(payload.get("deployment_environment")) or "production"
-        release_owner = normalize_optional_string(payload.get("release_owner"))
-        evidence_paths = normalize_unique_strings(payload.get("evidence_paths"), allow_scalar=True)
-
+        params = ctx.params
         next_state = state.model_copy(
             update={
-                "release_name": release_name,
-                "target_date": target_date,
-                "deployment_environment": deployment_environment,
-                "release_owner": release_owner,
-                "evidence_paths": evidence_paths,
+                "release_name": params.release_name,
+                "target_date": params.target_date,
+                "deployment_environment": params.deployment_environment,
+                "release_owner": params.release_owner,
+                "evidence_paths": list(params.evidence_paths),
                 "framing_status": None,
                 "evidence_status": None,
                 "assessment_status": None,

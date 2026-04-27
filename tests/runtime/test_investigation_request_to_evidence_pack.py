@@ -293,6 +293,91 @@ def test_investigation_evidence_pack_package_normalizes_repeatable_inputs(tmp_pa
     }
 
 
+def test_investigation_evidence_pack_bootstrap_reads_typed_ctx_params(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.investigation_request_to_evidence_pack")
+    parameters_cls = resolve_workflow_reference(REPO_ROOT, "investigation_request_to_evidence_pack").parameters_cls
+    assert parameters_cls is not None
+    typed_params = parameters_cls.model_validate(
+        coerce_workflow_parameter_mapping(
+            parameters_cls,
+            {
+                "investigation_title": " Admin impersonation privilege escalation ",
+                "investigation_kind": " security_remediation ",
+                "sponsor_role": " Security Engineering ",
+                "evidence_paths": [
+                    " pentest/findings/admin-impersonation.md ",
+                    "",
+                    "pentest/findings/admin-impersonation.md",
+                    "src/auth/impersonation.py",
+                ],
+                "source_constraints": [
+                    " use repo artifacts only ",
+                    "",
+                    "use repo artifacts only",
+                    "Treat missing audit evidence as a gap.",
+                ],
+            },
+        )
+    )
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "typed-bootstrap-task"
+    workflow_folder = task_folder / "wf_investigation_request_to_evidence_pack"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Typed bootstrap request.\n", encoding="utf-8")
+
+    ctx = Context(
+        task_id="typed-bootstrap-task",
+        run_id="run-1",
+        workflow_name="investigation_request_to_evidence_pack",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=REPO_ROOT / "workflows" / "investigation_request_to_evidence_pack",
+        state=workflow_pkg.InvestigationRequestToEvidencePack.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={
+            "investigation_title": "wrong investigation",
+            "investigation_kind": "general",
+            "sponsor_role": "Wrong Sponsor",
+            "evidence_paths": ["wrong/path.md"],
+            "source_constraints": ["wrong constraint"],
+        },
+    )
+
+    next_state, event = workflow_pkg.InvestigationRequestToEvidencePack.on_bootstrap(
+        workflow_pkg.InvestigationRequestToEvidencePack.State(),
+        ctx,
+    )
+
+    assert event.tag == "inputs_prepared"
+    assert next_state.investigation_title == "Admin impersonation privilege escalation"
+    assert next_state.investigation_kind == "security_remediation"
+    assert next_state.sponsor_role == "Security Engineering"
+    assert next_state.evidence_paths == [
+        "pentest/findings/admin-impersonation.md",
+        "src/auth/impersonation.py",
+    ]
+    assert next_state.source_constraints == [
+        "use repo artifacts only",
+        "Treat missing audit evidence as a gap.",
+    ]
+    assert ctx.get_session("frame_session") is not None
+    assert ctx.get_session("evidence_session") is not None
+
+    invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
+    assert invocation_contract["investigation_title"] == "Admin impersonation privilege escalation"
+    assert invocation_contract["investigation_kind"] == "security_remediation"
+    assert invocation_contract["sponsor_role"] == "Security Engineering"
+    assert invocation_contract["evidence_paths"] == next_state.evidence_paths
+    assert invocation_contract["source_constraints"] == next_state.source_constraints
+
+
 def test_investigation_evidence_pack_package_runs_and_emits_terminal_receipt(tmp_path: Path) -> None:
     _install_repo_investigation_package(tmp_path)
 
