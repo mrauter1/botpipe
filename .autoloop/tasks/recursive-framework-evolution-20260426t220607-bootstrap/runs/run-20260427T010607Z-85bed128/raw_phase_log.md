@@ -146,3 +146,12 @@ No open verification blockers remain in the planning artifacts. The plan is read
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=deterministic-ingestion-and-workflow-shell,ranking-and-failure-analysis,candidate-generation-and-publication,refinement-and-documentation-integration,verification-and-full-regression
+explicit=True
+current_phase_index=0
