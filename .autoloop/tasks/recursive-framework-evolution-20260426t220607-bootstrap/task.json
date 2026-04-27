@@ -16,15 +16,15 @@
       "verification-and-full-regression"
     ],
     "explicit": true,
-    "current_phase_index": 3,
-    "current_phase_id": "refinement-and-documentation-integration"
+    "current_phase_index": 4,
+    "current_phase_id": "verification-and-full-regression"
   },
   "phase_status": {
     "deterministic-ingestion-and-workflow-shell": "completed",
     "ranking-and-failure-analysis": "completed",
     "candidate-generation-and-publication": "completed",
-    "refinement-and-documentation-integration": "in_progress",
-    "verification-and-full-regression": "planned"
+    "refinement-and-documentation-integration": "completed",
+    "verification-and-full-regression": "in_progress"
   },
   "phase_history": [
     {
@@ -71,6 +71,19 @@
       "run_id": "run-20260427T010607Z-85bed128",
       "status": "in_progress",
       "ts": "2026-04-27T02:52:26.035944+00:00"
+    },
+    {
+      "phase_id": "refinement-and-documentation-integration",
+      "run_id": "run-20260427T010607Z-85bed128",
+      "status": "completed",
+      "ts": "2026-04-27T03:09:46.284956+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "verification-and-full-regression",
+      "run_id": "run-20260427T010607Z-85bed128",
+      "status": "in_progress",
+      "ts": "2026-04-27T03:09:46.287878+00:00"
     }
   ]
 }
