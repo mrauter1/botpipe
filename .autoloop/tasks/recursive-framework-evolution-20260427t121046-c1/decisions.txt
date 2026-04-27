@@ -10,3 +10,5 @@ Keep the optimizer helper seam contract-driven by passing workflow-owned artifac
 Treat optimizer frame capture, optional-pass finalization, and scorecard publication validation as the shared deterministic subset; keep no-eligible packaging policy, packet text shaping, and route semantics in the workflow package.
 <autoloop-decisions-header version="1" block_seq="4" owner="implementer" phase_id="proof-docs-memory-closeout" pair="implement" turn_seq="1" run_id="run-20260427T160524Z-93840723" ts="2026-04-27T16:34:19.341064+00:00" />
 Closeout stays docs/memory/notes-only because the live optimizer helper seam already matches the approved plan and the full targeted proof bundle is green.
+<autoloop-decisions-header version="1" block_seq="5" owner="test_author" phase_id="proof-docs-memory-closeout" pair="test" turn_seq="1" run_id="run-20260427T160524Z-93840723" ts="2026-04-27T16:42:03.039986+00:00" />
+Freeze the cycle-1 optimizer closeout through `tests/test_architecture_baseline_docs.py` rather than new runtime tests because this phase changed docs and standing memory, not executable behavior.
