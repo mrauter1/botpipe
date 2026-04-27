@@ -432,3 +432,139 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcfca-ae4c-7a62-a826-68ba64de0c43
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcfca-ae4c-7a62-a826-68ba64de0c43
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfca-ae4c-7a62-a826-68ba64de0c43
+---
+I’m treating this as a proof/docs/memory closeout pass for the prior optimizer consolidation. First I’m gathering the phase contract, prior phase artifacts, current docs, memory ledgers, and the touched workflow/helper surfaces so I can verify scope before editing anything.
+
+The prior consolidation already changed the optimizer workflow and some memory files. I’m checking whether the current closeout phase still needs doc/memory deltas, and then I’ll rerun the targeted proof bundle against the live tree before writing phase-local notes.
+
+I’ve confirmed the optimizer seam and most memory references were already added during the refactor phase. What remains is the closeout layer: prove the current tree still passes, then tighten any missing cycle notes in the standing memory and phase-local notes so the architecture record matches the live code.
+
+I have enough context to execute the closeout slice.
+
+Plan:
+1. Run the scoped proof bundle that this phase is responsible for.
+2. Patch only the missing closeout records in the standing memory set and phase notes.
+3. Recheck the resulting diff against the cycle requirements: mode rationale, audit coverage, metrics, compatibility, and deferred debt.
+
+The proof run is mostly through. The unit helper suite and docs baseline already passed; I’m waiting on the two runtime suites because those are the compatibility-sensitive checks for the optimizer and refinement handoff.
+
+The live code is green. The remaining work is record-keeping: a few memory entries are stale or incomplete for this cycle, and one optimizer workflow doc still has a duplicated boundary sentence. I’m patching those notes now, along with the phase-local implementation notes and the turn’s decision ledger.
+
+I’ve applied the closeout-only patches. I’m doing one last verification pass on the doc and memory baseline, then I’ll inspect the final diff and report the metrics and deferred debt cleanly.
+
+The docs baseline surfaced one exact-string contract in the optimizer workflow doc. I’m restoring that sentence in a non-duplicated form and rerunning the baseline test.
+
+I’m on the final pass now. One wrinkle was that the recursive-memory files are not part of the tracked diff in this checkout, so I’m checking the working tree directly to make sure the closeout report reflects both the tracked phase artifacts and the untracked standing-memory edits.
+
+Scope considered
+
+- Phase-local closeout for `proof-docs-memory-closeout` after the optimizer helper consolidation.
+- Relevant live surfaces: `stdlib/optimization.py`, `workflows/workflow_run_traces_to_optimization_candidates/`, `workflows/workflow_and_eval_to_refined_workflow_package/`, `docs/architecture.md`, `docs/authoring.md`, `docs/workflows/workflow_run_traces_to_optimization_candidates.md`, the standing `.autoloop_recursive/` memory files, and the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260427t121046-c1/`.
+
+What I analyzed
+
+- The accepted cycle plan, prior implementation notes, reviewer feedback, and current decision ledger.
+- The optimizer helper seam and the refinement handoff surface to confirm no follow-on code change was actually needed.
+- The standing memory files to find what was still missing or stale for cycle `recursive-framework-evolution-20260427t121046-c1`.
+- The scoped proof bundle:
+  - `tests/unit/test_optimization_helpers.py`
+  - `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
+  - `tests/test_architecture_baseline_docs.py`
+
+What I changed
+
+- Updated `.autoloop_recursive/framework_evolution_charter.md`, `.autoloop_recursive/framework_roadmap.md`, `.autoloop_recursive/framework_gap_ledger.md`, `.autoloop_recursive/workflow_candidate_ledger.md`, and `.autoloop_recursive/validation_debt_ledger.md` with the missing cycle-1 closeout record, final proof outcome, compatibility statement, and deferred debt notes.
+- Updated [workflow_run_traces_to_optimization_candidates.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_run_traces_to_optimization_candidates.md) to keep the optimizer ownership boundary explicit without duplicated wording.
+- Filled in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c1/implement/phases/proof-docs-memory-closeout/implementation_notes.md) for this phase and appended one closeout decision line to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c1/decisions.txt).
+- No runtime or workflow code changed in this phase.
+- Files added: `0`
+- Files deleted: `0`
+- Net tracked line change for this phase-local tracked diff: `+70`
+- Repo-wide net line change is not practical from `git diff` because the `.autoloop_recursive/` memory files are untracked in this checkout.
+- Recorded cycle metrics from the already-landed consolidation: repeated validation idioms removed `3`, workflows changed to use shared helpers `1`, new helper functions introduced `7`, old workflow-local validation blocks replaced `3`.
+
+Key findings / decisions
+
+- The optimizer consolidation was already complete in code; this closeout correctly stayed docs/memory/proof only.
+- Final scoped proof is green: `24 + 43 + 31 + 41 = 139 passed`.
+- Compatibility remained unchanged: no CLI, runtime/provider boundary, `workflow.toml`, artifact-contract, or `ctx.invoke_workflow(...)` behavior changed.
+- The recursive-memory closeout now explicitly freezes `stdlib/optimization.py` as the deterministic optimizer seam while leaving optimizer-specific route, ranking, packaging, and refinement-handoff policy workflow-local.
+- The standing `.autoloop_recursive/` files are modified but appear as untracked (`??`) in this repository state; that is why they do not show up in the tracked `git diff --stat`.
+
+Open issues / next step
+
+- No blocking issue remains for this phase.
+- The optimizer runtime suite still emits the pre-existing Pydantic `schema` field-shadow warnings; they did not fail proof and were not in scope for this closeout.
+- Remaining deferred debt stays the same: adjacent optimizer-family adoption and broader portfolio-shape/helper-cleanup work, not new workflow expansion or runtime-owned optimizer automation.
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcfca-ae4c-7a62-a826-68ba64de0c43
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcfca-ae4c-7a62-a826-68ba64de0c43
+
+
+---
+run_id=run-20260427T160524Z-93840723 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfca-ae4c-7a62-a826-68ba64de0c43
+---
+I’m reviewing the closeout slice against the phase contract, the shared decisions, and the current diff first. Then I’ll verify the phase artifacts, update the criteria and feedback files, and finish with the loop-control result.
+
+The phase artifacts look coherent so far. I’m verifying the deliverables directly now: the scoped proof bundle and the specific charter/roadmap/ledger/doc sections that were supposed to absorb the optimizer closeout.
+
+The unit helper suite and docs baseline passed again under review. I’m waiting on the two runtime suites, which are the main regression checks for the optimizer behavior and the refinement evidence handoff.
+
+The scoped proof is green under review as well. I don’t have a blocking or non-blocking implementation finding for this phase, so I’m updating the verifier artifacts to reflect a clean review and the rerun proof record.
+
+Scope considered
+
+- Phase-local verifier review for `proof-docs-memory-closeout`.
+- Requested scope only: targeted proof, optimizer doc alignment, recursive-memory closeout entries, and phase artifact updates.
+
+What I analyzed
+
+- The phase contract, acceptance criteria, implementation notes, and shared decisions ledger.
+- The touched deliverables in `docs/workflows/workflow_run_traces_to_optimization_candidates.md` and the standing `.autoloop_recursive/` files.
+- The scoped proof bundle required by AC-1.
+
+What I reviewed
+
+- Reran:
+  - `.venv/bin/pytest -q tests/unit/test_optimization_helpers.py` -> `24 passed`
+  - `.venv/bin/pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py` -> `43 passed`
+  - `.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` -> `31 passed`
+  - `.venv/bin/pytest -q tests/test_architecture_baseline_docs.py` -> `41 passed`
+- Verified the criteria file is fully checked.
+- Updated the feedback file to record a clean scoped review and the rerun proof record.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The closeout satisfies AC-1 through AC-3 as scoped.
+- The only warnings observed were the pre-existing optimizer-contract `schema` field-shadow warnings; they did not fail proof and are outside this closeout slice.
+
+Open issues / next step
+
+- No open issue blocks this phase.
+- Phase verifier artifacts are updated and this review is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
