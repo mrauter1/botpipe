@@ -1,4 +1,163 @@
 version: 1
 task_id: standalone-implementation-plan-autoloop-v3-green-f94366a9
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/runs/run-20260427T204304Z-eddf2be0/request.md
-phases: []
+phases:
+- phase_id: public-surface-and-route-metadata
+  title: Public surface and route metadata
+  objective: Remove RouteContract from active APIs and establish the final greenfield
+    route metadata and step declaration model.
+  status: planned
+  in_scope:
+  - Update autoloop.simple and autoloop.__init__ to the final public surface.
+  - Remove RouteContract exports/imports from autoloop, workflow, and core shims.
+  - Delete core/route_contracts.py and replace route_contract usage with RouteInfo
+    and Route metadata.
+  - Finalize core/routes.py validation and add Step(route_infos=...), SystemStep(handler=...),
+    and a real WorkflowStep in core/steps.py.
+  - Stop treating workflow/primitives.py or workflow/__init__.py as a second active
+    authoring API.
+  out_of_scope:
+  - Engine execution rewiring.
+  - Bundled workflow and test migration.
+  - Full documentation sweep.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: No active public export exposes RouteContract, and core step constructors
+      no longer accept route_contracts.
+  - id: AC-2
+    text: RouteInfo and Route provide the requested metadata fields and validation
+      semantics, and simple declarations expose the requested signatures.
+  deliverables:
+  - Updated public export modules and simple declaration surface.
+  - Final route metadata model in core/routes.py and core/steps.py.
+  - Removal of core/route_contracts.py.
+  risks:
+  - Public shim cleanup can strand tests or bundled workflows on removed imports.
+  - A mixed route_infos/route_contracts state would make later phases harder to validate.
+  rollback:
+  - Revert the phase as one changeset if any active module still depends on RouteContract.
+  - Do not keep a hybrid export surface that exposes both metadata models.
+- phase_id: normalization-and-discovery
+  title: Normalization and discovery
+  objective: Lower simple workflows directly into the final graph model, inject reserved
+    routes mechanically, and make simple workflows discoverable before lowering.
+  status: planned
+  in_scope:
+  - Rewrite core/validation.py simple lowering to use route_infos, reserved routes,
+    chain defaults, entry inference, and final reads/requires semantics.
+  - Add central workflow-class detection that recognizes simple declaration members.
+  - Update runtime loader and capability inspection to resolve simple workflows by
+    path, module, and catalog name.
+  - Validate hook signatures, route override legality, required-output references,
+    and statically resolvable child workflow references.
+  out_of_scope:
+  - Provider rendering changes.
+  - Engine finalization order changes.
+  - Mass migration of bundled workflows.
+  dependencies:
+  - public-surface-and-route-metadata
+  acceptance_criteria:
+  - id: AC-1
+    text: Simple Workflow subclasses compile without explicit State, entry, transitions,
+      prompt files, or generated on_<step> handlers for system/workflow steps.
+  - id: AC-2
+    text: Loader and capability inspection can locate simple declaration workflows
+      before strict lowering and reserved routes are always present unless explicitly
+      overridden.
+  deliverables:
+  - Updated validation/lowering pipeline.
+  - Shared workflow-class detection helper and loader/capability integrations.
+  - Prototype validation coverage for route metadata, reads/requires, and simple discovery.
+  risks:
+  - Discovery loosening may accidentally match helper classes.
+  - Changing reads semantics can disturb artifact graph validation if not kept separate
+    from requires.
+  rollback:
+  - Revert discovery helper and lowering changes together if workflow resolution becomes
+    ambiguous.
+  - Do not ship reserved-route documentation without reserved-route normalization.
+- phase_id: provider-and-engine-contract
+  title: Provider and engine contract
+  objective: Replace legacy route-contract provider payloads with route metadata and
+    implement the final engine execution order, hook behavior, and WorkflowStep runtime
+    path.
+  status: planned
+  in_scope:
+  - Update compiled workflow dataclasses to remove route_contracts and carry only
+    route_infos and route_required_outputs.
+  - Replace provider request models, fake provider telemetry, rendered turn payloads,
+    and capability payloads with the final readable/required/writable artifact contract.
+  - Implement Prompt resolution rules and ensure low-level Engine file prompts require
+    an explicit prompt registry when appropriate.
+  - Reorder engine execution/finalization to match the requested before/after-hook,
+    artifact re-resolution, required-output enforcement, handoff scheduling, and checkpoint
+    flow.
+  - Execute WorkflowStep directly, including child message resolution, terminal mapping,
+    output artifact writing, and verifier-loop legality.
+  out_of_scope:
+  - Bundled workflow source migration.
+  - Full-suite final proof.
+  dependencies:
+  - normalization-and-discovery
+  acceptance_criteria:
+  - id: AC-1
+    text: Provider requests, rendered prompts, and capability payloads contain no
+      route_contract or route_required_artifacts fields and still expose required
+      route metadata.
+  - id: AC-2
+    text: Engine hook ordering, route override behavior, required-output enforcement,
+      retry attribution, and direct WorkflowStep execution match the requested semantics.
+  deliverables:
+  - Updated compiler, provider models/rendering, fake provider, and capability payload
+    schemas.
+  - Updated engine execution path for llm, pair, system, and workflow steps.
+  - Contract tests covering rendering, hook ordering, route override, and workflow-step
+    runtime behavior.
+  risks:
+  - Engine ordering changes can silently alter retries, handoffs, or artifact validation
+    timing.
+  - WorkflowStep direct execution may regress child run metadata or loop behavior.
+  rollback:
+  - Revert compiler/provider/engine contract changes as one slice if prompt rendering
+    or runtime execution diverges.
+  - Do not retain a provider API that mixes route_infos with legacy route_contract
+    fields.
+- phase_id: workflow-migration-docs-and-proof
+  title: Workflow migration, docs, and proof
+  objective: Migrate active bundled workflows and tests to the greenfield model, update
+    active docs/examples, and complete the final anti-regression verification.
+  status: planned
+  in_scope:
+  - Migrate active workflows/* packages off RouteContract while allowing contracts.py
+    filenames to remain for non-RouteContract support code.
+  - Update unit, contract, runtime, and strictness tests to the final API and behavior.
+  - Update active prompt READMEs, examples, and any surviving working-tree docs to
+    the greenfield model.
+  - Run full pytest coverage and grep checks for removed RouteContract terminology
+    outside archived legacy_docs.
+  out_of_scope:
+  - Editing archived legacy_docs beyond excluding them from active-term greps.
+  - Adding eject or workflow expansion commands.
+  dependencies:
+  - provider-and-engine-contract
+  acceptance_criteria:
+  - id: AC-1
+    text: Active workflows, tests, and docs no longer import or mention RouteContract,
+      route_contracts, route_required_artifacts, or route contract terminology.
+  - id: AC-2
+    text: The requested simple authoring, route metadata, reads/requires, hook, WorkflowStep,
+      and provider-rendering tests pass together with the full suite.
+  deliverables:
+  - Migrated bundled workflow packages and active docs/examples.
+  - Expanded automated coverage for the final greenfield behavior.
+  - Final grep and test verification evidence.
+  risks:
+  - Large workflow/test migration volume can hide missed active references.
+  - Prompt README updates can lag behind runtime contract wording if not verified
+    by grep.
+  rollback:
+  - Revert package/doc/test migration with the kernel cleanup branch if active references
+    remain.
+  - Do not leave the tree in a state where tests expect both legacy and greenfield
+    metadata.

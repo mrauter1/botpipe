@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260427T204304Z-eddf2be0" ts="2026-04-27T20:43:04.545741+00:00" />
+Greenfield cleanup explicitly permits breaking removal of RouteContract across public APIs, provider payloads, capability payloads, bundled workflow packages, and tests; no compatibility shim should survive in active code.
+Bundled workflows under workflows/* are active in-scope code and must migrate off RouteContract, while legacy_docs/ may be treated as archived-only for the no-active-match grep boundary.
+Reserved question/blocked/failed routes must be inserted mechanically during normalization, and simple workflow_step must compile to a real core WorkflowStep rather than a generated SystemStep handler.
