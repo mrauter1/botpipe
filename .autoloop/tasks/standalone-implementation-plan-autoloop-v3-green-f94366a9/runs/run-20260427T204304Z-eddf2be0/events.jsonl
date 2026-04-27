@@ -29,3 +29,7 @@
 {"ts": "2026-04-27T21:31:45.338516+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 29, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "public-surface-and-route-metadata"}
 {"ts": "2026-04-27T21:32:37.031821+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 30, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "public-surface-and-route-metadata"}
 {"ts": "2026-04-27T21:32:37.068988+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 31, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "public-surface-and-route-metadata"}
+{"ts": "2026-04-27T21:32:37.150375+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 32, "event_type": "phase_completed", "pair": "test", "phase_id": "public-surface-and-route-metadata", "phase_mode": "single"}
+{"ts": "2026-04-27T21:32:37.154270+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 33, "event_type": "phase_started", "phase_id": "normalization-and-discovery", "phase_mode": "single"}
+{"ts": "2026-04-27T21:32:37.155920+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 34, "event_type": "pair_started", "pair": "implement", "phase_id": "normalization-and-discovery"}
+{"ts": "2026-04-27T21:32:37.156089+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 35, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "normalization-and-discovery"}

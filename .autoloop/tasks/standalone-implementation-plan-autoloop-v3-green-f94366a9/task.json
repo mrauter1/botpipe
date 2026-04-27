@@ -15,12 +15,12 @@
       "workflow-migration-docs-and-proof"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "public-surface-and-route-metadata"
+    "current_phase_index": 1,
+    "current_phase_id": "normalization-and-discovery"
   },
   "phase_status": {
-    "public-surface-and-route-metadata": "in_progress",
-    "normalization-and-discovery": "planned",
+    "public-surface-and-route-metadata": "completed",
+    "normalization-and-discovery": "in_progress",
     "provider-and-engine-contract": "planned",
     "workflow-migration-docs-and-proof": "planned"
   },
@@ -30,6 +30,19 @@
       "run_id": "run-20260427T204304Z-eddf2be0",
       "status": "in_progress",
       "ts": "2026-04-27T20:55:20.053137+00:00"
+    },
+    {
+      "phase_id": "public-surface-and-route-metadata",
+      "run_id": "run-20260427T204304Z-eddf2be0",
+      "status": "completed",
+      "ts": "2026-04-27T21:32:37.149681+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "normalization-and-discovery",
+      "run_id": "run-20260427T204304Z-eddf2be0",
+      "status": "in_progress",
+      "ts": "2026-04-27T21:32:37.153333+00:00"
     }
   ]
 }
