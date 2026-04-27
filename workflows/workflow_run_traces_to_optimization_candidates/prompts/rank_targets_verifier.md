@@ -24,6 +24,7 @@
 ## Evidence
 
 - Check that ranking rationale is grounded in the deterministic metrics and corpus.
+- Treat the precomputed metrics and report as authoritative unless the same evidence clearly supports a correction.
 - Allow low-confidence ranking if the route is `insufficient_evidence` and the report says so explicitly.
 
 ## Route Guidance

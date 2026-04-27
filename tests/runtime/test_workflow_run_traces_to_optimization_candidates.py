@@ -5,6 +5,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -151,6 +152,61 @@ def test_capture_frame_context_normalizes_trace_corpus_from_seeded_runs(tmp_path
     assert corpus["runs"][0]["run_ref"] == "release-good/run-good"
     assert corpus["step_observations"][0]["raw_output_refs"]["producer"] == "raw/000003_assessment_producer.txt"
     assert corpus["step_observations"][0]["commit_after_step"] == "commit-after-step"
+    del params
+
+
+def test_rank_targets_writes_priority_report(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+
+    workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+
+    metrics = json.loads((ctx.workflow_folder / "step_trace_metrics.json").read_text(encoding="utf-8"))
+    report = json.loads((ctx.workflow_folder / "step_optimization_priority_report.json").read_text(encoding="utf-8"))
+
+    assert metrics["schema"] == "autoloop.workflow_optimization.step_trace_metrics/v1"
+    assert metrics["steps"][0]["step_name"] == "assessment"
+    assert report["schema"] == "autoloop.workflow_optimization.step_priority_report/v1"
+    assert report["ranked_steps"][0]["step_name"] == "assessment"
+    del params
+
+
+def test_mine_failures_writes_failure_scenarios(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+
+    artifacts = SimpleNamespace(
+        workflow_optimization_trace_corpus=_JsonHandle(ctx.workflow_folder / "workflow_optimization_trace_corpus.json"),
+        step_optimization_priority_report=_JsonHandle(ctx.workflow_folder / "step_optimization_priority_report.json"),
+        workflow_failure_scenarios=_JsonHandle(ctx.workflow_folder / "workflow_failure_scenarios.json"),
+    )
+    next_state = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_mine_failures(
+        state,
+        Outcome(
+            raw_output="failure scenarios grounded\n",
+            tag="failure_scenarios_mined",
+            payload={
+                "summary": "Failure scenarios were mined from the ranked target set.",
+                "selected_workflow_name": "release_candidate_to_go_no_go",
+                "target_steps": ["assessment"],
+                "failure_ids": ["assessment_producer_failed_verifier"],
+            },
+        ),
+        artifacts,
+    )
+
+    payload = json.loads((ctx.workflow_folder / "workflow_failure_scenarios.json").read_text(encoding="utf-8"))
+    assert next_state.failure_status == "failure_scenarios_mined"
+    assert payload["schema"] == "autoloop.workflow_optimization.failure_scenarios/v1"
+    assert payload["failure_scenarios"][0]["step_name"] == "assessment"
+    assert payload["failure_scenarios"][0]["failure_kind"] in {
+        "producer_failed_verifier",
+        "token_bloat",
+        "downstream_failure_after_local_pass",
+    }
     del params
 
 
@@ -368,6 +424,17 @@ def _produce_noop_package(request) -> str:
         )
     )
     return "packaged noop optimization packet\n"
+
+
+class _JsonHandle:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+
+    def read_json(self) -> dict[str, object]:
+        return json.loads(self.path.read_text(encoding="utf-8"))
+
+    def write_json(self, payload: dict[str, object]) -> None:
+        self.path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _install_repo_optimizer_package(root: Path) -> None:

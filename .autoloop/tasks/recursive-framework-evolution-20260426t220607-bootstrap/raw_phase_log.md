@@ -587,3 +587,72 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcca4-fed7-7033-adcf-c394312e9126
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+I’m implementing the ranking-and-failure-analysis phase only: deterministic step metrics, leverage ranking, and failure-scenario seeding plus the `rank_targets` and `mine_failures` steps. First I’m reading the existing workflow shell, optimization helpers, and phase artifacts so the changes fit current patterns and stay within phase scope.
+
+The prior phase already laid down the optimizer shell and part of `stdlib/optimization.py`. I’m narrowing onto the current gaps: deterministic ranking math, failure-seed extraction, and wiring those artifacts into the workflow steps and tests without expanding into later candidate-generation phases.
+
+The current shell does not yet wire deterministic ranking/failure artifacts into execution; the pair hooks only record outcome tags. I’m checking the workflow engine hooks now so I can add the deterministic writes in the narrowest place that still preserves the exact step sequence.
+
+I have enough context to edit. Plan:
+1. Finish deterministic helper coverage in `stdlib/optimization.py`: richer step metrics, centrality-aware scoring, upstream-symptom penalties, and bounded failure-scenario extraction.
+2. Wire those helpers into the optimizer workflow without changing pair order by precomputing ranking artifacts from frame-time evidence and precomputing failure scenarios after ranking.
+3. Add strict artifact schemas for metrics, priority reports, and failure scenarios, then extend unit/runtime tests around upstream attribution, insufficient evidence, and mined scenarios.
+
+I’m editing the optimizer stdlib and workflow now. The change is to make frame-time capture produce deterministic ranking inputs, let `mine_failures` refresh scenarios from those inputs, and tighten schemas/tests around upstream attribution and bounded failure classification.
+
+The next edit wires deterministic artifact generation into the workflow shell itself: frame capture will publish metrics, a priority report, and an initial failure-scenario set; the `mine_failures` hook will then refresh the failure artifact from the ranked target set that just passed review.
+
+I’ve finished the core code path and am tightening the contract around it: the ranking and failure-analysis prompts need one small correction so they treat the deterministic artifacts as authoritative starting points instead of inventing them from scratch.
+
+I’m on the last code pass now: adding focused tests that prove the optimizer shell actually publishes ranking and failure-analysis artifacts from real seeded run bundles, not just from isolated helper calls.
+
+I’ve reached validation. Running the targeted unit and runtime suites now to catch schema mistakes, hook wiring errors, and any ranking logic that doesn’t survive seeded run data.
+
+The first validation pass compiled cleanly. The test run is still live; I’m polling for the final result and will fix any contract or scoring regressions immediately if something breaks.
+
+One runtime test failed because the seeded run legitimately produced a `downstream_failure_after_local_pass` scenario instead of the narrower producer-only kind I expected. I’m broadening that assertion to the valid deterministic failure kinds this seed can produce, then rerunning the same target suite.
+
+The corrected run is nearly complete; I’m polling once more for the final verdict. If this passes, I’ll update the phase notes and shared decisions ledger with the narrow implementation choices that matter for later phases.
+
+I’ve finished implementation and validation. I’m writing the phase notes and the two non-obvious decisions that later phases need to preserve: ranking/failure artifacts are deterministically precomputed during frame capture for review, and `mine_failures` refreshes the published scenario artifact from the ranked target set rather than trusting provider prose alone.
+
+Scope considered
+
+Implemented the phase-local ranking and failure-analysis slice only: deterministic step metrics, leverage ranking, and failure-scenario mining for `workflow_run_traces_to_optimization_candidates`. I kept runtime semantics, topology, and candidate-only boundaries unchanged.
+
+What I analyzed
+
+I reviewed the phase artifacts, prior implementation notes, the existing optimizer shell, and the deterministic helper seam in [stdlib/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/optimization.py), plus the workflow wiring in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py) and the current runtime/unit tests.
+
+What I changed
+
+In [stdlib/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/optimization.py), I finished the ranking/failure logic: weighted route criticality, downstream-failure detection after local pass, deterministic leverage scoring with the requested penalties, upstream-symptom deprioritization, repeated-loop seed extraction, and bounded failure seed ordering.
+
+In [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py), `capture_frame_context` now precomputes and writes `step_trace_metrics.json`, `step_optimization_priority_report.json`, and an initial `workflow_failure_scenarios.json` from eligible trace evidence so the later pair steps review deterministic artifacts without adding steps or changing order. `on_mine_failures` now refreshes `workflow_failure_scenarios.json` from the ranked target set instead of trusting provider prose. I also added strict artifact models in [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/contracts.py), updated the four ranking/failure prompts to treat the deterministic artifacts as authoritative starting points, and expanded [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py) and [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py).
+
+Key findings / decisions
+
+The main constraint was the fixed workflow topology: there was no safe way to add extra prep steps for ranking/failure analysis. I solved that by precomputing ranking and initial failure artifacts during frame capture, then letting the pair steps review or refresh those artifacts. I also recorded that choice in the shared decisions ledger and phase notes.
+
+Validation passed with targeted checks:
+- `python3 -m py_compile ...`
+- `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+- Result: `27 passed`
+
+Open issues / next step
+
+I did not run the full repository test suite. The targeted tests still emit existing Pydantic warnings about models that use a `schema` field name in [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/contracts.py); they are warnings only and were left out of scope for this phase. The next phase can build producer/verifier-rubric/token candidate passes on top of the now-published ranking and failure artifacts.

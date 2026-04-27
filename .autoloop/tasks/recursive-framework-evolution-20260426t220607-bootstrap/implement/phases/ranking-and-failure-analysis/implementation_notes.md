@@ -6,3 +6,51 @@
 - Phase Directory Key: ranking-and-failure-analysis
 - Phase Title: Ranking And Failure Analysis
 - Scope: phase-local producer artifact
+- Files changed:
+  - `stdlib/optimization.py`
+  - `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`
+  - `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`
+  - `workflows/workflow_run_traces_to_optimization_candidates/prompts/rank_targets_producer.md`
+  - `workflows/workflow_run_traces_to_optimization_candidates/prompts/rank_targets_verifier.md`
+  - `workflows/workflow_run_traces_to_optimization_candidates/prompts/mine_failures_producer.md`
+  - `workflows/workflow_run_traces_to_optimization_candidates/prompts/mine_failures_verifier.md`
+  - `tests/unit/test_optimization_helpers.py`
+  - `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+- Symbols touched:
+  - `build_step_trace_metrics`
+  - `rank_optimization_targets`
+  - `extract_failure_scenario_seeds`
+  - `WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context`
+  - `WorkflowRunTracesToOptimizationCandidates.on_mine_failures`
+  - `_build_step_metrics_payload`
+  - `_build_priority_report_payload`
+  - `_build_failure_scenarios_payload`
+- Checklist mapping:
+  - Plan item 8 completed for this phase scope: static metrics and deterministic `rank_targets` inputs.
+  - Plan item 9 completed for this phase scope: bounded failure-scenario seeding and `mine_failures` artifact refresh.
+  - Later items intentionally deferred: producer/verifier-rubric/token/adversarial/workflow-level candidate passes, refinement handoff changes, broader docs updates, full-suite validation.
+- Assumptions:
+  - Ranking/failure-analysis artifacts may be deterministically precomputed during frame capture as long as pair order, routes, and candidate-only boundaries remain unchanged.
+  - Pydantic `schema`-field warnings are pre-existing style noise for this repo pattern and are not in scope for this phase.
+- Preserved invariants:
+  - No runtime, runner, or engine behavior changed.
+  - `run_statuses` remains run-level filtering and `route_tags` remains step-level evidence filtering.
+  - The optimizer still does not mutate selected workflow source or execute hidden reruns/refinement.
+- Intended behavior changes:
+  - Eligible trace capture now also publishes deterministic `step_trace_metrics.json`, `step_optimization_priority_report.json`, and an initial `workflow_failure_scenarios.json`.
+  - Priority scoring now factors direct failure rate, downstream blast radius, rework cost, centrality, route criticality, token share, sample support, and explicit downstream-symptom penalties.
+  - Failure-scenario seeding now emits repeated-loop seeds and bounded scenario inputs that map to allowed failure kinds.
+  - `mine_failures` now refreshes `workflow_failure_scenarios.json` deterministically from trace evidence and the ranked target set.
+- Known non-changes:
+  - No producer/verifier-rubric/token/adversarial/workflow-level candidate generation was added in this phase.
+  - No refinement-workflow integration or publication scorecard changes were added here.
+- Expected side effects:
+  - Optimizer runs with eligible evidence now have ranking/failure artifacts available before later candidate passes execute.
+  - Runtime tests may emit existing Pydantic warnings about `schema` field names; targeted tests still pass.
+- Validation performed:
+  - `python3 -m py_compile stdlib/optimization.py workflows/workflow_run_traces_to_optimization_candidates/workflow.py workflows/workflow_run_traces_to_optimization_candidates/contracts.py tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - Result: `27 passed` with known Pydantic `schema` field warnings.
+- Deduplication / centralization:
+  - Kept deterministic ranking math and failure-seed extraction centralized in `stdlib/optimization.py`.
+  - Used workflow-local helpers only for assembling the published failure-scenario artifact from deterministic seeds, avoiding a second stdlib serializer pass.

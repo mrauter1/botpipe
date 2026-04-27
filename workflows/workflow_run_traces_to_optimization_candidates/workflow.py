@@ -32,9 +32,13 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.optimization import (
         EXCLUDED_RUN_REPORT_SCHEMA,
+        FAILURE_SCENARIOS_SCHEMA,
         TRACE_CORPUS_SCHEMA,
+        build_step_trace_metrics,
+        extract_failure_scenario_seeds,
         list_selected_workflow_runs,
         normalize_trace_corpus,
+        rank_optimization_targets,
         resolve_selected_workflow_name,
         validate_selected_workflow_source_unchanged,
         write_optimization_refinement_evidence,
@@ -63,9 +67,13 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.optimization import (
         EXCLUDED_RUN_REPORT_SCHEMA,
+        FAILURE_SCENARIOS_SCHEMA,
         TRACE_CORPUS_SCHEMA,
+        build_step_trace_metrics,
+        extract_failure_scenario_seeds,
         list_selected_workflow_runs,
         normalize_trace_corpus,
+        rank_optimization_targets,
         resolve_selected_workflow_name,
         validate_selected_workflow_source_unchanged,
         write_optimization_refinement_evidence,
@@ -592,6 +600,16 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             run_dirs=run_dirs,
             route_tags=state.route_tags,
         )
+        step_metrics_payload = _build_step_metrics_payload(trace_corpus)
+        priority_report_payload = _build_priority_report_payload(
+            step_metrics_payload=step_metrics_payload,
+            top_k_steps=state.top_k_steps,
+        )
+        failure_scenarios_payload = _build_failure_scenarios_payload(
+            trace_corpus=trace_corpus,
+            priority_report=priority_report_payload,
+            max_failure_scenarios=state.max_failure_scenarios,
+        )
         excluded_runs = list(trace_corpus.pop("excluded_runs", []))
         trace_corpus.pop("static_step_graphs", None)
         write_workflow_json(
@@ -629,6 +647,9 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "workflow_optimization_trace_corpus.json",
             trace_corpus,
         )
+        write_workflow_json(ctx, "step_trace_metrics.json", step_metrics_payload)
+        write_workflow_json(ctx, "step_optimization_priority_report.json", priority_report_payload)
+        write_workflow_json(ctx, "workflow_failure_scenarios.json", failure_scenarios_payload)
 
         return (
             state.model_copy(
@@ -668,7 +689,13 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
 
     @staticmethod
     def on_mine_failures(state: State, outcome: Outcome, artifacts):
-        del artifacts
+        artifacts.workflow_failure_scenarios.write_json(
+            _build_failure_scenarios_payload(
+                trace_corpus=artifacts.workflow_optimization_trace_corpus.read_json(),
+                priority_report=artifacts.step_optimization_priority_report.read_json(),
+                max_failure_scenarios=state.max_failure_scenarios,
+            )
+        )
         return state.model_copy(update={"failure_status": outcome.tag})
 
     @staticmethod
@@ -840,6 +867,184 @@ def _optimization_evidence_entries(workflow_folder: Path, no_eligible: bool) -> 
             }
         )
     return entries
+
+
+def _build_step_metrics_payload(trace_corpus: Mapping[str, Any]) -> dict[str, Any]:
+    static_step_graphs = [item for item in trace_corpus.get("static_step_graphs", []) if isinstance(item, Mapping)]
+    return build_step_trace_metrics(trace_corpus, static_step_graphs)
+
+
+def _build_priority_report_payload(
+    *,
+    step_metrics_payload: Mapping[str, Any],
+    top_k_steps: int,
+) -> dict[str, Any]:
+    return rank_optimization_targets(
+        step_metrics=step_metrics_payload,
+        static_centrality={},
+        top_k=top_k_steps,
+    )
+
+
+def _build_failure_scenarios_payload(
+    *,
+    trace_corpus: Mapping[str, Any],
+    priority_report: Mapping[str, Any],
+    max_failure_scenarios: int,
+) -> dict[str, Any]:
+    seeds_payload = extract_failure_scenario_seeds(
+        trace_corpus=trace_corpus,
+        priority_report=priority_report,
+        max_scenarios=max_failure_scenarios,
+    )
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for seed in seeds_payload.get("failure_scenario_seeds", []):
+        if not isinstance(seed, Mapping):
+            continue
+        step_name = require_non_empty_string(
+            seed.get("step_name"),
+            error_message="failure scenario seeds must define step_name",
+            coerce=True,
+        )
+        reasons = [reason for reason in seed.get("seed_reasons", []) if isinstance(reason, str)]
+        failure_kind = _classify_failure_kind(reasons)
+        group_key = (step_name, failure_kind)
+        observation_ids = {
+            observation_id
+            for observation_id in seed.get("observation_ids", [])
+            if isinstance(observation_id, str) and observation_id
+        }
+        existing = grouped.get(group_key)
+        if existing is None:
+            grouped[group_key] = {
+                "failure_id": f"{_slug(step_name)}_{_slug(failure_kind)}",
+                "step_name": step_name,
+                "failure_kind": failure_kind,
+                "severity": _failure_severity(failure_kind),
+                "frequency": max(1, int(seed.get("frequency") or len(observation_ids))),
+                "evidence_observation_ids": observation_ids,
+                "producer_gap": _producer_gap(failure_kind, reasons),
+                "verifier_behavior": _verifier_behavior(failure_kind),
+                "likely_fix_surfaces": _likely_fix_surfaces(failure_kind),
+                "downstream_effect": _downstream_effect(failure_kind, reasons),
+            }
+            continue
+        existing["frequency"] = max(
+            int(existing["frequency"]),
+            len(existing["evidence_observation_ids"] | observation_ids),
+            int(existing["frequency"]) + int(seed.get("frequency") or 0),
+        )
+        existing["evidence_observation_ids"] |= observation_ids
+
+    failure_scenarios = sorted(
+        (
+            {
+                **payload,
+                "evidence_observation_ids": sorted(payload["evidence_observation_ids"]),
+            }
+            for payload in grouped.values()
+        ),
+        key=lambda item: (-_severity_rank(str(item["severity"])), -int(item["frequency"]), str(item["step_name"])),
+    )[:max_failure_scenarios]
+    return {
+        "schema": FAILURE_SCENARIOS_SCHEMA,
+        "selected_workflow": require_non_empty_string(
+            trace_corpus.get("selected_workflow"),
+            error_message="trace_corpus.selected_workflow must be non-empty",
+            coerce=True,
+        ),
+        "failure_scenarios": failure_scenarios,
+    }
+
+
+def _classify_failure_kind(reasons: list[str]) -> str:
+    if any(reason == "repeated_same_step_needs_rework_loop" for reason in reasons):
+        return "needs_rework_loop"
+    if any(reason == "repeated_same_step_needs_replan_loop" for reason in reasons):
+        return "needs_replan_loop"
+    if "terminal_failure_after_local_pass" in reasons:
+        return "downstream_failure_after_local_pass"
+    if "route:blocked" in reasons:
+        return "blocked_missing_context"
+    if "route:failed" in reasons:
+        return "artifact_invalid"
+    if "high_token_usage_without_success" in reasons:
+        return "token_bloat"
+    if "missing_raw_output_reference" in reasons:
+        return "artifact_missing"
+    if "missing_usage_data" in reasons or "missing_static_graph" in reasons:
+        return "insufficient_evidence"
+    if "route:needs_replan" in reasons:
+        return "input_quality_gap"
+    if "route:needs_rework" in reasons:
+        return "producer_failed_verifier"
+    return "insufficient_evidence"
+
+
+def _failure_severity(failure_kind: str) -> str:
+    if failure_kind in {"downstream_failure_after_local_pass", "blocked_missing_context", "artifact_invalid"}:
+        return "high"
+    if failure_kind in {"needs_rework_loop", "needs_replan_loop", "producer_failed_verifier", "token_bloat"}:
+        return "medium"
+    return "low"
+
+
+def _severity_rank(severity: str) -> int:
+    return {"high": 3, "medium": 2, "low": 1}.get(severity, 0)
+
+
+def _producer_gap(failure_kind: str, reasons: list[str]) -> str | None:
+    if failure_kind == "producer_failed_verifier":
+        return "Producer output likely missed required evidence, structure, or normalization expected by the verifier."
+    if failure_kind in {"needs_rework_loop", "needs_replan_loop"}:
+        return "The step repeated without resolving the same gap, suggesting unstable local instructions or missing evidence discipline."
+    if failure_kind == "token_bloat":
+        return "High token use did not translate into a successful local outcome."
+    if failure_kind == "artifact_missing":
+        return "The step completed without durable raw output references needed for later diagnosis."
+    if failure_kind == "input_quality_gap" or "route:needs_replan" in reasons:
+        return "Inputs reaching the step appear too weak or incomplete for the current prompt contract."
+    return None
+
+
+def _verifier_behavior(failure_kind: str) -> str | None:
+    if failure_kind in {"producer_failed_verifier", "needs_rework_loop"}:
+        return "Verifier or route control pushed the step back for local repair."
+    if failure_kind == "artifact_invalid":
+        return "The workflow failed locally before a stable artifact could be accepted downstream."
+    if failure_kind == "downstream_failure_after_local_pass":
+        return "The step passed locally, but later workflow execution still failed."
+    return None
+
+
+def _likely_fix_surfaces(failure_kind: str) -> list[str]:
+    if failure_kind in {"producer_failed_verifier", "artifact_missing", "token_bloat"}:
+        return ["producer_prompt"]
+    if failure_kind in {"needs_rework_loop", "needs_replan_loop"}:
+        return ["producer_prompt", "verifier_rubric"]
+    if failure_kind == "downstream_failure_after_local_pass":
+        return ["workflow_handoff", "workflow_level"]
+    if failure_kind == "blocked_missing_context":
+        return ["input_contract", "producer_prompt"]
+    if failure_kind == "input_quality_gap":
+        return ["input_quality", "operator_process"]
+    return ["insufficient_evidence"]
+
+
+def _downstream_effect(failure_kind: str, reasons: list[str]) -> str | None:
+    if failure_kind == "downstream_failure_after_local_pass":
+        return "A later step or the terminal workflow outcome still failed after this step passed locally."
+    if failure_kind in {"needs_rework_loop", "needs_replan_loop"}:
+        return "The workflow paid repeated local loop cost without progressing cleanly."
+    if "route:blocked" in reasons:
+        return "Execution stalled because required context or artifacts were unavailable."
+    return None
+
+
+def _slug(value: str) -> str:
+    cleaned = "".join(char.lower() if char.isalnum() else "_" for char in value)
+    collapsed = "_".join(part for part in cleaned.split("_") if part)
+    return collapsed or "item"
 
 def _validate_selected_workflow_field(
     payload: Mapping[str, Any],

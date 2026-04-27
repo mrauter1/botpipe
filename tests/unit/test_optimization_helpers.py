@@ -9,10 +9,13 @@ from types import SimpleNamespace
 import pytest
 
 from autoloop_v3.stdlib.optimization import (
+    build_step_trace_metrics,
+    extract_failure_scenario_seeds,
     list_selected_workflow_runs,
     load_run_observability_bundle,
     normalize_trace_corpus,
     parse_run_ref,
+    rank_optimization_targets,
     validate_observability_bundle,
     validate_selected_workflow_source_unchanged,
     write_optimization_refinement_evidence,
@@ -194,6 +197,157 @@ def test_normalize_trace_corpus_keeps_eligible_runs_when_route_filter_matches_no
     assert corpus["runs"][0]["run_ref"] == "task-1/run-no-match"
     assert corpus["step_observation_count"] == 0
     assert corpus["step_observations"] == []
+
+
+def test_build_step_trace_metrics_counts_routes_and_tokens() -> None:
+    trace_corpus = {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "step_observations": [
+            {
+                "step_name": "assessment",
+                "step_kind": "pair",
+                "route": "needs_rework",
+                "local_outcome": "rejected_by_verifier",
+                "downstream_outcome": "next_step_failed",
+                "usage": {"total_tokens": 200},
+            },
+            {
+                "step_name": "assessment",
+                "step_kind": "pair",
+                "route": "assessment_complete",
+                "local_outcome": "locally_accepted",
+                "downstream_outcome": "terminal_failure_after_local_pass",
+                "usage": {"total_tokens": 300},
+            },
+            {
+                "step_name": "package",
+                "step_kind": "pair",
+                "route": "failed",
+                "local_outcome": "failed",
+                "downstream_outcome": "unknown",
+                "usage": {"total_tokens": 100},
+            },
+        ],
+    }
+    static_graphs = [
+        {
+            "steps": [{"name": "assessment"}, {"name": "package"}],
+            "transitions": {
+                "steps": {
+                    "assessment": {"assessment_complete": "package", "needs_rework": "assessment"},
+                    "package": {"failed": "FAIL"},
+                }
+            },
+        }
+    ]
+
+    payload = build_step_trace_metrics(trace_corpus, static_graphs)
+
+    assessment = next(step for step in payload["steps"] if step["step_name"] == "assessment")
+    package = next(step for step in payload["steps"] if step["step_name"] == "package")
+    assert assessment["observed_count"] == 2
+    assert assessment["route_counts"]["needs_rework"] == 1
+    assert assessment["estimated_token_total"] == 500
+    assert assessment["token_share"] == pytest.approx(0.8333, abs=1e-4)
+    assert assessment["downstream_failure_after_pass_count"] == 1
+    assert assessment["artifact_centrality"] >= package["artifact_centrality"]
+
+
+def test_rank_targets_prefers_high_leverage_upstream_step_over_downstream_symptom() -> None:
+    step_metrics = {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "steps": [
+            {
+                "step_name": "assessment",
+                "step_kind": "pair",
+                "observed_count": 5,
+                "route_counts": {"assessment_complete": 2, "needs_rework": 3},
+                "producer_failed_verifier_count": 3,
+                "blocked_count": 0,
+                "failed_count": 0,
+                "needs_rework_count": 3,
+                "needs_replan_count": 0,
+                "estimated_token_total": 2200,
+                "token_share": 0.55,
+                "downstream_failure_after_pass_count": 2,
+                "artifact_centrality": 1.0,
+                "route_criticality": 0.59,
+            },
+            {
+                "step_name": "package",
+                "step_kind": "pair",
+                "observed_count": 5,
+                "route_counts": {"failed": 3, "package_complete": 2},
+                "producer_failed_verifier_count": 0,
+                "blocked_count": 0,
+                "failed_count": 3,
+                "needs_rework_count": 0,
+                "needs_replan_count": 0,
+                "estimated_token_total": 350,
+                "token_share": 0.08,
+                "downstream_failure_after_pass_count": 0,
+                "artifact_centrality": 0.3,
+                "route_criticality": 0.6,
+            },
+        ],
+    }
+
+    payload = rank_optimization_targets(step_metrics=step_metrics, static_centrality={}, top_k=1)
+
+    assert payload["ranked_steps"][0]["step_name"] == "assessment"
+    assert payload["not_selected"][0]["step_name"] == "package"
+    assert "downstream symptom" in payload["not_selected"][0]["reason"]
+
+
+def test_extract_failure_scenario_seeds_limits_to_max_scenarios() -> None:
+    trace_corpus = {
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "step_observations": [
+            {
+                "observation_id": "task/run:000001:assessment",
+                "step_name": "assessment",
+                "route": "needs_rework",
+                "usage": {"total_tokens": 2000},
+                "raw_output_refs": {},
+                "local_outcome": "rejected_by_verifier",
+                "downstream_outcome": "unknown",
+            },
+            {
+                "observation_id": "task/run:000002:assessment",
+                "step_name": "assessment",
+                "route": "needs_rework",
+                "usage": {"total_tokens": 1800},
+                "raw_output_refs": {"producer": "raw/1.txt"},
+                "local_outcome": "rejected_by_verifier",
+                "downstream_outcome": "unknown",
+            },
+            {
+                "observation_id": "task/run:000003:package",
+                "step_name": "package",
+                "route": "failed",
+                "usage": {},
+                "raw_output_refs": {"producer": "raw/2.txt"},
+                "local_outcome": "failed",
+                "downstream_outcome": "unknown",
+            },
+        ],
+    }
+    priority_report = {
+        "ranked_steps": [{"step_name": "assessment"}, {"step_name": "package"}],
+    }
+
+    payload = extract_failure_scenario_seeds(
+        trace_corpus=trace_corpus,
+        priority_report=priority_report,
+        max_scenarios=2,
+    )
+
+    assert payload["schema"] == "autoloop.workflow_optimization.failure_scenario_seeds/v1"
+    assert len(payload["failure_scenario_seeds"]) == 2
+    assert any(
+        "repeated_same_step_needs_rework_loop" in seed["seed_reasons"]
+        for seed in payload["failure_scenario_seeds"]
+    )
 
 
 def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) -> None:

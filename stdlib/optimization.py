@@ -29,6 +29,7 @@ REFINEMENT_EVIDENCE_SCHEMA = "autoloop.workflow_refinement_evidence/v1"
 STEP_TRACE_METRICS_SCHEMA = "autoloop.workflow_optimization.step_trace_metrics/v1"
 STEP_PRIORITY_REPORT_SCHEMA = "autoloop.workflow_optimization.step_priority_report/v1"
 FAILURE_SCENARIO_SEEDS_SCHEMA = "autoloop.workflow_optimization.failure_scenario_seeds/v1"
+FAILURE_SCENARIOS_SCHEMA = "autoloop.workflow_optimization.failure_scenarios/v1"
 
 _ELIGIBLE_STATUS_LABELS = frozenset({"failed", "paused", "blocked"})
 _PROMPT_SURFACE_SUFFIXES = ("_producer.md", "_verifier.md", ".md")
@@ -360,19 +361,7 @@ def build_step_trace_metrics(
         token_share = 0.0 if total_tokens <= 0 else round(estimated_token_total / total_tokens, 4)
         centrality_values = centrality_by_step.get(step_name, [])
         artifact_centrality = round(sum(centrality_values) / len(centrality_values), 4) if centrality_values else 0.0
-        route_criticality = round(
-            min(
-                1.0,
-                (
-                    route_counts.get("failed", 0)
-                    + route_counts.get("blocked", 0)
-                    + route_counts.get("needs_rework", 0)
-                    + route_counts.get("needs_replan", 0)
-                )
-                / max(1, observed_count),
-            ),
-            4,
-        )
+        route_criticality = round(_weighted_route_pressure(route_counts, observed_count), 4)
         step_entries.append(
             {
                 "step_name": step_name,
@@ -387,7 +376,10 @@ def build_step_trace_metrics(
                 "estimated_token_total": estimated_token_total,
                 "token_share": token_share,
                 "downstream_failure_after_pass_count": sum(
-                    1 for obs in step_observations if _optional_text(obs.get("downstream_outcome")) == "terminal_failure_after_local_pass"
+                    1
+                    for obs in step_observations
+                    if _optional_text(obs.get("local_outcome")) == "locally_accepted"
+                    and _is_downstream_failure_outcome(_optional_text(obs.get("downstream_outcome")))
                 ),
                 "artifact_centrality": artifact_centrality,
                 "route_criticality": route_criticality,
@@ -464,6 +456,10 @@ def rank_optimization_targets(
         downstream_blast_radius = min(1.0, downstream_failures / max(1, observed_count))
         rework_loop_cost = min(1.0, needs_rework_count / max(1, observed_count))
         sample_support = min(1.0, observed_count / 5.0)
+        insufficient_sample_penalty = 0.10 if observed_count < 2 else 0.0
+        missing_trace_data_penalty = 0.05 if token_share <= 0.0 else 0.0
+        no_prompt_surface_penalty = 0.05 if not _has_prompt_surface(step_name) else 0.0
+        likely_downstream_symptom_penalty = 0.10 if _likely_downstream_symptom(step, artifact_centrality) else 0.0
         score = (
             0.25 * direct_failure_rate
             + 0.20 * downstream_blast_radius
@@ -473,25 +469,44 @@ def rank_optimization_targets(
             + 0.10 * token_share
             + 0.05 * sample_support
         )
-        if observed_count < 2:
-            score -= 0.10
-        if token_share <= 0.0:
-            score -= 0.05
-        if not _has_prompt_surface(step_name):
-            score -= 0.05
-        if failed_count == 0 and downstream_failures > 0:
-            score -= 0.05
-        evidence_strength = "high" if observed_count >= 5 else "medium" if observed_count >= 2 else "low"
+        score -= (
+            insufficient_sample_penalty
+            + missing_trace_data_penalty
+            + no_prompt_surface_penalty
+            + likely_downstream_symptom_penalty
+        )
+        evidence_strength = (
+            "high"
+            if observed_count >= 5 and insufficient_sample_penalty == 0.0 and missing_trace_data_penalty == 0.0
+            else "medium"
+            if observed_count >= 2
+            else "low"
+        )
         ranked_entries.append(
             {
                 "step_name": step_name,
                 "priority_score": round(max(0.0, min(1.0, score)), 4),
-                "confidence": round(min(1.0, 0.45 + 0.1 * observed_count), 4),
+                "confidence": round(
+                    min(
+                        1.0,
+                        0.25
+                        + 0.35 * sample_support
+                        + 0.20 * artifact_centrality
+                        + 0.10 * min(1.0, direct_failure_rate + downstream_blast_radius)
+                        + 0.10 * max(0.0, 1.0 - missing_trace_data_penalty - insufficient_sample_penalty),
+                    ),
+                    4,
+                ),
                 "evidence_strength": evidence_strength,
                 "recommended_first_pass": _recommended_first_pass(step),
                 "secondary_passes": _secondary_passes(step),
                 "why_high_leverage": _why_high_leverage(step),
                 "likely_failure_surfaces": _likely_failure_surfaces(step),
+                "_artifact_centrality": artifact_centrality,
+                "_failed_count": failed_count,
+                "_needs_rework_count": needs_rework_count,
+                "_downstream_failures": downstream_failures,
+                "_token_share": token_share,
             }
         )
 
@@ -502,16 +517,17 @@ def rank_optimization_targets(
     not_selected = [
         {
             "step_name": entry["step_name"],
-            "reason": "Lower deterministic leverage score than the selected target set.",
+            "reason": _not_selected_reason(entry),
         }
         for entry in ranked_entries[top_k:]
     ]
+    published_ranked = [{key: value for key, value in entry.items() if not key.startswith("_")} for entry in top_ranked]
     return {
         "schema": STEP_PRIORITY_REPORT_SCHEMA,
         "selected_workflow": selected_workflow,
         "ranking_method": "static_graph_plus_trace_metrics_plus_llm_attribution",
         "top_k_steps": top_k,
-        "ranked_steps": top_ranked,
+        "ranked_steps": published_ranked,
         "not_selected": not_selected,
     }
 
@@ -542,7 +558,32 @@ def extract_failure_scenario_seeds(
         for entry in _require_mapping_list(priority_report.get("ranked_steps"), "priority_report.ranked_steps must be a list of objects")
     }
 
+    grouped_observations: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for observation in observations:
+        step_name = _optional_text(observation.get("step_name"))
+        if step_name in ranked_steps:
+            grouped_observations[str(step_name)].append(observation)
+
     seeds: list[dict[str, Any]] = []
+    for step_name, step_observations in grouped_observations.items():
+        route_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for observation in step_observations:
+            route = _optional_text(observation.get("route")) or "unknown"
+            route_groups[route].append(observation)
+        for route in ("needs_rework", "needs_replan"):
+            grouped = route_groups.get(route, [])
+            if len(grouped) > 1:
+                seeds.append(
+                    {
+                        "seed_id": f"{step_name}:{route}:loop",
+                        "step_name": step_name,
+                        "route": route,
+                        "observation_ids": [_optional_text(item.get("observation_id")) for item in grouped if _optional_text(item.get("observation_id"))],
+                        "frequency": len(grouped),
+                        "seed_reasons": [f"repeated_same_step_{route}_loop"],
+                    }
+                )
+
     for observation in observations:
         step_name = _optional_text(observation.get("step_name"))
         if step_name not in ranked_steps:
@@ -564,14 +605,18 @@ def extract_failure_scenario_seeds(
             continue
         seeds.append(
             {
-                "observation_id": _optional_text(observation.get("observation_id")),
+                "seed_id": _optional_text(observation.get("observation_id")) or f"{step_name}:{route}:seed",
                 "step_name": step_name,
                 "route": route,
+                "observation_ids": [_optional_text(observation.get("observation_id"))] if _optional_text(observation.get("observation_id")) else [],
+                "frequency": 1,
                 "seed_reasons": reasons,
+                "local_outcome": _optional_text(observation.get("local_outcome")) or "unknown",
+                "downstream_outcome": _optional_text(observation.get("downstream_outcome")) or "unknown",
             }
         )
-        if len(seeds) >= max_scenarios:
-            break
+    seeds.sort(key=_failure_seed_sort_key)
+    seeds = seeds[:max_scenarios]
 
     return {
         "schema": FAILURE_SCENARIO_SEEDS_SCHEMA,
@@ -764,6 +809,12 @@ def _downstream_outcome(next_records: Sequence[Mapping[str, Any]], terminal: Any
     return "unknown"
 
 
+def _is_downstream_failure_outcome(value: str | None) -> bool:
+    if value is None:
+        return False
+    return value == "terminal_failure_after_local_pass" or value.startswith("next_step_")
+
+
 def _require_mapping_or_empty(value: Any) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return {str(key): item for key, item in value.items()}
@@ -796,10 +847,34 @@ def _has_prompt_surface(step_name: str) -> bool:
     return not step_name.startswith("publish") and step_name != "bootstrap"
 
 
+def _weighted_route_pressure(route_counts: Mapping[str, int], observed_count: int) -> float:
+    weights = {
+        "failed": 1.0,
+        "blocked": 0.85,
+        "needs_replan": 0.75,
+        "needs_rework": 0.65,
+    }
+    weighted_sum = sum(count * weights.get(route, 0.0) for route, count in route_counts.items())
+    return min(1.0, weighted_sum / max(1, observed_count))
+
+
+def _likely_downstream_symptom(step: Mapping[str, Any], artifact_centrality: float) -> bool:
+    step_name = require_non_empty_string(step.get("step_name"), error_message="step metrics must define step_name")
+    failed_count = int(step.get("failed_count") or step.get("_failed_count") or 0)
+    needs_rework_count = int(step.get("needs_rework_count") or step.get("_needs_rework_count") or 0)
+    downstream_failures = int(
+        step.get("downstream_failure_after_pass_count") or step.get("_downstream_failures") or 0
+    )
+    token_share = float(step.get("token_share") or step.get("_token_share") or 0.0)
+    if step_name.startswith("package") or step_name.startswith("publish"):
+        return artifact_centrality <= 0.6 and failed_count > 0 and needs_rework_count == 0
+    return artifact_centrality <= 0.35 and failed_count > 0 and downstream_failures == 0 and token_share < 0.15
+
+
 def _recommended_first_pass(step: Mapping[str, Any]) -> str:
     if int(step.get("needs_rework_count") or 0) > int(step.get("failed_count") or 0):
         return "verifier_rubric_local_optimization"
-    if float(step.get("token_share") or 0.0) >= 0.35:
+    if float(step.get("token_share") or 0.0) >= 0.25 and int(step.get("failed_count") or 0) == 0:
         return "token_optimization"
     return "producer_local_optimization"
 
@@ -813,7 +888,7 @@ def _secondary_passes(step: Mapping[str, Any]) -> list[str]:
 def _why_high_leverage(step: Mapping[str, Any]) -> list[str]:
     reasons: list[str] = []
     if int(step.get("needs_rework_count") or 0) > 0:
-        reasons.append("high needs_rework loop rate")
+        reasons.append("highest needs_rework loop rate among observed routes")
     if float(step.get("token_share") or 0.0) >= 0.20:
         reasons.append("large token share")
     if int(step.get("downstream_failure_after_pass_count") or 0) > 0:
@@ -837,7 +912,7 @@ def _likely_failure_surfaces(step: Mapping[str, Any]) -> list[dict[str, object]]
         surfaces.append(
             {
                 "surface": "producer_prompt",
-                "probability": 0.34,
+                "probability": 0.34 if int(step.get("failed_count") or 0) > 0 else 0.28,
                 "rationale": "Observed failures and prompt cost suggest upstream instruction or evidence-discipline issues.",
             }
         )
@@ -852,8 +927,32 @@ def _likely_failure_surfaces(step: Mapping[str, Any]) -> list[dict[str, object]]
     return surfaces
 
 
+def _not_selected_reason(entry: Mapping[str, Any]) -> str:
+    step_name = require_non_empty_string(entry.get("step_name"), error_message="ranked entry must define step_name")
+    if not _has_prompt_surface(step_name):
+        return "No prompt-local optimization surface was detected for this step."
+    if _likely_downstream_symptom(entry, float(entry.get("_artifact_centrality") or 0.0)):
+        return "Mostly downstream symptom of weaker upstream artifacts."
+    return "Lower deterministic leverage score than the selected target set."
+
+
+def _failure_seed_sort_key(seed: Mapping[str, Any]) -> tuple[int, int, str]:
+    severity_rank = 0
+    reasons = [reason for reason in seed.get("seed_reasons", []) if isinstance(reason, str)]
+    if any(reason in {"terminal_failure_after_local_pass", "route:failed", "route:blocked"} for reason in reasons):
+        severity_rank = 3
+    elif any(reason.startswith("repeated_same_step_") for reason in reasons):
+        severity_rank = 2
+    elif "high_token_usage_without_success" in reasons:
+        severity_rank = 1
+    frequency = int(seed.get("frequency") or 0)
+    step_name = _optional_text(seed.get("step_name")) or ""
+    return (-severity_rank, -frequency, step_name)
+
+
 __all__ = [
     "EXCLUDED_RUN_REPORT_SCHEMA",
+    "FAILURE_SCENARIOS_SCHEMA",
     "FAILURE_SCENARIO_SEEDS_SCHEMA",
     "REFINEMENT_EVIDENCE_SCHEMA",
     "RunObservabilityBundle",

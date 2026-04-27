@@ -18,6 +18,7 @@
 ## Output Requirements
 
 - Write `workflow_failure_scenarios`.
+- Treat the precomputed deterministic failure scenarios as the starting point and keep any revisions bounded to the same ranked evidence.
 - Use allowed failure kinds only.
 - Keep observed evidence separate from inferred likely fixes.
 

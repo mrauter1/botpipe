@@ -16,6 +16,26 @@ from workflow import RouteContract
 
 EvidenceStrength = Literal["low", "medium", "high"]
 OptimizationDepth = Literal["cheap", "standard", "ablation"]
+FailureKind = Literal[
+    "producer_failed_verifier",
+    "verifier_false_accept",
+    "verifier_false_reject",
+    "verifier_rubric_ambiguity",
+    "route_misuse",
+    "needs_rework_loop",
+    "needs_replan_loop",
+    "blocked_missing_context",
+    "artifact_invalid",
+    "artifact_missing",
+    "token_bloat",
+    "downstream_failure_after_local_pass",
+    "workflow_handoff_gap",
+    "insufficient_evidence",
+    "eval_suite_gap",
+    "input_quality_gap",
+    "operator_process_gap",
+]
+FailureSeverity = Literal["high", "medium", "low"]
 
 
 class WorkflowOptimizationScopeArtifactPayload(BaseModel):
@@ -137,6 +157,80 @@ class WorkflowOptimizationScorecardArtifactPayload(BaseModel):
     summary: str = Field(min_length=1)
 
 
+class StepTraceMetricPayload(BaseModel):
+    step_name: str = Field(min_length=1)
+    step_kind: str = Field(min_length=1)
+    observed_count: int = Field(ge=0)
+    route_counts: dict[str, int] = Field(default_factory=dict)
+    producer_failed_verifier_count: int = Field(ge=0)
+    blocked_count: int = Field(ge=0)
+    failed_count: int = Field(ge=0)
+    needs_rework_count: int = Field(ge=0)
+    needs_replan_count: int = Field(ge=0)
+    estimated_token_total: int = Field(ge=0)
+    token_share: float = Field(ge=0.0, le=1.0)
+    downstream_failure_after_pass_count: int = Field(ge=0)
+    artifact_centrality: float = Field(ge=0.0, le=1.0)
+    route_criticality: float = Field(ge=0.0, le=1.0)
+
+
+class StepTraceMetricsArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    steps: list[StepTraceMetricPayload] = Field(default_factory=list)
+
+
+class LikelyFailureSurfacePayload(BaseModel):
+    surface: str = Field(min_length=1)
+    probability: float = Field(ge=0.0, le=1.0)
+    rationale: str = Field(min_length=1)
+
+
+class RankedStepPayload(BaseModel):
+    step_name: str = Field(min_length=1)
+    rank: int = Field(ge=1)
+    priority_score: float = Field(ge=0.0, le=1.0)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_strength: EvidenceStrength
+    recommended_first_pass: str = Field(min_length=1)
+    secondary_passes: list[str] = Field(default_factory=list)
+    why_high_leverage: list[str] = Field(default_factory=list)
+    likely_failure_surfaces: list[LikelyFailureSurfacePayload] = Field(default_factory=list)
+
+
+class NotSelectedStepPayload(BaseModel):
+    step_name: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+
+
+class StepOptimizationPriorityReportArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    ranking_method: str = Field(min_length=1)
+    top_k_steps: int = Field(ge=1)
+    ranked_steps: list[RankedStepPayload] = Field(default_factory=list)
+    not_selected: list[NotSelectedStepPayload] = Field(default_factory=list)
+
+
+class WorkflowFailureScenarioArtifactPayload(BaseModel):
+    failure_id: str = Field(min_length=1)
+    step_name: str = Field(min_length=1)
+    failure_kind: FailureKind
+    severity: FailureSeverity
+    frequency: int = Field(ge=0)
+    evidence_observation_ids: list[str] = Field(default_factory=list)
+    producer_gap: str | None = None
+    verifier_behavior: str | None = None
+    likely_fix_surfaces: list[str] = Field(default_factory=list)
+    downstream_effect: str | None = None
+
+
+class WorkflowFailureScenariosArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    failure_scenarios: list[WorkflowFailureScenarioArtifactPayload] = Field(default_factory=list)
+
+
 class FrameOptimizationPayload(BaseModel):
     summary: str = Field(min_length=1)
     selected_workflow_name: str = Field(min_length=1)
@@ -201,6 +295,18 @@ EXCLUDED_RUN_REPORT_ARTIFACT = JsonArtifactSpec(
 WORKFLOW_OPTIMIZATION_TRACE_CORPUS_ARTIFACT = JsonArtifactSpec(
     "workflow_optimization_trace_corpus.json",
     WorkflowOptimizationTraceCorpusArtifactPayload,
+)
+STEP_TRACE_METRICS_ARTIFACT = JsonArtifactSpec(
+    "step_trace_metrics.json",
+    StepTraceMetricsArtifactPayload,
+)
+STEP_OPTIMIZATION_PRIORITY_REPORT_ARTIFACT = JsonArtifactSpec(
+    "step_optimization_priority_report.json",
+    StepOptimizationPriorityReportArtifactPayload,
+)
+WORKFLOW_FAILURE_SCENARIOS_ARTIFACT = JsonArtifactSpec(
+    "workflow_failure_scenarios.json",
+    WorkflowFailureScenariosArtifactPayload,
 )
 SELECTED_WORKFLOW_SOURCE_MANIFEST_ARTIFACT = JsonArtifactSpec(
     "selected_workflow_source_manifest.json",
@@ -415,9 +521,15 @@ __all__ = [
     "SELECTED_WORKFLOW_SOURCE_MANIFEST_ARTIFACT",
     "SelectedWorkflowSourceManifestArtifactPayload",
     "SourceManifestFilePayload",
+    "STEP_OPTIMIZATION_PRIORITY_REPORT_ARTIFACT",
+    "STEP_TRACE_METRICS_ARTIFACT",
+    "StepOptimizationPriorityReportArtifactPayload",
+    "StepTraceMetricPayload",
+    "StepTraceMetricsArtifactPayload",
     "StepUsagePayload",
     "TraceCorpusObservationPayload",
     "TraceCorpusRunPayload",
+    "WORKFLOW_FAILURE_SCENARIOS_ARTIFACT",
     "WORKFLOW_LEVEL_ROUTE_CONTRACTS",
     "WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT",
     "WORKFLOW_OPTIMIZATION_SCOPE_ARTIFACT",
@@ -425,4 +537,6 @@ __all__ = [
     "WorkflowOptimizationScopeArtifactPayload",
     "WorkflowOptimizationScorecardArtifactPayload",
     "WorkflowOptimizationTraceCorpusArtifactPayload",
+    "WorkflowFailureScenarioArtifactPayload",
+    "WorkflowFailureScenariosArtifactPayload",
 ]

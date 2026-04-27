@@ -22,6 +22,7 @@
 ## Evidence
 
 - Accept grounded scenarios even when some evidence-reference arrays are omitted.
+- Treat the precomputed scenario artifact as authoritative unless the same evidence clearly requires local repair.
 - Reject invented evidence or invalid failure kinds.
 
 ## Route Guidance
