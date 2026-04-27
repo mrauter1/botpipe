@@ -1575,3 +1575,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+---
+I’m auditing the existing proof coverage for this phase and then I’ll update the test-phase artifacts with a behavior-to-test map. First I’m checking the current test strategy/feedback files and the request-relevant test modules that now carry the greenfield assertions.
+
+I’ve confirmed the core proof files already contain the greenfield assertions. I’m mapping the concrete coverage now so the test strategy names the exact modules that guard system-step normalization, provider rendering, workflow discovery, capability payloads, and removed-term docs enforcement.
+
+The biggest remaining coverage gap is that the active docs test suite did not explicitly guard the root `cleanup.md` note or the recursive template docs that were scrubbed during implementation. I’m adding a focused regression test for those working-tree surfaces and then I’ll record that coverage in the test strategy.
+
+The new docs regression test is green. I’m writing the phase test strategy now with the behavior-to-test coverage map and then I’ll append the concise test-author summary to the phase feedback artifact.
+
+Scope considered
+
+- Active phase test scope only: request-relevant simple-surface, engine-contract, runtime parity, stdlib/capability, and active-doc proof coverage.
+- Test-phase artifacts: [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/workflow-migration-docs-and-proof/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/workflow-migration-docs-and-proof/feedback.md).
+
+What I analyzed
+
+- Existing proof modules: `tests/unit/test_simple_surface.py`, `tests/contract/test_engine_contracts.py`, `tests/unit/test_stdlib_and_extensions.py`, `tests/runtime/*.py`, and `tests/test_architecture_baseline_docs.py`.
+- Shared decisions and implementation notes for the authoritative selected-workflow payload shape, reserved-route normalization, and active-doc grep boundary.
+
+What I changed
+
+- Added a regression test in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) so the active docs vocabulary boundary now explicitly includes the root `cleanup.md` note and the recursive template docs.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/workflow-migration-docs-and-proof/test_strategy.md) with a concise behavior-to-test coverage map.
+- Appended the phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/workflow-migration-docs-and-proof/feedback.md).
+
+Key findings / decisions
+
+- The main coverage gap was documentation-proof scope, not runtime behavior: active docs tests previously covered `docs/` and prompt READMEs but not the cleaned root note or recursive templates.
+- Targeted validation passed: `.venv/bin/pytest tests/test_architecture_baseline_docs.py -q` -> `7 passed`.
+
+Open issues / next step
+
+- No blocking test gaps remain in this phase-local pass.
+- Full-suite and grep evidence remains documented in the paired implementation artifacts; this turn added the missing working-tree docs regression guard only.
