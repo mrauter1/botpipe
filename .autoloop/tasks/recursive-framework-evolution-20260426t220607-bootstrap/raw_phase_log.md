@@ -989,3 +989,56 @@ Result: `91 passed`.
 **Open issues / next step**
 
 There are still pre-existing Pydantic warnings about model fields named `schema` in the optimizer contracts. They did not fail the scoped proof, but they remain a cleanup candidate if you want a follow-up pass on warning hygiene.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+I’m auditing the phase-local implementation and the review artifacts now. I’ll verify the candidate/publication contracts against the request and update the phase criteria and feedback based on concrete code-path findings, not just the passing subset of tests.
+
+I’ve narrowed the review to the actual phase contract now. The main things I’m checking are whether skip routes are enforced deterministically in code, whether ordered-prefix `pairs` subsets are actually validated, and whether package-time publication can be bypassed by provider output.
+
+The first substantive issue is confirmed: the include/skip flags are only written into state and prompt context. There is no workflow-side branch or route override for `token_pass_not_applicable`, `adversarial_generation_skipped`, or `workflow_level_pass_not_applicable`, so disabled passes still depend on provider compliance.
+
+I have two blocking implementation gaps and one coverage gap. I’m writing them into the phase feedback now and leaving the criteria unchecked because the phase contract is not fully met yet.
+
+I’m making the criteria artifact explicit as reviewed-with-blockers so the phase state is unambiguous.
+
+Scope considered
+
+Phase-local implementation for `candidate-generation-and-publication`, focused on the optimizer workflow code, its contracts/tests, and the active phase review artifacts only.
+
+What I analyzed
+
+I reviewed [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py), [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/contracts.py), [params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/params.py), the phase request/decisions, and the current runtime test file [test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py). I also checked the active criteria and feedback artifacts.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/candidate-generation-and-publication/criteria.md) to keep all boxes unchecked with an explicit reviewed-with-blockers note, and appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/candidate-generation-and-publication/feedback.md).
+
+Key findings / decisions
+
+I found three blocking issues.
+
+`IMP-001`: the required skip routes are not enforced deterministically. The include flags are recorded in state, but `optimize_tokens`, `adversarial_cases`, and `workflow_level` still run as normal pair steps and accept provider-selected routes, so disabled passes can still emit enabled-pass outcomes.
+
+`IMP-002`: the candidate JSON artifacts requested by the plan are not schema-validated before publication. The workflow defines outcome payload models, but publication only checks file existence for candidate artifacts, so malformed or policy-violating candidate files can still be published into refinement evidence.
+
+`IMP-003`: the required runtime coverage for this phase is incomplete. The current test file does not cover the requested skip semantics, package-time source-drift failure, ordered-prefix `pairs` enforcement, or ablation-depth non-execution, which is why the route-gating gap was able to slip through.
+
+Open issues / next step
+
+This phase should return to implement to add deterministic skip enforcement, artifact-schema validation for the candidate outputs, and the missing runtime tests from the request snapshot. After that, rerun the phase-local optimizer/refinement/docs proof set and resubmit for review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
