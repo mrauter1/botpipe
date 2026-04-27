@@ -96,3 +96,12 @@ Planner feedback can optionally incorporate the two non-blocking clarifications 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=selected-workflow-helper-convergence,workflow-family-migration,proof-docs-and-memory-closeout
+explicit=True
+current_phase_index=0
