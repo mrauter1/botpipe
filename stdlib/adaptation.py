@@ -7,19 +7,17 @@ from pathlib import Path
 from typing import Any
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.workflow_capabilities import (
-        inspect_workflow_reference,
-        selected_workflow_capability_payload,
-    )
-    from ..runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
+    from ..core.workflow_capabilities import selected_workflow_capability_payload
+    from ..runtime.loader import coerce_workflow_parameter_mapping
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.workflow_capabilities import (
-        inspect_workflow_reference,
-        selected_workflow_capability_payload,
-    )
-    from runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
+    from core.workflow_capabilities import selected_workflow_capability_payload
+    from runtime.loader import coerce_workflow_parameter_mapping
 
-from .lifecycle import write_workflow_json
+from ._selected_workflow import (
+    capture_selected_workflow,
+    inspect_selected_workflow,
+    write_selected_workflow_artifact,
+)
 
 
 def write_selected_workflow_capability_snapshot(
@@ -29,21 +27,14 @@ def write_selected_workflow_capability_snapshot(
 ) -> Path:
     """Write one selected workflow's compiled contract under ``ctx.workflow_folder``."""
 
-    repo_root = _repo_root_from_context(ctx)
-    resolved = resolve_workflow_reference(repo_root, workflow)
-    capability = selected_workflow_capability_payload(inspect_workflow_reference(repo_root, resolved.workflow_cls))
-    return write_workflow_json(
+    inspection = inspect_selected_workflow(ctx, workflow)
+    return write_selected_workflow_artifact(
         ctx,
-        relative_path,
-        {
-            "repo_root": str(repo_root),
-            "run_id": ctx.run_id,
-            "selected_workflow_capability": capability,
-            "selected_workflow_name": resolved.package.workflow_name,
-            "task_id": ctx.task_id,
-            "workflow_name": ctx.workflow_name,
-        },
-    )
+        capture=inspection.capture,
+        relative_path=relative_path,
+        artifact_name="selected_workflow_capability",
+        artifact_payload=selected_workflow_capability_payload(inspection.capability),
+    ).path
 
 
 def write_validated_workflow_parameters(
@@ -54,23 +45,15 @@ def write_validated_workflow_parameters(
 ) -> Path:
     """Validate and persist workflow parameters through the shared loader coercion path."""
 
-    repo_root = _repo_root_from_context(ctx)
-    resolved = resolve_workflow_reference(repo_root, workflow)
-    validated = coerce_workflow_parameter_mapping(resolved.parameters_cls, payload)
-    return write_workflow_json(
+    capture = capture_selected_workflow(ctx, workflow)
+    validated = coerce_workflow_parameter_mapping(capture.resolved.parameters_cls, payload)
+    return write_selected_workflow_artifact(
         ctx,
-        relative_path,
-        {
-            "repo_root": str(repo_root),
-            "run_id": ctx.run_id,
-            "selected_workflow_name": resolved.package.workflow_name,
-            "task_id": ctx.task_id,
-            "validated_parameters": validated,
-            "workflow_name": ctx.workflow_name,
-        },
-    )
-def _repo_root_from_context(ctx) -> Path:
-    return ctx.root.resolve()
+        capture=capture,
+        relative_path=relative_path,
+        artifact_name="validated_parameters",
+        artifact_payload=validated,
+    ).path
 
 
 __all__ = [

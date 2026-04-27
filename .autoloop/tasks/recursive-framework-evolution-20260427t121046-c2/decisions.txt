@@ -2,3 +2,6 @@
 Cycle 2 stays in consolidate mode: selected-workflow context-capture convergence has higher leverage than portfolio expansion because prompt compaction, validation migration, typed bootstrap cleanup, and optimizer helper extraction are already closed.
 Preserve the current selected-workflow artifact filenames and top-level schemas; any new helper seam must stay authoring-only and additive.
 Do not add a new workflow in this cycle; shorten existing selected-workflow consumers and helper seams first.
+<autoloop-decisions-header version="1" block_seq="2" owner="implementer" phase_id="selected-workflow-helper-convergence" pair="implement" turn_seq="1" run_id="run-20260427T164535Z-3624382b" ts="2026-04-27T16:53:43.763204+00:00" />
+Use a private `stdlib/_selected_workflow.py` seam, not a new public root/stdlib helper export, to centralize selected-workflow resolution, selected_workflow_name capture, and shared envelope writing while keeping the existing public artifact-writer names stable.
+Return capture metadata from the private seam so later workflow-family migration can remove write-read-validate tails without changing current artifact filenames or top-level payload schemas in this phase.

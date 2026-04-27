@@ -8,13 +8,11 @@ from pathlib import Path
 from typing import Any
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..runtime.loader import resolve_workflow_reference
     from ..runtime.workspace import list_run_records
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from runtime.loader import resolve_workflow_reference
     from runtime.workspace import list_run_records
 
-from .lifecycle import write_workflow_json
+from ._selected_workflow import capture_selected_workflow, write_selected_workflow_artifact
 from .validation import require_non_empty_string
 
 
@@ -28,35 +26,29 @@ def write_selected_workflow_run_history_snapshot(
 ) -> Path:
     """Write one selected workflow's filtered run history under ``ctx.workflow_folder``."""
 
-    repo_root = _repo_root_from_context(ctx)
-    resolved = resolve_workflow_reference(repo_root, workflow)
+    capture = capture_selected_workflow(ctx, workflow)
     normalized_statuses = _normalize_statuses(statuses)
     normalized_max_runs = _normalize_max_runs(max_runs)
 
-    records = list_run_records(repo_root, workflow_name=resolved.package.workflow_name)
+    records = list_run_records(capture.repo_root, workflow_name=capture.selected_workflow_name)
     if normalized_statuses is not None:
         allowed_statuses = set(normalized_statuses)
         records = tuple(record for record in records if record.status in allowed_statuses)
     if normalized_max_runs is not None:
         records = records[:normalized_max_runs]
 
-    return write_workflow_json(
+    return write_selected_workflow_artifact(
         ctx,
-        relative_path,
-        {
-            "repo_root": str(repo_root),
-            "run_id": ctx.run_id,
-            "selected_workflow_name": resolved.package.workflow_name,
-            "selected_workflow_run_history": {
-                "max_runs": normalized_max_runs,
-                "run_count": len(records),
-                "runs": [_run_history_payload(record) for record in records],
-                "statuses": normalized_statuses,
-            },
-            "task_id": ctx.task_id,
-            "workflow_name": ctx.workflow_name,
+        capture=capture,
+        relative_path=relative_path,
+        artifact_name="selected_workflow_run_history",
+        artifact_payload={
+            "max_runs": normalized_max_runs,
+            "run_count": len(records),
+            "runs": [_run_history_payload(record) for record in records],
+            "statuses": normalized_statuses,
         },
-    )
+    ).path
 
 
 def _run_history_payload(record) -> dict[str, Any]:
@@ -170,10 +162,6 @@ def _optional_text(path: Path) -> str | None:
 
 def _optional_text_value(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
-
-
-def _repo_root_from_context(ctx) -> Path:
-    return ctx.root.resolve()
 
 
 __all__ = ["write_selected_workflow_run_history_snapshot"]

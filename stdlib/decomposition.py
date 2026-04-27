@@ -6,19 +6,11 @@ from pathlib import Path
 from typing import Any
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.workflow_capabilities import (
-        inspect_workflow_reference,
-        selected_workflow_decomposition_surface_payload,
-    )
-    from ..runtime.loader import resolve_workflow_reference
+    from ..core.workflow_capabilities import selected_workflow_decomposition_surface_payload
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.workflow_capabilities import (
-        inspect_workflow_reference,
-        selected_workflow_decomposition_surface_payload,
-    )
-    from runtime.loader import resolve_workflow_reference
+    from core.workflow_capabilities import selected_workflow_decomposition_surface_payload
 
-from .lifecycle import write_workflow_json
+from ._selected_workflow import inspect_selected_workflow, write_selected_workflow_artifact
 
 
 def write_selected_workflow_decomposition_surface(
@@ -28,29 +20,17 @@ def write_selected_workflow_decomposition_surface(
 ) -> Path:
     """Write one selected workflow's authoring and compiled decomposition surface."""
 
-    repo_root = _repo_root_from_context(ctx)
-    resolved = resolve_workflow_reference(repo_root, workflow)
-    capability = inspect_workflow_reference(repo_root, resolved.workflow_cls)
-
-    return write_workflow_json(
+    inspection = inspect_selected_workflow(ctx, workflow)
+    return write_selected_workflow_artifact(
         ctx,
-        relative_path,
-        {
-            "repo_root": str(repo_root),
-            "run_id": ctx.run_id,
-            "selected_workflow_decomposition_surface": selected_workflow_decomposition_surface_payload(
-                capability,
-                repo_root=repo_root,
-            ),
-            "selected_workflow_name": capability.workflow_name,
-            "task_id": ctx.task_id,
-            "workflow_name": ctx.workflow_name,
-        },
-    )
-
-
-def _repo_root_from_context(ctx) -> Path:
-    return ctx.root.resolve()
+        capture=inspection.capture,
+        relative_path=relative_path,
+        artifact_name="selected_workflow_decomposition_surface",
+        artifact_payload=selected_workflow_decomposition_surface_payload(
+            inspection.capability,
+            repo_root=inspection.capture.repo_root,
+        ),
+    ).path
 
 
 __all__ = ["write_selected_workflow_decomposition_surface"]
