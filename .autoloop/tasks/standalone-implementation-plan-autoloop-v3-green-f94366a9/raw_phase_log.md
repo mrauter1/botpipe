@@ -678,3 +678,53 @@ Open issues / next step
 - Validation run: `python3 -m py_compile tests/unit/test_simple_surface.py tests/unit/test_validation.py`.
 - I attempted targeted `pytest` again, but `/usr/bin/python3` in this shell still does not have `pytest` installed.
 - The next auditor pass should be able to resolve TST-001 and TST-002 if it agrees these new tests close the documented gaps.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m re-checking the two formerly blocking areas directly in the updated tests, then I’ll mark the audit artifacts complete if they now close the phase requirements.
+
+The two former blockers are closed in the tests themselves, not just in the strategy text, so I’m marking the audit artifacts complete and recording that those findings are resolved.
+
+Scope considered
+
+- Final phase-local audit for the `public-surface-and-route-metadata` test pass.
+- The updated unit tests for the simple surface and core validation, plus the phase-local strategy/feedback artifacts.
+
+What I analyzed
+
+- The follow-up tests added for the two previously blocking audit gaps.
+- The authoritative decisions around removing `RouteContract` and documenting the `system_step(fn)` callable contract.
+- The current criteria and feedback artifacts to ensure they reflect the updated test state accurately.
+
+What I reviewed
+
+- `tests/unit/test_validation.py::test_core_step_constructors_reject_legacy_route_contracts_keyword`
+- `tests/unit/test_simple_surface.py::test_simple_system_step_normalizes_supported_handler_signatures_and_return_shapes`
+- The phase-local `test_strategy.md` and `feedback.md` updates that describe the new coverage.
+
+Key findings / decisions
+
+- No blocking findings remain in this phase-local test scope.
+- The former AC-1 coverage gap is closed by the explicit negative constructor test for legacy `route_contracts=`.
+- The former `system_step(fn)` coverage gap is closed by the new normalization matrix spanning both supported handler arities and all documented return shapes.
+- Criteria updated: all boxes are now checked.
+
+Open issues / next step
+
+- This phase-local test audit is complete.
+- The environment still lacks `pytest`, so the validation boundary remains syntax-only here, but that is already recorded in the phase feedback and does not block this scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
