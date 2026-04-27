@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260427T151046Z-3a255053" ts="2026-04-27T15:10:46.734826+00:00" />
+workflow_failure_scenario_seeds.json is the deterministic input artifact; workflow_failure_scenarios.json remains the provider-authored final artifact and may only be synthesized as the minimal empty fallback for no_failure_scenarios when absent.
+Accepted provider-authored failure and candidate artifacts must be validated and preserved in place; optimizer handlers must not deterministically rewrite, truncate, or normalize them after verifier acceptance.
+optimization_depth changes prompt and publication semantics only; no target-workflow reruns, ablation execution, refinement execution, or source mutation are allowed at any depth.
+max_candidates_per_pass remains soft prompt guidance only; candidate schemas and package validation must not enforce hard candidate-count caps.

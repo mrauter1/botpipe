@@ -1,4 +1,120 @@
 version: 1
 task_id: recursive-framework-evolution-20260427t121046-bootstrap
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/runs/run-20260427T151046Z-3a255053/request.md
-phases: []
+phases:
+- phase_id: workflow-semantics-and-contracts
+  title: Workflow Semantics And Contracts
+  objective: Separate deterministic failure seeds from provider-authored final artifacts,
+    preserve accepted provider output, and update optimizer-owned contracts and publication
+    fields without changing runtime behavior.
+  status: planned
+  in_scope:
+  - Add workflow-local failure seed artifact ownership and schema exposure.
+  - Refactor mine_failures and candidate-pass handlers to validate accepted artifacts
+    without deterministic rewrites.
+  - Record optimization_depth and ablation_executed=false in optimizer publication
+    artifacts.
+  out_of_scope:
+  - Runtime git-tracking changes.
+  - Runtime tracing changes.
+  - commit_after_run changes.
+  - Target workflow reruns or ablation execution.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: workflow_failure_scenario_seeds.json is the deterministic seed artifact
+      and workflow_failure_scenarios.json remains the provider-authored final artifact
+      with validation-only handling on accepted routes.
+  - id: AC-2
+    text: Accepted producer, verifier-rubric, token, adversarial, and workflow-level
+      artifacts are validated and counted without deterministic regeneration, truncation,
+      or formatting rewrites.
+  - id: AC-3
+    text: workflow_optimization_scorecard.json requires optimization_depth and ablation_executed=false,
+      and package publication derives requires_ablation_before_promotion from validated
+      candidate artifacts.
+  deliverables:
+  - Updated workflow.py handler semantics and package publication behavior.
+  - Updated contracts.py artifact and scorecard models.
+  - Any minimal stdlib optimization helper adjustment required to expose the requested
+    seed payload cleanly.
+  risks:
+  - Helper payload shape drift between stdlib and workflow-local contracts.
+  - Unintended hard validation of candidate counts or evidence references.
+  rollback:
+  - Revert optimizer workflow and contract changes only.
+  - Restore previous optimizer publication validation if scorecard compatibility breaks.
+- phase_id: prompts-docs-and-report
+  title: Prompts Docs And Report
+  objective: Align prompt instructions, workflow documentation, and report output
+    with validation-only artifact ownership, prompt-only depth semantics, and soft
+    candidate budgets.
+  status: planned
+  in_scope:
+  - Update prompt README ownership, failure-seed, optimization-depth, and candidate-budget
+    guidance.
+  - Update producer and verifier step prompts named in the request snapshot.
+  - Revise workflow docs and replace report.md with a real implementation report.
+  out_of_scope:
+  - Changing target workflow prompts outside this optimizer package.
+  - Documenting commit_after_run behavior changes.
+  dependencies:
+  - workflow-semantics-and-contracts
+  acceptance_criteria:
+  - id: AC-1
+    text: Prompt surfaces explicitly instruct producers to use workflow_optimization_scope.json,
+      apply optimization_depth, and treat max_candidates_per_pass as a soft budget.
+  - id: AC-2
+    text: Verifier prompts explicitly avoid rejecting solely on over-budget candidate
+      count and reject hidden execution or ownership violations.
+  - id: AC-3
+    text: Docs and report describe deterministic seed ownership, validation-only publication
+      of accepted LLM artifacts, and no-rerun or no-ablation semantics.
+  deliverables:
+  - Updated optimizer prompt markdown files.
+  - Updated docs/workflows/workflow_run_traces_to_optimization_candidates.md.
+  - Updated report.md.
+  risks:
+  - Prompt/doc language diverging from implemented handler semantics.
+  rollback:
+  - Revert optimizer prompt and documentation edits only.
+- phase_id: tests-and-verification
+  title: Tests And Verification
+  objective: Realign runtime and helper tests to the new seed/final split, depth recording,
+    and prompt-only budget semantics, then verify the workflow with targeted and full
+    test runs.
+  status: planned
+  in_scope:
+  - Add runtime tests for preserved provider-authored failure artifacts, empty fallback
+    behavior, invalid accepted artifacts, separate seeds, depth recording, and soft
+    candidate budgets.
+  - Update helper tests for deterministic failure seed extraction and any changed
+    helper payload shape.
+  - Run the required pytest commands and full pytest when feasible.
+  out_of_scope:
+  - Adding unrelated runtime observability coverage.
+  - Broad refactors of shared test harnesses beyond what this workflow needs.
+  dependencies:
+  - workflow-semantics-and-contracts
+  - prompts-docs-and-report
+  acceptance_criteria:
+  - id: AC-1
+    text: Runtime tests prove accepted provider-authored failure and candidate artifacts
+      are preserved, malformed accepted artifacts fail validation, and no_failure_scenarios
+      writes only the minimal empty fallback when absent.
+  - id: AC-2
+    text: Runtime tests prove optimization_depth is reflected in scope, scorecard,
+      packet, and receipt without creating reruns or ablation runs, and over-budget
+      candidate artifacts can still pass when accepted.
+  - id: AC-3
+    text: Required targeted pytest commands pass, and full pytest is run and recorded
+      in report.md when feasible.
+  deliverables:
+  - Updated tests/runtime/test_workflow_run_traces_to_optimization_candidates.py.
+  - Updated tests/unit/test_optimization_helpers.py.
+  - Recorded validation commands and outcomes in report.md.
+  risks:
+  - Many scorecard fixtures need synchronized updates once required fields change.
+  - Existing tests may implicitly depend on deterministic failure scenario rewrites.
+  rollback:
+  - Revert optimizer-specific test changes if they expose unrelated baseline failures.
