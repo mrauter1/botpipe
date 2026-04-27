@@ -13,13 +13,18 @@ phases:
     bundle loading and validation, trace-corpus normalization, and source-manifest
     helpers.
   - Add workflows/workflow_run_traces_to_optimization_candidates package files, workflow.toml,
-    prompt README, checklist asset, and prompt stubs following existing workflow package
-    conventions.
+    checklist asset, prompts/README.md, and the full required prompt inventory from
+    the request snapshot.
+  - Encode the shared prompt README boundary, non-mutation rule, candidate-only rule,
+    no-hidden-execution rule, evidence-versus-inference rule, and verifier rejection
+    rules in the scoped prompt package plan.
   - Implement bootstrap and frame behavior, including selected-workflow capability/authoring/decomposition
     snapshots, selected_workflow_source_manifest.json, excluded_run_report.json, workflow_optimization_scope.json,
     and workflow_optimization_trace_corpus.json.
   - Expose any new stdlib helpers through stdlib/__init__.py and ensure manifest-backed
     discovery surfaces the new bundled workflow.
+  - Freeze the exact ordered pair topology and frame-step route behavior, including
+    frame -> package short-circuit on no_eligible_trace_evidence.
   out_of_scope:
   - Optimization candidate generation beyond no-op packaging for zero eligible runs.
   - Refinement evidence consumption changes in other workflows.
@@ -28,7 +33,8 @@ phases:
   acceptance_criteria:
   - id: AC-1
     text: The new workflow package is discoverable by canonical name and aliases,
-      and describe/introspection can resolve its parameters and ordered pair topology.
+      and describe/introspection can resolve its parameters plus the exact ordered
+      pair topology beginning with frame and ending with package.
   - id: AC-2
     text: Frame-time deterministic ingestion accepts explicit run_refs or discovered
       runs, excludes missing Plan-1 observability with reason codes, and emits the
@@ -36,6 +42,10 @@ phases:
   - id: AC-3
     text: If no eligible runs remain after filtering, the workflow can short-circuit
       to packaging with a no-op optimization packet instead of failing.
+  - id: AC-4
+    text: The scoped prompt package is planned as a full contract, not stubs, and
+      includes the shared README rules plus verifier rejection conditions required
+      by the request snapshot.
   deliverables:
   - stdlib/optimization.py
   - workflows/workflow_run_traces_to_optimization_candidates/
@@ -63,6 +73,9 @@ phases:
     seeds plus LLM diagnosis bounded by allowed failure kinds.
   - Preserve separation between run_statuses filtering and route_tags filtering in
     both helper logic and emitted artifacts.
+  - Preserve the exact control-flow contract for rank_targets and mine_failures, including
+    targets_ranked, insufficient_evidence, failure_scenarios_mined, and no_failure_scenarios
+    routes.
   out_of_scope:
   - Producer, verifier/rubric, token, adversarial, and workflow-level optimization
     candidate passes.
@@ -81,6 +94,10 @@ phases:
     text: workflow_failure_scenarios.json is emitted from deterministic seeds plus
       bounded LLM classification without requiring evidence references for schema
       validity.
+  - id: AC-4
+    text: rank_targets and mine_failures keep the exact ordered sequence and route
+      names required by the request snapshot, including the package short-circuit
+      on insufficient_evidence.
   deliverables:
   - Step metric and priority helpers in stdlib/optimization.py
   - rank_targets and mine_failures workflow steps
@@ -100,9 +117,10 @@ phases:
   status: planned
   in_scope:
   - Implement optimize_producer, optimize_verifier_rubric, optimize_tokens, adversarial_cases,
-    workflow_level, and package steps plus their route contracts.
+    workflow_level, and package steps plus their exact route contracts.
   - Implement skip behavior for include_token_optimization, include_adversarial_generation,
-    and include_workflow_level_candidates.
+    and include_workflow_level_candidates through token_pass_not_applicable, adversarial_generation_skipped,
+    and workflow_level_pass_not_applicable.
   - Implement optimization_depth semantics so cheap and standard stay trace-only and
     ablation only marks candidates or ablation plans without execution.
   - Publish workflow_optimization_scorecard.json, workflow_refinement_evidence.json,
@@ -117,13 +135,16 @@ phases:
   acceptance_criteria:
   - id: AC-1
     text: Each candidate pass emits its required artifact or explicit pass-not-applicable
-      route without crossing target-surface boundaries.
+      route required by the request snapshot without crossing target-surface boundaries.
   - id: AC-2
     text: Package publication fails if the selected workflow source manifest changes,
       and passes only when all published artifacts are candidate-only and aligned.
   - id: AC-3
     text: optimization_depth='ablation' never executes ablations or target-workflow
       reruns inside this workflow.
+  - id: AC-4
+    text: Later optimization steps preserve the exact route grammar and short-circuit
+      behavior from the request snapshot through package publication.
   deliverables:
   - All optimization candidate artifacts and publication artifacts
   - Package-time source mutation check

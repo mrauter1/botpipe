@@ -3,3 +3,6 @@ Implement the optimizer as an additive workflow package plus stdlib/optimization
 Treat bundled workflow registration as manifest-backed package discovery plus docs/tests updates unless a later code path proves an explicit registry is still required.
 Reuse the existing selected_workflow_capability, selected_workflow_authoring_surface, and selected_workflow_decomposition_surface helper family; add only optimizer-specific source-manifest capture instead of a fourth general serializer.
 optimization_depth=\"ablation\" only labels candidates and optional ablation planning metadata; this workflow never reruns the target workflow or executes ablations.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260427T010607Z-85bed128" ts="2026-04-27T01:11:31.411340+00:00" />
+Freeze the optimizer topology to the exact ordered step list and application-route map from the request snapshot; do not allow renamed routes or reordered pairs in planning artifacts.
+Treat the optimizer prompt bundle as a full required contract, not stubs, and carry the shared README boundary rules plus verifier rejection rules explicitly in the plan.

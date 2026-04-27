@@ -80,3 +80,30 @@ Revise `plan.md` and `phase_plan.yaml` to include the exact ordered step list, p
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dcc78-e8d2-7de2-9aca-de7ef0789e3b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dcc78-e8d2-7de2-9aca-de7ef0789e3b
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcc78-e8d2-7de2-9aca-de7ef0789e3b
+---
+I’m addressing the verifier’s two blocking gaps directly: the plan needs the exact workflow control-flow contract frozen in prose and phases, and it needs the prompt package described as a full contract rather than stubs. I’m reading the current feedback and decisions state, then I’ll patch the plan artifacts narrowly.
+
+I’m patching the narrative plan and phase contract now with the exact pair order, route grammar, skip behavior, and prompt contract so the implementation target matches the request snapshot rather than a looser derivative.
+
+The first patch partially failed because `phase_plan.yaml` was normalized without quotes after the earlier parse. I’m re-reading the exact current text and applying smaller edits so the machine-readable file stays valid and the changes stay narrow.
+
+The plan and phase contract are patched. I’m validating YAML parseability and doing a quick readback on the changed sections to make sure the control-flow and prompt requirements now read exactly as intended.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/plan/phase_plan.yaml) to address the verifier’s blockers.
+
+The plan now freezes the exact optimizer topology from the request snapshot: ordered pair sequence, per-step route names, and the required skip short-circuit behavior. It also replaces the loose “prompt stubs” wording with the full prompt inventory and explicit shared prompt/verifier contract requirements. I appended the change note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/plan/feedback.md) and added the non-obvious constraints under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt).
+
+Validation: `phase_plan.yaml` parses successfully with `python3` and `yaml.safe_load` (`parsed_ok 5`).

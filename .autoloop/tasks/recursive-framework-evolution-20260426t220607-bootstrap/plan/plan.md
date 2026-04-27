@@ -29,6 +29,26 @@ Implement `workflow_run_traces_to_optimization_candidates` as a bundled, authori
 ### New workflow package
 
 - Add `workflows/workflow_run_traces_to_optimization_candidates/` with `__init__.py`, `workflow.py`, `contracts.py`, `params.py`, `workflow.toml`, `assets/optimization_package_checklist.md`, and the full `prompts/` set from the request snapshot.
+- Required prompt inventory:
+- `prompts/README.md`
+- `prompts/frame_producer.md`
+- `prompts/frame_verifier.md`
+- `prompts/rank_targets_producer.md`
+- `prompts/rank_targets_verifier.md`
+- `prompts/mine_failures_producer.md`
+- `prompts/mine_failures_verifier.md`
+- `prompts/optimize_producer_producer.md`
+- `prompts/optimize_producer_verifier.md`
+- `prompts/optimize_verifier_rubric_producer.md`
+- `prompts/optimize_verifier_rubric_verifier.md`
+- `prompts/optimize_tokens_producer.md`
+- `prompts/optimize_tokens_verifier.md`
+- `prompts/adversarial_cases_producer.md`
+- `prompts/adversarial_cases_verifier.md`
+- `prompts/workflow_level_producer.md`
+- `prompts/workflow_level_verifier.md`
+- `prompts/package_producer.md`
+- `prompts/package_verifier.md`
 - Model the package after the existing diagnostics/refinement workflow style:
 - typed `State`
 - deterministic bootstrap/frame/package system steps
@@ -85,6 +105,49 @@ Implement `workflow_run_traces_to_optimization_candidates` as a bundled, authori
 - optimization refinement evidence
 - Publish-step validation should stay strict on artifact structure and boundary invariants, while leaving narrative rationale fields loosely typed.
 
+### Exact topology and skip behavior
+
+- Ordered pair sequence is fixed:
+- `frame`
+- `rank_targets`
+- `mine_failures`
+- `optimize_producer`
+- `optimize_verifier_rubric`
+- `optimize_tokens`
+- `adversarial_cases`
+- `workflow_level`
+- `package`
+- Supported `pairs` subsets must be ordered prefixes only.
+- Exact application routes:
+- `frame`: `optimization_scope_framed -> rank_targets`, `no_eligible_trace_evidence -> package`, `needs_rework -> frame`, `blocked -> PAUSE`, `failed -> FAIL`
+- `rank_targets`: `targets_ranked -> mine_failures`, `insufficient_evidence -> package`, `needs_rework -> rank_targets`, `failed -> FAIL`
+- `mine_failures`: `failure_scenarios_mined -> optimize_producer`, `no_failure_scenarios -> optimize_tokens`, `needs_rework -> mine_failures`, `failed -> FAIL`
+- `optimize_producer`: `producer_candidates_ready -> optimize_verifier_rubric`, `producer_pass_not_applicable -> optimize_verifier_rubric`, `needs_rework -> optimize_producer`, `failed -> FAIL`
+- `optimize_verifier_rubric`: `verifier_rubric_candidates_ready -> optimize_tokens`, `verifier_rubric_pass_not_applicable -> optimize_tokens`, `needs_rework -> optimize_verifier_rubric`, `failed -> FAIL`
+- `optimize_tokens`: `token_candidates_ready -> adversarial_cases`, `token_pass_not_applicable -> adversarial_cases`, `needs_rework -> optimize_tokens`, `failed -> FAIL`
+- `adversarial_cases`: `adversarial_cases_ready -> workflow_level`, `adversarial_generation_skipped -> workflow_level`, `needs_rework -> adversarial_cases`, `failed -> FAIL`
+- `workflow_level`: `workflow_level_candidates_ready -> package`, `workflow_level_pass_not_applicable -> package`, `needs_rework -> workflow_level`, `failed -> FAIL`
+- `package`: `optimization_packet_ready -> SUCCESS`, `needs_rework -> package`, `failed -> FAIL`
+- Required short-circuit behavior:
+- `include_adversarial_generation=false` forces `adversarial_generation_skipped`
+- `include_token_optimization=false` forces `token_pass_not_applicable`
+- `include_workflow_level_candidates=false` forces `workflow_level_pass_not_applicable`
+
+### Prompt contract
+
+- `prompts/README.md` must state:
+- this workflow proposes optimization candidates only
+- do not edit source prompts or workflow files
+- do not run the selected workflow
+- do not claim a candidate improves performance unless ablation or rerun evidence exists
+- separate observed evidence from inference
+- prefer targeted local changes before workflow-level changes
+- verifier/rubric changes are one merged acceptance-function surface
+- token compression must be classified by quality risk
+- Every prompt pair must include the required input artifacts, output artifacts, schema requirements, non-mutation rule, candidate-only rule, no hidden execution rule, and no false rerun or ablation claims.
+- Verifier prompts must reject outputs that omit required schema fields, invent run evidence, claim tests or reruns happened without evidence, propose direct source mutation, recommend automatic promotion, collapse producer and verifier/rubric surfaces, or mislabel risky semantic changes as safe compression.
+- Missing evidence references alone must not be a rejection reason.
+
 ### Artifact boundaries
 
 - All optimizer artifacts live under the optimizer workflow folder only.
@@ -97,20 +160,20 @@ Implement `workflow_run_traces_to_optimization_candidates` as a bundled, authori
 ### 1. Deterministic ingestion and workflow shell
 
 - Add `stdlib/optimization.py`.
-- Add `params.py`, `contracts.py`, workflow package files, prompt README, checklist, and `workflow.toml`.
+- Add `params.py`, `contracts.py`, workflow package files, `workflow.toml`, checklist, the full prompt inventory, and the shared prompt README/verifier contract markers from the request snapshot.
 - Export stdlib helpers and make the new package discoverable.
-- Implement bootstrap/frame logic, selected-workflow snapshots, source manifest capture, run discovery, eligibility filtering, excluded-run reporting, and no-op packaging for zero eligible runs.
+- Implement bootstrap/frame logic, selected-workflow snapshots, source manifest capture, run discovery, eligibility filtering, exact `frame` routes, and no-op packaging for zero eligible runs.
 
 ### 2. Ranking and failure analysis
 
 - Implement static centrality, step metrics, deterministic scoring, and top-k ranking support.
-- Implement `rank_targets` and `mine_failures` around the deterministic corpus and metrics.
+- Implement `rank_targets` and `mine_failures` around the deterministic corpus and metrics while preserving the exact step order and route names from the request snapshot.
 - Preserve the distinction between highest failure count and highest leverage upstream target.
 
 ### 3. Candidate generation and publication
 
-- Implement `optimize_producer`, `optimize_verifier_rubric`, `optimize_tokens`, `adversarial_cases`, `workflow_level`, and `package`.
-- Enforce skip behavior for disabled optional passes.
+- Implement `optimize_producer`, `optimize_verifier_rubric`, `optimize_tokens`, `adversarial_cases`, `workflow_level`, and `package` with the exact application routes above.
+- Enforce disabled optional passes through the exact short-circuit routes rather than alternate control-flow names.
 - Ensure `optimization_depth="ablation"` only changes labeling and optional planning fields; no ablation execution.
 - Publish scorecard, refinement evidence, packet, and receipt only after the source manifest re-check passes.
 
