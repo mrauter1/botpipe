@@ -202,3 +202,41 @@ No open issues from review. Phase can advance.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T033024Z-f4648cdd | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcd04-7321-7db0-9cee-ec4ec66e064e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcd04-7321-7db0-9cee-ec4ec66e064e
+
+
+---
+run_id=run-20260427T033024Z-f4648cdd | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcd04-7321-7db0-9cee-ec4ec66e064e
+---
+I’m auditing the scoped bootstrap migration from the test side now. I’ll verify the new regression coverage against the phase contract, then update the phase-local test strategy and feedback artifacts with the exact behavior map.
+
+The repo-side tests already cover the phase well, so I’m keeping code churn at zero on the test files themselves and documenting the exact behavior map in the phase artifacts. I’m also capturing one non-obvious test constraint in the shared decisions ledger before closing out.
+
+Scope considered
+
+Phase-local test coverage for the five remaining bootstrap migrations, the recursive-memory closeout assertions, the shared decisions ledger, and the phase test artifacts.
+
+What I analyzed
+
+I checked the new typed-bootstrap regression tests in the five scoped runtime suites, verified that they exercise the intended seam with contradictory raw `workflow_params`, and re-ran the targeted proof command to confirm the updated memory assertions still pass.
+
+What I changed
+
+I updated [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-c1/test/phases/remaining-typed-bootstrap-convergence/test_strategy.md:1>) with an explicit behavior-to-test coverage map, appended a concise execution summary to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-c1/test/phases/remaining-typed-bootstrap-convergence/feedback.md:1>), and added one test-specific constraint to [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-c1/decisions.txt:7>). No additional repo test-file edits were needed beyond the already-landed scoped runtime and baseline-doc coverage.
+
+Key findings / decisions
+
+The right regression trigger is contradictory raw `workflow_params` paired with typed `params`, but assertions should target workflow-specific invocation-contract fields only because `write_invocation_contract(...)` intentionally adds shared runtime metadata. The targeted proof passed:
+`.venv/bin/pytest -q tests/runtime/test_release_candidate_to_go_no_go.py tests/runtime/test_investigation_request_to_evidence_pack.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_incident_to_hardening_program.py tests/runtime/test_workflow_builder_package.py tests/test_architecture_baseline_docs.py` (`136 passed`).
+
+Open issues / next step
+
+No open test-side blockers. The scoped bootstrap regression coverage and recursive-memory assertions are in place and verified.
