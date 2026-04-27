@@ -288,3 +288,52 @@ Phase review is complete. The only remaining failures in the recorded validation
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+---
+I’m checking the existing optimizer tests before I touch anything. The goal here is to add or tighten coverage only where the changed workflow semantics still have regression risk, then record the coverage map in the phase test artifacts.
+
+There’s one coverage gap worth tightening: the changed skip-route semantics are supposed to leave existing provider-authored optional-pass artifacts alone and only synthesize empties when the file is absent. I’m adding a focused regression test for that behavior, then I’ll update the phase test strategy and feedback artifacts with the exact coverage map.
+
+I’m writing a single regression test that covers all three optional skip gates, because the risky behavior is the same across them: a pre-existing provider-authored artifact must survive a skipped pass unchanged. After that I’ll record the exact coverage map and the stabilization notes in the phase-local test artifacts.
+
+The new test is in place. I’m running the optimizer runtime suite now to confirm the added skip-route regression coverage passes cleanly alongside the existing semantics tests.
+
+The runtime suite is still running; I’m waiting on the full file rather than a single test so the new regression check is exercised against the whole optimizer behavior surface it sits beside.
+
+Scope considered
+
+Optimizer workflow semantics-and-contracts test surface only: the changed runtime behavior in `workflow_run_traces_to_optimization_candidates`, its regression coverage in `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, and the phase-local test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/workflow-semantics-and-contracts/`.
+
+What I analyzed
+
+I reviewed the accepted phase contract, the shared decisions ledger, the existing optimizer runtime/unit coverage, and the implementation’s changed ownership semantics around failure seeds, accepted artifact preservation, skip/not-applicable handling, and publication metadata. The main gap was skip-route preservation: existing tests covered empty-artifact synthesis when optional passes are disabled, but they did not pin the new requirement that pre-existing provider-authored artifacts must be left unchanged.
+
+What I changed
+
+I added `test_optional_skip_routes_preserve_existing_artifacts_when_present` to [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py:394). It is parametrized across the token, adversarial, and workflow-level skip gates and asserts that each disabled route preserves an existing provider-authored artifact verbatim instead of replacing it with an empty placeholder.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/workflow-semantics-and-contracts/test_strategy.md) with an explicit AC-to-test coverage map, preserved invariants, edge/failure paths, stabilization notes, and known gaps, appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/workflow-semantics-and-contracts/feedback.md), and recorded the non-obvious skip-route test decision in `decisions.txt`.
+
+Key findings / decisions
+
+The added regression test closes the only meaningful semantics gap I found in the current optimizer test surface. Validation run: `.venv/bin/python -m pytest tests/runtime/test_workflow_run_traces_to_optimization_candidates.py` passed with `33 passed`. The only observed noise was the existing repeated Pydantic `schema` field shadowing warnings; no new flake risk was introduced.
+
+Open issues / next step
+
+No blocking test gaps remain in this phase scope. Prompt wording is still not snapshot-tested, which I documented as an intentional known gap because this phase is focused on artifact semantics and publication/runtime behavior.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

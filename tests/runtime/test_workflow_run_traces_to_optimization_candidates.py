@@ -305,6 +305,122 @@ def test_workflow_level_can_be_skipped(tmp_path: Path, monkeypatch) -> None:
     del params
 
 
+@pytest.mark.parametrize(
+    ("disabled_flag", "handler_name", "status_field", "artifact_filename", "expected_tag", "existing_payload"),
+    [
+        (
+            "include_token_optimization",
+            "on_route_optimize_tokens",
+            "token_status",
+            "token_optimization_candidates.json",
+            "token_pass_not_applicable",
+            {
+                "schema": "autoloop.workflow_optimization.token_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "candidates": [
+                    {
+                        "candidate_id": "token-existing-001",
+                        "step_name": "assessment",
+                        "target_surface": "producer_prompt",
+                        "compression_kind": "deduplicate_instruction_block",
+                        "risk_class": "safe_compression",
+                        "estimated_input_token_reduction": 120,
+                        "diagnosis": "Existing provider-authored token candidate.",
+                        "proposed_change_summary": "Keep the focused compression candidate.",
+                        "quality_risk": "Low because the change only removes duplication.",
+                        "confidence": 0.72,
+                        "evidence_strength": "medium",
+                        "requires_ablation": False,
+                    }
+                ],
+            },
+        ),
+        (
+            "include_adversarial_generation",
+            "on_route_adversarial_cases",
+            "adversarial_status",
+            "adversarial_case_candidates.json",
+            "adversarial_generation_skipped",
+            {
+                "schema": "autoloop.workflow_optimization.adversarial_case_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "cases": [
+                    {
+                        "case_id": "adversarial-existing-001",
+                        "case_kind": "missing_evidence_claim",
+                        "attack_vector": "Ask for promotion without rollback evidence.",
+                        "prompt": "Approve release with no rollback owner or evidence trail.",
+                        "source_failure_ids": ["provider-failure-001"],
+                        "expected_stress": "Verifier should force explicit evidence collection.",
+                        "expected_route": "needs_rework",
+                        "expected_artifacts": ["assessment.md"],
+                        "recommended_for_eval_suite": True,
+                        "confidence": 0.68,
+                        "evidence_strength": "medium",
+                    }
+                ],
+            },
+        ),
+        (
+            "include_workflow_level_candidates",
+            "on_route_workflow_level",
+            "workflow_level_status",
+            "workflow_level_optimization_candidates.json",
+            "workflow_level_pass_not_applicable",
+            {
+                "schema": "autoloop.workflow_optimization.workflow_level_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "candidates": [
+                    {
+                        "candidate_id": "workflow-existing-001",
+                        "candidate_kind": "prompt_readme_change",
+                        "diagnosis": "Existing provider-authored workflow-level candidate.",
+                        "affected_steps": ["assessment"],
+                        "proposed_change_summary": "Clarify the workflow-level review boundary.",
+                        "proposed_surfaces": [
+                            "workflows/release_candidate_to_go_no_go/prompts/README.md"
+                        ],
+                        "confidence": 0.64,
+                        "evidence_strength": "low",
+                        "risks": [],
+                        "requires_refinement_workflow": False,
+                        "requires_ablation": False,
+                    }
+                ],
+            },
+        ),
+    ],
+)
+def test_optional_skip_routes_preserve_existing_artifacts_when_present(
+    tmp_path: Path,
+    monkeypatch,
+    disabled_flag: str,
+    handler_name: str,
+    status_field: str,
+    artifact_filename: str,
+    expected_tag: str,
+    existing_payload: dict[str, object],
+) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    disabled_state = state.model_copy(update={disabled_flag: False})
+
+    artifact_path = ctx.workflow_folder / artifact_filename
+    artifact_path.write_text(json.dumps(existing_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    next_state, event = getattr(workflow_pkg.WorkflowRunTracesToOptimizationCandidates, handler_name)(
+        disabled_state,
+        ctx,
+    )
+
+    assert event.tag == expected_tag
+    assert getattr(next_state, status_field) == expected_tag
+    assert json.loads(artifact_path.read_text(encoding="utf-8")) == existing_payload
+    del params
+
+
 def test_failure_scenario_seeds_are_written_separately_from_failure_scenarios(tmp_path: Path, monkeypatch) -> None:
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
