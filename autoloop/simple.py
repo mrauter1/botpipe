@@ -47,6 +47,8 @@ class StrictWorkflow(_StrictWorkflow):
 class ArtifactSpec:
     """Simple authoring artifact declaration with optional inferred step-local paths."""
 
+    __autoloop_simple_artifact_spec__ = True
+
     name: str
     kind: str
     schema: type[BaseModel] | dict[str, object] | None = None
@@ -108,6 +110,8 @@ def Raw(name: str, *, path: str | Path | None = None, required: bool = False) ->
 
 class _NamedDeclaration:
     __slots__ = ("name", "_explicit_name")
+    __autoloop_simple_declaration__ = True
+    default_chain_route = "done"
 
     def __init__(self, *, name: str | None = None) -> None:
         self.name = name
@@ -164,6 +168,7 @@ class ReviewStepDeclaration(_NamedDeclaration):
     """Foundation declaration for future review-step lowering."""
 
     kind = "review"
+    default_chain_route = "accepted"
 
     def __init__(
         self,
@@ -269,6 +274,7 @@ class WorkflowStep(_NamedDeclaration):
 
 @dataclass(frozen=True, slots=True)
 class FlowSpec:
+    __autoloop_simple_flow_spec__ = True
     items: tuple[ChainNode, ...]
 
 

@@ -11,6 +11,7 @@ import pytest
 from pydantic import BaseModel
 
 from autoloop.simple import Json, Md, Prompt, Route, RouteInfo, StrictWorkflow, Workflow, chain, review_step, step
+from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.errors import WorkflowValidationError
 from autoloop_v3.core.prompts import PromptRegistry
 from autoloop_v3.runtime.prompts import FilesystemPromptRegistry
@@ -152,6 +153,63 @@ def test_simple_workflow_base_does_not_trigger_strict_class_definition_validatio
 
     assert LightweightWorkflow.note.name == "note"
     assert LightweightWorkflow.__strict_workflow__ is False
+
+
+def test_simple_single_step_workflow_compiles_with_inferred_entry_and_success_route() -> None:
+    class LightweightWorkflow(Workflow):
+        note = step("Write a short note.", out=Md("note"))
+
+    compiled = compile_workflow(LightweightWorkflow)
+
+    assert compiled.entry_step_name == "note"
+    assert compiled.routes["note"]["done"].target == "SUCCESS"
+    assert compiled.steps["note"].expected_output_schema is None
+    assert compiled.new_state().model_dump(mode="python") == {}
+
+
+def test_simple_chain_and_review_step_lower_into_existing_compiled_workflow_model() -> None:
+    class Analysis(BaseModel):
+        summary: str
+
+    class IncidentBrief(Workflow):
+        analysis = step(
+            "Analyze the incident request and produce a structured summary.",
+            out=Json("analysis", Analysis),
+        )
+        email = review_step(
+            producer="Draft an executive email from {analysis}.",
+            verifier="Accept if the email is accurate and concise.",
+            out=Md("email"),
+        )
+        flow = chain(analysis, email)
+
+    compiled = compile_workflow(IncidentBrief)
+
+    assert compiled.entry_step_name == "analysis"
+    assert compiled.routes["analysis"]["done"].target == "email"
+    assert compiled.routes["email"]["accepted"].target == "SUCCESS"
+    assert compiled.routes["email"]["needs_rework"].target == "email"
+    assert compiled.steps["analysis"].expected_output_schema is None
+    assert compiled.steps["email"].reads == ("analysis.analysis",)
+    assert compiled.steps["email"].requires == ()
+
+
+def test_simple_placeholder_inference_is_conservative_about_bare_name_ambiguity() -> None:
+    class Analysis(BaseModel):
+        summary: str
+
+    class AmbiguousPromptWorkflow(Workflow):
+        class State(BaseModel):
+            analysis: str = ""
+
+        analysis = step("Produce the analysis.", out=Json("analysis", Analysis))
+        publish = step("Publish a short summary of {analysis}.")
+        flow = chain(analysis, publish)
+
+    compiled = compile_workflow(AmbiguousPromptWorkflow)
+
+    assert compiled.steps["publish"].reads == ()
+    assert compiled.steps["publish"].requires == ()
 
 
 def test_strict_workflow_counterpart_preserves_import_time_validation() -> None:
