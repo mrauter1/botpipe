@@ -428,6 +428,112 @@ def test_frame_no_eligible_runs_publishes_noop_packet(tmp_path: Path) -> None:
     assert "No eligible Plan-1 observability bundles were available" in packet_text
 
 
+def test_full_run_skips_disabled_optional_passes_without_provider_calls(tmp_path: Path) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: "frame reviewed\n",
+            lambda request: "ranking reviewed\n",
+            lambda request: "failure review complete\n",
+            _produce_skipped_optional_passes_package,
+        ],
+        verifier_turns=[
+            Outcome(
+                raw_output="frame grounded\n",
+                tag="optimization_scope_framed",
+                payload={
+                    "summary": "The selected workflow and trace scope are grounded for ranking.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "candidate_run_count": 1,
+                    "eligible_run_count": 1,
+                    "excluded_run_count": 0,
+                    "top_k_steps": 1,
+                    "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
+                },
+            ),
+            Outcome(
+                raw_output="targets ranked\n",
+                tag="targets_ranked",
+                payload={
+                    "summary": "Assessment is the highest-leverage target.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "ranked_steps": ["assessment"],
+                    "ranking_method": "static_graph_plus_trace_metrics_plus_llm_attribution",
+                },
+            ),
+            Outcome(
+                raw_output="no local failure scenarios\n",
+                tag="no_failure_scenarios",
+                payload={
+                    "summary": "No targeted failure scenarios were mined, so optional local passes are considered from skip gates.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "target_steps": ["assessment"],
+                    "failure_ids": [],
+                },
+            ),
+            Outcome(
+                raw_output="optimization packet ready\n",
+                tag="optimization_packet_ready",
+                payload={
+                    "summary": "The scorecard and packet are aligned after optional passes were skipped.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "authoritative_artifacts": [
+                        "workflow_optimization_scorecard",
+                        "workflow_optimization_packet",
+                    ],
+                    "highest_priority_candidate_ids": [],
+                    "recommended_next_action": "Review the ranked scope before enabling optional candidate passes.",
+                    "requires_ablation_before_promotion": False,
+                    "source_mutation_check_expected": True,
+                },
+            ),
+        ],
+    )
+
+    result = run_workflow_package(
+        "workflow_run_traces_to_optimization_candidates",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="optimizer-task",
+            message="Publish an optimizer packet with all optional passes disabled.\n",
+            workflow_params={
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "task_title": "Release workflow optimization",
+                "include_token_optimization": False,
+                "include_adversarial_generation": False,
+                "include_workflow_level_candidates": False,
+                "run_statuses": ["failed", "paused", "blocked"],
+                "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
+            },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "optimizer-task" / "wf_workflow_run_traces_to_optimization_candidates"
+    token_candidates = json.loads((workflow_dir / "token_optimization_candidates.json").read_text(encoding="utf-8"))
+    adversarial_candidates = json.loads((workflow_dir / "adversarial_case_candidates.json").read_text(encoding="utf-8"))
+    workflow_level_candidates = json.loads(
+        (workflow_dir / "workflow_level_optimization_candidates.json").read_text(encoding="utf-8")
+    )
+
+    observed_step_calls = [call.step_name for call in provider.calls]
+
+    assert result.terminal == "SUCCESS"
+    assert "frame" in observed_step_calls
+    assert "rank_targets" in observed_step_calls
+    assert "mine_failures" in observed_step_calls
+    assert "package" in observed_step_calls
+    assert "optimize_tokens" not in observed_step_calls
+    assert "adversarial_cases" not in observed_step_calls
+    assert "workflow_level" not in observed_step_calls
+    assert token_candidates["candidates"] == []
+    assert adversarial_candidates["cases"] == []
+    assert workflow_level_candidates["candidates"] == []
+
+
 def test_insufficient_evidence_short_circuit_does_not_publish_failure_scenarios(tmp_path: Path) -> None:
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
@@ -869,6 +975,58 @@ def _produce_insufficient_evidence_package(request) -> str:
         )
     )
     return "packaged insufficient evidence optimization packet\n"
+
+
+def _produce_skipped_optional_passes_package(request) -> str:
+    request.artifacts.workflow_optimization_scorecard.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.scorecard/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "evidence_run_count": 1,
+                "excluded_run_count": 0,
+                "target_steps_ranked": 1,
+                "failure_scenarios": 0,
+                "candidate_counts": {
+                    "producer": 0,
+                    "verifier_rubric": 0,
+                    "token": 0,
+                    "adversarial_cases": 0,
+                    "workflow_level": 0,
+                },
+                "recommended_next_action": "Review the ranked scope before enabling optional candidate passes.",
+                "highest_priority_candidate_ids": [],
+                "requires_ablation_before_promotion": False,
+                "source_mutation_check": {
+                    "passed": True,
+                    "details": "Will be rechecked deterministically at publication.",
+                },
+                "summary": "Optional candidate passes were disabled, so publication contains only ranked scope and package artifacts.",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    request.artifacts.workflow_optimization_packet.write_text(
+        "\n".join(
+            (
+                "# Workflow Optimization Packet",
+                "",
+                "Optional candidate passes were disabled explicitly.",
+                "",
+                "- Ready for review: none.",
+                "- Requires ablation: none.",
+                "- Token-only candidates: none.",
+                "- Adversarial eval-case candidates: none.",
+                "- Workflow-level refinement candidates: none.",
+                "",
+                "Recommended next action: review the ranked scope before enabling optional candidate passes.",
+                "",
+            )
+        )
+    )
+    return "packaged skipped-optional-passes optimization packet\n"
 
 
 def _write_publishable_package(

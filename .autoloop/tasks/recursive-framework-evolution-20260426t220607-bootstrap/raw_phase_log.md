@@ -1167,3 +1167,60 @@ Phase-local review is complete. If desired later, warning hygiene around the opt
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+I’m checking the scoped test coverage against the phase contract first, then I’ll decide whether the existing runtime tests need one more regression case before I update the phase test artifacts.
+
+The current runtime file covers the gates directly, but it still doesn’t prove the compiled workflow skips those pair steps end-to-end. I’m adding one full-run regression that disables all optional passes and succeeds with no provider turns for the skipped steps.
+
+I’m adding one end-to-end regression now. It will only supply provider turns for `frame`, `rank_targets`, `mine_failures`, and `package`, so any accidental execution of the disabled optional pair steps will fail the test immediately.
+
+The end-to-end test is doing its job: `provider.calls` records both producer and verifier turns, so an exact list is too strict. I’m tightening the assertion to the behavior we actually care about: the skipped pair steps never receive any provider calls at all.
+
+The new end-to-end skip test is green. I’m rerunning the scoped optimizer proof set now so the strategy/feedback can reference one final clean command instead of a partial subset.
+
+I’m validating the new runtime coverage against the scoped proof set and then I’ll update the phase-local test artifacts to reflect the behavior now covered.
+
+The earlier full-suite session is gone, so I’m rerunning the scoped proof locally and checking the phase notes before I write the test-strategy updates.
+
+The scoped suite is still running; while it finishes, I’m recording the new behavior coverage and the non-obvious end-to-end skip invariant in the phase-local artifacts.
+
+I’ve confirmed the new test delta is isolated to the optimizer runtime suite. Next I’m updating the phase-local strategy and feedback so the coverage map matches the actual regression surface.
+
+Scope considered
+
+Phase-local test work for `candidate-generation-and-publication`: the optimizer runtime regression surface, the scoped proof set, and the required test-phase artifacts under `.autoloop/tasks/.../test/phases/candidate-generation-and-publication/`.
+
+What I analyzed
+
+I reviewed the active phase contract, the current optimizer runtime suite in [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py), the shared decisions ledger, and the test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/candidate-generation-and-publication/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/candidate-generation-and-publication/feedback.md).
+
+What I changed
+
+I added an end-to-end runtime regression in [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py) that disables all three optional candidate passes and proves `optimize_tokens`, `adversarial_cases`, and `workflow_level` receive no provider calls while still publishing canonical empty artifacts. I also added the package helper used by that scenario.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/candidate-generation-and-publication/test_strategy.md) with an explicit behavior-to-test coverage map, appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/candidate-generation-and-publication/feedback.md), and recorded the non-obvious full-run skip invariant in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The main gap worth closing was topology-level proof of skip behavior. The existing handler tests covered the gate functions, but they would not catch a regression where disabled optional passes still executed as pair steps during a full run. The new end-to-end test covers that exact failure mode.
+
+Scoped validation passed:
+`.venv/bin/pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py`
+Result: `101 passed, 247 warnings`.
+
+Open issues / next step
+
+No scoped test gaps remain for this phase based on the current contract. The remaining warnings are the existing Pydantic `schema`-field warnings in optimizer contract models; they are unchanged and warning-only.

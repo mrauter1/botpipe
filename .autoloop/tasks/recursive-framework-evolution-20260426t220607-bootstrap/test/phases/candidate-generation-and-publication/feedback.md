@@ -6,3 +6,4 @@
 - Phase Directory Key: candidate-generation-and-publication
 - Phase Title: Candidate Generation And Publication
 - Scope: phase-local authoritative verifier artifact
+- Added runtime coverage for the end-to-end disabled-optional-pass path, asserting `optimize_tokens`, `adversarial_cases`, and `workflow_level` receive no provider calls while still publishing canonical empty candidate artifacts; retained scoped publication, source-drift, ordered-prefix, and ablation-boundary regression coverage.
