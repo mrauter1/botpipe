@@ -20,3 +20,6 @@ Workflow discovery now uses a shared is_workflow_class check that accepts simple
 Inherited workflow member discovery now uses one visible-namespace traversal for both workflow detection and workflow definition lowering so subclasses inheriting simple declarations compile consistently with what loader/capability inspection can discover.
 Optional read fallback is intentionally narrow: only unknown string/path reads degrade to workspace reads, while ambiguous or otherwise invalid declared-artifact read references still fail validation.
 Static after-hook route validation is conservative and source-based; constant string/Event/AfterHookResult route overrides are validated without executing user hook code at import or compile time.
+<autoloop-decisions-header version="1" block_seq="7" owner="implementer" phase_id="provider-and-engine-contract" pair="implement" turn_seq="1" run_id="run-20260427T204304Z-eddf2be0" ts="2026-04-27T21:58:08.811053+00:00" />
+Final step output enforcement now re-resolves artifacts after after-hook state changes and keeps provider-attributable artifact failures retryable even when the hook overrides the final route.
+Direct WorkflowStep execution writes JSON payloads to declared json outputs, human-readable summaries to markdown/text outputs, and the same JSON payload as raw text to declared raw outputs.

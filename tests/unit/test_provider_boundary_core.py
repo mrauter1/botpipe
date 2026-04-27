@@ -12,6 +12,7 @@ from autoloop_v3.core.providers.models import (
     ProducerRequest,
     ProducerResponse,
     ProviderArtifactRef,
+    ProviderReadableRef,
     ProviderTurnContext,
     TokenUsage,
     VerifierRequest,
@@ -50,6 +51,27 @@ def _artifact_ref(
     )
 
 
+def _readable_ref(
+    name: str,
+    *,
+    path: str,
+    exists: bool,
+    declared_artifact: bool,
+    kind: str | None = "markdown",
+    qualified_name: str | None = None,
+    schema_name: str | None = None,
+) -> ProviderReadableRef:
+    return ProviderReadableRef(
+        name=name,
+        path=path,
+        exists=exists,
+        declared_artifact=declared_artifact,
+        kind=kind,
+        qualified_name=qualified_name,
+        schema_name=schema_name,
+    )
+
+
 def _turn_context(
     *,
     prompt_text: str = "Follow the workflow-authored instructions.",
@@ -81,7 +103,20 @@ def _turn_context(
             "needs_rework": RouteInfo(summary="Repair the current design before packaging.", required_outputs=("design_doc",)),
         },
         readable_artifacts=(
-            _artifact_ref("previous_decision", path="/tmp/previous-decision.md", required=False, exists=False),
+            _readable_ref(
+                "previous_decision",
+                path="/tmp/previous-decision.md",
+                exists=False,
+                declared_artifact=False,
+                kind=None,
+            ),
+            _readable_ref(
+                "design_brief",
+                path="/tmp/design-brief.md",
+                exists=True,
+                declared_artifact=True,
+                qualified_name="design.design_brief",
+            ),
         ),
         required_artifacts=(
             _artifact_ref("request", path="/tmp/request.md"),
@@ -127,8 +162,16 @@ def test_render_provider_turn_renders_markdown_contract_without_raw_output() -> 
     assert "### Declared artifacts this step may write" in turn.prompt_text
     assert "not an exclusive allow-list" in turn.prompt_text
     assert "### Available routes" in turn.prompt_text
-    assert "### Output payload" in turn.prompt_text
+    assert "### Control response" in turn.prompt_text
+    assert '"tag": "<one available route>"' in turn.prompt_text
+    assert '"reason": "<short reason>"' in turn.prompt_text
+    assert '"payload": {}' in turn.prompt_text
+    assert "If the selected route is `question`" in turn.prompt_text
+    assert "If the selected route is `blocked` or `failed`" in turn.prompt_text
+    assert "#### Payload schema" in turn.prompt_text
     assert "previous_decision" in turn.prompt_text
+    assert "workspace path; missing at runtime" in turn.prompt_text
+    assert "declared artifact; present at runtime" in turn.prompt_text
     assert "request" in turn.prompt_text
     assert "/tmp/design.md" in turn.prompt_text
     assert "done" in turn.prompt_text
@@ -212,6 +255,36 @@ def test_render_provider_turn_uses_route_infos_summary() -> None:
     )
 
     assert "RouteInfo summary wins." in turn.prompt_text
+
+
+def test_render_provider_turn_uses_raw_text_response_contract_for_producer_turns() -> None:
+    context = _turn_context()
+    turn = render_provider_turn(
+        ProviderTurnContext(
+            step_name=context.step_name,
+            turn_kind="producer",
+            prompt=context.prompt,
+            context=context.context,
+            artifacts=context.artifacts,
+            session=context.session,
+            expected_output_schema=context.expected_output_schema,
+            available_routes=context.available_routes,
+            route_infos=context.route_infos,
+            readable_artifacts=context.readable_artifacts,
+            required_artifacts=context.required_artifacts,
+            writable_artifacts=context.writable_artifacts,
+            route_required_outputs=context.route_required_outputs,
+            retry_feedback=context.retry_feedback,
+            route_handoff=context.route_handoff,
+            attempt=context.attempt,
+            max_attempts=context.max_attempts,
+        )
+    )
+
+    assert turn.expected_response == "raw_text"
+    assert "### Producer response" in turn.prompt_text
+    assert "Return the authored content as raw text." in turn.prompt_text
+    assert "### Control response" not in turn.prompt_text
 
 
 def test_render_provider_turn_rejects_missing_prompt_text() -> None:

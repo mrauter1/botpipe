@@ -1056,3 +1056,90 @@ No phase-local test audit issues remain. Broader unrelated runtime/reference fai
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+I’m treating this as the provider-and-engine-contract phase only. First I’m reading the active phase artifacts and the current engine/provider/compiler code so I can make scoped changes without pulling unrelated work into this turn.
+
+The working tree already has broad in-flight restructuring, including deletions of the old `autoloop_v3/*` tree and untracked replacements at repo root. I’m staying on the root `core/`, `runtime/`, `tests/`, and active phase artifacts unless a dependency forces a wider read.
+
+I’ve confirmed the earlier phases already removed the core route-contract module and normalized route metadata. The remaining work is concentrated where the phase contract said it would be: compiler payload shape, provider rendering/parsing, engine ordering, and direct `WorkflowStep` execution.
+
+There’s a lot of stale test surface still asserting the removed contract names, so I’m not trying to preserve those assertions. I’m reading the contract tests that already touch hooks, retries, and child workflows so I can replace them with the final phase behavior instead of layering another compatibility shim on top.
+
+Plan for this phase:
+1. Update provider request/rendering/parsing models to the final readable/required/writable contract and explicit control-response wording.
+2. Rework engine step finalization so after-hook state changes re-resolve artifacts, route overrides stay provider-attributable when appropriate, and `WorkflowStep` executes directly.
+3. Replace stale contract tests with phase-scoped coverage for rendering, hook ordering/override, retries, and workflow-step runtime behavior, then run targeted verification.
+
+I’ve got the runtime seams identified. I’m starting with the provider contract types and renderer so the engine changes land against the final request shape instead of another intermediate payload.
+
+The provider model is in place. I’m moving the engine now: direct `WorkflowStep` execution, after-hook re-resolution, and readable-path handling all sit in the same execution path, so they need to land together.
+
+The engine patch is in, but there are a couple of cleanup points around readable-path resolution and the workflow-step type check. I’m tightening those now before running any verification.
+
+I’ve finished the first pass of the engine and renderer changes. I’m compiling the touched modules now so I can catch contract-shape mistakes before I rework the tests around them.
+
+The contract tests still assume the deleted route-contract fields, but I don’t need to preserve those assertions to validate this phase. I’m updating the provider-boundary tests first so they assert the final renderer/request model directly.
+
+I found one remaining engine seam before test execution: readable-path rendering needs the runtime `Context`, and `_request_control_contract(...)` wasn’t carrying it through yet. I’m fixing that before running the phase tests.
+
+The touched modules compile cleanly. I’m running the provider-boundary unit file and a focused set of contract tests that exercise the new renderer rules, route validation, hook re-resolution, and direct `WorkflowStep` path.
+
+The contract file itself was still importing the old `workflow` shim. I’m switching those imports to the internal `core` surface so the phase-scoped tests can collect against the current tree.
+
+The contract file now collects, which is the main blocker cleared. Six of the focused tests are still failing, so I’m pulling the traceback and fixing the actual engine mismatches instead of papering over them in the tests.
+
+The failures are real but straightforward: the invalid-output tests are retrying because they still use the default provider retry policy, and the direct workflow-step path is missing one import plus the `Md` helper in the new test. I’m fixing those now.
+
+The focused contract set is green now. I’m doing one more pass with the simple-surface unit file, then I’ll record the implementation notes and phase-local decisions before closing out.
+
+I’ve got the code and focused tests in place. I’m recording the two non-obvious runtime decisions from this phase now: post-hook artifact re-resolution is authoritative for final output enforcement, and workflow-step raw outputs serialize the child result payload as JSON text.
+
+I’ve updated the phase notes and decisions ledger. I’m doing a quick status pass now so the closeout only describes the files actually touched in this turn.
+
+Scope considered
+
+- Phase-scoped provider and engine contract work in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:441), [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py:35), provider request models/fake telemetry, and focused contract/unit tests.
+- I kept bundled workflow migration, repo-wide legacy-term cleanup, and full-suite proof out of phase.
+
+What I analyzed
+
+- Current step finalization order, hook handling, retry attribution, provider request construction, prompt rendering, and existing `WorkflowStep` tests.
+- Prior phase notes/decisions plus the active phase artifact requirements.
+- Regression surfaces around retries, pause/fail routing, child workflow invocation, and artifact validation after hook-driven state changes.
+
+What I changed
+
+- Added `ProviderReadableRef` and switched readable inputs to declared-artifact vs workspace-path semantics.
+- Updated provider rendering to show the final runtime contract sections, including explicit `### Control response` JSON for verifier/llm turns and raw-text guidance for producer turns.
+- Tightened provider outcome validation so `question` requires `question`, and `blocked` / `failed` require `reason`.
+- Reworked engine finalization so after-hook state changes are applied to context, artifacts are re-resolved before final output enforcement, and provider-attributable artifact failures stay retryable even if the hook changes route.
+- Implemented direct `WorkflowStep` execution in the engine: message resolution, child terminal mapping, declared output writing, and verifier-loop compatibility.
+- Updated focused tests in [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py:1) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1), plus phase notes and decisions.
+
+Key findings / decisions
+
+- `WorkflowStep` raw outputs now store the child-result payload as JSON text; markdown/text outputs get a human-readable summary.
+- Post-hook artifact resolution has to be authoritative for final required-output checks, otherwise state-dependent artifact paths validate against stale locations.
+- Focused verification passed:
+  - `tests/unit/test_provider_boundary_core.py`
+  - 12 targeted engine-contract tests
+  - `tests/unit/test_simple_surface.py`
+
+Open issues / next step
+
+- I did not run the full suite.
+- Repo-wide `RouteContract` cleanup is still incomplete in out-of-phase areas, including bundled workflows and untouched legacy sections of `tests/contract/test_engine_contracts.py`.
+- The next phase should finish migrating those remaining legacy references, then run the full test suite and the final anti-regression greps.

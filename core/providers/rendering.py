@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import Any, Literal, Mapping, Sequence
 
 from ..errors import ProviderExecutionError
-from .models import ProviderArtifactRef, ProviderTurnContext
+from .models import ProviderArtifactRef, ProviderReadableRef, ProviderTurnContext
 from .turns import RenderedProviderTurn
 
 
@@ -54,8 +55,7 @@ def render_provider_turn_with_policy(
         "### Available routes",
         _render_routes(context),
         "",
-        "### Output payload",
-        _render_expected_output_schema(context.expected_output_schema),
+        *_response_contract_sections(context),
     ]
     if context.route_handoff and context.route_handoff.strip():
         sections.extend(
@@ -95,11 +95,12 @@ def _yes_no(value: bool) -> str:
     return "yes" if value else "no"
 
 
-def _required_by_routes(context: ProviderTurnContext, artifact_name: str) -> str:
+def _required_by_routes(context: ProviderTurnContext, ref: ProviderArtifactRef) -> str:
     required_by = [
         route
         for route in context.available_routes
-        if artifact_name in _route_required_outputs(context, route)
+        if ref.name in _route_required_outputs(context, route)
+        or ref.qualified_name in _route_required_outputs(context, route)
     ]
     return ", ".join(required_by) if required_by else "none"
 
@@ -164,6 +165,46 @@ def _render_expected_output_schema(schema: Mapping[str, Any] | None) -> str:
     return _markdown_table(headers, rows)
 
 
+def _response_contract_sections(context: ProviderTurnContext) -> list[str]:
+    if context.turn_kind == "producer":
+        return [
+            "### Producer response",
+            "Return the authored content as raw text. Do not wrap it in JSON. The verifier will choose the final route.",
+        ]
+    return [
+        "### Control response",
+        _render_control_response(context.expected_output_schema),
+    ]
+
+
+def _render_control_response(schema: Mapping[str, Any] | None) -> str:
+    payload_rule = (
+        "If no control payload schema is declared, `payload` may be omitted or `{}`."
+        if not isinstance(schema, Mapping)
+        else "If a control payload schema is declared, `payload` must validate against it."
+    )
+    lines = [
+        "Return exactly one JSON object with this shape:",
+        "```json",
+        json.dumps(
+            {
+                "tag": "<one available route>",
+                "reason": "<short reason>",
+                "payload": {},
+            },
+            indent=2,
+        ),
+        "```",
+        payload_rule,
+        "If the selected route is `question`, include a non-empty top-level `question` string.",
+        "If the selected route is `blocked` or `failed`, provide a concise non-empty `reason`.",
+        "",
+        "#### Payload schema",
+        _render_expected_output_schema(schema),
+    ]
+    return "\n".join(lines)
+
+
 def _apply_render_policy(text: str, *, policy: ProviderPromptRenderPolicy) -> str:
     if policy.max_prompt_chars is None or len(text) <= policy.max_prompt_chars:
         return text
@@ -199,7 +240,7 @@ def _render_readable_inputs(context: ProviderTurnContext) -> str:
             ref.name,
             ref.path,
             _yes_no(ref.exists),
-            _artifact_notes(ref),
+            _readable_notes(ref),
         )
         for ref in context.readable_artifacts
     ]
@@ -214,7 +255,7 @@ def _render_writable_artifacts(context: ProviderTurnContext) -> str:
             ref.name,
             ref.path,
             _schema_name(ref),
-            _required_by_routes(context, ref.name),
+            _required_by_routes(context, ref),
             _artifact_notes(ref),
         )
         for ref in context.writable_artifacts
@@ -254,6 +295,18 @@ def _route_summary(context: ProviderTurnContext, route: str) -> str:
 def _artifact_notes(ref: ProviderArtifactRef) -> str:
     notes = [f"qualified name: {ref.qualified_name}"]
     notes.append("present at runtime" if ref.exists else "missing at runtime")
+    if ref.schema_name:
+        notes.append(f"schema: {ref.schema_name}")
+    return "; ".join(notes)
+
+
+def _readable_notes(ref: ProviderReadableRef) -> str:
+    notes = ["declared artifact" if ref.declared_artifact else "workspace path"]
+    notes.append("present at runtime" if ref.exists else "missing at runtime")
+    if ref.qualified_name:
+        notes.append(f"qualified name: {ref.qualified_name}")
+    if ref.kind:
+        notes.append(f"kind: {ref.kind}")
     if ref.schema_name:
         notes.append(f"schema: {ref.schema_name}")
     return "; ".join(notes)
