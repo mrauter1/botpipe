@@ -1421,3 +1421,46 @@ Result: `98 passed`
 Open issues / next step
 
 No blocking issues in this phase-local scope. The main intentional non-change is that simple child-workflow steps still lower through the generated handler path; if a later phase wants a dedicated core `WorkflowStep` declaration class, that can be swapped in without changing the hook/final-route engine behavior implemented here.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd060-3709-7a20-910c-d97ea5d8434b
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+I’m reviewing the phase-local implementation against the engine hook and workflow-step acceptance criteria first, then I’ll update the reviewer-owned criteria and feedback artifacts with any concrete findings.
+
+I’ve got the main execution diff open now. I’m checking for subtle regressions around provider retries, state/context consistency, and whether the new “workflow” kind actually behaves as a first-class runtime path rather than just a renamed system step.
+
+I found one material regression surface and I’m writing it into the reviewer feedback now. It comes from the new `kind="workflow"` path interacting with the existing route-handoff queue, not from the hook normalization itself.
+
+Scope considered
+
+Phase-local review for `engine-hooks-workflow-step`. I limited the audit to the changed hook/compiler/engine/tracing path, the targeted tests, and the authoritative phase artifacts.
+
+What I analyzed
+
+I read the phase notes, criteria, feedback template, and shared decisions, then audited the execution path in `core/engine.py`, `core/compiler.py`, `core/validation.py`, `core/steps.py`, and `runtime/tracing.py`. I also checked the new regression coverage in `tests/contract/test_engine_contracts.py`, `tests/unit/test_simple_surface.py`, and `tests/runtime/test_runtime_tracing.py`.
+
+What I reviewed
+
+I verified hook ordering, final-route enforcement after hook normalization, compiled `kind="workflow"` handling, child-workflow lowering behavior, and adjacent route-handoff behavior. I updated the phase feedback artifact with one prioritized finding.
+
+Key findings / decisions
+
+I found one blocking regression: after the change that compiles lowered child-workflow nodes as `kind="workflow"`, route handoffs targeted at those steps are no longer dropped like system steps, but workflow steps still never consume queued handoffs. That means handoff messages can persist forever in `pending_handoffs`, survive checkpoints, and never reach the child workflow. I recorded this as `IMP-001` in the phase feedback file.
+
+Open issues / next step
+
+Fix `IMP-001` by either consuming workflow-targeted handoffs in the workflow-step execution path and threading them into `ctx.invoke_workflow(...)`, or by continuing to drop handoffs for `kind in {"system", "workflow"}` until explicit workflow-step handoff delivery is implemented.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
