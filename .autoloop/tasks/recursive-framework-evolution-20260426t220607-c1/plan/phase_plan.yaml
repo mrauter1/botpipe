@@ -1,4 +1,52 @@
 version: 1
 task_id: recursive-framework-evolution-20260426t220607-c1
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-c1/runs/run-20260427T033024Z-f4648cdd/request.md
-phases: []
+phases:
+- phase_id: remaining-typed-bootstrap-convergence
+  title: Finish Typed Bootstrap Convergence
+  objective: Migrate the remaining raw workflow-parameter bootstraps onto ctx.params,
+    preserve workflow behavior, and update proof plus recursive memory to match the
+    actual repo state.
+  status: planned
+  in_scope:
+  - Replace dict(ctx.workflow_params) bootstrap normalization with typed ctx.params
+    projection in release_candidate_to_go_no_go, investigation_request_to_evidence_pack,
+    security_finding_to_verified_remediation, incident_to_hardening_program, and workflow_idea_to_workflow_package.
+  - Keep invocation-contract payloads, artifact names, route names, receipt filenames,
+    and publish-step behavior compatible.
+  - Update targeted runtime tests and recursive memory files so code, tests, and standing
+    docs agree on the migration scope and outcome.
+  out_of_scope:
+  - Adding a new workflow package or building block.
+  - Changing CLI syntax, runtime parameter coercion behavior, ctx.invoke_workflow(...),
+    or workflow.toml semantics.
+  - General publish-handler abstraction beyond the scoped bootstrap cleanup.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The five remaining raw bootstrap handlers now consume ctx.params directly
+      and no longer manually re-normalize values already owned by their Parameters
+      models.
+  - id: AC-2
+    text: 'Existing workflow behavior remains compatible: invocation-contract payloads,
+      workflow receipts, route names, artifact names, and child-composition behavior
+      do not regress.'
+  - id: AC-3
+    text: Targeted runtime proof plus tests/test_architecture_baseline_docs.py pass,
+      and the standing recursive memory files accurately describe the completed migration.
+  deliverables:
+  - Bootstrap migrations in the five scoped workflow.py files.
+  - Updated targeted runtime tests and recursive-memory baseline assertions.
+  - Updated .autoloop_recursive charter, roadmap, gap ledger, workflow candidate ledger,
+    and validation debt ledger entries for this cycle.
+  risks:
+  - A typed-bootstrap rewrite could accidentally change defaults or invocation-contract
+    payload values if it drifts from the existing Parameters models.
+  - Recursive memory could remain inconsistent with the code if the implementation
+    updates workflows without the matching standing-doc closeout.
+  - Workflow-specific validation could be lost if bootstrap cleanup removes logic
+    that really belongs in params.py rather than in generic projection code.
+  rollback:
+  - Revert the five workflow bootstrap edits together with their targeted tests.
+  - Revert the matching recursive-memory updates in the same rollback so standing
+    documentation does not over-claim the migration again.
