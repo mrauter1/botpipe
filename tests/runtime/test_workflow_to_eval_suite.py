@@ -1426,6 +1426,55 @@ def test_workflow_to_eval_suite_publish_rejects_summary_drift_from_validated_man
         workflow_pkg.WorkflowToEvalSuite.on_publish_workflow_eval_suite(state, ctx)
 
 
+def test_workflow_to_eval_suite_capture_step_normalizes_alias_without_revalidating_snapshot(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_repo_workflow_to_eval_suite_package(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_to_eval_suite")
+    workflow_module = importlib.import_module("workflows.workflow_to_eval_suite.workflow")
+
+    def _unexpected_validate(*args, **kwargs):
+        raise AssertionError("capture step should not revalidate the capability snapshot to recover the workflow name")
+
+    monkeypatch.setattr(workflow_module, "validate_selected_workflow_capability_snapshot", _unexpected_validate)
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "eval-capture-task"
+    workflow_folder = task_folder / "wf_workflow_to_eval_suite"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    state = workflow_pkg.WorkflowToEvalSuite.State(
+        selected_workflow_reference="release-readiness",
+        task_title="Release readiness evaluation suite",
+    )
+    ctx = Context(
+        task_id="eval-capture-task",
+        run_id="run-1",
+        workflow_name="workflow_to_eval_suite",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=tmp_path / "workflows" / "workflow_to_eval_suite",
+        state=state,
+        session_store=InMemorySessionStore(),
+        workflow_params={"selected_workflow": "release-readiness", "task_title": state.task_title},
+    )
+
+    next_state, event = workflow_pkg.WorkflowToEvalSuite.on_capture_selected_workflow_contract(state, ctx)
+
+    snapshot = json.loads((workflow_folder / "selected_workflow_capability.json").read_text(encoding="utf-8"))
+
+    assert event.tag == "selected_workflow_contract_captured"
+    assert next_state.selected_workflow_name == "release_candidate_to_go_no_go"
+    assert snapshot["selected_workflow_name"] == "release_candidate_to_go_no_go"
+    assert snapshot["selected_workflow_capability"]["workflow_name"] == "release_candidate_to_go_no_go"
+
+
 def _make_publish_eval_suite_test_context(
     tmp_path: Path,
     monkeypatch,

@@ -6,3 +6,5 @@
 - Phase Directory Key: workflow-family-migration
 - Phase Title: Workflow Migration
 - Scope: phase-local authoritative verifier artifact
+
+- Added focused handler-level alias capture regression tests for the four migrated workflow families and one optimizer source-manifest alias test. Validated with the scoped phase bundle: `214 passed, 588 warnings`.

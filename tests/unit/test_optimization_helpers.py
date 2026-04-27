@@ -398,6 +398,24 @@ def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) 
     assert first_entry["bytes"] == len(content)
 
 
+def test_write_selected_workflow_source_manifest_normalizes_alias_to_canonical_workflow_name(tmp_path: Path) -> None:
+    _install_selected_workflow(tmp_path)
+    workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    ctx = SimpleNamespace(root=tmp_path, workflow_folder=workflow_folder)
+
+    manifest_path = write_selected_workflow_source_manifest(
+        ctx=ctx,
+        selected_workflow="release-readiness",
+        relative_path="selected_workflow_source_manifest.json",
+    )
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert payload["selected_workflow"] == "release_candidate_to_go_no_go"
+    assert payload["package_dir"] == "workflows/release_candidate_to_go_no_go"
+    assert payload["files"]
+
+
 def test_validate_selected_workflow_source_unchanged_detects_mutation(tmp_path: Path) -> None:
     _install_selected_workflow(tmp_path)
     workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"

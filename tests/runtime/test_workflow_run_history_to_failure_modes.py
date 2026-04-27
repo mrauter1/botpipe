@@ -1571,6 +1571,69 @@ def _produce_improvement_package(request) -> str:
     return "packaged improvement pressure\n"
 
 
+def test_workflow_run_history_capture_step_normalizes_alias_and_preserves_filtered_run_ids(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_repo_workflow_run_history_package(tmp_path)
+    _seed_release_run_history(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_run_history_to_failure_modes")
+    workflow_module = importlib.import_module("workflows.workflow_run_history_to_failure_modes.workflow")
+
+    def _unexpected_validate(*args, **kwargs):
+        raise AssertionError("capture step should not revalidate the capability snapshot to recover the workflow name")
+
+    monkeypatch.setattr(workflow_module, "validate_selected_workflow_capability_snapshot", _unexpected_validate)
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "failure-capture-task"
+    workflow_folder = task_folder / "wf_workflow_run_history_to_failure_modes"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    state = workflow_pkg.WorkflowRunHistoryToFailureModes.State(
+        selected_workflow_reference="release-readiness",
+        task_title="Release workflow failure-mode diagnosis",
+        statuses=["blocked", "failed", "paused"],
+        max_runs=3,
+    )
+    ctx = Context(
+        task_id="failure-capture-task",
+        run_id="run-1",
+        workflow_name="workflow_run_history_to_failure_modes",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=tmp_path / "workflows" / "workflow_run_history_to_failure_modes",
+        state=state,
+        session_store=InMemorySessionStore(),
+        workflow_params={
+            "selected_workflow": "release-readiness",
+            "task_title": state.task_title,
+            "statuses": list(state.statuses),
+            "max_runs": state.max_runs,
+        },
+    )
+
+    next_state, event = workflow_pkg.WorkflowRunHistoryToFailureModes.on_capture_run_history_context(state, ctx)
+
+    capability_snapshot = json.loads((workflow_folder / "selected_workflow_capability.json").read_text(encoding="utf-8"))
+    history_snapshot = json.loads((workflow_folder / "selected_workflow_run_history.json").read_text(encoding="utf-8"))
+    run_ids = [
+        entry["run_metadata"]["run_id"]
+        for entry in history_snapshot["selected_workflow_run_history"]["runs"]
+    ]
+
+    assert event.tag == "run_history_context_captured"
+    assert next_state.selected_workflow_name == "release_candidate_to_go_no_go"
+    assert next_state.evidence_run_ids == run_ids
+    assert capability_snapshot["selected_workflow_name"] == "release_candidate_to_go_no_go"
+    assert history_snapshot["selected_workflow_name"] == "release_candidate_to_go_no_go"
+
+
 def _captured_run_ids(request) -> list[str]:
     snapshot = json.loads(request.artifacts.selected_workflow_run_history.read_text())
     runs = snapshot["selected_workflow_run_history"]["runs"]

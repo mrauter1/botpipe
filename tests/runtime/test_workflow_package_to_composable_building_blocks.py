@@ -1247,6 +1247,57 @@ def _run_successful_decomposition_workflow(
     )
 
 
+def test_workflow_package_to_composable_building_blocks_capture_step_normalizes_alias_and_writes_baseline_context(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_repo_workflow_package_to_composable_building_blocks(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_package_to_composable_building_blocks.workflow")
+    task_dir = tmp_path / ".autoloop" / "tasks" / "decomposition-capture-task"
+    workflow_dir = task_dir / "wf_workflow_package_to_composable_building_blocks"
+    workflow_dir.mkdir(parents=True, exist_ok=True)
+    run_dir = workflow_dir / "runs" / "run-1"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "request.md").write_text("Decompose the release workflow into reusable building blocks.\n", encoding="utf-8")
+    state = workflow_pkg.WorkflowPackageToComposableBuildingBlocks.State(
+        selected_workflow_reference="release-readiness",
+        task_title="Release workflow decomposition",
+    )
+    ctx = Context(
+        task_id="decomposition-capture-task",
+        run_id="run-1",
+        workflow_name="workflow_package_to_composable_building_blocks",
+        task_folder=task_dir,
+        workflow_folder=workflow_dir,
+        run_folder=run_dir,
+        package_folder=tmp_path / "workflows" / "workflow_package_to_composable_building_blocks",
+        state=state,
+        session_store=InMemorySessionStore(),
+        workflow_params={"selected_workflow": "release-readiness", "task_title": state.task_title},
+    )
+
+    next_state, event = workflow_pkg.WorkflowPackageToComposableBuildingBlocks.on_capture_decomposition_context(
+        state,
+        ctx,
+    )
+
+    decomposition_surface = json.loads(
+        (workflow_dir / "selected_workflow_decomposition_surface.json").read_text(encoding="utf-8")
+    )
+    baseline_manifest = json.loads((workflow_dir / "baseline_parent_manifest.json").read_text(encoding="utf-8"))
+    evidence_manifest = json.loads((workflow_dir / "decomposition_evidence_manifest.json").read_text(encoding="utf-8"))
+
+    assert event.tag == "decomposition_context_captured"
+    assert next_state.selected_workflow_name == "release_candidate_to_go_no_go"
+    assert decomposition_surface["selected_workflow_name"] == "release_candidate_to_go_no_go"
+    assert baseline_manifest["selected_workflow_name"] == "release_candidate_to_go_no_go"
+    assert evidence_manifest["request_fallback_used"] is True
+
+
 def _install_repo_workflow_package_to_composable_building_blocks(root: Path) -> None:
     workflows_root = root / "workflows"
     workflows_root.mkdir(parents=True, exist_ok=True)

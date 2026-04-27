@@ -1058,6 +1058,58 @@ def test_candidate_workflow_to_adapted_execution_plan_publish_rejects_summary_se
         workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_publish_adapted_execution_plan(state, ctx)
 
 
+def test_candidate_workflow_capture_step_normalizes_alias_without_revalidating_snapshot(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _install_repo_candidate_workflow_to_adapted_execution_plan_package(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan")
+    workflow_module = importlib.import_module("workflows.candidate_workflow_to_adapted_execution_plan.workflow")
+
+    def _unexpected_validate(*args, **kwargs):
+        raise AssertionError("capture step should not revalidate the capability snapshot to recover the workflow name")
+
+    monkeypatch.setattr(workflow_module, "validate_selected_workflow_capability_snapshot", _unexpected_validate)
+
+    task_folder = tmp_path / ".autoloop" / "tasks" / "candidate-capture-task"
+    workflow_folder = task_folder / "wf_candidate_workflow_to_adapted_execution_plan"
+    workflow_folder.mkdir(parents=True, exist_ok=True)
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    state = workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.State(
+        selected_workflow_reference="security-remediation",
+        task_title="Admin impersonation privilege escalation response",
+    )
+    ctx = Context(
+        task_id="candidate-capture-task",
+        run_id="run-1",
+        workflow_name="candidate_workflow_to_adapted_execution_plan",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=tmp_path / "workflows" / "candidate_workflow_to_adapted_execution_plan",
+        state=state,
+        session_store=InMemorySessionStore(),
+        workflow_params={"selected_workflow": "security-remediation", "task_title": state.task_title},
+    )
+
+    next_state, event = workflow_pkg.CandidateWorkflowToAdaptedExecutionPlan.on_capture_selected_workflow_contract(
+        state,
+        ctx,
+    )
+
+    snapshot = json.loads((workflow_folder / "selected_workflow_capability.json").read_text(encoding="utf-8"))
+
+    assert event.tag == "selected_workflow_contract_captured"
+    assert next_state.selected_workflow_name == "security_finding_to_verified_remediation"
+    assert snapshot["selected_workflow_name"] == "security_finding_to_verified_remediation"
+    assert snapshot["selected_workflow_capability"]["workflow_name"] == "security_finding_to_verified_remediation"
+
+
 def _make_publish_adaptation_test_context(
     tmp_path: Path,
     monkeypatch,
