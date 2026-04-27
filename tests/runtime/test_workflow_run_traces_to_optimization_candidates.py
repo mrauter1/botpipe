@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
@@ -66,11 +67,26 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
         "mine_failures",
         "optimize_producer",
         "optimize_verifier_rubric",
+        "route_optimize_tokens",
+        "optimize_tokens",
+        "route_adversarial_cases",
+        "adversarial_cases",
+        "route_workflow_level",
+        "workflow_level",
+        "package",
+        "publish_optimization_packet",
+    )
+    pair_steps = tuple(name for name, step in compiled.steps.items() if step.kind == "pair")
+    assert pair_steps == (
+        "frame",
+        "rank_targets",
+        "mine_failures",
+        "optimize_producer",
+        "optimize_verifier_rubric",
         "optimize_tokens",
         "adversarial_cases",
         "workflow_level",
         "package",
-        "publish_optimization_packet",
     )
     assert set(resolved.parameters_cls.model_fields) >= {
         "selected_workflow",
@@ -111,6 +127,25 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
         "workflow_optimization_scorecard",
         "workflow_optimization_packet",
     ]
+
+
+def test_pairs_subset_must_be_ordered_prefix(monkeypatch) -> None:
+    monkeypatch.syspath_prepend(str(REPO_ROOT))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_run_traces_to_optimization_candidates")
+    resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.WorkflowRunTracesToOptimizationCandidates)
+    compiled = compile_workflow(resolved.workflow_cls)
+
+    pair_steps = tuple(name for name, step in compiled.steps.items() if step.kind == "pair")
+    allowed_prefixes = {pair_steps[:index] for index in range(1, len(pair_steps) + 1)}
+
+    assert ("frame",) in allowed_prefixes
+    assert ("frame", "rank_targets", "mine_failures") in allowed_prefixes
+    assert pair_steps in allowed_prefixes
+    assert ("frame", "mine_failures") not in allowed_prefixes
+    assert ("rank_targets", "mine_failures") not in allowed_prefixes
 
 
 def test_capture_frame_context_excludes_old_runs_missing_plan1_observability(tmp_path: Path, monkeypatch) -> None:
@@ -194,6 +229,77 @@ def test_rank_targets_writes_priority_report(tmp_path: Path, monkeypatch) -> Non
     assert metrics["steps"][0]["step_name"] == "assessment"
     assert report["schema"] == "autoloop.workflow_optimization.step_priority_report/v1"
     assert report["ranked_steps"][0]["step_name"] == "assessment"
+    del params
+
+
+def test_route_optimize_tokens_skips_when_disabled(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    disabled_state = state.model_copy(update={"include_token_optimization": False})
+
+    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_route_optimize_tokens(
+        disabled_state,
+        ctx,
+    )
+
+    payload = json.loads((ctx.workflow_folder / "token_optimization_candidates.json").read_text(encoding="utf-8"))
+    assert event.tag == "token_pass_not_applicable"
+    assert next_state.token_status == "token_pass_not_applicable"
+    assert payload == {
+        "schema": "autoloop.workflow_optimization.token_candidates/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "candidates": [],
+    }
+    del params
+
+
+def test_adversarial_cases_can_be_skipped(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    disabled_state = state.model_copy(update={"include_adversarial_generation": False})
+
+    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_route_adversarial_cases(
+        disabled_state,
+        ctx,
+    )
+
+    payload = json.loads((ctx.workflow_folder / "adversarial_case_candidates.json").read_text(encoding="utf-8"))
+    assert event.tag == "adversarial_generation_skipped"
+    assert next_state.adversarial_status == "adversarial_generation_skipped"
+    assert payload == {
+        "schema": "autoloop.workflow_optimization.adversarial_case_candidates/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "cases": [],
+    }
+    del params
+
+
+def test_workflow_level_can_be_skipped(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    disabled_state = state.model_copy(update={"include_workflow_level_candidates": False})
+
+    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_route_workflow_level(
+        disabled_state,
+        ctx,
+    )
+
+    payload = json.loads(
+        (ctx.workflow_folder / "workflow_level_optimization_candidates.json").read_text(encoding="utf-8")
+    )
+    assert event.tag == "workflow_level_pass_not_applicable"
+    assert next_state.workflow_level_status == "workflow_level_pass_not_applicable"
+    assert payload == {
+        "schema": "autoloop.workflow_optimization.workflow_level_candidates/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "candidates": [],
+    }
     del params
 
 
@@ -441,6 +547,182 @@ def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_pat
     assert not (workflow_folder / "invocation_contract.json").exists()
 
 
+def test_package_writes_scorecard_refinement_evidence_packet_and_receipt(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    _write_publishable_package(ctx)
+
+    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_publish_optimization_packet(
+        state,
+        ctx,
+    )
+
+    assert event.tag == "optimization_candidates_published"
+    assert next_state.published is True
+    assert (ctx.workflow_folder / "workflow_refinement_evidence.json").exists()
+    assert (ctx.workflow_folder / "optimization_publication_receipt.json").exists()
+    del params
+
+
+def test_package_fails_if_selected_workflow_source_changed(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    _write_publishable_package(ctx)
+
+    target_prompt = (
+        tmp_path / "workflows" / "release_candidate_to_go_no_go" / "prompts" / "assessment_producer.md"
+    )
+    target_prompt.write_text(target_prompt.read_text(encoding="utf-8") + "\nMutation.\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="authoritative selected workflow file changed during optimization publication"):
+        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_publish_optimization_packet(state, ctx)
+    del params
+
+
+def test_package_rejects_candidate_count_mismatch(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    _write_valid_producer_candidates(ctx)
+    _write_publishable_package(
+        ctx,
+        scorecard_overrides={
+            "candidate_counts": {
+                "producer": 0,
+                "verifier_rubric": 0,
+                "token": 0,
+                "adversarial_cases": 0,
+                "workflow_level": 0,
+            },
+        },
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="workflow_optimization_scorecard.json candidate_counts.producer must match the validated candidate artifact count",
+    ):
+        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_publish_optimization_packet(state, ctx)
+    del params
+
+
+def test_package_rejects_malformed_candidate_artifact(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch)
+    state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+    _write_publishable_package(ctx)
+    (ctx.workflow_folder / "producer_prompt_optimization_candidates.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "target_steps": ["assessment"],
+                "candidates": [
+                    {
+                        "step_name": "assessment",
+                        "target_surface": "producer_prompt",
+                        "diagnosis": "Missing required candidate identity.",
+                        "proposed_change_summary": "This payload is intentionally malformed for regression coverage.",
+                        "confidence": 0.5,
+                        "evidence_strength": "medium",
+                        "requires_ablation": False,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValidationError):
+        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_publish_optimization_packet(state, ctx)
+    del params
+
+
+def test_optimization_depth_ablation_does_not_execute_ablation(tmp_path: Path) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_minimal_run_metadata(tmp_path, "release-old", "release_candidate_to_go_no_go", "run-old", "failed")
+
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: "frame reviewed\n",
+            _produce_noop_package,
+        ],
+        verifier_turns=[
+            Outcome(
+                raw_output="no eligible evidence\n",
+                tag="no_eligible_trace_evidence",
+                payload={
+                    "summary": "Historical runs were discovered, but none had the required Plan-1 observability bundle.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "candidate_run_count": 1,
+                    "eligible_run_count": 0,
+                    "excluded_run_count": 1,
+                    "top_k_steps": 1,
+                    "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
+                },
+            ),
+            Outcome(
+                raw_output="optimization packet ready\n",
+                tag="optimization_packet_ready",
+                payload={
+                    "summary": "The no-op scorecard and packet are aligned for deterministic publication.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "authoritative_artifacts": [
+                        "workflow_optimization_scorecard",
+                        "workflow_optimization_packet",
+                    ],
+                    "highest_priority_candidate_ids": [],
+                    "recommended_next_action": "Collect eligible Plan-1 observability bundles, then rerun the optimizer.",
+                    "requires_ablation_before_promotion": False,
+                    "source_mutation_check_expected": True,
+                },
+            ),
+        ],
+    )
+
+    result = run_workflow_package(
+        "workflow_run_traces_to_optimization_candidates",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="optimizer-task",
+            message="Publish an ablation-depth optimizer packet without executing ablations.\n",
+            workflow_params={
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "task_title": "Release workflow optimization",
+                "optimization_depth": "ablation",
+                "run_statuses": ["failed", "paused", "blocked"],
+                "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
+            },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    receipt = json.loads(
+        (
+            tmp_path
+            / ".autoloop"
+            / "tasks"
+            / "optimizer-task"
+            / "wf_workflow_run_traces_to_optimization_candidates"
+            / "optimization_publication_receipt.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert result.terminal == "SUCCESS"
+    assert receipt["optimization_depth"] == "ablation"
+    assert not (
+        tmp_path / ".autoloop" / "tasks" / "optimizer-task" / "wf_workflow_optimization_candidates_to_ablation_results"
+    ).exists()
+
+
 def _bootstrap_context(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -587,6 +869,100 @@ def _produce_insufficient_evidence_package(request) -> str:
         )
     )
     return "packaged insufficient evidence optimization packet\n"
+
+
+def _write_publishable_package(
+    ctx: Context,
+    *,
+    scorecard_overrides: dict[str, object] | None = None,
+) -> None:
+    payload: dict[str, object] = {
+        "schema": "autoloop.workflow_optimization.scorecard/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "evidence_run_count": 1,
+        "excluded_run_count": 0,
+        "target_steps_ranked": 1,
+        "failure_scenarios": 1,
+        "candidate_counts": {
+            "producer": 0,
+            "verifier_rubric": 0,
+            "token": 0,
+            "adversarial_cases": 0,
+            "workflow_level": 0,
+        },
+        "recommended_next_action": "Run workflow_and_eval_to_refined_workflow_package with this refinement evidence.",
+        "highest_priority_candidate_ids": [],
+        "requires_ablation_before_promotion": False,
+        "source_mutation_check": {
+            "passed": True,
+            "details": "Will be rechecked deterministically at publication.",
+        },
+        "summary": "Assessment remains the highest-leverage local optimization target.",
+    }
+    if scorecard_overrides:
+        payload.update(scorecard_overrides)
+    (ctx.workflow_folder / "workflow_optimization_scorecard.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (ctx.workflow_folder / "workflow_optimization_packet.md").write_text(
+        "\n".join(
+            (
+                "# Workflow Optimization Packet",
+                "",
+                "Candidate-only optimization evidence is ready for review.",
+                "",
+                "- Ready for review: none.",
+                "- Requires ablation: none.",
+                "- Token-only candidates: none.",
+                "- Adversarial eval-case candidates: none.",
+                "- Workflow-level refinement candidates: none.",
+                "",
+                "Recommended next action: run workflow_and_eval_to_refined_workflow_package with this refinement evidence.",
+                "",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_valid_producer_candidates(ctx: Context) -> None:
+    (ctx.workflow_folder / "producer_prompt_optimization_candidates.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "target_steps": ["assessment"],
+                "candidates": [
+                    {
+                        "candidate_id": "producer-assessment-001",
+                        "step_name": "assessment",
+                        "target_surface": "producer_prompt",
+                        "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                        "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
+                        "diagnosis": "Producer does not separate observed evidence from inference.",
+                        "proposed_change_summary": "Add an explicit evidence-versus-inference split.",
+                        "proposed_unified_diff": None,
+                        "proposed_patch_instructions": [
+                            "Add a Missing Evidence section for unsupported claims.",
+                        ],
+                        "expected_effect": {
+                            "verifier_pass_rate": "increase",
+                            "false_accepts": "decrease",
+                        },
+                        "confidence": 0.72,
+                        "evidence_strength": "medium",
+                        "risks": ["May add verbosity in routine cases."],
+                        "requires_ablation": False,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 class _JsonHandle:

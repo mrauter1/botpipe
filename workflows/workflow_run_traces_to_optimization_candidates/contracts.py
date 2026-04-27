@@ -16,6 +16,26 @@ from workflow import RouteContract
 
 EvidenceStrength = Literal["low", "medium", "high"]
 OptimizationDepth = Literal["cheap", "standard", "ablation"]
+TokenRiskClass = Literal[
+    "safe_compression",
+    "risky_compression",
+    "semantic_behavior_change_disguised_as_compression",
+]
+WorkflowLevelCandidateKind = Literal[
+    "artifact_handoff_change",
+    "route_contract_change",
+    "step_split",
+    "step_merge",
+    "prompt_readme_change",
+    "context_rendering_change",
+    "session_policy_change",
+    "workflow_code_change",
+    "workflow_parameter_change",
+    "eval_suite_gap",
+    "input_quality_gap",
+    "operator_process_gap",
+    "insufficient_evidence",
+]
 FailureKind = Literal[
     "producer_failed_verifier",
     "verifier_false_accept",
@@ -231,6 +251,121 @@ class WorkflowFailureScenariosArtifactPayload(BaseModel):
     failure_scenarios: list[WorkflowFailureScenarioArtifactPayload] = Field(default_factory=list)
 
 
+class ProducerPromptOptimizationCandidatePayload(BaseModel):
+    candidate_id: str = Field(min_length=1)
+    step_name: str = Field(min_length=1)
+    target_surface: str = Field(min_length=1)
+    target_path: str | None = None
+    failure_ids_addressed: list[str] = Field(default_factory=list)
+    diagnosis: str = Field(min_length=1)
+    proposed_change_summary: str = Field(min_length=1)
+    proposed_unified_diff: str | None = None
+    proposed_patch_instructions: list[str] = Field(default_factory=list)
+    expected_effect: dict[str, str] = Field(default_factory=dict)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_strength: EvidenceStrength
+    risks: list[str] = Field(default_factory=list)
+    requires_ablation: bool
+
+
+class ProducerPromptOptimizationCandidatesArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    target_steps: list[str] = Field(default_factory=list)
+    candidates: list[ProducerPromptOptimizationCandidatePayload] = Field(default_factory=list)
+
+
+class VerifierRubricChangePayload(BaseModel):
+    target_surface: str = Field(min_length=1)
+    target_path: str | None = None
+    route: str | None = None
+    change_type: str | None = None
+    summary: str = Field(min_length=1)
+
+
+class VerifierRubricOptimizationCandidatePayload(BaseModel):
+    candidate_id: str = Field(min_length=1)
+    step_name: str = Field(min_length=1)
+    target_surfaces: list[str] = Field(default_factory=list)
+    diagnosis: str = Field(min_length=1)
+    failure_ids_addressed: list[str] = Field(default_factory=list)
+    proposed_changes: list[VerifierRubricChangePayload] = Field(default_factory=list)
+    expected_effect: dict[str, str] = Field(default_factory=dict)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_strength: EvidenceStrength
+    risks: list[str] = Field(default_factory=list)
+    requires_ablation: bool
+
+
+class VerifierRubricOptimizationCandidatesArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    target_steps: list[str] = Field(default_factory=list)
+    candidates: list[VerifierRubricOptimizationCandidatePayload] = Field(default_factory=list)
+
+
+class TokenOptimizationCandidatePayload(BaseModel):
+    candidate_id: str = Field(min_length=1)
+    step_name: str = Field(min_length=1)
+    target_surface: str = Field(min_length=1)
+    target_path: str | None = None
+    compression_kind: str = Field(min_length=1)
+    risk_class: TokenRiskClass
+    estimated_input_token_reduction: int = Field(ge=0)
+    diagnosis: str = Field(min_length=1)
+    proposed_change_summary: str = Field(min_length=1)
+    quality_risk: str = Field(min_length=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_strength: EvidenceStrength
+    requires_ablation: bool
+
+
+class TokenOptimizationCandidatesArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    candidates: list[TokenOptimizationCandidatePayload] = Field(default_factory=list)
+
+
+class AdversarialCaseCandidatePayload(BaseModel):
+    case_id: str = Field(min_length=1)
+    case_kind: str = Field(min_length=1)
+    attack_vector: str = Field(min_length=1)
+    prompt: str = Field(min_length=1)
+    source_failure_ids: list[str] = Field(default_factory=list)
+    expected_stress: str = Field(min_length=1)
+    expected_route: str = Field(min_length=1)
+    expected_artifacts: list[str] = Field(default_factory=list)
+    recommended_for_eval_suite: bool
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_strength: EvidenceStrength
+
+
+class AdversarialCaseCandidatesArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    cases: list[AdversarialCaseCandidatePayload] = Field(default_factory=list)
+
+
+class WorkflowLevelOptimizationCandidatePayload(BaseModel):
+    candidate_id: str = Field(min_length=1)
+    candidate_kind: WorkflowLevelCandidateKind
+    diagnosis: str = Field(min_length=1)
+    affected_steps: list[str] = Field(default_factory=list)
+    proposed_change_summary: str = Field(min_length=1)
+    proposed_surfaces: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0)
+    evidence_strength: EvidenceStrength
+    risks: list[str] = Field(default_factory=list)
+    requires_refinement_workflow: bool
+    requires_ablation: bool
+
+
+class WorkflowLevelOptimizationCandidatesArtifactPayload(BaseModel):
+    schema: str = Field(min_length=1)
+    selected_workflow: str = Field(min_length=1)
+    candidates: list[WorkflowLevelOptimizationCandidatePayload] = Field(default_factory=list)
+
+
 class FrameOptimizationPayload(BaseModel):
     summary: str = Field(min_length=1)
     selected_workflow_name: str = Field(min_length=1)
@@ -307,6 +442,26 @@ STEP_OPTIMIZATION_PRIORITY_REPORT_ARTIFACT = JsonArtifactSpec(
 WORKFLOW_FAILURE_SCENARIOS_ARTIFACT = JsonArtifactSpec(
     "workflow_failure_scenarios.json",
     WorkflowFailureScenariosArtifactPayload,
+)
+PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT = JsonArtifactSpec(
+    "producer_prompt_optimization_candidates.json",
+    ProducerPromptOptimizationCandidatesArtifactPayload,
+)
+VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT = JsonArtifactSpec(
+    "verifier_rubric_optimization_candidates.json",
+    VerifierRubricOptimizationCandidatesArtifactPayload,
+)
+TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT = JsonArtifactSpec(
+    "token_optimization_candidates.json",
+    TokenOptimizationCandidatesArtifactPayload,
+)
+ADVERSARIAL_CASE_CANDIDATES_ARTIFACT = JsonArtifactSpec(
+    "adversarial_case_candidates.json",
+    AdversarialCaseCandidatesArtifactPayload,
+)
+WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT = JsonArtifactSpec(
+    "workflow_level_optimization_candidates.json",
+    WorkflowLevelOptimizationCandidatesArtifactPayload,
 )
 SELECTED_WORKFLOW_SOURCE_MANIFEST_ARTIFACT = JsonArtifactSpec(
     "selected_workflow_source_manifest.json",
@@ -498,13 +653,15 @@ PACKAGE_ROUTE_CONTRACTS = {
 
 __all__ = [
     "ADVERSARIAL_CASES_ROUTE_CONTRACTS",
+    "ADVERSARIAL_CASE_CANDIDATES_ARTIFACT",
+    "AdversarialCaseCandidatePayload",
+    "AdversarialCaseCandidatesArtifactPayload",
     "AdversarialCasesPayload",
     "CandidatePassPayload",
     "EXCLUDED_RUN_REPORT_ARTIFACT",
     "ExcludedRunPayload",
     "ExcludedRunReportArtifactPayload",
     "EvidenceStrength",
-    "FAILURE_SCENARIO_SEEDS_SCHEMA",
     "FRAME_ROUTE_CONTRACTS",
     "FrameOptimizationPayload",
     "MINE_FAILURES_ROUTE_CONTRACTS",
@@ -515,6 +672,9 @@ __all__ = [
     "OptimizationDepth",
     "OptimizationPackagePayload",
     "PACKAGE_ROUTE_CONTRACTS",
+    "PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT",
+    "ProducerPromptOptimizationCandidatePayload",
+    "ProducerPromptOptimizationCandidatesArtifactPayload",
     "RANK_TARGETS_ROUTE_CONTRACTS",
     "RawOutputRefsPayload",
     "RankTargetsPayload",
@@ -529,8 +689,20 @@ __all__ = [
     "StepUsagePayload",
     "TraceCorpusObservationPayload",
     "TraceCorpusRunPayload",
+    "TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT",
+    "TokenOptimizationCandidatePayload",
+    "TokenOptimizationCandidatesArtifactPayload",
+    "TokenRiskClass",
+    "VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT",
+    "VerifierRubricChangePayload",
+    "VerifierRubricOptimizationCandidatePayload",
+    "VerifierRubricOptimizationCandidatesArtifactPayload",
     "WORKFLOW_FAILURE_SCENARIOS_ARTIFACT",
     "WORKFLOW_LEVEL_ROUTE_CONTRACTS",
+    "WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT",
+    "WorkflowLevelCandidateKind",
+    "WorkflowLevelOptimizationCandidatePayload",
+    "WorkflowLevelOptimizationCandidatesArtifactPayload",
     "WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT",
     "WORKFLOW_OPTIMIZATION_SCOPE_ARTIFACT",
     "WORKFLOW_OPTIMIZATION_TRACE_CORPUS_ARTIFACT",
