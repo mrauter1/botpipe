@@ -656,3 +656,49 @@ Validation passed with targeted checks:
 Open issues / next step
 
 I did not run the full repository test suite. The targeted tests still emit existing Pydantic warnings about models that use a `schema` field name in [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/contracts.py); they are warnings only and were left out of scope for this phase. The next phase can build producer/verifier-rubric/token candidate passes on top of the now-published ranking and failure artifacts.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcca4-fed7-7033-adcf-c394312e9126
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+I’m auditing the phase artifacts and the changed optimizer code with the phase contract in mind. I’m focusing on whether the ranking and failure-analysis behavior actually stays faithful to `route_tags` semantics, upstream attribution, and the required short-circuit behavior when evidence is insufficient.
+
+I found two material problems that block approval: one breaks upstream attribution under the default `route_tags` filter, and the other publishes failure-scenario evidence even after the `insufficient_evidence` short-circuit. I’m recording both in the phase feedback and leaving the criteria unchecked.
+
+Scope considered
+
+Phase-local review of the ranking-and-failure-analysis implementation only. I limited edits to the active phase artifacts under `.autoloop/tasks/.../ranking-and-failure-analysis/`.
+
+What I analyzed
+
+I checked the accepted phase contract, the shared decisions ledger, the updated optimizer helpers in `stdlib/optimization.py`, the workflow wiring in `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`, and the new unit/runtime tests that exercise ranking and failure mining.
+
+What I reviewed
+
+I focused on whether the implementation preserves:
+- upstream attribution under the required `route_tags` semantics
+- the `rank_targets -> insufficient_evidence -> package` short-circuit truthfully
+- phase scope boundaries without leaking later-phase artifacts into publication
+
+Key findings / decisions
+
+I recorded two blocking findings in the phase feedback:
+- `IMP-001`: ranking currently runs only on `step_observations` that were already filtered by `route_tags`, so upstream locally accepted steps can disappear before deterministic attribution runs. That breaks the required ability to prefer an upstream leverage point over a downstream symptom.
+- `IMP-002`: `workflow_failure_scenarios.json` is generated during frame capture and can still be published even when `rank_targets` routes `insufficient_evidence`, which contradicts the required short-circuit behavior.
+
+Open issues / next step
+
+The implementation is not ready for approval yet. The next implement pass should preserve filtered published observations for artifact compatibility, but keep an unfiltered internal observation view for ranking/attribution, and it should defer or gate failure-scenario publication so `insufficient_evidence` does not publish mined-failure evidence.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
