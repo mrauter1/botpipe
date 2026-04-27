@@ -1,5 +1,23 @@
 # Authoring
 
+## Simple Surface
+
+`autoloop.simple` is the additive simplified authoring surface under active implementation.
+
+Use:
+
+```python
+from autoloop.simple import Workflow, StrictWorkflow, Prompt, Route, RouteInfo
+from autoloop.simple import Json, Md, Text, Raw, step, review_step, workflow_step, system_step, chain
+```
+
+Import compatibility is explicit for the repository's two supported execution modes in practice:
+
+- installed-package-preferred imports, where internal fallback logic prefers `autoloop_v3.*` modules when available
+- repo-root execution, where the same public surface falls back to root-level `core/*` modules
+
+The root `workflow` shim remains the strict compatibility surface during the migration window. The simple surface is additive and lowers into the same runtime model rather than introducing a second engine.
+
 Use the strict root `workflow` shim when authoring workflows:
 
 ```python
@@ -662,9 +680,11 @@ The selected-workflow snapshot helpers form one converged authoring seam across:
 
 Family boundary:
 
+- the private `stdlib/_selected_workflow.py` seam owns canonical selected-workflow resolution, `selected_workflow_name` capture, and shared envelope writing so later selected-workflow consumers can shorten capture steps without widening the public stdlib or root `workflow` surface
 - `core/workflow_capabilities.py` owns the authoritative payload builders for the compiled capability, editable authoring-surface, and decomposition-surface views
 - the stdlib helper modules stay thin artifact writers over those builders and keep the emitted artifacts explicit under `ctx.workflow_folder`
 - `stdlib/validation.py` owns the generic snapshot identity and alignment checks, including capability, authoring-surface, decomposition-surface, and cross-artifact selected-workflow-name validation
+- adjacent selected-workflow helpers such as `stdlib/diagnostics.py` and `stdlib/optimization.py` may reuse that private capture seam while keeping their workflow-local publication artifacts and policy separate from this public snapshot-helper family
 - workflows still own domain-specific publication policy, evidence policy, state-drift handling, and receipt shaping
 - the family intentionally keeps `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, and `selected_workflow_decomposition_surface.json` as three distinct artifact contracts instead of collapsing compiled and editable surfaces into one payload
 - the family does not add CLI flags, widen the root `workflow` authoring surface, or introduce runtime-owned adaptation, refinement, or decomposition behavior

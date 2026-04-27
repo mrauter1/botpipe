@@ -9,27 +9,84 @@ from .primitives import FAIL, PAUSE, SUCCESS
 
 
 @dataclass(frozen=True, slots=True)
+class RouteInfo:
+    """Optional route metadata for rendering and inspection."""
+
+    summary: str | None = None
+    required_outputs: tuple[str, ...] = ()
+    handoff: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Route:
     """Explicit route target plus optional side effects."""
 
     target: object | None = None
     effects: tuple[Effect, ...] = ()
+    summary: str | None = None
+    required_outputs: tuple[str, ...] = ()
+    handoff: str | None = None
 
     @staticmethod
-    def to(target: object, *effects: Effect) -> "Route":
-        return Route(target=target, effects=tuple(effects))
+    def to(
+        target: object,
+        *effects: Effect,
+        summary: str | None = None,
+        required_outputs: tuple[str, ...] = (),
+        handoff: str | None = None,
+    ) -> "Route":
+        return Route(
+            target=target,
+            effects=tuple(effects),
+            summary=summary,
+            required_outputs=tuple(required_outputs),
+            handoff=handoff,
+        )
 
     @staticmethod
-    def complete(*effects: Effect) -> "Route":
-        return Route(target=SUCCESS, effects=tuple(effects))
+    def complete(
+        *effects: Effect,
+        summary: str | None = None,
+        required_outputs: tuple[str, ...] = (),
+        handoff: str | None = None,
+    ) -> "Route":
+        return Route.to(
+            SUCCESS,
+            *effects,
+            summary=summary,
+            required_outputs=required_outputs,
+            handoff=handoff,
+        )
 
     @staticmethod
-    def pause(*effects: Effect) -> "Route":
-        return Route(target=PAUSE, effects=tuple(effects))
+    def pause(
+        *effects: Effect,
+        summary: str | None = None,
+        required_outputs: tuple[str, ...] = (),
+        handoff: str | None = None,
+    ) -> "Route":
+        return Route.to(
+            PAUSE,
+            *effects,
+            summary=summary,
+            required_outputs=required_outputs,
+            handoff=handoff,
+        )
 
     @staticmethod
-    def fail(*effects: Effect) -> "Route":
-        return Route(target=FAIL, effects=tuple(effects))
+    def fail(
+        *effects: Effect,
+        summary: str | None = None,
+        required_outputs: tuple[str, ...] = (),
+        handoff: str | None = None,
+    ) -> "Route":
+        return Route.to(
+            FAIL,
+            *effects,
+            summary=summary,
+            required_outputs=required_outputs,
+            handoff=handoff,
+        )
 
 
 def normalize_route_spec(destination: object) -> Route:
@@ -46,4 +103,4 @@ def normalize_route_spec(destination: object) -> Route:
     return Route.to(destination)
 
 
-__all__ = ["Route"]
+__all__ = ["Route", "RouteInfo"]

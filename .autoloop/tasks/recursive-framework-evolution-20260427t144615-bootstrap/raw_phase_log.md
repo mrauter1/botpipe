@@ -215,3 +215,85 @@ phase_mode=single
 phase_ids=surface-foundations,contract-migration,simple-lowering,engine-hooks-workflow-step,compatibility-docs-cleanup
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd018-7166-72b3-886b-81f99ab85b01
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+I’m starting with the phase scope: additive simple-authoring surface, prompt/route foundation types, and import-path compatibility without changing the existing strict workflow shim. I’m reading the active phase artifacts and the current workflow/prompt/route/public API code to find the narrowest safe change set.
+
+The worktree is already very dirty, including large unrelated deletes and duplicate trees. I’m keeping scope to the active root-level package files and the phase artifacts, and I’m checking how the repository currently exposes its public API before touching imports.
+
+The planner already recorded the key constraint I expected: the repo does not currently expose an `autoloop` package, so the additive surface needs real package glue rather than a doc-only alias. I’m drilling into the current `core`, `workflow`, and packaging tests to see how much of that glue can be done in this phase without altering runtime behavior.
+
+The current foundation is still minimal: `Prompt` is just a path wrapper, `Route` only carries target/effects, and the strict shim exports directly from `core`. I’m checking the packaging/test conventions now so I can add `autoloop.simple` without accidentally breaking the existing `workflow` and `autoloop_v3` import stories.
+
+I’ve confirmed there’s no packaging config to lean on here, so the safest way to make `autoloop.simple` real in both current import modes is an actual `autoloop/` package in the repo, not a shim hidden inside `autoloop_v3`. Next I’m tracing prompt and route consumers so the new metadata stays additive and doesn’t destabilize the existing compiler/engine path.
+
+I’ve narrowed the likely change set to additive package glue plus low-risk core type extensions. I’m reading the legacy route-contract normalizer now because the safest phase-1 route metadata work is to enrich `Route` and keep `RouteContract` untouched for existing workflows and tests.
+
+The safest way to land this phase is to make `autoloop.simple` importable and explicit, but keep its semantics intentionally foundational. I’m checking the doc/test guardrails now so I can add that without tripping the existing strictness assertions around the root `workflow` shim.
+
+Plan for this phase:
+1. Extend the low-level prompt and route primitives additively so they can carry inline/file prompt origins and optional route metadata without changing current strict callers.
+2. Add a real `autoloop/` package with `simple.py`, a non-strict `Workflow` base, strict counterpart, simple declaration/spec objects, and lightweight artifact helpers that already normalize inline prompts and inferred step-local artifact paths.
+3. Add focused tests for the new import surface and foundation behavior, then update `docs/authoring.md`, `implementation_notes.md`, and this turn’s decision block with only the non-obvious phase decisions.
+
+I’ve resolved the import-path constraint: within this repo, the realistic compatibility target is “installed-package-preferred vs repo-root-preferred” `sys.path` ordering, not a parent-only path that can’t see nested top-level packages. I’m editing the core primitives and adding the new `autoloop/` package now, then I’ll lock that behavior with subprocess import tests that exercise both path orders.
+
+I’m at the doc/test part of the change now. The simple surface exists as declarations and compatibility glue, not as a second runtime, so I’m documenting it explicitly that way to avoid implying behavior this phase does not wire in yet.
+
+I’ve got the new surface and low-level primitives in place. I’m tightening the tests now because the import-mode details matter here: when `autoloop_v3` is available, `autoloop.simple` should prefer that backend internally, and when it isn’t, it should cleanly fall back to repo-root `core/*`.
+
+I’m in verification now. I’m running a narrow test slice around the new surface plus the prompt/route callers I touched, rather than the whole suite, because the repo already carries a large amount of unrelated churn.
+
+The first failure is a pure import-time type alias issue in `autoloop.simple`, not a behavioral problem. I’m fixing that and rerunning the same verification slice.
+
+The broad docs baseline file already has unrelated recursive-memory assertions failing against the current tree. I’m isolating the authoring-doc and strictness checks that are actually in this phase’s blast radius so the validation result stays actionable.
+
+The implementation itself is stable now. I’m recording the two non-obvious phase decisions and writing the phase notes before I close out: the actual import-compat story here is path-order-sensitive, and the new simple helpers are intentionally declaration-only foundations in this phase.
+
+Scope considered
+
+- Active phase `surface-foundations` only: additive `autoloop.simple` surface, prompt/route foundation types, lightweight artifact-helper foundations, and docs/tests needed to make that contract explicit.
+- I kept the strict root `workflow` shim unchanged and avoided route-contract migration, compiler lowering, engine execution changes, or bundled-workflow edits.
+
+What I analyzed
+
+- Current public surfaces in [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1), [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py:1), [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py:1), [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py:1), and strict validation/compiler behavior in `core/validation.py` and `core/compiler.py`.
+- Existing doc/test guardrails around the strict `workflow` shim and authoring docs, especially `tests/strictness/test_no_compat.py` and `tests/test_architecture_baseline_docs.py`.
+- The repo’s practical import modes: `autoloop_v3.*`-preferred when that package is importable, and repo-root fallback when only the repo root is on `sys.path`.
+
+What I changed
+
+- Added a real additive public package: [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py:1) and [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py:1).
+- Extended prompt primitives in [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py:1) with `Prompt.inline(...)`, `Prompt.file(...)`, and `ResolvedPrompt.source`, then propagated that additively through [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py:1), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:959), and prompt-text error paths.
+- Extended route primitives in [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py:1) with `RouteInfo` plus additive `summary`, `required_outputs`, and `handoff` metadata on `Route`.
+- Added lightweight simple artifact specs and declaration helpers in `autoloop.simple`, including step-local artifact path inference helpers and name binding via `__set_name__`.
+- Documented the additive contract in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:1).
+- Added focused coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1).
+
+Key findings / decisions
+
+- `autoloop.simple` can be made compatible in this repo by combining a real repo-root `autoloop/` package with internal imports that prefer `autoloop_v3.*` and fall back to root `core/*`; that is what I implemented and tested.
+- In this phase, the simple helpers are declaration/spec foundations only. They normalize prompts and artifact defaults, but they do not lower into the compiler/engine yet.
+- Validation run:
+  - `87 passed` across the touched prompt/route/provider/static-graph/simple-surface tests.
+  - `65 passed` in `tests/unit/test_validation.py`.
+  - Authoring-doc and strictness checks passed in isolation.
+- One broader docs suite still has unrelated pre-existing failures in recursive-memory assertions: `tests/test_architecture_baseline_docs.py` fails outside this phase’s blast radius.
+
+Open issues / next step
+
+- Next phase should wire `autoloop.simple` declarations into workflow discovery/validation/compilation, starting with non-strict `Workflow` lowering, `EmptyState` handling, and step/output materialization.
+- Route/provider vocabulary migration from `route_contracts` to `route_infos` and `route_required_outputs` is still deferred.
+- `WorkflowStep` exists only as a declaration foundation in this phase; it is not executable yet.

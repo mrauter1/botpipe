@@ -229,9 +229,10 @@ def _artifact_notes(ref: ProviderArtifactRef) -> str:
 
 def _require_prompt_text(context: ProviderTurnContext) -> str:
     if context.prompt.text is None:
+        prompt_ref = context.prompt.path or "<inline prompt>"
         raise ProviderExecutionError(
             f"cannot render provider turn for step {context.step_name!r}: "
-            f"prompt {context.prompt.path!r} did not resolve to text."
+            f"prompt {prompt_ref!r} did not resolve to text."
         )
     return context.prompt.text
 

@@ -15,8 +15,9 @@ def require_prompt_text(prompt: ResolvedPrompt, provider_name: str, step_name: s
     """Return resolved prompt text or raise a provider execution error."""
 
     if prompt.text is None:
+        prompt_ref = prompt.path or "<inline prompt>"
         raise ProviderExecutionError(
-            f"provider '{provider_name}' cannot run step {step_name!r}: prompt {prompt.path!r} did not resolve to text."
+            f"provider '{provider_name}' cannot run step {step_name!r}: prompt {prompt_ref!r} did not resolve to text."
         )
     return prompt.text
 
