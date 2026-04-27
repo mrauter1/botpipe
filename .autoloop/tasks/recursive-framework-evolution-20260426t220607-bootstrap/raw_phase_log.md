@@ -531,3 +531,59 @@ Open issues / next step
 
 - The next useful cleanup is the warning noise in `contracts.py`; it does not block the current phase tests, but it is still worth fixing later.
 - The later-phase ranking, failure-mining, and candidate-generation passes remain intentionally out of scope for this test turn.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcc81-994f-76a1-acd7-bcea21039407
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+I’m auditing the phase-local test coverage against the optimizer shell behavior and the shared decisions. I’ll inspect the current audit artifacts, review the new tests for regression depth and edge-case coverage, and then update the criteria and feedback accordingly.
+
+I’ve finished the coverage review and the focused suite lines up with the phase decisions. I’m updating the audit artifacts now: criteria to complete, and feedback with a concise audit outcome plus the residual non-blocking warning noise already visible in the test run.
+
+Scope considered
+
+- Phase-scoped test audit only for `deterministic-ingestion-and-workflow-shell`.
+- I reviewed the changed optimizer-shell tests, the phase test strategy, and the shared decisions that govern route-filter semantics and bootstrap validation.
+
+What I analyzed
+
+- [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py) for deterministic helper coverage, especially `route_tags` filtering and no-match eligibility preservation.
+- [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py) for end-to-end shell behavior, no-op short-circuit publication, and early unknown-workflow rejection.
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/deterministic-ingestion-and-workflow-shell/test_strategy.md) against the phase acceptance criteria and the recorded decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt).
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/deterministic-ingestion-and-workflow-shell/criteria.md) to fully checked.
+- Appended the audit outcome to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/deterministic-ingestion-and-workflow-shell/feedback.md).
+- Confirmed the focused suite result:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - `22 passed`
+
+Key findings / decisions
+
+- No blocking audit findings remain for this phase scope.
+- Coverage is appropriately split between unit and runtime layers:
+  - helper-level deterministic ingestion and filtering
+  - workflow-shell discovery/topology
+  - no-op short-circuit packaging
+  - bootstrap validation before side effects
+- The added no-match route-filter test correctly aligns with the shared decision that `route_tags` filter published step observations without affecting run eligibility.
+- Residual non-blocking issue: import-time Pydantic warnings from `contracts.py` still add noise to the test output.
+
+Open issues / next step
+
+- Optional cleanup: remove the `schema` field-name warnings in the optimizer contract models to keep test output quieter.
+- From a test-audit standpoint, this phase is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
