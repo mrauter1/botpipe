@@ -163,6 +163,37 @@ def test_render_provider_turn_omits_optional_sections_when_absent() -> None:
     assert "### Retry feedback" not in turn.prompt_text
 
 
+def test_render_required_inputs_marks_runtime_preconditions_required_even_for_optional_artifacts() -> None:
+    context = _turn_context()
+    turn = render_provider_turn(
+        ProviderTurnContext(
+            step_name=context.step_name,
+            turn_kind=context.turn_kind,
+            prompt=context.prompt,
+            context=context.context,
+            artifacts=context.artifacts,
+            session=context.session,
+            expected_output_schema=context.expected_output_schema,
+            available_routes=context.available_routes,
+            route_infos=context.route_infos,
+            route_contracts=context.route_contracts,
+            readable_artifacts=context.readable_artifacts,
+            required_artifacts=(
+                _artifact_ref("optional_input", path="/tmp/optional.md", required=False),
+            ),
+            writable_artifacts=context.writable_artifacts,
+            route_required_outputs=context.route_required_outputs,
+            route_required_artifacts=context.route_required_artifacts,
+            retry_feedback=context.retry_feedback,
+            route_handoff=context.route_handoff,
+            attempt=context.attempt,
+            max_attempts=context.max_attempts,
+        )
+    )
+
+    assert "| optional_input | /tmp/optional.md | yes |" in turn.prompt_text
+
+
 def test_render_provider_turn_rejects_missing_prompt_text() -> None:
     context = _turn_context()
     context = ProviderTurnContext(

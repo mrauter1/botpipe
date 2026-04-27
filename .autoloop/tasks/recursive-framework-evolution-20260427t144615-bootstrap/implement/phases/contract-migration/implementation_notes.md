@@ -47,11 +47,13 @@
 - Runtime missing-artifact failure still applies only to `requires`.
 - Route-contract-derived required-output enforcement still works for legacy workflows through normalized `route_required_outputs`.
 - Undeclared workspace outputs remain allowed; provider prompts no longer imply otherwise.
+- Route-level output obligations can no longer be satisfied by pre-existing inputs or upstream artifacts; they must resolve to artifacts produced by the current step.
 
 ## Intended behavior changes
 - Compiled/provider/static metadata now exposes optional readable inputs separately from required inputs.
 - Route summaries and route-required outputs are available through `route_infos` / `route_required_outputs` even when a step omits legacy `route_contracts`.
 - Strict validation no longer rejects application routes solely because some routes omit legacy contracts.
+- Provider rendering now marks every row in the “Required inputs” section as required based on runtime precondition semantics rather than artifact output optionality.
 
 ## Known non-changes
 - Public `RouteContract` exports and bundled workflow source imports were not removed in this phase.

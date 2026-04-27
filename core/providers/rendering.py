@@ -186,7 +186,7 @@ def _render_required_inputs(context: ProviderTurnContext) -> str:
         (
             ref.name,
             ref.path,
-            _yes_no(ref.required),
+            "yes",
             _artifact_notes(ref),
         )
         for ref in context.required_artifacts
