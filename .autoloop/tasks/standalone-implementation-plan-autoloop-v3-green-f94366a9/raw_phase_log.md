@@ -574,3 +574,56 @@ Open issues / next step
 - Validation run: `python3 -m py_compile tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py`.
 - I attempted targeted `pytest`, but `/usr/bin/python3` in this shell does not have `pytest` installed.
 - Broader repo tests still contain many legacy `RouteContract` and `from workflow import ...` expectations outside this phase-local slice; those belong to later migration work rather than this scoped test pass.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m auditing the phase-local test changes and the surrounding regression surface now, then I’ll update only the test audit artifacts with either findings or completion status.
+
+I’ve found one likely gap already: the phase criteria call out removal of `route_contracts` from core step constructors, but the new tests only assert the positive `route_infos` path. I’m checking whether that rejection is covered anywhere else before I decide if it’s a blocker.
+
+I’ve narrowed this to two material coverage gaps: no explicit test that core step constructors reject `route_contracts`, and no meaningful coverage for the documented `system_step(fn)` callable/return variants beyond one happy path. I’m recording those now.
+
+Scope considered
+
+- Phase-local audit of the `public-surface-and-route-metadata` test pass.
+- The changed unit tests, the phase-local `test_strategy.md`, the shared decisions ledger, and the test audit artifacts only.
+
+What I analyzed
+
+- Coverage added in `tests/unit/test_simple_surface.py`, `tests/unit/test_primitives_and_stores.py`, `tests/unit/test_validation.py`, and `tests/unit/test_stdlib_and_extensions.py`.
+- The phase strategy and feedback artifacts.
+- The authoritative decisions around removing `RouteContract`, deactivating `workflow` as an authoring surface, and the required `system_step(fn)` callable contract.
+
+What I reviewed
+
+- Whether the tests cover AC-1 and AC-2 at the right level.
+- Whether the changed tests would catch likely regressions in route-metadata normalization and the new public/simple surface.
+- Whether the tests encode only the explicitly approved compatibility break.
+
+Key findings / decisions
+
+- I recorded 2 blocking findings in the phase feedback.
+- The first gap is direct regression coverage for the core constructor break: the tests do not assert that core step classes reject `route_contracts=`.
+- The second gap is `system_step(fn)` behavior coverage: only one `(state, "done")` path is tested, while the requested callable/return matrix is materially broader.
+- Criteria updated accordingly: `Reliability` and `Behavioral Intent` are true; `Coverage Quality`, `Regression Protection`, and `Edge Cases / Failure Paths` remain unchecked because of the blockers.
+
+Open issues / next step
+
+- Add explicit negative tests for legacy `route_contracts=` on core step constructors.
+- Add focused `system_step(fn)` tests for the documented signatures and return variants.
+- Re-audit after those tests are added.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
