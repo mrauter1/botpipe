@@ -380,3 +380,50 @@ Add a handler-level or scripted full-workflow regression test that seeds an exis
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+---
+The auditor gap is real: the current tests pin the deterministic skip gates, but they still don’t hit the shared candidate-handler branch for provider-emitted `*_not_applicable` outcomes. I’m adding direct handler-level coverage for that branch now, including both “preserve existing artifact” and “write minimal empty when absent” behavior.
+
+I’ve got the fix scoped: I’m adding two direct handler-branch tests, one for “preserve existing authored artifact on `*_not_applicable`” and one for “write minimal empty artifact when missing on `*_not_applicable`.” That closes the exact branch the auditor flagged without broadening the phase beyond optimizer semantics coverage.
+
+The missing branch coverage is in place now. I’m rerunning the optimizer runtime suite to verify the new not-applicable handler tests pass alongside the earlier semantics coverage and don’t destabilize the harness.
+
+The runtime suite is still in flight. I’m waiting for the full file again because the new handler-level tests share the same bootstrap fixtures and I want one clean confirmation that the expanded branch coverage stays deterministic.
+
+Scope considered
+
+The optimizer semantics-and-contracts test surface only: `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, the phase-local `test_strategy.md` and `feedback.md`, and the shared decisions relevant to artifact-preservation behavior.
+
+What I analyzed
+
+I reviewed the auditor’s blocking gap against the changed workflow branching. The missing coverage was the provider-emitted `*_not_applicable` branch inside `_finalize_candidate_artifact`, which is distinct from the deterministic `on_route_*` skip gates already covered.
+
+What I changed
+
+I added two new parametrized runtime tests to [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py:490): one proves all five candidate handlers preserve an existing provider-authored artifact on `producer_pass_not_applicable`, `verifier_rubric_pass_not_applicable`, `token_pass_not_applicable`, `adversarial_generation_skipped`, and `workflow_level_pass_not_applicable`; the other proves those same branches write the minimal empty artifact only when the file is missing.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/workflow-semantics-and-contracts/test_strategy.md) to map AC-2 to both deterministic skip-route coverage and direct provider-emitted not-applicable handler coverage, appended the test addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/workflow-semantics-and-contracts/feedback.md), and recorded the non-obvious branch-coverage decision under the current test-author block in `decisions.txt`.
+
+Key findings / decisions
+
+The exact auditor gap is now covered without broadening scope beyond optimizer semantics. Validation run: `.venv/bin/python -m pytest tests/runtime/test_workflow_run_traces_to_optimization_candidates.py` passed with `43 passed`. The existing Pydantic `schema` shadowing warnings remain, but the new tests did not introduce any new flake source.
+
+Open issues / next step
+
+No known blocking gaps remain in the phase-local test surface from this branch-coverage issue. Prompt text is still intentionally not snapshot-tested; the phase strategy continues to document that as a non-blocking known gap.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
