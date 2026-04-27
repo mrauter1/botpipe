@@ -792,3 +792,105 @@ No open blocker remains in this phase-local review. The criteria are fully check
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+I’m handling the test phase for `contract-migration`: I’ll inspect the current focused test coverage and the new runtime/compiler/provider behavior, then I’ll add or refine only the tests needed to lock this phase’s contract down and update the phase test artifacts.
+
+The current suite already covers the reviewer fixes, but it’s still light on direct happy-path coverage for explicit `Route(...)` metadata. I’m adding that now so this phase doesn’t only test legacy contracts plus failure paths.
+
+I added direct coverage for the explicit `Route(...)` metadata path and for route-info precedence in rendering. I’m running the same focused suite the implementer used so the test-phase artifacts can point at a stable, deterministic coverage set.
+
+The focused suite is green. I’m writing the phase test artifacts now with an explicit behavior-to-coverage map and a short summary of the new direct happy-path coverage that was missing from the implementation pass.
+
+I’m checking the phase-local test artifacts and the focused test diffs, then I’ll append the required feedback entry and make sure the coverage map matches the code that landed.
+
+I’ve confirmed the strategy and repo tests line up. Next I’m appending the phase-local feedback note so the test artifact set is complete.
+
+The remaining check is just a quick pass over the final diffs so I can close with the exact test coverage and file references, without drifting beyond the phase scope.
+
+Scope considered
+
+Phase-local `contract-migration` test coverage only: focused repo tests for validation/provider/runtime-static-graph behavior, plus the active test artifacts in `.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/contract-migration/`.
+
+What I analyzed
+
+I checked the implemented migration surfaces against the phase contract and existing focused tests, then looked for uncovered regression risk around the new direct `Route(...)` metadata path and the migration-window precedence between `route_infos` and legacy `route_contracts` in provider rendering.
+
+What I changed
+
+I added a validation happy-path regression in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) for explicit `Route.complete(summary=..., required_outputs=...)` compilation without any legacy `route_contracts`, and a rendering-precedence regression in [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py) proving `route_infos` summaries win over legacy contract summaries.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/contract-migration/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, flake controls, and known gaps, and I appended a concise results note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/contract-migration/feedback.md). I also recorded the two non-obvious test decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt) under this turn’s header.
+
+Key findings / decisions
+
+The focused suite now covers both the compatibility path and the direct migrated path, which was the main remaining regression gap for this phase. It also locks in the intended precedence order during the compatibility window: provider rendering should use `route_infos` metadata when both sources are present.
+
+Validation remained deterministic and phase-local. The focused commands passed:
+`.venv/bin/python -m pytest tests/unit/test_validation.py -q`
+`.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py -q`
+`.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q`
+`.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -q`
+
+Open issues / next step
+
+No blocking test gap remains inside this phase scope. The next step is auditor review of the updated test artifacts and the added regressions.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+I’m auditing the phase-local test additions against the migration scope first, then I’ll update the audit artifacts to reflect any remaining coverage gaps or a clean pass.
+
+The strategy is coherent. I’m reading the actual test bodies now to confirm the claimed coverage is real and that nothing in the expectations silently narrows compatibility.
+
+I’ve verified the newly added unit tests. I’m checking the existing contract and static-graph tests one more time for adjacent gaps before I mark the audit artifacts complete or incomplete.
+
+I’ve finished the coverage audit. The added tests match the phase goals, and I’m updating the audit artifacts to record a clean pass rather than leaving the checklist ambiguous.
+
+The phase-local audit artifacts are updated. I’m doing one last readback of the criteria and feedback so the closeout matches the audit state exactly.
+
+Scope considered
+
+Phase-local `contract-migration` test audit only: the updated focused tests in `tests/unit/test_validation.py`, `tests/unit/test_provider_boundary_core.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime/test_runtime_static_graph.py`, plus the active audit artifacts under `.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/contract-migration/`.
+
+What I analyzed
+
+I checked the claimed coverage against the phase scope: separation of `reads` from `requires`, route metadata and compatibility aliases, route-required-output validation, provider rendering semantics, and static-graph exposure. I also reviewed the test strategy and the shared decisions to make sure the new expectations did not silently narrow compatibility or encode an unconfirmed behavior break.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/contract-migration/criteria.md) to mark all audit criteria satisfied, and I appended [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/contract-migration/feedback.md) with `TST-001` as a non-blocking audit record noting no additional scoped findings.
+
+Key findings / decisions
+
+No blocking audit findings remain. The focused suite now covers the direct migrated `Route(...)` path, the legacy compatibility path, route-required-output failure enforcement, required-input rendering semantics, and static metadata exposure. The tests are deterministic and do not introduce timing, network, or ordering flake risk.
+
+Open issues / next step
+
+No open blocker remains in this phase-local test audit. The updated criteria and feedback artifacts are consistent with a complete audit pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
