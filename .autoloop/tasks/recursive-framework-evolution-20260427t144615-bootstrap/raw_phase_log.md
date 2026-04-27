@@ -406,3 +406,59 @@ Open issues / next step
 
 - The simple surface is still declaration-only in this phase; compiler lowering, non-strict validation, and engine execution remain for later phases.
 - If the reviewer wants raw parent-only source checkouts themselves to expose `autoloop.simple` with no install/export step, that would require a broader package-layout change than this phase currently scopes.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd018-7166-72b3-886b-81f99ab85b01
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+I’ve rechecked the phase after the producer addressed the packaging/export gap. The remaining question is just whether the current evidence is strong enough to clear AC-1 and AC-2; if it is, I’ll clear the stale blocking note and mark the phase complete.
+
+The phase now has a repo-owned installed/export path plus validation from outside the repo root, and the strict shim remained untouched. I’m clearing the stale blocking note and marking the criteria complete.
+
+Scope considered
+
+- Phase-local re-review of `surface-foundations`.
+- I checked the producer’s follow-up changes to the new `autoloop.simple` surface, the added packaging/export glue, the updated compatibility tests, and the unchanged strict `workflow` shim.
+
+What I analyzed
+
+- The new `pyproject.toml` export path for `autoloop*` and `core*`.
+- The updated installed-package compatibility probe in `tests/unit/test_simple_surface.py`.
+- The existing prompt/route additive changes and the authoring-doc wording tied to this phase.
+
+What I reviewed
+
+- Whether AC-1 now holds without depending on the repo root being the working directory.
+- Whether AC-2 remains satisfied without breaking existing callers.
+- Whether the strict root `workflow` shim stayed unchanged.
+- Whether the validation evidence is sufficient for the changed blast radius.
+
+Key findings / decisions
+
+- No remaining blocking or non-blocking findings in scope.
+- The previous import-compatibility concern is resolved for this phase by combining:
+  - a repo-owned installed/export layout (`pyproject.toml`)
+  - an isolated outside-the-repo-root probe that stages the exported packages and imports `autoloop.simple`
+- Validation reviewed:
+  - `15 passed` for the targeted simple-surface, validation, and doc/strictness slice shown in this review pass.
+- I updated the phase artifacts accordingly:
+  - all criteria boxes checked in `criteria.md`
+  - stale blocking note removed from `feedback.md`
+
+Open issues / next step
+
+- The simple surface remains declaration-only in this phase by design; compiler lowering and runtime execution changes remain for later phases.
+- No reviewer action remains for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
