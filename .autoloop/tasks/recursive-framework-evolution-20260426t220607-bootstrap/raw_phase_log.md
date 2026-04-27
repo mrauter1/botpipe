@@ -1680,3 +1680,46 @@ The only remaining signal is the pre-existing Pydantic warning noise from optimi
 Open issues / next step
 
 No blocking implementer issue remains in this phase. The next step is reviewer re-check of criteria/feedback; optional follow-up later is warning cleanup in `workflows/workflow_run_traces_to_optimization_candidates/contracts.py` if you want quieter CI output.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dccea-17e8-7fb3-be43-6ff6d74ba266
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dccea-17e8-7fb3-be43-6ff6d74ba266
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dccea-17e8-7fb3-be43-6ff6d74ba266
+---
+I’m re-reviewing the phase after the test additions. First I’m checking the reviewer artifacts, then I’ll audit the new runtime coverage against the earlier blocking findings and the shared decisions before I decide whether this phase is actually complete.
+
+The missing coverage is present now, and the test file matches the earlier blocking requests. I’m doing one quick runtime-suite confirmation myself before I clear the criteria, mainly to avoid relying only on the implementation notes for the final review decision.
+
+The re-check is clean: the missing runtime coverage is present and the success-path non-mutation proof now exists. I’m updating the reviewer artifacts to mark the blocking findings resolved and leave only the pre-existing warning noise as a non-blocking follow-up.
+
+Scope considered
+
+Phase-local re-review only: the updated optimizer runtime test coverage, the shared decisions ledger, the phase implementation notes, and the reviewer artifacts for `verification-and-full-regression`.
+
+What I analyzed
+
+I compared the new runtime tests against the earlier blocking findings, checked that the enabled candidate-generation paths and success-path source non-mutation proof now exist in `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, and confirmed they align with the shared decision to use one shared full-run fake-provider helper.
+
+What I reviewed
+
+I re-ran `./.venv/bin/pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, which passed with `25 passed`. I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/verification-and-full-regression/criteria.md:1>) to checked, and appended the re-review status to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/verification-and-full-regression/feedback.md:1>).
+
+Key findings / decisions
+
+The prior blocking findings are resolved. The runtime test file now covers successful `optimize_producer`, `optimize_verifier_rubric`, enabled `optimize_tokens`, enabled `adversarial_cases`, and a successful end-to-end run that leaves the selected workflow package unchanged. No new blocking issue was found. The only remaining note is the pre-existing Pydantic warning noise from optimizer contract models, which remains non-blocking.
+
+Open issues / next step
+
+No blocking issue remains for this phase. Optional follow-up later is contract warning cleanup if quieter CI output is worth the churn.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
