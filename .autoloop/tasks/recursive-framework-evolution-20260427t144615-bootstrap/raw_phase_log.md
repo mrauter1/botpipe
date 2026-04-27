@@ -512,3 +512,60 @@ Open issues / next step
 
 - Compiler lowering and runtime execution for simple declarations remain intentionally untested here because they are explicitly deferred beyond this phase.
 - No test-phase blocker remains for the additive surface-foundations slice.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd018-7166-72b3-886b-81f99ab85b01
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+I’m auditing the phase-local test coverage against the changed simple surface, prompt/route foundations, and the preserved strict-shim invariants. I’ll inspect the authored strategy/feedback artifacts, confirm the targeted coverage maps to the actual changed behavior, and then either record gaps or mark the test phase complete.
+
+The authored tests cover the changed behaviors, preserved strictness, edge cases, and the compatibility seam with stable setup. I don’t see a remaining gap that materially weakens regression detection for this phase, so I’m marking the audit complete and recording that there were no additional findings.
+
+Scope considered
+
+- Phase-local audit of the `surface-foundations` test slice only.
+- I reviewed the authored tests, the coverage map, the audit feedback artifact, and the targeted execution evidence for the changed `autoloop.simple` surface and preserved strict-shim behavior.
+
+What I analyzed
+
+- `tests/unit/test_simple_surface.py`
+- `.autoloop/.../test_strategy.md`
+- `.autoloop/.../feedback.md`
+- The targeted pytest slice covering simple-surface tests plus strictness and authoring-doc guardrails.
+
+What I reviewed
+
+- Coverage of AC-1: installed/exported `autoloop.simple` imports and repo-root fallback imports.
+- Coverage of AC-2: inline/file prompt origins and additive route metadata.
+- Preserved invariant coverage: strict `workflow` shim remains strict and existing guardrails still hold.
+- Edge/failure coverage: strict simple counterpart without `State`, explicit artifact-path override, and outside-repo-root installed/export probe.
+- Reliability/stabilization: the installed/export path is tested with an isolated staged package layout instead of a flaky build-tool dependency.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings remain.
+- The test slice is coherent with the implementation decisions recorded for this phase.
+- The targeted command passed in this audit pass:
+  - `./.venv/bin/pytest -q tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py -k 'authoring_doc or package_foundation_docs_exist'`
+  - Result: `15 passed, 42 deselected`
+- I updated the test audit artifacts accordingly:
+  - all criteria boxes checked in `criteria.md`
+  - feedback updated to note no additional audit findings
+
+Open issues / next step
+
+- No test-audit blocker remains for this phase.
+- Later phases should add compiler/runtime execution coverage once simple declarations begin lowering into the workflow engine.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

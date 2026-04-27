@@ -20,3 +20,6 @@
 {"ts": "2026-04-27T18:17:34.455344+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 20, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "surface-foundations", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-27T18:17:34.456167+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 21, "event_type": "pair_started", "pair": "test", "phase_id": "surface-foundations"}
 {"ts": "2026-04-27T18:17:34.456264+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 22, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "surface-foundations"}
+{"ts": "2026-04-27T18:19:00.007317+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "surface-foundations"}
+{"ts": "2026-04-27T18:19:46.549688+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "surface-foundations"}
+{"ts": "2026-04-27T18:19:46.582348+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "surface-foundations"}

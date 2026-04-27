@@ -462,3 +462,110 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd018-7166-72b3-886b-81f99ab85b01
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+I’m validating the changed surface from the test-authoring side: new `autoloop.simple` import compatibility, additive prompt/route primitives, and preserved strict-shim behavior. I’ll inspect the already-added tests first, then fill any meaningful coverage gaps and update the phase test artifacts with an explicit coverage map.
+
+The current coverage is good on import paths and prompt/route metadata, but it under-tests the new artifact-helper seam itself. I’m adding one focused regression test for `Json`/`Md` materialization so the phase also covers required/schema preservation and explicit-path overrides, then I’ll write the behavior-to-test map into the phase test artifacts.
+
+I’ve got the additional artifact-helper regression coverage in place and the targeted validation passing. I’m writing the explicit coverage map now, plus a short note about why the installed-package probe stages a top-level layout directly instead of invoking `pip` in this repo’s current test environment.
+
+Scope considered
+
+- Phase-local test work for `surface-foundations` only.
+- I focused on the changed `autoloop.simple` surface, the additive prompt/route primitives, the simple artifact-helper seam, and the preserved strict-shim behavior.
+
+What I analyzed
+
+- The implementation notes and changed files for this phase.
+- Existing and newly added coverage in `tests/unit/test_simple_surface.py`.
+- The repo-owned import/export story for installed-package mode versus repo-root fallback mode.
+
+What I changed
+
+- Added one focused regression test in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1) for simple artifact-spec materialization, covering inferred JSON paths, schema propagation, requiredness, and explicit Markdown path overrides.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/surface-foundations/test_strategy.md:1) with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, stabilization notes, and known gaps.
+- Appended a concise summary of test coverage to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/surface-foundations/feedback.md:1).
+- Appended one non-obvious test decision to the shared [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt:1): the installed-package probe stages exported packages directly instead of invoking `pip` in this environment.
+
+Key findings / decisions
+
+- The installed-package compatibility contract is now covered as an isolated top-level exported layout outside the repo root, which is the behavior that matters for this phase.
+- The added artifact-helper test closes the main remaining seam that was only indirectly covered before.
+- Validation run:
+  - `./.venv/bin/pytest -q tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_providers.py tests/unit/test_provider_boundary_core.py tests/unit/test_validation.py tests/test_architecture_baseline_docs.py -k 'authoring_doc or package_foundation_docs_exist' tests/strictness/test_no_compat.py`
+  - Result: `15 passed, 186 deselected`
+
+Open issues / next step
+
+- Compiler lowering and runtime execution for simple declarations remain intentionally untested here because they are explicitly deferred beyond this phase.
+- No test-phase blocker remains for the additive surface-foundations slice.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd018-7166-72b3-886b-81f99ab85b01
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+I’m auditing the phase-local test coverage against the changed simple surface, prompt/route foundations, and the preserved strict-shim invariants. I’ll inspect the authored strategy/feedback artifacts, confirm the targeted coverage maps to the actual changed behavior, and then either record gaps or mark the test phase complete.
+
+The authored tests cover the changed behaviors, preserved strictness, edge cases, and the compatibility seam with stable setup. I don’t see a remaining gap that materially weakens regression detection for this phase, so I’m marking the audit complete and recording that there were no additional findings.
+
+Scope considered
+
+- Phase-local audit of the `surface-foundations` test slice only.
+- I reviewed the authored tests, the coverage map, the audit feedback artifact, and the targeted execution evidence for the changed `autoloop.simple` surface and preserved strict-shim behavior.
+
+What I analyzed
+
+- `tests/unit/test_simple_surface.py`
+- `.autoloop/.../test_strategy.md`
+- `.autoloop/.../feedback.md`
+- The targeted pytest slice covering simple-surface tests plus strictness and authoring-doc guardrails.
+
+What I reviewed
+
+- Coverage of AC-1: installed/exported `autoloop.simple` imports and repo-root fallback imports.
+- Coverage of AC-2: inline/file prompt origins and additive route metadata.
+- Preserved invariant coverage: strict `workflow` shim remains strict and existing guardrails still hold.
+- Edge/failure coverage: strict simple counterpart without `State`, explicit artifact-path override, and outside-repo-root installed/export probe.
+- Reliability/stabilization: the installed/export path is tested with an isolated staged package layout instead of a flaky build-tool dependency.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings remain.
+- The test slice is coherent with the implementation decisions recorded for this phase.
+- The targeted command passed in this audit pass:
+  - `./.venv/bin/pytest -q tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py -k 'authoring_doc or package_foundation_docs_exist'`
+  - Result: `15 passed, 42 deselected`
+- I updated the test audit artifacts accordingly:
+  - all criteria boxes checked in `criteria.md`
+  - feedback updated to note no additional audit findings
+
+Open issues / next step
+
+- No test-audit blocker remains for this phase.
+- Later phases should add compiler/runtime execution coverage once simple declarations begin lowering into the workflow engine.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
