@@ -178,3 +178,135 @@ phase_mode=single
 phase_ids=public-surface-and-route-metadata,normalization-and-discovery,provider-and-engine-contract,workflow-migration-docs-and-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m scoping the public-surface and route-metadata phase first: reading the phase artifacts, then inspecting the current exports, route model, and step declarations before I touch code.
+
+I have the phase contract and plan context. Next I’m reading the current public exports and the route/step implementations to see how much of the greenfield surface already exists versus where `RouteContract` is still wired through.
+
+The public layer is still halfway through the migration: `autoloop.simple` still carries legacy `provider/model/effort`, `core.__init__` still exports `RouteContract`, and `core.steps` still stores `route_contracts`. I’m now tracing every `RouteContract` dependency so I can remove the public/internal plumbing without breaking imports.
+
+I’m narrowing the change set now. The next read is the validation/compiler/provider boundary, because deleting `core/route_contracts.py` will cascade unless those internal models already have a `route_infos` path I can finish instead of introducing a temporary shim.
+
+I’ve confirmed this phase can’t be isolated to three files. Deleting `core/route_contracts.py` forces at least a validation/compiler/runtime plumbing pass so imports and route metadata normalization still work, even if full engine behavior and workflow migrations stay for later phases.
+
+Plan for this phase:
+1. Replace the public/shim surface: `autoloop.simple`, `autoloop.__init__`, `workflow/__init__.py`, and `workflow/primitives.py`.
+2. Finalize `RouteInfo`/`Route` validation and move `core.steps` onto `route_infos`, `SystemStep(handler=...)`, and a real `WorkflowStep`.
+3. Update validation/compiler/provider plumbing just enough to remove `core/route_contracts.py` and keep route metadata/import paths coherent.
+4. Refresh the phase notes/decisions and run targeted tests for the public surface and route metadata.
+
+I’ve got enough context to start edits. First pass is the route and step primitives, because everything else hangs off those types.
+
+The next edit is the normalization layer. I’m removing the remaining `route_contracts` dependency from validation and teaching lowering to emit `route_infos`, direct `SystemStep(handler=...)`, and core `WorkflowStep` instances.
+
+The core declarations are updated. I’m wiring compiler/runtime models now so those new fields actually compile and `system_step(fn)` can execute without an `on_<step>` method.
+
+I’ve removed the public/internal `RouteContract` path from the active plumbing. I’m deleting the module now and then cleaning the test surface so the phase still has a coherent proof target.
+
+The repo image doesn’t have a `pytest` shell entrypoint, so I’m using `python -m pytest` for validation instead.
+
+I can’t run pytest in this environment because `pytest` isn’t installed, so I’m switching to import/compile checks to catch syntax and module-level regressions before I update the phase notes.
+
+The code compiles at the file level. Runtime imports can’t be executed here because the environment is missing `pydantic`, so the strongest validation available in this shell is `py_compile` plus grep-based surface checks.
+
+I’ve got file-level compilation clean. I’m doing one last manual pass over the modified compiler/step code now, because the environment can’t import the package without `pydantic` installed.
+
+I’m at the documentation-for-this-phase step now: updating the shared decision ledger and the phase implementation notes with the exact scope, intentional non-changes, and the validation limits of this environment.
+
+Scope considered
+
+- Phase-local work for `public-surface-and-route-metadata`: public exports, core route metadata, step constructors, and the minimum compiler/provider/runtime plumbing needed after deleting `RouteContract`.
+- I kept bundled workflow migrations, loader/discovery changes, and direct engine execution for `WorkflowStep` out of scope for this turn.
+
+What I analyzed
+
+- Public/shim surfaces in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py:1), [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py:1), [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:1), and [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1).
+- Route and step models in [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py:1) and [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py:1).
+- The dependent lowering/compiler/provider path in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:360), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:1), [core/providers/models.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/models.py:1), [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py:1), and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:1211).
+
+What I changed
+
+- Deleted [core/route_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/route_contracts.py) and removed `RouteContract` from active public/core/workflow exports.
+- Finalized `RouteInfo` / `Route` validation and switched `Step`/`LLMStep`/`PairStep`/`SystemStep` to `route_infos`; added `SystemStep(handler=...)` and a real core `WorkflowStep`.
+- Updated `autoloop.simple` to the greenfield signatures: `AfterHookResult` export, `route_infos` support, removed `provider/model/effort`, `system_step(fn)` lowering to direct handlers, and `workflow_step(...)` lowering to core `WorkflowStep`.
+- Removed `route_contracts` / `route_required_artifacts` from the active compiler/provider/request/rendering payloads touched in this phase, and updated the targeted unit tests to the new surface.
+
+Key findings / decisions
+
+- Deleting `core/route_contracts.py` could not be isolated to exports; compiler/provider/request models had to be cleaned in the same turn or active imports would keep reaching for removed fields.
+- I left `workflow/primitives.py` alone. It is still a runtime primitive shim, not a second authoring API, and changing it here would have expanded the phase into bundled-workflow/runtime migration.
+- `workflow_step(...)` now lowers to core `WorkflowStep`, but direct engine execution for that step kind is still deferred to the later engine phase.
+
+Open issues / next step
+
+- Validation in this shell was limited to `python3 -m py_compile` on all touched modules plus grep checks; `pytest` and runtime import checks could not run because this environment is missing `pytest` and `pydantic`.
+- The next phase still needs to migrate bundled workflows/tests off legacy `route_contracts`, add loader/discovery updates, and implement real engine execution for `WorkflowStep`.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m reviewing the phase-scoped implementation against the acceptance criteria, starting with the active artifacts and the changed public/core files to identify any blocking regressions before I update the review artifacts.
+
+The implementation diff isn’t enough by itself because this worktree is already heavily detached from HEAD, so I’m reading the live file contents and checking the changed logic paths directly for regressions.
+
+I’ve identified two clear intent/compatibility regressions and one public-surface contract miss. I’m pulling the concrete file references now so the feedback is precise and actionable.
+
+I have enough to write the review artifacts: two blocking regressions against active codepaths and one blocking miss against the requested public API contract.
+
+Scope considered
+
+- Phase-local review for `public-surface-and-route-metadata`.
+- Changed public/core/provider/runtime files plus active artifact files and dependent active import sites needed for regression analysis.
+
+What I analyzed
+
+- Public/shim surfaces in `autoloop/*`, `workflow/__init__.py`, and `core/__init__.py`.
+- Route/step/compiler changes in `core/routes.py`, `core/steps.py`, `core/validation.py`, and `core/compiler.py`.
+- Immediate dependency fallout from deleting `core/route_contracts.py`, especially `stdlib/contracts.py` and `workflows/*/contracts.py`.
+
+What I reviewed
+
+- Acceptance criteria against the live implementation.
+- Active import compatibility after `RouteContract` removal.
+- Whether the requested public helper signatures are actually exposed at the `autoloop.simple` boundary.
+- Review artifacts updated: `feedback.md` appended with blocking findings; `criteria.md` remains unchecked because blockers are present.
+
+Key findings / decisions
+
+- Found 3 blocking issues.
+- The most severe regression is that deleting `core/route_contracts.py` broke active in-tree imports that still depend on it.
+- `workflow/__init__.py` still exposes a second authoring surface, which conflicts with the phase objective.
+- `autoloop.simple` helper functions still use `**kwargs`, so the required explicit public signatures are not actually implemented.
+
+Open issues / next step
+
+- Fix the three blocking findings in `feedback.md`.
+- Keep criteria unchecked until those issues are resolved.
+- After fixes, re-review active imports and the public helper signatures before marking the phase complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
