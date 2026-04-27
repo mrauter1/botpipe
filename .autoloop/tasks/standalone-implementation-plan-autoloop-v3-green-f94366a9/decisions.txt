@@ -5,3 +5,7 @@ Reserved question/blocked/failed routes must be inserted mechanically during nor
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260427T204304Z-eddf2be0" ts="2026-04-27T20:50:10.220364+00:00" />
 Provider prompt/rendering work must be planned against the exact runtime control contract: required rendered sections plus the exact {tag, reason, payload} response shape and question/blocked/failed route rules.
 system_step(fn) is not complete unless the plan explicitly covers supported callable signatures, supported return normalization, direct lowering to SystemStep(handler=fn), and dedicated tests.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="public-surface-and-route-metadata" pair="implement" turn_seq="1" run_id="run-20260427T204304Z-eddf2be0" ts="2026-04-27T20:55:20.155203+00:00" />
+Deleting core/route_contracts.py in this phase required immediate compiler/provider/request-shape cleanup so active imports and inspection payload builders stop reaching for removed route_contracts fields.
+workflow/primitives.py remains unchanged in this phase because it is a runtime primitive shim, not a second authoring surface; RouteContract removal was limited to public authoring exports and core/workflow shims.
+Simple workflow_step lowering now creates a real core WorkflowStep and reserves its pause/fail routes during normalization, while direct engine execution for WorkflowStep remains deferred to the later engine phase.

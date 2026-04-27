@@ -12,10 +12,12 @@ try:  # pragma: no branch - prefer installed-package imports when available
     from autoloop_v3.core import Artifact, Workflow as _StrictWorkflow
     from autoloop_v3.core.prompts import Prompt
     from autoloop_v3.core.routes import Route, RouteInfo
+    from autoloop_v3.core.steps import AfterHookResult
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from core import Artifact, Workflow as _StrictWorkflow
     from core.prompts import Prompt
     from core.routes import Route, RouteInfo
+    from core.steps import AfterHookResult
 
 
 PromptInput = str | Path | Prompt
@@ -137,13 +139,11 @@ class StepDeclaration(_NamedDeclaration):
         out: Artifact | ArtifactSpec | None = None,
         outputs: Sequence[Artifact | ArtifactSpec] = (),
         routes: RouteMapping | None = None,
+        route_infos: Mapping[str, RouteInfo | str] | None = None,
         route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
         control_schema: Any | None = None,
-        provider: str | None = None,
-        model: str | None = None,
-        effort: str | None = None,
         retry: Any | None = None,
         session: Any | None = None,
     ) -> None:
@@ -153,13 +153,10 @@ class StepDeclaration(_NamedDeclaration):
         self.requires = tuple(requires)
         self.outputs = _normalize_outputs(out, outputs)
         self.routes = dict(routes or {})
-        self.route_summaries = dict(route_summaries or {})
+        self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
         self.control_schema = control_schema
-        self.provider = provider
-        self.model = model
-        self.effort = effort
         self.retry = retry
         self.session = session
 
@@ -182,12 +179,11 @@ class ReviewStepDeclaration(_NamedDeclaration):
         outputs: Sequence[Artifact | ArtifactSpec] = (),
         accepted: str = "accepted",
         rework: str = "needs_rework",
+        route_infos: Mapping[str, RouteInfo | str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
         route_summaries: Mapping[str, str] | None = None,
-        provider: str | None = None,
-        model: str | None = None,
-        effort: str | None = None,
+        control_schema: Any | None = None,
         retry: Any | None = None,
         session: Any | None = None,
     ) -> None:
@@ -201,10 +197,8 @@ class ReviewStepDeclaration(_NamedDeclaration):
         self.rework = rework
         self.before = before
         self.after = after
-        self.route_summaries = dict(route_summaries or {})
-        self.provider = provider
-        self.model = model
-        self.effort = effort
+        self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
+        self.control_schema = control_schema
         self.retry = retry
         self.session = session
 
@@ -221,8 +215,11 @@ class SystemStepDeclaration(_NamedDeclaration):
         name: str | None = None,
         reads: Sequence[ArtifactInput] = (),
         requires: Sequence[ArtifactInput] = (),
+        out: Artifact | ArtifactSpec | None = None,
         outputs: Sequence[Artifact | ArtifactSpec] = (),
         routes: RouteMapping | None = None,
+        route_infos: Mapping[str, RouteInfo | str] | None = None,
+        route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
     ) -> None:
@@ -230,8 +227,9 @@ class SystemStepDeclaration(_NamedDeclaration):
         self.fn = fn
         self.reads = tuple(reads)
         self.requires = tuple(requires)
-        self.outputs = tuple(outputs)
+        self.outputs = _normalize_outputs(out, outputs)
         self.routes = dict(routes or {})
+        self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
 
@@ -255,6 +253,8 @@ class WorkflowStep(_NamedDeclaration):
         out: Artifact | ArtifactSpec | None = None,
         outputs: Sequence[Artifact | ArtifactSpec] = (),
         routes: RouteMapping | None = None,
+        route_infos: Mapping[str, RouteInfo | str] | None = None,
+        route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
     ) -> None:
@@ -268,6 +268,7 @@ class WorkflowStep(_NamedDeclaration):
         self.requires = tuple(requires)
         self.outputs = _normalize_outputs(out, outputs)
         self.routes = dict(routes or {})
+        self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
 
@@ -318,7 +319,27 @@ def _normalize_simple_prompt(prompt: PromptInput) -> Prompt:
     raise TypeError(f"unsupported prompt type: {type(prompt)!r}")
 
 
+def _normalize_simple_route_infos(
+    route_infos: Mapping[str, RouteInfo | str] | None,
+    *,
+    route_summaries: Mapping[str, str] | None = None,
+) -> dict[str, RouteInfo]:
+    normalized: dict[str, RouteInfo] = {}
+    for route_name, summary in dict(route_summaries or {}).items():
+        normalized[route_name] = RouteInfo(summary=summary)
+    for route_name, info in dict(route_infos or {}).items():
+        if isinstance(info, str):
+            normalized[route_name] = RouteInfo(summary=info)
+            continue
+        if isinstance(info, RouteInfo):
+            normalized[route_name] = info
+            continue
+        raise TypeError("route_infos values must be RouteInfo instances or summary strings")
+    return normalized
+
+
 __all__ = [
+    "AfterHookResult",
     "Json",
     "Md",
     "Prompt",

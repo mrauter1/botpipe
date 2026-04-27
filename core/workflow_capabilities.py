@@ -69,7 +69,6 @@ class WorkflowStepCapability:
     expected_output_schema: dict[str, Any] | None
     route_infos: dict[str, RouteInfo]
     route_required_outputs: dict[str, tuple[str, ...]]
-    route_contracts: dict[str, dict[str, Any]]
     producer_prompt: str | None
     verifier_prompt: str | None
 
@@ -337,10 +336,6 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
                 "route_required_outputs": {
                     route_name: list(required_outputs)
                     for route_name, required_outputs in step.route_required_outputs.items()
-                },
-                "route_contracts": {
-                    route_name: dict(contract)
-                    for route_name, contract in step.route_contracts.items()
                 },
                 "session_name": step.session_name,
                 "typed_output_schema": step.expected_output_schema,
@@ -680,7 +675,6 @@ def _compiled_step_capability(step, *, default_session_name: str) -> WorkflowSte
         expected_output_schema=step.expected_output_schema,
         route_infos=dict(step.route_infos),
         route_required_outputs=dict(step.route_required_outputs),
-        route_contracts={route_name: dict(contract) for route_name, contract in step.route_contracts.items()},
         producer_prompt=_prompt_path(step.producer_prompt),
         verifier_prompt=_prompt_path(step.verifier_prompt),
     )
@@ -735,7 +729,6 @@ def _compiled_step_payload(
             route_name: list(required_outputs)
             for route_name, required_outputs in step.route_required_outputs.items()
         },
-        "route_contracts": {route_name: dict(contract) for route_name, contract in step.route_contracts.items()},
         "route_targets": dict(route_targets),
         "session_name": step.session_name,
         "verifier_prompt": step.verifier_prompt,

@@ -80,10 +80,6 @@ def _turn_context(
             "done": RouteInfo(summary="Package the accepted design.", required_outputs=("design_doc", "decision_record")),
             "needs_rework": RouteInfo(summary="Repair the current design before packaging.", required_outputs=("design_doc",)),
         },
-        route_contracts={
-            "done": {"summary": "Package the accepted design."},
-            "needs_rework": {"summary": "Repair the current design before packaging."},
-        },
         readable_artifacts=(
             _artifact_ref("previous_decision", path="/tmp/previous-decision.md", required=False, exists=False),
         ),
@@ -102,10 +98,6 @@ def _turn_context(
                 schema_name="DecisionRecord",
             ),
         ),
-        route_required_artifacts={
-            "done": ("design_doc", "decision_record"),
-            "needs_rework": ("design_doc",),
-        },
         route_required_outputs={
             "done": ("design_doc", "decision_record"),
             "needs_rework": ("design_doc",),
@@ -176,14 +168,12 @@ def test_render_required_inputs_marks_runtime_preconditions_required_even_for_op
             expected_output_schema=context.expected_output_schema,
             available_routes=context.available_routes,
             route_infos=context.route_infos,
-            route_contracts=context.route_contracts,
             readable_artifacts=context.readable_artifacts,
             required_artifacts=(
                 _artifact_ref("optional_input", path="/tmp/optional.md", required=False),
             ),
             writable_artifacts=context.writable_artifacts,
             route_required_outputs=context.route_required_outputs,
-            route_required_artifacts=context.route_required_artifacts,
             retry_feedback=context.retry_feedback,
             route_handoff=context.route_handoff,
             attempt=context.attempt,
@@ -194,7 +184,7 @@ def test_render_required_inputs_marks_runtime_preconditions_required_even_for_op
     assert "| optional_input | /tmp/optional.md | yes |" in turn.prompt_text
 
 
-def test_render_provider_turn_prefers_route_infos_summary_over_legacy_route_contracts() -> None:
+def test_render_provider_turn_uses_route_infos_summary() -> None:
     context = _turn_context()
     turn = render_provider_turn(
         ProviderTurnContext(
@@ -210,15 +200,10 @@ def test_render_provider_turn_prefers_route_infos_summary_over_legacy_route_cont
                 **context.route_infos,
                 "done": RouteInfo(summary="RouteInfo summary wins."),
             },
-            route_contracts={
-                **context.route_contracts,
-                "done": {"summary": "Legacy route contract summary loses."},
-            },
             readable_artifacts=context.readable_artifacts,
             required_artifacts=context.required_artifacts,
             writable_artifacts=context.writable_artifacts,
             route_required_outputs=context.route_required_outputs,
-            route_required_artifacts=context.route_required_artifacts,
             retry_feedback=context.retry_feedback,
             route_handoff=context.route_handoff,
             attempt=context.attempt,
@@ -227,7 +212,6 @@ def test_render_provider_turn_prefers_route_infos_summary_over_legacy_route_cont
     )
 
     assert "RouteInfo summary wins." in turn.prompt_text
-    assert "Legacy route contract summary loses." not in turn.prompt_text
 
 
 def test_render_provider_turn_rejects_missing_prompt_text() -> None:
@@ -242,12 +226,10 @@ def test_render_provider_turn_rejects_missing_prompt_text() -> None:
         expected_output_schema=context.expected_output_schema,
         available_routes=context.available_routes,
         route_infos=context.route_infos,
-        route_contracts=context.route_contracts,
         readable_artifacts=context.readable_artifacts,
         required_artifacts=context.required_artifacts,
         writable_artifacts=context.writable_artifacts,
         route_required_outputs=context.route_required_outputs,
-        route_required_artifacts=context.route_required_artifacts,
         retry_feedback=context.retry_feedback,
         route_handoff=context.route_handoff,
         attempt=context.attempt,

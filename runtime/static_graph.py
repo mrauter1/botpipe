@@ -41,10 +41,6 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
                     route_name: list(required_outputs)
                     for route_name, required_outputs in step.route_required_outputs.items()
                 },
-                "route_contracts": {
-                    route_name: dict(contract)
-                    for route_name, contract in step.route_contracts.items()
-                },
                 "has_expected_output_schema": step.expected_output_schema is not None,
             }
             for step in compiled.steps.values()

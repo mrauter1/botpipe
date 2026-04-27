@@ -105,13 +105,10 @@ def _required_by_routes(context: ProviderTurnContext, artifact_name: str) -> str
 
 
 def _route_required_outputs(context: ProviderTurnContext, route: str) -> tuple[str, ...]:
-    required = context.route_required_outputs.get(route)
-    if required is not None:
-        return tuple(required)
-    return tuple(context.route_required_artifacts.get(route, ()))
+    return tuple(context.route_required_outputs.get(route, ()))
 
 
-def _route_required_artifacts(context: ProviderTurnContext, route: str) -> str:
+def _render_route_required_outputs(context: ProviderTurnContext, route: str) -> str:
     required = _route_required_outputs(context, route)
     return ", ".join(required) if required else "none"
 
@@ -232,7 +229,7 @@ def _render_routes(context: ProviderTurnContext) -> str:
         (
             route,
             _route_summary(context, route),
-            _route_required_artifacts(context, route),
+            _render_route_required_outputs(context, route),
         )
         for route in context.available_routes
     ]
@@ -249,11 +246,6 @@ def _route_summary(context: ProviderTurnContext, route: str) -> str:
             return summary.strip()
     elif info is not None:
         summary = info.summary
-        if isinstance(summary, str) and summary.strip():
-            return summary.strip()
-    contract = context.route_contracts.get(route)
-    if isinstance(contract, Mapping):
-        summary = contract.get("summary")
         if isinstance(summary, str) and summary.strip():
             return summary.strip()
     return "No route summary provided."
