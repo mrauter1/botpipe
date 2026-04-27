@@ -23,3 +23,7 @@
 {"ts": "2026-04-27T15:49:20.446472+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "workflow-semantics-and-contracts"}
 {"ts": "2026-04-27T15:50:26.698365+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "workflow-semantics-and-contracts"}
 {"ts": "2026-04-27T15:50:26.731279+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "workflow-semantics-and-contracts"}
+{"ts": "2026-04-27T15:50:26.800260+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-semantics-and-contracts", "phase_mode": "single"}
+{"ts": "2026-04-27T15:50:26.807922+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 27, "event_type": "phase_started", "phase_id": "prompts-docs-and-report", "phase_mode": "single"}
+{"ts": "2026-04-27T15:50:26.809713+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "prompts-docs-and-report"}
+{"ts": "2026-04-27T15:50:26.809938+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "prompts-docs-and-report"}

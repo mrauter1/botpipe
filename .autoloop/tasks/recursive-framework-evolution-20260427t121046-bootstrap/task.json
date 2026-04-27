@@ -14,12 +14,12 @@
       "tests-and-verification"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "workflow-semantics-and-contracts"
+    "current_phase_index": 1,
+    "current_phase_id": "prompts-docs-and-report"
   },
   "phase_status": {
-    "workflow-semantics-and-contracts": "in_progress",
-    "prompts-docs-and-report": "planned",
+    "workflow-semantics-and-contracts": "completed",
+    "prompts-docs-and-report": "in_progress",
     "tests-and-verification": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260427T151046Z-3a255053",
       "status": "in_progress",
       "ts": "2026-04-27T15:19:38.657528+00:00"
+    },
+    {
+      "phase_id": "workflow-semantics-and-contracts",
+      "run_id": "run-20260427T151046Z-3a255053",
+      "status": "completed",
+      "ts": "2026-04-27T15:50:26.799140+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "prompts-docs-and-report",
+      "run_id": "run-20260427T151046Z-3a255053",
+      "status": "in_progress",
+      "ts": "2026-04-27T15:50:26.806782+00:00"
     }
   ]
 }
