@@ -44,14 +44,14 @@ def parse_outcome_json(text: str) -> Outcome:
     if not isinstance(parsed_payload, dict):
         raise ProviderExecutionError("provider outcome JSON field 'payload' must be an object when provided.")
 
-    reason = _optional_string_field(payload, "reason")
+    reason = _required_string_field(payload, "reason")
     clarification = _optional_string_field(payload, "clarification")
     question = _optional_string_field(payload, "question")
 
     return Outcome(
         raw_output=text,
         tag=tag,
-        reason=reason or "",
+        reason=reason,
         clarification=clarification,
         question=question,
         payload=deepcopy(parsed_payload),
@@ -64,4 +64,11 @@ def _optional_string_field(payload: dict[str, Any], key: str) -> str | None:
         return None
     if not isinstance(value, str):
         raise ProviderExecutionError(f"provider outcome JSON field {key!r} must be a string when provided.")
+    return value
+
+
+def _required_string_field(payload: dict[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ProviderExecutionError(f"provider outcome JSON must contain a non-empty string {key!r}.")
     return value

@@ -1193,3 +1193,51 @@ Tighten the shared parser so `reason` is required for all control responses, the
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+Addressing the blocking parser mismatch first. I’m checking the shared outcome parser and the focused provider-contract tests, then I’ll make the smallest change that brings runtime enforcement back in line with the rendered control contract.
+
+There are already a few unit tests that rely on omitted `reason`, so I’m updating the parser and the focused tests together to keep the contract consistent in one pass.
+
+I’m keeping the fix narrow: require `reason` in the shared JSON parser, update the direct parser call sites in the provider-boundary tests, and add an omission-case regression test.
+
+I’ve made the parser change. Next I’m validating the focused provider tests and then I’ll record the non-obvious boundary decision in the shared ledger.
+
+One provider-boundary test was still using a reasonless JSON sample. I’m updating that fixture to match the stricter control contract and rerunning the focused validation.
+
+Scope considered
+
+Phase-scoped fix for the blocking reviewer finding in the rendered-provider control contract: `core/providers/parsing.py`, the focused provider-boundary tests, and the phase notes/decision ledger.
+
+What I analyzed
+
+I traced the mismatch from the reviewer note through the shared outcome parser and the direct `parse_outcome_json(...)` call sites in [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py:1). I also checked that the stricter `reason` requirement only needs to apply to rendered JSON control responses, not to internal test providers that construct `Outcome(...)` directly.
+
+What I changed
+
+I updated [core/providers/parsing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/parsing.py:1) so rendered provider control responses must contain a non-empty top-level `reason`, aligning runtime parsing with the explicit `{tag, reason, payload}` prompt contract. I updated the affected provider-boundary fixtures in [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py:1) and added a regression test that rejects `{"tag":"done"}` when `reason` is omitted. I also updated [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/provider-and-engine-contract/implementation_notes.md>) and appended the non-obvious parser-boundary decision to [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/decisions.txt>).
+
+Key findings / decisions
+
+The minimal safe fix is at the JSON parser boundary, not in `Engine._validate_outcome()`. That keeps the rendered-provider contract strict without broadening the behavior of direct `Outcome`-returning test providers that bypass JSON parsing.
+
+Open issues / next step
+
+Focused validation passed:
+- `.venv/bin/python -m py_compile core/providers/parsing.py tests/unit/test_provider_boundary_core.py`
+- `.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py`
+- `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts`
+
+The next step is verifier re-review of the phase artifacts against `IMP-001`.

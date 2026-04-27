@@ -23,3 +23,5 @@ Static after-hook route validation is conservative and source-based; constant st
 <autoloop-decisions-header version="1" block_seq="7" owner="implementer" phase_id="provider-and-engine-contract" pair="implement" turn_seq="1" run_id="run-20260427T204304Z-eddf2be0" ts="2026-04-27T21:58:08.811053+00:00" />
 Final step output enforcement now re-resolves artifacts after after-hook state changes and keeps provider-attributable artifact failures retryable even when the hook overrides the final route.
 Direct WorkflowStep execution writes JSON payloads to declared json outputs, human-readable summaries to markdown/text outputs, and the same JSON payload as raw text to declared raw outputs.
+<autoloop-decisions-header version="1" block_seq="8" owner="implementer" phase_id="provider-and-engine-contract" pair="implement" turn_seq="2" run_id="run-20260427T204304Z-eddf2be0" ts="2026-04-27T22:15:51.294899+00:00" />
+Rendered-provider control responses now require a non-empty top-level reason during JSON parsing so the runtime matches the explicit {tag, reason, payload} prompt contract, while direct Outcome-returning test providers remain unchanged.

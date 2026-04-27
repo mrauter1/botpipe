@@ -377,7 +377,7 @@ def test_producer_response_usage_defaults_to_none() -> None:
 
 
 def test_outcome_response_usage_defaults_to_none() -> None:
-    response = OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'))
+    response = OutcomeResponse(outcome=parse_outcome_json('{"tag":"done","reason":"completed"}'))
 
     assert response.usage is None
 
@@ -388,8 +388,8 @@ def test_fake_provider_can_emit_usage() -> None:
     llm_usage = TokenUsage(total_tokens=4, source="fake")
     provider = ScriptedLLMProvider(
         producer_turns=[ProducerResponse(raw_output="draft", usage=producer_usage)],
-        verifier_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'), usage=verifier_usage)],
-        llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done"}'), usage=llm_usage)],
+        verifier_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done","reason":"verified"}'), usage=verifier_usage)],
+        llm_turns=[OutcomeResponse(outcome=parse_outcome_json('{"tag":"done","reason":"answered"}'), usage=llm_usage)],
     )
 
     producer_response = provider.run_producer(
@@ -421,6 +421,11 @@ def test_fake_provider_can_emit_usage() -> None:
     assert producer_response.usage == producer_usage
     assert verifier_response.usage == verifier_usage
     assert llm_response.usage == llm_usage
+
+
+def test_parse_outcome_json_requires_reason_field() -> None:
+    with pytest.raises(ProviderExecutionError, match="non-empty string 'reason'"):
+        parse_outcome_json('{"tag":"done"}')
 
 
 def test_rendered_llm_provider_returns_producer_response() -> None:
@@ -481,7 +486,10 @@ def test_rendered_llm_provider_parses_verifier_outcome_and_excludes_raw_output_f
 
 def test_rendered_llm_provider_parses_llm_outcome() -> None:
     usage = TokenUsage(total_tokens=9, source="claude")
-    transport = _TransportStub(result_text='```json\n{"tag":"needs_rework","question":"Fix it?"}\n```', usage=usage)
+    transport = _TransportStub(
+        result_text='```json\n{"tag":"needs_rework","reason":"Needs local repair.","question":"Fix it?"}\n```',
+        usage=usage,
+    )
     provider = RenderedLLMProvider(transport)
 
     response = provider.run_llm(
@@ -495,5 +503,6 @@ def test_rendered_llm_provider_parses_llm_outcome() -> None:
     )
 
     assert response.outcome.tag == "needs_rework"
+    assert response.outcome.reason == "Needs local repair."
     assert response.outcome.question == "Fix it?"
     assert response.usage == usage
