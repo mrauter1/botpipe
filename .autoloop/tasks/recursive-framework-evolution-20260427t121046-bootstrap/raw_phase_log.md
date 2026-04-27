@@ -427,3 +427,44 @@ No known blocking gaps remain in the phase-local test surface from this branch-c
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+---
+Re-auditing the optimizer tests after the handler-branch additions now. I’m checking that the new not-applicable coverage actually closes the branch the previous audit flagged, then I’ll update the phase criteria and feedback artifacts accordingly.
+
+The missing branch is now directly exercised, and the strategy document matches the actual coverage. I’m marking the test phase complete and recording that the prior blocking audit finding is closed by the new handler-level regression tests.
+
+Scope considered
+
+The optimizer workflow semantics-and-contracts test surface only: the updated runtime tests in `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, the phase-local `test_strategy.md`, the shared decisions about artifact ownership/preservation, and the test audit artifacts in `.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/workflow-semantics-and-contracts/`.
+
+What I analyzed
+
+I re-checked the prior blocking gap against the actual branch structure in `_finalize_candidate_artifact`, then reviewed the new handler-level tests that cover provider-emitted `*_not_applicable` outcomes. I also checked the updated strategy mapping and the recorded runtime validation result.
+
+What I reviewed
+
+The added coverage closes the previous audit finding: the suite now exercises both sides of the changed not-applicable behavior for all five candidate handlers, proving that existing provider-authored artifacts are preserved and that minimal empty artifacts are synthesized only when missing. The coverage map in `test_strategy.md` now matches the implementation and the phase contract, and the runtime suite passed with `43 passed`.
+
+Key findings / decisions
+
+No remaining blocking findings. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/workflow-semantics-and-contracts/criteria.md) to fully checked and appended a closing audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/test/phases/workflow-semantics-and-contracts/feedback.md) recording that `TST-001` is addressed.
+
+Open issues / next step
+
+Phase-local test audit is complete. The only noted remaining gap is the already-documented non-blocking choice not to snapshot prompt text in this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
