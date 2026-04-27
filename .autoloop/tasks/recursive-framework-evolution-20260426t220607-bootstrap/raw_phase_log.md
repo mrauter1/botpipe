@@ -286,3 +286,70 @@ Open issues / next step
 
 - Later phases still need the actual ranking, failure-mining, producer/verifier/token/adversarial/workflow-level candidate generation, broader docs updates, and refinement-workflow evidence consumption changes.
 - If you want the next increment cleaned up first, the most obvious follow-up is removing the `schema`-field warnings in the optimizer contract models before the broader suite work.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcc81-994f-76a1-acd7-bcea21039407
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+I’m reviewing the phase-scoped implementation against the acceptance criteria and the touched code paths. I’ll inspect the criteria/feedback artifacts first, then audit the optimizer shell, deterministic helpers, and the no-op short-circuit path for correctness and regression risk.
+
+I’ve got the criteria and current feedback state. Next I’m reading the deterministic helper and workflow-shell code closely, with focus on discovery, frame artifacts, and whether publication-time validation still works when the workflow runs from a copied package in tests or from the real repo at runtime.
+
+I’ve finished the first pass through the helper and workflow shell. I’m checking the params/contracts/prompt package now, and then I’ll decide whether the remaining gaps are scope-acceptable deferrals or actual blocking issues against the phase contract.
+
+The prompt package looks materially complete. I’m checking two deeper contract questions now: whether the source-manifest helper actually covers the full requested selected-workflow surface, and whether any frame/publication fields diverge from established shared artifact conventions in a way that could break later phases.
+
+I found one potentially important class of issue: several new files advertise “direct repo-root import fallback” support. I’m checking whether that fallback actually works end to end or whether it only passes because the focused tests always import through the installed `autoloop_v3` package path.
+
+I confirmed the prompt bundle itself is fine. The remaining review questions are now about code-path safety and compatibility, not prompt completeness. I’m checking the shared parameter base and a couple of established workflow patterns to see whether this phase diverged in a way that will break adjacent workflows later.
+
+I found one concrete behavior divergence already: `route_tags` is documented as a step-level evidence filter, but the new trace-corpus normalization currently discards that parameter and keeps every step observation. I’m confirming whether there’s a second blocker or whether the rest is acceptable as deferred cleanup.
+
+The second issue is real but I’m checking whether it’s a regression introduced here or just an existing repository-wide limitation. If it’s already systemic, I won’t block this phase on it; if the new code uniquely broke the fallback path, I will.
+
+I have one clear blocker. I’m checking one more input-contract gap now: whether other selected-workflow workflows already validate workflow existence in params, or whether this phase is silently weakening the request’s explicit validation requirements by deferring that check until frame execution.
+
+I’ve decided there are two substantive contract gaps to record. I’m confirming the second one with a quick repro, then I’ll update the criteria and append the findings to the phase feedback file.
+
+I’ve confirmed the second contract gap: the new params model accepts an unknown `selected_workflow` and only fails later at execution time. I’m writing the review findings and marking the criteria accordingly now.
+
+Scope considered
+
+- Phase-scoped review only for `deterministic-ingestion-and-workflow-shell`.
+- I reviewed the new optimizer workflow shell, deterministic ingestion helpers, params/contracts/prompt package, the no-op short-circuit path, and the phase-local verifier artifacts.
+
+What I analyzed
+
+- `stdlib/optimization.py` for run discovery, observability validation, trace-corpus normalization, and source-manifest publication checks.
+- `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`, `params.py`, and `contracts.py` for topology, route behavior, artifact contracts, and validation boundaries.
+- The focused tests added for this phase, plus the phase notes and shared decisions file.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/deterministic-ingestion-and-workflow-shell/criteria.md) checkboxes to reflect the current implementation state.
+- Appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/deterministic-ingestion-and-workflow-shell/feedback.md).
+- Confirmed the prompt bundle is materially complete for this phase and that the no-op path can publish its packet artifacts.
+
+Key findings / decisions
+
+- `IMP-001` blocking: `route_tags` is required to filter step-level evidence, but `normalize_trace_corpus()` currently discards it and publishes all observations.
+- `IMP-002` blocking: the new params model accepts unknown `selected_workflow` values and defers failure until frame execution, which misses the explicit validation requirement in the request snapshot.
+- I did not treat the “direct repo-root import fallback” failures as a new blocker because the same limitation already exists across other workflows and stdlib modules; it is not unique to this change set.
+
+Open issues / next step
+
+- Fix `route_tags` filtering in the published trace corpus and add regression coverage for the run-status versus route-tag split.
+- Add early known-workflow validation for `selected_workflow` and a regression test that rejects unknown workflow names before bootstrap/frame side effects.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
