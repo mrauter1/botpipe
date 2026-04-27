@@ -1145,3 +1145,113 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+Reviewing the current simple-lowering tests and the phase artifacts first, then I’ll add any missing regression coverage and update the test-phase notes to match what’s actually exercised.
+
+I’ve identified the main gap in the current tests: `workflow_step` only has a success-path check. I’m adding edge and failure coverage there, plus the required test-phase documentation updates.
+
+The new coverage is in place. I’m running the focused unit suite now to catch any assumptions in the generated `workflow_step` tests before I update the final phase summary.
+
+Scope considered
+
+- Phase-local `simple-lowering` test coverage only.
+- Focused on the changed simple-surface behaviors and adjacent regression risk around `workflow_step(...)` and prompt/read inference.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py)
+- [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md)
+
+What I changed
+
+- Added `workflow_step(...)` edge and failure coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py):
+  - `message_from` reads step-local artifact text into the child invocation.
+  - child `question` results map back to the reserved parent `question -> PAUSE` route.
+  - unknown `message_from` references fail at compile time with a clear validation error.
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, stability notes, and known gaps.
+- Appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md).
+
+Key findings / decisions
+
+- The highest-risk uncovered path was `workflow_step(...)`: the existing tests only exercised the success case, so I added direct coverage for child-question mapping and invalid `message_from` references.
+- I kept the tests deterministic by using fake contexts and child-result doubles rather than full runtime runs; that matches the phase scope and still validates the generated lowering behavior.
+- I did not add a test that would normalize the new absolute-path `PromptRegistry` precedence noted by review, because that behavior was not explicitly confirmed as intended.
+
+Open issues / next step
+
+- Focused validation completed with:
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_validation.py -k "simple or system_handler_arity or strict_workflow_counterpart"`
+- I did not run the full repository suite.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+Auditing the new simple-lowering tests against the changed behavior and the phase contract, then I’ll update the test audit artifacts to match whether any material gaps remain.
+
+The new tests close most of the gap. I’m checking one remaining risk surface now: whether the test suite actually proves `workflow_step(...)` propagates child failure to the parent `failed` route, not just that the route exists.
+
+I found one material omission in the new `workflow_step(...)` coverage: the tests prove success and question propagation, but not the explicit `FAIL` or generic blocked child-terminal mapping the phase contract calls for. I’m updating the audit artifacts now.
+
+Scope considered
+
+- Phase-local test audit for `simple-lowering`.
+- I reviewed the new unit coverage and the updated test-phase artifacts, with emphasis on the changed `workflow_step(...)` behavior and adjacent regression risk.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md)
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/criteria.md)
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) for the child-terminal mapping the tests are supposed to protect
+
+What I reviewed
+
+- The new `workflow_step(...)` tests for `message_from`, child-question propagation, and unknown-reference validation.
+- Whether the added tests actually cover the phase-required child-terminal mapping semantics, not just route-table shape.
+- The updated strategy document’s coverage map and stated intentional gaps.
+
+Key findings / decisions
+
+- I recorded one blocking audit finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md): the suite still does not prove `workflow_step(...)` maps child `FAIL` to `Event("failed")` or generic paused/non-question child results to `Event("blocked")`.
+- Current coverage proves the success branch and the `question` pause branch, but the explicit child-failure mapping required by the phase request remains untested.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/criteria.md) accordingly: reliability and behavioral-intent checks pass, but coverage/regression/failure-path checks remain open.
+
+Open issues / next step
+
+- Add direct handler-level tests for:
+  - child `terminal="FAIL"` returning `Event("failed")`
+  - child `terminal="PAUSE"` without a `question` event returning `Event("blocked")`
+- After those are added, this audit can be rerun for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

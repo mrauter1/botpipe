@@ -52,3 +52,6 @@
 {"ts": "2026-04-27T19:11:28.083058+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 52, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "simple-lowering", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-27T19:11:28.084153+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 53, "event_type": "pair_started", "pair": "test", "phase_id": "simple-lowering"}
 {"ts": "2026-04-27T19:11:28.084279+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 54, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "simple-lowering"}
+{"ts": "2026-04-27T19:13:23.806606+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 55, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "simple-lowering"}
+{"ts": "2026-04-27T19:14:56.272968+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 56, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "simple-lowering"}
+{"ts": "2026-04-27T19:14:58.375286+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 57, "event_type": "cycle_started", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "simple-lowering"}
