@@ -20,6 +20,7 @@
 | `baseline_evaluation_summary` | Read | Required input. |
 | `baseline_evaluation_findings` | Read | Required input. |
 | `baseline_failure_modes` | Read | Required input. |
+| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
 | `refinement_request_brief` | Read | Required input. |
 | `refinement_acceptance_criteria` | Read | Required input. |
 | `refinement_strategy` | Read | Required input. |
@@ -48,6 +49,7 @@
 ## Evidence
 
 - Base the verdict on the planning artifacts plus the selected-workflow and baseline-evidence artifacts instead of provider inference.
+- If optimization evidence is present, confirm the plan keeps candidate-only estimates unproven and does not auto-materialize adversarial cases.
 - Confirm that the planning package is concrete enough for implementation and explicit enough to detect drift later.
 
 ## Routes
@@ -62,4 +64,5 @@
 
 - Do not approve vague “improve prompts/tests” guidance.
 - Do not approve planning that edits outside the selected workflow boundary without explicit cause.
+- Do not approve plans that treat token compression as cover for a semantic rewrite.
 - Do not ask for a replan when local repair is sufficient.

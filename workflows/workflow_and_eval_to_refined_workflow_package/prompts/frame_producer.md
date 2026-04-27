@@ -25,6 +25,7 @@
 | `baseline_evaluation_summary` | Read | Required input. |
 | `baseline_evaluation_findings` | Read | Required input. |
 | `baseline_failure_modes` | Read | Required input. |
+| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
 | `framework_architecture_doc` | Read | Required input. |
 | `framework_authoring_doc` | Read | Required input. |
 | `workflow_instructions` | Read | Required input. |
@@ -58,6 +59,8 @@
 ## Evidence
 
 - Anchor the request in `selected_workflow_capability`, `selected_workflow_authoring_surface`, `baseline_workflow_manifest`, and the copied baseline evidence artifacts.
+- If `baseline_refinement_evidence_summary` contains optimization candidates, treat them as candidate-only input rather than proof of measured improvement.
+- Treat `optimization_ablation_results`, when present, as stronger evidence than candidate estimates.
 - Keep the runtime/provider boundary crisp: the runtime injects the compact human-readable step contract, while prompt templates own the operational guidance and raw provider output never re-enters prompts.
 - Make the acceptance surface specific enough that the next step can choose file-level changes and regression guardrails without widening the selected workflow boundary.
 
@@ -79,5 +82,6 @@
 
 - Do not choose a different workflow in this step.
 - Do not mutate the authoritative selected workflow package.
+- Do not present optimization candidates as proven wins without separate ablation or rerun evidence.
 - Do not hide the framing only in provider prose; the durable output must live in the named artifacts.
 - Do not invent new runtime-owned metadata or a provider-facing packet abstraction.

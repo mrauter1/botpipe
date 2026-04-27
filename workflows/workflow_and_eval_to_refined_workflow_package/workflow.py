@@ -92,6 +92,21 @@ No dedicated failure-modes artifact was supplied for this refinement run.
 Use `baseline_evaluation_summary.json` and `baseline_evaluation_findings.md` as the authoritative baseline evidence.
 """
 
+_REFINEMENT_EVIDENCE_SCHEMA = "autoloop.workflow_refinement_evidence/v1"
+_ALLOWED_OPTIMIZATION_EVIDENCE_KINDS = frozenset(
+    {
+        "step_optimization_priority_report",
+        "workflow_failure_scenarios",
+        "producer_prompt_optimization_candidates",
+        "verifier_rubric_optimization_candidates",
+        "token_optimization_candidates",
+        "adversarial_case_candidates",
+        "workflow_level_optimization_candidates",
+        "workflow_optimization_scorecard",
+        "optimization_ablation_results",
+    }
+)
+
 
 class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     """Turn one selected workflow plus evaluation evidence into a candidate refinement package."""
@@ -105,6 +120,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         evaluation_summary_path: str = ""
         evaluation_findings_path: str = ""
         failure_modes_path: str | None = None
+        refinement_evidence_path: str | None = None
         sponsor_role: str | None = None
         desired_outcome: str | None = None
         constraints: list[str] = Field(default_factory=list)
@@ -138,6 +154,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     baseline_evaluation_summary = Artifact("{workflow_folder}/baseline_evaluation_summary.json")
     baseline_evaluation_findings = Artifact("{workflow_folder}/baseline_evaluation_findings.md")
     baseline_failure_modes = Artifact("{workflow_folder}/baseline_failure_modes.md")
+    baseline_refinement_evidence = Artifact("{workflow_folder}/baseline_refinement_evidence.json")
+    baseline_refinement_evidence_summary = Artifact("{workflow_folder}/baseline_refinement_evidence.md")
     refinement_request_brief = Artifact("{workflow_folder}/refinement_request_brief.md")
     refinement_acceptance_criteria = Artifact("{workflow_folder}/refinement_acceptance_criteria.md")
     refinement_strategy = Artifact("{workflow_folder}/refinement_strategy.md")
@@ -169,6 +187,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "baseline_evaluation_summary": baseline_evaluation_summary,
             "baseline_evaluation_findings": baseline_evaluation_findings,
             "baseline_failure_modes": baseline_failure_modes,
+            "baseline_refinement_evidence": baseline_refinement_evidence,
+            "baseline_refinement_evidence_summary": baseline_refinement_evidence_summary,
         },
     )
     frame_refinement_request = PairStep(
@@ -185,6 +205,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             baseline_evaluation_summary,
             baseline_evaluation_findings,
             baseline_failure_modes,
+            baseline_refinement_evidence_summary,
             framework_architecture_doc,
             framework_authoring_doc,
             workflow_instructions,
@@ -210,6 +231,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             baseline_evaluation_summary,
             baseline_evaluation_findings,
             baseline_failure_modes,
+            baseline_refinement_evidence_summary,
             refinement_request_brief,
             refinement_acceptance_criteria,
         ],
@@ -261,6 +283,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             baseline_evaluation_summary,
             baseline_evaluation_findings,
             baseline_failure_modes,
+            baseline_refinement_evidence_summary,
             refinement_strategy,
             workflow_change_plan,
             regression_guardrails,
@@ -287,6 +310,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             baseline_evaluation_summary,
             baseline_evaluation_findings,
             baseline_failure_modes,
+            baseline_refinement_evidence,
+            baseline_refinement_evidence_summary,
             candidate_workflow_manifest,
             refinement_verification_report,
             evaluation_delta_report,
@@ -339,6 +364,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 "evaluation_summary_path": params.evaluation_summary_path,
                 "evaluation_findings_path": params.evaluation_findings_path,
                 "failure_modes_path": params.failure_modes_path,
+                "refinement_evidence_path": params.refinement_evidence_path,
                 "sponsor_role": params.sponsor_role,
                 "desired_outcome": params.desired_outcome,
                 "constraints": list(params.constraints),
@@ -363,6 +389,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 "evaluation_summary_path": next_state.evaluation_summary_path,
                 "evaluation_findings_path": next_state.evaluation_findings_path,
                 "failure_modes_path": next_state.failure_modes_path,
+                "refinement_evidence_path": next_state.refinement_evidence_path,
                 "sponsor_role": next_state.sponsor_role,
                 "desired_outcome": next_state.desired_outcome,
                 "constraints": next_state.constraints,
@@ -404,6 +431,12 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             failure_modes_source = _resolve_input_path(repo_root, state.failure_modes_path, "failure_modes_path")
             failure_modes_text = failure_modes_source.read_text(encoding="utf-8")
         _write_text(ctx.workflow_folder / "baseline_failure_modes.md", failure_modes_text)
+        _write_refinement_evidence_inputs(
+            ctx,
+            repo_root=repo_root,
+            selected_workflow_name=selected_workflow_name,
+            refinement_evidence_path=state.refinement_evidence_path,
+        )
 
         return (
             state.model_copy(update={"selected_workflow_name": selected_workflow_name}),
@@ -534,6 +567,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             "baseline_evaluation_summary": workflow_folder / "baseline_evaluation_summary.json",
             "baseline_evaluation_findings": workflow_folder / "baseline_evaluation_findings.md",
             "baseline_failure_modes": workflow_folder / "baseline_failure_modes.md",
+            "baseline_refinement_evidence": workflow_folder / "baseline_refinement_evidence.json",
+            "baseline_refinement_evidence_summary": workflow_folder / "baseline_refinement_evidence.md",
             "candidate_workflow_manifest": workflow_folder / "candidate_workflow_manifest.json",
             "refinement_verification_report": workflow_folder / "refinement_verification_report.md",
             "evaluation_delta_report": workflow_folder / "evaluation_delta_report.md",
@@ -586,6 +621,12 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         selected_workflow_name, _, authoring_surface = validate_selected_workflow_capability_and_authoring_snapshots(
             capability_snapshot,
             authoring_snapshot,
+        )
+        refinement_evidence_payload = _read_json(required_paths["baseline_refinement_evidence"])
+        _validate_refinement_evidence_payload(refinement_evidence_payload, selected_workflow_name)
+        _require_non_empty_text_file(
+            required_paths["baseline_refinement_evidence_summary"],
+            "baseline_refinement_evidence.md must be non-empty",
         )
         _validate_evaluation_summary_selected_workflow(baseline_evaluation_summary, selected_workflow_name)
         if state.selected_workflow_name is not None and state.selected_workflow_name != selected_workflow_name:
@@ -662,6 +703,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 "baseline_evaluation_summary": str(required_paths["baseline_evaluation_summary"]),
                 "baseline_evaluation_findings": str(required_paths["baseline_evaluation_findings"]),
                 "baseline_failure_modes": str(required_paths["baseline_failure_modes"]),
+                "baseline_refinement_evidence": str(required_paths["baseline_refinement_evidence"]),
+                "baseline_refinement_evidence_summary": str(required_paths["baseline_refinement_evidence_summary"]),
                 "candidate_workflow_surface": str(required_dirs["candidate_workflow_surface"]),
                 "candidate_workflow_manifest": str(required_paths["candidate_workflow_manifest"]),
                 "refinement_verification_report": str(required_paths["refinement_verification_report"]),
@@ -918,6 +961,110 @@ def _resolve_input_path(repo_root: Path, raw_value: str, field_name: str) -> Pat
     if not path.is_file():
         raise ValueError(f"{field_name} must point to a file: {path}")
     return path
+
+
+def _write_refinement_evidence_inputs(
+    ctx,
+    *,
+    repo_root: Path,
+    selected_workflow_name: str,
+    refinement_evidence_path: str | None,
+) -> None:
+    if refinement_evidence_path is None:
+        payload = {
+            "schema": _REFINEMENT_EVIDENCE_SCHEMA,
+            "source_path": None,
+            "target_workflow_id": selected_workflow_name,
+            "evidence_entries": [],
+        }
+    else:
+        source_path = _resolve_input_path(repo_root, refinement_evidence_path, "refinement_evidence_path")
+        payload = _read_json(source_path)
+        _validate_refinement_evidence_payload(payload, selected_workflow_name)
+        payload = {
+            "schema": _REFINEMENT_EVIDENCE_SCHEMA,
+            "source_path": str(source_path),
+            "target_workflow_id": selected_workflow_name,
+            "evidence_entries": [dict(entry) for entry in payload["evidence_entries"]],
+        }
+
+    write_workflow_json(ctx, "baseline_refinement_evidence.json", payload)
+    _write_text(ctx.workflow_folder / "baseline_refinement_evidence.md", _render_refinement_evidence_summary(payload))
+
+
+def _validate_refinement_evidence_payload(payload: Mapping[str, Any], selected_workflow_name: str) -> None:
+    if _require_text(
+        payload.get("schema"),
+        "baseline_refinement_evidence.json must define non-empty schema",
+    ) != _REFINEMENT_EVIDENCE_SCHEMA:
+        raise ValueError("baseline_refinement_evidence.json schema must equal autoloop.workflow_refinement_evidence/v1")
+    if _require_text(
+        payload.get("target_workflow_id"),
+        "baseline_refinement_evidence.json must define non-empty target_workflow_id",
+    ) != selected_workflow_name:
+        raise ValueError("baseline_refinement_evidence.json target_workflow_id must match selected workflow")
+    raw_entries = payload.get("evidence_entries")
+    if not isinstance(raw_entries, list):
+        raise ValueError("baseline_refinement_evidence.json must define evidence_entries as a JSON array")
+    for index, raw_entry in enumerate(raw_entries):
+        if not isinstance(raw_entry, Mapping):
+            raise ValueError("baseline_refinement_evidence.json evidence_entries must contain JSON objects")
+        kind = _require_text(
+            raw_entry.get("kind"),
+            f"baseline_refinement_evidence.json evidence_entries[{index}].kind must be non-empty",
+        )
+        if kind not in _ALLOWED_OPTIMIZATION_EVIDENCE_KINDS:
+            raise ValueError(f"baseline_refinement_evidence.json evidence_entries[{index}].kind is not supported")
+        _require_text(
+            raw_entry.get("path"),
+            f"baseline_refinement_evidence.json evidence_entries[{index}].path must be non-empty",
+        )
+        _require_text(
+            raw_entry.get("summary"),
+            f"baseline_refinement_evidence.json evidence_entries[{index}].summary must be non-empty",
+        )
+        _require_text(
+            raw_entry.get("handling"),
+            f"baseline_refinement_evidence.json evidence_entries[{index}].handling must be non-empty",
+        )
+
+
+def _render_refinement_evidence_summary(payload: Mapping[str, Any]) -> str:
+    entries = payload.get("evidence_entries")
+    assert isinstance(entries, list)
+    source_path = payload.get("source_path")
+    lines = [
+        "# Refinement Evidence",
+        "",
+        f"- Target workflow: `{_require_text(payload.get('target_workflow_id'), 'refinement evidence target_workflow_id must be non-empty')}`.",
+        (
+            f"- Source path: `{source_path}`."
+            if isinstance(source_path, str) and source_path
+            else "- No additional optimization refinement evidence was supplied for this run."
+        ),
+        "- Optimization candidates are candidate-only input and remain unproven until separate ablation or rerun evidence exists.",
+        "- `optimization_ablation_results`, when present, are stronger evidence than candidate estimates.",
+        "- Token optimization candidates must preserve semantics before any later materialization.",
+        "- `adversarial_case_candidates` should usually feed `workflow_to_eval_suite` before prompt or workflow promotion.",
+        "",
+        "## Evidence Entries",
+    ]
+    if not entries:
+        lines.extend(("", "- No additional refinement evidence entries were supplied.", ""))
+        return "\n".join(lines)
+
+    for raw_entry in entries:
+        entry = dict(raw_entry)
+        lines.extend(
+            (
+                "",
+                f"- `{entry['kind']}` from `{entry['path']}`",
+                f"  Summary: {entry['summary']}",
+                f"  Handling: {entry['handling']}",
+            )
+        )
+    lines.append("")
+    return "\n".join(lines)
 
 
 _read_json = read_json_object

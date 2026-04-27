@@ -20,6 +20,7 @@
 | `baseline_evaluation_summary` | Read | Required input. |
 | `baseline_evaluation_findings` | Read | Required input. |
 | `baseline_failure_modes` | Read | Required input. |
+| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
 | `candidate_workflow_manifest` | Read | Required input. |
 | `refinement_build_report` | Read | Required input. |
 | `candidate_diff_summary` | Read | Required input. |
@@ -55,6 +56,7 @@
 ## Evidence
 
 - Base the verdict on the evaluation artifacts plus the captured baseline and candidate manifests instead of provider inference.
+- If optimization evidence is present, confirm the evaluation package still treats candidate-only entries as unproven and does not imply adversarial-case materialization happened automatically.
 - Confirm that the package is publication-ready, that the delta report is evidence-driven, and that promotion or rollback guidance is concrete enough for deterministic later use.
 
 ## Routes
@@ -69,5 +71,6 @@
 
 - Do not silently validate missing test proof.
 - Do not approve contradictory promotion or rollback guidance.
+- Do not approve claims that adversarial eval suites or ablations already ran unless the evidence actually proves that.
 - Do not leave the receipt or publish step to infer baseline or candidate boundaries.
 - Do not ask for a replan when local repair is sufficient.

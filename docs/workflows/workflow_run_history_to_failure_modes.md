@@ -223,6 +223,7 @@ Payload models used by the package:
 
 - `workflow_idea_to_workflow_package` remains the standing greenfield authoring baseline and was reconsidered before shipping this narrower diagnostic layer.
 - The package relies on the cycle-9 `stdlib/diagnostics.py` seam instead of inventing runtime-owned diagnostics automation or widening `workflow.toml`.
+- `workflow_run_traces_to_optimization_candidates` is the follow-on consumer when trace, git-tracking, static-step-graph, and raw-output observability should be turned into candidate-only optimization evidence; this diagnostic workflow still stops at explicit publication.
 - Later cycles can now layer `workflow_and_eval_to_refined_workflow_package` or broader portfolio operating workflows on top of an explicit failure-mode package instead of inferring failure pressure from raw run logs.
 
 ## Evidence

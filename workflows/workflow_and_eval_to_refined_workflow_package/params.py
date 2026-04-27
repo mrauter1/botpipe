@@ -22,6 +22,7 @@ class Parameters(SelectedWorkflowTaskFramingParameters):
     evaluation_summary_path: str
     evaluation_findings_path: str
     failure_modes_path: str | None = None
+    refinement_evidence_path: str | None = None
     target_test_command: str = "pytest -q"
 
     _validate_refinement_required_text = required_text_fields(
@@ -30,7 +31,7 @@ class Parameters(SelectedWorkflowTaskFramingParameters):
         "target_test_command",
         error_message="value must be non-empty",
     )
-    _normalize_failure_modes_path = optional_text_fields("failure_modes_path")
+    _normalize_optional_paths = optional_text_fields("failure_modes_path", "refinement_evidence_path")
 
 
 __all__ = ["Parameters"]

@@ -26,6 +26,7 @@
 | `baseline_evaluation_summary` | Read | Required input. |
 | `baseline_evaluation_findings` | Read | Required input. |
 | `baseline_failure_modes` | Read | Required input. |
+| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
 | `refinement_strategy` | Read | Required input. |
 | `workflow_change_plan` | Read | Required input. |
 | `regression_guardrails` | Read | Required input. |
@@ -71,6 +72,8 @@
 ## Evidence
 
 - Compare the candidate against the copied baseline evidence and the baseline or candidate manifests, not just provider intuition.
+- If optimization evidence is present, call out what remains candidate-only and unproven, and treat `optimization_ablation_results` as stronger evidence than estimated gains.
+- Keep `adversarial_case_candidates` as future eval-suite input unless separate work explicitly materializes them elsewhere.
 - Make the overlay validation path explicit by naming the exact command from `invocation_contract`.
 - Keep promotion and rollback guidance concrete enough that publication does not need to infer workflow boundaries or evidence ownership.
 
@@ -92,5 +95,6 @@
 
 - Do not mutate the candidate or authoritative selected workflow surfaces.
 - Do not claim measured improvement without tying it to the supplied baseline evidence.
+- Do not auto-materialize adversarial eval cases or imply that eval-suite authoring already happened.
 - Do not skip rollback detail for candidate-to-baseline promotion decisions.
 - Do not leave the overlay validation command implicit.

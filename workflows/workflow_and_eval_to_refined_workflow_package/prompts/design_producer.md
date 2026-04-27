@@ -24,6 +24,7 @@
 | `baseline_evaluation_summary` | Read | Required input. |
 | `baseline_evaluation_findings` | Read | Required input. |
 | `baseline_failure_modes` | Read | Required input. |
+| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
 | `refinement_request_brief` | Read | Required input. |
 | `refinement_acceptance_criteria` | Read | Required input. |
 | `refinement_strategy` | Write | Overwrite. |
@@ -59,6 +60,8 @@
 ## Evidence
 
 - Tie every planned change to the copied baseline evidence and the selected-workflow surface.
+- If optimization evidence is present, use candidate entries as prioritization input only; do not present them as proof of improvement without ablation or rerun evidence.
+- Prefer sending `adversarial_case_candidates` toward later eval-suite authoring instead of planning direct auto-materialization here.
 - Keep the candidate surface scoped to the selected workflow boundary and avoid hidden runtime support.
 - Make the guardrails concrete enough that build and evaluation can detect drift instead of inferring it.
 
@@ -80,5 +83,6 @@
 
 - Do not mutate the authoritative selected workflow package.
 - Do not leave file ownership implicit.
+- Do not treat token optimization as permission for a semantic behavior change.
 - Do not defer core change decisions into vague prose.
 - Do not assume hidden runtime support or automatic promotion behavior.

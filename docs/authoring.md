@@ -841,6 +841,34 @@ Evaluation helper boundary:
 - it does not widen the runtime-injected control contract beyond `expected_output_schema`, `available_routes`, and `route_contracts`
 - workflows still own evaluation policy, category coverage requirements, prompt semantics, publication gating, and any downstream execution behavior in workflow code and prompt templates
 
+## Optional Optimization Helpers
+
+`stdlib/optimization.py` provides deterministic authoring-only helpers for workflows that need to ingest runtime observability and publish candidate-only optimization evidence.
+
+```python
+from autoloop_v3.stdlib import (
+    build_step_trace_metrics,
+    list_selected_workflow_runs,
+    normalize_trace_corpus,
+    rank_optimization_targets,
+    validate_selected_workflow_source_unchanged,
+    write_optimization_refinement_evidence,
+    write_selected_workflow_source_manifest,
+)
+```
+
+Optimization helper boundary:
+
+- the helpers write only workflow-local artifacts under `ctx.workflow_folder`
+- they reuse shared selected-workflow resolution and read-only run discovery seams instead of adding runtime-owned optimization behavior
+- `run_refs` use `<task_id>/<run_id>` identity and remain distinct from run-level status filters
+- `run_statuses` filter run-level terminal state, while `route_tags` filter step-level evidence inside eligible runs
+- they capture deterministic evidence such as trace normalization, route counts, token counts, static centrality, source manifests, and refinement-evidence envelopes
+- they support the bundled `workflow_run_traces_to_optimization_candidates` workflow without mutating the selected workflow or widening `workflow.toml`
+- they do not auto-run target workflows, auto-refine, auto-materialize prompts, auto-promote changes, or execute ablations
+- verifier/rubric optimization remains one merged acceptance-function pass owned by workflow code and prompt templates, not by stdlib helper policy
+- workflow code and prompt templates still own optimization policy, candidate ranking explanations, adversarial-case handling, and publication receipts
+
 ## Optional Workflow Capability Snapshot Helpers
 
 `stdlib/portfolio.py` also provides an opt-in helper for portfolio workflows that need richer importing inspection of workflow parameters and compiled step contracts while keeping the lightweight catalog seam unchanged.

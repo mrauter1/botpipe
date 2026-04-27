@@ -219,6 +219,7 @@ Payload models used by the package:
 
 - `workflow_idea_to_workflow_package` remains the standing greenfield authoring path and was reconsidered before shipping this narrower evaluation layer.
 - The package relies on the cycle-7 `stdlib/evaluation.py` seam instead of inventing runtime-owned evaluation execution or widening `workflow.toml`.
+- `adversarial_case_candidates` from `workflow_run_traces_to_optimization_candidates` should usually be materialized here rather than inside refinement; optimization candidates stay candidate-only until this workflow or another explicit authoring step turns them into durable eval-suite artifacts.
 - Future cycles can now build `workflow_and_eval_to_refined_workflow_package`, run-history diagnostics, or broader portfolio operating workflows on top of explicit eval-suite publication instead of re-deriving evaluation artifacts from scratch.
 
 ## Evidence

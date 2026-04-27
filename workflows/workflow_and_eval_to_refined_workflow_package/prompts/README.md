@@ -9,6 +9,10 @@
 - Provider raw output is runtime telemetry. It is persisted for logs, traces, extension events, debugging, and replay, but it is not rendered into provider prompts.
 - Provider prose is control metadata unless it is written into a declared artifact.
 - Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.
+- When `baseline_refinement_evidence.md` is present, treat optimization candidates as candidate-only input rather than proof of improvement.
+- `optimization_ablation_results` are stronger evidence than candidate estimates when both exist.
+- Token optimization ideas must preserve semantics before any later materialization.
+- `adversarial_case_candidates` should usually feed `workflow_to_eval_suite`; this workflow does not auto-materialize them.
 
 ## Keep In Each Prompt
 

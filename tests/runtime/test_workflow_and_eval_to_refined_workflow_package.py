@@ -149,6 +149,8 @@ def test_workflow_and_eval_to_refined_workflow_package_compiles_with_explicit_co
         "baseline_evaluation_summary",
         "baseline_evaluation_findings",
         "baseline_failure_modes",
+        "baseline_refinement_evidence",
+        "baseline_refinement_evidence_summary",
         "candidate_workflow_manifest",
         "refinement_verification_report",
         "evaluation_delta_report",
@@ -204,6 +206,9 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
         "WorkflowRefinementEvaluationPayload",
         "compact human-readable step contract",
         "Provider raw output is runtime telemetry",
+        "baseline_refinement_evidence.md",
+        "candidate-only input rather than proof of improvement",
+        "`adversarial_case_candidates` should usually feed `workflow_to_eval_suite`",
     ):
         assert required in text
 
@@ -221,6 +226,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
+                "`baseline_refinement_evidence_summary`",
                 "`refinement_request_brief`",
                 "`refinement_acceptance_criteria`",
                 "`refinement_request_framed`",
@@ -241,6 +247,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
+                "`baseline_refinement_evidence_summary`",
                 "Do not overwrite `refinement_request_brief` or `refinement_acceptance_criteria` during verification.",
                 "Return verifier control metadata only through the step payload and selected route.",
                 "`refinement_request_framed`",
@@ -259,6 +266,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
+                "`baseline_refinement_evidence_summary`",
                 "`refinement_strategy`",
                 "`workflow_change_plan`",
                 "`regression_guardrails`",
@@ -280,6 +288,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
+                "`baseline_refinement_evidence_summary`",
                 "Do not overwrite `refinement_strategy`, `workflow_change_plan`, or `regression_guardrails` during verification.",
                 "Return verifier control metadata only through the step payload and selected route.",
                 "`refinement_plan_designed`",
@@ -339,6 +348,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "## Evidence",
                 "Route guidance for the verifier",
                 "Forbidden",
+                "`baseline_refinement_evidence_summary`",
                 "`refinement_verification_report`",
                 "`evaluation_delta_report`",
                 "`promotion_record`",
@@ -362,6 +372,7 @@ def test_workflow_and_eval_to_refined_workflow_package_prompt_readme_uses_shared
                 "Route guidance",
                 "Payload requirements",
                 "Forbidden",
+                "`baseline_refinement_evidence_summary`",
                 "Do not overwrite `refinement_verification_report`, `evaluation_delta_report`, `promotion_record`, or `rollback_plan` during verification.",
                 "Do not create `workflow_refinement_receipt.json` in this step.",
                 "Return verifier control metadata only through the step payload and selected route.",
@@ -423,6 +434,7 @@ def test_workflow_and_eval_to_refined_workflow_package_normalizes_repeatable_inp
             "evaluation_summary_path": " .autoloop/evals/summary.json ",
             "evaluation_findings_path": " .autoloop/evals/findings.md ",
             "failure_modes_path": " ",
+            "refinement_evidence_path": " ",
             "sponsor_role": " Engineering Productivity ",
             "desired_outcome": " ",
             "constraints": [
@@ -444,6 +456,7 @@ def test_workflow_and_eval_to_refined_workflow_package_normalizes_repeatable_inp
         "evaluation_findings_path": ".autoloop/evals/findings.md",
         "evaluation_summary_path": ".autoloop/evals/summary.json",
         "failure_modes_path": None,
+        "refinement_evidence_path": None,
         "selected_workflow": "release_candidate_to_go_no_go",
         "sponsor_role": "Engineering Productivity",
         "target_test_command": TARGET_TEST_COMMAND,
@@ -471,6 +484,7 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
                 "evaluation_summary_path": " .autoloop/evals/summary.json ",
                 "evaluation_findings_path": " .autoloop/evals/findings.md ",
                 "failure_modes_path": " ",
+                "refinement_evidence_path": " ",
                 "sponsor_role": " Engineering Productivity ",
                 "desired_outcome": " ",
                 "constraints": [
@@ -515,6 +529,7 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
     assert next_state.evaluation_summary_path == ".autoloop/evals/summary.json"
     assert next_state.evaluation_findings_path == ".autoloop/evals/findings.md"
     assert next_state.failure_modes_path is None
+    assert next_state.refinement_evidence_path is None
     assert next_state.sponsor_role == "Engineering Productivity"
     assert next_state.desired_outcome is None
     assert next_state.constraints == [
@@ -533,6 +548,7 @@ def test_workflow_and_eval_to_refined_workflow_package_bootstrap_reads_typed_ctx
     assert invocation_contract["evaluation_summary_path"] == ".autoloop/evals/summary.json"
     assert invocation_contract["evaluation_findings_path"] == ".autoloop/evals/findings.md"
     assert invocation_contract["failure_modes_path"] is None
+    assert invocation_contract["refinement_evidence_path"] is None
     assert invocation_contract["desired_outcome"] is None
     assert invocation_contract["constraints"] == next_state.constraints
     assert invocation_contract["target_test_command"] == TARGET_TEST_COMMAND
@@ -561,6 +577,8 @@ def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candid
     assert (run.workflow_dir / "baseline_evaluation_summary.json").exists()
     assert (run.workflow_dir / "baseline_evaluation_findings.md").exists()
     assert (run.workflow_dir / "baseline_failure_modes.md").exists()
+    assert (run.workflow_dir / "baseline_refinement_evidence.json").exists()
+    assert (run.workflow_dir / "baseline_refinement_evidence.md").exists()
     assert (run.workflow_dir / "refinement_request_brief.md").exists()
     assert (run.workflow_dir / "refinement_acceptance_criteria.md").exists()
     assert (run.workflow_dir / "refinement_strategy.md").exists()
@@ -586,6 +604,7 @@ def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candid
         "evaluation_findings_path": ".autoloop/evals/release_go_no_go_eval_findings.md",
         "evaluation_summary_path": ".autoloop/evals/release_go_no_go_eval_summary.json",
         "failure_modes_path": ".autoloop/evals/release_go_no_go_failure_modes.md",
+        "refinement_evidence_path": None,
         "message": "Refine the release go/no-go workflow from the latest evaluation evidence.\n",
         "request_file": str(run.run_dir / "request.md"),
         "run_id": run.run_dir.name,
@@ -636,6 +655,19 @@ def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candid
     ) != run.source_snapshot[DOC_RELATIVE_PATH]
     assert (tmp_path / PROMPT_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[PROMPT_RELATIVE_PATH]
     assert (tmp_path / DOC_RELATIVE_PATH).read_text(encoding="utf-8") == run.source_snapshot[DOC_RELATIVE_PATH]
+    baseline_refinement_evidence = json.loads(
+        (run.workflow_dir / "baseline_refinement_evidence.json").read_text(encoding="utf-8")
+    )
+    baseline_refinement_evidence_summary = (run.workflow_dir / "baseline_refinement_evidence.md").read_text(
+        encoding="utf-8"
+    )
+    assert baseline_refinement_evidence == {
+        "schema": "autoloop.workflow_refinement_evidence/v1",
+        "source_path": None,
+        "target_workflow_id": "release_candidate_to_go_no_go",
+        "evidence_entries": [],
+    }
+    assert "No additional optimization refinement evidence was supplied for this run." in baseline_refinement_evidence_summary
 
     assert [call.step_name for call in run.provider.calls] == [
         "frame_refinement_request",
@@ -741,6 +773,75 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_evaluatio
             run.result.state,
             run.publish_context,
         )
+
+
+def test_refinement_accepts_optimization_refinement_evidence_entries(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    optimization_evidence_path = _write_optimization_refinement_evidence(tmp_path)
+    run = _run_successful_refinement_workflow(
+        tmp_path,
+        monkeypatch,
+        refinement_evidence_path=optimization_evidence_path,
+    )
+
+    invocation_contract = json.loads((run.workflow_dir / "invocation_contract.json").read_text(encoding="utf-8"))
+    baseline_refinement_evidence = json.loads(
+        (run.workflow_dir / "baseline_refinement_evidence.json").read_text(encoding="utf-8")
+    )
+    baseline_refinement_evidence_summary = (run.workflow_dir / "baseline_refinement_evidence.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert invocation_contract["refinement_evidence_path"] == optimization_evidence_path
+    assert baseline_refinement_evidence["schema"] == "autoloop.workflow_refinement_evidence/v1"
+    assert baseline_refinement_evidence["target_workflow_id"] == "release_candidate_to_go_no_go"
+    assert [entry["kind"] for entry in baseline_refinement_evidence["evidence_entries"]] == [
+        "step_optimization_priority_report",
+        "token_optimization_candidates",
+        "adversarial_case_candidates",
+        "workflow_optimization_scorecard",
+    ]
+    assert "candidate-only input and remain unproven" in baseline_refinement_evidence_summary
+    assert "`adversarial_case_candidates` should usually feed `workflow_to_eval_suite`" in baseline_refinement_evidence_summary
+
+
+def test_refinement_treats_candidate_without_ablation_as_unproven(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    optimization_evidence_path = _write_optimization_refinement_evidence(tmp_path)
+    run = _run_successful_refinement_workflow(
+        tmp_path,
+        monkeypatch,
+        refinement_evidence_path=optimization_evidence_path,
+    )
+
+    baseline_refinement_evidence_summary = (run.workflow_dir / "baseline_refinement_evidence.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "remain unproven until separate ablation or rerun evidence exists" in baseline_refinement_evidence_summary
+    assert "`optimization_ablation_results`, when present, are stronger evidence than candidate estimates." in (
+        baseline_refinement_evidence_summary
+    )
+
+
+def test_refinement_does_not_materialize_adversarial_cases_automatically(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    optimization_evidence_path = _write_optimization_refinement_evidence(tmp_path)
+    run = _run_successful_refinement_workflow(
+        tmp_path,
+        monkeypatch,
+        refinement_evidence_path=optimization_evidence_path,
+    )
+
+    assert not (run.task_dir / "wf_workflow_to_eval_suite").exists()
+    assert not (run.workflow_dir / "validated_eval_case_manifest.json").exists()
+    assert not (run.workflow_dir / "adversarial_case_matrix.md").exists()
 
 
 def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authoring_surface_mismatch(
@@ -885,7 +986,12 @@ def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_selected_
         )
 
 
-def _run_successful_refinement_workflow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+def _run_successful_refinement_workflow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    refinement_evidence_path: str | None = None,
+) -> SimpleNamespace:
     _install_repo_workflow_and_eval_to_refined_workflow_package(tmp_path)
     evidence_paths = _write_refinement_evidence(tmp_path)
     source_snapshot = {
@@ -1098,6 +1204,7 @@ def _run_successful_refinement_workflow(tmp_path: Path, monkeypatch: pytest.Monk
                 "evaluation_summary_path": evidence_paths["evaluation_summary_path"],
                 "evaluation_findings_path": evidence_paths["evaluation_findings_path"],
                 "failure_modes_path": evidence_paths["failure_modes_path"],
+                "refinement_evidence_path": refinement_evidence_path,
                 "sponsor_role": "engineering productivity",
                 "desired_outcome": "Publish a verified refinement candidate package for the selected workflow.",
                 "constraints": [
@@ -1222,6 +1329,52 @@ def _write_refinement_evidence(root: Path) -> dict[str, str]:
         "evaluation_findings_path": ".autoloop/evals/release_go_no_go_eval_findings.md",
         "failure_modes_path": ".autoloop/evals/release_go_no_go_failure_modes.md",
     }
+
+
+def _write_optimization_refinement_evidence(root: Path) -> str:
+    evidence_root = root / ".autoloop" / "optimization"
+    evidence_root.mkdir(parents=True, exist_ok=True)
+    path = evidence_root / "release_go_no_go_optimization_refinement_evidence.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_refinement_evidence/v1",
+                "source_path": None,
+                "target_workflow_id": "release_candidate_to_go_no_go",
+                "evidence_entries": [
+                    {
+                        "kind": "step_optimization_priority_report",
+                        "path": "step_optimization_priority_report.json",
+                        "summary": "Assessment is the highest-leverage optimization target.",
+                        "handling": "Candidate only; validate before materializing workflow changes.",
+                    },
+                    {
+                        "kind": "token_optimization_candidates",
+                        "path": "token_optimization_candidates.json",
+                        "summary": "Token candidates stay candidate-only until semantics are validated.",
+                        "handling": "Candidate only; validate before materializing workflow changes.",
+                    },
+                    {
+                        "kind": "adversarial_case_candidates",
+                        "path": "adversarial_case_candidates.json",
+                        "summary": "Adversarial cases should pressure rollback-evidence handling.",
+                        "handling": "Candidate only; route through eval-suite authoring before promotion.",
+                    },
+                    {
+                        "kind": "workflow_optimization_scorecard",
+                        "path": "workflow_optimization_scorecard.json",
+                        "summary": "The optimization scorecard recommends refinement as the next explicit step.",
+                        "handling": "Candidate only; validate before materializing workflow changes.",
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return ".autoloop/optimization/release_go_no_go_optimization_refinement_evidence.json"
 
 
 def _write_candidate_surface(request) -> str:

@@ -260,7 +260,14 @@ Workflow-declared `GitTracking` is ignored with a deprecation warning because ru
 
 Workflow-declared `Tracing` remains sidecar-compatible for workflows that still want an extra trace sink.
 
-Future optimization workflows consume `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/`.
+`workflow_run_traces_to_optimization_candidates` consumes runtime-owned `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/` evidence.
+
+The optimizer is a bundled authoring-only workflow:
+
+- it emits candidate-only optimization artifacts plus `workflow_refinement_evidence.json`
+- it does not mutate the selected workflow source
+- it does not run the selected workflow by default
+- it does not execute ablations by default
 
 ## Recursive Operation
 

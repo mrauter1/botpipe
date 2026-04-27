@@ -20,6 +20,7 @@
 | `baseline_evaluation_summary` | Read | Required input. |
 | `baseline_evaluation_findings` | Read | Required input. |
 | `baseline_failure_modes` | Read | Required input. |
+| `baseline_refinement_evidence_summary` | Read | Optional optimization evidence summary rendered as workflow-local guidance. |
 | `refinement_request_brief` | Read | Required input. |
 | `refinement_acceptance_criteria` | Read | Required input. |
 
@@ -45,6 +46,7 @@
 ## Evidence
 
 - Base the verdict on the framing artifacts plus the captured selected-workflow and baseline-evidence artifacts instead of provider inference.
+- If optimization evidence is present, confirm the framing treats candidate-only entries as unproven unless separate ablation or rerun evidence exists.
 - Confirm that the artifacts make the refinement boundary explicit enough for deterministic planning without widening the selected workflow surface.
 
 ## Routes
@@ -59,4 +61,5 @@
 
 - Do not choose another workflow.
 - Do not approve framing that leaves the selected workflow boundary implicit.
+- Do not approve framing that treats optimization candidates as measured proof without stronger evidence.
 - Do not ask for a replan when local repair is sufficient.
