@@ -771,3 +771,56 @@ Validation passed with the focused phase suite:
 Open issues / next step
 
 I did not run the full repository test suite. The remaining warnings are the existing Pydantic `schema` field warnings in optimizer contracts and remain out of scope for this phase. The next step is reviewer re-verification of this phase so later optimization-candidate passes can build on the corrected ranking and failure-analysis artifacts.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcca4-fed7-7033-adcf-c394312e9126
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+I’m re-reviewing the phase after the implementer’s fixes, focused on the two prior blockers and any regressions around ranking attribution and the `insufficient_evidence` short-circuit. Next I’m checking the touched code and then I’ll update the phase criteria and feedback only.
+
+The previous blockers are no longer showing up in the raw diff query, so I’m verifying the live file contents directly. I’m checking the internal-corpus path, ranking helper behavior, and evidence gating before I mark criteria.
+
+I’ve verified the live code paths. The only remaining check is the focused test rerun, then I’ll mark the phase criteria and record whether any findings remain open.
+
+The focused tests pass and the two prior blockers are resolved in the live code paths. I’m marking the criteria complete and adding a short verifier note that there are no remaining findings for this phase pass.
+
+Scope considered
+
+Phase-local review of the ranking-and-failure-analysis implementation only. I limited writes to the active verifier artifacts under `.autoloop/tasks/.../ranking-and-failure-analysis/`.
+
+What I analyzed
+
+I rechecked the shared decisions, the two prior blocking findings, the current helper behavior in `stdlib/optimization.py`, the workflow publication path in `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`, and the targeted unit/runtime coverage added for this phase.
+
+What I reviewed
+
+I verified that:
+- published `route_tags` filtering remains intact for `workflow_optimization_trace_corpus.json`
+- deterministic ranking and failure seeding can still see upstream locally accepted steps through the internal corpus path
+- the `insufficient_evidence -> package` short-circuit no longer publishes mined-failure evidence as if failure mining had completed
+- the focused regression suite passes
+
+Key findings / decisions
+
+No remaining findings in phase scope. The earlier blockers are resolved:
+- `IMP-001`: fixed by separating the published filtered observations from the internal unfiltered observation set used for deterministic ranking and failure seeding.
+- `IMP-002`: fixed by gating `workflow_failure_scenarios` refinement-evidence publication on `ranking_status == "targets_ranked"` and `failure_status == "failure_scenarios_mined"`.
+
+I updated `criteria.md` to fully checked and appended a verifier note to `feedback.md` recording that the blockers were revalidated as resolved.
+
+Open issues / next step
+
+Focused validation passed with `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py` (`29 passed`). Residual risk is limited to the existing Pydantic `schema` field warnings, which remain non-blocking and out of scope for this phase. The phase is ready to move forward.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
