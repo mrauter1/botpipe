@@ -19,7 +19,7 @@
 ## Output Requirements
 
 - Write `token_optimization_candidates`.
-- Read `workflow_optimization_scope`.
+- Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
 - Classify every candidate as `safe_compression`, `risky_compression`, or `semantic_behavior_change_disguised_as_compression`.

@@ -24,7 +24,7 @@
 ## Output Requirements
 
 - Write `workflow_optimization_scorecard` and `workflow_optimization_packet`.
-- Read `workflow_optimization_scope` and apply `optimization_depth`.
+- Read `workflow_optimization_scope.json` and apply `optimization_depth`.
 - If `eligible_run_count == 0`, publish a no-op scorecard and packet that explain why no optimization was performed.
 - Say which candidates are ready for review, which require ablation, which are token-only, which are adversarial-case ideas, and which require workflow-level refinement when those artifacts exist.
 - State that target workflow reruns, ablations, and refinement execution were not executed in this workflow.

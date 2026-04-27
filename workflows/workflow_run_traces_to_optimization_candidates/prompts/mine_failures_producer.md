@@ -20,8 +20,8 @@
 ## Output Requirements
 
 - Write `workflow_failure_scenarios`.
-- Read `workflow_optimization_scope` and apply `optimization_depth`.
-- Read `workflow_failure_scenario_seeds` as deterministic input. You own the final `workflow_failure_scenarios` artifact.
+- Read `workflow_optimization_scope.json` and apply `optimization_depth`.
+- Read `workflow_failure_scenario_seeds.json` as deterministic input. You own the final `workflow_failure_scenarios.json` artifact.
 - The workflow will validate your artifact but will not deterministically rewrite it.
 - Use the seeds, trace corpus, raw-output references, priority report, and selected workflow surfaces to author the final failure scenarios.
 - Do not simply copy seeds mechanically. Refine, merge, split, or discard seeds based on the evidence.

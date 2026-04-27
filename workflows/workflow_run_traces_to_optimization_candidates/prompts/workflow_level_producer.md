@@ -21,7 +21,7 @@
 ## Output Requirements
 
 - Write `workflow_level_optimization_candidates`.
-- Read `workflow_optimization_scope`.
+- Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
 - Allowed targets include artifact handoff, route contract, split/merge, prompt README, context rendering, session policy, workflow parameter, workflow code, eval gap, input quality gap, and operator process gap.

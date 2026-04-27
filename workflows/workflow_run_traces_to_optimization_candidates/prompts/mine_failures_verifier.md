@@ -23,7 +23,7 @@
 ## Evidence
 
 - Accept grounded scenarios even when some evidence-reference arrays are omitted.
-- Validate the producer-authored `workflow_failure_scenarios`.
+- Validate the producer-authored `workflow_failure_scenarios.json`.
 - Reject invented evidence, invalid schema, wrong selected workflow, or invalid failure kinds.
 - Do not reject solely because evidence-reference arrays are absent.
 

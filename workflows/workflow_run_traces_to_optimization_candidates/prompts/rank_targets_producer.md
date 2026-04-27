@@ -21,7 +21,7 @@
 ## Output Requirements
 
 - Write `step_trace_metrics` and `step_optimization_priority_report`.
-- Read `workflow_optimization_scope` and apply `optimization_depth`.
+- Read `workflow_optimization_scope.json` and apply `optimization_depth`.
 - Treat the precomputed deterministic metrics and draft ranking report as the authoritative starting point; revise only when the same evidence justifies it explicitly.
 - Distinguish high failure count from highest leverage optimization target.
 - Prefer upstream attribution when later failures are downstream symptoms of weaker earlier artifacts.

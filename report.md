@@ -25,6 +25,7 @@ Fixed workflow optimization semantics so accepted LLM-authored artifacts are val
 - workflows/workflow_run_traces_to_optimization_candidates/prompts/package_verifier.md
 - workflows/workflow_run_traces_to_optimization_candidates/prompts/rank_targets_producer.md
 - docs/workflows/workflow_run_traces_to_optimization_candidates.md
+- report.md
 - stdlib/optimization.py
 - tests/runtime/test_workflow_run_traces_to_optimization_candidates.py
 - tests/unit/test_optimization_helpers.py

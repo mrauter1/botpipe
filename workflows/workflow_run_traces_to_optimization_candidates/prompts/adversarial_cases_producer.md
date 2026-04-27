@@ -18,7 +18,7 @@
 ## Output Requirements
 
 - Write `adversarial_case_candidates`.
-- Read `workflow_optimization_scope`.
+- Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
 - Keep cases grounded in observed failure modes and explicit expected routes.

@@ -19,7 +19,7 @@
 ## Output Requirements
 
 - Write `verifier_rubric_optimization_candidates`.
-- Read `workflow_optimization_scope`.
+- Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
 - Treat verifier prompt, rubric text, feedback specificity, required-artifact interpretation, and route contracts as one acceptance-function surface.

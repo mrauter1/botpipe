@@ -19,7 +19,7 @@
 ## Output Requirements
 
 - Write `producer_prompt_optimization_candidates`.
-- Read `workflow_optimization_scope`.
+- Read `workflow_optimization_scope.json`.
 - Apply `optimization_depth`.
 - Treat `max_candidates_per_pass` as a soft candidate budget.
 - Candidate changes may include prompt instructions, evidence discipline, artifact instructions, or output-shape guidance.

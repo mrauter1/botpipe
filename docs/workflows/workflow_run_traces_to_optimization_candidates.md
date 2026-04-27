@@ -42,6 +42,7 @@ autoloop run workflow_run_traces_to_optimization_candidates <task-id> \
 - `optimization_depth` optional, one of `cheap`, `standard`, or `ablation`. Even `ablation` mode does not execute ablations here.
 - `include_adversarial_generation`, `include_token_optimization`, and `include_workflow_level_candidates` are optional booleans that short-circuit their passes explicitly when disabled.
 - `max_failure_scenarios`, `max_candidates_per_pass`, `focus`, `sponsor_role`, `desired_outcome`, and `constraints` are optional.
+- The published `workflow_optimization_scope.json` records `optimization_depth` and `max_candidates_per_pass` for prompt and publication semantics only; it does not authorize reruns, ablations, refinement execution, or source mutation.
 
 ## Artifact Ownership
 
@@ -115,6 +116,7 @@ Supported `pairs` subsets must be ordered prefixes only.
 
 ## Optimization Depth
 
+- All depths use existing traces only. This workflow does not execute target-workflow reruns, ablations, or refinement runs.
 - `cheap`: existing traces only; concise candidate generation.
 - `standard`: existing traces only; deeper LLM cross-checking; no reruns.
 - `ablation`: ablation planning mode only; no ablation execution.

@@ -468,3 +468,46 @@ Phase-local test audit is complete. The only noted remaining gap is the already-
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcfa2-8341-79b0-9d59-07c39c7b4de1
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcfa2-8341-79b0-9d59-07c39c7b4de1
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfa2-8341-79b0-9d59-07c39c7b4de1
+---
+I’m handling the phase-scoped prompts, docs, and report work. First I’m reading the active phase notes, shared decisions, and the current optimizer prompt/doc files so I can align the text with the workflow semantics already landed in the prior phase.
+
+The prior phase notes show prompt and doc files were already touched while landing the semantics. I’m checking the actual file contents now against the active phase contract so I can either tighten any mismatches or confirm only phase bookkeeping remains.
+
+I’ve identified a small but real alignment gap: the prompt text mostly has the right semantics, but several prompts refer to artifact handles rather than the published `.json` filenames called out in the request. I’m tightening those references, updating the workflow doc to state the scope artifact semantics explicitly, and then I’ll record the phase notes and validation.
+
+The text changes are in. I’m recording the phase-local decision and implementation notes now, then I’ll run the relevant docs-facing validation so the report and notes match the actual result.
+
+The docs-facing test result is consistent with the earlier full-run note: my phase changes didn’t introduce a new failure, and the only failures remain the pre-existing recursive-memory charter assertions. I’m updating the phase notes with that exact result and then I’ll summarize the finished scope.
+
+Scope considered
+
+Active phase only: prompt, docs, and report alignment for `workflow_run_traces_to_optimization_candidates`, plus the required phase-local notes and shared decision ledger updates.
+
+What I analyzed
+
+I checked the active phase artifacts, the shared decisions, the prior workflow-semantics implementation notes, and the current optimizer prompt/doc/report files. The substantive workflow behavior was already landed in the prior phase; the remaining gap was prompt/doc wording consistency with the published artifact contracts.
+
+What I changed
+
+I tightened the producer and failure-mining prompts to name the published JSON artifacts explicitly, especially `workflow_optimization_scope.json`, `workflow_failure_scenario_seeds.json`, and `workflow_failure_scenarios.json`. I also updated [docs/workflows/workflow_run_traces_to_optimization_candidates.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_run_traces_to_optimization_candidates.md) to state that `workflow_optimization_scope.json` carries prompt/publication semantics only and that all optimization depths remain existing-trace-only with no reruns, ablations, or refinement runs. I updated [report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/report.md) to include itself in the changed-files list, and I recorded the phase result in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/implement/phases/prompts-docs-and-report/implementation_notes.md) and `decisions.txt`.
+
+Key findings / decisions
+
+The only phase-local behavior decision was to keep this turn documentation-only: no Python workflow, contract, or test code changed here. The prompt copy now matches the artifact filenames called out by the request, which removes contract ambiguity without changing runtime semantics.
+
+Open issues / next step
+
+Validation run: `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py`. It still fails on two pre-existing recursive-memory charter assertions in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py); no new failure was introduced by this phase.
