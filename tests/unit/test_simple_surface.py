@@ -289,6 +289,99 @@ def test_simple_workflow_step_compiles_and_generated_handler_invokes_child_workf
     assert payload["output_artifacts"]["note"].endswith("child-note.md")
 
 
+def test_simple_workflow_step_message_from_reads_step_local_artifact_text(tmp_path: Path) -> None:
+    class ChildWorkflow(Workflow):
+        note = step("Write the note.")
+
+    class ParentWorkflow(Workflow):
+        draft = step("Draft the child launch message.", out=Md("brief"))
+        launch = workflow_step(ChildWorkflow, message_from="brief")
+        flow = chain(draft, launch)
+
+    compiled = compile_workflow(ParentWorkflow)
+
+    @dataclass
+    class _FakeChildResult:
+        workflow_name: str = "child_workflow"
+        run_id: str = "run-child-2"
+        terminal: str = "SUCCESS"
+        status: str = "success"
+        last_event: Event | None = Event("done")
+        output_artifacts: dict[str, Path] | None = None
+        output_metadata: dict[str, object] | None = None
+
+    class _FakeContext:
+        def __init__(self) -> None:
+            self.workflow_folder = tmp_path / "parent"
+            self.workflow_folder.mkdir(parents=True, exist_ok=True)
+            self.invocations: list[str] = []
+
+        def invoke_workflow(self, workflow, *, message, parameters=None, input=None):
+            assert workflow is ChildWorkflow
+            assert parameters == {}
+            assert input is None
+            self.invocations.append(message)
+            return _FakeChildResult()
+
+    ctx = _FakeContext()
+    message_path = ctx.workflow_folder / "draft" / "brief.md"
+    message_path.parent.mkdir(parents=True, exist_ok=True)
+    message_path.write_text("Launch the child workflow with this brief.\n", encoding="utf-8")
+
+    next_state, event = ParentWorkflow.on_launch(compiled.new_state(), ctx)
+
+    assert next_state == compiled.new_state()
+    assert event.tag == "done"
+    assert ctx.invocations == ["Launch the child workflow with this brief.\n"]
+
+
+def test_simple_workflow_step_child_question_maps_to_reserved_question_route(tmp_path: Path) -> None:
+    class ChildWorkflow(Workflow):
+        note = step("Write the note.")
+
+    class ParentWorkflow(Workflow):
+        launch = workflow_step(ChildWorkflow, message="Run child workflow")
+        flow = chain(launch)
+
+    compiled = compile_workflow(ParentWorkflow)
+
+    @dataclass
+    class _FakeChildResult:
+        workflow_name: str = "child_workflow"
+        run_id: str = "run-child-3"
+        terminal: str = "PAUSE"
+        status: str = "paused"
+        last_event: Event | None = Event("question", question="Need approval?")
+        output_artifacts: dict[str, Path] | None = None
+        output_metadata: dict[str, object] | None = None
+
+    class _FakeContext:
+        def __init__(self) -> None:
+            self.workflow_folder = tmp_path / "parent"
+            self.workflow_folder.mkdir(parents=True, exist_ok=True)
+
+        def invoke_workflow(self, workflow, *, message, parameters=None, input=None):
+            return _FakeChildResult()
+
+    _, event = ParentWorkflow.on_launch(compiled.new_state(), _FakeContext())
+
+    assert compiled.routes["launch"]["question"].target == "PAUSE"
+    assert event.tag == "question"
+    assert event.question == "Need approval?"
+
+
+def test_simple_workflow_step_rejects_unknown_message_from_reference() -> None:
+    class ChildWorkflow(Workflow):
+        note = step("Write the note.")
+
+    class BrokenParentWorkflow(Workflow):
+        launch = workflow_step(ChildWorkflow, message_from="missing")
+        flow = chain(launch)
+
+    with pytest.raises(WorkflowValidationError, match="message_from 'missing' must reference a known artifact"):
+        compile_workflow(BrokenParentWorkflow)
+
+
 def test_strict_workflow_counterpart_preserves_import_time_validation() -> None:
     with pytest.raises(WorkflowValidationError, match="workflow must define nested State"):
 

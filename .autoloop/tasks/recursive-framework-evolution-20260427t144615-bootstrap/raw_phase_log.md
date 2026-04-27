@@ -1145,3 +1145,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+Reviewing the current simple-lowering tests and the phase artifacts first, then I’ll add any missing regression coverage and update the test-phase notes to match what’s actually exercised.
+
+I’ve identified the main gap in the current tests: `workflow_step` only has a success-path check. I’m adding edge and failure coverage there, plus the required test-phase documentation updates.
+
+The new coverage is in place. I’m running the focused unit suite now to catch any assumptions in the generated `workflow_step` tests before I update the final phase summary.
+
+Scope considered
+
+- Phase-local `simple-lowering` test coverage only.
+- Focused on the changed simple-surface behaviors and adjacent regression risk around `workflow_step(...)` and prompt/read inference.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py)
+- [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md)
+
+What I changed
+
+- Added `workflow_step(...)` edge and failure coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py):
+  - `message_from` reads step-local artifact text into the child invocation.
+  - child `question` results map back to the reserved parent `question -> PAUSE` route.
+  - unknown `message_from` references fail at compile time with a clear validation error.
+- Expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, stability notes, and known gaps.
+- Appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md).
+
+Key findings / decisions
+
+- The highest-risk uncovered path was `workflow_step(...)`: the existing tests only exercised the success case, so I added direct coverage for child-question mapping and invalid `message_from` references.
+- I kept the tests deterministic by using fake contexts and child-result doubles rather than full runtime runs; that matches the phase scope and still validates the generated lowering behavior.
+- I did not add a test that would normalize the new absolute-path `PromptRegistry` precedence noted by review, because that behavior was not explicitly confirmed as intended.
+
+Open issues / next step
+
+- Focused validation completed with:
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_validation.py -k "simple or system_handler_arity or strict_workflow_counterpart"`
+- I did not run the full repository suite.
