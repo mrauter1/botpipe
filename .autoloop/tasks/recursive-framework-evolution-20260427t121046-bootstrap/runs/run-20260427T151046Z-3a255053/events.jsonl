@@ -33,3 +33,6 @@
 {"ts": "2026-04-27T15:53:59.680943+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 33, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "prompts-docs-and-report", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-27T15:53:59.681712+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 34, "event_type": "pair_started", "pair": "test", "phase_id": "prompts-docs-and-report"}
 {"ts": "2026-04-27T15:53:59.681785+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 35, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "prompts-docs-and-report"}
+{"ts": "2026-04-27T15:56:41.794303+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 36, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "prompts-docs-and-report"}
+{"ts": "2026-04-27T15:57:36.490410+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 37, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "prompts-docs-and-report"}
+{"ts": "2026-04-27T15:57:36.525266+00:00", "run_id": "run-20260427T151046Z-3a255053", "seq": 38, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "prompts-docs-and-report"}
