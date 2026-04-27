@@ -1282,3 +1282,94 @@ This phase is complete from the reviewer side. Remaining route-contract cleanup 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+I’m starting with the phase test artifacts and the changed provider/engine test surfaces, then I’ll fill any material coverage gap before updating the strategy and feedback notes.
+
+There’s a likely gap around low-level `Engine` prompt resolution without a prompt registry. I’m checking the existing prompt tests before deciding whether to add that coverage or stay within the current provider/engine contract assertions.
+
+The runtime-provider tests still look like they encode the older reasonless `question` outcome shape. I’m checking those before deciding the smallest coherent test update.
+
+I found a second worthwhile gap: the phase contract calls out low-level `Engine` file prompts needing an explicit prompt registry, and current tests don’t exercise that engine-level failure mode yet. I’m wiring that into the focused contract/runtime coverage rather than leaving it implicit.
+
+I’m editing two test surfaces: runtime provider tests to align with the stricter control-response shape, and engine contract tests to cover the explicit prompt-registry requirement for low-level `Engine` usage.
+
+I’ve added the new coverage. Next I’m running the focused runtime and contract slices to catch any stale expectations introduced by the stricter control-response contract.
+
+Scope considered
+
+Phase-scoped test coverage for the provider and engine contract changes, focused on rendered-provider control-response parsing, runtime prompt rendering expectations, and low-level `Engine` prompt-registry behavior.
+
+What I analyzed
+
+I reviewed the changed provider-boundary and engine contract tests, the current parser/runtime expectations in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py:1), and the existing phase coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1). The main uncovered risk was engine-level handling of relative `Prompt.file(...)` without an explicit prompt registry.
+
+What I changed
+
+I updated [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py:1) so runtime-provider parsing and CLI-wrapper assertions match the stricter `{tag, reason, payload}` control-response contract, including a new failure-path test for missing `reason`. I added two engine contract tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1) covering low-level `Engine` failure for relative file prompts without a prompt registry and success when `FilesystemPromptRegistry` is supplied. I also updated [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/provider-and-engine-contract/test_strategy.md>) with a behavior-to-test coverage map and appended a concise summary to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/provider-and-engine-contract/feedback.md>).
+
+Key findings / decisions
+
+The engine prompt-registry behavior is best exercised through `RenderedLLMProvider`, because `ScriptedLLMProvider` bypasses prompt rendering and would not catch unresolved file prompts. I kept the new tests deterministic by using in-process stubs and local filesystem fixtures only.
+
+Open issues / next step
+
+Focused validation passed:
+- `.venv/bin/python -m py_compile tests/runtime/test_runtime_providers.py tests/contract/test_engine_contracts.py`
+- `.venv/bin/python -m pytest tests/runtime/test_runtime_providers.py -k "parse_outcome_json or rendered_llm_provider_parses_codex_verifier_outcome_in_core or rendered_llm_provider_parses_claude_llm_outcome_in_core"`
+- `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k "low_level_engine_requires_prompt_registry_for_relative_file_prompts or low_level_engine_resolves_relative_file_prompts_with_filesystem_registry"`
+
+Broader full-suite proof remains deferred to the later phase gate.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+Auditing the new test coverage first against the phase contract: rendered-provider control responses, prompt-registry behavior, and the engine/workflow-step regression surfaces.
+
+The phase-local tests now cover the parser contract change and the engine prompt-registry edge explicitly. I’m marking the audit artifacts complete and leaving a brief no-findings note in the feedback trail.
+
+Scope considered
+
+Phase-scoped audit of the provider and engine contract tests, with focus on the new rendered-provider control-response assertions, the low-level `Engine` prompt-registry tests, and the phase-local strategy/feedback artifacts.
+
+What I analyzed
+
+I reviewed the updated tests in [tests/runtime/test_runtime_providers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_providers.py:1) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1), plus the behavior map in [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/provider-and-engine-contract/test_strategy.md>). I checked them against the accepted phase contract and the shared decisions around the exact `{tag, reason, payload}` response shape and explicit prompt-registry requirements.
+
+What I reviewed
+
+The added coverage is aligned with the changed behavior and catches the material regression surfaces. The runtime-provider tests now assert the stricter control-response shape and updated rendered prompt sections, while the contract tests exercise both low-level `Engine` failure without a prompt registry and success with `FilesystemPromptRegistry`. The strategy note accurately records both the coverage and the remaining intentional gaps.
+
+Key findings / decisions
+
+No phase-local findings. I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/provider-and-engine-contract/criteria.md>) to checked and appended a brief no-findings audit note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/provider-and-engine-contract/feedback.md>).
+
+Open issues / next step
+
+This test phase is complete. Broader full-suite proof and repo-wide legacy cleanup remain deferred exactly as recorded in the phase strategy.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
