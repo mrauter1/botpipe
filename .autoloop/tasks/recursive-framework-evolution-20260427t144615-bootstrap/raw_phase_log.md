@@ -71,3 +71,52 @@ Prompt resolution is already lazy in the runtime, so the plan reuses that seam f
 Open issues / next step
 
 No blocking ambiguity remains from the current request. The next phase can proceed directly from the authored plan, starting with the additive `autoloop.simple` surface and the prompt/route foundation work.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+---
+I’m auditing the authored plan against the request, current repo constraints, and the verifier checklist now. I’ll update the criteria and feedback artifacts based on whether the plan actually covers the risky compatibility and execution details it claims to handle.
+
+I found two material gaps that would make the implementation drift from the requested public contract or accidentally narrow runtime behavior. I’m recording those as blocking findings and marking the criteria accordingly rather than over-approving a plan that still has hidden compatibility risk.
+
+The verifier edits are in place. I’m doing one quick spot-check so the final status reflects the written findings and checkbox state exactly.
+
+Scope considered
+
+I verified the active planning artifacts against the immutable request, raw log, current decisions, and the repo surfaces that constrain this change: strict `workflow` shim behavior, installed-package vs repo-root imports, provider/rendering contract wording, static graph metadata, and the request’s explicit undeclared-output invariants.
+
+What I analyzed
+
+I reviewed [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt). I also re-validated `phase_plan.yaml` with `python3` and `yaml.safe_load`; it parses cleanly and its required lists are populated.
+
+What I reviewed
+
+The phase ordering is coherent and the metadata in `phase_plan.yaml` is valid. The plan does a good job keeping the new surface additive, preserving the strict `workflow` shim early, and framing simple authoring as lowering into the existing compiler/engine rather than as a second runtime.
+
+Key findings / decisions
+
+I recorded two blocking findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/feedback.md).
+
+`PLAN-001` is blocking because the plan does not explicitly solve how the requested `from autoloop.simple import ...` contract will work in both repo-root and installed-package modes. Adding a repo-root `autoloop/` package alone is not enough given the repo’s current `autoloop_v3.*` installed-package path and the existing dual-mode shim pattern.
+
+`PLAN-002` is blocking because the plan does not explicitly preserve the request’s undeclared-workspace-output invariant during provider/rendering migration. As written, implementation could narrow behavior by implying that only declared writable artifacts may be written.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/criteria.md) accordingly: only `Technical Debt` is checked at this point.
+
+Open issues / next step
+
+The producer plan needs a revision that explicitly covers the top-level `autoloop.simple` import contract across supported execution modes and adds a concrete invariant/test requirement that declared writable artifacts are non-exclusive and undeclared workspace outputs remain allowed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
