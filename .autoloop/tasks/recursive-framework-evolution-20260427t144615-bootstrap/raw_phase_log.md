@@ -206,3 +206,12 @@ The plan artifacts are now consistent with the request and the verifier-owned cr
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=surface-foundations,contract-migration,simple-lowering,engine-hooks-workflow-step,compatibility-docs-cleanup
+explicit=True
+current_phase_index=0
