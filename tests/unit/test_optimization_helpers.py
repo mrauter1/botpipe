@@ -9,13 +9,17 @@ from types import SimpleNamespace
 import pytest
 
 from autoloop_v3.stdlib.optimization import (
+    OptimizationArtifactSpec,
     build_step_trace_metrics,
+    collect_optimization_publication_surface,
     extract_failure_scenario_seeds,
+    finalize_optional_optimization_artifact,
     list_selected_workflow_runs,
     load_run_observability_bundle,
     normalize_trace_corpus,
     parse_run_ref,
     rank_optimization_targets,
+    validate_optimization_scorecard_publication,
     validate_observability_bundle,
     validate_selected_workflow_source_unchanged,
     write_optimization_refinement_evidence,
@@ -442,6 +446,121 @@ def test_write_optimization_refinement_evidence_uses_expected_schema(tmp_path: P
     assert payload["evidence_entries"][0]["kind"] == "workflow_optimization_scorecard"
 
 
+def test_finalize_optional_optimization_artifact_writes_empty_payload_for_missing_skipped_route(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "token_optimization_candidates.json"
+    spec = OptimizationArtifactSpec(
+        filename=artifact_path.name,
+        artifact_name=artifact_path.name,
+        expected_schema="autoloop.workflow_optimization.token_candidates/v1",
+        list_field="candidates",
+        reader=_namespace_reader,
+        empty_payload_factory=lambda *, selected_workflow: {
+            "schema": "autoloop.workflow_optimization.token_candidates/v1",
+            "selected_workflow": selected_workflow,
+            "candidates": [],
+        },
+    )
+
+    finalize_optional_optimization_artifact(
+        route="token_pass_not_applicable",
+        path=artifact_path,
+        selected_workflow_name="release_candidate_to_go_no_go",
+        spec=spec,
+    )
+
+    assert json.loads(artifact_path.read_text(encoding="utf-8")) == {
+        "schema": "autoloop.workflow_optimization.token_candidates/v1",
+        "selected_workflow": "release_candidate_to_go_no_go",
+        "candidates": [],
+    }
+
+
+def test_collect_and_validate_optimization_publication_surface_aggregates_counts_ids_and_ablation(tmp_path: Path) -> None:
+    producer_path = tmp_path / "producer_prompt_optimization_candidates.json"
+    producer_path.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "candidates": [
+                    {"candidate_id": "producer-001", "requires_ablation": False},
+                    {"candidate_id": "producer-002", "requires_ablation": True},
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    adversarial_path = tmp_path / "adversarial_case_candidates.json"
+    adversarial_path.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.adversarial_case_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "cases": [
+                    {"case_id": "case-001"},
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    specs = (
+        OptimizationArtifactSpec(
+            filename=producer_path.name,
+            artifact_name=producer_path.name,
+            expected_schema="autoloop.workflow_optimization.producer_candidates/v1",
+            list_field="candidates",
+            reader=_namespace_reader,
+            empty_payload_factory=lambda *, selected_workflow: {
+                "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+                "selected_workflow": selected_workflow,
+                "candidates": [],
+            },
+            count_key="producer",
+            id_field="candidate_id",
+            requires_ablation_field="requires_ablation",
+        ),
+        OptimizationArtifactSpec(
+            filename=adversarial_path.name,
+            artifact_name=adversarial_path.name,
+            expected_schema="autoloop.workflow_optimization.adversarial_case_candidates/v1",
+            list_field="cases",
+            reader=_namespace_reader,
+            empty_payload_factory=lambda *, selected_workflow: {
+                "schema": "autoloop.workflow_optimization.adversarial_case_candidates/v1",
+                "selected_workflow": selected_workflow,
+                "cases": [],
+            },
+            count_key="adversarial_cases",
+            id_field="case_id",
+        ),
+    )
+
+    surface = collect_optimization_publication_surface(
+        tmp_path,
+        selected_workflow_name="release_candidate_to_go_no_go",
+        artifact_specs=specs,
+    )
+
+    assert surface.counts == {"producer": 2, "adversarial_cases": 1}
+    assert surface.candidate_ids == {"producer-001", "producer-002", "case-001"}
+    assert surface.requires_ablation is True
+
+    validate_optimization_scorecard_publication(
+        {
+            "candidate_counts": {"producer": 2, "adversarial_cases": 1},
+            "highest_priority_candidate_ids": ["producer-002", "case-001"],
+            "requires_ablation_before_promotion": True,
+        },
+        publication_surface=surface,
+    )
+
+
 def _write_minimal_run_metadata(root: Path, task_id: str, workflow_name: str, run_id: str, status: str) -> Path:
     run_dir = root / ".autoloop" / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -460,6 +579,19 @@ def _write_minimal_run_metadata(root: Path, task_id: str, workflow_name: str, ru
     }
     (run_dir / "run.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return run_dir
+
+
+def _namespace_reader(path: Path) -> SimpleNamespace:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return _to_namespace(payload)
+
+
+def _to_namespace(value):
+    if isinstance(value, dict):
+        return SimpleNamespace(**{key: _to_namespace(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return [_to_namespace(item) for item in value]
+    return value
 
 
 def _write_observable_run(root: Path, task_id: str, workflow_name: str, run_id: str) -> Path:

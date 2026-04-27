@@ -8,7 +8,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
@@ -20,7 +20,17 @@ except ImportError:  # pragma: no cover - direct repo-root import fallback
     from runtime.workspace import list_run_records
 
 from .lifecycle import write_workflow_json
-from .validation import require_non_empty_string, require_positive_int, require_string_list
+from .validation import (
+    require_non_empty_string,
+    require_positive_int,
+    require_string_list,
+    validate_selected_workflow_authoring_surface_snapshot,
+    validate_selected_workflow_capability_snapshot,
+    validate_selected_workflow_decomposition_surface_snapshot,
+)
+from .adaptation import write_selected_workflow_capability_snapshot
+from .decomposition import write_selected_workflow_decomposition_surface
+from .refinement import write_selected_workflow_authoring_surface
 
 TRACE_CORPUS_SCHEMA = "autoloop.workflow_optimization.trace_corpus/v1"
 SOURCE_MANIFEST_SCHEMA = "autoloop.workflow_optimization.source_manifest/v1"
@@ -54,6 +64,44 @@ class RunObservabilityBundle:
     git_tracking_records: tuple[dict[str, Any], ...] | None = None
     static_step_graph: dict[str, Any] | None = None
     load_error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class OptimizationFrameCapture:
+    """Deterministic optimizer frame-capture result after writing workflow-local artifacts."""
+
+    selected_workflow_name: str
+    candidate_run_count: int
+    eligible_run_count: int
+    excluded_run_count: int
+
+    @property
+    def no_eligible_trace_evidence(self) -> bool:
+        return self.eligible_run_count == 0
+
+
+@dataclass(frozen=True, slots=True)
+class OptimizationArtifactSpec:
+    """Schema and reader metadata for one optimization artifact."""
+
+    filename: str
+    artifact_name: str
+    expected_schema: str
+    list_field: str
+    reader: Callable[[Path], Any]
+    empty_payload_factory: Callable[..., dict[str, Any]]
+    count_key: str | None = None
+    id_field: str | None = None
+    requires_ablation_field: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class OptimizationPublicationSurface:
+    """Validated optimization candidate counts and publication metadata."""
+
+    counts: dict[str, int]
+    candidate_ids: set[str]
+    requires_ablation: bool
 
 
 def parse_run_ref(run_ref: str) -> tuple[str, str]:
@@ -186,6 +234,133 @@ def validate_observability_bundle(bundle: RunObservabilityBundle) -> tuple[bool,
     if isinstance(workflow_name, str) and workflow_name and workflow_name != bundle.expected_workflow_name:
         return False, "wrong_selected_workflow"
     return True, None
+
+
+def capture_optimization_frame_context(
+    *,
+    ctx,
+    selected_workflow_reference: str,
+    task_title: str,
+    run_refs: Sequence[str],
+    run_statuses: Sequence[str],
+    route_tags: Sequence[str],
+    history_limit: int,
+    top_k_steps: int,
+    optimization_depth: str,
+    include_adversarial_generation: bool,
+    include_token_optimization: bool,
+    include_workflow_level_candidates: bool,
+    max_failure_scenarios: int,
+    max_candidates_per_pass: int,
+    focus: str | None,
+    constraints: Sequence[str],
+) -> OptimizationFrameCapture:
+    """Write deterministic optimizer frame artifacts and return summarized counts."""
+
+    capability_path = write_selected_workflow_capability_snapshot(ctx, selected_workflow_reference)
+    authoring_surface_path = write_selected_workflow_authoring_surface(ctx, selected_workflow_reference)
+    decomposition_surface_path = write_selected_workflow_decomposition_surface(ctx, selected_workflow_reference)
+    source_manifest_path = write_selected_workflow_source_manifest(
+        ctx=ctx,
+        selected_workflow=selected_workflow_reference,
+        relative_path="selected_workflow_source_manifest.json",
+    )
+
+    capability_snapshot = _read_json_object(capability_path)
+    selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(capability_snapshot)
+    validate_selected_workflow_authoring_surface_snapshot(
+        _read_json_object(authoring_surface_path),
+        expected_selected_workflow_name=selected_workflow_name,
+        expected_label="selected_workflow_capability.json",
+    )
+    validate_selected_workflow_decomposition_surface_snapshot(
+        _read_json_object(decomposition_surface_path),
+        expected_selected_workflow_name=selected_workflow_name,
+        expected_label="selected_workflow_capability.json",
+    )
+    validate_optimization_selected_workflow_field(
+        _read_json_object(source_manifest_path),
+        artifact_name="selected_workflow_source_manifest.json",
+        expected_selected_workflow_name=selected_workflow_name,
+    )
+
+    run_dirs = list_selected_workflow_runs(
+        ctx.root,
+        selected_workflow_name,
+        run_refs=run_refs,
+        run_statuses=run_statuses,
+        history_limit=history_limit,
+    )
+    trace_corpus = normalize_trace_corpus(
+        selected_workflow=selected_workflow_name,
+        run_dirs=run_dirs,
+        route_tags=route_tags,
+    )
+    step_metrics_payload = build_step_trace_metrics(
+        trace_corpus,
+        [item for item in trace_corpus.get("static_step_graphs", []) if isinstance(item, Mapping)],
+    )
+    priority_report_payload = rank_optimization_targets(
+        step_metrics=step_metrics_payload,
+        static_centrality={},
+        top_k=top_k_steps,
+    )
+    failure_scenario_seeds_payload = extract_failure_scenario_seeds(
+        trace_corpus=trace_corpus,
+        priority_report=priority_report_payload,
+        max_scenarios=max_failure_scenarios,
+    )
+    if failure_scenario_seeds_payload.get("schema") != FAILURE_SCENARIO_SEEDS_SCHEMA:
+        raise ValueError("workflow_failure_scenario_seeds.json must preserve the optimizer seed schema")
+
+    internal_trace_corpus = dict(trace_corpus)
+    excluded_runs = list(trace_corpus.pop("excluded_runs", []))
+    trace_corpus.pop("all_step_observations", None)
+    trace_corpus.pop("static_step_graphs", None)
+
+    write_workflow_json(
+        ctx,
+        "workflow_optimization_scope.json",
+        {
+            "schema": "autoloop.workflow_optimization.scope/v1",
+            "selected_workflow": selected_workflow_name,
+            "task_title": task_title,
+            "run_refs": list(run_refs),
+            "run_statuses": list(run_statuses),
+            "route_tags": list(route_tags),
+            "history_limit": history_limit,
+            "top_k_steps": top_k_steps,
+            "optimization_depth": optimization_depth,
+            "include_adversarial_generation": include_adversarial_generation,
+            "include_token_optimization": include_token_optimization,
+            "include_workflow_level_candidates": include_workflow_level_candidates,
+            "max_candidates_per_pass": max_candidates_per_pass,
+            "focus": focus,
+            "constraints": list(constraints),
+        },
+    )
+    write_workflow_json(
+        ctx,
+        "excluded_run_report.json",
+        {
+            "schema": EXCLUDED_RUN_REPORT_SCHEMA,
+            "selected_workflow": selected_workflow_name,
+            "candidate_run_count": trace_corpus["candidate_run_count"],
+            "excluded_runs": excluded_runs,
+        },
+    )
+    write_workflow_json(ctx, "workflow_optimization_trace_corpus.json", trace_corpus)
+    write_workflow_json(ctx, "_workflow_optimization_internal_trace_corpus.json", internal_trace_corpus)
+    write_workflow_json(ctx, "step_trace_metrics.json", step_metrics_payload)
+    write_workflow_json(ctx, "step_optimization_priority_report.json", priority_report_payload)
+    write_workflow_json(ctx, "workflow_failure_scenario_seeds.json", failure_scenario_seeds_payload)
+
+    return OptimizationFrameCapture(
+        selected_workflow_name=selected_workflow_name,
+        candidate_run_count=int(trace_corpus["candidate_run_count"]),
+        eligible_run_count=int(trace_corpus["eligible_run_count"]),
+        excluded_run_count=int(trace_corpus["excluded_run_count"]),
+    )
 
 
 def normalize_trace_corpus(
@@ -728,6 +903,165 @@ def write_optimization_refinement_evidence(
     return write_workflow_json(ctx, "workflow_refinement_evidence.json", payload)
 
 
+def validate_optimization_selected_workflow_field(
+    payload: Mapping[str, Any],
+    *,
+    artifact_name: str,
+    expected_selected_workflow_name: str,
+) -> str:
+    """Validate one optimization artifact's selected-workflow identity."""
+
+    selected_workflow_name = require_non_empty_string(
+        payload.get("selected_workflow"),
+        error_message=f"{artifact_name} must define a non-empty selected_workflow",
+        coerce=True,
+    )
+    if selected_workflow_name != expected_selected_workflow_name:
+        raise ValueError(f"{artifact_name} selected_workflow must match selected_workflow_capability.json")
+    return selected_workflow_name
+
+
+def read_optimization_artifact_payload(
+    path: Path,
+    *,
+    spec: OptimizationArtifactSpec,
+    selected_workflow_name: str,
+) -> dict[str, Any]:
+    """Read and validate one optimization artifact payload."""
+
+    if not path.is_file():
+        raise ValueError(f"{spec.artifact_name} is required for the accepted route")
+    payload = _read_json_object(path)
+    if payload.get("schema") != spec.expected_schema:
+        raise ValueError(f"{spec.artifact_name} must preserve schema {spec.expected_schema}")
+    validate_optimization_selected_workflow_field(
+        payload,
+        artifact_name=spec.artifact_name,
+        expected_selected_workflow_name=selected_workflow_name,
+    )
+    list_payload = payload.get(spec.list_field)
+    if not isinstance(list_payload, list):
+        raise ValueError(f"{spec.artifact_name} {spec.list_field} must be a list")
+    spec.reader(path)
+    return payload
+
+
+def finalize_optional_optimization_artifact(
+    *,
+    route: str,
+    path: Path,
+    selected_workflow_name: str,
+    spec: OptimizationArtifactSpec,
+) -> None:
+    """Finalize one optional optimization artifact for accepted or skipped routes."""
+
+    if route in {"needs_rework", "failed", "question", "blocked"}:
+        return
+    if route.endswith("_not_applicable") or route == "adversarial_generation_skipped":
+        if path.is_file():
+            read_optimization_artifact_payload(
+                path,
+                spec=spec,
+                selected_workflow_name=selected_workflow_name,
+            )
+            return
+        path.write_text(
+            json.dumps(
+                spec.empty_payload_factory(selected_workflow=selected_workflow_name),
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return
+    read_optimization_artifact_payload(
+        path,
+        spec=spec,
+        selected_workflow_name=selected_workflow_name,
+    )
+
+
+def collect_optimization_publication_surface(
+    workflow_folder: Path,
+    *,
+    selected_workflow_name: str,
+    artifact_specs: Sequence[OptimizationArtifactSpec],
+) -> OptimizationPublicationSurface:
+    """Collect validated optimization publication counts and candidate IDs."""
+
+    counts = {spec.count_key: 0 for spec in artifact_specs if spec.count_key is not None}
+    candidate_ids: set[str] = set()
+    requires_ablation = False
+
+    for spec in artifact_specs:
+        path = workflow_folder / spec.filename
+        if not path.is_file():
+            continue
+        read_optimization_artifact_payload(
+            path,
+            spec=spec,
+            selected_workflow_name=selected_workflow_name,
+        )
+        artifact = spec.reader(path)
+        entries = list(getattr(artifact, spec.list_field))
+        if spec.count_key is not None:
+            counts[spec.count_key] = len(entries)
+        if spec.id_field is not None:
+            candidate_ids.update(
+                require_non_empty_string(
+                    getattr(entry, spec.id_field),
+                    error_message=f"{spec.artifact_name} entries must define {spec.id_field}",
+                )
+                for entry in entries
+            )
+        if spec.requires_ablation_field is not None:
+            requires_ablation = requires_ablation or any(
+                bool(getattr(entry, spec.requires_ablation_field)) for entry in entries
+            )
+
+    return OptimizationPublicationSurface(
+        counts=counts,
+        candidate_ids=candidate_ids,
+        requires_ablation=requires_ablation,
+    )
+
+
+def validate_optimization_scorecard_publication(
+    scorecard_payload: Mapping[str, Any],
+    *,
+    publication_surface: OptimizationPublicationSurface,
+) -> None:
+    """Validate scorecard counts and ablation metadata against the publication surface."""
+
+    scorecard_counts = _require_mapping_or_empty(scorecard_payload.get("candidate_counts"))
+    for key, expected_count in publication_surface.counts.items():
+        raw_value = scorecard_counts.get(key, 0)
+        if not isinstance(raw_value, int) or raw_value < 0:
+            raise ValueError(f"workflow_optimization_scorecard.json candidate_counts.{key} must be a non-negative int")
+        if raw_value != expected_count:
+            raise ValueError(
+                f"workflow_optimization_scorecard.json candidate_counts.{key} must match the validated candidate artifact count"
+            )
+    highest_priority_ids = [
+        candidate_id
+        for candidate_id in scorecard_payload.get("highest_priority_candidate_ids", [])
+        if isinstance(candidate_id, str) and candidate_id
+    ]
+    missing_candidate_ids = sorted(set(highest_priority_ids) - publication_surface.candidate_ids)
+    if missing_candidate_ids:
+        raise ValueError(
+            "workflow_optimization_scorecard.json highest_priority_candidate_ids must refer to validated candidate artifacts"
+        )
+    requires_ablation_before_promotion = scorecard_payload.get("requires_ablation_before_promotion")
+    if not isinstance(requires_ablation_before_promotion, bool):
+        raise ValueError("workflow_optimization_scorecard.json requires_ablation_before_promotion must be a bool")
+    if requires_ablation_before_promotion != publication_surface.requires_ablation:
+        raise ValueError(
+            "workflow_optimization_scorecard.json requires_ablation_before_promotion must match validated candidate ablation requirements"
+        )
+
+
 def _read_json_object(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
@@ -1010,6 +1344,9 @@ __all__ = [
     "EXCLUDED_RUN_REPORT_SCHEMA",
     "FAILURE_SCENARIOS_SCHEMA",
     "FAILURE_SCENARIO_SEEDS_SCHEMA",
+    "OptimizationArtifactSpec",
+    "OptimizationFrameCapture",
+    "OptimizationPublicationSurface",
     "REFINEMENT_EVIDENCE_SCHEMA",
     "RunObservabilityBundle",
     "SOURCE_MANIFEST_SCHEMA",
@@ -1017,14 +1354,20 @@ __all__ = [
     "STEP_TRACE_METRICS_SCHEMA",
     "TRACE_CORPUS_SCHEMA",
     "build_step_trace_metrics",
+    "capture_optimization_frame_context",
+    "collect_optimization_publication_surface",
     "compute_static_step_centrality",
     "extract_failure_scenario_seeds",
+    "finalize_optional_optimization_artifact",
     "list_selected_workflow_runs",
     "load_run_observability_bundle",
     "normalize_trace_corpus",
     "parse_run_ref",
     "rank_optimization_targets",
+    "read_optimization_artifact_payload",
     "resolve_selected_workflow_name",
+    "validate_optimization_scorecard_publication",
+    "validate_optimization_selected_workflow_field",
     "validate_observability_bundle",
     "validate_selected_workflow_source_unchanged",
     "write_optimization_refinement_evidence",

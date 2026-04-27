@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -15,35 +14,29 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         read_json_object,
         read_required_text,
         require_existing_artifact_paths,
-        require_mapping,
         require_non_empty_string,
         validate_no_hidden_execution_signal,
-        validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_authoring_surface_snapshot,
         validate_selected_workflow_capability_snapshot,
         validate_selected_workflow_decomposition_surface_snapshot,
         write_invocation_contract,
         write_publication_receipt,
-        write_selected_workflow_authoring_surface,
-        write_selected_workflow_capability_snapshot,
-        write_selected_workflow_decomposition_surface,
         write_workflow_json,
     )
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.optimization import (
+        OptimizationArtifactSpec,
         EXCLUDED_RUN_REPORT_SCHEMA,
-        FAILURE_SCENARIO_SEEDS_SCHEMA,
         FAILURE_SCENARIOS_SCHEMA,
-        TRACE_CORPUS_SCHEMA,
-        build_step_trace_metrics,
-        extract_failure_scenario_seeds,
-        list_selected_workflow_runs,
-        normalize_trace_corpus,
-        rank_optimization_targets,
+        capture_optimization_frame_context,
+        collect_optimization_publication_surface,
+        finalize_optional_optimization_artifact,
+        read_optimization_artifact_payload,
         resolve_selected_workflow_name,
+        validate_optimization_scorecard_publication,
+        validate_optimization_selected_workflow_field,
         validate_selected_workflow_source_unchanged,
         write_optimization_refinement_evidence,
-        write_selected_workflow_source_manifest,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
@@ -51,35 +44,29 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         read_json_object,
         read_required_text,
         require_existing_artifact_paths,
-        require_mapping,
         require_non_empty_string,
         validate_no_hidden_execution_signal,
-        validate_selected_workflow_artifact_alignment,
         validate_selected_workflow_authoring_surface_snapshot,
         validate_selected_workflow_capability_snapshot,
         validate_selected_workflow_decomposition_surface_snapshot,
         write_invocation_contract,
         write_publication_receipt,
-        write_selected_workflow_authoring_surface,
-        write_selected_workflow_capability_snapshot,
-        write_selected_workflow_decomposition_surface,
         write_workflow_json,
     )
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.optimization import (
+        OptimizationArtifactSpec,
         EXCLUDED_RUN_REPORT_SCHEMA,
-        FAILURE_SCENARIO_SEEDS_SCHEMA,
         FAILURE_SCENARIOS_SCHEMA,
-        TRACE_CORPUS_SCHEMA,
-        build_step_trace_metrics,
-        extract_failure_scenario_seeds,
-        list_selected_workflow_runs,
-        normalize_trace_corpus,
-        rank_optimization_targets,
+        capture_optimization_frame_context,
+        collect_optimization_publication_surface,
+        finalize_optional_optimization_artifact,
+        read_optimization_artifact_payload,
         resolve_selected_workflow_name,
+        validate_optimization_scorecard_publication,
+        validate_optimization_selected_workflow_field,
         validate_selected_workflow_source_unchanged,
         write_optimization_refinement_evidence,
-        write_selected_workflow_source_manifest,
     )
 
 from workflow import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
@@ -127,13 +114,6 @@ _FRAME_ARTIFACT_NAMES = (
     "workflow_optimization_trace_corpus",
     "excluded_run_report",
     "workflow_failure_scenario_seeds",
-)
-_CANDIDATE_ARTIFACT_COUNT_KEYS = (
-    ("producer", "producer_prompt_optimization_candidates.json"),
-    ("verifier_rubric", "verifier_rubric_optimization_candidates.json"),
-    ("token", "token_optimization_candidates.json"),
-    ("adversarial_cases", "adversarial_case_candidates.json"),
-    ("workflow_level", "workflow_level_optimization_candidates.json"),
 )
 _PACKAGE_EVIDENCE_FILES = {
     "step_optimization_priority_report.json": "step_optimization_priority_report",
@@ -683,114 +663,33 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
 
     @staticmethod
     def on_capture_frame_context(state: State, ctx) -> tuple[State, Event]:
-        capability_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
-        authoring_surface_path = write_selected_workflow_authoring_surface(ctx, state.selected_workflow_reference)
-        decomposition_surface_path = write_selected_workflow_decomposition_surface(ctx, state.selected_workflow_reference)
-        source_manifest_path = write_selected_workflow_source_manifest(
+        frame_capture = capture_optimization_frame_context(
             ctx=ctx,
-            selected_workflow=state.selected_workflow_reference,
-            relative_path="selected_workflow_source_manifest.json",
-        )
-
-        capability_snapshot = read_json_object(capability_path)
-        selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(capability_snapshot)
-        authoring_snapshot = read_json_object(authoring_surface_path)
-        validate_selected_workflow_authoring_surface_snapshot(
-            authoring_snapshot,
-            expected_selected_workflow_name=selected_workflow_name,
-            expected_label="selected_workflow_capability.json",
-        )
-        decomposition_snapshot = read_json_object(decomposition_surface_path)
-        validate_selected_workflow_decomposition_surface_snapshot(
-            decomposition_snapshot,
-            expected_selected_workflow_name=selected_workflow_name,
-            expected_label="selected_workflow_capability.json",
-        )
-        _validate_selected_workflow_field(
-            read_json_object(source_manifest_path),
-            artifact_name="selected_workflow_source_manifest.json",
-            expected_selected_workflow_name=selected_workflow_name,
-        )
-
-        run_dirs = list_selected_workflow_runs(
-            ctx.root,
-            selected_workflow_name,
+            selected_workflow_reference=state.selected_workflow_reference,
+            task_title=state.task_title,
             run_refs=state.run_refs,
             run_statuses=state.run_statuses,
-            history_limit=state.history_limit,
-        )
-        trace_corpus = normalize_trace_corpus(
-            selected_workflow=selected_workflow_name,
-            run_dirs=run_dirs,
             route_tags=state.route_tags,
-        )
-        step_metrics_payload = _build_step_metrics_payload(trace_corpus)
-        priority_report_payload = _build_priority_report_payload(
-            step_metrics_payload=step_metrics_payload,
+            history_limit=state.history_limit,
             top_k_steps=state.top_k_steps,
-        )
-        failure_scenario_seeds_payload = _build_failure_scenario_seeds_payload(
-            trace_corpus=trace_corpus,
-            priority_report=priority_report_payload,
+            optimization_depth=state.optimization_depth,
+            include_adversarial_generation=state.include_adversarial_generation,
+            include_token_optimization=state.include_token_optimization,
+            include_workflow_level_candidates=state.include_workflow_level_candidates,
             max_failure_scenarios=state.max_failure_scenarios,
+            max_candidates_per_pass=state.max_candidates_per_pass,
+            focus=state.focus,
+            constraints=state.constraints,
         )
-        internal_trace_corpus = dict(trace_corpus)
-        excluded_runs = list(trace_corpus.pop("excluded_runs", []))
-        trace_corpus.pop("all_step_observations", None)
-        trace_corpus.pop("static_step_graphs", None)
-        write_workflow_json(
-            ctx,
-            "workflow_optimization_scope.json",
-            {
-                "schema": "autoloop.workflow_optimization.scope/v1",
-                "selected_workflow": selected_workflow_name,
-                "task_title": state.task_title,
-                "run_refs": state.run_refs,
-                "run_statuses": state.run_statuses,
-                "route_tags": state.route_tags,
-                "history_limit": state.history_limit,
-                "top_k_steps": state.top_k_steps,
-                "optimization_depth": state.optimization_depth,
-                "include_adversarial_generation": state.include_adversarial_generation,
-                "include_token_optimization": state.include_token_optimization,
-                "include_workflow_level_candidates": state.include_workflow_level_candidates,
-                "max_candidates_per_pass": state.max_candidates_per_pass,
-                "focus": state.focus,
-                "constraints": state.constraints,
-            },
-        )
-        write_workflow_json(
-            ctx,
-            "excluded_run_report.json",
-            {
-                "schema": EXCLUDED_RUN_REPORT_SCHEMA,
-                "selected_workflow": selected_workflow_name,
-                "candidate_run_count": trace_corpus["candidate_run_count"],
-                "excluded_runs": excluded_runs,
-            },
-        )
-        write_workflow_json(
-            ctx,
-            "workflow_optimization_trace_corpus.json",
-            trace_corpus,
-        )
-        write_workflow_json(
-            ctx,
-            "_workflow_optimization_internal_trace_corpus.json",
-            internal_trace_corpus,
-        )
-        write_workflow_json(ctx, "step_trace_metrics.json", step_metrics_payload)
-        write_workflow_json(ctx, "step_optimization_priority_report.json", priority_report_payload)
-        write_workflow_json(ctx, "workflow_failure_scenario_seeds.json", failure_scenario_seeds_payload)
 
         return (
             state.model_copy(
                 update={
-                    "selected_workflow_name": selected_workflow_name,
-                    "candidate_run_count": int(trace_corpus["candidate_run_count"]),
-                    "eligible_run_count": int(trace_corpus["eligible_run_count"]),
-                    "excluded_run_count": int(trace_corpus["excluded_run_count"]),
-                    "no_eligible_trace_evidence": int(trace_corpus["eligible_run_count"]) == 0,
+                    "selected_workflow_name": frame_capture.selected_workflow_name,
+                    "candidate_run_count": frame_capture.candidate_run_count,
+                    "eligible_run_count": frame_capture.eligible_run_count,
+                    "excluded_run_count": frame_capture.excluded_run_count,
+                    "no_eligible_trace_evidence": frame_capture.no_eligible_trace_evidence,
                 }
             ),
             Event("frame_context_captured"),
@@ -823,20 +722,27 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     def on_mine_failures(state: State, outcome: Outcome, artifacts):
         selected_workflow_name = _selected_workflow_name_from_state(state)
         if outcome.tag == "failure_scenarios_mined":
-            _load_failure_scenarios_artifact(
+            read_optimization_artifact_payload(
                 artifacts.workflow_failure_scenarios.path,
+                spec=_FAILURE_SCENARIOS_SPEC,
                 selected_workflow_name=selected_workflow_name,
             )
         elif outcome.tag == "no_failure_scenarios":
             if artifacts.workflow_failure_scenarios.path.is_file():
-                _load_failure_scenarios_artifact(
+                read_optimization_artifact_payload(
                     artifacts.workflow_failure_scenarios.path,
+                    spec=_FAILURE_SCENARIOS_SPEC,
                     selected_workflow_name=selected_workflow_name,
                 )
             else:
-                _write_empty_failure_scenarios(
-                    artifacts.workflow_failure_scenarios.path,
-                    selected_workflow_name=selected_workflow_name,
+                artifacts.workflow_failure_scenarios.path.write_text(
+                    json.dumps(
+                        _empty_failure_scenarios_payload(selected_workflow=selected_workflow_name),
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
                 )
         return state.model_copy(update={"failure_status": outcome.tag})
 
@@ -844,55 +750,43 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     def on_route_optimize_tokens(state: State, ctx) -> tuple[State, Event]:
         if state.include_token_optimization:
             return state, Event("token_optimization_enabled")
-        if not (ctx.workflow_folder / "token_optimization_candidates.json").is_file():
-            write_workflow_json(
-                ctx,
-                "token_optimization_candidates.json",
-                _empty_token_candidates_payload(selected_workflow=_selected_workflow_name_from_state(state)),
-            )
+        finalize_optional_optimization_artifact(
+            route="token_pass_not_applicable",
+            path=ctx.workflow_folder / _TOKEN_CANDIDATES_SPEC.filename,
+            selected_workflow_name=_selected_workflow_name_from_state(state),
+            spec=_TOKEN_CANDIDATES_SPEC,
+        )
         return state.model_copy(update={"token_status": "token_pass_not_applicable"}), Event(
             "token_pass_not_applicable"
         )
 
     @staticmethod
     def on_optimize_producer(state: State, outcome: Outcome, artifacts):
-        _finalize_candidate_artifact(
+        finalize_optional_optimization_artifact(
             route=outcome.tag,
             path=artifacts.producer_prompt_optimization_candidates.path,
             selected_workflow_name=_selected_workflow_name_from_state(state),
-            artifact_name="producer_prompt_optimization_candidates.json",
-            expected_schema="autoloop.workflow_optimization.producer_candidates/v1",
-            list_field="candidates",
-            reader=PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-            empty_payload_factory=_empty_producer_candidates_payload,
+            spec=_PRODUCER_CANDIDATES_SPEC,
         )
         return state.model_copy(update={"producer_status": outcome.tag})
 
     @staticmethod
     def on_optimize_verifier_rubric(state: State, outcome: Outcome, artifacts):
-        _finalize_candidate_artifact(
+        finalize_optional_optimization_artifact(
             route=outcome.tag,
             path=artifacts.verifier_rubric_optimization_candidates.path,
             selected_workflow_name=_selected_workflow_name_from_state(state),
-            artifact_name="verifier_rubric_optimization_candidates.json",
-            expected_schema="autoloop.workflow_optimization.verifier_rubric_candidates/v1",
-            list_field="candidates",
-            reader=VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-            empty_payload_factory=_empty_verifier_rubric_candidates_payload,
+            spec=_VERIFIER_RUBRIC_CANDIDATES_SPEC,
         )
         return state.model_copy(update={"verifier_rubric_status": outcome.tag})
 
     @staticmethod
     def on_optimize_tokens(state: State, outcome: Outcome, artifacts):
-        _finalize_candidate_artifact(
+        finalize_optional_optimization_artifact(
             route=outcome.tag,
             path=artifacts.token_optimization_candidates.path,
             selected_workflow_name=_selected_workflow_name_from_state(state),
-            artifact_name="token_optimization_candidates.json",
-            expected_schema="autoloop.workflow_optimization.token_candidates/v1",
-            list_field="candidates",
-            reader=TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-            empty_payload_factory=_empty_token_candidates_payload,
+            spec=_TOKEN_CANDIDATES_SPEC,
         )
         return state.model_copy(update={"token_status": outcome.tag})
 
@@ -900,27 +794,23 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     def on_route_adversarial_cases(state: State, ctx) -> tuple[State, Event]:
         if state.include_adversarial_generation:
             return state, Event("adversarial_generation_enabled")
-        if not (ctx.workflow_folder / "adversarial_case_candidates.json").is_file():
-            write_workflow_json(
-                ctx,
-                "adversarial_case_candidates.json",
-                _empty_adversarial_cases_payload(selected_workflow=_selected_workflow_name_from_state(state)),
-            )
+        finalize_optional_optimization_artifact(
+            route="adversarial_generation_skipped",
+            path=ctx.workflow_folder / _ADVERSARIAL_CASES_SPEC.filename,
+            selected_workflow_name=_selected_workflow_name_from_state(state),
+            spec=_ADVERSARIAL_CASES_SPEC,
+        )
         return state.model_copy(update={"adversarial_status": "adversarial_generation_skipped"}), Event(
             "adversarial_generation_skipped"
         )
 
     @staticmethod
     def on_adversarial_cases(state: State, outcome: Outcome, artifacts):
-        _finalize_candidate_artifact(
+        finalize_optional_optimization_artifact(
             route=outcome.tag,
             path=artifacts.adversarial_case_candidates.path,
             selected_workflow_name=_selected_workflow_name_from_state(state),
-            artifact_name="adversarial_case_candidates.json",
-            expected_schema="autoloop.workflow_optimization.adversarial_case_candidates/v1",
-            list_field="cases",
-            reader=ADVERSARIAL_CASE_CANDIDATES_ARTIFACT.read,
-            empty_payload_factory=_empty_adversarial_cases_payload,
+            spec=_ADVERSARIAL_CASES_SPEC,
         )
         return state.model_copy(update={"adversarial_status": outcome.tag})
 
@@ -928,27 +818,23 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     def on_route_workflow_level(state: State, ctx) -> tuple[State, Event]:
         if state.include_workflow_level_candidates:
             return state, Event("workflow_level_enabled")
-        if not (ctx.workflow_folder / "workflow_level_optimization_candidates.json").is_file():
-            write_workflow_json(
-                ctx,
-                "workflow_level_optimization_candidates.json",
-                _empty_workflow_level_candidates_payload(selected_workflow=_selected_workflow_name_from_state(state)),
-            )
+        finalize_optional_optimization_artifact(
+            route="workflow_level_pass_not_applicable",
+            path=ctx.workflow_folder / _WORKFLOW_LEVEL_CANDIDATES_SPEC.filename,
+            selected_workflow_name=_selected_workflow_name_from_state(state),
+            spec=_WORKFLOW_LEVEL_CANDIDATES_SPEC,
+        )
         return state.model_copy(update={"workflow_level_status": "workflow_level_pass_not_applicable"}), Event(
             "workflow_level_pass_not_applicable"
         )
 
     @staticmethod
     def on_workflow_level(state: State, outcome: Outcome, artifacts):
-        _finalize_candidate_artifact(
+        finalize_optional_optimization_artifact(
             route=outcome.tag,
             path=artifacts.workflow_level_optimization_candidates.path,
             selected_workflow_name=_selected_workflow_name_from_state(state),
-            artifact_name="workflow_level_optimization_candidates.json",
-            expected_schema="autoloop.workflow_optimization.workflow_level_candidates/v1",
-            list_field="candidates",
-            reader=WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-            empty_payload_factory=_empty_workflow_level_candidates_payload,
+            spec=_WORKFLOW_LEVEL_CANDIDATES_SPEC,
         )
         return state.model_copy(update={"workflow_level_status": outcome.tag})
 
@@ -989,19 +875,19 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             expected_selected_workflow_name=selected_workflow_name,
             expected_label="selected_workflow_capability.json",
         )
-        _validate_selected_workflow_field(
+        validate_optimization_selected_workflow_field(
             read_json_object(required_paths["selected_workflow_source_manifest"]),
             artifact_name="selected_workflow_source_manifest.json",
             expected_selected_workflow_name=selected_workflow_name,
         )
         scope_payload = read_json_object(required_paths["workflow_optimization_scope"])
-        _validate_selected_workflow_field(
+        validate_optimization_selected_workflow_field(
             scope_payload,
             artifact_name="workflow_optimization_scope.json",
             expected_selected_workflow_name=selected_workflow_name,
         )
         WORKFLOW_OPTIMIZATION_SCOPE_ARTIFACT.read(required_paths["workflow_optimization_scope"])
-        _validate_selected_workflow_field(
+        validate_optimization_selected_workflow_field(
             read_json_object(required_paths["workflow_optimization_trace_corpus"]),
             artifact_name="workflow_optimization_trace_corpus.json",
             expected_selected_workflow_name=selected_workflow_name,
@@ -1009,7 +895,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         excluded_report = read_json_object(required_paths["excluded_run_report"])
         if excluded_report.get("schema") != EXCLUDED_RUN_REPORT_SCHEMA:
             raise ValueError("excluded_run_report.json must preserve the optimizer excluded-run schema")
-        _validate_selected_workflow_field(
+        validate_optimization_selected_workflow_field(
             excluded_report,
             artifact_name="excluded_run_report.json",
             expected_selected_workflow_name=selected_workflow_name,
@@ -1018,25 +904,25 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         if scope_payload.get("optimization_depth") != state.optimization_depth:
             raise ValueError("workflow_optimization_scope.json optimization_depth must match the workflow request")
 
-        _computed_counts, _candidate_ids, requires_ablation = _read_candidate_publication_surface(
+        publication_surface = collect_optimization_publication_surface(
             workflow_folder,
             selected_workflow_name=selected_workflow_name,
+            artifact_specs=_CANDIDATE_ARTIFACT_SPECS,
         )
         scorecard_payload = read_json_object(required_paths["workflow_optimization_scorecard"])
         scorecard_payload["optimization_depth"] = state.optimization_depth
         scorecard_payload["ablation_executed"] = False
-        scorecard_payload["requires_ablation_before_promotion"] = requires_ablation
+        scorecard_payload["requires_ablation_before_promotion"] = publication_surface.requires_ablation
         write_workflow_json(ctx, "workflow_optimization_scorecard.json", scorecard_payload)
         WORKFLOW_OPTIMIZATION_SCORECARD_ARTIFACT.read(required_paths["workflow_optimization_scorecard"])
-        _validate_selected_workflow_field(
+        validate_optimization_selected_workflow_field(
             scorecard_payload,
             artifact_name="workflow_optimization_scorecard.json",
             expected_selected_workflow_name=selected_workflow_name,
         )
-        _validate_candidate_artifact_publication_surface(
-            workflow_folder,
-            selected_workflow_name=selected_workflow_name,
+        validate_optimization_scorecard_publication(
             scorecard_payload=scorecard_payload,
+            publication_surface=publication_surface,
         )
         packet_text = read_required_text(
             required_paths["workflow_optimization_packet"],
@@ -1197,261 +1083,81 @@ def _empty_workflow_level_candidates_payload(*, selected_workflow: str) -> dict[
     }
 
 
-def _load_failure_scenarios_artifact(
-    path: Path,
-    *,
-    selected_workflow_name: str,
-) -> dict[str, Any]:
-    return _read_and_validate_authored_artifact(
-        path,
-        artifact_name="workflow_failure_scenarios.json",
-        expected_schema=FAILURE_SCENARIOS_SCHEMA,
-        selected_workflow_name=selected_workflow_name,
-        list_field="failure_scenarios",
-        reader=WORKFLOW_FAILURE_SCENARIOS_ARTIFACT.read,
-    )
+_FAILURE_SCENARIOS_SPEC = OptimizationArtifactSpec(
+    filename="workflow_failure_scenarios.json",
+    artifact_name="workflow_failure_scenarios.json",
+    expected_schema=FAILURE_SCENARIOS_SCHEMA,
+    list_field="failure_scenarios",
+    reader=WORKFLOW_FAILURE_SCENARIOS_ARTIFACT.read,
+    empty_payload_factory=_empty_failure_scenarios_payload,
+)
 
+_PRODUCER_CANDIDATES_SPEC = OptimizationArtifactSpec(
+    filename="producer_prompt_optimization_candidates.json",
+    artifact_name="producer_prompt_optimization_candidates.json",
+    expected_schema="autoloop.workflow_optimization.producer_candidates/v1",
+    list_field="candidates",
+    reader=PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
+    empty_payload_factory=_empty_producer_candidates_payload,
+    count_key="producer",
+    id_field="candidate_id",
+    requires_ablation_field="requires_ablation",
+)
 
-def _write_empty_failure_scenarios(path: Path, *, selected_workflow_name: str) -> None:
-    path.write_text(
-        json.dumps(
-            _empty_failure_scenarios_payload(selected_workflow=selected_workflow_name),
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+_VERIFIER_RUBRIC_CANDIDATES_SPEC = OptimizationArtifactSpec(
+    filename="verifier_rubric_optimization_candidates.json",
+    artifact_name="verifier_rubric_optimization_candidates.json",
+    expected_schema="autoloop.workflow_optimization.verifier_rubric_candidates/v1",
+    list_field="candidates",
+    reader=VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
+    empty_payload_factory=_empty_verifier_rubric_candidates_payload,
+    count_key="verifier_rubric",
+    id_field="candidate_id",
+    requires_ablation_field="requires_ablation",
+)
 
+_TOKEN_CANDIDATES_SPEC = OptimizationArtifactSpec(
+    filename="token_optimization_candidates.json",
+    artifact_name="token_optimization_candidates.json",
+    expected_schema="autoloop.workflow_optimization.token_candidates/v1",
+    list_field="candidates",
+    reader=TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
+    empty_payload_factory=_empty_token_candidates_payload,
+    count_key="token",
+    id_field="candidate_id",
+    requires_ablation_field="requires_ablation",
+)
 
-def _finalize_candidate_artifact(
-    *,
-    route: str,
-    path: Path,
-    selected_workflow_name: str,
-    artifact_name: str,
-    expected_schema: str,
-    list_field: str,
-    reader,
-    empty_payload_factory,
-) -> None:
-    if route in {"needs_rework", "failed", "question", "blocked"}:
-        return
-    if route.endswith("_not_applicable") or route == "adversarial_generation_skipped":
-        if path.is_file():
-            _read_and_validate_authored_artifact(
-                path,
-                artifact_name=artifact_name,
-                expected_schema=expected_schema,
-                selected_workflow_name=selected_workflow_name,
-                list_field=list_field,
-                reader=reader,
-            )
-            return
-        path.write_text(
-            json.dumps(
-                empty_payload_factory(selected_workflow=selected_workflow_name),
-                indent=2,
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        return
-    _read_and_validate_authored_artifact(
-        path,
-        artifact_name=artifact_name,
-        expected_schema=expected_schema,
-        selected_workflow_name=selected_workflow_name,
-        list_field=list_field,
-        reader=reader,
-    )
+_ADVERSARIAL_CASES_SPEC = OptimizationArtifactSpec(
+    filename="adversarial_case_candidates.json",
+    artifact_name="adversarial_case_candidates.json",
+    expected_schema="autoloop.workflow_optimization.adversarial_case_candidates/v1",
+    list_field="cases",
+    reader=ADVERSARIAL_CASE_CANDIDATES_ARTIFACT.read,
+    empty_payload_factory=_empty_adversarial_cases_payload,
+    count_key="adversarial_cases",
+    id_field="case_id",
+)
 
+_WORKFLOW_LEVEL_CANDIDATES_SPEC = OptimizationArtifactSpec(
+    filename="workflow_level_optimization_candidates.json",
+    artifact_name="workflow_level_optimization_candidates.json",
+    expected_schema="autoloop.workflow_optimization.workflow_level_candidates/v1",
+    list_field="candidates",
+    reader=WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
+    empty_payload_factory=_empty_workflow_level_candidates_payload,
+    count_key="workflow_level",
+    id_field="candidate_id",
+    requires_ablation_field="requires_ablation",
+)
 
-def _read_and_validate_authored_artifact(
-    path: Path,
-    *,
-    artifact_name: str,
-    expected_schema: str,
-    selected_workflow_name: str,
-    list_field: str,
-    reader,
-) -> dict[str, Any]:
-    if not path.is_file():
-        raise ValueError(f"{artifact_name} is required for the accepted route")
-    payload = read_json_object(path)
-    if payload.get("schema") != expected_schema:
-        raise ValueError(f"{artifact_name} must preserve schema {expected_schema}")
-    _validate_selected_workflow_field(
-        payload,
-        artifact_name=artifact_name,
-        expected_selected_workflow_name=selected_workflow_name,
-    )
-    list_payload = payload.get(list_field)
-    if not isinstance(list_payload, list):
-        raise ValueError(f"{artifact_name} {list_field} must be a list")
-    reader(path)
-    return payload
-
-
-def _validate_candidate_artifact_publication_surface(
-    workflow_folder: Path,
-    *,
-    selected_workflow_name: str,
-    scorecard_payload: Mapping[str, Any],
-) -> None:
-    scorecard_counts = require_mapping(
-        scorecard_payload.get("candidate_counts"),
-        "workflow_optimization_scorecard.json must define candidate_counts as a JSON object",
-    )
-    computed_counts, candidate_ids, requires_ablation = _read_candidate_publication_surface(
-        workflow_folder,
-        selected_workflow_name=selected_workflow_name,
-    )
-    for key, _filename in _CANDIDATE_ARTIFACT_COUNT_KEYS:
-        raw_value = scorecard_counts.get(key, 0)
-        if not isinstance(raw_value, int) or raw_value < 0:
-            raise ValueError(f"workflow_optimization_scorecard.json candidate_counts.{key} must be a non-negative int")
-        if raw_value != computed_counts[key]:
-            raise ValueError(
-                f"workflow_optimization_scorecard.json candidate_counts.{key} must match the validated candidate artifact count"
-            )
-    highest_priority_ids = [
-        candidate_id
-        for candidate_id in scorecard_payload.get("highest_priority_candidate_ids", [])
-        if isinstance(candidate_id, str) and candidate_id
-    ]
-    missing_candidate_ids = sorted(set(highest_priority_ids) - candidate_ids)
-    if missing_candidate_ids:
-        raise ValueError(
-            "workflow_optimization_scorecard.json highest_priority_candidate_ids must refer to validated candidate artifacts"
-        )
-    requires_ablation_before_promotion = scorecard_payload.get("requires_ablation_before_promotion")
-    if not isinstance(requires_ablation_before_promotion, bool):
-        raise ValueError("workflow_optimization_scorecard.json requires_ablation_before_promotion must be a bool")
-    if requires_ablation_before_promotion != requires_ablation:
-        raise ValueError(
-            "workflow_optimization_scorecard.json requires_ablation_before_promotion must match validated candidate ablation requirements"
-        )
-
-
-def _read_candidate_publication_surface(
-    workflow_folder: Path,
-    *,
-    selected_workflow_name: str,
-) -> tuple[dict[str, int], set[str], bool]:
-    counts = {key: 0 for key, _filename in _CANDIDATE_ARTIFACT_COUNT_KEYS}
-    candidate_ids: set[str] = set()
-    requires_ablation = False
-
-    producer_path = workflow_folder / "producer_prompt_optimization_candidates.json"
-    if producer_path.is_file():
-        _read_and_validate_authored_artifact(
-            producer_path,
-            artifact_name="producer_prompt_optimization_candidates.json",
-            expected_schema="autoloop.workflow_optimization.producer_candidates/v1",
-            selected_workflow_name=selected_workflow_name,
-            list_field="candidates",
-            reader=PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-        )
-        artifact = PRODUCER_PROMPT_OPTIMIZATION_CANDIDATES_ARTIFACT.read(producer_path)
-        counts["producer"] = len(artifact.candidates)
-        candidate_ids.update(candidate.candidate_id for candidate in artifact.candidates)
-        requires_ablation = requires_ablation or any(candidate.requires_ablation for candidate in artifact.candidates)
-
-    verifier_path = workflow_folder / "verifier_rubric_optimization_candidates.json"
-    if verifier_path.is_file():
-        _read_and_validate_authored_artifact(
-            verifier_path,
-            artifact_name="verifier_rubric_optimization_candidates.json",
-            expected_schema="autoloop.workflow_optimization.verifier_rubric_candidates/v1",
-            selected_workflow_name=selected_workflow_name,
-            list_field="candidates",
-            reader=VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-        )
-        artifact = VERIFIER_RUBRIC_OPTIMIZATION_CANDIDATES_ARTIFACT.read(verifier_path)
-        counts["verifier_rubric"] = len(artifact.candidates)
-        candidate_ids.update(candidate.candidate_id for candidate in artifact.candidates)
-        requires_ablation = requires_ablation or any(candidate.requires_ablation for candidate in artifact.candidates)
-
-    token_path = workflow_folder / "token_optimization_candidates.json"
-    if token_path.is_file():
-        _read_and_validate_authored_artifact(
-            token_path,
-            artifact_name="token_optimization_candidates.json",
-            expected_schema="autoloop.workflow_optimization.token_candidates/v1",
-            selected_workflow_name=selected_workflow_name,
-            list_field="candidates",
-            reader=TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-        )
-        artifact = TOKEN_OPTIMIZATION_CANDIDATES_ARTIFACT.read(token_path)
-        counts["token"] = len(artifact.candidates)
-        candidate_ids.update(candidate.candidate_id for candidate in artifact.candidates)
-        requires_ablation = requires_ablation or any(candidate.requires_ablation for candidate in artifact.candidates)
-
-    adversarial_path = workflow_folder / "adversarial_case_candidates.json"
-    if adversarial_path.is_file():
-        _read_and_validate_authored_artifact(
-            adversarial_path,
-            artifact_name="adversarial_case_candidates.json",
-            expected_schema="autoloop.workflow_optimization.adversarial_case_candidates/v1",
-            selected_workflow_name=selected_workflow_name,
-            list_field="cases",
-            reader=ADVERSARIAL_CASE_CANDIDATES_ARTIFACT.read,
-        )
-        artifact = ADVERSARIAL_CASE_CANDIDATES_ARTIFACT.read(adversarial_path)
-        counts["adversarial_cases"] = len(artifact.cases)
-        candidate_ids.update(case.case_id for case in artifact.cases)
-
-    workflow_level_path = workflow_folder / "workflow_level_optimization_candidates.json"
-    if workflow_level_path.is_file():
-        _read_and_validate_authored_artifact(
-            workflow_level_path,
-            artifact_name="workflow_level_optimization_candidates.json",
-            expected_schema="autoloop.workflow_optimization.workflow_level_candidates/v1",
-            selected_workflow_name=selected_workflow_name,
-            list_field="candidates",
-            reader=WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT.read,
-        )
-        artifact = WORKFLOW_LEVEL_OPTIMIZATION_CANDIDATES_ARTIFACT.read(workflow_level_path)
-        counts["workflow_level"] = len(artifact.candidates)
-        candidate_ids.update(candidate.candidate_id for candidate in artifact.candidates)
-        requires_ablation = requires_ablation or any(candidate.requires_ablation for candidate in artifact.candidates)
-
-    return counts, candidate_ids, requires_ablation
-
-
-def _build_step_metrics_payload(trace_corpus: Mapping[str, Any]) -> dict[str, Any]:
-    static_step_graphs = [item for item in trace_corpus.get("static_step_graphs", []) if isinstance(item, Mapping)]
-    return build_step_trace_metrics(trace_corpus, static_step_graphs)
-
-
-def _build_priority_report_payload(
-    *,
-    step_metrics_payload: Mapping[str, Any],
-    top_k_steps: int,
-) -> dict[str, Any]:
-    return rank_optimization_targets(
-        step_metrics=step_metrics_payload,
-        static_centrality={},
-        top_k=top_k_steps,
-    )
-
-
-def _build_failure_scenario_seeds_payload(
-    *,
-    trace_corpus: Mapping[str, Any],
-    priority_report: Mapping[str, Any],
-    max_failure_scenarios: int,
-) -> dict[str, Any]:
-    seeds_payload = extract_failure_scenario_seeds(
-        trace_corpus=trace_corpus,
-        priority_report=priority_report,
-        max_scenarios=max_failure_scenarios,
-    )
-    if seeds_payload.get("schema") != FAILURE_SCENARIO_SEEDS_SCHEMA:
-        raise ValueError("workflow_failure_scenario_seeds.json must preserve the optimizer seed schema")
-    return seeds_payload
+_CANDIDATE_ARTIFACT_SPECS = (
+    _PRODUCER_CANDIDATES_SPEC,
+    _VERIFIER_RUBRIC_CANDIDATES_SPEC,
+    _TOKEN_CANDIDATES_SPEC,
+    _ADVERSARIAL_CASES_SPEC,
+    _WORKFLOW_LEVEL_CANDIDATES_SPEC,
+)
 
 
 def _ensure_packet_optimization_depth_section(packet_text: str, *, optimization_depth: str) -> str:
@@ -1477,21 +1183,4 @@ def _ensure_packet_optimization_depth_section(packet_text: str, *, optimization_
     if packet_text.endswith("\n"):
         return f"{packet_text}\n{section}\n"
     return f"{packet_text}\n\n{section}\n"
-
-
-def _validate_selected_workflow_field(
-    payload: Mapping[str, Any],
-    *,
-    artifact_name: str,
-    expected_selected_workflow_name: str,
-) -> None:
-    selected_workflow_name = require_non_empty_string(
-        payload.get("selected_workflow"),
-        error_message=f"{artifact_name} must define a non-empty selected_workflow",
-        coerce=True,
-    )
-    if selected_workflow_name != expected_selected_workflow_name:
-        raise ValueError(f"{artifact_name} selected_workflow must match selected_workflow_capability.json")
-
-
 __all__ = ["WorkflowRunTracesToOptimizationCandidates"]

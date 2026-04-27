@@ -46,7 +46,10 @@ autoloop run workflow_run_traces_to_optimization_candidates <task-id> \
 
 ## Artifact Ownership
 
-The optimizer uses deterministic helpers to prepare trace corpora, step metrics, source manifests, and failure-scenario seeds. LLM producers author failure and candidate artifacts. Workflow handlers validate accepted LLM-authored artifacts and leave them in place; they do not deterministically rewrite them.
+The optimizer uses deterministic helpers to prepare trace corpora, step metrics, source manifests, and failure-scenario seeds.
+The optimizer uses deterministic helpers in `stdlib/optimization.py` to capture selected-workflow context, finalize optional-pass artifacts, and validate the scorecard publication surface.
+LLM producers author failure and candidate artifacts. Workflow handlers keep optimizer-only route and packaging policy local, validate accepted LLM-authored artifacts, and leave them in place; they do not deterministically rewrite them.
+Workflow handlers validate accepted LLM-authored artifacts and leave them in place; they do not deterministically rewrite them.
 
 ## Artifacts
 

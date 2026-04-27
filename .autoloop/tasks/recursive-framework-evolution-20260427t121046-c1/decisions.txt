@@ -5,3 +5,6 @@ Any optimizer refactor must preserve existing artifact filenames, route tags, ca
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260427T160524Z-93840723" ts="2026-04-27T16:11:53.662832+00:00" />
 Update `.autoloop_recursive/framework_evolution_charter.md` in the same closeout slice as the roadmap and ledgers so the full standing memory set stays aligned.
 Only clearly reusable deterministic optimizer mechanics should move into `stdlib/optimization.py`; optimizer-only route, prompt, and candidate-policy behavior should stay package-local if reuse is not explicit.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="optimization-helper-consolidation" pair="implement" turn_seq="1" run_id="run-20260427T160524Z-93840723" ts="2026-04-27T16:15:51.478435+00:00" />
+Keep the optimizer helper seam contract-driven by passing workflow-owned artifact specs into `stdlib/optimization.py`, so stdlib stays generic over optimization mechanics without importing workflow package contracts.
+Treat optimizer frame capture, optional-pass finalization, and scorecard publication validation as the shared deterministic subset; keep no-eligible packaging policy, packet text shaping, and route semantics in the workflow package.
