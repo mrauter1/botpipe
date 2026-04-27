@@ -74,3 +74,7 @@
 {"ts": "2026-04-27T19:42:32.761485+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 74, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "engine-hooks-workflow-step"}
 {"ts": "2026-04-27T19:43:41.123601+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 75, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "engine-hooks-workflow-step"}
 {"ts": "2026-04-27T19:43:41.165782+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 76, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "engine-hooks-workflow-step"}
+{"ts": "2026-04-27T19:43:41.264091+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 77, "event_type": "phase_completed", "pair": "test", "phase_id": "engine-hooks-workflow-step", "phase_mode": "single"}
+{"ts": "2026-04-27T19:43:41.269088+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 78, "event_type": "phase_started", "phase_id": "compatibility-docs-cleanup", "phase_mode": "single"}
+{"ts": "2026-04-27T19:43:41.270596+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 79, "event_type": "pair_started", "pair": "implement", "phase_id": "compatibility-docs-cleanup"}
+{"ts": "2026-04-27T19:43:41.270839+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 80, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "compatibility-docs-cleanup"}
