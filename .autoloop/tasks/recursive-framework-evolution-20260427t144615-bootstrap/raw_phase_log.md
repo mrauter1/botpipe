@@ -1464,3 +1464,50 @@ Fix `IMP-001` by either consuming workflow-targeted handoffs in the workflow-ste
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd060-3709-7a20-910c-d97ea5d8434b
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+I’m addressing the reviewer’s `IMP-001` only: I’ll inspect the route-handoff queue and the workflow-step execution path, then make the smallest fix that preserves current child-workflow behavior without introducing a second handoff delivery mechanism.
+
+The reviewer is right about the leak surface. I’m fixing it by treating workflow steps like system steps for handoff delivery until there is an explicit child-workflow handoff mechanism; that keeps the new `kind="workflow"` semantics without inventing a half-supported queue consumer.
+
+I’ve made the narrow engine fix and added a regression that fails the previous leak mode by crashing after a workflow step and inspecting the checkpoint’s `pending_handoffs`. I’m running the focused contract/runtime/unit slice again now.
+
+The reviewer’s regression is fixed. I’m updating the shared decision block and the phase notes to make the handoff behavior explicit, because the workflow-step kind now differs from the underlying lowered `SystemStep` type and that distinction will matter in later phases.
+
+Scope considered
+
+Phase-local `engine-hooks-workflow-step` only. I fixed the reviewer’s `IMP-001` in the engine handoff queue, added a regression for the workflow-step leak case, and updated the phase notes plus shared decision ledger.
+
+What I analyzed
+
+I reviewed the reviewer finding against [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), existing handoff tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), and the current simple workflow-step lowering behavior from the prior phase. The key check was whether `kind="workflow"` introduced a new pending-handoff sink without any delivery path into `ctx.invoke_workflow(...)`.
+
+What I changed
+
+I changed `_schedule_route_handoffs(...)` in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py) to treat compiled workflow steps like system steps for now and drop handoffs targeted at `kind in {"system", "workflow"}`. That preserves the new workflow-step runtime kind without persisting undeliverable `PendingHandoff` entries.
+
+I added a regression in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) that routes through a workflow step, injects a dynamic handoff via `on_outcome`, crashes on the later provider step, and asserts the checkpoint does not retain stale workflow-targeted handoffs. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/engine-hooks-workflow-step/implementation_notes.md) and appended the non-obvious handoff decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The safest fix in this phase is to keep workflow-step handoffs dropped until there is an explicit child-workflow handoff-delivery path. That matches the previous effective behavior of lowered child-workflow nodes when they were still treated as system steps underneath, and it avoids inventing a partial second message channel into child invocations.
+
+Validation run:
+`.venv/bin/pytest tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_tracing.py -q`
+Result: `99 passed`
+
+Open issues / next step
+
+No blocking issues remain in this phase-local scope. The remaining intentional non-change is that child workflow invocations still do not accept queued route handoff text; a later phase can add that explicitly if the public behavior is wanted.

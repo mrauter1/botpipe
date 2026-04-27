@@ -49,11 +49,13 @@
 - `after` hooks may override the selected route via `str`, `Event`, or `AfterHookResult`, and final artifact obligations are enforced against the final route.
 - Lowered simple workflow steps now compile as `kind="workflow"` instead of `kind="system"` for engine/tracing purposes.
 - Step-finish trace records can include hook route-override metadata.
+- Route handoffs targeted at lowered workflow steps are now explicitly dropped, matching prior system-step behavior until child-workflow handoff delivery is implemented.
 
 ## Known non-changes
 - No second child-workflow engine was added.
 - `autoloop.simple.workflow_step(...)` still uses the generated handler compatibility path installed during simple lowering.
 - Route handoff scheduling still flows through existing `Handoff` effects / event handoff behavior.
+- Child-workflow invocations still do not accept queued route handoff text as an additional message channel in this phase.
 
 ## Expected side effects
 - Hook-driven route overrides that introduce new required outputs now fail against the final route and are not retried as provider failures.
