@@ -32,6 +32,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         validate_candidate_surface_overlay,
         write_selected_workflow_decomposition_surface,
     )
+    from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -59,6 +60,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         validate_candidate_surface_overlay,
         write_selected_workflow_decomposition_surface,
     )
+    from stdlib._selected_workflow import capture_selected_workflow
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
@@ -364,26 +366,33 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
 
     @staticmethod
     def on_capture_decomposition_context(state: State, ctx) -> tuple[State, Event]:
-        repo_root = _repo_root_from_context(ctx)
+        capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
+        repo_root = capture.repo_root
         try:
             surface_path = write_selected_workflow_decomposition_surface(ctx, state.selected_workflow_reference)
+            if not surface_path.exists():
+                raise FileNotFoundError(
+                    f"selected workflow decomposition surface was not written at {surface_path}"
+                )
             surface_snapshot = _read_json(surface_path)
             _require_text(state.selected_workflow_reference, "selected_workflow_reference must stay non-empty")
-            selected_workflow_name, _, _, _ = validate_selected_workflow_decomposition_surface_snapshot(
-                surface_snapshot
+            validate_selected_workflow_decomposition_surface_snapshot(
+                surface_snapshot,
+                expected_selected_workflow_name=capture.selected_workflow_name,
+                expected_label="selected workflow capture",
             )
             boundary = _decomposition_surface_boundary(surface_snapshot, repo_root)
             _write_baseline_parent_manifest(
                 ctx,
                 repo_root=repo_root,
-                selected_workflow_name=selected_workflow_name,
+                selected_workflow_name=capture.selected_workflow_name,
                 boundary=boundary,
             )
             _capture_decomposition_evidence(ctx, repo_root=repo_root, requested_paths=state.evidence_paths)
         except _CaptureBlockedError as exc:
             return state, Event("blocked", reason=str(exc))
         return (
-            state.model_copy(update={"selected_workflow_name": selected_workflow_name}),
+            state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
             Event("decomposition_context_captured"),
         )
 

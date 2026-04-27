@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
         read_json_object,
+        require_existing_artifact_paths,
         require_non_empty_string,
         require_string_list,
         validate_selected_workflow_artifact_alignment,
@@ -16,6 +17,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_selected_workflow_capability_snapshot,
         write_validated_eval_case_manifest,
     )
+    from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -25,6 +27,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
         read_json_object,
+        require_existing_artifact_paths,
         require_non_empty_string,
         require_string_list,
         validate_selected_workflow_artifact_alignment,
@@ -32,6 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_selected_workflow_capability_snapshot,
         write_validated_eval_case_manifest,
     )
+    from stdlib._selected_workflow import capture_selected_workflow
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -268,14 +272,12 @@ class WorkflowToEvalSuite(Workflow):
 
     @staticmethod
     def on_capture_selected_workflow_contract(state: State, ctx) -> tuple[State, Event]:
+        capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
         snapshot_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"selected workflow capability snapshot was not written at {snapshot_path}")
-
-        snapshot = read_json_object(snapshot_path)
-        selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(snapshot)
         return (
-            state.model_copy(update={"selected_workflow_name": selected_workflow_name}),
+            state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
             Event("selected_workflow_contract_captured"),
         )
 
@@ -362,20 +364,19 @@ class WorkflowToEvalSuite(Workflow):
     @staticmethod
     def on_publish_workflow_eval_suite(state: State, ctx) -> tuple[State, Event]:
         workflow_folder = ctx.workflow_folder
-        required_paths = {
-            "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
-            "benchmark_case_matrix": workflow_folder / "benchmark_case_matrix.md",
-            "edge_case_matrix": workflow_folder / "edge_case_matrix.md",
-            "adversarial_case_matrix": workflow_folder / "adversarial_case_matrix.md",
-            "eval_case_manifest": workflow_folder / "eval_case_manifest.json",
-            "eval_rubric": workflow_folder / "eval_rubric.md",
-            "workflow_eval_suite": workflow_folder / "workflow_eval_suite.md",
-            "workflow_eval_suite_summary": workflow_folder / "workflow_eval_suite_summary.json",
-            "workflow_eval_next_action": workflow_folder / "workflow_eval_next_action.md",
-        }
-        for artifact_path in required_paths.values():
-            if not artifact_path.exists():
-                raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
+        required_paths = require_existing_artifact_paths(
+            {
+                "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
+                "benchmark_case_matrix": workflow_folder / "benchmark_case_matrix.md",
+                "edge_case_matrix": workflow_folder / "edge_case_matrix.md",
+                "adversarial_case_matrix": workflow_folder / "adversarial_case_matrix.md",
+                "eval_case_manifest": workflow_folder / "eval_case_manifest.json",
+                "eval_rubric": workflow_folder / "eval_rubric.md",
+                "workflow_eval_suite": workflow_folder / "workflow_eval_suite.md",
+                "workflow_eval_suite_summary": workflow_folder / "workflow_eval_suite_summary.json",
+                "workflow_eval_next_action": workflow_folder / "workflow_eval_next_action.md",
+            }
+        )
 
         capability_snapshot = read_json_object(required_paths["selected_workflow_capability"])
         snapshot_selected_workflow_name, selected_capability = validate_selected_workflow_capability_snapshot(

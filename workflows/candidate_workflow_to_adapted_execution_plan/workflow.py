@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.stdlib import (
         read_json_object,
+        require_existing_artifact_paths,
         require_non_empty_string,
         require_string_list,
         validate_selected_workflow_artifact_alignment,
@@ -14,6 +15,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_selected_workflow_capability_snapshot,
         write_validated_workflow_parameters,
     )
+    from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -23,6 +25,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
         read_json_object,
+        require_existing_artifact_paths,
         require_non_empty_string,
         require_string_list,
         validate_selected_workflow_artifact_alignment,
@@ -30,6 +33,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_selected_workflow_capability_snapshot,
         write_validated_workflow_parameters,
     )
+    from stdlib._selected_workflow import capture_selected_workflow
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -251,14 +255,12 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
 
     @staticmethod
     def on_capture_selected_workflow_contract(state: State, ctx) -> tuple[State, Event]:
+        capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
         snapshot_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"selected workflow capability snapshot was not written at {snapshot_path}")
-
-        snapshot = read_json_object(snapshot_path)
-        selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(snapshot)
         return (
-            state.model_copy(update={"selected_workflow_name": selected_workflow_name}),
+            state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
             Event("selected_workflow_contract_captured"),
         )
 
@@ -315,18 +317,17 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
     @staticmethod
     def on_publish_adapted_execution_plan(state: State, ctx) -> tuple[State, Event]:
         workflow_folder = ctx.workflow_folder
-        required_paths = {
-            "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
-            "workflow_fit_assessment": workflow_folder / "workflow_fit_assessment.md",
-            "step_adaptation_matrix": workflow_folder / "step_adaptation_matrix.md",
-            "adapted_execution_plan": workflow_folder / "adapted_execution_plan.md",
-            "proposed_workflow_parameters": workflow_folder / "proposed_workflow_parameters.json",
-            "adapted_execution_summary": workflow_folder / "adapted_execution_summary.json",
-            "adapted_execution_next_action": workflow_folder / "adapted_execution_next_action.md",
-        }
-        for artifact_path in required_paths.values():
-            if not artifact_path.exists():
-                raise FileNotFoundError(f"missing required publication artifact at {artifact_path}")
+        required_paths = require_existing_artifact_paths(
+            {
+                "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
+                "workflow_fit_assessment": workflow_folder / "workflow_fit_assessment.md",
+                "step_adaptation_matrix": workflow_folder / "step_adaptation_matrix.md",
+                "adapted_execution_plan": workflow_folder / "adapted_execution_plan.md",
+                "proposed_workflow_parameters": workflow_folder / "proposed_workflow_parameters.json",
+                "adapted_execution_summary": workflow_folder / "adapted_execution_summary.json",
+                "adapted_execution_next_action": workflow_folder / "adapted_execution_next_action.md",
+            }
+        )
 
         capability_snapshot = read_json_object(required_paths["selected_workflow_capability"])
         snapshot_selected_workflow_name, selected_capability = validate_selected_workflow_capability_snapshot(

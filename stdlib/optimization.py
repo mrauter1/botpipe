@@ -19,13 +19,13 @@ except ImportError:  # pragma: no cover - direct repo-root import fallback
     from runtime.loader import resolve_workflow_reference
     from runtime.workspace import list_run_records
 
+from ._selected_workflow import capture_selected_workflow, inspect_selected_workflow
 from .lifecycle import write_workflow_json
 from .validation import (
     require_non_empty_string,
     require_positive_int,
     require_string_list,
     validate_selected_workflow_authoring_surface_snapshot,
-    validate_selected_workflow_capability_snapshot,
     validate_selected_workflow_decomposition_surface_snapshot,
 )
 from .adaptation import write_selected_workflow_capability_snapshot
@@ -257,6 +257,7 @@ def capture_optimization_frame_context(
 ) -> OptimizationFrameCapture:
     """Write deterministic optimizer frame artifacts and return summarized counts."""
 
+    selected_capture = capture_selected_workflow(ctx, selected_workflow_reference)
     capability_path = write_selected_workflow_capability_snapshot(ctx, selected_workflow_reference)
     authoring_surface_path = write_selected_workflow_authoring_surface(ctx, selected_workflow_reference)
     decomposition_surface_path = write_selected_workflow_decomposition_surface(ctx, selected_workflow_reference)
@@ -266,8 +267,9 @@ def capture_optimization_frame_context(
         relative_path="selected_workflow_source_manifest.json",
     )
 
-    capability_snapshot = _read_json_object(capability_path)
-    selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(capability_snapshot)
+    if not capability_path.is_file():
+        raise FileNotFoundError(f"selected workflow capability snapshot was not written at {capability_path}")
+    selected_workflow_name = selected_capture.selected_workflow_name
     validate_selected_workflow_authoring_surface_snapshot(
         _read_json_object(authoring_surface_path),
         expected_selected_workflow_name=selected_workflow_name,
@@ -823,9 +825,9 @@ def write_selected_workflow_source_manifest(
 ) -> Path:
     """Write a stable source-surface manifest for one selected workflow."""
 
-    repo_root = ctx.root.resolve()
-    capability = inspect_workflow_reference(repo_root, selected_workflow)
-    surface = selected_workflow_authoring_surface_payload(capability)
+    inspection = inspect_selected_workflow(ctx, selected_workflow)
+    repo_root = inspection.capture.repo_root
+    surface = selected_workflow_authoring_surface_payload(inspection.capability)
     editable_paths = [
         Path(path).resolve()
         for path in require_string_list(
@@ -851,7 +853,7 @@ def write_selected_workflow_source_manifest(
         )
     manifest = {
         "schema": SOURCE_MANIFEST_SCHEMA,
-        "selected_workflow": capability.workflow_name,
+        "selected_workflow": inspection.capture.selected_workflow_name,
         "package_dir": _repo_relative_if_possible(package_dir, repo_root),
         "files": sorted(files, key=lambda entry: str(entry["path"])),
     }

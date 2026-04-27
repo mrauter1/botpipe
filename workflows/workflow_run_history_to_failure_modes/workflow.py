@@ -28,6 +28,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_selected_workflow_capability_snapshot,
         write_selected_workflow_run_history_snapshot,
     )
+    from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
     from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
@@ -54,6 +55,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_selected_workflow_capability_snapshot,
         write_selected_workflow_run_history_snapshot,
     )
+    from stdlib._selected_workflow import capture_selected_workflow
     from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
@@ -297,6 +299,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
 
     @staticmethod
     def on_capture_run_history_context(state: State, ctx) -> tuple[State, Event]:
+        capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
         capability_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
         history_path = write_selected_workflow_run_history_snapshot(
             ctx,
@@ -304,19 +307,18 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             statuses=state.statuses or None,
             max_runs=state.max_runs,
         )
-        if not capability_path.exists():
-            raise FileNotFoundError(f"selected workflow capability snapshot was not written at {capability_path}")
-        if not history_path.exists():
-            raise FileNotFoundError(f"selected workflow run history snapshot was not written at {history_path}")
+        required_paths = require_existing_artifact_paths(
+            {
+                "selected_workflow_capability": capability_path,
+                "selected_workflow_run_history": history_path,
+            }
+        )
 
-        capability_snapshot = _read_json(capability_path)
-        snapshot_selected_workflow_name, _ = validate_selected_workflow_capability_snapshot(capability_snapshot)
-
-        history_snapshot = _read_json(history_path)
+        history_snapshot = _read_json(required_paths["selected_workflow_run_history"])
         validate_selected_workflow_artifact_alignment(
             history_snapshot,
             artifact_name="selected_workflow_run_history.json",
-            expected_selected_workflow_name=snapshot_selected_workflow_name,
+            expected_selected_workflow_name=capture.selected_workflow_name,
             expected_artifact_name="selected_workflow_capability.json",
         )
         run_history = _require_mapping(
@@ -343,7 +345,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         return (
             state.model_copy(
                 update={
-                    "selected_workflow_name": snapshot_selected_workflow_name,
+                    "selected_workflow_name": capture.selected_workflow_name,
                     "evidence_run_ids": evidence_run_ids,
                 }
             ),
