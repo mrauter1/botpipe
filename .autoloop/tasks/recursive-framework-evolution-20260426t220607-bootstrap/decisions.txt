@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260427T010607Z-85bed128" ts="2026-04-27T01:06:07.943013+00:00" />
+Implement the optimizer as an additive workflow package plus stdlib/optimization.py seam only; do not add optimization behavior to runtime, runner, or engine code.
+Treat bundled workflow registration as manifest-backed package discovery plus docs/tests updates unless a later code path proves an explicit registry is still required.
+Reuse the existing selected_workflow_capability, selected_workflow_authoring_surface, and selected_workflow_decomposition_surface helper family; add only optimizer-specific source-manifest capture instead of a fourth general serializer.
+optimization_depth=\"ablation\" only labels candidates and optional ablation planning metadata; this workflow never reruns the target workflow or executes ablations.

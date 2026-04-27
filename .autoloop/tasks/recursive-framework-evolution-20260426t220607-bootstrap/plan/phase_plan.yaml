@@ -1,4 +1,225 @@
 version: 1
 task_id: recursive-framework-evolution-20260426t220607-bootstrap
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/runs/run-20260427T010607Z-85bed128/request.md
-phases: []
+phases:
+- phase_id: deterministic-ingestion-and-workflow-shell
+  title: Deterministic Ingestion And Workflow Shell
+  objective: Create the optimizer workflow package, parameter and contract models,
+    deterministic observability ingestion seam, and frame-time evidence capture without
+    changing runtime behavior.
+  status: planned
+  in_scope:
+  - Add stdlib/optimization.py with run_ref parsing, run discovery, observability
+    bundle loading and validation, trace-corpus normalization, and source-manifest
+    helpers.
+  - Add workflows/workflow_run_traces_to_optimization_candidates package files, workflow.toml,
+    prompt README, checklist asset, and prompt stubs following existing workflow package
+    conventions.
+  - Implement bootstrap and frame behavior, including selected-workflow capability/authoring/decomposition
+    snapshots, selected_workflow_source_manifest.json, excluded_run_report.json, workflow_optimization_scope.json,
+    and workflow_optimization_trace_corpus.json.
+  - Expose any new stdlib helpers through stdlib/__init__.py and ensure manifest-backed
+    discovery surfaces the new bundled workflow.
+  out_of_scope:
+  - Optimization candidate generation beyond no-op packaging for zero eligible runs.
+  - Refinement evidence consumption changes in other workflows.
+  - Any runtime engine, runner, or observability behavior changes.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The new workflow package is discoverable by canonical name and aliases,
+      and describe/introspection can resolve its parameters and ordered pair topology.
+  - id: AC-2
+    text: Frame-time deterministic ingestion accepts explicit run_refs or discovered
+      runs, excludes missing Plan-1 observability with reason codes, and emits the
+      required scope, trace-corpus, exclusion, snapshot, and source-manifest artifacts.
+  - id: AC-3
+    text: If no eligible runs remain after filtering, the workflow can short-circuit
+      to packaging with a no-op optimization packet instead of failing.
+  deliverables:
+  - stdlib/optimization.py
+  - workflows/workflow_run_traces_to_optimization_candidates/
+  - Selected workflow source-manifest capture and validation seam
+  risks:
+  - Filesystem ingestion may diverge from existing run-history helpers if path assumptions
+    are not aligned with runtime.workspace records.
+  - Adding a fourth selected-workflow serializer would create long-term drift if helper
+    reuse is not enforced.
+  rollback:
+  - Drop the new workflow package and stdlib exports while leaving runtime observability
+    unchanged.
+  - Keep selected-workflow helper reuse and discovery behavior identical to the pre-change
+    state.
+- phase_id: ranking-and-failure-analysis
+  title: Ranking And Failure Analysis
+  objective: Turn eligible trace evidence into deterministic step metrics, leverage
+    ranking, and failure-scenario seeds that respect upstream attribution and route
+    semantics.
+  status: planned
+  in_scope:
+  - Implement static centrality computation, step metrics aggregation, deterministic
+    priority scoring, and target ranking helpers.
+  - Implement rank_targets pair outputs and mine_failures pair outputs using deterministic
+    seeds plus LLM diagnosis bounded by allowed failure kinds.
+  - Preserve separation between run_statuses filtering and route_tags filtering in
+    both helper logic and emitted artifacts.
+  out_of_scope:
+  - Producer, verifier/rubric, token, adversarial, and workflow-level optimization
+    candidate passes.
+  - Refinement evidence handoff and final scorecard publication.
+  dependencies:
+  - deterministic-ingestion-and-workflow-shell
+  acceptance_criteria:
+  - id: AC-1
+    text: step_trace_metrics.json and step_optimization_priority_report.json are emitted
+      with deterministic metrics, leverage scoring inputs, and top-k ranked steps.
+  - id: AC-2
+    text: Ranking logic can prefer a high-leverage upstream step over a downstream
+      symptom when deterministic evidence indicates blast radius and centrality justify
+      it.
+  - id: AC-3
+    text: workflow_failure_scenarios.json is emitted from deterministic seeds plus
+      bounded LLM classification without requiring evidence references for schema
+      validity.
+  deliverables:
+  - Step metric and priority helpers in stdlib/optimization.py
+  - rank_targets and mine_failures workflow steps
+  - Failure-scenario seed extraction and validation coverage
+  risks:
+  - Priority scoring may overweight failure counts and underweight upstream leverage.
+  - Sparse or malformed trace data may reduce confidence and require explicit insufficient-evidence
+    handling.
+  rollback:
+  - Retain trace-corpus publication while disabling ranking/failure steps behind workflow-local
+    implementation rollback if scoring proves unsound.
+- phase_id: candidate-generation-and-publication
+  title: Candidate Generation And Publication
+  objective: Generate candidate-only local and workflow-level optimization artifacts,
+    enforce optional-pass skip semantics, and publish a non-mutating optimization
+    packet with source-drift validation.
+  status: planned
+  in_scope:
+  - Implement optimize_producer, optimize_verifier_rubric, optimize_tokens, adversarial_cases,
+    workflow_level, and package steps plus their route contracts.
+  - Implement skip behavior for include_token_optimization, include_adversarial_generation,
+    and include_workflow_level_candidates.
+  - Implement optimization_depth semantics so cheap and standard stay trace-only and
+    ablation only marks candidates or ablation plans without execution.
+  - Publish workflow_optimization_scorecard.json, workflow_refinement_evidence.json,
+    workflow_optimization_packet.md, and optimization_publication_receipt.json after
+    source-manifest revalidation.
+  out_of_scope:
+  - Executing ablations, rerunning the selected workflow, or materializing source
+    patches.
+  - Automatic refinement, promotion, rollback, or repo patching.
+  dependencies:
+  - ranking-and-failure-analysis
+  acceptance_criteria:
+  - id: AC-1
+    text: Each candidate pass emits its required artifact or explicit pass-not-applicable
+      route without crossing target-surface boundaries.
+  - id: AC-2
+    text: Package publication fails if the selected workflow source manifest changes,
+      and passes only when all published artifacts are candidate-only and aligned.
+  - id: AC-3
+    text: optimization_depth='ablation' never executes ablations or target-workflow
+      reruns inside this workflow.
+  deliverables:
+  - All optimization candidate artifacts and publication artifacts
+  - Package-time source mutation check
+  - Ordered-prefix pair subset enforcement
+  risks:
+  - Prompt surfaces may blur producer and verifier/rubric responsibilities unless
+    contracts are kept strict.
+  - Package publication may overclaim evidence quality if scorecard wording is not
+    tightly bounded.
+  rollback:
+  - Disable later optimization passes and keep the workflow at trace analysis plus
+    no-op packaging if publication invariants are not yet stable.
+- phase_id: refinement-and-documentation-integration
+  title: Refinement And Documentation Integration
+  objective: Teach refinement to consume optimization evidence as candidate-only input
+    and document the optimizer boundaries, invocation contract, and non-mutation policy
+    across repository docs.
+  status: planned
+  in_scope:
+  - Extend workflow_and_eval_to_refined_workflow_package acceptance logic, prompts,
+    and tests for optimization evidence kinds and candidate-only semantics.
+  - Add docs/workflows/workflow_run_traces_to_optimization_candidates.md with invocation,
+    parameters, artifacts, topology, phases, ablation boundary, refinement handoff,
+    non-mutation guarantee, and validation guidance.
+  - Update architecture, authoring, and related workflow docs to describe observability
+    inputs, run_refs shape, run_statuses versus route_tags, merged verifier/rubric
+    optimization, and no-default-ablation behavior.
+  - Update architecture baseline docs assertions to freeze the new optimizer boundary.
+  out_of_scope:
+  - Merging optimization and refinement into one workflow.
+  - Any change that makes optimization candidates count as proof of improvement.
+  dependencies:
+  - candidate-generation-and-publication
+  acceptance_criteria:
+  - id: AC-1
+    text: Refinement accepts optimization evidence entries, treats candidate-only
+      artifacts as unproven without ablation, and does not auto-materialize adversarial
+      cases.
+  - id: AC-2
+    text: Workflow and architecture docs describe the optimizer as trace-consuming,
+      candidate-only, non-mutating, and non-ablation-executing.
+  - id: AC-3
+    text: Baseline doc tests explicitly lock the new optimizer boundaries and identity
+      conventions.
+  deliverables:
+  - Refinement evidence integration updates
+  - Optimizer workflow documentation page
+  - Architecture, authoring, and related workflow doc updates
+  risks:
+  - Docs and refinement code can drift if accepted evidence kinds are changed in one
+    place only.
+  rollback:
+  - Keep optimizer publication self-contained and revert refinement acceptance widening
+    if integration semantics are not yet consistent.
+- phase_id: verification-and-full-regression
+  title: Verification And Full Regression
+  objective: Prove the optimizer, refinement integration, and documentation boundaries
+    with focused unit/runtime coverage and full-suite regression validation.
+  status: planned
+  in_scope:
+  - Add tests/unit/test_optimization_helpers.py for helper parsing, filtering, normalization,
+    ranking, failure seed extraction, source-manifest behavior, and refinement-evidence
+    writing.
+  - Add tests/runtime/test_workflow_run_traces_to_optimization_candidates.py covering
+    registration, describe output, no-op framing, seeded corpus generation, candidate
+    passes, skip behavior, source non-mutation, ordered-prefix pair subsets, and ablation
+    non-execution.
+  - Update refinement runtime tests and architecture baseline docs tests for the new
+    evidence kinds and boundaries.
+  - Run targeted suites first, then the full test suite, and fix any boundary regressions
+    before closeout.
+  out_of_scope:
+  - Shipping partial coverage that leaves source-mutation or ablation-boundary behavior
+    untested.
+  dependencies:
+  - refinement-and-documentation-integration
+  acceptance_criteria:
+  - id: AC-1
+    text: All new unit, runtime, refinement-integration, and docs tests requested
+      by the snapshot exist and pass.
+  - id: AC-2
+    text: Full-suite regression runs show no break to workflow discovery, selected-workflow
+      helper families, runtime observability assumptions, or refinement publication
+      behavior.
+  - id: AC-3
+    text: The final implementation satisfies the snapshot acceptance criteria without
+      hidden execution, source mutation, or runtime contract drift.
+  deliverables:
+  - New optimization helper tests
+  - New optimizer workflow runtime tests
+  - Updated refinement integration and architecture baseline tests
+  risks:
+  - The full suite may expose latent assumptions in docs baselines or selected-workflow
+    artifact validators.
+  - Fake-provider scripts may need careful shaping to exercise all step-local routes
+    without making tests brittle.
+  rollback:
+  - Revert only the failing integration slice while preserving already-proven deterministic
+    helper behavior and package scaffolding.
