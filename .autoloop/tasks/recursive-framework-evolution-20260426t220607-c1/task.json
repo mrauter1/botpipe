@@ -12,11 +12,11 @@
       "remaining-typed-bootstrap-convergence"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "remaining-typed-bootstrap-convergence"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "remaining-typed-bootstrap-convergence": "in_progress"
+    "remaining-typed-bootstrap-convergence": "completed"
   },
   "phase_history": [
     {
@@ -24,6 +24,13 @@
       "run_id": "run-20260427T033024Z-f4648cdd",
       "status": "in_progress",
       "ts": "2026-04-27T03:38:33.498757+00:00"
+    },
+    {
+      "phase_id": "remaining-typed-bootstrap-convergence",
+      "run_id": "run-20260427T033024Z-f4648cdd",
+      "status": "completed",
+      "ts": "2026-04-27T03:55:35.816565+00:00",
+      "pair": "test"
     }
   ]
 }
