@@ -1622,3 +1622,51 @@ Open issues / next step
 
 - No blocking test gaps remain in this phase-local pass.
 - Full-suite and grep evidence remains documented in the paired implementation artifacts; this turn added the missing working-tree docs regression guard only.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd109-f5ef-79b2-a68f-56046bce14ad
+---
+I’m auditing the phase-local test artifacts and the request-relevant tests now. First I’m checking the auditor-owned criteria/feedback files, then I’ll verify that the new docs guard and the broader greenfield proof coverage line up with the phase intent and the shared decisions.
+
+The added docs guard is deterministic and aligned with the shared decision that the root note and recursive templates are part of the active-term boundary. I’m marking the audit complete unless a final criteria pass reveals a real coverage gap.
+
+Scope considered
+
+- Active phase-local test scope only: the updated docs regression guard, the phase test strategy/feedback artifacts, and the existing request-relevant greenfield proof suites already cited by the paired implementation work.
+- Auditor-owned artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/workflow-migration-docs-and-proof/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/workflow-migration-docs-and-proof/feedback.md).
+
+What I analyzed
+
+- The new assertions in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- The phase coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/workflow-migration-docs-and-proof/test_strategy.md).
+- Shared decisions relevant to this phase: reserved-route normalization, authoritative selected-workflow payloads, and the active-doc grep boundary.
+
+What I reviewed
+
+- Whether the added test closes a material regression gap for active working-tree docs outside `docs/` and prompt READMEs.
+- Whether the documented coverage map names the right proof layers for AC-1 and AC-2.
+- Whether the new test is deterministic and avoids flaky assumptions.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings beyond recording the clean audit result.
+- Criteria were fully checked and feedback was updated with the audit outcome.
+
+Open issues / next step
+
+- No open test-audit issues remain for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
