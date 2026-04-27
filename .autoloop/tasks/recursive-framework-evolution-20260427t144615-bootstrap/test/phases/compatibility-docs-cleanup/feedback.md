@@ -10,3 +10,5 @@
 - Added a direct regression for the repo-root public authoring guide: `tests/test_architecture_baseline_docs.py::test_workflow_instructions_teach_route_metadata_vocabulary`.
 - Revalidated the widened forbidden-token scan against `Workflow_Instructions.md` plus `docs/`.
 - Validation run: `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k 'public_docs_do_not_teach_route_contract_or_board_mutation_authoring or workflow_instructions_teach_route_metadata_vocabulary' -q` -> `2 passed, 42 deselected`.
+
+- TST-001 `non-blocking` — Audit confirmed the phase-local doc-pin coverage is sufficient for the changed risk surface: one negative scan blocks reintroduction of deprecated public vocabulary across `docs/` plus `Workflow_Instructions.md`, and one positive assertion guards the replacement route-metadata vocabulary in the repo-root guide. No additional test findings.

@@ -1873,3 +1873,91 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd078-0d68-7960-9954-c65d51a725f9
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+I’m working the test side of `compatibility-docs-cleanup`: first I’ll inspect the phase test artifacts and the current doc-pin coverage so I can add only the missing regression checks and record a tight coverage map.
+
+The current doc-pin already blocks old tokens, but I want one direct regression for the repo-root guide’s positive contract too, so we catch accidental removal of the new `route_infos` / `route_required_outputs` vocabulary rather than only forbidden-term leakage.
+
+I’ve added the direct positive regression for `Workflow_Instructions.md`. Next I’m running the narrow doc-pin slice so I can record exact coverage and any remaining gaps in the phase artifacts.
+
+Scope considered
+- Phase-local test coverage for `compatibility-docs-cleanup`.
+- The public doc-pin surface in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+- The repo-root authoring guide [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:1).
+- Phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/compatibility-docs-cleanup/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/compatibility-docs-cleanup/feedback.md:1).
+
+What I analyzed
+- Existing doc-pin coverage already added for forbidden legacy tokens.
+- The remaining regression risk after the implementer fix: `Workflow_Instructions.md` could silently lose the new route-metadata vocabulary while still avoiding the old forbidden tokens.
+- The smallest deterministic assertion that would catch that drift without adding unrelated churn.
+
+What I changed
+- Added `tests/test_architecture_baseline_docs.py::test_workflow_instructions_teach_route_metadata_vocabulary` to assert the repo-root guide positively teaches `readable inputs`, `required inputs`, `writable artifacts`, `route_infos`, `route_required_outputs`, `explicit route metadata`, and `typed control surface`.
+- Updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/compatibility-docs-cleanup/test_strategy.md:1) with a behavior-to-test map, preserved invariants, failure paths, flake notes, and known gaps.
+- Appended a concise validation summary to the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/compatibility-docs-cleanup/feedback.md:1).
+
+Key findings / decisions
+- The narrowed doc cleanup needed one positive regression, not just forbidden-token scans.
+- The added test is deterministic and phase-local; it strengthens the public authoring contract without touching unrelated runtime behavior.
+- Validation passed: `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k 'public_docs_do_not_teach_route_contract_or_board_mutation_authoring or workflow_instructions_teach_route_metadata_vocabulary' -q` -> `2 passed, 42 deselected`.
+
+Open issues / next step
+- The broader recursive-memory assertions in `tests/test_architecture_baseline_docs.py` remain outside this phase scope and are intentionally not normalized here.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd078-0d68-7960-9954-c65d51a725f9
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+I’m auditing the phase-local test work now: first I’ll inspect the updated strategy/feedback artifacts and the doc-pin tests they reference so I can confirm the added coverage actually closes the changed-risk window.
+
+The added coverage is narrowly scoped and looks appropriate. I’m running the same narrow doc-pin slice once to verify the assertions are stable before I mark the audit artifacts complete.
+
+Scope considered
+- Phase-local audit of the `compatibility-docs-cleanup` test work only.
+- The added doc-pin assertions in `tests/test_architecture_baseline_docs.py`.
+- The phase artifacts `test_strategy.md`, `feedback.md`, and `criteria.md`.
+
+What I analyzed
+- The changed-risk surface: public authoring vocabulary drift in `docs/` and `Workflow_Instructions.md`.
+- The new positive assertion for `Workflow_Instructions.md` and the widened forbidden-token scan.
+- The test strategy’s claimed coverage, failure paths, and flake profile.
+
+What I reviewed
+- `test_public_docs_do_not_teach_route_contract_or_board_mutation_authoring` now scans both `docs/` and `Workflow_Instructions.md`.
+- `test_workflow_instructions_teach_route_metadata_vocabulary` positively guards the replacement vocabulary (`readable inputs`, `required inputs`, `writable artifacts`, `route_infos`, `route_required_outputs`, `explicit route metadata`, `typed control surface`).
+- Validation rerun passed: `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k 'public_docs_do_not_teach_route_contract_or_board_mutation_authoring or workflow_instructions_teach_route_metadata_vocabulary' -q` -> `2 passed, 42 deselected`.
+
+Key findings / decisions
+- No blocking audit findings.
+- The added coverage is appropriately narrow, deterministic, and aligned with the phase objective.
+- Criteria were updated to all checked, and a non-blocking audit note was appended to the phase feedback artifact.
+
+Open issues / next step
+- No phase-local test issues remain.
+- The broader recursive-memory assertions intentionally remain outside this phase’s scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
