@@ -23,3 +23,7 @@
 {"ts": "2026-04-27T18:19:00.007317+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "surface-foundations"}
 {"ts": "2026-04-27T18:19:46.549688+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "surface-foundations"}
 {"ts": "2026-04-27T18:19:46.582348+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "surface-foundations"}
+{"ts": "2026-04-27T18:19:46.659838+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "surface-foundations", "phase_mode": "single"}
+{"ts": "2026-04-27T18:19:46.662046+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 27, "event_type": "phase_started", "phase_id": "contract-migration", "phase_mode": "single"}
+{"ts": "2026-04-27T18:19:46.662530+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "contract-migration"}
+{"ts": "2026-04-27T18:19:46.662600+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "contract-migration"}
