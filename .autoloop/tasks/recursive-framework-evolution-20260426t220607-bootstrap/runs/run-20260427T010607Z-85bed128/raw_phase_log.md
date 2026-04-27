@@ -1042,3 +1042,128 @@ This phase should return to implement to add deterministic skip enforcement, art
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+I’m implementing the reviewer findings in the optimizer workflow now. First I’m tracing how other workflows handle deterministic step gating and whether this repo already has a pattern for ordered-prefix pair subsets before I edit the optimizer package.
+
+The repo does not already have an ordered-prefix subset seam for this workflow, so I’m tracing the engine hooks next. I need to know whether the cleanest fix is to insert explicit system-step gates before the optional passes or to normalize outcomes in a step callback without fighting the engine.
+
+I don’t see an existing repo-wide pair-subset mechanism for workflow pair steps. I’m prioritizing the concrete blocking bugs first: deterministic skip gating and candidate-artifact validation. After that I’ll reassess whether the ordered-prefix requirement can be satisfied cleanly inside this package or whether the current ask only needs the missing regression tests around the fixed pair order.
+
+I’ve got the fix shape. I’m adding typed artifact specs for the candidate JSON files first, then I’ll wire publication-time validation and deterministic skip gates into the workflow so the tests can exercise the real path.
+
+I found a useful repo detail: artifact schemas are enforced automatically by the engine when the `Artifact` declaration carries a Pydantic schema. I’m switching the optimizer’s candidate artifacts onto typed `Artifact.json(...)` declarations and then using small gate system steps for the deterministic skip routes.
+
+The workflow changes are in. I’m cleaning the contract exports and then I’ll expand the runtime tests to cover the new gate steps, publication validation, and the source-drift failure path.
+
+The test file now covers the deterministic skips and publication validation path. I’m running the optimizer runtime and helper suites next so I can catch any contract mistakes before I touch the phase notes.
+
+There are immediate failures in the optimizer runtime file, which is expected after introducing the gates. I’m pulling the traceback now and I’ll fix those before widening back out to the refinement/docs suites.
+
+Review feedback points to skip gating, publication validation, and missing coverage. I’ve patched those surfaces and I’m checking the failing test details now before making any further edits.
+
+I’m re-running the scoped test set and reading the touched workflow/contracts/tests together so I can tie each failure back to the exact code path instead of patching blindly.
+
+The scoped test run is failing early, so I’m pulling the first traceback now. The failures should tell us whether the new gate steps broke engine expectations or whether one of the schema checks is too strict for existing test fixtures.
+
+The first failure is structural: system-step route contracts need full summaries, not bare placeholders. I’m aligning those gate steps to the repository’s normalized route-contract format before re-running the whole phase proof.
+
+I’m patching the gate-step contracts to satisfy workflow validation cleanly rather than relying on empty mappings. After that I’ll rerun the runtime file to see the next real behavioral failures, if any.
+
+Two failures remain. One is just step registration order, which I’ll align with the declared workflow topology; the other is the source-drift failure message, which I’ll tighten to the contract language the phase expects.
+
+I caught one ordering detail while applying that fix: the gate steps need to sit immediately before the pass they guard, otherwise the compiled step order still drifts from the declared topology. I’m correcting that now.
+
+The optimizer runtime file is clean now. I’m running the broader scoped proof set next to make sure the new validation hooks didn’t regress helper tests, refinement handoff, or the docs baseline.
+
+The remaining scoped suites passed too. I’m doing one final combined run of the optimizer helper/runtime/refinement/docs set so the notes and validation line up with a single green command.
+
+The proof set is green, but I’m checking one last reviewer gap against the request snapshot: explicit ordered-prefix `pairs` coverage. If that’s only enforced implicitly today, I’ll add a direct regression test instead of leaving it to generic builder tests elsewhere.
+
+I’m adding two direct regression tests to close the remaining review gap rather than relying on the current green run alone: one for malformed candidate publication input, and one named coverage check for ordered-prefix pair topology.
+
+Scope considered
+
+Phase-local `candidate-generation-and-publication` work only: the optimizer workflow’s candidate passes, skip routing, package publication checks, scoped runtime tests, and the required phase notes/decision ledger.
+
+What I analyzed
+
+I reviewed the reviewer findings against [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py), [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/contracts.py), [test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py), the active phase feedback, and the scoped proof surfaces in refinement/docs tests. I also checked the runtime route-contract requirements and the package-time source-drift path before editing.
+
+What I changed
+
+I made the optional passes deterministic in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py:388) by adding explicit system gates before `optimize_tokens`, `adversarial_cases`, and `workflow_level`. When the corresponding include flag is false, the workflow now writes the canonical empty candidate artifact and emits the exact skip route instead of relying on provider-selected pair outcomes.
+
+I hardened publication in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py:939) and [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/contracts.py) by adding typed artifact specs for all candidate JSON artifacts, using schema-backed `Artifact.json(...)` declarations, and re-validating the candidate publication surface at package time. Publication now cross-checks scorecard counts, highest-priority IDs, and ablation flags against validated candidate artifacts and fails with the required authoritative source-drift message.
+
+I extended [test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py) to cover the skip gates, package publication success, source-drift failure, malformed candidate rejection, candidate-count mismatch rejection, ordered-prefix pair topology, and `optimization_depth="ablation"` non-execution. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/candidate-generation-and-publication/implementation_notes.md) and appended the non-obvious decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The reviewer’s first two blockers were real: skip behavior was not deterministic, and package publication trusted candidate files too loosely. The clean fix was to gate optional passes with explicit system steps and centralize package-time candidate validation rather than scattering ad hoc checks across handlers.
+
+Validation passed with:
+`.venv/bin/pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py`
+Result: `100 passed`.
+
+Open issues / next step
+
+The scoped proof is green. The remaining visible issue is the existing Pydantic warning noise around models with a `schema` field; I left that unchanged because it is warning-only and outside the reviewer findings for this phase.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+I’m reviewing the scoped optimizer changes against the phase contract and the current feedback, then I’ll update the reviewer-owned criteria and feedback artifacts to reflect the result.
+
+I’ve got the prior findings and the updated diff. I’m running the scoped proof set myself and checking the exact workflow sections that were changed so I can either clear the blockers or carry forward anything still material.
+
+The scoped proof is green and the prior blockers are addressed in code and tests. I’m updating the reviewer artifacts to mark the phase complete and to record the only remaining issue as warning-only.
+
+Scope considered
+
+Phase-local `candidate-generation-and-publication` changes only: the optimizer workflow’s optional-pass routing, candidate artifact schema/publication checks, the scoped runtime tests, and the active reviewer artifacts.
+
+What I analyzed
+
+I reviewed the updated implementations in `workflows/workflow_run_traces_to_optimization_candidates/{workflow.py,contracts.py}`, the scoped runtime coverage in `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, the active implementation notes, and the latest phase decisions. I also reran the scoped proof set:
+`.venv/bin/pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py`
+
+What I reviewed
+
+The prior blockers are addressed. The workflow now enforces deterministic skip semantics through explicit system gates before the guarded pair steps, package publication now rereads and validates the candidate artifacts and their scorecard alignment before emitting refinement evidence, and the runtime tests now cover skip behavior, malformed candidate rejection, source-drift failure, ordered-prefix topology, and ablation-depth non-execution.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/candidate-generation-and-publication/criteria.md) to checked/complete and appended the re-review result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/candidate-generation-and-publication/feedback.md).
+
+Key findings / decisions
+
+No blocking findings remain for this phase. The only residual issue I found is warning-only Pydantic noise from models that use a `schema` field name; that is not a release blocker for this scoped phase review.
+
+Open issues / next step
+
+Phase-local review is complete. If desired later, warning hygiene around the optimizer contract models can be handled as a follow-up cleanup without changing the accepted behavior here.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
