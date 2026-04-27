@@ -10,7 +10,7 @@ import pytest
 from autoloop_v3.core.errors import WorkflowExecutionError
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop_v3.runtime.loader import WorkflowDiscoveryError, resolve_workflow_reference
+from autoloop_v3.runtime.loader import WorkflowDiscoveryError, inspect_workflow_reference, resolve_workflow_reference
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from workflow.primitives import Outcome
 
@@ -248,6 +248,45 @@ class DemoWorkflow(Workflow):
 
     assert resolved.reference.source_path == workflows_root / "demo.py"
     assert resolved.reference.workflow_name == "demo"
+
+
+def test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection(tmp_path: Path) -> None:
+    workflows_root = tmp_path / "workflows"
+    workflows_root.mkdir(parents=True, exist_ok=True)
+    workflows_root.joinpath("__init__.py").write_text("__all__ = []\n", encoding="utf-8")
+    workflow_path = workflows_root / "simple_example.py"
+    workflow_path.write_text(
+        """
+from __future__ import annotations
+
+from autoloop.simple import Workflow, chain, step
+
+
+class SimpleExample(Workflow):
+    a = step("Do A.")
+    flow = chain(a)
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    resolved_by_path = resolve_workflow_reference(tmp_path, "workflows/simple_example.py")
+    resolved_by_module = resolve_workflow_reference(tmp_path, "workflows.simple_example")
+    resolved_by_name = resolve_workflow_reference(tmp_path, "simple_example")
+    inspected = inspect_workflow_reference(tmp_path, "simple_example")
+
+    assert resolved_by_path.reference.source_path == workflow_path
+    assert resolved_by_module.reference.source_path == workflow_path
+    assert resolved_by_name.reference.source_path == workflow_path
+    assert resolved_by_name.reference.workflow_name == "simple_example"
+    assert inspected.workflow_path == workflow_path
+    assert inspected.entry_step_name == "a"
+    assert inspected.transitions["a"] == {
+        "done": "SUCCESS",
+        "question": "PAUSE",
+        "blocked": "PAUSE",
+        "failed": "FAIL",
+    }
 
 
 def test_module_and_class_references_run_through_the_same_resolver_path(tmp_path: Path) -> None:

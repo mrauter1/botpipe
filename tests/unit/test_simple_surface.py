@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import json
 import os
 import shutil
 import subprocess
@@ -253,6 +254,7 @@ def test_simple_workflow_step_compiles_as_core_workflow_step_without_generated_h
 
     assert compiled.entry_step_name == "launch"
     assert compiled.routes["launch"]["done"].target == "SUCCESS"
+    assert compiled.routes["launch"]["question"].target == "PAUSE"
     assert compiled.routes["launch"]["failed"].target == "FAIL"
     assert compiled.routes["launch"]["blocked"].target == "PAUSE"
     assert compiled.steps["launch"].kind == "workflow"
@@ -280,12 +282,12 @@ def test_simple_workflow_step_preserves_message_metadata_on_core_step() -> None:
 
 
 def test_simple_system_step_lowers_to_core_system_handler_without_on_step_method() -> None:
-    def run(state: _SystemWorkflowState, ctx: object) -> tuple[_SystemWorkflowState, str]:
+    def handler(state: _SystemWorkflowState, ctx: object) -> tuple[_SystemWorkflowState, str]:
         return _SystemWorkflowState(notes=state.notes + 1), "done"
 
     class SystemWorkflow(Workflow):
         State = _SystemWorkflowState
-        run = system_step(run, out=Md("note"))
+        run = system_step(handler, out=Md("note"))
         flow = chain(run)
 
     compiled = compile_workflow(SystemWorkflow)

@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from .compiler import CompiledWorkflow, compile_workflow
 from .routes import RouteInfo
+from .validation import is_workflow_class
 from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog
 
 
@@ -166,22 +167,16 @@ def locate_workflow_class(module: ModuleType, *, class_name: str | None = None) 
 
     if class_name is not None:
         candidate = getattr(module, class_name, None)
-        if not isinstance(candidate, type):
+        if not is_workflow_class(candidate):
             raise WorkflowCapabilityInspectionError(
                 f"workflow class {class_name!r} was not found in module {module.__name__!r}"
             )
         return candidate
 
-    from .steps import Step
-
     candidates = [
         value
         for value in module.__dict__.values()
-        if isinstance(value, type)
-        and value.__module__ == module.__name__
-        and value.__name__ != "Workflow"
-        and getattr(value, "State", None) is not None
-        and any(isinstance(member, Step) for member in value.__dict__.values())
+        if isinstance(value, type) and value.__module__ == module.__name__ and is_workflow_class(value)
     ]
     if not candidates:
         raise WorkflowCapabilityInspectionError(f"no workflow class was found in module {module.__name__!r}")

@@ -728,3 +728,70 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+I’m implementing the normalization-and-discovery phase only: simple-workflow lowering, reserved-route insertion, direct `system_step(fn)` lowering, and discovery before lowering. I’ll read the active phase notes and the relevant compiler/loader/validation code first, then patch only the scoped surfaces plus tests and phase notes.
+
+The phase artifacts are minimal, so I’m reading the actual lowering and discovery code now. Next I’m checking the current simple declarations, validation pipeline, loader, and the existing tests that already pin some of this behavior.
+
+I’ve confirmed the prior phase already introduced real `WorkflowStep` lowering in parts of validation, but discovery still relies on “strict workflow with concrete Step members” heuristics. I’m reading the remaining graph-lowering helpers and the current loader/capability resolution internals before editing, because the discovery fix should be shared, not duplicated.
+
+The remaining gaps are specific now: discovery still duplicates strict-only heuristics, reserved routes are only injected for some simple steps, and validation still treats `reads` like hard graph dependencies. I’m patching those behaviors together so the compiler, loader, and capability inspector all see the same normalized simple graph.
+
+I have the patch boundary now. I’m editing `core/validation.py`, `core/compiler.py`, `runtime/loader.py`, and `core/workflow_capabilities.py` together, because reads semantics, reserved-route normalization, and workflow discovery all meet in those four files and the tests need them to stay consistent.
+
+I’ve finished the normalization-side changes and I’m wiring the compiler and discovery surfaces to match them. Next I’m making `reads` preserve optional path references at compile time and switching loader/capability class detection over to the shared helper so simple workflows resolve before lowering.
+
+The patch is in place. I hit one environment detail while validating: this workspace doesn’t have a `python` shim, so I’m using `python3` for the test pass and any syntax checks.
+
+The code compiles, but this shell environment does not have `pytest` installed into `python3`, so I’m checking for the repo’s test runner alternative instead of stopping at that import error.
+
+There’s no installed pytest runner in this environment and the repo doesn’t declare one in `pyproject.toml`, so I’m validating with direct `python3` assertions against the touched behaviors instead: compile/lowering, reserved routes, optional reads, and simple workflow discovery.
+
+I found a local virtualenv at `.venv`, so I’m switching validation to that interpreter instead of the bare system `python3`.
+
+The phase-scoped assertions are green now. I’m doing the closeout pass: recording the non-obvious decisions in the phase ledger, updating the phase implementation notes, and checking the exact file set before I summarize scope and residual risk.
+
+Scope considered
+
+Phase-local normalization/discovery only: simple-workflow lowering, reserved-route injection, optional `reads` semantics, direct `system_step(fn)` validation, and pre-lowering workflow discovery. I updated [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py), [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py), the scoped tests, and the phase notes/decision ledger.
+
+What I analyzed
+
+I traced the current lowering path in `core/validation.py`, the compiled-step contract in `core/compiler.py`, and the workflow-class discovery heuristics in both loader and capability inspection. I also checked the phase artifacts, existing simple-surface tests, and the runtime reference-resolution tests to separate phase-scoped failures from unrelated baseline issues.
+
+What I changed
+
+I added a shared `is_workflow_class(...)` helper and switched both loader and capability inspection to use it, so simple declaration workflows are discoverable by path, module, and name before lowering. I now inject reserved `question` / `blocked` / `failed` routes during normalization for every step, align direct `SystemStep(handler=...)` validation with the compiled 1-arg/2-arg handler contract, and reject statically invalid `WorkflowStep` child class references.
+
+I also changed `reads` semantics to match the phase contract: `reads` no longer impose producer ordering or artifact-graph edges, and compiled reads now resolve declared artifacts to qualified names while preserving unknown strings or `Path` values as optional workspace reads.
+
+What I changed in tests: I added/updated coverage for reserved routes, direct system handlers without `on_<step>`, optional future reads, invalid workflow-step child references, and simple-workflow discovery through the runtime resolver/capability path. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/normalization-and-discovery/implementation_notes.md) and appended the non-obvious decisions to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/decisions.txt).
+
+Key findings / decisions
+
+Reserved routes needed to be injected in one shared normalization step; doing it ad hoc in simple lowering was leaving discovery, compilation, and inspection out of sync.
+
+`reads` and `requires` were still coupled in prototype validation. I split them so only `requires` affect ordering and hard validation, while `reads` stay optional and can represent workspace paths.
+
+Workflow discovery was duplicated in two places and both were strict-step-only. Centralizing the check avoided another round of drift.
+
+Open issues / next step
+
+Validation performed:
+`.venv/bin/python -m py_compile ...` on the touched code/tests, plus targeted pytest node runs for the changed behaviors; those targeted checks passed.
+
+Not done:
+I did not run the full suite as an acceptance gate. A full-file run of `tests/runtime/test_workflow_reference_resolution.py` still exposes unrelated pre-existing failures around strict `workflow` shim imports, which are outside this phase’s scope and should be handled in a later migration pass.
