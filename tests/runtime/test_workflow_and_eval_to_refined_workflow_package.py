@@ -844,6 +844,48 @@ def test_refinement_does_not_materialize_adversarial_cases_automatically(
     assert not (run.workflow_dir / "adversarial_case_matrix.md").exists()
 
 
+def test_refinement_rejects_unsupported_optimization_evidence_kind(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    optimization_evidence_path = _write_optimization_refinement_evidence(tmp_path)
+    evidence_path = tmp_path / optimization_evidence_path
+    payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    payload["evidence_entries"][0]["kind"] = "unsupported_candidate_kind"
+    evidence_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="baseline_refinement_evidence.json evidence_entries\\[0\\]\\.kind is not supported",
+    ):
+        _run_successful_refinement_workflow(
+            tmp_path,
+            monkeypatch,
+            refinement_evidence_path=optimization_evidence_path,
+        )
+
+
+def test_refinement_rejects_optimization_evidence_for_different_workflow(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    optimization_evidence_path = _write_optimization_refinement_evidence(tmp_path)
+    evidence_path = tmp_path / optimization_evidence_path
+    payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    payload["target_workflow_id"] = "incident_to_hardening_program"
+    evidence_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="baseline_refinement_evidence.json target_workflow_id must match selected workflow",
+    ):
+        _run_successful_refinement_workflow(
+            tmp_path,
+            monkeypatch,
+            refinement_evidence_path=optimization_evidence_path,
+        )
+
+
 def test_workflow_and_eval_to_refined_workflow_package_publish_rejects_authoring_surface_mismatch(
     tmp_path: Path,
     monkeypatch,
