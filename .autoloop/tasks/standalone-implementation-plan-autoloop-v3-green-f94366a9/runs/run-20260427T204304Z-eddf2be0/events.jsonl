@@ -74,3 +74,4 @@
 {"ts": "2026-04-27T23:17:13.521604+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 74, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-migration-docs-and-proof"}
 {"ts": "2026-04-27T23:18:08.285165+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 75, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-migration-docs-and-proof"}
 {"ts": "2026-04-27T23:18:08.321584+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 76, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-migration-docs-and-proof"}
+{"ts": "2026-04-27T23:18:08.409800+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 77, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-migration-docs-and-proof", "phase_mode": "single"}
