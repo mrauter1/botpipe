@@ -6,3 +6,6 @@
 - Phase Directory Key: selected-workflow-helper-convergence
 - Phase Title: Shared Selected-Workflow Seam
 - Scope: phase-local authoritative verifier artifact
+
+- Added unit coverage for the new private selected-workflow seam to prove one captured context can drive multiple artifact writes without re-resolving the workflow reference.
+- Recorded the phase-local behavior-to-test map, preserved invariants, failure paths, and known gap in `test_strategy.md`.

@@ -217,3 +217,42 @@ Planned later phases still need to migrate workflow capture handlers and perform
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+---
+I’m checking the current helper-family proof first so I only add tests where the new seam still has regression risk. Then I’ll update the phase-local test strategy and feedback with an explicit coverage map.
+
+I found one worthwhile gap: the new seam should prove that a captured selected-workflow context can be reused for multiple writes without silently re-resolving. I’m adding that regression test now, then I’ll document the phase coverage map and the test-only delta in the phase artifacts.
+
+The new regression case is in. I’m running the helper-family unit suite again so the phase artifacts can point to a fresh proof run for the added capture-reuse case, not just the earlier implementation pass.
+
+Scope considered
+
+Active phase `selected-workflow-helper-convergence` only. I stayed on the new private selected-workflow seam, the helper-family unit coverage in `tests/unit/test_stdlib_and_extensions.py`, and the phase-local test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/selected-workflow-helper-convergence/`.
+
+What I analyzed
+
+I checked the new seam against the phase contract and existing tests to find the remaining regression gap. The notable uncovered behavior was capture reuse: the new helper should support multiple artifact writes from one resolved selected-workflow context without silently re-resolving.
+
+What I changed
+
+I added one focused unit regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) that proves `capture_selected_workflow(...)` can drive multiple `write_selected_workflow_artifact(...)` calls with a single workflow resolution while preserving the shared envelope fields. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/selected-workflow-helper-convergence/test_strategy.md) with an explicit behavior/invariant/edge/failure coverage map and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/selected-workflow-helper-convergence/feedback.md).
+
+Key findings / decisions
+
+The new seam already had broad public-helper coverage from the implementation pass, so I kept this turn narrow and added only the missing capture-reuse regression case. Fresh proof passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` (`95 passed`).
+
+Open issues / next step
+
+No test blocker remains in this phase. Workflow capture-step migration and closeout docs/memory proof are still out of scope here and belong to the later planned phases.
