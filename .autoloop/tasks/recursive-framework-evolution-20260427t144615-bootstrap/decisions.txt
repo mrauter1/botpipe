@@ -42,3 +42,5 @@ Keep `tests/contract/test_engine_contracts.py::test_workflow_step_after_hook_can
 <autoloop-decisions-header version="1" block_seq="10" owner="implementer" phase_id="compatibility-docs-cleanup" pair="implement" turn_seq="1" run_id="run-20260427T174615Z-f98ff2bb" ts="2026-04-27T19:43:41.366836+00:00" />
 Keep the strict `workflow` shim exported for compatibility in this phase, but scrub `RouteContract`/`route_contracts` and `BoardMutation` from public docs so new authoring guidance points only at `autoloop.simple`, `Route(...)` metadata, and normalized `route_infos`/`route_required_outputs`.
 Reject `BoardMutation` during compile-time validation with a clear error instead of allowing the effect to survive to the known runtime trap in `core.engine`.
+<autoloop-decisions-header version="1" block_seq="11" owner="implementer" phase_id="compatibility-docs-cleanup" pair="implement" turn_seq="2" run_id="run-20260427T174615Z-f98ff2bb" ts="2026-04-27T19:59:00.764277+00:00" />
+Treat `Workflow_Instructions.md` as part of the public authoring surface for this cleanup phase, and include it in the deprecated-token scan so route-vocabulary drift is not limited to `docs/` only.

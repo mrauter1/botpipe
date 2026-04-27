@@ -9,6 +9,7 @@
 
 ## Files changed
 
+- `Workflow_Instructions.md`
 - `docs/authoring.md`
 - `docs/architecture.md`
 - `docs/workflows/*.md` for the public workflow package docs that still taught route-contract wording
@@ -21,12 +22,14 @@
 ## Symbols touched
 
 - Public doc vocabulary: `autoloop.simple`, `Route`, `RouteInfo`, `route_infos`, `route_required_outputs`
+- Public-doc scan coverage: `WORKFLOW_INSTRUCTIONS_PATH`, `test_public_docs_do_not_teach_route_contract_or_board_mutation_authoring`
 - Validation: `_validate_route_effects`
 - Tests: public-doc token scan, simple-surface export check, `BoardMutation` compile-time rejection
 
 ## Checklist mapping
 
 - AC-1: updated `docs/authoring.md`, `docs/architecture.md`, and public workflow docs to teach `autoloop.simple` plus route metadata instead of `RouteContract`
+- AC-1 reviewer follow-up: updated `Workflow_Instructions.md` and widened the public-doc scan so repo-root authoring guidance is covered too
 - AC-2: kept bundled workflow/runtime compatibility unchanged while updating tests and docs around the compatibility shims
 - Optional cleanup: added compile-time rejection for unsupported `BoardMutation`
 
@@ -44,6 +47,7 @@
 ## Intended behavior changes
 
 - Public docs no longer teach `RouteContract`, `route_contracts`, or `BoardMutation` as authoring surfaces
+- The repo-root workflow design guide now uses the same route-metadata vocabulary as `docs/`
 - Validation now fails fast when `BoardMutation` is authored instead of deferring to the known runtime trap
 
 ## Known non-changes
@@ -60,6 +64,7 @@
 ## Validation performed
 
 - `rg -n "RouteContract|route_contracts|BoardMutation|route-contract|route contracts" docs --glob '*.md'`
+- `rg -n "RouteContract|route_contracts|route contracts|route-contract|BoardMutation" Workflow_Instructions.md docs --glob '*.md'`
 - `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k 'not recursive_memory' tests/unit/test_simple_surface.py tests/unit/test_validation.py -q`
 - Observed unrelated failures when running the full `tests/test_architecture_baseline_docs.py` slice: three recursive-memory closeout assertions unrelated to this phase
 

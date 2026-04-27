@@ -1782,3 +1782,47 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd078-0d68-7960-9954-c65d51a725f9
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+I’m addressing the reviewer’s one blocking gap: the repo-root `Workflow_Instructions.md` still teaches `route_contracts`, so I’m updating that authoring guide and widening the doc scan so this surface stays covered.
+
+I’ve confirmed the reviewer’s gap directly in `Workflow_Instructions.md`. I’m patching that guide to the same route-metadata vocabulary as `docs/`, then I’ll widen the doc-pin scan so the repo-root authoring guide is covered too.
+
+The reviewer’s gap is patched. I’m rerunning the same phase-local validation slice now, including the widened public-doc scan, to confirm the cleanup is actually closed.
+
+Scope considered
+- Reviewer finding `IMP-001` in the active phase feedback.
+- Repo-root public authoring guidance in [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:1).
+- The widened public-doc validation in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+- Phase artifacts [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/compatibility-docs-cleanup/implementation_notes.md:1) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt:1).
+
+What I analyzed
+- The reviewer’s claim that `Workflow_Instructions.md` still taught `route_contracts` and concrete route contracts.
+- The existing doc-pin scan scope, which previously only covered `docs/`.
+- The current public vocabulary already used in `docs/authoring.md` and `docs/architecture.md` so the repo-root guide could be aligned without changing runtime behavior.
+
+What I changed
+- Updated [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:1) to replace `route_contracts` / route-contract wording with `readable inputs`, `required inputs`, `writable artifacts`, `route_infos`, and `route_required_outputs`.
+- Widened [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1) so the deprecated-token scan now covers `Workflow_Instructions.md` in addition to `docs/`.
+- Updated the phase notes and appended the non-obvious scope decision to the current turn’s block in `decisions.txt`.
+
+Key findings / decisions
+- The reviewer’s blocking gap was real: `Workflow_Instructions.md` was a public authoring surface and needed to be scrubbed too.
+- I treated that file as part of the public-doc surface for this phase and made the test enforce it so the drift does not recur.
+- Validation passed after the fix: `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k 'not recursive_memory' tests/unit/test_simple_surface.py tests/unit/test_validation.py -q` -> `113 passed, 21 deselected`.
+
+Open issues / next step
+- The broader `tests/test_architecture_baseline_docs.py` file still has the previously noted unrelated recursive-memory assertions outside this phase scope.
+- The active working tree still shows [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1) as untracked in this repo state; I left that repo-state quirk unchanged.

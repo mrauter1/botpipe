@@ -64,9 +64,13 @@ Core boundary
 
 4. The runtime stays narrow and mechanical.
    The runtime may inject and enforce only machine-readable control surfaces such as:
+   - readable inputs
+   - required inputs
+   - writable artifacts
    - expected_output_schema
    - available_routes
-   - route_contracts
+   - route_infos
+   - route_required_outputs
 
    The runtime may also validate returned outcomes, reject invalid routes, and enforce reserved-route behavior.
    Everything else that is provider-facing operational guidance belongs in the prompt template authored by the workflow/profile.
@@ -269,9 +273,13 @@ For every step, the workflow/profile must author a prompt template that explicit
 
 The runtime should not duplicate this as a second abstraction.
 Instead, the runtime should only inject or enforce:
+ - readable inputs
+ - required inputs
+ - writable artifacts
 - expected_output_schema
 - available_routes
-- route_contracts
+- route_infos
+- route_required_outputs
 
 Everything else provider-facing belongs in the prompt template itself.
 
@@ -331,9 +339,13 @@ Runtime-injected control contract
 
 The runtime may inject these machine-readable fields into the rendered step prompt or attach them as an enforced side contract:
 
+ - readable inputs
+ - required inputs
+ - writable artifacts
 - expected_output_schema
 - available_routes
-- route_contracts
+- route_infos
+- route_required_outputs
 
 The runtime may also:
 - validate returned output against expected_output_schema
@@ -438,7 +450,7 @@ Prefer:
 - explicit role boundaries
 - artifact-producing steps
 - explicit verifier gates
-- concrete route contracts
+- explicit route metadata
 - prompt templates that fully specify the local step contract
 - runtime enforcement limited to typed control surfaces
 
