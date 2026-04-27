@@ -569,3 +569,121 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+I’m working the `contract-migration` phase: validation, compiler, provider payloads, and rendering need to understand `reads`, route metadata, and route-required outputs without breaking legacy route-contract behavior. I’ll inspect the current core surfaces and the phase artifacts first, then I’ll patch the narrowest set of files that moves those contracts forward safely.
+
+The repo already has substantial unrelated changes in flight, so I’m treating this phase as a narrow migration on top of a dirty worktree. Next I’m reading the core compiler, validation, step, and provider files to see what surface-foundations already introduced and where the route-contract vocabulary still drives behavior.
+
+Surface foundations already added `RouteInfo`, prompt constructors, and simple-step declarations, but the runtime still compiles and renders through `route_contracts` and input-only `requires`. I’m drilling into the compiler/engine/provider seams now so the next patch can migrate the internal metadata shape without breaking legacy bundled workflows.
+
+The internal shape is clear now: `RouteInfo` exists, but compilation and provider requests still only carry `route_contracts`, and validation still errors if application routes lack contracts. I’m checking the engine call sites and adjacent metadata surfaces next so I can migrate one coherent contract shape instead of patching these files inconsistently.
+
+I’ve confirmed the main blast radius: `core/{steps,validation,compiler,engine}`, provider request/rendering models, and the static graph/capability payloads. I’m reading the focused contract tests now so the migration keeps old callers working while adding the new route-info/readable-input fields that this phase requires.
+
+I have enough context to patch safely. The first edit is at the declaration layer: I’m adding `reads` to the core step types so validation, compilation, and provider payloads can distinguish optional readable inputs from hard preconditions without changing existing strict workflow authoring.
+
+The next edit is the core normalization pass. I’m moving route summary/output metadata derivation into validation so compilation, runtime enforcement, and provider payloads all see the same compatibility-normalized view whether the workflow used legacy `route_contracts` or explicit route metadata on transitions.
+
+The compiler now carries both the old and new route vocabulary. I’m patching the engine and provider request contract next so execution still enforces selected-route outputs the same way, while providers start receiving `readable_artifacts`, `route_infos`, and `route_required_outputs` alongside the legacy fields.
+
+I’ve finished the runtime-side migration. The remaining work is tightening the focused tests so they lock the new compatibility contract in place: route contracts remain accepted, but they’re no longer mandatory, and the provider/rendering surfaces now expose the richer metadata alongside the legacy fields.
+
+I caught one compatibility edge while updating the tests: the legacy `route_required_artifacts` alias should stay narrow so existing callers don’t suddenly see extra reserved routes. I’m restoring that alias while keeping the new `route_required_outputs` map complete.
+
+The code changes are in place. I’m running the focused validation, engine-contract, provider-rendering, and static-graph tests now to catch any incompatibilities before I update the phase notes and decision ledger.
+
+`pytest` isn’t on the shell path here, so I’m switching to the repository’s Python entrypoint and verifying the updated files with `python3 -m pytest` instead.
+
+There is a local `.venv`, so I’m running the focused suite through that interpreter rather than the system Python.
+
+The focused suite is green, so I’m doing one last pass over the diff and then I’ll record the phase notes and durable decisions before closing this turn.
+
+I’m writing the phase artifacts now. The key durable decision from this slice is that `reads` should affect compile-time dependency analysis and provider visibility, but only `requires` should keep its existing runtime-failure behavior, so the engine semantics stay stable while the authoring contract expands.
+
+**Scope considered**
+`contract-migration` only: core step metadata, validation, compilation, engine/provider control payloads, provider rendering, static graph/capability payloads, and focused tests. I kept legacy `route_contracts` compatibility in place and did not touch simple-workflow lowering, hooks, or bundled workflow source migration.
+
+**What I analyzed**
+I traced the current contract path through [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), provider request/rendering code, and static metadata surfaces. The main issue was that `RouteInfo` already existed, but the runtime still normalized everything through `route_contracts` and had no separate notion of optional readable inputs.
+
+**What I changed**
+I added `reads` to core step declarations and taught validation/compiler metadata to carry `reads`, `route_infos`, and `route_required_outputs` alongside legacy `route_contracts`. Validation now allows application routes without route contracts, still resolves route-required artifact references, and now treats impossible `reads` dependencies the same way it already treated impossible `requires` dependencies.
+
+I updated the engine/provider request contract so providers receive `readable_artifacts`, `required_artifacts`, `route_infos`, and `route_required_outputs`, while `route_contracts` and `route_required_artifacts` remain available as compatibility aliases. Provider rendering now has a readable-inputs section and explicitly says declared writable artifacts are governed surfaces, not an exclusive allow-list. I also extended static graph / workflow capability / CLI payloads with the new metadata.
+
+Focused tests were updated in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), and [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py). I also recorded the implementation notes and durable decisions in the phase artifacts.
+
+**Key findings / decisions**
+`reads` now participates in compile-time artifact resolution and ordering checks, but only `requires` still fails runtime execution when files are missing. That preserves current engine semantics while widening the authoring/runtime contract.
+
+The new `route_required_outputs` map is the authoritative expanded route-output view. The legacy `route_required_artifacts` alias intentionally stays narrower and mirrors only explicit legacy contracts, which avoids breaking existing callers that do not expect inferred reserved-route entries.
+
+**Open issues / next step**
+This phase does not remove public `RouteContract`, migrate bundled workflow source authoring, or add simple-workflow lowering/hooks. Validation passed with the repo venv via:
+
+`.venv/bin/python -m pytest tests/unit/test_validation.py -q`  
+`.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py -q`  
+`.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q`  
+`.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -q`
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd02b-3a8c-7a91-9e38-2407f31785f3
+---
+I’m reviewing the `contract-migration` implementation against the phase contract and the updated notes, starting with the changed runtime/compiler/provider surfaces and the phase artifacts. I’ll verify whether the new metadata shape preserves legacy behavior and then update the criteria and feedback files accordingly.
+
+I’m reading the final compiler/validator/engine state directly now rather than relying on the diff summary. The main things I’m checking are whether `reads` changed execution semantics accidentally and whether the new route metadata path actually stays in sync with legacy contract callers.
+
+I found one place that still needs scrutiny: route-required outputs are being resolved against the whole artifact inventory, not obviously limited to artifacts produced by the current step. I’m checking whether there’s any later validation that enforces “produced by this step only,” because the plan explicitly called that out.
+
+I found one concrete contract hole and I’m checking for a second one in the provider prompt semantics. The first is a real validation gap around `Route.required_outputs`; the second is whether the “Required inputs” rendering still shows the artifact declaration’s `required` bit instead of the runtime precondition bit.
+
+I have the review outcome. There’s one material validation hole in the new route-required-output path, and one smaller prompt-contract mismatch I’m going to record as non-blocking. Then I’ll mark the criteria to reflect that the phase is not ready to close yet.
+
+Scope considered
+
+Phase-local `contract-migration` only: [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), provider request/rendering surfaces, static metadata outputs, focused tests, and the active phase artifacts under `.autoloop/.../contract-migration/`.
+
+What I analyzed
+
+I checked the phase contract, implementation notes, and shared decisions first, then traced the new `reads` / `route_infos` / `route_required_outputs` path through validation, compilation, engine enforcement, provider payload construction, and rendered prompts. I also checked whether compatibility aliases remained intact for legacy `route_contracts` callers and whether the new rendering preserved the non-exclusive writable-artifact invariant.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/contract-migration/criteria.md) to reflect one blocking correctness gap and appended findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/contract-migration/feedback.md). The main blocking issue is that route-required outputs are validated against the whole artifact inventory instead of being restricted to artifacts produced by the source step, which lets route output obligations be silently satisfied by pre-existing inputs.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The new `Route.required_outputs` path does not enforce the plan’s “known produced artifacts” rule, so route-level output obligations can point at workflow-level or upstream artifacts and pass validation and runtime enforcement incorrectly.
+
+`IMP-002` is non-blocking. The new “Required inputs” rendering still uses the artifact declaration’s `required` bit, not the runtime precondition semantics of `step.requires`, so the prompt can label a hard required input as `Required = no`.
+
+Open issues / next step
+
+The phase is not ready to close. The implementation should add produced-by-current-step validation to the centralized route-required-output normalization path and, ideally in the same pass, align required-input rendering with runtime precondition semantics. After that, the focused regression suite should be rerun and the phase criteria re-evaluated.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
