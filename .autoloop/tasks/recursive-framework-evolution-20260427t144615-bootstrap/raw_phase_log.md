@@ -1200,3 +1200,58 @@ Open issues / next step
   - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`
   - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_validation.py -k "simple or system_handler_arity or strict_workflow_counterpart"`
 - I did not run the full repository suite.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+Auditing the new simple-lowering tests against the changed behavior and the phase contract, then I’ll update the test audit artifacts to match whether any material gaps remain.
+
+The new tests close most of the gap. I’m checking one remaining risk surface now: whether the test suite actually proves `workflow_step(...)` propagates child failure to the parent `failed` route, not just that the route exists.
+
+I found one material omission in the new `workflow_step(...)` coverage: the tests prove success and question propagation, but not the explicit `FAIL` or generic blocked child-terminal mapping the phase contract calls for. I’m updating the audit artifacts now.
+
+Scope considered
+
+- Phase-local test audit for `simple-lowering`.
+- I reviewed the new unit coverage and the updated test-phase artifacts, with emphasis on the changed `workflow_step(...)` behavior and adjacent regression risk.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md)
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/criteria.md)
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) for the child-terminal mapping the tests are supposed to protect
+
+What I reviewed
+
+- The new `workflow_step(...)` tests for `message_from`, child-question propagation, and unknown-reference validation.
+- Whether the added tests actually cover the phase-required child-terminal mapping semantics, not just route-table shape.
+- The updated strategy document’s coverage map and stated intentional gaps.
+
+Key findings / decisions
+
+- I recorded one blocking audit finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/feedback.md): the suite still does not prove `workflow_step(...)` maps child `FAIL` to `Event("failed")` or generic paused/non-question child results to `Event("blocked")`.
+- Current coverage proves the success branch and the `question` pause branch, but the explicit child-failure mapping required by the phase request remains untested.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/simple-lowering/criteria.md) accordingly: reliability and behavioral-intent checks pass, but coverage/regression/failure-path checks remain open.
+
+Open issues / next step
+
+- Add direct handler-level tests for:
+  - child `terminal="FAIL"` returning `Event("failed")`
+  - child `terminal="PAUSE"` without a `question` event returning `Event("blocked")`
+- After those are added, this audit can be rerun for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
