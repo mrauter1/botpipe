@@ -183,7 +183,7 @@ The runtime injects a compact human-readable step contract containing:
 - route-specific artifact requirements
 - expected output payload requirements
 - available routes
-- route contracts
+- route metadata and route-required outputs
 - optional route handoff for the resolved target step only
 - optional retry feedback for accepted retries only
 
@@ -207,7 +207,7 @@ Payload models used by the package:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose typed route contracts and payload schemas for the three pair steps.
+- Compilation must expose route summaries, route-required outputs, and payload schemas for the three pair steps.
 - Runtime proof must cover:
 - successful publication of `workflow_capability_snapshot.json`, `workflow_portfolio_health_snapshot.json`, `workflow_lifecycle_matrix.md`, `portfolio_gap_analysis.md`, `portfolio_change_candidates.json`, `workflow_portfolio_operating_system.md`, `portfolio_operating_summary.json`, `portfolio_next_actions.md`, and `portfolio_operating_system_receipt.json`
 - deterministic capture of grouped portfolio run-health evidence from the current `.autoloop` run records without mutating run state or workflow packages

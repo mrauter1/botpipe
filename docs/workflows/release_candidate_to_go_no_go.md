@@ -47,7 +47,7 @@ Parameters:
 
 | Candidate | Benefits | Trade-offs | Decision |
 | --- | --- | --- | --- |
-| Typed and normalized `route_contracts` | Makes release-gating semantics explicit and keeps runtime control data narrow | Needed additive validation and compiler normalization | Chosen in the preceding route-contract phase and exercised by this package |
+| Route metadata with inferred summaries and route-required outputs | Makes release-gating semantics explicit while keeping the runtime control surface mechanical | Needed additive validation and compiler normalization | Chosen and exercised by this package |
 | Artifact-bundle helper for grouped release evidence | Could reduce repeated path prefixes | Hides artifact meaning behind a new abstraction | Rejected |
 | Declarative child-workflow release composition | Could help future portfolios | Too much runtime machinery for the first domain workflow | Rejected |
 
@@ -71,14 +71,14 @@ Parameters:
 - Selected: deterministic `publish_decision`
 - Why: the workflow needs an inspectable terminal receipt without expanding runtime behavior.
 
-### 3. Route-contract expression
+### 3. Route metadata expression
 
 - Alternatives considered:
-- freeform dict route contracts only
+- compatibility-only legacy route metadata dicts
 - prompt-only route guidance
-- typed route contracts with normalized runtime shape
-- Selected: typed `RouteContract` declarations
-- Why: the release workflow needs explicit evidence and work-item-effect semantics while staying inside the narrow runtime contract surface.
+- `Route(...)` metadata with inferred summaries and explicit required outputs
+- Selected: `Route(...)` metadata plus inferred route summaries
+- Why: the release workflow needs explicit evidence gates and route-local output obligations while staying inside the narrow runtime contract surface.
 
 ## Implementation candidates considered
 
@@ -98,7 +98,7 @@ Turn a release candidate into a durable go/no-go package that captures scope, ev
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing, evidence assembly, assessment, and package assembly as separate work items.
-- Keep runtime control data human-readable and mechanical: required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
+- Keep runtime control data human-readable and mechanical: readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
 - Publish a deterministic decision receipt only after the final package exists.
 
 ### Provider-owned cognitive responsibilities
@@ -168,12 +168,13 @@ Application routes:
 
 The runtime injects a compact human-readable step contract containing:
 
+- readable inputs
 - required inputs
 - writable artifacts
-- route-specific artifact requirements
-- expected output payload requirements
+- route-specific output requirements
+- explicit expected output payload requirements
 - available routes
-- route contracts
+- route summaries and route-required outputs
 - optional route handoff for the resolved target step only
 - optional retry feedback for accepted retries only
 
@@ -202,7 +203,7 @@ The package includes explicit step prompts for:
 ### Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose the typed route contracts as normalized runtime metadata.
+- Compilation must expose route summaries and route-required outputs as normalized runtime metadata.
 - A scripted-provider runtime test must prove legal route flow and creation of:
 - `invocation_contract.json`
 - `decision_summary.json`
@@ -219,7 +220,7 @@ The package includes explicit step prompts for:
 
 ### Recursive self-improvement policy
 
-- The package follows the builder-established package contract and exercises the normalized route-contract seam.
+- The package follows the builder-established package contract and exercises the normalized route-metadata seam.
 - Promotion remains evidence-gated by workflow-local artifacts and the runtime proof.
 - Broader recursive memory updates remain part of the later closeout phase, not this package-local change.
 

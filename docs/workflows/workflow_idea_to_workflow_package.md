@@ -189,7 +189,7 @@ The runtime injects a compact human-readable step contract containing:
 - route-specific artifact requirements
 - expected output payload requirements
 - available routes
-- route contracts
+- route metadata and route-required outputs
 - optional route handoff for the resolved target step only
 - optional retry feedback for accepted retries only
 

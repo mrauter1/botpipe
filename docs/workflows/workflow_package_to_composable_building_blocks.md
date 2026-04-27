@@ -190,7 +190,7 @@ The runtime injects a compact human-readable step contract containing:
 - route-specific artifact requirements
 - expected output payload requirements
 - available routes
-- route contracts
+- route metadata and route-required outputs
 - optional route handoff for the resolved target step only
 - optional retry feedback for accepted retries only
 
@@ -217,7 +217,7 @@ Payload models used by the package:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose typed route contracts and payload schemas for the four pair steps.
+- Compilation must expose route summaries, route-required outputs, and payload schemas for the four pair steps.
 - `capture_decomposition_context` must always write `decomposition_evidence_manifest.json`:
 - when `evidence_paths` are supplied, the manifest must list the copied evidence artifacts and their source paths
 - when no `evidence_paths` are supplied, the manifest must record `request.md` as the fallback authoritative context

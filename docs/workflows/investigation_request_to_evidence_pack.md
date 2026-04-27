@@ -124,7 +124,7 @@ Turn an investigation request into a durable evidence pack that another workflow
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing and evidence-pack assembly as separate work items.
-- Keep runtime control data human-readable and mechanical: required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
+- Keep runtime control data human-readable and mechanical: readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
 - Publish a deterministic evidence-pack receipt only after the terminal artifacts exist.
 
 ### Provider-owned cognitive responsibilities
@@ -196,7 +196,7 @@ The runtime injects a compact human-readable step contract containing:
 - route-specific artifact requirements
 - expected output payload requirements
 - available routes
-- route contracts
+- route metadata and route-required outputs
 - optional route handoff for the resolved target step only
 - optional retry feedback for accepted retries only
 
@@ -221,7 +221,7 @@ Each prompt names the role, purpose, current work item, required reads, required
 ### Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose the typed route contracts as normalized runtime metadata.
+- Compilation must expose route summaries and route-required outputs as normalized runtime metadata.
 - A scripted-provider runtime test must prove legal route flow and creation of:
 - `invocation_contract.json`
 - `investigation_scope_brief.md`

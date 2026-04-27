@@ -13,15 +13,23 @@ The internal workflow kernel lives under:
 
 The public authoring contract does not point workflow authors at internal modules. Authors import the strict root shims:
 
+- `autoloop.simple`
 - `workflow`
 - `workflow.primitives`
 
-The root `workflow` shim is authoring-facing only:
+`autoloop.simple` is the preferred progressive authoring surface:
+
+- `Workflow`, `StrictWorkflow`
+- `step`, `review_step`, `workflow_step`, `system_step`, `chain`
+- `Json`, `Md`, `Text`, `Raw`
+- `Prompt`, `Route`, `RouteInfo`
+
+The root `workflow` shim remains the explicit strict compatibility surface:
 
 - `Workflow`, `Context`, `Session`, `Continuity`, `Artifact`, `Prompt`
 - `PairStep`, `LLMStep`, `SystemStep`
-- `Route`, `RouteContract`, `SUCCESS`, `PAUSE`, `FAIL`, `GLOBAL`
-- `SetStatus`, `Advance`, `Refresh`, `ResetCompletion`, `BoardMutation`
+- `Route`, `SUCCESS`, `PAUSE`, `FAIL`, `GLOBAL`
+- `SetStatus`, `Advance`, `Refresh`, `ResetCompletion`
 - `WorkItem`, `Worklist`, `Selector`
 
 Low-level runtime values stay under `workflow.primitives`:
@@ -163,7 +171,7 @@ CLI-backed providers now cross the runtime boundary through a shared layered sea
 
 That means Codex and Claude transports receive only shared rendered turns and return only raw assistant text plus session metadata. They do not render workflow prompts, inject workflow contracts, or parse workflow outcome JSON themselves.
 
-The shared renderer injects a compact human-readable Runtime Step Contract with required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
+The shared renderer injects a compact human-readable Runtime Step Contract with readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
 
 Provider raw output is runtime telemetry. It remains available to logs, traces, extension events, debugging, and replay, but it is not rendered back into provider prompts.
 

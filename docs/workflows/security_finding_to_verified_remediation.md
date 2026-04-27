@@ -111,7 +111,7 @@ Turn a security finding into an execution-ready remediation and closure package 
 - Keep child `question` and `blocked` propagation explicit in workflow code.
 - Require the child workflow to succeed, reach `evidence_pack_published`, and produce the expected artifacts before parent-local adoption.
 - Hold security assessment, remediation planning, and closure packaging as separate work items.
-- Keep runtime control data human-readable and mechanical: required inputs, writable artifacts, route-specific artifact requirements, expected output payload requirements, available routes, route contracts, optional route handoff, and optional retry feedback.
+- Keep runtime control data human-readable and mechanical: readable inputs, required inputs, writable artifacts, route-specific output requirements, explicit expected output payload requirements, available routes, route summaries, optional route handoff, and optional retry feedback.
 - Publish a deterministic remediation receipt only after the terminal package artifacts and machine-readable summaries exist.
 
 ### Provider-owned cognitive responsibilities
@@ -203,7 +203,7 @@ The runtime injects a compact human-readable step contract containing:
 - route-specific artifact requirements
 - expected output payload requirements
 - available routes
-- route contracts
+- route metadata and route-required outputs
 - optional route handoff for the resolved target step only
 - optional retry feedback for accepted retries only
 
@@ -227,7 +227,7 @@ Step payload models:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose the typed route contracts for the three pair steps.
+- Compilation must expose route summaries and route-required outputs for the three pair steps.
 - Runtime proof must cover:
 - successful end-to-end execution with explicit child-workflow composition
 - deterministic parent-local adoption of child evidence artifacts

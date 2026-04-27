@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import importlib
 import os
 import shutil
 import subprocess
@@ -462,3 +463,9 @@ def test_authoring_doc_mentions_additive_autoloop_simple_surface() -> None:
 
     assert "autoloop.simple" in text
     assert "The root `workflow` shim remains the strict compatibility surface during the migration window." in text
+
+
+def test_autoloop_simple_does_not_export_route_contract() -> None:
+    simple_surface = importlib.import_module("autoloop.simple")
+
+    assert not hasattr(simple_surface, "RouteContract")

@@ -181,7 +181,7 @@ The runtime injects a compact human-readable step contract containing:
 - route-specific artifact requirements
 - expected output payload requirements
 - available routes
-- route contracts
+- route metadata and route-required outputs
 - optional route handoff for the resolved target step only
 - optional retry feedback for accepted retries only
 
@@ -205,7 +205,7 @@ Payload models used by the package:
 ## Verification and evidence contract
 
 - Workflow discovery must find the package by canonical name and alias.
-- Compilation must expose typed route contracts and payload schemas for the three pair steps.
+- Compilation must expose route summaries, route-required outputs, and payload schemas for the three pair steps.
 - Runtime proof must cover:
 - successful publication of `selected_workflow_run_history.json`, `failure_mode_map.md`, `failure_mode_manifest.json`, `recurring_weak_points.md`, `improvement_opportunities.md`, `improvement_opportunities.json`, `diagnostic_next_actions.md`, and `failure_mode_diagnostic_receipt.json`
 - deterministic capture of filtered run-history evidence, including request text, parsed events, parsed child-run records, and parsed parent-run metadata when present

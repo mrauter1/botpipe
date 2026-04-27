@@ -104,13 +104,13 @@ Supported `pairs` subsets must be ordered prefixes only.
 - `rank_targets` combines deterministic metrics with LLM attribution to rank highest-leverage upstream steps rather than downstream symptoms.
 - `mine_failures` consumes deterministic failure-scenario seeds and turns them into explicit producer-authored failure scenarios.
 - `optimize_producer` proposes producer-side candidates only.
-- `optimize_verifier_rubric` is one merged acceptance-function pass covering verifier prompt, rubric, and route-contract pressure.
+- `optimize_verifier_rubric` is one merged acceptance-function pass covering verifier prompt, rubric, and route-metadata pressure.
 - `optimize_tokens` proposes token reductions and classifies them by risk instead of treating compression as automatically safe.
 - `adversarial_cases` proposes eval-case candidates only; it does not publish or run an eval suite.
 
 ## Workflow-level optimization phase
 
-- `workflow_level` runs after local passes and proposes cross-step candidates such as artifact handoff changes, route-contract updates, context rendering changes, or workflow-parameter adjustments.
+- `workflow_level` runs after local passes and proposes cross-step candidates such as artifact handoff changes, route-metadata updates, context rendering changes, or workflow-parameter adjustments.
 - `package` validates candidate artifacts, verifies the selected workflow source manifest is unchanged, writes the scorecard and packet, and publishes `workflow_refinement_evidence.json`.
 
 ## Failure Scenario Seeds
