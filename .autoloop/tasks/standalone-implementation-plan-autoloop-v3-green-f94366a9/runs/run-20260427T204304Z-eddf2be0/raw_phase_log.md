@@ -169,3 +169,12 @@ No blocking findings remain. The plan is complete and internally consistent for 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=public-surface-and-route-metadata,normalization-and-discovery,provider-and-engine-contract,workflow-migration-docs-and-proof
+explicit=True
+current_phase_index=0
