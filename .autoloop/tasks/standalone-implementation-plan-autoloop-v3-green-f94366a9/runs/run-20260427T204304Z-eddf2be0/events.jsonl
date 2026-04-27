@@ -61,3 +61,7 @@
 {"ts": "2026-04-27T22:22:13.688849+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 61, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-and-engine-contract"}
 {"ts": "2026-04-27T22:23:03.444087+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 62, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "provider-and-engine-contract"}
 {"ts": "2026-04-27T22:23:03.480444+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 63, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "provider-and-engine-contract"}
+{"ts": "2026-04-27T22:23:03.550087+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 64, "event_type": "phase_completed", "pair": "test", "phase_id": "provider-and-engine-contract", "phase_mode": "single"}
+{"ts": "2026-04-27T22:23:03.552976+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 65, "event_type": "phase_started", "phase_id": "workflow-migration-docs-and-proof", "phase_mode": "single"}
+{"ts": "2026-04-27T22:23:03.554116+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 66, "event_type": "pair_started", "pair": "implement", "phase_id": "workflow-migration-docs-and-proof"}
+{"ts": "2026-04-27T22:23:03.554194+00:00", "run_id": "run-20260427T204304Z-eddf2be0", "seq": 67, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "workflow-migration-docs-and-proof"}
