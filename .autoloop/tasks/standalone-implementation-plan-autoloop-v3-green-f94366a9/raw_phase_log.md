@@ -97,3 +97,32 @@ The planner needs to revise the plan artifacts so phases and acceptance criteria
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dd0ae-6cbf-7da3-8431-b43e4b2fe953
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dd0ae-6cbf-7da3-8431-b43e4b2fe953
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd0ae-6cbf-7da3-8431-b43e4b2fe953
+---
+I’m revising the plan against the verifier’s blocking findings, not changing scope. First I’m checking the current plan artifacts and the decisions ledger so I can patch only the missing provider-contract and `system_step(fn)` behavior details without drifting from the original greenfield spec.
+
+I’ve got the corrections scoped. I’m tightening the plan where the verifier found ambiguity: phase language and acceptance criteria will now spell out the exact provider control-response/rendering contract and the full `system_step(fn)` callable/return contract, and I’ll record those as explicit turn decisions so later phases don’t regress back to generic wording.
+
+The first patch missed because `phase_plan.yaml` is currently in PyYAML-emitted formatting rather than the quoted form I authored. I’m reapplying the changes in smaller, exact hunks so I only touch the missing contract details and preserve the runtime-owned metadata.
+
+The missing contracts are now explicit in both the narrative plan and the phase decomposition. I’m doing the final integrity pass: re-reading the changed sections, confirming the new decision lines landed under the current turn header, and parsing `phase_plan.yaml` again with `python3` + `yaml.safe_load`.
+
+The narrative plan is fine; the remaining issue is only YAML syntax. The new phase text introduced unquoted `{tag, reason, payload}` braces, which PyYAML reads as flow mapping syntax in plain scalars. I’m quoting the affected authored strings now and then re-running `yaml.safe_load` until it passes.
+
+Revised the plan artifacts to address both verifier blockers.
+
+In [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/plan/plan.md:1), I made the missing contracts explicit: the exact provider control-response/rendering contract and the full `system_step(fn)` callable/return contract, including proof obligations. In [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/plan/phase_plan.yaml:1), I added matching scope, acceptance criteria, and deliverables across the relevant phases. I also appended the change note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/plan/feedback.md:1) and recorded the non-obvious constraints under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/decisions.txt:1).
+
+`phase_plan.yaml` was re-validated locally with `python3` and `yaml.safe_load`.

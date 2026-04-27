@@ -14,6 +14,8 @@ phases:
     and Route metadata.
   - Finalize core/routes.py validation and add Step(route_infos=...), SystemStep(handler=...),
     and a real WorkflowStep in core/steps.py.
+  - Make system_step(fn) a first-class simple surface with direct SystemStep(handler=fn)
+    lowering requirements and explicit supported callable/return semantics.
   - Stop treating workflow/primitives.py or workflow/__init__.py as a second active
     authoring API.
   out_of_scope:
@@ -27,10 +29,12 @@ phases:
       no longer accept route_contracts.
   - id: AC-2
     text: RouteInfo and Route provide the requested metadata fields and validation
-      semantics, and simple declarations expose the requested signatures.
+      semantics, and simple declarations expose the requested signatures including
+      the direct system_step(fn) callable contract.
   deliverables:
   - Updated public export modules and simple declaration surface.
   - Final route metadata model in core/routes.py and core/steps.py.
+  - Explicit system_step(fn) callable contract in the simple/public step definitions.
   - Removal of core/route_contracts.py.
   risks:
   - Public shim cleanup can strand tests or bundled workflows on removed imports.
@@ -46,6 +50,8 @@ phases:
   in_scope:
   - Rewrite core/validation.py simple lowering to use route_infos, reserved routes,
     chain defaults, entry inference, and final reads/requires semantics.
+  - Lower system_step(fn) directly to SystemStep(handler=fn) with no generated on_<step>
+    handler and normalize the supported handler signatures and return forms.
   - Add central workflow-class detection that recognizes simple declaration members.
   - Update runtime loader and capability inspection to resolve simple workflows by
     path, module, and catalog name.
@@ -60,7 +66,8 @@ phases:
   acceptance_criteria:
   - id: AC-1
     text: Simple Workflow subclasses compile without explicit State, entry, transitions,
-      prompt files, or generated on_<step> handlers for system/workflow steps.
+      prompt files, or generated on_<step> handlers for system/workflow steps, and
+      system_step(fn) lowering accepts the requested callable and return forms.
   - id: AC-2
     text: Loader and capability inspection can locate simple declaration workflows
       before strict lowering and reserved routes are always present unless explicitly
@@ -68,7 +75,8 @@ phases:
   deliverables:
   - Updated validation/lowering pipeline.
   - Shared workflow-class detection helper and loader/capability integrations.
-  - Prototype validation coverage for route metadata, reads/requires, and simple discovery.
+  - Prototype validation coverage for route metadata, reads/requires, simple discovery,
+    and the direct system_step(fn) lowering contract.
   risks:
   - Discovery loosening may accidentally match helper classes.
   - Changing reads semantics can disturb artifact graph validation if not kept separate
@@ -88,6 +96,9 @@ phases:
     route_infos and route_required_outputs.
   - Replace provider request models, fake provider telemetry, rendered turn payloads,
     and capability payloads with the final readable/required/writable artifact contract.
+  - 'Make the provider control-response contract explicit: exact {tag, reason, payload}
+    JSON, question-route question requirements, blocked/failed reason requirements,
+    and the required rendered prompt sections.'
   - Implement Prompt resolution rules and ensure low-level Engine file prompts require
     an explicit prompt registry when appropriate.
   - Reorder engine execution/finalization to match the requested before/after-hook,
@@ -103,8 +114,8 @@ phases:
   acceptance_criteria:
   - id: AC-1
     text: Provider requests, rendered prompts, and capability payloads contain no
-      route_contract or route_required_artifacts fields and still expose required
-      route metadata.
+      route_contract or route_required_artifacts fields, render the requested runtime
+      sections, and require the exact {tag, reason, payload} control-response shape.
   - id: AC-2
     text: Engine hook ordering, route override behavior, required-output enforcement,
       retry attribution, and direct WorkflowStep execution match the requested semantics.
@@ -112,8 +123,8 @@ phases:
   - Updated compiler, provider models/rendering, fake provider, and capability payload
     schemas.
   - Updated engine execution path for llm, pair, system, and workflow steps.
-  - Contract tests covering rendering, hook ordering, route override, and workflow-step
-    runtime behavior.
+  - Contract tests covering provider rendering/control-response rules, hook ordering,
+    route override, system_step(fn) runtime behavior, and workflow-step runtime behavior.
   risks:
   - Engine ordering changes can silently alter retries, handoffs, or artifact validation
     timing.
@@ -132,6 +143,8 @@ phases:
   - Migrate active workflows/* packages off RouteContract while allowing contracts.py
     filenames to remain for non-RouteContract support code.
   - Update unit, contract, runtime, and strictness tests to the final API and behavior.
+  - Add explicit tests for the system_step(fn) callable/return matrix and for provider-rendering/control-response
+    wording and structure.
   - Update active prompt READMEs, examples, and any surviving working-tree docs to
     the greenfield model.
   - Run full pytest coverage and grep checks for removed RouteContract terminology
@@ -146,11 +159,14 @@ phases:
     text: Active workflows, tests, and docs no longer import or mention RouteContract,
       route_contracts, route_required_artifacts, or route contract terminology.
   - id: AC-2
-    text: The requested simple authoring, route metadata, reads/requires, hook, WorkflowStep,
-      and provider-rendering tests pass together with the full suite.
+    text: The requested simple authoring, route metadata, reads/requires, hook, system_step(fn),
+      WorkflowStep, and provider-rendering/control-response tests pass together with
+      the full suite.
   deliverables:
   - Migrated bundled workflow packages and active docs/examples.
   - Expanded automated coverage for the final greenfield behavior.
+  - Explicit proof for the system_step(fn) return matrix and provider control-response/rendering
+    contract.
   - Final grep and test verification evidence.
   risks:
   - Large workflow/test migration volume can hide missed active references.
