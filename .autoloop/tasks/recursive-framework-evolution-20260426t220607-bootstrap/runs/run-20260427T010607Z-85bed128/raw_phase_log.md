@@ -1271,3 +1271,142 @@ Only warning-level noise remains from optimizer contract models that use a `sche
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dccda-386d-76c3-b119-81747cbbe9ff
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dccda-386d-76c3-b119-81747cbbe9ff
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dccda-386d-76c3-b119-81747cbbe9ff
+---
+I’m scoping the refinement-and-documentation phase against the existing optimizer and refinement workflow implementations first. I’ll read the active phase artifacts, the refinement workflow surfaces, and the current optimizer docs/tests to find the smallest safe edit set.
+
+The optimizer itself is already present, so this phase is mostly about tightening the refinement handoff contract and freezing the boundaries in docs/tests. I’m reading the refinement workflow’s evidence validation, prompt contract, and the doc baseline assertions next.
+
+I found a missing optimizer doc page and a very dirty worktree outside this phase. I’ll stay inside the refinement workflow, docs, and baseline/runtime tests, and I’m tracing the exact evidence-kind gate and doc assertions before editing.
+
+The refinement workflow itself does not yet appear to mention optimization evidence as a first-class input, and the optimizer workflow page is missing entirely. I’m drilling into the baseline doc assertions and the refinement parameter/prompt surfaces so the edits line up with existing wording and don’t widen scope.
+
+I’ve confirmed the refinement workflow still has a fixed “evaluation summary/findings/failure modes” entry contract, while the request for this phase is narrower: accept optimizer-produced refinement evidence without treating it as proof. I’m checking where the repo already models “evidence entries” so I can extend that path instead of inventing a second refinement input model.
+
+I’ve narrowed the real code gap: the refinement workflow has no path for a `workflow_refinement_evidence.json` input yet, so “accept optimization evidence entries” requires a small input/validation seam rather than just doc wording. I’m reading the optimizer’s emitted evidence-entry shape now so I can wire it into refinement without changing its existing evaluation-summary baseline.
+
+I’ve got the implementation shape. I’m going to add one optional refinement-evidence input seam to `workflow_and_eval_to_refined_workflow_package`, always materialize a workflow-local evidence artifact for prompts, validate optimizer evidence kinds and workflow identity deterministically, then update docs and baseline tests around the candidate-only and no-auto-materialization rules.
+
+I have the edit set scoped. I’m patching the refinement workflow first: new optional refinement-evidence input, workflow-local normalization/summary artifacts, prompt wiring, and deterministic validation of optimization evidence kinds and workflow identity.
+
+I’m editing the refinement workflow and parameter model now. The changes stay additive: existing evaluation-summary flow remains intact, and optimization evidence comes in as an optional sidecar input with explicit candidate-only semantics.
+
+The workflow seam is in. Next I’m aligning the prompt contracts and docs with that new optional evidence artifact so the runtime contract, provider guidance, and tests all describe the same candidate-only behavior.
+
+I’m updating the prompt bundle now so the runtime-injected contract and prompt text stay synchronized: optimization evidence is optional input, candidate-only by default, ablation is stronger evidence, and adversarial cases are not auto-materialized here.
+
+I’m patching the refinement runtime tests next. The goal is to prove three things explicitly: optimizer evidence is accepted, candidate-only inputs stay unproven without ablation, and adversarial case candidates do not trigger eval-suite materialization inside refinement.
+
+I’m on the documentation slice now. I’m adding the missing optimizer workflow page and updating the refinement/eval/history docs with the exact boundaries this phase is supposed to freeze: candidate-only evidence, no default ablation, and no automatic eval-suite materialization.
+
+One docs patch failed on context drift, so I’m re-reading those exact sections and will apply the documentation changes in smaller chunks. The code changes are intact; this is just about getting the doc/test wording aligned without accidental spillover.
+
+I’ve hit the baseline-doc test layer. I’m updating the frozen strings now so they assert the shipped optimizer wording instead of the old “future workflow” phrasing, and I’m adding explicit checks for the new optimization boundary and refinement-evidence handoff.
+
+The code and docs are patched. I’m running the targeted refinement and baseline proof set now to catch contract drift before I touch the phase notes or decision ledger.
+
+The baseline doc suite is green. The refinement runtime suite is still running; I’m waiting on that result before updating the phase notes and the shared decision block.
+
+The refinement suite exposed one real bug: I validated the copied refinement-evidence artifact before deriving `selected_workflow_name` from the selected-workflow snapshots in `publish_refined_workflow`. I’m fixing that ordering bug now and rerunning the targeted suite.
+
+The publish-step ordering bug is fixed. I’m rerunning the refinement workflow suite now to verify the new evidence seam and the existing publication checks both hold.
+
+The targeted proof set is green now. I’m doing the phase-local bookkeeping next: update the shared decision block with the non-obvious refinement-evidence seam choice, then write the phase implementation notes with the exact files, invariants, and validation that landed.
+
+The implementation work is complete and the targeted proof set is green. I’m doing one final status pass over the scoped files so the closeout is accurate and doesn’t accidentally claim anything outside this phase.
+
+**Scope considered**
+
+- Phase-local refinement and documentation integration only.
+- Kept changes inside the refinement workflow, optimizer/refinement docs, baseline doc assertions, and phase bookkeeping artifacts.
+
+**What I analyzed**
+
+- The active phase contract, plan, decisions ledger, and implementation notes scaffold.
+- `workflows/workflow_and_eval_to_refined_workflow_package/` inputs, publish-time validation, and prompt contracts.
+- Existing optimizer publication shape, especially `workflow_refinement_evidence.json`.
+- Baseline docs/tests for architecture, authoring, and workflow documentation boundaries.
+
+**What I changed**
+
+- Added optional `refinement_evidence_path` support to `workflow_and_eval_to_refined_workflow_package`, with deterministic workflow-local normalization into `baseline_refinement_evidence.json` and `baseline_refinement_evidence.md`.
+- Validated optimization evidence kinds and selected-workflow identity, and kept optimization inputs candidate-only unless stronger evidence exists.
+- Updated refinement prompts to treat optimization candidates as unproven by default, treat ablation results as stronger evidence, and keep adversarial cases out of automatic eval-suite materialization.
+- Added the missing [workflow_run_traces_to_optimization_candidates.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_run_traces_to_optimization_candidates.md) page and updated [workflow_and_eval_to_refined_workflow_package.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_and_eval_to_refined_workflow_package.md), [workflow_to_eval_suite.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_to_eval_suite.md), [workflow_run_history_to_failure_modes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/workflow_run_history_to_failure_modes.md), [architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), and [authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- Extended [test_workflow_and_eval_to_refined_workflow_package.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py) and [test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), and updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/refinement-and-documentation-integration/implementation_notes.md) plus the current decisions block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt).
+
+**Key findings / decisions**
+
+- The real code gap was that refinement had no input seam for optimizer-produced `workflow_refinement_evidence.json`; docs alone would not satisfy AC-1.
+- I kept the new seam additive: baseline evaluation summary/findings are still required, and optimization evidence only augments prioritization and framing.
+- I normalized foreign optimization evidence into workflow-local artifacts so prompts do not depend on external workflow-folder traversal.
+
+**Open issues / next step**
+
+- Targeted proof passed:
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
+  - `PYTHONPATH=/home/rauter/autoloop_v3_bkp ./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+- I did not run the full repository suite in this phase.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dccda-386d-76c3-b119-81747cbbe9ff
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dccda-386d-76c3-b119-81747cbbe9ff
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dccda-386d-76c3-b119-81747cbbe9ff
+---
+I’m reviewing the phase-local refinement/doc integration against the accepted scope and the changed code paths. I’ll read the phase criteria/feedback files, inspect the implementation diffs that landed, and check for correctness or contract drift before I mark the review artifacts.
+
+I’m at the decision point. I don’t see a correctness or boundary violation in the scoped phase diff, so I’m marking the criteria complete and recording a no-findings review note in the phase feedback artifact.
+
+Scope considered
+
+- Phase-local review for `refinement-and-documentation-integration` only.
+- Reviewed the refinement workflow seam, prompt updates, optimizer/refinement docs, baseline-doc assertions, and phase-local bookkeeping artifacts.
+
+What I analyzed
+
+- Accepted phase scope, implementation notes, and current decisions ledger.
+- The refinement workflow changes in `workflows/workflow_and_eval_to_refined_workflow_package/`.
+- The new optimizer doc page and related updates in architecture/authoring/eval-suite/run-history docs.
+- The targeted regression coverage in `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` and `tests/test_architecture_baseline_docs.py`.
+
+What I reviewed
+
+- Optional `refinement_evidence_path` handling, workflow-local evidence normalization, and publish-time validation.
+- Candidate-only semantics for optimization evidence, stronger-evidence wording for ablation results, and explicit non-materialization of adversarial cases.
+- Documentation coverage for `run_refs`, `run_statuses` vs. `route_tags`, merged verifier/rubric optimization, and no-default-ablation behavior.
+- Phase criteria and feedback artifacts.
+
+Key findings / decisions
+
+- No blocking or non-blocking defects found in the scoped implementation.
+- Updated `criteria.md` to all checked.
+- Appended a no-findings review note to `feedback.md`.
+
+Open issues / next step
+
+- No open review issues in this phase scope.
+- Targeted proof referenced by the implementation remains the relevant validation surface: `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py` and `tests/test_architecture_baseline_docs.py`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
