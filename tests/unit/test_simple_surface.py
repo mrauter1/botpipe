@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import os
 import shutil
 import subprocess
@@ -303,11 +304,99 @@ def test_strict_workflow_counterpart_preserves_import_time_validation() -> None:
             note = step("Write a short note.")
 
 
-def test_authoring_doc_mentions_additive_autoloop_simple_surface() -> None:
-    text = (REPO_ROOT / "docs" / "authoring.md").read_text(encoding="utf-8")
+def test_autoloop_simple_exports_requested_public_authoring_surface() -> None:
+    autoloop_surface = importlib.import_module("autoloop")
 
-    assert "autoloop.simple" in text
-    assert "The root `workflow` shim remains the strict compatibility surface during the migration window." in text
+    for exported in (
+        "AfterHookResult",
+        "Json",
+        "Md",
+        "Prompt",
+        "Raw",
+        "Route",
+        "RouteInfo",
+        "StrictWorkflow",
+        "Text",
+        "Workflow",
+        "WorkflowStep",
+        "chain",
+        "review_step",
+        "step",
+        "system_step",
+        "workflow_step",
+    ):
+        assert hasattr(autoloop_surface, exported)
+
+    assert not hasattr(autoloop_surface, "RouteContract")
+
+
+def test_autoloop_simple_helper_signatures_are_explicit() -> None:
+    simple_surface = importlib.import_module("autoloop.simple")
+
+    assert tuple(inspect.signature(simple_surface.step).parameters) == (
+        "prompt",
+        "name",
+        "reads",
+        "requires",
+        "out",
+        "outputs",
+        "routes",
+        "route_infos",
+        "route_summaries",
+        "before",
+        "after",
+        "control_schema",
+        "retry",
+        "session",
+    )
+    assert tuple(inspect.signature(simple_surface.review_step).parameters) == (
+        "producer",
+        "verifier",
+        "name",
+        "reads",
+        "requires",
+        "out",
+        "outputs",
+        "accepted",
+        "rework",
+        "route_infos",
+        "route_summaries",
+        "before",
+        "after",
+        "control_schema",
+        "retry",
+        "session",
+    )
+    assert tuple(inspect.signature(simple_surface.system_step).parameters) == (
+        "fn",
+        "name",
+        "reads",
+        "requires",
+        "out",
+        "outputs",
+        "routes",
+        "route_infos",
+        "route_summaries",
+        "before",
+        "after",
+    )
+    assert tuple(inspect.signature(simple_surface.workflow_step).parameters) == (
+        "workflow",
+        "name",
+        "message",
+        "message_from",
+        "params",
+        "input",
+        "reads",
+        "requires",
+        "out",
+        "outputs",
+        "routes",
+        "route_infos",
+        "route_summaries",
+        "before",
+        "after",
+    )
 
 
 def test_autoloop_simple_does_not_export_route_contract() -> None:
