@@ -420,3 +420,60 @@ Open issues / next step
 
 - The reviewer-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/deterministic-ingestion-and-workflow-shell/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/deterministic-ingestion-and-workflow-shell/feedback.md) now need a verifier rerun to clear `IMP-001` and `IMP-002`.
 - If there is another implement pass after that, the next cleanup target is the repeated Pydantic warning noise from contract models using a field named `schema`.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcc81-994f-76a1-acd7-bcea21039407
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+I’m re-reviewing the phase after the producer’s fixes, focused on the two prior blockers and any adjacent regressions from the new route-filtering and bootstrap-validation paths. I’ll verify the current code and tests, then update the reviewer artifacts accordingly.
+
+I’ve verified the two prior blockers in code and test coverage. I’m running the focused suite once more as reviewer, then I’ll mark the criteria complete and append the residual non-blocking warning about the contract-model import noise.
+
+The reviewer run is in flight. I’m polling for the final exit now; assuming it stays clean, I’ll update the criteria to complete and leave only the import-warning noise as non-blocking feedback.
+
+The reviewer test run passed: `21 passed`. I’m marking the criteria complete now and leaving one residual non-blocking note in feedback about the import-time Pydantic warnings, with the prior blockers called out as resolved in the re-review status.
+
+Scope considered
+
+- Phase-scoped re-review for `deterministic-ingestion-and-workflow-shell`.
+- I rechecked the two prior blockers, the adjacent bootstrap/frame behavior they touched, and the focused regression tests added for them.
+
+What I analyzed
+
+- [stdlib/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/optimization.py) for `route_tags` handling and selected-workflow resolution support.
+- [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py) for early bootstrap validation and side-effect ordering.
+- [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py) and [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py) for the new regression coverage.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/deterministic-ingestion-and-workflow-shell/criteria.md) to fully checked, since there are no remaining blocking findings in this phase scope.
+- Appended a re-review status note and one residual non-blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/deterministic-ingestion-and-workflow-shell/feedback.md).
+- Re-ran the focused suite:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - Result: `21 passed`
+
+Key findings / decisions
+
+- The previous blockers are resolved:
+  - `route_tags` now filters published step observations instead of being ignored.
+  - unknown `selected_workflow` references now fail during bootstrap before invocation-artifact side effects.
+- No new blocking correctness, safety, or compatibility issues were found in the touched phase scope.
+- One residual non-blocking issue remains: Pydantic emits import-time warnings because several contract models use a field named `schema`.
+
+Open issues / next step
+
+- Optional cleanup: remove the `schema` field-name warning noise in [contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/contracts.py).
+- From a verifier standpoint, this phase is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
