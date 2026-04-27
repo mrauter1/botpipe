@@ -297,3 +297,54 @@ Open issues / next step
 - Next phase should wire `autoloop.simple` declarations into workflow discovery/validation/compilation, starting with non-strict `Workflow` lowering, `EmptyState` handling, and step/output materialization.
 - Route/provider vocabulary migration from `route_contracts` to `route_infos` and `route_required_outputs` is still deferred.
 - `WorkflowStep` exists only as a declaration foundation in this phase; it is not executable yet.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd018-7166-72b3-886b-81f99ab85b01
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd018-7166-72b3-886b-81f99ab85b01
+---
+I’m reviewing the phase-local implementation against the active acceptance criteria and the changed code paths only. I’ll inspect the new `autoloop.simple` surface, the prompt/route primitive changes, and the validation notes/tests to decide whether this phase is complete or if there are blocking gaps.
+
+I found one likely gap in the import-compat story and I’m verifying it directly before I write the review. The question is whether `autoloop.simple` actually works when the environment only exposes the installed-package-style `autoloop_v3` root, rather than also adding the repo root to `sys.path`.
+
+I have one blocking finding. The new surface works when the repo root is also visible, but the acceptance criterion is broader: the documented top-level `autoloop.simple` import is still missing from a true installed-package-style environment that exposes only `autoloop_v3`. I’m recording that gap and marking the phase incomplete.
+
+Scope considered
+
+- Phase-local review of `surface-foundations` only.
+- I limited file edits to the active phase artifacts and reviewed the new `autoloop.simple` surface, prompt/route primitive changes, docs, and targeted tests.
+
+What I analyzed
+
+- The new public surface in `autoloop/__init__.py` and `autoloop/simple.py`.
+- Additive prompt/route changes in `core/prompts.py`, `core/routes.py`, and their touched consumers/tests.
+- The acceptance-criteria intent in the phase contract and the shared decisions about `autoloop.simple` import compatibility.
+
+What I reviewed
+
+- Whether `autoloop.simple` is actually importable in both claimed execution modes.
+- Whether the strict `workflow` shim remained unchanged.
+- Whether the new tests cover the compatibility story they claim to validate.
+
+Key findings / decisions
+
+- I recorded one blocking finding in `.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/surface-foundations/feedback.md` as `IMP-001`.
+- The blocking gap is the installed-package compatibility story: `autoloop.simple` still depends on the repo root also being visible. In a parent-only `PYTHONPATH` environment from outside the repo root, `import autoloop.simple` still fails.
+- I updated `.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/surface-foundations/criteria.md` accordingly. Only `Technical Debt / Simplicity` is checked.
+
+Open issues / next step
+
+- Add real packaging/export glue so top-level `autoloop.simple` is discoverable when only the installed-package root is present.
+- Extend subprocess coverage to test that parent-only path mode from a non-repo-root working directory.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
