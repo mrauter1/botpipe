@@ -520,3 +520,63 @@ Open issues / next step
 
 - The `588` warnings are the pre-existing Pydantic `schema` field-name warnings in optimization-candidate contracts; I did not change them in this phase.
 - No additional test gaps in the requested migration scope stood out after the broader phase-scoped pass.
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+---
+Auditing the phase-local test additions now. I’m checking the new regression tests, the updated strategy, and the scoped validation evidence before I mark the test audit artifacts.
+
+The phase artifacts are populated and the repo state for the targeted test files is already clean, so I’m reviewing the landed tests directly and confirming the scoped suite rather than auditing an uncommitted diff.
+
+The landed tests line up with the stated strategy and they target the right capture regression seam. I’m running the same scoped phase bundle independently so the audit is based on fresh evidence, not just the producer note.
+
+The scoped audit is clean. I’m marking the test criteria complete and appending an explicit no-findings audit record to the phase feedback.
+
+Scope considered
+
+- Phase-local test audit for `workflow-family-migration`.
+- Reviewed the landed runtime/unit test additions, the updated `test_strategy.md`, the shared decisions entry, and the scoped validation evidence.
+
+What I analyzed
+
+- New handler-level alias regression tests in:
+  - `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
+  - `tests/runtime/test_workflow_to_eval_suite.py`
+  - `tests/runtime/test_workflow_run_history_to_failure_modes.py`
+  - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+- New optimizer alias test in `tests/unit/test_optimization_helpers.py`
+- The phase strategy and feedback artifacts under `.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/workflow-family-migration/`
+
+What I reviewed
+
+- Coverage against AC-1: the new tests pin alias-driven canonical-name capture so the migrated workflows cannot silently reintroduce write-read-validate tails just to recover `selected_workflow_name`.
+- Coverage against AC-2-adjacent preserved behavior: decomposition capture still writes baseline/evidence context, run-history capture still preserves filtered run IDs, and optimizer source-manifest generation still records canonical workflow identity.
+- Reliability: all added tests are deterministic, filesystem-local, and avoid timing/network assumptions.
+- Independent validation run:
+  - `pytest -q tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/unit/test_optimization_helpers.py tests/test_architecture_baseline_docs.py`
+  - Result: `214 passed, 588 warnings`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking audit findings beyond recording the explicit clean result.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/workflow-family-migration/criteria.md) to check all audit gates.
+- Appended a no-findings audit record to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/workflow-family-migration/feedback.md).
+
+Open issues / next step
+
+- The `588` warnings are the existing Pydantic `schema` field-name warnings in optimization-candidate contracts; they are unchanged by this phase and not a blocker for the scoped migration audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
