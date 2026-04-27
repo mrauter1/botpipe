@@ -217,3 +217,87 @@ Planned later phases still need to migrate workflow capture handlers and perform
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+---
+I’m checking the current helper-family proof first so I only add tests where the new seam still has regression risk. Then I’ll update the phase-local test strategy and feedback with an explicit coverage map.
+
+I found one worthwhile gap: the new seam should prove that a captured selected-workflow context can be reused for multiple writes without silently re-resolving. I’m adding that regression test now, then I’ll document the phase coverage map and the test-only delta in the phase artifacts.
+
+The new regression case is in. I’m running the helper-family unit suite again so the phase artifacts can point to a fresh proof run for the added capture-reuse case, not just the earlier implementation pass.
+
+Scope considered
+
+Active phase `selected-workflow-helper-convergence` only. I stayed on the new private selected-workflow seam, the helper-family unit coverage in `tests/unit/test_stdlib_and_extensions.py`, and the phase-local test artifacts under `.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/selected-workflow-helper-convergence/`.
+
+What I analyzed
+
+I checked the new seam against the phase contract and existing tests to find the remaining regression gap. The notable uncovered behavior was capture reuse: the new helper should support multiple artifact writes from one resolved selected-workflow context without silently re-resolving.
+
+What I changed
+
+I added one focused unit regression test in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) that proves `capture_selected_workflow(...)` can drive multiple `write_selected_workflow_artifact(...)` calls with a single workflow resolution while preserving the shared envelope fields. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/selected-workflow-helper-convergence/test_strategy.md) with an explicit behavior/invariant/edge/failure coverage map and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/selected-workflow-helper-convergence/feedback.md).
+
+Key findings / decisions
+
+The new seam already had broad public-helper coverage from the implementation pass, so I kept this turn narrow and added only the missing capture-reuse regression case. Fresh proof passed with `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` (`95 passed`).
+
+Open issues / next step
+
+No test blocker remains in this phase. Workflow capture-step migration and closeout docs/memory proof are still out of scope here and belong to the later planned phases.
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+---
+I’m auditing the phase-local test coverage now. I’ll review the added seam tests, the updated strategy map, and the scoped proof run first, then I’ll update only the test-phase audit artifacts.
+
+The added test closes the main remaining gap cleanly, and the strategy map now matches the actual regression surface. I’m marking the phase artifacts complete with no audit findings.
+
+Scope considered
+
+Active phase `selected-workflow-helper-convergence`, the phase-local test strategy and feedback artifacts, the added helper-seam unit coverage in `tests/unit/test_stdlib_and_extensions.py`, and the shared decisions for the selected-workflow helper boundary.
+
+What I analyzed
+
+Whether the tests now cover the new private seam itself, whether preserved behavior for the rebased public helpers is still protected, whether the added regression case would catch silent re-resolution or envelope drift, and whether the phase strategy records happy-path, edge, failure, and known-gap coverage clearly.
+
+What I reviewed
+
+`.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/selected-workflow-helper-convergence/criteria.md`, `feedback.md`, `test_strategy.md`, the scoped tests around `capture_selected_workflow(...)` and `write_selected_workflow_artifact(...)`, and the proof result for `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` (`95 passed`).
+
+Key findings / decisions
+
+No blocking findings.
+No non-blocking findings.
+The added seam test closes the main remaining regression gap by proving one captured selected-workflow context can drive multiple writes without another resolver call.
+The updated strategy map matches the actual covered behaviors, preserved invariants, edge cases, failure paths, and declared known gap.
+
+Open issues / next step
+
+No audit changes are required for this phase.
+Later phases still need workflow capture-step migration and broader closeout proof, but that is outside this test-auditor turn’s scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

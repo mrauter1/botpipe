@@ -256,3 +256,48 @@ The new seam already had broad public-helper coverage from the implementation pa
 Open issues / next step
 
 No test blocker remains in this phase. Workflow capture-step migration and closeout docs/memory proof are still out of scope here and belong to the later planned phases.
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfdc-72cc-76c3-a946-4168bae3a2e6
+---
+I’m auditing the phase-local test coverage now. I’ll review the added seam tests, the updated strategy map, and the scoped proof run first, then I’ll update only the test-phase audit artifacts.
+
+The added test closes the main remaining gap cleanly, and the strategy map now matches the actual regression surface. I’m marking the phase artifacts complete with no audit findings.
+
+Scope considered
+
+Active phase `selected-workflow-helper-convergence`, the phase-local test strategy and feedback artifacts, the added helper-seam unit coverage in `tests/unit/test_stdlib_and_extensions.py`, and the shared decisions for the selected-workflow helper boundary.
+
+What I analyzed
+
+Whether the tests now cover the new private seam itself, whether preserved behavior for the rebased public helpers is still protected, whether the added regression case would catch silent re-resolution or envelope drift, and whether the phase strategy records happy-path, edge, failure, and known-gap coverage clearly.
+
+What I reviewed
+
+`.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/test/phases/selected-workflow-helper-convergence/criteria.md`, `feedback.md`, `test_strategy.md`, the scoped tests around `capture_selected_workflow(...)` and `write_selected_workflow_artifact(...)`, and the proof result for `.venv/bin/pytest -q tests/unit/test_stdlib_and_extensions.py` (`95 passed`).
+
+Key findings / decisions
+
+No blocking findings.
+No non-blocking findings.
+The added seam test closes the main remaining regression gap by proving one captured selected-workflow context can drive multiple writes without another resolver call.
+The updated strategy map matches the actual covered behaviors, preserved invariants, edge cases, failure paths, and declared known gap.
+
+Open issues / next step
+
+No audit changes are required for this phase.
+Later phases still need workflow capture-step migration and broader closeout proof, but that is outside this test-auditor turn’s scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
