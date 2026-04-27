@@ -30,3 +30,7 @@
 {"ts": "2026-04-27T17:36:34.226976+00:00", "run_id": "run-20260427T164535Z-3624382b", "seq": 30, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-family-migration"}
 {"ts": "2026-04-27T17:38:45.099279+00:00", "run_id": "run-20260427T164535Z-3624382b", "seq": 31, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-family-migration"}
 {"ts": "2026-04-27T17:38:45.137086+00:00", "run_id": "run-20260427T164535Z-3624382b", "seq": 32, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-family-migration"}
+{"ts": "2026-04-27T17:38:45.232708+00:00", "run_id": "run-20260427T164535Z-3624382b", "seq": 33, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-family-migration", "phase_mode": "single"}
+{"ts": "2026-04-27T17:38:45.237099+00:00", "run_id": "run-20260427T164535Z-3624382b", "seq": 34, "event_type": "phase_started", "phase_id": "proof-docs-and-memory-closeout", "phase_mode": "single"}
+{"ts": "2026-04-27T17:38:45.238691+00:00", "run_id": "run-20260427T164535Z-3624382b", "seq": 35, "event_type": "pair_started", "pair": "implement", "phase_id": "proof-docs-and-memory-closeout"}
+{"ts": "2026-04-27T17:38:45.238907+00:00", "run_id": "run-20260427T164535Z-3624382b", "seq": 36, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "proof-docs-and-memory-closeout"}

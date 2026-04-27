@@ -14,13 +14,13 @@
       "proof-docs-and-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "workflow-family-migration"
+    "current_phase_index": 2,
+    "current_phase_id": "proof-docs-and-memory-closeout"
   },
   "phase_status": {
     "selected-workflow-helper-convergence": "completed",
-    "workflow-family-migration": "in_progress",
-    "proof-docs-and-memory-closeout": "planned"
+    "workflow-family-migration": "completed",
+    "proof-docs-and-memory-closeout": "in_progress"
   },
   "phase_history": [
     {
@@ -41,6 +41,19 @@
       "run_id": "run-20260427T164535Z-3624382b",
       "status": "in_progress",
       "ts": "2026-04-27T17:08:24.465687+00:00"
+    },
+    {
+      "phase_id": "workflow-family-migration",
+      "run_id": "run-20260427T164535Z-3624382b",
+      "status": "completed",
+      "ts": "2026-04-27T17:38:45.231598+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "proof-docs-and-memory-closeout",
+      "run_id": "run-20260427T164535Z-3624382b",
+      "status": "in_progress",
+      "ts": "2026-04-27T17:38:45.236050+00:00"
     }
   ]
 }
