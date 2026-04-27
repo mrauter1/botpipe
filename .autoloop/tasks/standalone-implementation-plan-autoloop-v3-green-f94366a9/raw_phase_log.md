@@ -456,3 +456,52 @@ Open issues / next step
 - I ran `python3 -m py_compile stdlib/contracts.py stdlib/__init__.py`.
 - I still did not run `pytest`; the environment limitations noted earlier remain.
 - The next verifier pass should be able to clear the last blocker if it agrees that the `stdlib` import regression is now resolved.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m doing the final verification pass on the scoped changes and the remaining feedback item, then I’ll either clear the phase or leave a narrowed blocker if anything still violates the accepted contract.
+
+The remaining `stdlib` blocker is gone. I’m marking the phase complete in the review artifacts now and recording the last finding as resolved.
+
+Scope considered
+
+- Final phase-local review for `public-surface-and-route-metadata`.
+- The public/simple surface, `workflow` shim, `stdlib` export surface, and the reviewer artifact files.
+
+What I analyzed
+
+- The authoritative decisions ledger for allowed breakage boundaries.
+- The live state of `autoloop.simple`, `workflow/__init__.py`, `stdlib/contracts.py`, and `stdlib/__init__.py`.
+- The remaining blocking feedback item and whether it still represented an active regression.
+
+What I reviewed
+
+- `IMP-001`: resolved. The exported `stdlib` surface no longer imports the deleted `core.route_contracts`.
+- `IMP-002`: remains resolved from cycle 2. `workflow/__init__.py` is no longer a second authoring API.
+- `IMP-003`: remains resolved from cycle 2. `autoloop.simple` exposes explicit helper signatures.
+- Criteria updated: all boxes checked.
+
+Key findings / decisions
+
+- No blocking findings remain for this phase.
+- The scoped deliverables are satisfied: `RouteContract` is gone from active public exports, `RouteInfo`/`Route` are in place, core steps use `route_infos`, `SystemStep(handler=...)` exists, and the simple surface now advertises the requested callable contracts.
+
+Open issues / next step
+
+- Phase can move forward.
+- Later phases still need the already-deferred bundled workflow/test migration and engine-side `WorkflowStep` execution work, but those are outside this review scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
