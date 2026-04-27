@@ -1,4 +1,175 @@
 version: 1
 task_id: recursive-framework-evolution-20260427t144615-bootstrap
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/runs/run-20260427T174615Z-f98ff2bb/request.md
-phases: []
+phases:
+- phase_id: surface-foundations
+  title: Additive Surface Foundations
+  objective: Create the additive simple-authoring package and the shared foundation
+    types needed to support it without disturbing the current strict workflow shim.
+  status: planned
+  in_scope:
+  - Add repo-root autoloop package files for the new public simple surface.
+  - Extend prompt and route primitives with inline/file prompt support and route metadata
+    types.
+  - Add lightweight simple artifact helper constructors and the base non-strict workflow
+    declarations.
+  out_of_scope:
+  - Removing the workflow shim.
+  - Migrating bundled workflows.
+  - Changing runtime execution semantics beyond additive type support.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: The repo exposes an additive autoloop.simple import path while the existing
+      workflow shim remains strict and unchanged.
+  - id: AC-2
+    text: Prompt and route primitives can represent inline/file prompt origins and
+      optional route metadata without breaking existing callers.
+  deliverables:
+  - New autoloop package surface definition.
+  - Prompt and route foundation updates.
+  - Simple artifact helper specifications.
+  risks:
+  - Import-path confusion between autoloop, autoloop_v3, and workflow surfaces.
+  - Accidental breakage of strictness tests pinned to the workflow shim.
+  rollback:
+  - Remove the additive autoloop package and leave the workflow shim untouched.
+  - Keep new prompt/route fields backward-compatible so they can remain dormant if
+    the simple surface is rolled back.
+- phase_id: contract-migration
+  title: Compiler And Contract Migration
+  objective: Teach validation, compilation, provider payloads, and rendering to understand
+    reads, route metadata, and route-required outputs while preserving legacy route-contract
+    compatibility.
+  status: planned
+  in_scope:
+  - Split readable inputs from required inputs.
+  - Add prototype validation support and relax route-contract-only requirements.
+  - Migrate compiled/provider/static metadata toward route_infos and route_required_outputs
+    with compatibility adapters.
+  out_of_scope:
+  - Final removal of RouteContract.
+  - Bundled workflow source migration.
+  dependencies:
+  - surface-foundations
+  acceptance_criteria:
+  - id: AC-1
+    text: Provider and compiled-step metadata can represent readable inputs, required
+      inputs, route infos, and route-required outputs without regressing existing
+      legacy callers.
+  - id: AC-2
+    text: Prototype validation no longer requires application route contracts while
+      still rejecting invalid routes, invalid schemas, and impossible artifact dependencies.
+  deliverables:
+  - Validation and compiler migration plan implemented in core surfaces.
+  - Provider-model and rendering vocabulary updated with compatibility coverage.
+  - Static-graph and related metadata migration notes.
+  risks:
+  - Broad test fallout because route_contracts currently appear in runtime, provider,
+    and static-graph assertions.
+  - Terminology migration causing inconsistent behavior between legacy and new workflows.
+  rollback:
+  - Retain the compatibility adapter and continue emitting legacy route_contracts
+    fields while backing out new public vocabulary.
+  - Keep validation relaxations guarded behind the simple workflow path if needed.
+- phase_id: simple-lowering
+  title: Simple Workflow Lowering
+  objective: Implement the simple Workflow, StrictWorkflow, helper constructors, inference
+    rules, and lowering path so concise declarations compile into the existing workflow
+    definition model.
+  status: planned
+  in_scope:
+  - Implement step, review_step, system_step, workflow_step, and chain helpers.
+  - Infer step names, entry points, EmptyState, step-local artifact paths, and unambiguous
+    prompt-placeholder reads.
+  - Lower simple declarations into the same validated WorkflowDefinition and CompiledWorkflow
+    path used by strict workflows.
+  out_of_scope:
+  - Source-code expansion or eject tooling.
+  - Automatic requiredness or automatic provider control schema generation.
+  dependencies:
+  - contract-migration
+  acceptance_criteria:
+  - id: AC-1
+    text: A one-step and two-step simple workflow can compile without explicit State,
+      entry, route contracts, or prompt files when inline prompts are used.
+  - id: AC-2
+    text: Simple helper inference remains conservative and never infers required inputs
+      or provider control schemas from prompt text or artifact schemas.
+  deliverables:
+  - Simple workflow lowering path.
+  - Helper API implementations and inference rules.
+  - Entry and placeholder inference behavior.
+  risks:
+  - Inference ambiguity causing nondeterministic or surprising compilation behavior.
+  - Simple lowering bypassing existing artifact and topology checks.
+  rollback:
+  - Disable or remove helper lowering while keeping the foundation types and contract
+    migration in place.
+  - Require explicit helper arguments for any inference rule that proves unstable.
+- phase_id: engine-hooks-workflow-step
+  title: Engine Hooks And WorkflowStep
+  objective: Extend execution to support before/after hooks, final-route override
+    handling, and child-workflow invocation as a first-class step kind.
+  status: planned
+  in_scope:
+  - Add before and after hook compilation and execution ordering.
+  - Implement AfterHookResult and final-route enforcement after hook normalization.
+  - Add WorkflowStep execution, child terminal mapping, and optional child-result
+    artifacts.
+  out_of_scope:
+  - A separate child-workflow engine.
+  - Hidden workflow-step behavior embedded inside PairStep internals.
+  dependencies:
+  - simple-lowering
+  acceptance_criteria:
+  - id: AC-1
+    text: Provider, system, and child-workflow steps all honor before/after hooks
+      with the requested ordering and clear validation on illegal route overrides.
+  - id: AC-2
+    text: WorkflowStep can participate in normal chains and verifier-gated rework
+      loops while mapping child terminal states deterministically.
+  deliverables:
+  - Engine hook execution support.
+  - WorkflowStep runtime path.
+  - Final-route validation/enforcement updates.
+  risks:
+  - Hook ordering changes destabilizing retry and artifact enforcement behavior.
+  - WorkflowStep loop topologies surfacing new routing edge cases.
+  rollback:
+  - Keep hook support behind simple-step usage while reverting WorkflowStep if needed.
+  - Preserve legacy enforcement order for strict workflows until the new path is proven.
+- phase_id: compatibility-docs-cleanup
+  title: Compatibility Migration And Cleanup
+  objective: Migrate public docs, bundled workflows, and tests to the new authoring
+    vocabulary, then retire public RouteContract usage where compatibility allows.
+  status: planned
+  in_scope:
+  - Update docs and examples to teach autoloop.simple and route metadata instead of
+    RouteContract.
+  - Migrate or shim bundled workflows and affected tests.
+  - Optionally add a compile-time guard for unsupported public BoardMutation usage
+    if it remains low-risk.
+  out_of_scope:
+  - Any autoloop eject or source-generation flow.
+  - Unrelated runtime feature work.
+  dependencies:
+  - engine-hooks-workflow-step
+  acceptance_criteria:
+  - id: AC-1
+    text: Public docs no longer teach RouteContract-based authoring and simple authoring
+      is documented end to end.
+  - id: AC-2
+    text: Bundled workflows and affected tests compile or pass through compatibility
+      shims without relying on RouteContract as a public authoring requirement.
+  deliverables:
+  - Updated docs and public examples.
+  - Bundled workflow/test compatibility migration.
+  - Final cleanup decision on public RouteContract and BoardMutation guard.
+  risks:
+  - Late removal of public RouteContract breaking still-unmigrated workflows or tests.
+  - Docs moving ahead of the actual shipped compatibility state.
+  rollback:
+  - Keep RouteContract exported on legacy public surfaces until all dependent workflows/tests
+    are migrated.
+  - Defer BoardMutation compile-time fencing if it creates unrelated validation churn.

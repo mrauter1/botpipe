@@ -1,0 +1,7 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260427T174615Z-f98ff2bb" ts="2026-04-27T17:46:16.061076+00:00" />
+Keep the existing workflow shim strict and unchanged in the early phases; autoloop.simple is additive until bundled workflows and pinned strictness tests are migrated.
+Implement simple authoring as lowering into the existing WorkflowDefinition and CompiledWorkflow path rather than as a parallel execution model.
+Add a repo-root autoloop package for the new public surface instead of renaming or replacing current autoloop_v3 or workflow import paths in the first pass.
+Migrate route_contracts to route_infos and route_required_outputs through compatibility adapters first because provider payloads, static graph output, CLI metadata, bundled workflows, and tests currently depend on the legacy shape.
+Reuse the existing runtime prompt registry/resolution path for inline and file prompts instead of introducing a second prompt execution path.
+Treat BoardMutation compile-time rejection as optional cleanup after the main authoring simplification unless the migration naturally touches that validation seam with low risk.
