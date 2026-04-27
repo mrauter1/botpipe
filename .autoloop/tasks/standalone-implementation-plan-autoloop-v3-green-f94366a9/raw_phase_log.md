@@ -1241,3 +1241,44 @@ Focused validation passed:
 - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts`
 
 The next step is verifier re-review of the phase artifacts against `IMP-001`.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+Re-reviewing the focused parser fix and the phase artifacts against the earlier blocking finding, then I’ll update the reviewer checklist if the contract now lines up cleanly.
+
+The parser now matches the rendered contract and the added regression test covers the omission case. I’m marking the phase complete and leaving a short re-review note so the earlier blocking item isn’t ambiguous in the artifact trail.
+
+Scope considered
+
+Phase-scoped re-review of the provider and engine contract work, with focus on the earlier parser mismatch and the reviewer-owned artifacts in the active phase directory.
+
+What I analyzed
+
+I rechecked [core/providers/parsing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/parsing.py:1), the updated provider-boundary tests in [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py:1), and the latest shared decision added for this phase. I also verified that the fix stays confined to rendered JSON control responses rather than broadening direct `Outcome(...)` test-provider behavior.
+
+What I reviewed
+
+The prior blocking gap is closed. The shared JSON parser now requires a non-empty top-level `reason`, and the focused tests cover both the omission case and the updated rendered-provider fixtures. That brings runtime parsing back in line with the explicit `{tag, reason, payload}` prompt contract required by AC-1.
+
+Key findings / decisions
+
+No remaining phase-local findings. I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/provider-and-engine-contract/criteria.md>) to checked and appended a short re-review resolution note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/provider-and-engine-contract/feedback.md>) so the earlier `IMP-001` entry is not left ambiguous.
+
+Open issues / next step
+
+This phase is complete from the reviewer side. Remaining route-contract cleanup outside this phase stays deferred to the later migration/docs work.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
