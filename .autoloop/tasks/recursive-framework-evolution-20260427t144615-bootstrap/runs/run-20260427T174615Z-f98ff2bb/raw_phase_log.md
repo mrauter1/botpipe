@@ -1665,3 +1665,120 @@ The remaining work is implementation-side, not test-side: the workflow-step outp
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd078-0d68-7960-9954-c65d51a725f9
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+I’m working the `compatibility-docs-cleanup` phase: first I’ll inspect the phase artifacts, current public API/docs, and remaining `RouteContract` usage so I can limit edits to compatibility, examples, and cleanup.
+
+I’ve got the phase scope and prior decisions. Next I’m checking the remaining public `RouteContract` surface, bundled workflow imports, and docs/examples so I can migrate only the compatibility-facing pieces.
+
+The repo is mid-migration, with a large dirty tree outside this phase. I’m isolating actual compatibility-facing surfaces now: docs text, public exports, tests that pin docs/API wording, and any bundled authoring examples that still teach `RouteContract`.
+
+I’ve confirmed the remaining public problem is mostly documentation and pinned doc tests, not the runtime path itself. I’m reading the current authoring/architecture docs and one representative workflow package doc before editing so I can replace the old vocabulary cleanly rather than patching strings blindly.
+
+I’ve narrowed the actual code risk: the main work is documentation and tests, with one optional compile-time guard for the unsupported `BoardMutation` effect. I’m checking the strict step signatures before I change examples so the docs match what the code can actually author today.
+
+I’ve confirmed the public docs scope is small: `docs/authoring.md`, `docs/architecture.md`, and one workflow package doc still teach the old contract language. I’m going to patch those docs, update the doc-pin tests to the new vocabulary, and add a small validation test if I wire the BoardMutation guard.
+
+I’m editing the public docs now. The changes are focused on replacing `RouteContract`/`route_contracts` with route metadata and route-required outputs, documenting `autoloop.simple` as the preferred authoring surface, and keeping the strict `workflow` shim as compatibility-only guidance.
+
+I’ve moved from docs into the only low-risk engine cleanup in scope: rejecting `BoardMutation` during validation instead of letting it survive to a runtime failure branch. After that I’ll run the doc-pin and validation tests together.
+
+I found a broader public-doc tail: several workflow package docs still say “route contracts” even though they’re not using the old class name anymore. I’m cleaning those wording-only references now so the public docs are consistently on route metadata and route-required outputs.
+
+The edits are in place. I’m running the doc-pin, simple-surface, and validation slices first because they cover the exact compatibility surfaces changed here and will catch any wording drift quickly.
+
+`pytest` isn’t available on the system Python in this shell, so I’m checking the repo-local environment next and will run the same targeted slices there if it exists.
+
+The targeted test slice found a few mismatches in the updated docs/tests rather than runtime failures. I’m pulling the exact failures now and will tighten the wording or expectations before rerunning.
+
+The only failures in that run are unrelated recursive-memory closeout assertions in `tests/test_architecture_baseline_docs.py`; none of them touch the docs, exports, or validation paths changed here. I’m rerunning the edited coverage minus those known unrelated assertions to verify the phase-local changes cleanly.
+
+I’ve verified the phase-local edits: the updated doc/API/validation coverage passes, and the only failures in the broader doc-pin file are unrelated recursive-memory assertions that predate this scope. I’m recording the implementation notes and shared decisions now, then I’ll summarize the exact blast radius and residual issue.
+
+**Scope considered**
+- Public authoring/docs surfaces under [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:1), [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md:1), and `docs/workflows/*.md`.
+- Phase-local compatibility tests in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1) and [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1).
+- One low-risk runtime cleanup seam in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1553).
+
+**What I analyzed**
+- Remaining public references to `RouteContract`, `route_contracts`, and `BoardMutation` across `docs/`.
+- The current simple surface in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py:1) and strict shim exports in [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1).
+- Validation behavior for the known `BoardMutation` runtime trap in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1553).
+
+**What I changed**
+- Rewrote the public docs to teach `autoloop.simple`, `Route(...)` metadata, `route_infos`, and `route_required_outputs` instead of `RouteContract`/`route_contracts`.
+- Cleaned all public workflow package docs under `docs/workflows/` so they no longer describe “route contracts” as the public authoring model.
+- Updated doc-pin expectations in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1) and added a doc-wide forbidden-token scan.
+- Added a simple-surface regression in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:471) proving `autoloop.simple` does not export `RouteContract`.
+- Added a compile-time guard in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1579) and a regression in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:132) so `BoardMutation` now fails validation instead of surviving to the runtime trap.
+- Recorded the phase decisions and notes in the authoritative phase artifacts.
+
+**Key findings / decisions**
+- I kept the strict `workflow` shim compatibility export unchanged; bundled workflows still rely on that path, so this phase only removes the old vocabulary from public docs.
+- Public docs are now clean: `rg -n "RouteContract|route_contracts|BoardMutation|route-contract|route contracts" docs --glob '*.md'` returns no matches.
+- The repo state is unusual: [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1), and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1) are currently untracked in git, but they are the active working-tree copies used by the local test run.
+
+**Open issues / next step**
+- Validation run that covers the edited scope passed: `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k 'not recursive_memory' tests/unit/test_simple_surface.py tests/unit/test_validation.py -q` -> `113 passed, 21 deselected`.
+- A broader run of the full `tests/test_architecture_baseline_docs.py` file still has 3 unrelated recursive-memory assertion failures; I left those untouched because they are outside this phase’s doc/API compatibility scope.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd078-0d68-7960-9954-c65d51a725f9
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+I’m reviewing the `compatibility-docs-cleanup` implementation against the phase contract: first I’ll inspect the phase criteria/feedback files and the relevant diffs so I can verify intent fidelity before I write findings or mark criteria.
+
+I’ve got the phase artifacts and decision context. Next I’m spot-checking the changed docs and the `BoardMutation` validation path against the actual code so I can distinguish real correctness issues from wording-only drift.
+
+I found one material gap in the doc cleanup: a repo-root authoring guide outside `docs/` still teaches `route_contracts`, so the public guidance isn’t fully consistent yet. I’m recording that as a blocking finding and marking the criteria accordingly.
+
+Scope considered
+- Phase-local review of the `compatibility-docs-cleanup` implementation, limited to the phase artifacts plus request-relevant doc/test/runtime surfaces.
+- Public doc surfaces under `docs/`, the repo-root authoring guide `Workflow_Instructions.md`, the updated doc-pin tests, and the optional `BoardMutation` validation change.
+
+What I analyzed
+- The active phase contract, criteria, feedback, implementation notes, and shared decisions ledger.
+- The changed public docs in `docs/authoring.md`, `docs/architecture.md`, and `docs/workflows/*.md`.
+- The optional validation change in `core/validation.py` and the new/updated tests described in the implementation notes.
+- A repo-wide token search for remaining public `RouteContract` / `route_contracts` / `BoardMutation` teaching surfaces.
+
+What I reviewed
+- Public docs were successfully scrubbed under `docs/`.
+- The `BoardMutation` compile-time rejection is low-risk and consistent with the shared decision to fence the known runtime trap.
+- The new doc-pin approach only scans `docs/`, not the repo-root authoring guide.
+- `Workflow_Instructions.md` still teaches `route_contracts` and “concrete route contracts” as the public authoring/runtime contract.
+
+Key findings / decisions
+- Blocking finding recorded: `Workflow_Instructions.md` still teaches deprecated RouteContract-based public authoring, so AC-1 is not yet satisfied.
+- No separate runtime-regression finding: the optional `BoardMutation` validation guard is acceptable on safety grounds.
+- Criteria updated to reflect one material intent-fidelity / documentation-completeness gap.
+
+Open issues / next step
+- Update or explicitly demote `Workflow_Instructions.md` so it no longer teaches `route_contracts` as public authoring vocabulary.
+- Widen the doc validation scan to cover that repo-root guide so the cleanup cannot drift again.
+- After that, rerun the doc-pin slice and re-review for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
