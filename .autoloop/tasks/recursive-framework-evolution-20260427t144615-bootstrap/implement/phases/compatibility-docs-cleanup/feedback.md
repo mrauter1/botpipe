@@ -9,3 +9,6 @@
 
 - IMP-001 `blocking` — `Workflow_Instructions.md:65-71`, `Workflow_Instructions.md:272-277`, `Workflow_Instructions.md:334-339`, `Workflow_Instructions.md:441`
   The public doc scrub is incomplete: this repo-root authoring guide still teaches `route_contracts` and “concrete route contracts” as the runtime/provider contract even though this phase is supposed to retire RouteContract-based public authoring. A reader following that file will still author against the deprecated vocabulary, so AC-1 is not met even though `docs/` was cleaned. Minimal fix: either migrate `Workflow_Instructions.md` to the new `route_infos` / `route_required_outputs` / route-metadata vocabulary, or explicitly demote/move it out of the public-authoring surface and widen the doc validation scan so this class of drift cannot recur.
+
+- IMP-002 `non-blocking` — Re-review follow-up
+  Re-review confirmed that `Workflow_Instructions.md` now uses the new route-metadata vocabulary and that `tests/test_architecture_baseline_docs.py::test_public_docs_do_not_teach_route_contract_or_board_mutation_authoring` now covers the repo-root guide in addition to `docs/`. No remaining phase-local findings.
