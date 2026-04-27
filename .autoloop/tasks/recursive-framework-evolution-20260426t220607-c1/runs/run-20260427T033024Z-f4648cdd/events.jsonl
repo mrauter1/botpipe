@@ -4,3 +4,7 @@
 {"ts": "2026-04-27T03:37:08.747155+00:00", "run_id": "run-20260427T033024Z-f4648cdd", "seq": 4, "event_type": "phase_finished", "pair": "plan", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-27T03:38:33.362749+00:00", "run_id": "run-20260427T033024Z-f4648cdd", "seq": 5, "event_type": "phase_finished", "pair": "plan", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
 {"ts": "2026-04-27T03:38:33.402409+00:00", "run_id": "run-20260427T033024Z-f4648cdd", "seq": 6, "event_type": "pair_completed", "pair": "plan", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-27T03:38:33.497474+00:00", "run_id": "run-20260427T033024Z-f4648cdd", "seq": 7, "event_type": "phase_scope_resolved", "phase_mode": "single", "phase_ids": ["remaining-typed-bootstrap-convergence"], "explicit": true, "current_phase_index": 0}
+{"ts": "2026-04-27T03:38:33.499664+00:00", "run_id": "run-20260427T033024Z-f4648cdd", "seq": 8, "event_type": "phase_started", "phase_id": "remaining-typed-bootstrap-convergence", "phase_mode": "single"}
+{"ts": "2026-04-27T03:38:33.500237+00:00", "run_id": "run-20260427T033024Z-f4648cdd", "seq": 9, "event_type": "pair_started", "pair": "implement", "phase_id": "remaining-typed-bootstrap-convergence"}
+{"ts": "2026-04-27T03:38:33.500339+00:00", "run_id": "run-20260427T033024Z-f4648cdd", "seq": 10, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "remaining-typed-bootstrap-convergence"}

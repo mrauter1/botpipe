@@ -89,3 +89,12 @@ No blocking issues remain. The plan can move to implementation as written.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T033024Z-f4648cdd | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=remaining-typed-bootstrap-convergence
+explicit=True
+current_phase_index=0
