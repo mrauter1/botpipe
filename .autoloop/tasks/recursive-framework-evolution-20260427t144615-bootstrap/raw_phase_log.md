@@ -1561,3 +1561,58 @@ No phase-local issues remain from this review pass. The explicit non-change rema
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd060-3709-7a20-910c-d97ea5d8434b
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+Reviewing the phase-local runtime and tests first, then I’ll either add missing regression coverage or just tighten the test artifacts if the existing suite already covers the acceptance criteria cleanly.
+
+The artifact files are basically empty, but the repository tests already cover a large chunk of this phase. I’m checking for one remaining gap: hook-driven route override on a child-workflow step, since that is the most phase-specific branch that could still regress unnoticed.
+
+I found one worthwhile coverage gap and I’m filling it now: a workflow-step-specific `after` override on the child-workflow path, including proof that the child result artifact exists before the `after` hook runs.
+
+The new workflow-step override test is in place. I’m running the focused phase suite to confirm it passes and doesn’t destabilize the existing hook and handoff coverage.
+
+The new test exposed a real mismatch rather than a flaky setup. I’m inspecting the failure details now and will either adjust the assertion to the actual contract or remove an invalid expectation.
+
+The failure is just the simple-surface discovery rule: `entry = launch` duplicates the declaration object in a `SimpleWorkflow` class body. I’m switching the test to `flow = chain(launch)` plus an explicit `question` route so it exercises the same runtime path without encoding an invalid simple authoring pattern.
+
+The failure showed my added assertion was stricter than the phase contract. The current workflow-step contract guarantees child-result output by step completion, but it does not guarantee that the output file is visible inside the `after` hook. I’m narrowing the test back to the supported behavior and recording that distinction in the test artifacts.
+
+The new regression is valid: the phase contract says a configured workflow-step output should be written, and the current implementation drops that artifact when an `after` hook reroutes the child-workflow step. I’m leaving the test in place and updating the phase artifacts to call out that implementation gap explicitly.
+
+Scope considered
+
+Phase-local `engine-hooks-workflow-step` test scope only. I limited changes to request-relevant regression coverage plus the phase test artifacts and decision ledger.
+
+What I analyzed
+
+I reviewed the phase contract, the existing hook/workflow-step coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py), then checked the shared decisions for the intended workflow-step behavior.
+
+What I changed
+
+I added `test_workflow_step_after_hook_can_override_route_after_child_completion` in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py). It exercises the compiled `kind="workflow"` path directly and asserts that a workflow-step `after` hook can reroute a successful child invocation to `question` while still expecting the configured `child_result` output artifact to exist by step completion.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/engine-hooks-workflow-step/test_strategy.md) with an explicit behavior-to-test map, appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/engine-hooks-workflow-step/feedback.md), and recorded the non-obvious testing decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The new regression test is currently red, and it appears to expose a real implementation gap rather than a bad expectation: when a workflow step has `out=Json("child_result")` and its `after` hook overrides the route to `question`, the configured output artifact is missing at step completion. That conflicts with the phase contract that configured workflow-step outputs should be written when present.
+
+Validation run:
+`.venv/bin/pytest tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_tracing.py -q`
+Result: `1 failed, 99 passed`
+
+Open issues / next step
+
+The failing test should go back to implementation. The likely fix surface is the workflow-step output-writing path in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py): child-result artifact writing needs to survive `after`-hook route overrides so the artifact still exists by step completion.
