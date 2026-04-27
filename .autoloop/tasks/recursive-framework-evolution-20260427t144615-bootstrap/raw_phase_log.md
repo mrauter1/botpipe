@@ -1616,3 +1616,52 @@ Result: `1 failed, 99 passed`
 Open issues / next step
 
 The failing test should go back to implementation. The likely fix surface is the workflow-step output-writing path in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py): child-result artifact writing needs to survive `after`-hook route overrides so the artifact still exists by step completion.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd060-3709-7a20-910c-d97ea5d8434b
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+Auditing the new workflow-step regression test and the phase test artifacts now. I’m checking whether the added coverage matches the accepted contract and whether it encodes any unsupported expectation before I update the audit artifacts.
+
+The added expectation matches the documented phase contract: workflow-step outputs are supposed to exist when configured, even if the `after` hook changes the final route. I’m doing one quick execution check on the new regression itself, then I’ll mark the audit artifacts accordingly.
+
+The regression reproduces exactly and the expectation is justified by the phase contract, so this is a good red test rather than a test-quality bug. I’m marking the audit artifacts complete and recording that the failing regression should stay in place until implementation catches up.
+
+Scope considered
+
+Phase-local audit for `engine-hooks-workflow-step` test coverage only. I limited the review to the new workflow-step regression, the surrounding hook coverage, the phase test artifacts, and the shared decisions that define the expected behavior.
+
+What I analyzed
+
+I reviewed [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/engine-hooks-workflow-step/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/engine-hooks-workflow-step/feedback.md), the new regression in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), and the phase-specific decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt).
+
+What I reviewed
+
+I verified that the new workflow-step test encodes intended behavior rather than a speculative contract. I also reran the focused regression:
+`.venv/bin/pytest tests/contract/test_engine_contracts.py::test_workflow_step_after_hook_can_override_route_after_child_completion -q`
+It fails on the missing `child_result` artifact after a workflow-step `after` override, which matches the documented implementation gap rather than a flaky or overreaching expectation.
+
+Key findings / decisions
+
+No blocking test-quality findings.
+
+The new red regression is appropriate and should remain in place. It directly protects a phase requirement: configured workflow-step outputs must still exist by step completion even when the `after` hook changes the final route.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/engine-hooks-workflow-step/criteria.md) to fully checked and appended an audit note with stable ID `TST-001` to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/engine-hooks-workflow-step/feedback.md).
+
+Open issues / next step
+
+The remaining work is implementation-side, not test-side: the workflow-step output-writing path needs to preserve `child_result` when `after` reroutes the step.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
