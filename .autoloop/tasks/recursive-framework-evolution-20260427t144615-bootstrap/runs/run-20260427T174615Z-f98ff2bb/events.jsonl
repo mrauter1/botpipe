@@ -39,3 +39,7 @@
 {"ts": "2026-04-27T18:41:24.057901+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "contract-migration"}
 {"ts": "2026-04-27T18:42:41.261277+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 40, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "contract-migration"}
 {"ts": "2026-04-27T18:42:41.291398+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 41, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "contract-migration"}
+{"ts": "2026-04-27T18:42:41.376095+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 42, "event_type": "phase_completed", "pair": "test", "phase_id": "contract-migration", "phase_mode": "single"}
+{"ts": "2026-04-27T18:42:41.378966+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 43, "event_type": "phase_started", "phase_id": "simple-lowering", "phase_mode": "single"}
+{"ts": "2026-04-27T18:42:41.379921+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 44, "event_type": "pair_started", "pair": "implement", "phase_id": "simple-lowering"}
+{"ts": "2026-04-27T18:42:41.380066+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 45, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "simple-lowering"}
