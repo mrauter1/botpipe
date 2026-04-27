@@ -1082,3 +1082,66 @@ Open issues / next step
   - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py`
   - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py -k "invoke_workflow or prompt_resolution"`
 - I did not run the full repository suite.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+I don’t see an obvious phase-scope blocker yet, so I’m checking for compatibility drift from the new shared prompt resolver and for any behavioral mismatch in the synthetic `workflow_step` path. The biggest risk is that centralizing prompt resolution may have changed `PromptRegistry` semantics for absolute paths or widened file I/O unexpectedly.
+
+Reviewing the producer changes against the two prior blockers and adjacent regression surfaces, then I’ll update the phase artifacts to match the actual review outcome.
+
+The prior blockers are addressed in the obvious paths. I’m checking for adjacent regressions in prompt resolution and the generated `workflow_step` handler before I finalize the review artifacts.
+
+I’ve narrowed it to one compatibility question around prompt resolution semantics. I’m checking the implementation notes and shared decisions now to make sure the final review matches the intended migration boundary.
+
+The main phase behavior looks correct. I’m doing one last compatibility check on the shared prompt resolver, because that’s the only place I still see a potential contract sharp edge.
+
+I’ve finished the code review. The two earlier blockers are resolved; I’m updating the phase artifacts now, plus one non-blocking note about the new shared prompt resolver contract.
+
+Scope considered
+
+- Phase-local review for `simple-lowering`, focused on the cycle-2 producer changes and adjacent regression surfaces they touched.
+- I stayed within the active implementation scope: simple helper lowering, prompt-placeholder inference, and compatibility with the existing compiled/runtime model.
+
+What I analyzed
+
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py)
+- [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py)
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt)
+
+What I reviewed
+
+- The new `workflow_step(...)` lowering path that generates `SystemStep` handlers over `ctx.invoke_workflow(...)`.
+- Shared prompt-resolution behavior used by both runtime execution and validation-time placeholder inference.
+- The new regression coverage for file-backed prompt inference and lowered child-workflow steps.
+- Phase artifact updates in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/feedback.md).
+
+Key findings / decisions
+
+- The two prior blockers are resolved: `workflow_step(...)` now lowers into the existing model, and file-backed prompts now participate in conservative placeholder-read inference.
+- I did not find a remaining blocking correctness or compatibility issue in the phase scope.
+- I recorded one non-blocking follow-up in `feedback.md`: `PromptRegistry` now treats absolute registry keys as filesystem candidates first, which widens the old “in-memory registry” contract. I did not find an in-repo caller depending on the previous behavior, so this is not blocking for the phase.
+- I updated the review criteria to complete status.
+
+Open issues / next step
+
+- Optional follow-up only: make the `PromptRegistry` precedence explicit with either a regression test or a narrower `source="registry"` resolution rule.
+- No further blocking review action is required for `simple-lowering`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

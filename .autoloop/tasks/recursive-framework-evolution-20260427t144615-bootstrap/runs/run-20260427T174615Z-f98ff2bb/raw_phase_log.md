@@ -1021,3 +1021,127 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+I’m addressing the two reviewer findings: `workflow_step(...)` still doesn’t lower, and file-backed prompt placeholders don’t participate in `reads` inference. I’m reading the child-workflow runtime seam and the existing prompt registry/search-root path before I edit, so I can fix both without inventing a parallel mechanism.
+
+The child-workflow seam is already there through `ctx.invoke_workflow(...)`, so I can satisfy the reviewer without inventing a new engine path by lowering `workflow_step(...)` to a generated system-style step for this phase. I’m also moving file-prompt text resolution into a shared prompt helper so validation and runtime use the same lookup behavior instead of two different rules.
+
+I’m editing the shared prompt resolution first so both runtime prompt loading and validation-time placeholder inference use the same file lookup behavior. After that I’ll wire `workflow_step(...)` lowering through a generated system handler over `ctx.invoke_workflow(...)`.
+
+I’ve wired the core code paths. Next I’m adding regression tests for the two exact repros from review: a file-backed prompt with `{analysis}` and a simple `workflow_step(...)` that now compiles and runs through a generated child-workflow handler.
+
+The targeted regression slices are green, including runtime-backed `ctx.invoke_workflow(...)` coverage around the prompt resolver. I’m updating the phase notes now to replace the earlier `workflow_step` deferment with the actual synthetic-system-step implementation and the shared file-prompt inference path.
+
+Scope considered
+
+- Phase-local `simple-lowering` only, focused on the two blocking review findings: `workflow_step(...)` lowering and file-backed prompt placeholder inference.
+
+What I analyzed
+
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py)
+- [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py)
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/feedback.md)
+
+What I changed
+
+- Added shared prompt path resolution in [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py) and switched [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py) to use it, so validation-time inference and runtime file prompt loading follow the same rules.
+- Extended [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) so simple prompt-placeholder `reads` inference now works for file-backed prompts as well as inline prompts.
+- Implemented `workflow_step(...)` lowering in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) by generating a `SystemStep` plus synthetic `on_<step>` handler that calls `ctx.invoke_workflow(...)`, writes declared child-result outputs, and maps child terminal states back to routes.
+- Added regression coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) for file prompt inference and executable `workflow_step(...)` lowering.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/implementation_notes.md) and appended the new non-obvious decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+- I reused the existing child-workflow runtime seam instead of inventing a new engine path: simple `workflow_step(...)` now compiles via generated system handlers over `ctx.invoke_workflow(...)`.
+- File prompt inference is now centralized through the same prompt resolver runtime already uses, which removes the earlier divergence the reviewer caught.
+- `workflow_step` still does not become a first-class compiled `kind="workflow"` node in this phase; it is an additive lowering over existing runtime primitives.
+
+Open issues / next step
+
+- The later runtime phase still owns true first-class `WorkflowStep` engine support plus `before`/`after` execution semantics.
+- Validation run completed with:
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py -k "invoke_workflow or prompt_resolution"`
+- I did not run the full repository suite.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+I don’t see an obvious phase-scope blocker yet, so I’m checking for compatibility drift from the new shared prompt resolver and for any behavioral mismatch in the synthetic `workflow_step` path. The biggest risk is that centralizing prompt resolution may have changed `PromptRegistry` semantics for absolute paths or widened file I/O unexpectedly.
+
+Reviewing the producer changes against the two prior blockers and adjacent regression surfaces, then I’ll update the phase artifacts to match the actual review outcome.
+
+The prior blockers are addressed in the obvious paths. I’m checking for adjacent regressions in prompt resolution and the generated `workflow_step` handler before I finalize the review artifacts.
+
+I’ve narrowed it to one compatibility question around prompt resolution semantics. I’m checking the implementation notes and shared decisions now to make sure the final review matches the intended migration boundary.
+
+The main phase behavior looks correct. I’m doing one last compatibility check on the shared prompt resolver, because that’s the only place I still see a potential contract sharp edge.
+
+I’ve finished the code review. The two earlier blockers are resolved; I’m updating the phase artifacts now, plus one non-blocking note about the new shared prompt resolver contract.
+
+Scope considered
+
+- Phase-local review for `simple-lowering`, focused on the cycle-2 producer changes and adjacent regression surfaces they touched.
+- I stayed within the active implementation scope: simple helper lowering, prompt-placeholder inference, and compatibility with the existing compiled/runtime model.
+
+What I analyzed
+
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py)
+- [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py)
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt)
+
+What I reviewed
+
+- The new `workflow_step(...)` lowering path that generates `SystemStep` handlers over `ctx.invoke_workflow(...)`.
+- Shared prompt-resolution behavior used by both runtime execution and validation-time placeholder inference.
+- The new regression coverage for file-backed prompt inference and lowered child-workflow steps.
+- Phase artifact updates in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/feedback.md).
+
+Key findings / decisions
+
+- The two prior blockers are resolved: `workflow_step(...)` now lowers into the existing model, and file-backed prompts now participate in conservative placeholder-read inference.
+- I did not find a remaining blocking correctness or compatibility issue in the phase scope.
+- I recorded one non-blocking follow-up in `feedback.md`: `PromptRegistry` now treats absolute registry keys as filesystem candidates first, which widens the old “in-memory registry” contract. I did not find an in-repo caller depending on the previous behavior, so this is not blocking for the phase.
+- I updated the review criteria to complete status.
+
+Open issues / next step
+
+- Optional follow-up only: make the `PromptRegistry` precedence explicit with either a regression test or a narrower `source="registry"` resolution rule.
+- No further blocking review action is required for `simple-lowering`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
