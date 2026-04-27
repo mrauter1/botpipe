@@ -477,3 +477,57 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcc81-994f-76a1-acd7-bcea21039407
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+I’m working in the test-phase scope only: I’ll inspect the current optimizer tests, map them against the phase acceptance criteria, and add or refine coverage only where the changed behavior still has meaningful regression risk. After that I’ll update the phase test strategy and feedback artifacts.
+
+The existing optimizer tests are already strong, but there’s one edge case worth pinning down for the new `route_tags` behavior: a run should stay eligible even when the route filter matches no steps. I’m adding that regression test, then I’ll write the phase test strategy and feedback summary.
+
+I’ve added the last edge-case regression I wanted. Now I’m recording the behavior-to-test coverage map and the phase-local test feedback so the auditor can see exactly which acceptance-criterion behaviors are covered and which gaps remain intentionally out of scope.
+
+The new edge-case test and the phase artifacts are in place. I’m running the focused optimizer test suite now to confirm the added no-match route-filter expectation holds alongside the existing runtime shell coverage.
+
+The focused suite is almost done. I’m polling once for the final exit, then I’ll close with the exact coverage summary and remaining known gaps.
+
+Scope considered
+
+- Phase-scoped test work only for `deterministic-ingestion-and-workflow-shell`.
+- I focused on the optimizer shell’s deterministic ingestion, route-filter semantics, bootstrap validation boundary, and no-op short-circuit behavior.
+
+What I analyzed
+
+- Existing optimizer tests in [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py) and [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py).
+- The implementation decisions recorded in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt), especially the route-filter rule that published step observations are filtered without changing run eligibility.
+- The test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/deterministic-ingestion-and-workflow-shell/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/deterministic-ingestion-and-workflow-shell/feedback.md).
+
+What I changed
+
+- Added `test_normalize_trace_corpus_keeps_eligible_runs_when_route_filter_matches_no_steps` to [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py) to lock in the edge case that `route_tags` may eliminate all published step observations while the run itself remains eligible.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/deterministic-ingestion-and-workflow-shell/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, failure paths, stabilization approach, and known gaps.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/deterministic-ingestion-and-workflow-shell/feedback.md).
+- Appended the non-obvious test decision to the latest `test_author` block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+- The added edge-case test is important because it catches a subtle regression: someone later could incorrectly tie `eligible_run_count` to route-filter matches rather than to run selection plus observability validation.
+- Focused validation passed:
+  - `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - Result: `22 passed`
+- Residual known issue remains unchanged: contract-model imports still emit Pydantic warnings for the `schema` field name.
+
+Open issues / next step
+
+- The next useful cleanup is the warning noise in `contracts.py`; it does not block the current phase tests, but it is still worth fixing later.
+- The later-phase ranking, failure-mining, and candidate-generation passes remain intentionally out of scope for this test turn.

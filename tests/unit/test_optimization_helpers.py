@@ -179,6 +179,23 @@ def test_normalize_trace_corpus_separates_run_statuses_from_route_tags(tmp_path:
     assert corpus["step_observations"][0]["sequence"] == 4
 
 
+def test_normalize_trace_corpus_keeps_eligible_runs_when_route_filter_matches_no_steps(tmp_path: Path) -> None:
+    run_dir = _write_observable_run(tmp_path, "task-1", "release_candidate_to_go_no_go", "run-no-match")
+
+    corpus = normalize_trace_corpus(
+        selected_workflow="release_candidate_to_go_no_go",
+        run_dirs=[run_dir],
+        route_tags=["blocked"],
+    )
+
+    assert corpus["candidate_run_count"] == 1
+    assert corpus["eligible_run_count"] == 1
+    assert corpus["excluded_run_count"] == 0
+    assert corpus["runs"][0]["run_ref"] == "task-1/run-no-match"
+    assert corpus["step_observation_count"] == 0
+    assert corpus["step_observations"] == []
+
+
 def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) -> None:
     _install_selected_workflow(tmp_path)
     workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"
