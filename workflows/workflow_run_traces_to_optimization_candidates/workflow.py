@@ -35,6 +35,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         TRACE_CORPUS_SCHEMA,
         list_selected_workflow_runs,
         normalize_trace_corpus,
+        resolve_selected_workflow_name,
         validate_selected_workflow_source_unchanged,
         write_optimization_refinement_evidence,
         write_selected_workflow_source_manifest,
@@ -65,6 +66,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         TRACE_CORPUS_SCHEMA,
         list_selected_workflow_runs,
         normalize_trace_corpus,
+        resolve_selected_workflow_name,
         validate_selected_workflow_source_unchanged,
         write_optimization_refinement_evidence,
         write_selected_workflow_source_manifest,
@@ -474,10 +476,11 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     @staticmethod
     def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
         params = ctx.params
+        selected_workflow_name = resolve_selected_workflow_name(ctx.root, params.selected_workflow)
         next_state = state.model_copy(
             update={
                 "selected_workflow_reference": params.selected_workflow,
-                "selected_workflow_name": None,
+                "selected_workflow_name": selected_workflow_name,
                 "task_title": params.task_title,
                 "run_refs": list(params.run_refs),
                 "run_statuses": list(params.run_statuses),

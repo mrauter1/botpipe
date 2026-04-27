@@ -238,6 +238,47 @@ def test_frame_no_eligible_runs_publishes_noop_packet(tmp_path: Path) -> None:
     assert "No eligible Plan-1 observability bundles were available" in packet_text
 
 
+def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_path: Path, monkeypatch) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+    _clear_workflow_modules()
+
+    workflow_pkg = importlib.import_module("workflows.workflow_run_traces_to_optimization_candidates")
+    typed_params = workflow_pkg.Parameters(
+        selected_workflow="does_not_exist",
+        task_title="Release workflow optimization",
+        run_statuses=["failed", "paused", "blocked"],
+        route_tags=["needs_rework", "needs_replan", "failed", "blocked"],
+    )
+    task_folder = tmp_path / ".autoloop" / "tasks" / "optimizer-task"
+    workflow_folder = task_folder / "wf_workflow_run_traces_to_optimization_candidates"
+    run_folder = workflow_folder / "runs" / "run-1"
+    run_folder.mkdir(parents=True, exist_ok=True)
+    (run_folder / "request.md").write_text("Optimize the selected workflow.\n", encoding="utf-8")
+    ctx = Context(
+        task_id="optimizer-task",
+        run_id="run-1",
+        workflow_name="workflow_run_traces_to_optimization_candidates",
+        task_folder=task_folder,
+        workflow_folder=workflow_folder,
+        run_folder=run_folder,
+        package_folder=tmp_path / "workflows" / "workflow_run_traces_to_optimization_candidates",
+        state=workflow_pkg.WorkflowRunTracesToOptimizationCandidates.State(),
+        session_store=InMemorySessionStore(),
+        params=typed_params,
+        workflow_params={},
+    )
+
+    with pytest.raises(LookupError):
+        workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_bootstrap(
+            workflow_pkg.WorkflowRunTracesToOptimizationCandidates.State(),
+            ctx,
+        )
+
+    assert not (workflow_folder / "invocation_contract.json").exists()
+
+
 def _bootstrap_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()

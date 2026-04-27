@@ -130,6 +130,55 @@ def test_normalize_trace_corpus_preserves_raw_refs_and_git_commits(tmp_path: Pat
     assert corpus["step_observations"][0]["commit_after_step"] == "commit-after-step"
 
 
+def test_normalize_trace_corpus_separates_run_statuses_from_route_tags(tmp_path: Path) -> None:
+    run_dir = _write_observable_run(tmp_path, "task-1", "release_candidate_to_go_no_go", "run-mixed")
+    with (run_dir / "trace.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "schema": "autoloop.runtime_trace/v1",
+                    "event_type": "step_finished",
+                    "sequence": 4,
+                    "step_name": "assessment",
+                    "step_kind": "pair",
+                    "event": {"tag": "blocked"},
+                    "outcome": {"tag": "blocked"},
+                    "provider_usage": {
+                        "producer": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15, "source": "provider"},
+                    },
+                    "raw_output_refs": {},
+                }
+            )
+            + "\n"
+        )
+    with (run_dir / "git_tracking.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "schema": "autoloop.git_tracking/v1",
+                    "event_type": "step_committed",
+                    "sequence": 4,
+                    "step_name": "assessment",
+                    "commit_before_step": "commit-before-step-2",
+                    "commit_after_step": "commit-after-step-2",
+                }
+            )
+            + "\n"
+        )
+
+    corpus = normalize_trace_corpus(
+        selected_workflow="release_candidate_to_go_no_go",
+        run_dirs=[run_dir],
+        route_tags=["blocked"],
+    )
+
+    assert corpus["candidate_run_count"] == 1
+    assert corpus["eligible_run_count"] == 1
+    assert corpus["step_observation_count"] == 1
+    assert [entry["route"] for entry in corpus["step_observations"]] == ["blocked"]
+    assert corpus["step_observations"][0]["sequence"] == 4
+
+
 def test_write_selected_workflow_source_manifest_records_hashes(tmp_path: Path) -> None:
     _install_selected_workflow(tmp_path)
     workflow_folder = tmp_path / ".autoloop" / "tasks" / "task-1" / "wf_optimizer"

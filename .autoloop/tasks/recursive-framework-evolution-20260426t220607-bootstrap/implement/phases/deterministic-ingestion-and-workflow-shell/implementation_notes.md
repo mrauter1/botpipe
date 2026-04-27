@@ -44,6 +44,8 @@
 - Intended behavior changes:
   - Adds a discoverable optimizer workflow shell with exact ordered topology and `frame -> package` short-circuit on `no_eligible_trace_evidence`.
   - Adds deterministic ingestion/publication helpers for optimizer frame artifacts and manifest verification.
+  - Unknown `selected_workflow` references now fail during bootstrap validation before session or artifact side effects.
+  - Published trace corpora now honor `route_tags` as a step-level filter while leaving run selection under `run_statuses`.
 - Known non-changes:
   - No optimization-candidate generation beyond no-op packaging for zero eligible runs.
   - No refinement-workflow acceptance changes in other packages.
@@ -54,7 +56,7 @@
 - Validation performed:
   - `python3 -m py_compile stdlib/optimization.py workflows/workflow_run_traces_to_optimization_candidates/*.py tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
   - `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
-  - Result: `19 passed`
+  - Result: `21 passed`
 - Deduplication / centralization:
   - Reused selected-workflow capability/authoring/decomposition helpers instead of adding a parallel serializer.
   - Centralized optimizer ingestion, manifest hashing, and refinement-evidence writing in `stdlib/optimization.py`.

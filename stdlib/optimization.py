@@ -195,10 +195,18 @@ def normalize_trace_corpus(
 ) -> dict[str, Any]:
     """Normalize selected run bundles into one optimization-ready trace corpus."""
 
-    del route_tags  # preserved in workflow_optimization_scope.json; corpus keeps all step observations.
     workflow_name = require_non_empty_string(
         selected_workflow,
         error_message="selected_workflow must be non-empty",
+    )
+    route_filter = set(
+        require_string_list(
+            list(route_tags),
+            field_name="route_tags",
+            error_message="route_tags must be a list of non-empty strings",
+            dedupe=True,
+            sort_output=False,
+        )
     )
     bundle_records: list[RunObservabilityBundle] = [load_run_observability_bundle(path) for path in run_dirs]
 
@@ -254,6 +262,8 @@ def normalize_trace_corpus(
             sequence = int(record["sequence"])
             step_name = str(record["step_name"])
             route = _extract_route_tag(record)
+            if route_filter and route not in route_filter:
+                continue
             raw_output_refs = _normalize_raw_output_refs(record.get("raw_output_refs"))
             provider_usage = _normalize_provider_usage(record.get("provider_usage"))
             git_step = git_index.get(sequence, {})
@@ -296,6 +306,18 @@ def normalize_trace_corpus(
             if validate_observability_bundle(bundle)[0] and isinstance(bundle.static_step_graph, dict)
         ],
     }
+
+
+def resolve_selected_workflow_name(root: Path, selected_workflow: str) -> str:
+    """Resolve one selected-workflow reference to its canonical workflow name."""
+
+    repo_root = root.resolve()
+    workflow_reference = require_non_empty_string(
+        selected_workflow,
+        error_message="selected_workflow must be non-empty",
+    )
+    capability = inspect_workflow_reference(repo_root, workflow_reference)
+    return capability.workflow_name
 
 
 def build_step_trace_metrics(
@@ -847,6 +869,7 @@ __all__ = [
     "normalize_trace_corpus",
     "parse_run_ref",
     "rank_optimization_targets",
+    "resolve_selected_workflow_name",
     "validate_observability_bundle",
     "validate_selected_workflow_source_unchanged",
     "write_optimization_refinement_evidence",
