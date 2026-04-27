@@ -90,3 +90,4 @@
 {"ts": "2026-04-27T20:04:42.325261+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 90, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "compatibility-docs-cleanup"}
 {"ts": "2026-04-27T20:05:43.460958+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 91, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "compatibility-docs-cleanup"}
 {"ts": "2026-04-27T20:05:43.499319+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 92, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "compatibility-docs-cleanup"}
+{"ts": "2026-04-27T20:05:43.586982+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 93, "event_type": "phase_completed", "pair": "test", "phase_id": "compatibility-docs-cleanup", "phase_mode": "single"}

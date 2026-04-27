@@ -16,15 +16,15 @@
       "compatibility-docs-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "compatibility-docs-cleanup"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "surface-foundations": "completed",
     "contract-migration": "completed",
     "simple-lowering": "completed",
     "engine-hooks-workflow-step": "completed",
-    "compatibility-docs-cleanup": "in_progress"
+    "compatibility-docs-cleanup": "completed"
   },
   "phase_history": [
     {
@@ -84,6 +84,13 @@
       "run_id": "run-20260427T174615Z-f98ff2bb",
       "status": "in_progress",
       "ts": "2026-04-27T19:43:41.268173+00:00"
+    },
+    {
+      "phase_id": "compatibility-docs-cleanup",
+      "run_id": "run-20260427T174615Z-f98ff2bb",
+      "status": "completed",
+      "ts": "2026-04-27T20:05:43.585870+00:00",
+      "pair": "test"
     }
   ]
 }
