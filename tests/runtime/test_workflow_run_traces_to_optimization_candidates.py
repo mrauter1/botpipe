@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import shutil
@@ -342,6 +343,54 @@ def test_mine_failures_writes_failure_scenarios(tmp_path: Path, monkeypatch) -> 
         "downstream_failure_after_local_pass",
     }
     del params
+
+
+def test_optimize_producer_writes_candidate_artifact(tmp_path: Path) -> None:
+    result, provider, workflow_dir = _run_enabled_candidate_workflow(tmp_path)
+
+    payload = json.loads((workflow_dir / "producer_prompt_optimization_candidates.json").read_text(encoding="utf-8"))
+
+    assert result.terminal == "SUCCESS"
+    assert "optimize_producer" in [call.step_name for call in provider.calls]
+    assert payload["schema"] == "autoloop.workflow_optimization.producer_candidates/v1"
+    assert payload["candidates"][0]["candidate_id"] == "producer-assessment-001"
+    assert payload["candidates"][0]["step_name"] == "assessment"
+
+
+def test_optimize_verifier_rubric_writes_merged_acceptance_candidates(tmp_path: Path) -> None:
+    result, provider, workflow_dir = _run_enabled_candidate_workflow(tmp_path)
+
+    payload = json.loads((workflow_dir / "verifier_rubric_optimization_candidates.json").read_text(encoding="utf-8"))
+
+    assert result.terminal == "SUCCESS"
+    assert "optimize_verifier_rubric" in [call.step_name for call in provider.calls]
+    assert payload["schema"] == "autoloop.workflow_optimization.verifier_rubric_candidates/v1"
+    assert payload["candidates"][0]["candidate_id"] == "verifier-rubric-assessment-001"
+    assert payload["candidates"][0]["target_surfaces"] == ["verifier_prompt", "criteria", "route_contract"]
+
+
+def test_optimize_tokens_writes_token_candidates(tmp_path: Path) -> None:
+    result, provider, workflow_dir = _run_enabled_candidate_workflow(tmp_path)
+
+    payload = json.loads((workflow_dir / "token_optimization_candidates.json").read_text(encoding="utf-8"))
+
+    assert result.terminal == "SUCCESS"
+    assert "optimize_tokens" in [call.step_name for call in provider.calls]
+    assert payload["schema"] == "autoloop.workflow_optimization.token_candidates/v1"
+    assert payload["candidates"][0]["candidate_id"] == "token-assessment-001"
+    assert payload["candidates"][0]["risk_class"] == "safe_compression"
+
+
+def test_adversarial_cases_writes_candidate_cases_when_enabled(tmp_path: Path) -> None:
+    result, provider, workflow_dir = _run_enabled_candidate_workflow(tmp_path)
+
+    payload = json.loads((workflow_dir / "adversarial_case_candidates.json").read_text(encoding="utf-8"))
+
+    assert result.terminal == "SUCCESS"
+    assert "adversarial_cases" in [call.step_name for call in provider.calls]
+    assert payload["schema"] == "autoloop.workflow_optimization.adversarial_case_candidates/v1"
+    assert payload["cases"][0]["case_id"] == "adversarial-missing-rollback-owner"
+    assert payload["cases"][0]["expected_route"] == "needs_rework"
 
 
 def test_frame_no_eligible_runs_publishes_noop_packet(tmp_path: Path) -> None:
@@ -689,6 +738,20 @@ def test_package_fails_if_selected_workflow_source_changed(tmp_path: Path, monke
     del params
 
 
+def test_workflow_never_mutates_selected_workflow_source(tmp_path: Path) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    selected_workflow_dir = tmp_path / "workflows" / "release_candidate_to_go_no_go"
+    before_snapshot = _snapshot_tree(selected_workflow_dir)
+
+    result, provider, workflow_dir = _run_enabled_candidate_workflow(tmp_path, install_repo=False)
+    after_snapshot = _snapshot_tree(selected_workflow_dir)
+
+    assert result.terminal == "SUCCESS"
+    assert "workflow_level" in [call.step_name for call in provider.calls]
+    assert (workflow_dir / "selected_workflow_source_manifest.json").exists()
+    assert before_snapshot == after_snapshot
+
+
 def test_package_rejects_candidate_count_mismatch(tmp_path: Path, monkeypatch) -> None:
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
@@ -827,6 +890,152 @@ def test_optimization_depth_ablation_does_not_execute_ablation(tmp_path: Path) -
     assert not (
         tmp_path / ".autoloop" / "tasks" / "optimizer-task" / "wf_workflow_optimization_candidates_to_ablation_results"
     ).exists()
+
+
+def _run_enabled_candidate_workflow(
+    tmp_path: Path,
+    *,
+    install_repo: bool = True,
+) -> tuple[object, ScriptedLLMProvider, Path]:
+    if install_repo:
+        _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: "frame reviewed\n",
+            lambda request: "ranking reviewed\n",
+            lambda request: "failure scenarios reviewed\n",
+            _produce_producer_candidates,
+            _produce_verifier_rubric_candidates,
+            _produce_token_candidates,
+            _produce_adversarial_cases,
+            _produce_workflow_level_candidates,
+            _produce_full_candidate_package,
+        ],
+        verifier_turns=[
+            Outcome(
+                raw_output="frame grounded\n",
+                tag="optimization_scope_framed",
+                payload={
+                    "summary": "The selected workflow and trace scope are grounded for candidate generation.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "candidate_run_count": 1,
+                    "eligible_run_count": 1,
+                    "excluded_run_count": 0,
+                    "top_k_steps": 1,
+                    "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
+                },
+            ),
+            Outcome(
+                raw_output="targets ranked\n",
+                tag="targets_ranked",
+                payload={
+                    "summary": "Assessment is the highest-leverage target for local optimization.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "ranked_steps": ["assessment"],
+                    "ranking_method": "static_graph_plus_trace_metrics_plus_llm_attribution",
+                },
+            ),
+            Outcome(
+                raw_output="failure scenarios mined\n",
+                tag="failure_scenarios_mined",
+                payload={
+                    "summary": "Assessment failures support candidate generation across local optimization surfaces.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "target_steps": ["assessment"],
+                    "failure_ids": ["assessment_missing_rollback_evidence"],
+                },
+            ),
+            Outcome(
+                raw_output="producer candidates ready\n",
+                tag="producer_candidates_ready",
+                payload={
+                    "summary": "Producer-side optimization candidates are ready for acceptance-function review.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "target_steps": ["assessment"],
+                    "candidate_ids": ["producer-assessment-001"],
+                },
+            ),
+            Outcome(
+                raw_output="verifier and rubric candidates ready\n",
+                tag="verifier_rubric_candidates_ready",
+                payload={
+                    "summary": "Acceptance-function candidates are ready for token review.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "target_steps": ["assessment"],
+                    "candidate_ids": ["verifier-rubric-assessment-001"],
+                },
+            ),
+            Outcome(
+                raw_output="token candidates ready\n",
+                tag="token_candidates_ready",
+                payload={
+                    "summary": "Token candidates are ready for adversarial-case generation.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "target_steps": ["assessment"],
+                    "candidate_ids": ["token-assessment-001"],
+                },
+            ),
+            Outcome(
+                raw_output="adversarial cases ready\n",
+                tag="adversarial_cases_ready",
+                payload={
+                    "summary": "Adversarial-case candidates are ready for workflow-level review.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "case_ids": ["adversarial-missing-rollback-owner"],
+                },
+            ),
+            Outcome(
+                raw_output="workflow-level candidates ready\n",
+                tag="workflow_level_candidates_ready",
+                payload={
+                    "summary": "Workflow-level candidates are ready for packaging.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "target_steps": ["assessment", "package"],
+                    "candidate_ids": ["workflow-level-001"],
+                },
+            ),
+            Outcome(
+                raw_output="optimization packet ready\n",
+                tag="optimization_packet_ready",
+                payload={
+                    "summary": "The candidate artifacts, scorecard, and packet are aligned for publication.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "authoritative_artifacts": [
+                        "workflow_optimization_scorecard",
+                        "workflow_optimization_packet",
+                    ],
+                    "highest_priority_candidate_ids": [
+                        "verifier-rubric-assessment-001",
+                        "producer-assessment-001",
+                    ],
+                    "recommended_next_action": "Run workflow_and_eval_to_refined_workflow_package with this refinement evidence.",
+                    "requires_ablation_before_promotion": True,
+                    "source_mutation_check_expected": True,
+                },
+            ),
+        ],
+    )
+
+    result = run_workflow_package(
+        "workflow_run_traces_to_optimization_candidates",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="optimizer-task",
+            message="Publish optimizer candidate artifacts from one eligible run.\n",
+            workflow_params={
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "task_title": "Release workflow optimization",
+                "run_statuses": ["failed", "paused", "blocked"],
+                "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
+            },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "optimizer-task" / "wf_workflow_run_traces_to_optimization_candidates"
+    return result, provider, workflow_dir
 
 
 def _bootstrap_context(
@@ -1029,6 +1238,241 @@ def _produce_skipped_optional_passes_package(request) -> str:
     return "packaged skipped-optional-passes optimization packet\n"
 
 
+def _produce_producer_candidates(request) -> str:
+    request.artifacts.producer_prompt_optimization_candidates.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.producer_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "target_steps": ["assessment"],
+                "candidates": [
+                    {
+                        "candidate_id": "producer-assessment-001",
+                        "step_name": "assessment",
+                        "target_surface": "producer_prompt",
+                        "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                        "failure_ids_addressed": ["assessment_missing_rollback_evidence"],
+                        "diagnosis": "Producer does not separate observed evidence from inference.",
+                        "proposed_change_summary": "Add direct evidence and missing-evidence requirements.",
+                        "proposed_unified_diff": None,
+                        "proposed_patch_instructions": [
+                            "Require direct evidence for each release-readiness claim.",
+                            "Add a Missing Evidence subsection when claims remain unsupported.",
+                        ],
+                        "expected_effect": {
+                            "verifier_pass_rate": "increase",
+                            "false_accepts": "decrease",
+                            "token_usage": "slight_increase",
+                        },
+                        "confidence": 0.72,
+                        "evidence_strength": "medium",
+                        "risks": ["May make routine cases more verbose."],
+                        "requires_ablation": False,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return "wrote producer optimization candidates\n"
+
+
+def _produce_verifier_rubric_candidates(request) -> str:
+    request.artifacts.verifier_rubric_optimization_candidates.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.verifier_rubric_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "target_steps": ["assessment"],
+                "candidates": [
+                    {
+                        "candidate_id": "verifier-rubric-assessment-001",
+                        "step_name": "assessment",
+                        "target_surfaces": ["verifier_prompt", "criteria", "route_contract"],
+                        "diagnosis": "Verifier accepts schema-valid sections without enough evidence discipline.",
+                        "failure_ids_addressed": ["assessment_false_accept_unsupported_rollback"],
+                        "proposed_changes": [
+                            {
+                                "target_surface": "verifier_prompt",
+                                "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_verifier.md",
+                                "change_type": "tighten_acceptance_rule",
+                                "summary": "Reject approval when rollback readiness lacks direct evidence.",
+                            },
+                            {
+                                "target_surface": "route_contract",
+                                "route": "needs_rework",
+                                "summary": "Clarify that evidence gaps require needs_rework rather than local acceptance.",
+                            },
+                        ],
+                        "expected_effect": {
+                            "false_accepts": "decrease",
+                            "false_rejects": "neutral",
+                            "token_usage": "neutral",
+                        },
+                        "confidence": 0.69,
+                        "evidence_strength": "medium",
+                        "risks": ["May over-block evidence that is acceptable but implicit."],
+                        "requires_ablation": True,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return "wrote verifier and rubric optimization candidates\n"
+
+
+def _produce_token_candidates(request) -> str:
+    request.artifacts.token_optimization_candidates.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.token_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "candidates": [
+                    {
+                        "candidate_id": "token-assessment-001",
+                        "step_name": "assessment",
+                        "target_surface": "producer_prompt",
+                        "target_path": "workflows/release_candidate_to_go_no_go/prompts/assessment_producer.md",
+                        "compression_kind": "remove_duplicate_static_guidance",
+                        "risk_class": "safe_compression",
+                        "estimated_input_token_reduction": 650,
+                        "diagnosis": "Prompt repeats artifact handling guidance already captured elsewhere.",
+                        "proposed_change_summary": "Replace repeated checklist text with one compact contract reference.",
+                        "quality_risk": "low",
+                        "confidence": 0.78,
+                        "evidence_strength": "medium",
+                        "requires_ablation": False,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return "wrote token optimization candidates\n"
+
+
+def _produce_adversarial_cases(request) -> str:
+    request.artifacts.adversarial_case_candidates.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.adversarial_case_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "cases": [
+                    {
+                        "case_id": "adversarial-missing-rollback-owner",
+                        "case_kind": "adversarial",
+                        "attack_vector": "Evidence implies rollback confidence but omits rollback owner.",
+                        "prompt": "Assess this release with notes that imply rollback readiness but omit rollback ownership evidence.",
+                        "source_failure_ids": ["assessment_missing_rollback_evidence"],
+                        "expected_stress": "Verifier should reject unsupported rollback readiness.",
+                        "expected_route": "needs_rework",
+                        "expected_artifacts": ["release_risk_assessment", "blocking_issues"],
+                        "recommended_for_eval_suite": True,
+                        "confidence": 0.74,
+                        "evidence_strength": "medium",
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return "wrote adversarial-case candidates\n"
+
+
+def _produce_workflow_level_candidates(request) -> str:
+    request.artifacts.workflow_level_optimization_candidates.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.workflow_level_candidates/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "candidates": [
+                    {
+                        "candidate_id": "workflow-level-001",
+                        "candidate_kind": "artifact_handoff_change",
+                        "diagnosis": "Assessment and package prompts duplicate release decision criteria, creating drift.",
+                        "affected_steps": ["assessment", "package"],
+                        "proposed_change_summary": "Move shared release evidence obligations into one artifact contract.",
+                        "proposed_surfaces": ["workflow_code", "prompt_readme", "package_prompt"],
+                        "confidence": 0.61,
+                        "evidence_strength": "low",
+                        "risks": ["Requires workflow-level refactor, not prompt-only patch."],
+                        "requires_refinement_workflow": True,
+                        "requires_ablation": True,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return "wrote workflow-level optimization candidates\n"
+
+
+def _produce_full_candidate_package(request) -> str:
+    request.artifacts.workflow_optimization_scorecard.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.scorecard/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "evidence_run_count": 1,
+                "excluded_run_count": 0,
+                "target_steps_ranked": 1,
+                "failure_scenarios": 1,
+                "candidate_counts": {
+                    "producer": 1,
+                    "verifier_rubric": 1,
+                    "token": 1,
+                    "adversarial_cases": 1,
+                    "workflow_level": 1,
+                },
+                "recommended_next_action": "Run workflow_and_eval_to_refined_workflow_package with this refinement evidence.",
+                "highest_priority_candidate_ids": [
+                    "verifier-rubric-assessment-001",
+                    "producer-assessment-001",
+                ],
+                "requires_ablation_before_promotion": True,
+                "source_mutation_check": {
+                    "passed": True,
+                    "details": "Will be rechecked deterministically at publication.",
+                },
+                "summary": "Assessment remains the highest-leverage local optimization target.",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    request.artifacts.workflow_optimization_packet.write_text(
+        "\n".join(
+            (
+                "# Workflow Optimization Packet",
+                "",
+                "Candidate-only optimization evidence is ready for review.",
+                "",
+                "- Ready for review: producer-assessment-001, verifier-rubric-assessment-001, token-assessment-001, adversarial-missing-rollback-owner, workflow-level-001.",
+                "- Requires ablation: verifier-rubric-assessment-001, workflow-level-001.",
+                "- Token-only candidates: token-assessment-001.",
+                "- Adversarial eval-case candidates: adversarial-missing-rollback-owner.",
+                "- Workflow-level refinement candidates: workflow-level-001.",
+                "",
+                "Recommended next action: run workflow_and_eval_to_refined_workflow_package with this refinement evidence.",
+                "",
+            )
+        )
+    )
+    return "packaged full optimization candidate set\n"
+
+
 def _write_publishable_package(
     ctx: Context,
     *,
@@ -1121,6 +1565,14 @@ def _write_valid_producer_candidates(ctx: Context) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def _snapshot_tree(root: Path) -> dict[str, tuple[str, int]]:
+    snapshot: dict[str, tuple[str, int]] = {}
+    for path in sorted(file_path for file_path in root.rglob("*") if file_path.is_file()):
+        payload = path.read_bytes()
+        snapshot[path.relative_to(root).as_posix()] = (hashlib.sha256(payload).hexdigest(), len(payload))
+    return snapshot
 
 
 class _JsonHandle:

@@ -1625,3 +1625,58 @@ Add the missing runtime tests for the enabled candidate-generation passes and ad
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dccea-17e8-7fb3-be43-6ff6d74ba266
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dccea-17e8-7fb3-be43-6ff6d74ba266
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dccea-17e8-7fb3-be43-6ff6d74ba266
+---
+I have the fix plan now. I’m patching only the optimizer runtime test file to add the missing enabled-pass coverage and the success-path non-mutation proof, using one shared full-run helper so the new tests stay tight and don’t duplicate workflow setup.
+
+The first patch attempt was too broad for the current file shape. I’m splitting it into smaller edits now so I can add the missing tests and helper functions without trampling the existing runtime test scaffolding.
+
+I’ve finished the test-file edits. I’m running the optimizer runtime suite first because that’s where the new enabled-pass coverage and non-mutation assertions live, and I want to catch any schema/payload mismatch there before I fan back out to the broader suites.
+
+The new runtime coverage is passing in isolation. I’m re-running the full targeted verification bundle now to make sure the added end-to-end candidate-pass tests don’t conflict with the refinement or docs assertions before I do the full regression pass.
+
+The full targeted bundle is green. I’m in the full regression pass now; once that completes cleanly, I’ll update the phase notes and ledger to reflect that the blocking review items were resolved by runtime coverage rather than product-code changes.
+
+The code changes are done and the full suite is green. I’m updating the phase notes now to reflect the real scope of this turn: closing the two blocking review gaps with runtime-test additions, leaving the warning-noise cleanup intentionally out of scope.
+
+I found the new turn’s decision-header block, so I’m recording the one non-obvious test-design choice there as well: a shared successful full-run helper now backs all of the enabled-pass coverage and the source non-mutation proof, which keeps the new runtime tests aligned on one execution path instead of drifting across bespoke setups.
+
+Scope considered
+
+Phase-local verification work only: the blocking reviewer findings in [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/verification-and-full-regression/feedback.md:1>), the optimizer runtime test surface, the shared decisions ledger, and the phase notes.
+
+What I analyzed
+
+I reviewed the missing coverage called out by the verifier against [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py:1), confirmed which enabled candidate-pass and source non-mutation paths were untested, and checked the existing helper/test scaffolding so the fix could stay in the test layer only.
+
+What I changed
+
+I extended [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py:348) with the missing runtime tests:
+`test_optimize_producer_writes_candidate_artifact`, `test_optimize_verifier_rubric_writes_merged_acceptance_candidates`, `test_optimize_tokens_writes_token_candidates`, `test_adversarial_cases_writes_candidate_cases_when_enabled`, and `test_workflow_never_mutates_selected_workflow_source`.
+
+I added one shared full-run helper plus artifact-writer helpers so every new assertion exercises the same real optimizer path. I also updated [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt:35>) and [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/implement/phases/verification-and-full-regression/implementation_notes.md:1>) for this turn.
+
+Key findings / decisions
+
+The fix stayed in test code; no product workflow/runtime code changed. Validation is green:
+`./.venv/bin/pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py` passed with `25 passed`,
+the targeted verification bundle passed with `113 passed`,
+and `./.venv/bin/pytest -q` passed with `863 passed`.
+
+The only remaining signal is the pre-existing Pydantic warning noise from optimizer contract models using a `schema` field name. I left that unchanged because it was a non-blocking reviewer item and outside this phase’s required scope.
+
+Open issues / next step
+
+No blocking implementer issue remains in this phase. The next step is reviewer re-check of criteria/feedback; optional follow-up later is warning cleanup in `workflows/workflow_run_traces_to_optimization_candidates/contracts.py` if you want quieter CI output.
