@@ -128,6 +128,24 @@ def test_simple_workflow_declarations_bind_names_and_infer_step_local_artifact_p
     assert IncidentBrief.flow.items == (IncidentBrief.analysis, IncidentBrief.email)
 
 
+def test_simple_artifact_specs_materialize_preserving_schema_requiredness_and_explicit_paths() -> None:
+    class Analysis(BaseModel):
+        summary: str
+
+    inferred = Json("analysis", Analysis, required=True).materialize("draft")
+    explicit = Md("email", path="custom/email.md").materialize("review")
+
+    assert inferred.template == "{workflow_folder}/draft/analysis.json"
+    assert inferred.kind == "json"
+    assert inferred.schema is Analysis
+    assert inferred.required is True
+    assert inferred.name == "analysis"
+    assert explicit.template == "custom/email.md"
+    assert explicit.kind == "markdown"
+    assert explicit.required is False
+    assert explicit.name == "email"
+
+
 def test_simple_workflow_base_does_not_trigger_strict_class_definition_validation() -> None:
     class LightweightWorkflow(Workflow):
         note = step("Write a short note.")
