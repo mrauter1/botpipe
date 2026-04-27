@@ -953,3 +953,106 @@ This phase is review-complete. I did not expand to the full repository test suit
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+I’m checking the existing phase tests and artifacts first, then I’ll add only the missing regression coverage that materially strengthens this normalization/discovery slice.
+
+I’ve got the current test surface. Now I’m looking for coverage gaps against the phase contract rather than duplicating what the implementer already added.
+
+There’s one clear gap worth covering: the new static after-hook validator also detects conflicting `AfterHookResult(route=..., event=...)` combinations, and that path is not currently pinned by tests.
+
+I’m adding one targeted regression test for the remaining unpinned validator branch, then I’ll document the coverage map in the phase test artifacts.
+
+I’ve added the missing regression pin. Now I’m running the smallest deterministic subset that exercises the new test plus the adjacent behaviors it depends on.
+
+Scope considered
+
+Phase-local normalization/discovery test coverage only. I stayed on the changed behaviors around simple workflow discovery, reserved-route normalization, `reads` semantics, direct `system_step(fn)` lowering, and static after-hook route validation.
+
+What I analyzed
+
+I reviewed the existing phase-relevant tests in `tests/unit/test_validation.py`, `tests/unit/test_simple_surface.py`, and `tests/runtime/test_workflow_reference_resolution.py`, then compared them against the phase contract and the recent implementation fixes. The main unpinned branch was the new static validator path for conflicting `AfterHookResult(route=..., event=...)`.
+
+What I changed
+
+I added `tests/unit/test_validation.py::test_validation_rejects_conflicting_static_after_hook_result_override` to pin that failure path.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/normalization-and-discovery/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, and known gaps. I also appended a concise summary of the new test coverage to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/normalization-and-discovery/feedback.md).
+
+Key findings / decisions
+
+The added coverage is deterministic and phase-scoped: pure unit/runtime-tempdir tests with no timing or network dependence. I did not append to `decisions.txt` because this turn did not introduce a new shared test-policy decision beyond the explicit artifact coverage map.
+
+Validation performed:
+- `.venv/bin/python -m pytest tests/unit/test_validation.py::test_validation_rejects_statically_invalid_after_hook_route_override tests/unit/test_validation.py::test_validation_rejects_conflicting_static_after_hook_result_override tests/unit/test_validation.py::test_validation_rejects_ambiguous_declared_read_reference tests/unit/test_simple_surface.py::test_inherited_simple_workflow_declarations_remain_discoverable_and_compilable tests/runtime/test_workflow_reference_resolution.py::test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection`
+- Result: `5 passed`
+
+Open issues / next step
+
+This phase still relies on targeted coverage rather than a full-suite pass because broader unrelated runtime/reference failures remain outside the normalization/discovery scope.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+I’m auditing the new phase-local tests and artifacts against the normalization/discovery contract, then I’ll mark the audit result in the reviewer-owned files.
+
+The artifact coverage map is coherent. I’m rerunning the targeted nodes named in the strategy so the audit conclusion is tied to the actual regression probes, not just the prose.
+
+I’ve verified the named regression nodes pass and I don’t see a material coverage gap inside this phase boundary. I’m updating the audit artifacts to reflect a clean result.
+
+The audit files are updated. I’m doing a final readback so the `COMPLETE` result matches the artifact state exactly.
+
+Scope considered
+
+Phase-local normalization/discovery test coverage only. I audited the new regression test, the updated strategy artifact, and the existing phase-relevant tests for simple discovery, reserved-route normalization, `reads` semantics, direct `system_step(fn)` lowering, and static after-hook route validation.
+
+What I analyzed
+
+I reviewed the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/normalization-and-discovery/test_strategy.md), the added `tests/unit/test_validation.py::test_validation_rejects_conflicting_static_after_hook_result_override`, and the adjacent phase tests it depends on. I reran the exact targeted nodes named in the strategy to confirm the audit result against execution, not just static inspection.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/normalization-and-discovery/criteria.md) to mark all audit criteria complete and appended an audit result note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/normalization-and-discovery/feedback.md).
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings. The added coverage is deterministic and materially strengthens the phase by pinning the remaining static hook-validation failure path without encoding any unconfirmed behavior change.
+
+Validation rerun:
+- `tests/unit/test_validation.py::test_validation_rejects_statically_invalid_after_hook_route_override`
+- `tests/unit/test_validation.py::test_validation_rejects_conflicting_static_after_hook_result_override`
+- `tests/unit/test_validation.py::test_validation_rejects_ambiguous_declared_read_reference`
+- `tests/unit/test_simple_surface.py::test_inherited_simple_workflow_declarations_remain_discoverable_and_compilable`
+- `tests/runtime/test_workflow_reference_resolution.py::test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection`
+
+Result: `5 passed`
+
+Open issues / next step
+
+No phase-local test audit issues remain. Broader unrelated runtime/reference failures remain outside this phase boundary and do not block this audit result.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
