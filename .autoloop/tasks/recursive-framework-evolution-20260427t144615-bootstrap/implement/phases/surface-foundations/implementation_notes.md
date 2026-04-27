@@ -11,6 +11,7 @@
 
 - `autoloop/__init__.py`
 - `autoloop/simple.py`
+- `pyproject.toml`
 - `core/prompts.py`
 - `core/routes.py`
 - `core/engine.py`
@@ -29,10 +30,12 @@
 - `Json`, `Md`, `Text`, `Raw`, `step`, `review_step`, `workflow_step`, `system_step`, `chain`
 - `FilesystemPromptRegistry.resolve`
 - `Engine._resolve_prompt`
+- package discovery for `autoloop*` and `core*`
 
 ## Checklist mapping
 
 - Milestone 1 / additive public surface: added repo-root `autoloop` package and documented `autoloop.simple`
+- Milestone 1 / import-path compatibility: added minimal packaging glue plus an installed-layout probe for top-level `autoloop.simple`
 - Milestone 1 / prompt foundations: added `Prompt.inline(...)`, `Prompt.file(...)`, and `ResolvedPrompt.source`
 - Milestone 1 / route foundations: added `RouteInfo` and additive route metadata fields on `Route`
 - Milestone 1 / simple artifact helpers: added lightweight simple artifact specs with step-local path inference helpers
@@ -40,7 +43,7 @@
 
 ## Assumptions
 
-- The supported import compatibility story in this repo is `autoloop_v3.*`-preferred when that package is importable plus repo-root `core/*` fallback when only the repo root is on `sys.path`
+- The supported import compatibility story in this phase is repo-root source imports plus a top-level installed/exported package layout for `autoloop` and `core`
 - Phase scope allows declaration/spec foundations without wiring compile/engine lowering yet
 
 ## Preserved invariants
@@ -52,6 +55,7 @@
 ## Intended behavior changes
 
 - `autoloop.simple` is now importable and documented as the additive simple-authoring surface
+- `autoloop.simple` now works from an isolated top-level package layout outside the repo root
 - Prompt primitives can now carry inline/file origin metadata
 - Route primitives can now carry optional summaries, required outputs, and handoff metadata
 
@@ -70,9 +74,8 @@
 
 - `./.venv/bin/pytest -q tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_providers.py tests/unit/test_provider_boundary_core.py`
 - `./.venv/bin/pytest -q tests/unit/test_validation.py`
+- `./.venv/bin/pytest -q tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_providers.py tests/unit/test_provider_boundary_core.py tests/unit/test_validation.py`
 - `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py -k 'authoring_doc or package_foundation_docs_exist' tests/strictness/test_no_compat.py`
-- `./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py tests/strictness/test_no_compat.py`
-  Result: unrelated pre-existing recursive-memory assertions failed in `tests/test_architecture_baseline_docs.py`; authoring-doc and strictness checks passed in isolation
 
 ## Deduplication / centralization
 

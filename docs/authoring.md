@@ -13,7 +13,7 @@ from autoloop.simple import Json, Md, Text, Raw, step, review_step, workflow_ste
 
 Import compatibility is explicit for the repository's two supported execution modes in practice:
 
-- installed-package-preferred imports, where internal fallback logic prefers `autoloop_v3.*` modules when available
+- installed-package execution, where a package install exposes top-level `autoloop.simple` without depending on the repo root being the working directory
 - repo-root execution, where the same public surface falls back to root-level `core/*` modules
 
 The root `workflow` shim remains the strict compatibility surface during the migration window. The simple surface is additive and lowers into the same runtime model rather than introducing a second engine.

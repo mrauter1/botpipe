@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,10 +17,9 @@ from autoloop_v3.runtime.prompts import FilesystemPromptRegistry
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REPO_PARENT = REPO_ROOT.parent
 
 
-def _probe_simple_surface(*pythonpath: Path) -> dict[str, object]:
+def _probe_simple_surface(*pythonpath: Path, cwd: Path) -> dict[str, object]:
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(str(path) for path in pythonpath)
     probe = """
@@ -37,24 +37,28 @@ print(json.dumps({
         [sys.executable, "-c", probe],
         check=True,
         capture_output=True,
-        cwd=REPO_ROOT,
+        cwd=cwd,
         env=env,
         text=True,
     )
     return json.loads(completed.stdout)
 
 
-def test_autoloop_simple_imports_with_installed_package_preference() -> None:
-    payload = _probe_simple_surface(REPO_PARENT, REPO_ROOT)
+def test_autoloop_simple_imports_in_installed_package_mode(tmp_path: Path) -> None:
+    target = tmp_path / "site"
+    target.mkdir()
+    shutil.copytree(REPO_ROOT / "autoloop", target / "autoloop")
+    shutil.copytree(REPO_ROOT / "core", target / "core")
+    payload = _probe_simple_surface(target, cwd=tmp_path)
 
     assert payload["workflow_module"] == "autoloop.simple"
     assert payload["strict_module"] == "autoloop.simple"
     assert payload["artifact_name"] == "note"
-    assert payload["route_info_module"] == "autoloop_v3.core.routes"
+    assert payload["route_info_module"] == "core.routes"
 
 
 def test_autoloop_simple_imports_with_repo_root_fallback_only() -> None:
-    payload = _probe_simple_surface(REPO_ROOT)
+    payload = _probe_simple_surface(REPO_ROOT, cwd=REPO_ROOT)
 
     assert payload["workflow_module"] == "autoloop.simple"
     assert payload["strict_module"] == "autoloop.simple"
