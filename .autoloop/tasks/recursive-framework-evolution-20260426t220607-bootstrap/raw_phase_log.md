@@ -1224,3 +1224,50 @@ Result: `101 passed, 247 warnings`.
 Open issues / next step
 
 No scoped test gaps remain for this phase based on the current contract. The remaining warnings are the existing Pydantic `schema`-field warnings in optimizer contract models; they are unchanged and warning-only.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dccbd-f55a-7992-8cdc-1a5a4c627d3c
+---
+I’m auditing the added optimizer test coverage against the phase contract and the shared decisions, then I’ll update the phase-local audit artifacts with the result.
+
+I’ve confirmed the new end-to-end skip test matches the non-obvious decision recorded for this phase. I’m running the scoped proof set once as auditor, then I’ll mark the audit artifacts complete if it stays green.
+
+The scoped proof passed as expected. I’m marking the audit complete and logging the remaining warning-only observation without treating it as a blocker.
+
+Scope considered
+
+Phase-local test audit for `candidate-generation-and-publication`: the new optimizer runtime regression coverage, the updated test strategy, the shared decision for optional-pass topology, and the audit artifacts under `.autoloop/tasks/.../test/phases/candidate-generation-and-publication/`.
+
+What I analyzed
+
+I reviewed the added runtime test in [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py), the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/candidate-generation-and-publication/test_strategy.md), the active shared decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/decisions.txt), and the scoped proof command output.
+
+What I reviewed
+
+The new full-run disabled-pass regression is the right missing layer: it proves `optimize_tokens`, `adversarial_cases`, and `workflow_level` are not merely routed to empty artifacts, but are not provider-executed at all when disabled. That complements the existing handler-level skip tests, source-drift failure coverage, malformed-candidate rejection, ordered-prefix topology enforcement, and ablation-depth non-execution coverage.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/candidate-generation-and-publication/criteria.md) to checked/complete and appended the audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/candidate-generation-and-publication/feedback.md).
+
+Key findings / decisions
+
+No blocking audit findings remain. The scoped proof set passed as audited:
+`.venv/bin/pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py`
+Result: `101 passed, 247 warnings`.
+
+Open issues / next step
+
+Only warning-level noise remains from optimizer contract models that use a `schema` field name. That does not weaken coverage, regression detection, or determinism for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
