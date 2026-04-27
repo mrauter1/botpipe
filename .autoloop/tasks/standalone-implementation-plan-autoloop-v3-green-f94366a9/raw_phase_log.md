@@ -50,3 +50,50 @@ Updated the planning artifacts:
 The plan is now implementation-ready across four ordered phases: public-surface cleanup, normalization/discovery, provider-and-engine contract rewiring, and bundled workflow/docs/test migration. The main non-obvious planning decision is that `workflows/*`, contract/runtime tests, and active prompt READMEs are all in scope because `RouteContract` is still wired through those active surfaces.
 
 `phase_plan.yaml` was validated locally with `python3` and `yaml.safe_load`.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd0ae-6cbf-7da3-8431-b43e4b2fe953
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dd0ae-6cbf-7da3-8431-b43e4b2fe953
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0ae-6cbf-7da3-8431-b43e4b2fe953
+---
+I’m verifying the authored plan against the immutable request, current criteria, and the shared decisions ledger. I’ll focus first on intent coverage and whether any requested behavior or compatibility constraint was omitted or softened in the plan.
+
+I’m in the intent-by-intent gap check now. The plan is generally aligned, but I’m checking whether any of the request’s concrete behavioral contracts were collapsed into generic wording that would leave implementation ambiguity in the high-risk engine and simple-authoring paths.
+
+I found two material omissions. The plan gets the overall decomposition right, but it does not explicitly carry forward two high-risk execution contracts from the request: the provider control-response/rendering contract, and the full `system_step(fn)` signature/return normalization contract. I’m recording those as blocking because they can produce an implementation that looks aligned at a high level but still fails the requested runtime behavior.
+
+Scope considered
+
+Immutable request, raw log clarifications, current `plan.md`, `phase_plan.yaml`, `criteria.md`, `feedback.md`, and read-only `decisions.txt`.
+
+What I analyzed
+
+I checked the produced plan against the requested greenfield contract, with extra attention on the highest-risk behavior surfaces: simple authoring lowering, provider/rendering contract, engine execution order, workflow discovery, and the active-code/doc grep boundary. I also validated that `phase_plan.yaml` is parseable YAML and that required phase lists are populated.
+
+What I reviewed
+
+`plan.md` is broadly aligned on decomposition and migration scope. `phase_plan.yaml` has coherent dependencies and valid runtime-owned metadata. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/plan/criteria.md:1) and appended prioritized findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/plan/feedback.md:1).
+
+Key findings / decisions
+
+`PLAN-001` is blocking: the plan under-specifies the provider control-response and rendered prompt contract. The request requires explicit `{tag, reason, payload}` response shape, route-specific `question` / `blocked` / `failed` rules, required prompt sections, and removal of route-contract wording.
+
+`PLAN-002` is blocking: the plan under-specifies the concrete `system_step(fn)` runtime contract. The request requires explicit supported callable signatures, supported return forms, direct lowering to `SystemStep(handler=fn)`, and dedicated tests.
+
+`phase_plan.yaml` is otherwise structurally sound and parseable, and the plan does not appear to introduce unnecessary abstraction or technical debt.
+
+Open issues / next step
+
+The planner needs to revise the plan artifacts so phases and acceptance criteria explicitly cover the provider rendering/control-response contract and the full `system_step(fn)` execution contract. Because those omissions are material intent and behavior gaps, this verification pass is not complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
