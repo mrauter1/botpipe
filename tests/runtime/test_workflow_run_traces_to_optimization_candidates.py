@@ -179,6 +179,9 @@ def test_mine_failures_writes_failure_scenarios(tmp_path: Path, monkeypatch) -> 
     state, _ = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
 
     artifacts = SimpleNamespace(
+        workflow_optimization_internal_trace_corpus=_JsonHandle(
+            ctx.workflow_folder / "_workflow_optimization_internal_trace_corpus.json"
+        ),
         workflow_optimization_trace_corpus=_JsonHandle(ctx.workflow_folder / "workflow_optimization_trace_corpus.json"),
         step_optimization_priority_report=_JsonHandle(ctx.workflow_folder / "step_optimization_priority_report.json"),
         workflow_failure_scenarios=_JsonHandle(ctx.workflow_folder / "workflow_failure_scenarios.json"),
@@ -292,6 +295,84 @@ def test_frame_no_eligible_runs_publishes_noop_packet(tmp_path: Path) -> None:
     assert receipt["no_eligible_trace_evidence"] is True
     assert evidence["evidence_entries"][0]["kind"] == "workflow_optimization_scorecard"
     assert "No eligible Plan-1 observability bundles were available" in packet_text
+
+
+def test_insufficient_evidence_short_circuit_does_not_publish_failure_scenarios(tmp_path: Path) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
+
+    provider = ScriptedLLMProvider(
+        producer_turns=[
+            lambda request: "frame reviewed\n",
+            lambda request: "ranking reviewed\n",
+            _produce_insufficient_evidence_package,
+        ],
+        verifier_turns=[
+            Outcome(
+                raw_output="frame grounded\n",
+                tag="optimization_scope_framed",
+                payload={
+                    "summary": "The selected workflow and trace scope are grounded for ranking.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "candidate_run_count": 1,
+                    "eligible_run_count": 1,
+                    "excluded_run_count": 0,
+                    "top_k_steps": 1,
+                    "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
+                },
+            ),
+            Outcome(
+                raw_output="evidence is thin\n",
+                tag="insufficient_evidence",
+                payload={
+                    "summary": "The deterministic ranking artifacts are low-confidence and should short-circuit to packaging.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "ranked_steps": [],
+                    "ranking_method": "static_graph_plus_trace_metrics_plus_llm_attribution",
+                },
+            ),
+            Outcome(
+                raw_output="insufficient evidence package ready\n",
+                tag="optimization_packet_ready",
+                payload={
+                    "summary": "The low-confidence scorecard and packet are aligned for publication.",
+                    "selected_workflow_name": "release_candidate_to_go_no_go",
+                    "authoritative_artifacts": [
+                        "workflow_optimization_scorecard",
+                        "workflow_optimization_packet",
+                    ],
+                    "highest_priority_candidate_ids": [],
+                    "recommended_next_action": "Collect more representative trace evidence before attempting optimization.",
+                    "requires_ablation_before_promotion": False,
+                    "source_mutation_check_expected": True,
+                },
+            ),
+        ],
+    )
+
+    result = run_workflow_package(
+        "workflow_run_traces_to_optimization_candidates",
+        provider=provider,
+        options=RunnerOptions(
+            root=tmp_path,
+            task_id="optimizer-task",
+            message="Publish an insufficient-evidence optimizer packet.\n",
+            workflow_params={
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "task_title": "Release workflow optimization",
+                "run_statuses": ["failed", "paused", "blocked"],
+                "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
+            },
+            runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
+        ),
+    )
+
+    workflow_dir = tmp_path / ".autoloop" / "tasks" / "optimizer-task" / "wf_workflow_run_traces_to_optimization_candidates"
+    evidence = json.loads((workflow_dir / "workflow_refinement_evidence.json").read_text(encoding="utf-8"))
+
+    assert result.terminal == "SUCCESS"
+    assert (workflow_dir / "workflow_failure_scenarios.json").exists()
+    assert all(entry["kind"] != "workflow_failure_scenarios" for entry in evidence["evidence_entries"])
 
 
 def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_path: Path, monkeypatch) -> None:
@@ -424,6 +505,58 @@ def _produce_noop_package(request) -> str:
         )
     )
     return "packaged noop optimization packet\n"
+
+
+def _produce_insufficient_evidence_package(request) -> str:
+    request.artifacts.workflow_optimization_scorecard.write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_optimization.scorecard/v1",
+                "selected_workflow": "release_candidate_to_go_no_go",
+                "evidence_run_count": 1,
+                "excluded_run_count": 0,
+                "target_steps_ranked": 0,
+                "failure_scenarios": 0,
+                "candidate_counts": {
+                    "producer": 0,
+                    "verifier_rubric": 0,
+                    "token": 0,
+                    "adversarial_cases": 0,
+                    "workflow_level": 0,
+                },
+                "recommended_next_action": "Collect more representative trace evidence before attempting optimization.",
+                "highest_priority_candidate_ids": [],
+                "requires_ablation_before_promotion": False,
+                "source_mutation_check": {
+                    "passed": True,
+                    "details": "Will be rechecked deterministically at publication.",
+                },
+                "summary": "Trace evidence was too thin for a credible optimization ranking, so candidate generation was not advanced.",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    request.artifacts.workflow_optimization_packet.write_text(
+        "\n".join(
+            (
+                "# Workflow Optimization Packet",
+                "",
+                "Deterministic ranking evidence was too thin to advance into mined failure scenarios.",
+                "",
+                "- Ready for review: none.",
+                "- Requires ablation: none.",
+                "- Token-only candidates: none.",
+                "- Adversarial eval-case candidates: none.",
+                "- Workflow-level refinement candidates: none.",
+                "",
+                "Recommended next action: collect more representative trace evidence before attempting optimization.",
+                "",
+            )
+        )
+    )
+    return "packaged insufficient evidence optimization packet\n"
 
 
 class _JsonHandle:

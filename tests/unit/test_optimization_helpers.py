@@ -199,6 +199,28 @@ def test_normalize_trace_corpus_keeps_eligible_runs_when_route_filter_matches_no
     assert corpus["step_observations"] == []
 
 
+def test_filtered_published_observations_still_allow_upstream_ranking_from_internal_trace_context(tmp_path: Path) -> None:
+    run_dir = _write_upstream_pass_downstream_fail_run(
+        tmp_path,
+        "task-1",
+        "release_candidate_to_go_no_go",
+        "run-upstream",
+    )
+
+    corpus = normalize_trace_corpus(
+        selected_workflow="release_candidate_to_go_no_go",
+        run_dirs=[run_dir],
+        route_tags=["failed"],
+    )
+    metrics = build_step_trace_metrics(corpus, corpus["static_step_graphs"])
+    priority = rank_optimization_targets(step_metrics=metrics, static_centrality={}, top_k=1)
+
+    assert [entry["step_name"] for entry in corpus["step_observations"]] == ["package"]
+    assert {entry["step_name"] for entry in corpus["all_step_observations"]} == {"assessment", "package"}
+    assert {entry["step_name"] for entry in metrics["steps"]} == {"assessment", "package"}
+    assert priority["ranked_steps"][0]["step_name"] == "assessment"
+
+
 def test_build_step_trace_metrics_counts_routes_and_tokens() -> None:
     trace_corpus = {
         "selected_workflow": "release_candidate_to_go_no_go",
@@ -508,6 +530,134 @@ def _write_observable_run(root: Path, task_id: str, workflow_name: str, run_id: 
                 "workflow_name": workflow_name,
                 "steps": [{"name": "assessment", "kind": "pair"}],
                 "transitions": {"steps": {"assessment": {"needs_rework": "assessment"}}, "global": {}},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return run_dir
+
+
+def _write_upstream_pass_downstream_fail_run(root: Path, task_id: str, workflow_name: str, run_id: str) -> Path:
+    run_dir = _write_minimal_run_metadata(root, task_id, workflow_name, run_id, "failed")
+    run_payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    run_payload["terminal"] = "FAIL"
+    run_payload["git_tracking"] = {
+        "commit_before_run": "commit-before-run",
+        "commit_after_run": "commit-after-run",
+    }
+    (run_dir / "run.json").write_text(json.dumps(run_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    raw_dir = run_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    (raw_dir / "000001_assessment_producer.txt").write_text("assessment producer\n", encoding="utf-8")
+    (raw_dir / "000002_package_producer.txt").write_text("package producer\n", encoding="utf-8")
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(
+            (
+                json.dumps(
+                    {
+                        "schema": "autoloop.runtime_trace/v1",
+                        "event_type": "step_finished",
+                        "sequence": 1,
+                        "step_name": "assessment",
+                        "step_kind": "pair",
+                        "event": {"tag": "assessment_complete"},
+                        "outcome": {"tag": "assessment_complete"},
+                        "provider_usage": {
+                            "producer": {
+                                "input_tokens": 200,
+                                "output_tokens": 40,
+                                "total_tokens": 240,
+                                "source": "provider",
+                            }
+                        },
+                        "raw_output_refs": {
+                            "producer": {
+                                "path": "raw/000001_assessment_producer.txt",
+                                "sha256": "unused",
+                                "bytes": 18,
+                            }
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "schema": "autoloop.runtime_trace/v1",
+                        "event_type": "step_finished",
+                        "sequence": 2,
+                        "step_name": "package",
+                        "step_kind": "pair",
+                        "event": {"tag": "failed"},
+                        "outcome": {"tag": "failed"},
+                        "provider_usage": {
+                            "producer": {
+                                "input_tokens": 40,
+                                "output_tokens": 10,
+                                "total_tokens": 50,
+                                "source": "provider",
+                            }
+                        },
+                        "raw_output_refs": {
+                            "producer": {
+                                "path": "raw/000002_package_producer.txt",
+                                "sha256": "unused",
+                                "bytes": 16,
+                            }
+                        },
+                    }
+                ),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "git_tracking.jsonl").write_text(
+        "\n".join(
+            (
+                json.dumps(
+                    {
+                        "schema": "autoloop.git_tracking/v1",
+                        "event_type": "step_committed",
+                        "sequence": 1,
+                        "step_name": "assessment",
+                        "commit_before_step": "commit-before-assessment",
+                        "commit_after_step": "commit-after-assessment",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "schema": "autoloop.git_tracking/v1",
+                        "event_type": "step_committed",
+                        "sequence": 2,
+                        "step_name": "package",
+                        "commit_before_step": "commit-before-package",
+                        "commit_after_step": "commit-after-package",
+                    }
+                ),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "static_step_graph.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_static_step_graph/v1",
+                "workflow_name": workflow_name,
+                "steps": [
+                    {"name": "assessment", "kind": "pair"},
+                    {"name": "package", "kind": "pair"},
+                ],
+                "transitions": {
+                    "steps": {
+                        "assessment": {"assessment_complete": "package"},
+                        "package": {"failed": "FAIL"},
+                    },
+                    "global": {},
+                },
             },
             indent=2,
             sort_keys=True,

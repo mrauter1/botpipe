@@ -191,6 +191,9 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     workflow_optimization_scope = Artifact("{workflow_folder}/workflow_optimization_scope.json")
     excluded_run_report = Artifact("{workflow_folder}/excluded_run_report.json")
     workflow_optimization_trace_corpus = Artifact("{workflow_folder}/workflow_optimization_trace_corpus.json")
+    workflow_optimization_internal_trace_corpus = Artifact(
+        "{workflow_folder}/_workflow_optimization_internal_trace_corpus.json"
+    )
     step_trace_metrics = Artifact("{workflow_folder}/step_trace_metrics.json")
     step_optimization_priority_report = Artifact("{workflow_folder}/step_optimization_priority_report.json")
     workflow_failure_scenarios = Artifact("{workflow_folder}/workflow_failure_scenarios.json")
@@ -225,6 +228,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "selected_workflow_source_manifest": selected_workflow_source_manifest,
             "workflow_optimization_scope": workflow_optimization_scope,
             "workflow_optimization_trace_corpus": workflow_optimization_trace_corpus,
+            "workflow_optimization_internal_trace_corpus": workflow_optimization_internal_trace_corpus,
             "excluded_run_report": excluded_run_report,
         },
     )
@@ -289,6 +293,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             request,
             invocation_contract,
             selected_workflow_authoring_surface,
+            workflow_optimization_internal_trace_corpus,
             workflow_optimization_trace_corpus,
             step_optimization_priority_report,
         ],
@@ -610,7 +615,9 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             priority_report=priority_report_payload,
             max_failure_scenarios=state.max_failure_scenarios,
         )
+        internal_trace_corpus = dict(trace_corpus)
         excluded_runs = list(trace_corpus.pop("excluded_runs", []))
+        trace_corpus.pop("all_step_observations", None)
         trace_corpus.pop("static_step_graphs", None)
         write_workflow_json(
             ctx,
@@ -646,6 +653,11 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             ctx,
             "workflow_optimization_trace_corpus.json",
             trace_corpus,
+        )
+        write_workflow_json(
+            ctx,
+            "_workflow_optimization_internal_trace_corpus.json",
+            internal_trace_corpus,
         )
         write_workflow_json(ctx, "step_trace_metrics.json", step_metrics_payload)
         write_workflow_json(ctx, "step_optimization_priority_report.json", priority_report_payload)
@@ -691,7 +703,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     def on_mine_failures(state: State, outcome: Outcome, artifacts):
         artifacts.workflow_failure_scenarios.write_json(
             _build_failure_scenarios_payload(
-                trace_corpus=artifacts.workflow_optimization_trace_corpus.read_json(),
+                trace_corpus=artifacts.workflow_optimization_internal_trace_corpus.read_json(),
                 priority_report=artifacts.step_optimization_priority_report.read_json(),
                 max_failure_scenarios=state.max_failure_scenarios,
             )
@@ -810,7 +822,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             write_workflow_json(ctx, "workflow_optimization_scorecard.json", updated_scorecard)
             raise ValueError(source_details)
 
-        evidence_entries = _optimization_evidence_entries(workflow_folder, state.no_eligible_trace_evidence)
+        evidence_entries = _optimization_evidence_entries(
+            workflow_folder,
+            no_eligible=state.no_eligible_trace_evidence,
+            ranking_status=state.ranking_status,
+            failure_status=state.failure_status,
+        )
         write_optimization_refinement_evidence(
             ctx=ctx,
             selected_workflow=selected_workflow_name,
@@ -840,13 +857,23 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
-def _optimization_evidence_entries(workflow_folder: Path, no_eligible: bool) -> list[dict[str, str]]:
+def _optimization_evidence_entries(
+    workflow_folder: Path,
+    *,
+    no_eligible: bool,
+    ranking_status: str | None,
+    failure_status: str | None,
+) -> list[dict[str, str]]:
     entries: list[dict[str, str]] = []
     for filename, kind in _PACKAGE_EVIDENCE_FILES.items():
         path = workflow_folder / filename
         if not path.is_file():
             continue
         if no_eligible and kind != "workflow_optimization_scorecard":
+            continue
+        if kind == "workflow_failure_scenarios" and (
+            ranking_status != "targets_ranked" or failure_status != "failure_scenarios_mined"
+        ):
             continue
         summary = (
             "No eligible Plan-1 observability bundles were available, so this scorecard is a no-op publication boundary."

@@ -214,6 +214,7 @@ def normalize_trace_corpus(
     excluded_runs: list[dict[str, str]] = []
     runs: list[dict[str, Any]] = []
     step_observations: list[dict[str, Any]] = []
+    all_step_observations: list[dict[str, Any]] = []
 
     for bundle in bundle_records:
         valid, reason = validate_observability_bundle(bundle)
@@ -263,32 +264,32 @@ def normalize_trace_corpus(
             sequence = int(record["sequence"])
             step_name = str(record["step_name"])
             route = _extract_route_tag(record)
-            if route_filter and route not in route_filter:
-                continue
             raw_output_refs = _normalize_raw_output_refs(record.get("raw_output_refs"))
             provider_usage = _normalize_provider_usage(record.get("provider_usage"))
             git_step = git_index.get(sequence, {})
             local_outcome = _local_outcome_from_route(route)
             downstream_outcome = _downstream_outcome(filtered_step_events[index + 1 :], run_entry["terminal"])
-            step_observations.append(
-                {
-                    "observation_id": f"{bundle.run_ref}:{sequence:06d}:{step_name}",
-                    "run_ref": bundle.run_ref,
-                    "run_id": bundle.run_id,
-                    "task_id": bundle.task_id,
-                    "sequence": sequence,
-                    "step_name": step_name,
-                    "step_kind": _optional_text(record.get("step_kind")) or "unknown",
-                    "route": route,
-                    "raw_output_refs": raw_output_refs,
-                    "usage": provider_usage,
-                    "commit_before_step": _optional_text(git_step.get("commit_before_step"))
-                    or _optional_text(_require_mapping_or_empty(record.get("git")).get("commit_before_step")),
-                    "commit_after_step": _optional_text(git_step.get("commit_after_step")),
-                    "local_outcome": local_outcome,
-                    "downstream_outcome": downstream_outcome,
-                }
-            )
+            observation = {
+                "observation_id": f"{bundle.run_ref}:{sequence:06d}:{step_name}",
+                "run_ref": bundle.run_ref,
+                "run_id": bundle.run_id,
+                "task_id": bundle.task_id,
+                "sequence": sequence,
+                "step_name": step_name,
+                "step_kind": _optional_text(record.get("step_kind")) or "unknown",
+                "route": route,
+                "raw_output_refs": raw_output_refs,
+                "usage": provider_usage,
+                "commit_before_step": _optional_text(git_step.get("commit_before_step"))
+                or _optional_text(_require_mapping_or_empty(record.get("git")).get("commit_before_step")),
+                "commit_after_step": _optional_text(git_step.get("commit_after_step")),
+                "local_outcome": local_outcome,
+                "downstream_outcome": downstream_outcome,
+            }
+            all_step_observations.append(observation)
+            if route_filter and route not in route_filter:
+                continue
+            step_observations.append(observation)
 
     return {
         "schema": TRACE_CORPUS_SCHEMA,
@@ -300,6 +301,7 @@ def normalize_trace_corpus(
         "step_observation_count": len(step_observations),
         "runs": runs,
         "step_observations": step_observations,
+        "all_step_observations": all_step_observations,
         "excluded_runs": excluded_runs,
         "static_step_graphs": [
             bundle.static_step_graph
@@ -331,10 +333,7 @@ def build_step_trace_metrics(
         trace_corpus.get("selected_workflow"),
         error_message="trace_corpus.selected_workflow must be non-empty",
     )
-    observations = _require_mapping_list(
-        trace_corpus.get("step_observations"),
-        "trace_corpus.step_observations must be a list of objects",
-    )
+    observations = _analysis_observations(trace_corpus)
     total_tokens = 0
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for observation in observations:
@@ -405,20 +404,22 @@ def compute_static_step_centrality(
     )
     transitions = _require_mapping_or_empty(static_step_graph.get("transitions"))
     step_routes = _require_mapping_or_empty(transitions.get("steps"))
-    counts: Counter[str] = Counter()
+    counts: dict[str, float] = defaultdict(float)
     for step in steps:
         name = _optional_text(step.get("name"))
         if name:
-            counts[name] += 0
+            counts[name] += 0.0
     for source, routes in step_routes.items():
         if isinstance(source, str):
-            counts[source] += 0
+            counts[source] += 0.0
         if not isinstance(routes, Mapping):
             continue
-        counts[str(source)] += len(routes)
-        for target in routes.values():
-            if isinstance(target, str) and target not in {"SUCCESS", "PAUSE", "FAIL"}:
-                counts[target] += 1
+        nonterminal_targets = [
+            target for target in routes.values() if isinstance(target, str) and target not in {"SUCCESS", "PAUSE", "FAIL"}
+        ]
+        counts[str(source)] += float(len(nonterminal_targets))
+        for target in nonterminal_targets:
+            counts[target] += 0.5
     max_count = max(counts.values(), default=0)
     if max_count <= 0:
         return {name: 0.0 for name in counts}
@@ -459,7 +460,7 @@ def rank_optimization_targets(
         insufficient_sample_penalty = 0.10 if observed_count < 2 else 0.0
         missing_trace_data_penalty = 0.05 if token_share <= 0.0 else 0.0
         no_prompt_surface_penalty = 0.05 if not _has_prompt_surface(step_name) else 0.0
-        likely_downstream_symptom_penalty = 0.10 if _likely_downstream_symptom(step, artifact_centrality) else 0.0
+        likely_downstream_symptom_penalty = _downstream_symptom_penalty(step, artifact_centrality)
         score = (
             0.25 * direct_failure_rate
             + 0.20 * downstream_blast_radius
@@ -549,10 +550,7 @@ def extract_failure_scenario_seeds(
         trace_corpus.get("selected_workflow"),
         error_message="trace_corpus.selected_workflow must be non-empty",
     )
-    observations = _require_mapping_list(
-        trace_corpus.get("step_observations"),
-        "trace_corpus.step_observations must be a list of objects",
-    )
+    observations = _analysis_observations(trace_corpus)
     ranked_steps = {
         require_non_empty_string(entry.get("step_name"), error_message="priority report ranked steps need step_name")
         for entry in _require_mapping_list(priority_report.get("ranked_steps"), "priority_report.ranked_steps must be a list of objects")
@@ -836,6 +834,16 @@ def _optional_text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _analysis_observations(trace_corpus: Mapping[str, Any]) -> list[dict[str, Any]]:
+    candidate = trace_corpus.get("all_step_observations")
+    if isinstance(candidate, list):
+        return _require_mapping_list(candidate, "trace_corpus.all_step_observations must be a list of objects")
+    return _require_mapping_list(
+        trace_corpus.get("step_observations"),
+        "trace_corpus.step_observations must be a list of objects",
+    )
+
+
 def _repo_relative_if_possible(path: Path, repo_root: Path) -> str:
     try:
         return str(path.resolve().relative_to(repo_root.resolve()))
@@ -869,6 +877,15 @@ def _likely_downstream_symptom(step: Mapping[str, Any], artifact_centrality: flo
     if step_name.startswith("package") or step_name.startswith("publish"):
         return artifact_centrality <= 0.6 and failed_count > 0 and needs_rework_count == 0
     return artifact_centrality <= 0.35 and failed_count > 0 and downstream_failures == 0 and token_share < 0.15
+
+
+def _downstream_symptom_penalty(step: Mapping[str, Any], artifact_centrality: float) -> float:
+    if not _likely_downstream_symptom(step, artifact_centrality):
+        return 0.0
+    step_name = require_non_empty_string(step.get("step_name"), error_message="step metrics must define step_name")
+    if step_name.startswith("package") or step_name.startswith("publish"):
+        return 0.25
+    return 0.10
 
 
 def _recommended_first_pass(step: Mapping[str, Any]) -> str:

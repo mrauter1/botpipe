@@ -35,22 +35,24 @@
 - Preserved invariants:
   - No runtime, runner, or engine behavior changed.
   - `run_statuses` remains run-level filtering and `route_tags` remains step-level evidence filtering.
+  - Published `workflow_optimization_trace_corpus.json` stays route-filtered and schema-shaped; the new internal corpus file is workflow-private plumbing only.
   - The optimizer still does not mutate selected workflow source or execute hidden reruns/refinement.
 - Intended behavior changes:
-  - Eligible trace capture now also publishes deterministic `step_trace_metrics.json`, `step_optimization_priority_report.json`, and an initial `workflow_failure_scenarios.json`.
+  - Eligible trace capture now also writes deterministic `step_trace_metrics.json`, `step_optimization_priority_report.json`, and an internal `_workflow_optimization_internal_trace_corpus.json` so ranking and failure mining can see unfiltered upstream observations without widening the published trace corpus.
   - Priority scoring now factors direct failure rate, downstream blast radius, rework cost, centrality, route criticality, token share, sample support, and explicit downstream-symptom penalties.
   - Failure-scenario seeding now emits repeated-loop seeds and bounded scenario inputs that map to allowed failure kinds.
-  - `mine_failures` now refreshes `workflow_failure_scenarios.json` deterministically from trace evidence and the ranked target set.
+  - `mine_failures` now refreshes `workflow_failure_scenarios.json` deterministically from the internal trace corpus and the ranked target set.
+  - Refinement-evidence publication now withholds `workflow_failure_scenarios` on the `insufficient_evidence -> package` short-circuit, even if the artifact file exists from frame precomputation.
 - Known non-changes:
   - No producer/verifier-rubric/token/adversarial/workflow-level candidate generation was added in this phase.
   - No refinement-workflow integration or publication scorecard changes were added here.
 - Expected side effects:
-  - Optimizer runs with eligible evidence now have ranking/failure artifacts available before later candidate passes execute.
+  - Optimizer runs with eligible evidence now have ranking/failure artifacts available before later candidate passes execute, while deterministic attribution can still blame upstream accepted steps.
   - Runtime tests may emit existing Pydantic warnings about `schema` field names; targeted tests still pass.
 - Validation performed:
   - `python3 -m py_compile stdlib/optimization.py workflows/workflow_run_traces_to_optimization_candidates/workflow.py workflows/workflow_run_traces_to_optimization_candidates/contracts.py tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
   - `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
-  - Result: `27 passed` with known Pydantic `schema` field warnings.
+  - Result: `29 passed` with known Pydantic `schema` field warnings.
 - Deduplication / centralization:
-  - Kept deterministic ranking math and failure-seed extraction centralized in `stdlib/optimization.py`.
+  - Kept deterministic ranking math and failure-seed extraction centralized in `stdlib/optimization.py`, including the internal-observation fallback used by both metrics and failure seeding.
   - Used workflow-local helpers only for assembling the published failure-scenario artifact from deterministic seeds, avoiding a second stdlib serializer pass.

@@ -702,3 +702,72 @@ The implementation is not ready for approval yet. The next implement pass should
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcca4-fed7-7033-adcf-c394312e9126
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+I’m addressing the two blocking review findings only: preserving upstream attribution under `route_tags` filtering, and preventing failure-scenario publication on the `insufficient_evidence` short-circuit. I’m re-reading the affected helpers and workflow publication path before editing so the fix stays phase-local and doesn’t disturb the established topology.
+
+I have the fix shape. I’m adding a workflow-local internal trace view that keeps all step observations for deterministic ranking and failure mining, while leaving the published corpus filtered by `route_tags`. Then I’m gating publication so `workflow_failure_scenarios` is only handed forward when ranking actually advanced into `mine_failures`.
+
+I’m extending the tests with the exact regression the reviewer described: a locally accepted upstream step hidden by the published `route_tags` filter but still chosen as the deterministic ranking target from internal trace context. I’m also adding a runtime short-circuit test to ensure `insufficient_evidence` does not publish mined-failure evidence.
+
+The code changes are in. I’m running the same targeted compile and test suite plus the new regression cases for upstream attribution and the `insufficient_evidence` publication gate.
+
+One of the new regressions failed. I’m pulling the exact traceback now and will patch the mismatch directly rather than widening scope.
+
+The remaining failure is the exact upstream-attribution case I added. The internal trace fix worked, but the current penalty still isn’t strong enough to demote a downstream `package` failure below an upstream pass-with-blast-radius case. I’m tightening that deterministic symptom penalty now and rerunning the same suite.
+
+The same regression is still failing, so I’m pulling the fresh traceback rather than guessing. That will tell me whether the remaining gap is scoring, centrality, or token-share interaction.
+
+I found the remaining cause: the current static centrality math counts routes to `FAIL`/`SUCCESS` as outgoing dependencies, which overstates terminal packaging steps and erases the intended upstream bias. I’m correcting that so only non-terminal handoffs contribute to step centrality, then I’ll rerun the same suite.
+
+The last gap is still centrality, not visibility. In the current chain case the upstream step and downstream step normalize to the same centrality, so the downstream symptom penalty never fires. I’m changing centrality to weight outgoing handoffs more than incoming consumers, which matches the request’s “artifact flow / handoff leverage” model and should let the upstream step outrank the terminal symptom.
+
+I’m addressing the two blocking review findings now. First I’m re-running the focused tests around ranking attribution and failure publication, then I’ll tighten the implementation only where those failures still point.
+
+The new regression coverage is in place. I’m checking whether the centrality and symptom-penalty adjustments now make upstream attribution win without broadening published `route_tags` output.
+
+The regressions are resolved in the focused test slice. I’m updating the phase notes and shared decisions so the next turn keeps the public/internal trace split and the publication gate intact.
+
+I have enough context to write the turn-local notes. I’m making two documentation-only updates now: the shared decision lines that explain the public/internal trace split, and the phase notes that map the fix back to the reviewer findings and current test result.
+
+The code path is stable and the artifact notes are updated. I’m doing one last pass over the touched diffs so the close-out reflects the exact behavior change and nothing outside the phase scope leaked in.
+
+Scope considered
+
+I stayed inside the phase-local ranking and failure-analysis scope and only addressed the two blocking review findings: upstream attribution under `route_tags` filtering, and truthful short-circuit behavior on `insufficient_evidence -> package`.
+
+What I analyzed
+
+I reviewed the reviewer findings in the active phase feedback, the existing ranking/failure helpers in `stdlib/optimization.py`, the optimizer workflow wiring in `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`, and the phase notes and shared decisions that need to preserve this behavior for later turns.
+
+What I changed
+
+I split published versus internal trace usage. `normalize_trace_corpus()` now keeps route-filtered `step_observations` for the published artifact and also retains unfiltered `all_step_observations` for deterministic analysis. `build_step_trace_metrics()` and `extract_failure_scenario_seeds()` now prefer the internal observation set, so upstream locally accepted steps can still be ranked and mined when a downstream step is the only one matching `route_tags`.
+
+In the workflow, `capture_frame_context` now writes `_workflow_optimization_internal_trace_corpus.json` alongside the published `workflow_optimization_trace_corpus.json`, and `on_mine_failures()` rebuilds scenarios from that internal corpus. I also gated refinement-evidence publication so `workflow_failure_scenarios` is omitted unless `rank_targets` ended in `targets_ranked` and `mine_failures` ended in `failure_scenarios_mined`, which keeps the `insufficient_evidence` short-circuit truthful.
+
+I tightened the deterministic ranking behavior with a stronger downstream-symptom penalty and a more source-weighted static centrality calculation so the intended upstream step can outrank a downstream package failure when the blast radius supports that attribution. I added regression coverage for both reviewer findings and updated the phase notes and shared decisions accordingly.
+
+Key findings / decisions
+
+The main design choice is that `route_tags` still define the published evidence surface, but not the full deterministic analysis surface. That keeps the external artifact contract intact while preserving upstream attribution.
+
+Validation passed with the focused phase suite:
+- `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+- Result: `29 passed`
+
+Open issues / next step
+
+I did not run the full repository test suite. The remaining warnings are the existing Pydantic `schema` field warnings in optimizer contracts and remain out of scope for this phase. The next step is reviewer re-verification of this phase so later optimization-candidate passes can build on the corrected ranking and failure-analysis artifacts.
