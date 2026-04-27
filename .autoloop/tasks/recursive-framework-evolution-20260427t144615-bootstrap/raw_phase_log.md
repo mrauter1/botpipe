@@ -1873,3 +1873,46 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd078-0d68-7960-9954-c65d51a725f9
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd078-0d68-7960-9954-c65d51a725f9
+---
+I’m working the test side of `compatibility-docs-cleanup`: first I’ll inspect the phase test artifacts and the current doc-pin coverage so I can add only the missing regression checks and record a tight coverage map.
+
+The current doc-pin already blocks old tokens, but I want one direct regression for the repo-root guide’s positive contract too, so we catch accidental removal of the new `route_infos` / `route_required_outputs` vocabulary rather than only forbidden-term leakage.
+
+I’ve added the direct positive regression for `Workflow_Instructions.md`. Next I’m running the narrow doc-pin slice so I can record exact coverage and any remaining gaps in the phase artifacts.
+
+Scope considered
+- Phase-local test coverage for `compatibility-docs-cleanup`.
+- The public doc-pin surface in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:1).
+- The repo-root authoring guide [Workflow_Instructions.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/Workflow_Instructions.md:1).
+- Phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/compatibility-docs-cleanup/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/compatibility-docs-cleanup/feedback.md:1).
+
+What I analyzed
+- Existing doc-pin coverage already added for forbidden legacy tokens.
+- The remaining regression risk after the implementer fix: `Workflow_Instructions.md` could silently lose the new route-metadata vocabulary while still avoiding the old forbidden tokens.
+- The smallest deterministic assertion that would catch that drift without adding unrelated churn.
+
+What I changed
+- Added `tests/test_architecture_baseline_docs.py::test_workflow_instructions_teach_route_metadata_vocabulary` to assert the repo-root guide positively teaches `readable inputs`, `required inputs`, `writable artifacts`, `route_infos`, `route_required_outputs`, `explicit route metadata`, and `typed control surface`.
+- Updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/compatibility-docs-cleanup/test_strategy.md:1) with a behavior-to-test map, preserved invariants, failure paths, flake notes, and known gaps.
+- Appended a concise validation summary to the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/test/phases/compatibility-docs-cleanup/feedback.md:1).
+
+Key findings / decisions
+- The narrowed doc cleanup needed one positive regression, not just forbidden-token scans.
+- The added test is deterministic and phase-local; it strengthens the public authoring contract without touching unrelated runtime behavior.
+- Validation passed: `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py -k 'public_docs_do_not_teach_route_contract_or_board_mutation_authoring or workflow_instructions_teach_route_metadata_vocabulary' -q` -> `2 passed, 42 deselected`.
+
+Open issues / next step
+- The broader recursive-memory assertions in `tests/test_architecture_baseline_docs.py` remain outside this phase scope and are intentionally not normalized here.
