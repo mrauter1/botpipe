@@ -1,11 +1,11 @@
-"""Optional route-contract helper bundles for common flow patterns."""
+"""Optional route-info helper bundles for common flow patterns."""
 
 from __future__ import annotations
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.route_contracts import RouteContract
+    from ..core.routes import RouteInfo
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.route_contracts import RouteContract
+    from core.routes import RouteInfo
 
 
 def review_gate_contracts(
@@ -13,19 +13,17 @@ def review_gate_contracts(
     complete: str = "review_complete",
     rework: str = "needs_rework",
     required_artifacts: tuple[str, ...] = (),
-) -> dict[str, RouteContract]:
+) -> dict[str, RouteInfo]:
     """Return one explicit review gate bundle without hiding transitions."""
 
     return {
-        complete: RouteContract(
+        complete: RouteInfo(
             summary="The review outcome is complete and ready for the next explicit transition.",
-            required_artifacts=required_artifacts,
-            work_item_effect="Advances the reviewed work item once the declared evidence exists.",
+            required_outputs=required_artifacts,
         ),
-        rework: RouteContract(
+        rework: RouteInfo(
             summary="The same review boundary still holds, but the work needs local repair before it can advance.",
-            required_artifacts=required_artifacts,
-            work_item_effect="Keeps the current review boundary intact and routes back for local rework.",
+            required_outputs=required_artifacts,
         ),
     }
 
@@ -34,14 +32,13 @@ def publication_gate_contracts(
     *,
     published: str = "published",
     required_artifacts: tuple[str, ...] = (),
-) -> dict[str, RouteContract]:
+) -> dict[str, RouteInfo]:
     """Return one minimal publication gate bundle."""
 
     return {
-        published: RouteContract(
+        published: RouteInfo(
             summary="Publication completed and the required receipt artifacts exist.",
-            required_artifacts=required_artifacts,
-            work_item_effect="Marks the current work item as published without introducing hidden automation.",
+            required_outputs=required_artifacts,
         )
     }
 

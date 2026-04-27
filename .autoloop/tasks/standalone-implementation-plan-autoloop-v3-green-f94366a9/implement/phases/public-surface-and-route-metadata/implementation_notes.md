@@ -23,6 +23,7 @@
 - `core/workflow_capabilities.py`
 - `runtime/static_graph.py`
 - `runtime/cli.py`
+- `stdlib/contracts.py`
 - `workflow/__init__.py`
 - `tests/unit/test_simple_surface.py`
 - `tests/unit/test_provider_boundary_core.py`
@@ -58,6 +59,7 @@
 - `autoloop.simple` now exposes explicit helper signatures for `step`, `review_step`, `system_step`, and `workflow_step` instead of `**kwargs` wrappers.
 - Core/public route metadata now validates/normalizes `summary`, `required_outputs`, and `handoff`.
 - Simple `workflow_step(...)` lowers to a real core `WorkflowStep` instead of a generated `SystemStep` handler.
+- `stdlib.review_gate_contracts(...)` and `stdlib.publication_gate_contracts(...)` now return `RouteInfo` bundles so `stdlib` no longer imports the deleted `core.route_contracts` module.
 
 ## Known non-changes
 - No bundled workflow under `workflows/*` was migrated off legacy `route_contracts` in this phase.
@@ -72,6 +74,7 @@
 - `python3 -m py_compile` on all touched Python modules and the updated unit tests.
 - `rg` checks confirming `RouteContract` and `route_contracts` no longer appear in the touched public/core/runtime/provider export surfaces.
 - `python3 -m py_compile autoloop/simple.py workflow/__init__.py` after the reviewer-driven follow-up edits.
+- `python3 -m py_compile stdlib/contracts.py stdlib/__init__.py` after migrating the exported stdlib helper bundle off `RouteContract`.
 
 ## Validation limits
 - `pytest` could not run because `pytest` is not installed in this environment.
@@ -81,3 +84,4 @@
 - Centralized route metadata validation in `core/routes.py`.
 - Centralized simple route-info lowering in `core/validation.py`.
 - Centralized direct system-step return normalization in `core/compiler.py`.
+- Kept the `stdlib` regression fix local to `stdlib/contracts.py` instead of changing `stdlib/__init__.py` exports, so the exported helper surface survives while still removing the deleted import path.

@@ -409,3 +409,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m fixing the last reviewer blocker by tracing how `stdlib/contracts.py` is used. If its helpers are already only consumed as route metadata bundles, I can migrate them to `RouteInfo` directly and keep the exported `stdlib` surface intact.
+
+I confirmed the `stdlib` helper bundle is only exported through `stdlib.__init__` and used by tests, so I’m migrating it to `RouteInfo` rather than deleting the export. That resolves the active import regression without reintroducing `RouteContract`.
+
+I’ve migrated the exported `stdlib` helper bundle off the deleted module. I’m doing a compile check now and then I’ll update the phase notes to justify the small out-of-phase `stdlib` touch as regression control.
+
+Scope considered
+
+- Phase-local fix for the remaining reviewer blocker in the public-surface and route-metadata phase.
+- I limited code changes to the active import surface that was still broken after `RouteContract` removal: [stdlib/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/contracts.py:1), plus the phase implementation notes.
+
+What I analyzed
+
+- How `stdlib` exposes its helper bundle through [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py:16).
+- Whether `review_gate_contracts(...)` / `publication_gate_contracts(...)` are used as live route metadata helpers or only as legacy contract wrappers.
+- The remaining reviewer feedback to keep the fix scoped to the active `stdlib` regression instead of reopening broader workflow/test migration.
+
+What I changed
+
+- Migrated [stdlib/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/contracts.py:1) from `RouteContract` imports/returns to `RouteInfo` imports/returns.
+- Preserved the exported helper names and parameter shape, but mapped `required_artifacts` into `RouteInfo.required_outputs` so `stdlib` no longer depends on the deleted `core.route_contracts` module.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/public-surface-and-route-metadata/implementation_notes.md:1) to record the out-of-phase-but-necessary `stdlib` touch as regression control.
+
+Key findings / decisions
+
+- I did not remove the `stdlib` exports from `stdlib.__init__`; migrating the helper implementation was smaller and avoids introducing a new public-surface regression.
+- This keeps the `stdlib` import path live while still honoring the no-`RouteContract` direction.
+
+Open issues / next step
+
+- I ran `python3 -m py_compile stdlib/contracts.py stdlib/__init__.py`.
+- I still did not run `pytest`; the environment limitations noted earlier remain.
+- The next verifier pass should be able to clear the last blocker if it agrees that the `stdlib` import regression is now resolved.
