@@ -561,6 +561,44 @@ def test_collect_and_validate_optimization_publication_surface_aggregates_counts
     )
 
 
+def test_validate_optimization_scorecard_publication_rejects_unknown_high_priority_candidate_ids() -> None:
+    with pytest.raises(
+        ValueError,
+        match="workflow_optimization_scorecard.json highest_priority_candidate_ids must refer to validated candidate artifacts",
+    ):
+        validate_optimization_scorecard_publication(
+            {
+                "candidate_counts": {"producer": 1},
+                "highest_priority_candidate_ids": ["producer-001", "missing-999"],
+                "requires_ablation_before_promotion": False,
+            },
+            publication_surface=SimpleNamespace(
+                counts={"producer": 1},
+                candidate_ids={"producer-001"},
+                requires_ablation=False,
+            ),
+        )
+
+
+def test_validate_optimization_scorecard_publication_rejects_ablation_flag_mismatch() -> None:
+    with pytest.raises(
+        ValueError,
+        match="workflow_optimization_scorecard.json requires_ablation_before_promotion must match validated candidate ablation requirements",
+    ):
+        validate_optimization_scorecard_publication(
+            {
+                "candidate_counts": {"producer": 1},
+                "highest_priority_candidate_ids": ["producer-001"],
+                "requires_ablation_before_promotion": False,
+            },
+            publication_surface=SimpleNamespace(
+                counts={"producer": 1},
+                candidate_ids={"producer-001"},
+                requires_ablation=True,
+            ),
+        )
+
+
 def _write_minimal_run_metadata(root: Path, task_id: str, workflow_name: str, run_id: str, status: str) -> Path:
     run_dir = root / ".autoloop" / "tasks" / task_id / f"wf_{workflow_name}" / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
