@@ -120,3 +120,89 @@ The producer plan needs a revision that explicitly covers the top-level `autoloo
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+---
+I’m revising the plan against the verifier’s two blocking gaps now: the real import-path contract for `autoloop.simple`, and the undeclared-workspace-output invariant during provider/rendering migration. I’ll tighten the narrative, phase criteria, and shared decisions so the next verification pass has explicit guidance instead of assumptions.
+
+The revisions are focused and mechanical: I’m not changing scope, just making the missing public-import and undeclared-output invariants explicit in the plan, phase criteria, and decision ledger so implementers cannot drift into a narrower behavior.
+
+The YAML file was normalized to plain scalars on disk, so the quoted-context patch missed. I’m reapplying the changes in smaller pieces against the actual serialized content and then I’ll re-parse the YAML again.
+
+The plan revisions are in. I’m running the required YAML parse now and then I’ll do a short consistency pass against the verifier findings to make sure the fixes are actually visible in the artifacts.
+
+Scope considered
+
+I stayed within the active planning artifacts and the repo surfaces tied to the verifier’s two blocking findings: import-path compatibility for the new public simple API and provider/rendering behavior around undeclared workspace outputs.
+
+What I analyzed
+
+I re-read the blocking verifier feedback, the current [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/phase_plan.yaml), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt), then checked the existing dual import-mode pattern in [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py) and the current public authoring guidance in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md). I also re-parsed `phase_plan.yaml` with `python3` and `yaml.safe_load`.
+
+What I changed
+
+I tightened [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/plan.md) so it now explicitly requires `autoloop.simple` to work across both repo-root and installed-package execution modes, and explicitly preserves undeclared workspace outputs as a non-exclusive invariant during provider/rendering migration. I updated [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/phase_plan.yaml) to reflect those requirements in phase objectives, scope, acceptance criteria, deliverables, and risks. I appended a repair note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/feedback.md) and recorded the two non-obvious corrected constraints under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+The plan now makes the documented `autoloop.simple` contract explicit instead of assuming repo-root-only behavior, and it keeps any required import-path or packaging glue in scope rather than silently degrading to `autoloop_v3.autoloop.simple`. It also now states, in the core migration and regression-control sections, that declared writable artifacts are governed but non-exclusive surfaces and that provider-rendered contract text must not imply undeclared outputs are forbidden.
+
+Open issues / next step
+
+No new ambiguity surfaced while addressing the verifier findings. The next step is another verification pass against the revised plan artifacts.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd00c-8cb5-7f12-a32b-20a40bc7c302
+---
+I’m re-checking the revised plan against the two prior blockers, the original request, and the decision ledger now. If the import-path and undeclared-output gaps are really closed, I’ll mark the criteria complete and record the prior findings as resolved rather than leaving stale blocking state behind.
+
+The revised plan now closes the two prior blockers in the plan text and phase contract, so I’m clearing the criteria and recording the old findings as resolved rather than inventing new issues.
+
+The verifier state is updated. I’m doing one last spot-check so the final status matches the artifacts exactly before I close this pass as complete.
+
+Scope considered
+
+I verified the revised planning artifacts against the immutable request, the raw log, the shared decisions ledger, and the two previously blocking compatibility/safety gaps around `autoloop.simple` import behavior and undeclared workspace outputs.
+
+What I analyzed
+
+I re-read [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt). I also re-validated `phase_plan.yaml` with `python3` and `yaml.safe_load`; metadata and required lists are valid.
+
+What I reviewed
+
+The revised plan now explicitly requires `autoloop.simple` to work across both repo-root and installed-package execution modes, keeps any needed import-path glue in scope, and makes undeclared workspace outputs a preserved non-exclusive invariant throughout provider/rendering migration, regression controls, and validation. The phase contract reflects those requirements in scope, acceptance criteria, risks, and deliverables.
+
+Key findings / decisions
+
+No blocking findings remain. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/criteria.md) so all verification boxes are checked.
+
+I appended closure entries to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/plan/feedback.md), marking `PLAN-001` and `PLAN-002` as resolved by the cycle-2 plan revision while preserving the historical blocking entries for traceability.
+
+Open issues / next step
+
+The plan artifacts are now consistent with the request and the verifier-owned criteria. The planning loop can close, and implementation can proceed from the current plan set.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
