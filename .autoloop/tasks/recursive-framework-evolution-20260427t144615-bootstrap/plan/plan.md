@@ -11,6 +11,7 @@ Implement an additive `autoloop.simple` authoring surface that lowers into the e
 
 ## Current Repo Constraints
 - `core.Workflow` is strict today because `WorkflowMeta` validates at class definition time; current `workflow` shim exports that strict surface and strictness tests pin it.
+- The repo already has two import modes in practice: installed-package imports through `autoloop_v3.*` and repo-root fallback imports. Any new public `autoloop.simple` surface must account for both rather than assuming repo-root execution only.
 - `route_contracts` currently drive validation, provider request payloads, provider rendering, static graph output, CLI metadata, bundled workflows, and many tests.
 - Prompt resolution is already lazy at runtime via `PromptRegistry` and `FilesystemPromptRegistry`; that should be extended, not replaced.
 - Artifact enforcement is currently route-contract-first, then artifact `required=True`; simple authoring must preserve that execution rule while renaming/publicly reframing the concept.
@@ -19,7 +20,10 @@ Implement an additive `autoloop.simple` authoring surface that lowers into the e
 ## Implementation Strategy
 
 ### Milestone 1: Additive public surface and foundation types
-- Add a new repo-root `autoloop/` package with `simple.py` so repo-root execution supports `from autoloop.simple import ...` without disturbing `workflow/__init__.py`.
+- Add a new public `autoloop.simple` surface without disturbing `workflow/__init__.py`, and make the documented `from autoloop.simple import ...` contract work in both supported execution modes:
+  - repo-root execution where the repository root is on `sys.path`
+  - installed-package execution where current imports resolve through `autoloop_v3.*`
+- If exposing the exact top-level `autoloop.simple` name in installed-package mode requires packaging/distribution glue beyond a plain subpackage, keep that glue in scope rather than silently degrading to `autoloop_v3.autoloop.simple`.
 - Keep `workflow` as the strict compatibility shim in the first pass; do not change its default behavior or exports until compatibility work is complete.
 - Extend prompt types with explicit inline/file constructors and richer resolved metadata:
   - `Prompt.inline(text)`
@@ -38,6 +42,10 @@ Implement an additive `autoloop.simple` authoring surface that lowers into the e
   - `route_infos`
   - `route_required_outputs`
   - readable/required/writable artifact groupings
+- Preserve the non-exclusive artifact-governance invariant during provider/rendering migration:
+  - declared writable artifacts are governed/typed surfaces, not an exclusive allow-list
+  - provider prompts and runtime metadata must not say or imply undeclared workspace files are forbidden
+  - undeclared workspace outputs remain allowed unless runtime policy explicitly changes in a separate confirmed task
 - Keep temporary adapters so legacy `route_contracts` still normalize into the new compiled shape until bundled workflows/tests are migrated.
 - Relax validation so application routes no longer require contracts/summaries, while still rejecting unknown route metadata and invalid required-output references.
 
@@ -85,6 +93,9 @@ Implement an additive `autoloop.simple` authoring surface that lowers into the e
 - New additive package:
   - `autoloop/__init__.py`
   - `autoloop/simple.py`
+- Import-path compatibility requirement:
+  - `autoloop.simple` is the documented surface in both repo-root and installed-package execution
+  - `autoloop_v3.*` compatibility may remain internally, but it must not become the only working path for the new simple API
 - `autoloop.simple` exports:
   - `Workflow`
   - `StrictWorkflow`
@@ -129,6 +140,7 @@ Implement an additive `autoloop.simple` authoring surface that lowers into the e
 - `core.providers.models` / `rendering` / `fake`:
   - route-info and readable-input vocabulary
   - compatibility aliases during migration
+  - explicit non-exclusive writable-artifact wording and tests
 - `runtime.static_graph` and CLI metadata payloads:
   - stop centering `route_contracts`
   - include new route metadata fields while remaining readable for compatibility tests during transition
@@ -136,6 +148,7 @@ Implement an additive `autoloop.simple` authoring surface that lowers into the e
 ## Compatibility Notes
 - The strict `workflow` shim remains the authoritative current surface during the early phases; `autoloop.simple` is additive first.
 - Current strictness tests pin `workflow.__all__` and root-shim behavior. Do not break those tests until the compatibility phase explicitly updates them.
+- The simple API’s documented import path is `autoloop.simple`, so the implementation plan must validate that path in both repo-root and installed-package execution instead of assuming one environment.
 - Bundled workflows under `workflows/*` currently import `Workflow`, `PairStep`, `SystemStep`, and `RouteContract` from `workflow`; they should continue compiling unchanged until their migration phase.
 - Legacy `route_contracts` mapping support remains temporarily available internally so provider, static-graph, CLI, and bundled-workflow changes can land incrementally.
 - Public docs should not jump to `autoloop.simple` until the runtime/compiler/provider path behind it is implemented end to end.
@@ -149,12 +162,16 @@ Implement an additive `autoloop.simple` authoring surface that lowers into the e
 - Preserve existing reserved-route semantics (`question`, `blocked`, `failed`) as runtime-understood routes.
 - Do not change provider retry semantics except where hook-driven route overrides require final-route revalidation.
 - Keep prompt-file resolution lazy and fail clearly only at compile/run time when a file is actually needed.
+- Preserve the current undeclared-output behavior explicitly: declared writable artifacts remain non-exclusive, runtime validation does not fail on other workspace writes, and provider-rendered contract text must not narrow write permission by implication.
 
 ## Validation And Test Plan
 - Add focused tests for:
+  - actual `from autoloop.simple import ...` availability in repo-root and installed-package import modes
   - simple workflow declaration, name inference, entry inference, `chain(...)`, and inline prompts
   - `Prompt.inline` / `Prompt.file` / `Path` prompt resolution
   - artifact helper defaults and schema-vs-control-schema separation
+  - undeclared workspace outputs remaining allowed after provider/rendering migration
+  - provider-rendered contract wording not implying declared outputs are an exclusive allow-list
   - `reads` vs `requires`
   - route summary inference and unknown-route rejection
   - `review_step` default loop semantics
@@ -165,8 +182,9 @@ Implement an additive `autoloop.simple` authoring surface that lowers into the e
 - Re-run bundled workflow compilation/regression tests after each migration slice because those workflows currently depend heavily on route-contract normalization.
 
 ## Risk Register
-- Public package naming risk: the repo does not currently expose an `autoloop` package. Mitigation: add `autoloop/` as an additive package under repo root and mirror existing fallback import patterns where needed.
+- Public package naming risk: the repo does not currently expose an `autoloop` package, and repo-root and installed-package import modes differ. Mitigation: make import-path compatibility an explicit deliverable, including any packaging/shim work needed so `autoloop.simple` is not repo-root-only.
 - Compatibility risk: `route_contracts` is wired into many tests and bundled workflows. Mitigation: keep an internal adapter until migration is complete; do not remove the legacy surface early.
+- Behavior-narrowing risk: provider/rendering changes could accidentally imply that only declared writable artifacts may be written. Mitigation: keep the non-exclusive writable-artifact invariant explicit in implementation, rendering, and tests.
 - Validation drift risk: simple-workflow inference could bypass strict invariants. Mitigation: simple declarations must lower into the same `WorkflowDefinition` / `CompiledWorkflow` path used today.
 - Hook-order risk: `after` route overrides can invalidate pre-hook enforcement assumptions. Mitigation: move final route/artifact enforcement after hook normalization exactly once in engine flow.
 - Child-workflow risk: `WorkflowStep` can create topology/loop regressions. Mitigation: compile it as a first-class step kind and validate it with the same route/topology checks rather than embedding it inside pair-step internals.
