@@ -13,12 +13,12 @@
       "proof-docs-memory-closeout"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "proof-docs-memory-closeout"
+    "current_phase_index": 2,
+    "current_phase_id": null
   },
   "phase_status": {
     "optimization-helper-consolidation": "completed",
-    "proof-docs-memory-closeout": "in_progress"
+    "proof-docs-memory-closeout": "completed"
   },
   "phase_history": [
     {
@@ -39,6 +39,13 @@
       "run_id": "run-20260427T160524Z-93840723",
       "status": "in_progress",
       "ts": "2026-04-27T16:34:19.258594+00:00"
+    },
+    {
+      "phase_id": "proof-docs-memory-closeout",
+      "run_id": "run-20260427T160524Z-93840723",
+      "status": "completed",
+      "ts": "2026-04-27T16:45:35.244446+00:00",
+      "pair": "test"
     }
   ]
 }
