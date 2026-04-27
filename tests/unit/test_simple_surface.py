@@ -14,12 +14,17 @@ from pydantic import BaseModel
 from autoloop.simple import AfterHookResult, Json, Md, Prompt, Route, RouteInfo, StrictWorkflow, Workflow, chain, review_step, step, system_step, workflow_step
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.errors import WorkflowValidationError
+from autoloop_v3.core.primitives import Event
 from autoloop_v3.core.prompts import PromptRegistry
 from autoloop_v3.runtime.prompts import FilesystemPromptRegistry
 from autoloop_v3.core.steps import SystemStep, WorkflowStep
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class _SystemWorkflowState(BaseModel):
+    notes: int = 0
 
 
 def _probe_simple_surface(*pythonpath: Path, cwd: Path) -> dict[str, object]:
@@ -275,14 +280,11 @@ def test_simple_workflow_step_preserves_message_metadata_on_core_step() -> None:
 
 
 def test_simple_system_step_lowers_to_core_system_handler_without_on_step_method() -> None:
-    class WorkflowState(BaseModel):
-        notes: int = 0
-
-    def run(state: WorkflowState, ctx: object) -> tuple[WorkflowState, str]:
-        return WorkflowState(notes=state.notes + 1), "done"
+    def run(state: _SystemWorkflowState, ctx: object) -> tuple[_SystemWorkflowState, str]:
+        return _SystemWorkflowState(notes=state.notes + 1), "done"
 
     class SystemWorkflow(Workflow):
-        State = WorkflowState
+        State = _SystemWorkflowState
         run = system_step(run, out=Md("note"))
         flow = chain(run)
 
@@ -291,10 +293,40 @@ def test_simple_system_step_lowers_to_core_system_handler_without_on_step_method
     assert isinstance(compiled.steps["run"].step, SystemStep)
     assert "on_run" not in SystemWorkflow.__dict__
 
-    next_state, event = compiled.steps["run"].system_handler(WorkflowState(), object())
+    next_state, event = compiled.steps["run"].system_handler(_SystemWorkflowState(), object())
 
     assert next_state.notes == 1
     assert event.tag == "done"
+
+
+@pytest.mark.parametrize(
+    ("handler_fn", "initial_notes", "expected_notes", "expected_tag"),
+    [
+        (lambda ctx: None, 3, 3, "done"),
+        (lambda ctx: _SystemWorkflowState(notes=7), 3, 7, "done"),
+        (lambda ctx: "question", 3, 3, "question"),
+        (lambda ctx: Event("blocked"), 3, 3, "blocked"),
+        (lambda state, ctx: (_SystemWorkflowState(notes=state.notes + 1), "done"), 1, 2, "done"),
+        (lambda state, ctx: (_SystemWorkflowState(notes=state.notes + 2), Event("failed")), 1, 3, "failed"),
+    ],
+)
+def test_simple_system_step_normalizes_supported_handler_signatures_and_return_shapes(
+    handler_fn,
+    initial_notes: int,
+    expected_notes: int,
+    expected_tag: str,
+) -> None:
+    class SystemWorkflow(Workflow):
+        State = _SystemWorkflowState
+        run = system_step(handler_fn, out=Md("note"))
+        flow = chain(run)
+
+    compiled = compile_workflow(SystemWorkflow)
+
+    next_state, event = compiled.steps["run"].system_handler(_SystemWorkflowState(notes=initial_notes), object())
+
+    assert next_state.notes == expected_notes
+    assert event.tag == expected_tag
 
 
 def test_strict_workflow_counterpart_preserves_import_time_validation() -> None:
