@@ -838,3 +838,62 @@ The implementation should be revised to unify workflow-member enumeration betwee
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+I’m addressing the reviewer’s three blocking findings only: inherited simple-declaration lowering, ambiguous read fallback, and missing after-hook route-override validation. I’ll patch the shared validation/compilation path first, then add focused regression tests and refresh the phase notes.
+
+I’ve narrowed the fix set to one shared member-enumeration helper, one shared optional-read resolver, and one conservative static after-hook route validator. I’m editing those in `core/validation.py` first so loader, compiler, and tests can all reuse the same behavior instead of adding another partial path.
+
+The fixes are in. I’m running the exact regressions the reviewer called out, plus the existing phase-scoped discovery/system-step tests, before I touch the phase notes again.
+
+The reviewer findings are resolved in code and in the targeted regressions. I’m updating the phase ledger and notes now so the next turn doesn’t lose the constraints around inherited-member discovery, read fallback, and conservative static hook validation.
+
+I’m addressing the three reviewer blockers in the normalization/discovery scope and rechecking the touched validation, compiler, and test surfaces before closing the phase.
+
+I found one artifact-side issue in the turn bookkeeping: the new decision lines were appended before a fresh header, so I’m fixing that ledger layout and then rerunning the targeted checks.
+
+I’ve confirmed the code-side fixes are in place; the remaining cleanup is the decision-ledger header ordering and one more targeted pass over the new validation helpers.
+
+I’m only changing the phase artifacts now: fixing the decision block layout so the turn ledger stays consistent with the execution contract.
+
+The implementation changes are stable; I’m rerunning the exact regression nodes that cover the reviewer findings and the inherited-workflow path to close the loop cleanly.
+
+Scope considered
+
+Phase-local normalization/discovery only. I stayed within the reviewer’s blocking findings and the active phase deliverables: simple-workflow lowering, workflow discovery before lowering, optional `reads` handling, and prototype validation for after-hook route overrides.
+
+What I analyzed
+
+I rechecked the verifier findings against [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), and the scoped regression tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py). I also fixed the turn-local decision ledger ordering in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/decisions.txt) and refreshed [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/normalization-and-discovery/implementation_notes.md).
+
+What I changed
+
+Inherited workflow declarations now lower through the same visible-namespace traversal used by discovery, so subclasses that inherit simple declarations compile consistently instead of being discoverable-but-uncompilable.
+
+Optional read fallback is now narrow and centralized: unknown string/path reads remain optional workspace reads, but ambiguous or otherwise invalid declared-artifact references still fail instead of silently degrading to raw paths.
+
+Prototype validation now checks statically resolvable after-hook route overrides and rejects unknown routes or conflicting `AfterHookResult(route=..., event=...)` combinations without executing hook code.
+
+Key findings / decisions
+
+The three blocking reviewer findings are addressed in code and covered by targeted regression tests.
+
+Validation run:
+- `.venv/bin/python -m pytest tests/unit/test_simple_surface.py::test_inherited_simple_workflow_declarations_remain_discoverable_and_compilable tests/unit/test_validation.py::test_validation_rejects_ambiguous_declared_read_reference tests/unit/test_validation.py::test_validation_rejects_statically_invalid_after_hook_route_override tests/runtime/test_workflow_reference_resolution.py::test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection`
+- Result: `4 passed`
+
+Open issues / next step
+
+The phase-local fixes are in place and the reviewer blockers are resolved. I did not rerun the full suite; the known unrelated baseline failures in broader runtime/reference coverage remain out of scope for this phase.

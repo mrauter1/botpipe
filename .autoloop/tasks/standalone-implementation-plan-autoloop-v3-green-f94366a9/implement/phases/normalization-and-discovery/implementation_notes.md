@@ -19,11 +19,14 @@
 
 ## Symbols touched
 - `core.validation.is_workflow_class`
+- `core.validation._visible_workflow_namespace_items`
 - `core.validation.describe_workflow_class`
+- `core.validation.resolve_optional_read_reference`
 - `core.validation._inject_reserved_routes`
 - `core.validation._validate_handlers`
 - `core.validation._validate_required_artifacts`
 - `core.validation._validate_artifact_graph`
+- `core.validation._validate_after_hook_route_overrides`
 - `core.validation._validate_control_contracts`
 - `core.validation._validate_workflow_step_reference`
 - `core.compiler._compile_read_reference`
@@ -38,7 +41,7 @@
 - Deferred within this phase: provider rendering/request-shape work and engine execution-order changes remain untouched.
 
 ## Assumptions
-- Unknown string reads should be treated as optional workspace paths for this phase, not hard validation failures.
+- Unknown string reads should be treated as optional workspace paths for this phase, but ambiguous declared-artifact reads must still fail.
 - Existing runtime/reference tests that still import strict surfaces from `workflow` are out-of-phase regressions and were not migrated here.
 
 ## Preserved invariants
@@ -48,9 +51,11 @@
 
 ## Intended behavior changes
 - Simple declaration workflows are now discoverable by file path, module path, and catalog name before lowering.
+- Inherited simple declarations now compile through the same member discovery path used by workflow-class detection.
 - Reserved `question` / `blocked` / `failed` routes are always present for normalized steps unless explicitly overridden.
 - Direct system handlers validate with the same 1-arg/2-arg contract used by compilation.
 - Optional reads no longer create artifact-graph edges or fail solely because the producer is later or absent.
+- Statically resolvable after-hook route overrides now fail validation when they target unknown routes or declare a conflicting `AfterHookResult(route=..., event=...)`.
 
 ## Known non-changes
 - No provider rendering changes.
@@ -59,12 +64,14 @@
 
 ## Expected side effects
 - Capability/inspection transition payloads for normalized workflows now include reserved pause/fail routes.
-- Compiled step `reads` can now contain raw workspace-path strings alongside qualified declared-artifact names.
+- Compiled step `reads` can now contain raw workspace-path strings alongside qualified declared-artifact names, but ambiguous declared-artifact reads still stop compilation.
 
 ## Validation performed
 - `.venv/bin/python -m py_compile core/validation.py core/compiler.py core/workflow_capabilities.py runtime/loader.py tests/unit/test_validation.py tests/unit/test_simple_surface.py tests/runtime/test_workflow_reference_resolution.py`
 - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py::test_simple_single_step_workflow_compiles_with_inferred_entry_and_success_route tests/unit/test_simple_surface.py::test_simple_workflow_step_compiles_as_core_workflow_step_without_generated_handler tests/unit/test_simple_surface.py::test_simple_system_step_lowers_to_core_system_handler_without_on_step_method tests/unit/test_simple_surface.py::test_simple_system_step_normalizes_supported_handler_signatures_and_return_shapes tests/unit/test_validation.py::test_validation_accepts_direct_system_step_handler_without_on_step_method tests/unit/test_validation.py::test_validation_rejects_invalid_workflow_step_child_class_reference tests/unit/test_validation.py::test_compilation_exposes_step_control_contracts tests/unit/test_validation.py::test_validation_rejects_future_read_artifacts tests/unit/test_validation.py::test_validation_allows_application_routes_without_explicit_route_infos tests/runtime/test_workflow_reference_resolution.py::test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection`
+- `.venv/bin/python -m pytest tests/unit/test_simple_surface.py::test_inherited_simple_workflow_declarations_remain_discoverable_and_compilable tests/unit/test_validation.py::test_validation_rejects_ambiguous_declared_read_reference tests/unit/test_validation.py::test_validation_rejects_statically_invalid_after_hook_route_override`
 - Full phase file test runs were not used as acceptance gates because unrelated pre-existing failures remain in `tests/runtime/test_workflow_reference_resolution.py` and unrelated baseline assertions in broader suites.
 
 ## Deduplication / centralization
-- Workflow-class detection is centralized in `core.validation.is_workflow_class` and reused by both runtime loading and capability inspection.
+- Workflow-class detection and inherited-member lowering now share the same visible-namespace traversal in `core.validation`.
+- Optional read resolution is centralized in `core.validation.resolve_optional_read_reference` so compiler fallback rules do not drift from validation semantics.

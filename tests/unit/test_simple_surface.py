@@ -175,6 +175,20 @@ def test_simple_single_step_workflow_compiles_with_inferred_entry_and_success_ro
     assert compiled.new_state().model_dump(mode="python") == {}
 
 
+def test_inherited_simple_workflow_declarations_remain_discoverable_and_compilable() -> None:
+    class BaseWorkflow(Workflow):
+        note = step("Write a short note.", out=Md("note"))
+        flow = chain(note)
+
+    class ChildWorkflow(BaseWorkflow):
+        pass
+
+    compiled = compile_workflow(ChildWorkflow)
+
+    assert compiled.entry_step_name == "note"
+    assert tuple(compiled.steps) == ("note",)
+
+
 def test_simple_chain_and_review_step_lower_into_existing_compiled_workflow_model() -> None:
     class Analysis(BaseModel):
         summary: str
