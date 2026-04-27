@@ -5,13 +5,15 @@ import os
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
 
-from autoloop.simple import Json, Md, Prompt, Route, RouteInfo, StrictWorkflow, Workflow, chain, review_step, step
+from autoloop.simple import Json, Md, Prompt, Route, RouteInfo, StrictWorkflow, Workflow, chain, review_step, step, workflow_step
 from autoloop_v3.core.compiler import compile_workflow
+from autoloop_v3.core.primitives import Event
 from autoloop_v3.core.errors import WorkflowValidationError
 from autoloop_v3.core.prompts import PromptRegistry
 from autoloop_v3.runtime.prompts import FilesystemPromptRegistry
@@ -210,6 +212,81 @@ def test_simple_placeholder_inference_is_conservative_about_bare_name_ambiguity(
 
     assert compiled.steps["publish"].reads == ()
     assert compiled.steps["publish"].requires == ()
+
+
+def test_simple_file_prompt_infers_reads_from_unambiguous_placeholders(tmp_path: Path) -> None:
+    class Analysis(BaseModel):
+        summary: str
+
+    prompt_path = tmp_path / "publish.md"
+    prompt_path.write_text("Publish a short summary of {analysis}.", encoding="utf-8")
+
+    class FilePromptWorkflow(Workflow):
+        analysis = step("Produce the analysis.", out=Json("analysis", Analysis))
+        publish = step(prompt_path)
+        flow = chain(analysis, publish)
+
+    compiled = compile_workflow(FilePromptWorkflow)
+
+    assert compiled.steps["publish"].reads == ("analysis.analysis",)
+    assert compiled.steps["publish"].requires == ()
+
+
+def test_simple_workflow_step_compiles_and_generated_handler_invokes_child_workflow(tmp_path: Path) -> None:
+    class ChildWorkflow(Workflow):
+        note = step("Write the note.")
+
+    class ParentState(BaseModel):
+        done: bool = False
+
+    class ParentWorkflow(Workflow):
+        State = ParentState
+        launch = workflow_step(
+            ChildWorkflow,
+            message="Run child workflow",
+            out=Json("child_result"),
+        )
+        flow = chain(launch)
+
+    compiled = compile_workflow(ParentWorkflow)
+
+    assert compiled.entry_step_name == "launch"
+    assert compiled.routes["launch"]["done"].target == "SUCCESS"
+    assert compiled.routes["launch"]["failed"].target == "FAIL"
+    assert compiled.routes["launch"]["blocked"].target == "PAUSE"
+    assert compiled.steps["launch"].kind == "system"
+
+    @dataclass
+    class _FakeChildResult:
+        workflow_name: str = "child_workflow"
+        run_id: str = "run-child-1"
+        terminal: str = "SUCCESS"
+        status: str = "success"
+        last_event: Event | None = Event("done")
+        output_artifacts: dict[str, Path] | None = None
+        output_metadata: dict[str, object] | None = None
+
+    class _FakeContext:
+        def __init__(self) -> None:
+            self.workflow_folder = tmp_path / "parent"
+            self.workflow_folder.mkdir(parents=True, exist_ok=True)
+            self.invocations: list[tuple[object, str, dict[str, object], object]] = []
+
+        def invoke_workflow(self, workflow, *, message, parameters=None, input=None):
+            self.invocations.append((workflow, message, dict(parameters or {}), input))
+            return _FakeChildResult(output_artifacts={"note": self.workflow_folder / "child-note.md"}, output_metadata={})
+
+    ctx = _FakeContext()
+    state = ParentState()
+    next_state, event = ParentWorkflow.on_launch(state, ctx)
+    payload = json.loads((ctx.workflow_folder / "launch" / "child_result.json").read_text(encoding="utf-8"))
+
+    assert next_state == state
+    assert event.tag == "done"
+    assert ctx.invocations == [(ChildWorkflow, "Run child workflow", {}, None)]
+    assert payload["workflow_name"] == "child_workflow"
+    assert payload["terminal"] == "SUCCESS"
+    assert payload["output_artifacts"]["note"].endswith("child-note.md")
 
 
 def test_strict_workflow_counterpart_preserves_import_time_validation() -> None:

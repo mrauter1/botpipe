@@ -1021,3 +1021,64 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+I’m addressing the two reviewer findings: `workflow_step(...)` still doesn’t lower, and file-backed prompt placeholders don’t participate in `reads` inference. I’m reading the child-workflow runtime seam and the existing prompt registry/search-root path before I edit, so I can fix both without inventing a parallel mechanism.
+
+The child-workflow seam is already there through `ctx.invoke_workflow(...)`, so I can satisfy the reviewer without inventing a new engine path by lowering `workflow_step(...)` to a generated system-style step for this phase. I’m also moving file-prompt text resolution into a shared prompt helper so validation and runtime use the same lookup behavior instead of two different rules.
+
+I’m editing the shared prompt resolution first so both runtime prompt loading and validation-time placeholder inference use the same file lookup behavior. After that I’ll wire `workflow_step(...)` lowering through a generated system handler over `ctx.invoke_workflow(...)`.
+
+I’ve wired the core code paths. Next I’m adding regression tests for the two exact repros from review: a file-backed prompt with `{analysis}` and a simple `workflow_step(...)` that now compiles and runs through a generated child-workflow handler.
+
+The targeted regression slices are green, including runtime-backed `ctx.invoke_workflow(...)` coverage around the prompt resolver. I’m updating the phase notes now to replace the earlier `workflow_step` deferment with the actual synthetic-system-step implementation and the shared file-prompt inference path.
+
+Scope considered
+
+- Phase-local `simple-lowering` only, focused on the two blocking review findings: `workflow_step(...)` lowering and file-backed prompt placeholder inference.
+
+What I analyzed
+
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py)
+- [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py)
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/feedback.md)
+
+What I changed
+
+- Added shared prompt path resolution in [core/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/prompts.py) and switched [runtime/prompts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/prompts.py) to use it, so validation-time inference and runtime file prompt loading follow the same rules.
+- Extended [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) so simple prompt-placeholder `reads` inference now works for file-backed prompts as well as inline prompts.
+- Implemented `workflow_step(...)` lowering in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) by generating a `SystemStep` plus synthetic `on_<step>` handler that calls `ctx.invoke_workflow(...)`, writes declared child-result outputs, and maps child terminal states back to routes.
+- Added regression coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) for file prompt inference and executable `workflow_step(...)` lowering.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/implementation_notes.md) and appended the new non-obvious decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+- I reused the existing child-workflow runtime seam instead of inventing a new engine path: simple `workflow_step(...)` now compiles via generated system handlers over `ctx.invoke_workflow(...)`.
+- File prompt inference is now centralized through the same prompt resolver runtime already uses, which removes the earlier divergence the reviewer caught.
+- `workflow_step` still does not become a first-class compiled `kind="workflow"` node in this phase; it is an additive lowering over existing runtime primitives.
+
+Open issues / next step
+
+- The later runtime phase still owns true first-class `WorkflowStep` engine support plus `before`/`after` execution semantics.
+- Validation run completed with:
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py`
+  - `PYTHONPATH=.. .venv/bin/python -m pytest -q tests/runtime/test_workspace_and_context.py -k "invoke_workflow or prompt_resolution"`
+- I did not run the full repository suite.
