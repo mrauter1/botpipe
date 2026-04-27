@@ -1356,3 +1356,111 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd060-3709-7a20-910c-d97ea5d8434b
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+I’m treating this as the `engine-hooks-workflow-step` phase: I’ll read the phase artifacts and the current engine/compiler/runtime code paths first, then I’ll patch only the execution and validation surfaces needed for hooks and `WorkflowStep`.
+
+The repo already has substantial in-progress restructuring, so I’m narrowing to the current `core/`, `runtime/`, `autoloop/`, and targeted tests instead of trying to reconcile unrelated dirty paths. Next I’m reading the hook, step, compiler, and engine implementations that the prior phases already introduced.
+
+I have the current structure now. The key point is that simple lowering already threads `before`, `after`, and lowered child-workflow behavior into declarations, but the compiled/engine path still treats steps as plain `llm`/`pair`/`system` only. I’m drilling into the execution helpers and the existing child-workflow callback path so I can wire the phase without introducing a second execution mechanism.
+
+The existing lowering already generates child-workflow system handlers via `ctx.invoke_workflow(...)`. That means the runtime gap is narrower than it first looked: I mainly need to promote hooks and route-finalization into the compiled engine path, and make the child-workflow execution semantics explicit instead of incidental.
+
+Plan for this phase:
+1. Extend step/core compilation to carry `before` / `after`, add `AfterHookResult`, and compile child-workflow steps as a first-class kind.
+2. Rework engine step finalization so hooks run in the required order, route overrides are normalized and validated before final artifact enforcement, and child-workflow steps have an explicit runtime path.
+3. Add focused contract/runtime tests for hook ordering, invalid overrides, final-route enforcement after override, and `WorkflowStep` loop behavior.
+4. Update phase notes and append any non-obvious decisions to the shared decisions ledger.
+
+I’ve got the runtime change surface isolated now. I’m editing the kernel types first so hooks become part of the compiled contract, then I’ll re-thread the engine flow around them rather than layering ad hoc behavior onto provider retries.
+
+The core hook path is in place now; I’m moving to regressions. I expect the next iteration to be mostly test-driven fixes around route override bookkeeping and the simple-workflow child-step assertions that were pinned to the previous “system-step” lowering.
+
+I’m at the validation stage now. I’ve added focused regressions for provider, system, and child-workflow hook paths plus trace metadata, and I’m running a narrow pytest slice before I touch the phase notes.
+
+The execution path is stable under the focused suite now. I’m doing one small cleanup pass for hook ergonomics and then I’ll update the phase artifacts with the exact scope, invariants, and validation I exercised.
+
+Scope considered
+
+Phase-local `engine-hooks-workflow-step` only. I limited edits to the hook/engine/compiler path, the lowered child-workflow step path, targeted tests, and the phase artifacts.
+
+What I analyzed
+
+I traced the current lowering and runtime flow through [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py), and the existing child-workflow lowering tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py). I also checked tracing via [runtime/tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/tracing.py).
+
+What I changed
+
+I added step-level hook support to the kernel and compiled metadata: `before` / `after` now compile through, `AfterHookResult` exists, and hook signatures are validated. In the engine, `before` now runs once per step before artifact resolution, `after` runs after candidate-route validation but before final route enforcement, and hook-driven route overrides recompute final route validation and output obligations.
+
+I also promoted lowered simple child-workflow nodes to compiled `kind="workflow"` while keeping the existing generated `ctx.invoke_workflow(...)` lowering path for compatibility. That lets workflow steps participate in normal chains and verifier rework loops with the same finalization logic as provider and system steps. I recorded hook override metadata on `StepFinish` and in runtime trace output.
+
+I added focused regressions in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py), and updated the simple-surface expectation in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py). I also updated the phase notes and appended the non-obvious runtime decisions to the authoritative ledger.
+
+Key findings / decisions
+
+`after` route overrides have to be treated as workflow-authored decisions, not provider-attributable failures. Without that, final-route required-output checks would incorrectly enter provider retry logic.
+
+I kept simple `workflow_step(...)` on the existing generated handler path instead of inventing a second child-workflow engine. The engine now recognizes those lowered nodes as `kind="workflow"` and applies the right hook ordering there.
+
+Validation run:
+`.venv/bin/pytest tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_tracing.py -q`
+Result: `98 passed`
+
+Open issues / next step
+
+No blocking issues in this phase-local scope. The main intentional non-change is that simple child-workflow steps still lower through the generated handler path; if a later phase wants a dedicated core `WorkflowStep` declaration class, that can be swapped in without changing the hook/final-route engine behavior implemented here.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd060-3709-7a20-910c-d97ea5d8434b
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd060-3709-7a20-910c-d97ea5d8434b
+---
+I’m reviewing the phase-local implementation against the engine hook and workflow-step acceptance criteria first, then I’ll update the reviewer-owned criteria and feedback artifacts with any concrete findings.
+
+I’ve got the main execution diff open now. I’m checking for subtle regressions around provider retries, state/context consistency, and whether the new “workflow” kind actually behaves as a first-class runtime path rather than just a renamed system step.
+
+I found one material regression surface and I’m writing it into the reviewer feedback now. It comes from the new `kind="workflow"` path interacting with the existing route-handoff queue, not from the hook normalization itself.
+
+Scope considered
+
+Phase-local review for `engine-hooks-workflow-step`. I limited the audit to the changed hook/compiler/engine/tracing path, the targeted tests, and the authoritative phase artifacts.
+
+What I analyzed
+
+I read the phase notes, criteria, feedback template, and shared decisions, then audited the execution path in `core/engine.py`, `core/compiler.py`, `core/validation.py`, `core/steps.py`, and `runtime/tracing.py`. I also checked the new regression coverage in `tests/contract/test_engine_contracts.py`, `tests/unit/test_simple_surface.py`, and `tests/runtime/test_runtime_tracing.py`.
+
+What I reviewed
+
+I verified hook ordering, final-route enforcement after hook normalization, compiled `kind="workflow"` handling, child-workflow lowering behavior, and adjacent route-handoff behavior. I updated the phase feedback artifact with one prioritized finding.
+
+Key findings / decisions
+
+I found one blocking regression: after the change that compiles lowered child-workflow nodes as `kind="workflow"`, route handoffs targeted at those steps are no longer dropped like system steps, but workflow steps still never consume queued handoffs. That means handoff messages can persist forever in `pending_handoffs`, survive checkpoints, and never reach the child workflow. I recorded this as `IMP-001` in the phase feedback file.
+
+Open issues / next step
+
+Fix `IMP-001` by either consuming workflow-targeted handoffs in the workflow-step execution path and threading them into `ctx.invoke_workflow(...)`, or by continuing to drop handoffs for `kind in {"system", "workflow"}` until explicit workflow-step handoff delivery is implemented.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
