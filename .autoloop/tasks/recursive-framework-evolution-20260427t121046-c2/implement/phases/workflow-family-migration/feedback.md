@@ -6,3 +6,5 @@
 - Phase Directory Key: workflow-family-migration
 - Phase Title: Workflow Migration
 - Scope: phase-local authoritative verifier artifact
+
+- RVW-000 | non-blocking | No review findings in scoped phase work. AC-1 and AC-2 are satisfied in the landed selected-workflow family migration, and the scoped verifier suite passed independently (`240 passed`).

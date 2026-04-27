@@ -301,3 +301,151 @@ Later phases still need workflow capture-step migration and broader closeout pro
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+---
+I’m auditing the workflow-family migration scope first: reading the phase artifacts, the standing recursive memory files, and the workflow/helper surfaces that likely own the repeated selected-workflow capture logic before I decide the exact consolidation target.
+
+The worktree is already dirty in unrelated areas, so I’m keeping scope tight to the active phase files and the shared selected-workflow seam. Next I’m tracing where the capture/publish boilerplate still exists across the targeted workflow family and what the previous convergence phase introduced.
+
+The previous phase already created the private seam I need. I’m opening the four targeted workflows and the optimizer/eval helpers now to see exactly where each one still writes, re-reads, and revalidates the selected-workflow artifacts instead of using the capture metadata directly.
+
+I’ve isolated the main debt: two workflows still do the exact `write -> exists -> read -> validate -> pull selected_workflow_name` pattern, the run-history workflow does it for the capability half of a two-artifact capture, and the decomposition/optimizer family still re-resolve selected-workflow context in adjacent helpers. I’m tightening those paths without changing artifact names or publication contracts.
+
+I’ve got the edit boundary now. Before patching, I’m checking the helper tests that pin `stdlib/evaluation.py` and `stdlib/optimization.py`, because those are the two adjacent seams most likely to fail if I swap them onto the private selected-workflow capture path.
+
+I’m patching the workflow family now. The edits are limited to replacing the repeated capture tails with the shared selected-workflow seam, switching the simpler publish handlers onto the shared artifact-existence helper, and tightening the optimizer/source-manifest path to the same capture seam.
+
+The first patch is in. I hit a local environment detail while sanity-checking: there’s no bare `python` on PATH here, so I’m switching verification to `.venv/bin/python` and tightening one remaining decomposition capture check before running the targeted suites.
+
+The code compiles cleanly. Most of the targeted suites are already past their first page of dots; I’m polling the remaining runs now and then I’ll update the phase notes, decisions, and recursive memory with the actual migration footprint and residual debt.
+
+The code changes are holding under the full targeted proof set. I’m in the closeout phase now: capturing diff metrics, appending the one implementation decision that matters for later turns, and updating the phase notes plus the standing recursive memory with the concrete debt that moved and what remains deferred.
+
+The code and memory updates are done. I’m doing one last pass over the exact diffs and file line numbers so the closeout can point at the real edits, then I’ll mark the plan complete and summarize the remaining deferred debt cleanly.
+
+Scope considered
+
+- Phase-local `workflow-family-migration` only: the selected-workflow helper seam, the four targeted workflow families, the optimizer-adjacent helper path, the phase notes, and the standing recursive memory files.
+- I kept unrelated dirty worktree changes out of scope.
+
+What I analyzed
+
+- Phase artifacts, plan, and decisions plus [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md) and [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- The shared seam in [stdlib/_selected_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/_selected_workflow.py).
+- Capture and publish paths in [candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py:257), [workflow_to_eval_suite/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py:274), [workflow_run_history_to_failure_modes/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py:301), [workflow_package_to_composable_building_blocks/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py:368), and [stdlib/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/optimization.py:260).
+
+What I changed
+
+- The scoped capture handlers now take `selected_workflow_name` from the shared private seam instead of writing, reopening, and revalidating a fresh artifact just to recover that name:
+  - [candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py:257)
+  - [workflow_to_eval_suite/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py:274)
+  - [workflow_run_history_to_failure_modes/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py:301)
+  - [workflow_package_to_composable_building_blocks/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py:368)
+- The simpler selected-workflow publish handlers now reuse the shared required-artifact existence validator:
+  - [candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py:318)
+  - [workflow_to_eval_suite/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py:365)
+- The optimizer-family helper path now uses the same selected-workflow capture/inspection seam for frame capture and source-manifest authoring in [stdlib/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/optimization.py:260) and [stdlib/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/optimization.py:820).
+- I updated the phase record and standing memory in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/implement/phases/workflow-family-migration/implementation_notes.md), [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/decisions.txt), and the `.autoloop_recursive/` ledgers.
+
+Key findings / decisions
+
+- Cycle mode stayed `consolidate`; no new workflow was justified.
+- I kept the convergence on the private seam instead of adding another public stdlib/root helper surface.
+- Artifact filenames, top-level JSON payload shapes, route names, prompt paths, receipt names, CLI behavior, and `ctx.invoke_workflow(...)` behavior were preserved.
+- Boilerplate removed in the scoped code paths: 4 selected-workflow capture re-read tails and 2 publish-time existence loops. Scoped tracked code diff was `+16` lines overall.
+- Verification passed:
+  - `.venv/bin/python -m py_compile ...`
+  - `tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py`
+  - `tests/runtime/test_workflow_to_eval_suite.py`
+  - `tests/runtime/test_workflow_run_history_to_failure_modes.py`
+  - `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+  - `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - `tests/unit/test_optimization_helpers.py`
+  - `tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py`
+  - `tests/test_architecture_baseline_docs.py`
+  - Total: `237 passed`
+
+Open issues / next step
+
+- `stdlib/evaluation.py` still keeps its helper-local snapshot-validation path; I left that unchanged in this phase because the active contract was workflow-family migration, not another helper-surface rewrite.
+- Remaining deferred debt is narrower now: workflow-local selected-workflow publication policy, any future eval-helper capture convergence, and broader portfolio-shape cleanup.
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+
+
+---
+run_id=run-20260427T164535Z-3624382b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcfe9-e3c2-7733-af97-8cca1e269784
+---
+I’m auditing the scoped workflow-family migration diff now: checking the targeted workflow capture/publish paths, the optimizer helper touch, and the phase artifacts before I mark criteria or add findings.
+
+I don’t see a design-level blocker in the diff, but I’m still doing an independent proof pass over the scoped runtime/unit bundle before I mark the criteria complete.
+
+The independent proof run is still clean through the first third of the scoped suite. I’m only waiting on the long optimizer/refinement tests now.
+
+Reviewing the scoped implementation and test evidence now. I’m polling the verifier test run to completion, then I’ll update the phase review artifacts with either findings or an explicit clean review.
+
+The earlier test session is gone, so I’m rerunning the scoped verifier suite and rechecking the phase artifacts before writing the review result.
+
+The working tree diff for the scoped code files is currently clean, so I’m reviewing the landed state directly and validating it with the scoped runtime/unit suite.
+
+The scoped verifier suite is running now. I’m waiting on the full result, then I’ll write the review outcome into the phase criteria and feedback artifacts.
+
+The scoped review is clean. I’m recording the verifier result in the phase criteria and feedback artifacts now, with no blocking findings and the scoped suite passing independently.
+
+Scope considered
+
+- Phase-local verifier scope for `workflow-family-migration`.
+- Reviewed only the landed selected-workflow migration surfaces plus the phase artifacts under `.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/implement/phases/workflow-family-migration/`.
+
+What I analyzed
+
+- Phase contract, acceptance criteria, implementation notes, and current reviewer artifacts.
+- The landed selected-workflow seam usage in:
+  - `workflows/candidate_workflow_to_adapted_execution_plan/workflow.py`
+  - `workflows/workflow_to_eval_suite/workflow.py`
+  - `workflows/workflow_run_history_to_failure_modes/workflow.py`
+  - `workflows/workflow_package_to_composable_building_blocks/workflow.py`
+  - `stdlib/optimization.py`
+
+What I reviewed
+
+- AC-1: repeated write-read-validate selected-workflow capture tails were removed where the shared seam already exposes the selected workflow explicitly.
+- AC-2: touched publish handlers retained domain-specific checks while shifting generic artifact existence checks to shared helpers.
+- Independent validation:
+  - `.venv/bin/pytest -q tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/test_architecture_baseline_docs.py`
+  - Result: `240 passed, 588 warnings in 48.47s`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking implementation findings in scoped phase work.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/implement/phases/workflow-family-migration/criteria.md) to check all review gates.
+- Appended explicit clean-review record to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-c2/implement/phases/workflow-family-migration/feedback.md).
+
+Open issues / next step
+
+- No phase-blocking issues remain for `workflow-family-migration`.
+- The pytest warnings are pre-existing schema-field warnings in optimization-candidate contracts and are outside this phase’s requested migration scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
