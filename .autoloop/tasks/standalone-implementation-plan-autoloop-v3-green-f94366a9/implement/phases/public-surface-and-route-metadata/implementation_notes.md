@@ -37,22 +37,25 @@
 - Provider/runtime payloads: `ProviderTurnContext`, `ProducerRequest`, `VerifierRequest`, `LLMRequest`, static graph and capability step payload builders
 
 ## Checklist mapping
-- Plan milestone 1 / phase AC-1: removed `RouteContract` from `autoloop`, `core`, and `workflow` exports; deleted `core/route_contracts.py`; removed `route_contracts` from active step/compiler/provider plumbing touched in this phase.
+- Plan milestone 1 / phase AC-1: removed `RouteContract` from `autoloop`, `core`, and `workflow` exports; deleted `core/route_contracts.py`; removed `route_contracts` from active step/compiler/provider plumbing touched in this phase; converted `workflow/__init__.py` into a non-authoring legacy shim.
 - Plan milestone 1 / phase AC-2: finalized `RouteInfo` and `Route` validation; switched `Step` constructors to `route_infos`; added `SystemStep(handler=...)`; added core `WorkflowStep`; updated simple declaration signatures to the greenfield shape.
 - Partial plan milestone 3 dependency cleanup: removed now-dead `route_contracts` and `route_required_artifacts` fields from provider/request/rendering payloads that would otherwise break after deleting the module.
 
 ## Assumptions
 - `workflow/primitives.py` is a runtime primitive shim, not an authoring surface, so it can remain as-is in this phase without violating the "single active public authoring surface" goal.
+- The shared decisions explicitly permit breaking removal of `RouteContract` across bundled workflows/tests, so this phase does not restore import compatibility for in-tree legacy workflow packages.
 - Bundled workflow package migration, loader discovery changes, and direct engine execution for `WorkflowStep` remain later-phase work per the phase contract.
 
 ## Preserved invariants
 - Strict workflows still compile through `core.Workflow` and metaclass validation.
 - Simple `Workflow` remains non-strict and keeps `EmptyState` as the default state model.
 - Existing `on_<step>` handlers are still accepted for strict/core `SystemStep` declarations; simple `system_step(fn)` no longer requires them.
+- `workflow/__init__.py` no longer functions as a usable authoring import path.
 
 ## Intended behavior changes
 - `autoloop.simple` and `autoloop.__init__` now expose `AfterHookResult`.
 - Simple `step(...)` and `review_step(...)` no longer accept `provider`, `model`, or `effort`.
+- `autoloop.simple` now exposes explicit helper signatures for `step`, `review_step`, `system_step`, and `workflow_step` instead of `**kwargs` wrappers.
 - Core/public route metadata now validates/normalizes `summary`, `required_outputs`, and `handoff`.
 - Simple `workflow_step(...)` lowers to a real core `WorkflowStep` instead of a generated `SystemStep` handler.
 
@@ -68,6 +71,7 @@
 ## Validation performed
 - `python3 -m py_compile` on all touched Python modules and the updated unit tests.
 - `rg` checks confirming `RouteContract` and `route_contracts` no longer appear in the touched public/core/runtime/provider export surfaces.
+- `python3 -m py_compile autoloop/simple.py workflow/__init__.py` after the reviewer-driven follow-up edits.
 
 ## Validation limits
 - `pytest` could not run because `pytest` is not installed in this environment.

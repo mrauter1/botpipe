@@ -1,75 +1,16 @@
-"""Strict workflow authoring shim."""
+"""Legacy workflow shim.
+
+The active public authoring surface is `autoloop.simple` (or `autoloop`).
+This module intentionally no longer re-exports authoring primitives.
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+__all__: list[str] = []
 
-try:  # pragma: no branch - prefer installed-package imports when available
-    from autoloop_v3.core import (
-        Advance,
-        AfterHookResult,
-        Artifact,
-        BoardMutation,
-        Continuity,
-        Context,
-        FAIL,
-        GLOBAL,
-        Handoff,
-        LLMStep,
-        PAUSE,
-        PairStep,
-        Prompt,
-        ProviderRetryPolicy,
-        Refresh,
-        ResetCompletion,
-        Route,
-        RouteInfo,
-        Selector,
-        SetStatus,
-        Session,
-        SUCCESS,
-        SystemStep,
-        Workflow,
-        WorkflowStep,
-        WorkItem,
-        Worklist,
+
+def __getattr__(name: str) -> object:
+    raise AttributeError(
+        "workflow is no longer an active authoring surface; "
+        "use autoloop.simple or autoloop instead."
     )
-    if TYPE_CHECKING:
-        from autoloop_v3.core.extensions import WorkflowExtension
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from core import Advance, AfterHookResult, Artifact, BoardMutation, Continuity, Context, FAIL, GLOBAL, Handoff, LLMStep, PAUSE
-    from core import PairStep, Prompt, ProviderRetryPolicy, Refresh, ResetCompletion, Route, RouteInfo, Selector, SetStatus
-    from core import Session, SUCCESS, SystemStep, Workflow, WorkflowStep, WorkItem, Worklist
-    if TYPE_CHECKING:
-        from core.extensions import WorkflowExtension
-
-
-__all__ = [
-    "Advance",
-    "AfterHookResult",
-    "Artifact",
-    "BoardMutation",
-    "Continuity",
-    "Context",
-    "FAIL",
-    "GLOBAL",
-    "Handoff",
-    "LLMStep",
-    "PAUSE",
-    "PairStep",
-    "Prompt",
-    "ProviderRetryPolicy",
-    "Refresh",
-    "ResetCompletion",
-    "Route",
-    "RouteInfo",
-    "Selector",
-    "SetStatus",
-    "SUCCESS",
-    "Session",
-    "SystemStep",
-    "Workflow",
-    "WorkflowStep",
-    "WorkItem",
-    "Worklist",
-]

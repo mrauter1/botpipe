@@ -245,7 +245,7 @@ class WorkflowStep(_NamedDeclaration):
         *,
         name: str | None = None,
         message: str | None = None,
-        message_from: str | None = None,
+        message_from: Artifact | str | Path | None = None,
         params: Mapping[str, object] | None = None,
         input: object | None = None,
         reads: Sequence[ArtifactInput] = (),
@@ -279,20 +279,144 @@ class FlowSpec:
     items: tuple[ChainNode, ...]
 
 
-def step(prompt: PromptInput, **kwargs: Any) -> StepDeclaration:
-    return StepDeclaration(prompt, **kwargs)
+def step(
+    prompt: PromptInput,
+    *,
+    name: str | None = None,
+    reads: Sequence[ArtifactInput] = (),
+    requires: Sequence[ArtifactInput] = (),
+    out: Artifact | ArtifactSpec | None = None,
+    outputs: Sequence[Artifact | ArtifactSpec] = (),
+    routes: RouteMapping | None = None,
+    route_infos: Mapping[str, RouteInfo | str] | None = None,
+    route_summaries: Mapping[str, str] | None = None,
+    before: Any | None = None,
+    after: Any | None = None,
+    control_schema: Any | None = None,
+    retry: Any | None = None,
+    session: Any | None = None,
+) -> StepDeclaration:
+    return StepDeclaration(
+        prompt,
+        name=name,
+        reads=reads,
+        requires=requires,
+        out=out,
+        outputs=outputs,
+        routes=routes,
+        route_infos=route_infos,
+        route_summaries=route_summaries,
+        before=before,
+        after=after,
+        control_schema=control_schema,
+        retry=retry,
+        session=session,
+    )
 
 
-def review_step(producer: PromptInput, verifier: PromptInput, **kwargs: Any) -> ReviewStepDeclaration:
-    return ReviewStepDeclaration(producer, verifier, **kwargs)
+def review_step(
+    producer: PromptInput,
+    verifier: PromptInput,
+    *,
+    name: str | None = None,
+    reads: Sequence[ArtifactInput] = (),
+    requires: Sequence[ArtifactInput] = (),
+    out: Artifact | ArtifactSpec | None = None,
+    outputs: Sequence[Artifact | ArtifactSpec] = (),
+    accepted: str = "accepted",
+    rework: str = "needs_rework",
+    route_infos: Mapping[str, RouteInfo | str] | None = None,
+    route_summaries: Mapping[str, str] | None = None,
+    before: Any | None = None,
+    after: Any | None = None,
+    control_schema: Any | None = None,
+    retry: Any | None = None,
+    session: Any | None = None,
+) -> ReviewStepDeclaration:
+    return ReviewStepDeclaration(
+        producer,
+        verifier,
+        name=name,
+        reads=reads,
+        requires=requires,
+        out=out,
+        outputs=outputs,
+        accepted=accepted,
+        rework=rework,
+        route_infos=route_infos,
+        before=before,
+        after=after,
+        route_summaries=route_summaries,
+        control_schema=control_schema,
+        retry=retry,
+        session=session,
+    )
 
 
-def system_step(fn: Any, **kwargs: Any) -> SystemStepDeclaration:
-    return SystemStepDeclaration(fn, **kwargs)
+def system_step(
+    fn: Any,
+    *,
+    name: str | None = None,
+    reads: Sequence[ArtifactInput] = (),
+    requires: Sequence[ArtifactInput] = (),
+    out: Artifact | ArtifactSpec | None = None,
+    outputs: Sequence[Artifact | ArtifactSpec] = (),
+    routes: RouteMapping | None = None,
+    route_infos: Mapping[str, RouteInfo | str] | None = None,
+    route_summaries: Mapping[str, str] | None = None,
+    before: Any | None = None,
+    after: Any | None = None,
+) -> SystemStepDeclaration:
+    return SystemStepDeclaration(
+        fn,
+        name=name,
+        reads=reads,
+        requires=requires,
+        out=out,
+        outputs=outputs,
+        routes=routes,
+        route_infos=route_infos,
+        route_summaries=route_summaries,
+        before=before,
+        after=after,
+    )
 
 
-def workflow_step(workflow: object, **kwargs: Any) -> WorkflowStep:
-    return WorkflowStep(workflow, **kwargs)
+def workflow_step(
+    workflow: object,
+    *,
+    name: str | None = None,
+    message: str | None = None,
+    message_from: Artifact | str | Path | None = None,
+    params: Mapping[str, object] | None = None,
+    input: object | None = None,
+    reads: Sequence[ArtifactInput] = (),
+    requires: Sequence[ArtifactInput] = (),
+    out: Artifact | ArtifactSpec | None = None,
+    outputs: Sequence[Artifact | ArtifactSpec] = (),
+    routes: RouteMapping | None = None,
+    route_infos: Mapping[str, RouteInfo | str] | None = None,
+    route_summaries: Mapping[str, str] | None = None,
+    before: Any | None = None,
+    after: Any | None = None,
+) -> WorkflowStep:
+    return WorkflowStep(
+        workflow,
+        name=name,
+        message=message,
+        message_from=message_from,
+        params=params,
+        input=input,
+        reads=reads,
+        requires=requires,
+        out=out,
+        outputs=outputs,
+        routes=routes,
+        route_infos=route_infos,
+        route_summaries=route_summaries,
+        before=before,
+        after=after,
+    )
 
 
 def chain(*items: ChainNode) -> FlowSpec:
