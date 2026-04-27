@@ -877,3 +877,54 @@ Validation passed:
 Open issues / next step
 
 I did not run the full repository test suite. The focused slice still emits the existing Pydantic `schema` field warnings from optimizer contracts; they remain non-blocking and out of scope for this phase.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcca4-fed7-7033-adcf-c394312e9126
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+I’m auditing the new phase-local tests for ranking and failure analysis, with emphasis on the new public/internal trace-corpus regression and the short-circuit publication boundary. I’ll verify the coverage map against the changed behavior, then update only the test audit artifacts.
+
+The strategy and feedback line up with the changed behavior so far. I’m waiting on the focused pytest slice to confirm the audited coverage still passes in the current workspace before I mark the criteria.
+
+The focused suite passes and the new integration regression matches the stated coverage map. I don’t see a material coverage hole in this phase scope, so I’m marking the audit artifacts complete and recording that no further findings remain open.
+
+Scope considered
+
+Phase-local audit of the ranking-and-failure-analysis tests only. I limited writes to the active test audit artifacts under `.autoloop/tasks/.../test/phases/ranking-and-failure-analysis/`.
+
+What I analyzed
+
+I reviewed the phase contract, the shared decisions that distinguish published versus internal trace evidence, the updated `test_strategy.md`, and the relevant unit/runtime tests covering `normalize_trace_corpus()`, deterministic ranking, failure-scenario mining, and the `insufficient_evidence -> package` short-circuit.
+
+What I reviewed
+
+I checked that the tests now cover:
+- route-filtered published observations without losing upstream attribution for deterministic ranking
+- the workflow-level `capture_frame_context` write boundary for public versus internal trace corpora
+- the no-eligible and insufficient-evidence failure paths
+- deterministic, non-flaky seeded-run setups with no timing or network dependency
+
+Key findings / decisions
+
+No remaining findings in phase scope. The added runtime regression closes the important integration gap between helper-level coverage and the workflow artifact boundary, and the focused suite passes:
+- `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+- Result: `30 passed`
+
+I updated `criteria.md` to fully checked and appended an audit note to `feedback.md` recording that no further findings remain open.
+
+Open issues / next step
+
+Residual risk is limited to the existing Pydantic `schema` field warnings emitted by the focused suite; they remain non-blocking and outside this phase’s test-scope acceptance criteria. The test phase is ready to move forward.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

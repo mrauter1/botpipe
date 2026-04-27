@@ -824,3 +824,107 @@ Focused validation passed with `./.venv/bin/python -m pytest -q tests/unit/test_
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dcca4-fed7-7033-adcf-c394312e9126
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+I’m checking the current phase test strategy and the repo tests that now cover ranking and failure analysis. Then I’ll either add the missing regression cases or, if the code coverage is already sufficient, I’ll tighten the strategy/feedback to match the actual protections in place.
+
+I found one integration gap worth closing: the current tests prove the helper-level public/internal split, but not that `capture_frame_context` writes a schema-clean public corpus while still preserving the internal corpus for upstream ranking. I’m adding a single runtime regression for that boundary and then I’ll update the phase strategy/feedback around the exact coverage map.
+
+I’m making one focused runtime addition rather than broad test churn: a regression that exercises the full `capture_frame_context` write path with `route_tags=["failed"]` and an upstream-pass/downstream-fail run. That closes the integration gap between the helper-level coverage and the published artifact contract.
+
+The new regression is in place. I’m running the focused unit and runtime slice now to verify that the integration assertion on the public/internal corpus boundary stays deterministic and doesn’t disturb the existing ranking/failure coverage.
+
+The new test compiles cleanly. I’m waiting on the full focused pytest slice to confirm the helper-level and workflow-level regressions still pass together.
+
+Scope considered
+
+Phase-local test coverage for ranking and failure analysis only. I stayed focused on deterministic metrics/ranking, failure-scenario mining boundaries, and the public versus internal trace-corpus behavior introduced by the implementation.
+
+What I analyzed
+
+I reviewed the current unit/runtime tests around `normalize_trace_corpus()`, `rank_optimization_targets()`, `on_mine_failures()`, and the `insufficient_evidence -> package` path, then compared that against the active phase contract and the shared decision that `route_tags` filter the published corpus without removing upstream attribution from deterministic analysis.
+
+What I changed
+
+I added one runtime regression to [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py) that exercises `capture_frame_context` with `route_tags=["failed"]` and an upstream-pass/downstream-fail run. It verifies that:
+- the public `workflow_optimization_trace_corpus.json` remains schema-clean and only exposes the filtered downstream step
+- `_workflow_optimization_internal_trace_corpus.json` retains the upstream accepted step for analysis
+- deterministic ranking still selects the upstream step as the highest-leverage target
+
+I added a local seeded-run helper and made `_bootstrap_context()` accept an optional `route_tags` override so the regression stays deterministic and isolated. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/ranking-and-failure-analysis/test_strategy.md) with an explicit behavior-to-coverage map, and appended a concise summary line to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260426t220607-bootstrap/test/phases/ranking-and-failure-analysis/feedback.md).
+
+Key findings / decisions
+
+The meaningful remaining gap was integration coverage for the public/internal trace split at the workflow write boundary. Helper-level coverage already existed, but it would not catch a regression where `capture_frame_context` leaked `all_step_observations` into the published artifact or stopped preserving upstream context internally. The new runtime test closes that gap.
+
+Validation passed:
+- `python3 -m py_compile tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+- `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+- Result: `30 passed`
+
+Open issues / next step
+
+I did not run the full repository test suite. The focused slice still emits the existing Pydantic `schema` field warnings from optimizer contracts; they remain non-blocking and out of scope for this phase.
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcca4-fed7-7033-adcf-c394312e9126
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcca4-fed7-7033-adcf-c394312e9126
+---
+I’m auditing the new phase-local tests for ranking and failure analysis, with emphasis on the new public/internal trace-corpus regression and the short-circuit publication boundary. I’ll verify the coverage map against the changed behavior, then update only the test audit artifacts.
+
+The strategy and feedback line up with the changed behavior so far. I’m waiting on the focused pytest slice to confirm the audited coverage still passes in the current workspace before I mark the criteria.
+
+The focused suite passes and the new integration regression matches the stated coverage map. I don’t see a material coverage hole in this phase scope, so I’m marking the audit artifacts complete and recording that no further findings remain open.
+
+Scope considered
+
+Phase-local audit of the ranking-and-failure-analysis tests only. I limited writes to the active test audit artifacts under `.autoloop/tasks/.../test/phases/ranking-and-failure-analysis/`.
+
+What I analyzed
+
+I reviewed the phase contract, the shared decisions that distinguish published versus internal trace evidence, the updated `test_strategy.md`, and the relevant unit/runtime tests covering `normalize_trace_corpus()`, deterministic ranking, failure-scenario mining, and the `insufficient_evidence -> package` short-circuit.
+
+What I reviewed
+
+I checked that the tests now cover:
+- route-filtered published observations without losing upstream attribution for deterministic ranking
+- the workflow-level `capture_frame_context` write boundary for public versus internal trace corpora
+- the no-eligible and insufficient-evidence failure paths
+- deterministic, non-flaky seeded-run setups with no timing or network dependency
+
+Key findings / decisions
+
+No remaining findings in phase scope. The added runtime regression closes the important integration gap between helper-level coverage and the workflow artifact boundary, and the focused suite passes:
+- `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+- Result: `30 passed`
+
+I updated `criteria.md` to fully checked and appended an audit note to `feedback.md` recording that no further findings remain open.
+
+Open issues / next step
+
+Residual risk is limited to the existing Pydantic `schema` field warnings emitted by the focused suite; they remain non-blocking and outside this phase’s test-scope acceptance criteria. The test phase is ready to move forward.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
