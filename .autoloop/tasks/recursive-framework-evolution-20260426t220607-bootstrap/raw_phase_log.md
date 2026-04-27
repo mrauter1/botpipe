@@ -155,3 +155,134 @@ phase_mode=single
 phase_ids=deterministic-ingestion-and-workflow-shell,ranking-and-failure-analysis,candidate-generation-and-publication,refinement-and-documentation-integration,verification-and-full-regression
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dcc81-994f-76a1-acd7-bcea21039407
+
+
+---
+run_id=run-20260427T010607Z-85bed128 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcc81-994f-76a1-acd7-bcea21039407
+---
+I’m implementing the phase-scoped optimizer shell: deterministic ingestion, workflow package scaffolding, frame artifacts, registry wiring, and the no-op packaging short-circuit. I’m starting by reading the existing workflow patterns, the phase notes, and the bundled-workflow registration points so the changes fit current contracts.
+
+I’ve confirmed the worktree is very dirty outside this phase, so I’m narrowing edits to the optimizer workflow, shared helper seams it needs, and the phase notes files only. Next I’m reading the active phase notes plus the closest existing workflow implementations to mirror their artifact, prompt, and routing patterns.
+
+I have the phase plan and a couple of adjacent workflow patterns now. Next I’m tracing the reusable selected-workflow snapshot helpers, workflow discovery, and publish/route conventions so the new shell lands on existing seams instead of introducing a parallel mechanism.
+
+The discovery seam is manifest-based, so registry work is just package/doc/test integration, not a runtime registry. I’m now checking how existing workflows enforce ordered-prefix `pairs`, how system steps write artifacts, and which validation helpers already cover parameter normalization and artifact publication.
+
+I’ve confirmed the repository already has patterns for deterministic capture steps and manifest-backed discovery, but not the optimizer-specific ingestion helpers yet. I’m reading the run-history helper and test fixtures now so I can build the new trace-corpus normalization on the same `.autoloop` filesystem conventions instead of guessing the run layout.
+
+The main uncertainty now is the exact trace and git-tracking payload shape. I’m reading the runtime tracing tests before I write the normalization helper so the corpus preserves the repository’s actual event fields, token usage layout, and step sequencing instead of inventing a parallel schema.
+
+I’ve narrowed the phase to a clean vertical slice: helper module, package metadata/prompts/contracts/params, `frame`, and the no-eligible-run publication path. I’m not going to invent later optimization behavior in this turn; instead I’m wiring the full topology and route contracts now so later phases can land on a stable shell.
+
+Plan for this turn:
+1. Implement `stdlib/optimization.py` with deterministic run-ref parsing, run discovery, observability loading/validation, corpus normalization, and source-manifest helpers.
+2. Add the optimizer workflow package shell: params, contracts, manifest, asset, full prompt inventory, and exact topology/route contracts.
+3. Implement `bootstrap`, `frame`, and `package` behaviors, including selected-workflow snapshots, excluded-run reporting, trace corpus emission, and the no-eligible-run publication path.
+4. Wire exports/discovery and add focused tests for helper behavior, workflow discovery/introspection, and the no-op short-circuit.
+5. Update the phase implementation notes and decisions block, then run the targeted test slice.
+
+I’ve got the design pinned down now. I’m starting the actual edits with `stdlib/optimization.py` and the new workflow package skeleton, and I’ll keep the current turn scoped to the deterministic frame path plus the packaging short-circuit instead of partially inventing later optimization logic.
+
+I’m writing the shared optimizer helper first because the workflow shell depends on its run filtering, observability normalization, and manifest logic. After that I’ll wire the workflow class to those helpers so the frame artifacts and no-op package are using one deterministic path.
+
+The helper seam is in place. I’m adding the workflow package contracts and parameter model next, then I’ll wire the workflow class against them so the topology, routes, and prompt contract are frozen before I touch tests.
+
+I’m wiring the workflow class now. The main decisions are fixed: deterministic capture happens in a system step, the user-facing topology remains the exact pair sequence from `frame` through `package`, and the publication step stays deterministic so the source-mutation check and refinement-evidence write are not delegated to prompts.
+
+I’ve hit one structural mismatch while wiring publication checks: the optimizer artifacts use `selected_workflow`, while the older snapshot-alignment helper expects `selected_workflow_name`. I’m patching that now so the new artifacts validate against their own schema instead of being forced through the wrong helper.
+
+The remaining heavy lift is the prompt inventory. I’m generating the full contract set now: one shared README that freezes the family-wide rules, plus per-step producer/verifier prompts that keep route names, writable artifacts, and forbidden actions explicit instead of leaving them to implied convention.
+
+The shell and prompts are in. I’m doing a compile-style pass now before adding tests because the new package touches a few shared validation seams, and I want to catch contract mismatches early instead of debugging them through runtime tests.
+
+I’ve moved on to tests now. I’m keeping them focused on the phase slice: discovery/introspection, deterministic frame capture, exclusion behavior, source-manifest checks, and the no-eligible-run package path.
+
+The code and tests are both in place now. I’m running the new helper tests and the new workflow runtime slice first, because they exercise the deterministic capture path and usually surface any contract mismatch faster than the broader suite.
+
+`pytest` is not on the shell PATH in this environment. I’m retrying with `python3 -m pytest`, which usually matches how this repo’s local virtualenv is exposed.
+
+The environment doesn’t have `pytest` installed for `/usr/bin/python3`. I’m checking whether the repo has a project-local interpreter or test runner available so I can still validate the phase slice instead of stopping at syntax checks.
+
+The local `.venv` has the test tooling, and the targeted suite is running there now. The first batch of output is clean so far; I’m waiting for the final status before I do the phase notes and decisions updates.
+
+The runtime slice found one real issue and one cosmetic one. The failure is just in the test harness: artifact handles don’t accept an `encoding=` argument, so I’m fixing that and rerunning the targeted suite. The warnings are from Pydantic’s `schema` field name shadowing and aren’t blocking this phase’s behavior.
+
+I’ve got the workflow shell and deterministic ingestion in place. I’m confirming the targeted test run, then I’ll update the phase notes and review the touched diff for any regression risk.
+
+The previous pytest session is gone, so I’m rerunning the focused tests and checking the phase-local notes/decision ledger in parallel. After that I’ll write the required implementation notes and do a final diff pass.
+
+The focused tests are nearly done; the initial output shows all collected cases passing so far. I’m polling once more for the final exit, then I’ll update the phase notes and record the non-obvious implementation decisions from this turn.
+
+One runtime test is failing in the no-eligible short-circuit path. I’m inspecting the package handler and the scripted no-op package output now; this looks like an artifact-shape mismatch in the zero-eligible case, not a broader ingestion problem.
+
+I’ve narrowed it to the publication step after the no-op packet is written. I’m rerunning just that test with full traceback so I can patch the exact contract mismatch instead of guessing.
+
+The failure is concrete: the package publisher is calling `read_required_text` with the wrong signature. I’m patching that now, then rerunning the focused tests and updating the phase notes.
+
+I’m making a small publication-path edit now: fix the text artifact read call and keep the no-op package validation explicit. Then I’ll rerun the two targeted test files.
+
+The fix is in and the focused suite is running again. I’m polling for the final exit; if it’s clean, I’ll write the phase notes and do a last scoped diff review.
+
+The focused suite passed: `19 passed`. I’m updating the phase notes and decision ledger now, then I’ll do one last scoped status review so the final handoff is clean.
+
+I’ve confirmed the touched-file set. I’m recording the phase-local notes now, including the preserved boundaries and the explicit deferrals to later phases.
+
+The phase notes and decisions are recorded. I’m doing one last scoped status/diff pass now; the only known residual issue is the Pydantic `schema` field warning from the contract models, which doesn’t block the targeted tests.
+
+Scope considered
+
+- Phase-scoped work only: deterministic ingestion, optimizer workflow shell, frame-time evidence capture, manifest-backed discovery, exact pair topology, and no-op packaging for zero eligible runs.
+- I did not extend runtime/runner behavior, candidate-generation passes beyond the shell, or downstream refinement-workflow consumption outside this phase.
+
+What I analyzed
+
+- Existing selected-workflow snapshot helpers and publication helpers to reuse the established authoring surfaces instead of adding parallel serializers.
+- Run-history storage/layout under `.autoloop/tasks/.../runs/...` to keep ingestion filesystem-level and deterministic.
+- Workflow compilation/discovery behavior to ensure the new package is discoverable by canonical name and aliases with the exact requested step order.
+- The zero-eligible short-circuit path end to end, including publication-time source-manifest validation and no-op packet/refinement-evidence output.
+
+What I changed
+
+- Added `stdlib/optimization.py` and re-exported it from `stdlib/__init__.py`.
+- Added the bundled workflow package `workflows/workflow_run_traces_to_optimization_candidates/` with:
+  - `workflow.py`, `contracts.py`, `params.py`, `workflow.toml`
+  - `assets/optimization_package_checklist.md`
+  - full prompt inventory plus `prompts/README.md` carrying the candidate-only, non-mutation, no-hidden-execution, and evidence-vs-inference rules
+- Implemented deterministic frame-time behavior:
+  - explicit `run_refs` parsing and discovered-run selection
+  - Plan-1 observability bundle loading/validation
+  - exclusion reporting for missing historical observability
+  - trace-corpus publication
+  - selected-workflow source manifest write and publication-time unchanged check
+  - `frame -> package` short-circuit for `no_eligible_trace_evidence`
+  - no-op publication that still writes `workflow_optimization_scorecard.json`, `workflow_refinement_evidence.json`, `workflow_optimization_packet.md`, and `optimization_publication_receipt.json`
+- Added targeted tests:
+  - `tests/unit/test_optimization_helpers.py`
+  - `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - baseline docs-test touch in `tests/test_architecture_baseline_docs.py`
+- Updated the phase-local implementation notes and appended the non-obvious phase decisions to the current turn block in `decisions.txt`.
+
+Key findings / decisions
+
+- The only runtime bug found during validation was a bad `read_required_text(...)` call in the optimizer publication step; I fixed that and reran the focused suite.
+- The published `workflow_optimization_trace_corpus.json` stays within the requested schema. Internal helper-only data such as `excluded_runs` and `static_step_graphs` is kept in memory for deterministic workflow logic and stripped before artifact write.
+- On the zero-eligible path, refinement evidence intentionally includes only the scorecard so downstream consumers get an explicit no-op boundary without implying real optimization candidates.
+- Targeted validation passed:
+  - `python3 -m py_compile ...`
+  - `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - Result: `19 passed`
+- Residual issue: contract models emit Pydantic warnings because they use a field named `schema`. Tests pass, but the warning cleanup is still open.
+
+Open issues / next step
+
+- Later phases still need the actual ranking, failure-mining, producer/verifier/token/adversarial/workflow-level candidate generation, broader docs updates, and refinement-workflow evidence consumption changes.
+- If you want the next increment cleaned up first, the most obvious follow-up is removing the `schema`-field warnings in the optimizer contract models before the broader suite work.

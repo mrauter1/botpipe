@@ -6,3 +6,55 @@
 - Phase Directory Key: deterministic-ingestion-and-workflow-shell
 - Phase Title: Deterministic Ingestion And Workflow Shell
 - Scope: phase-local producer artifact
+- Files changed:
+  - `stdlib/optimization.py`
+  - `stdlib/__init__.py`
+  - `workflows/workflow_run_traces_to_optimization_candidates/__init__.py`
+  - `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`
+  - `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`
+  - `workflows/workflow_run_traces_to_optimization_candidates/params.py`
+  - `workflows/workflow_run_traces_to_optimization_candidates/workflow.toml`
+  - `workflows/workflow_run_traces_to_optimization_candidates/assets/optimization_package_checklist.md`
+  - `workflows/workflow_run_traces_to_optimization_candidates/prompts/README.md`
+  - `workflows/workflow_run_traces_to_optimization_candidates/prompts/*.md`
+  - `tests/unit/test_optimization_helpers.py`
+  - `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - `tests/test_architecture_baseline_docs.py`
+- Symbols touched:
+  - `parse_run_ref`
+  - `list_selected_workflow_runs`
+  - `load_run_observability_bundle`
+  - `validate_observability_bundle`
+  - `normalize_trace_corpus`
+  - `write_selected_workflow_source_manifest`
+  - `validate_selected_workflow_source_unchanged`
+  - `write_optimization_refinement_evidence`
+  - `WorkflowRunTracesToOptimizationCandidates`
+- Checklist mapping:
+  - Plan items 1-7 completed for this phase scope: deterministic helpers, contracts, params, workflow package shell, manifest-backed discovery, frame-time capture, source-manifest validation seam.
+  - Later-phase items intentionally deferred: ranking/failure-mining candidate generation, downstream refinement consumption changes, broader docs pages, full-suite validation.
+- Assumptions:
+  - Historical eligibility is defined strictly by presence of `run.json`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/`.
+  - Bundled workflow discovery is manifest-backed; no extra hard-coded registry hook was required in this phase.
+- Preserved invariants:
+  - No runtime, runner, or engine behavior changed.
+  - The optimizer never mutates the selected workflow source package.
+  - The optimizer publishes candidate-only artifacts and never runs the target workflow.
+  - `run_statuses` remains run-level filtering and `route_tags` remains step-level evidence context.
+- Intended behavior changes:
+  - Adds a discoverable optimizer workflow shell with exact ordered topology and `frame -> package` short-circuit on `no_eligible_trace_evidence`.
+  - Adds deterministic ingestion/publication helpers for optimizer frame artifacts and manifest verification.
+- Known non-changes:
+  - No optimization-candidate generation beyond no-op packaging for zero eligible runs.
+  - No refinement-workflow acceptance changes in other packages.
+  - No architecture/workflow docs expansion beyond the prompt-package baseline test touch.
+- Expected side effects:
+  - New optimizer package appears in bundled workflow discovery.
+  - No-op publication now writes `workflow_refinement_evidence.json` with only the scorecard when no eligible evidence exists.
+- Validation performed:
+  - `python3 -m py_compile stdlib/optimization.py workflows/workflow_run_traces_to_optimization_candidates/*.py tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - `./.venv/bin/python -m pytest -q tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`
+  - Result: `19 passed`
+- Deduplication / centralization:
+  - Reused selected-workflow capability/authoring/decomposition helpers instead of adding a parallel serializer.
+  - Centralized optimizer ingestion, manifest hashing, and refinement-evidence writing in `stdlib/optimization.py`.
