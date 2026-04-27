@@ -16,14 +16,14 @@
       "compatibility-docs-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "simple-lowering"
+    "current_phase_index": 3,
+    "current_phase_id": "engine-hooks-workflow-step"
   },
   "phase_status": {
     "surface-foundations": "completed",
     "contract-migration": "completed",
-    "simple-lowering": "in_progress",
-    "engine-hooks-workflow-step": "planned",
+    "simple-lowering": "completed",
+    "engine-hooks-workflow-step": "in_progress",
     "compatibility-docs-cleanup": "planned"
   },
   "phase_history": [
@@ -58,6 +58,19 @@
       "run_id": "run-20260427T174615Z-f98ff2bb",
       "status": "in_progress",
       "ts": "2026-04-27T18:42:41.378131+00:00"
+    },
+    {
+      "phase_id": "simple-lowering",
+      "run_id": "run-20260427T174615Z-f98ff2bb",
+      "status": "completed",
+      "ts": "2026-04-27T19:17:39.139804+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "engine-hooks-workflow-step",
+      "run_id": "run-20260427T174615Z-f98ff2bb",
+      "status": "in_progress",
+      "ts": "2026-04-27T19:17:39.143826+00:00"
     }
   ]
 }
