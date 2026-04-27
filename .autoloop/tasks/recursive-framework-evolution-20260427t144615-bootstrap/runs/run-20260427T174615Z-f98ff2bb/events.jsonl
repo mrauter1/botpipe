@@ -33,3 +33,6 @@
 {"ts": "2026-04-27T18:37:12.787608+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 33, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "contract-migration"}
 {"ts": "2026-04-27T18:38:39.552916+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 34, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "contract-migration"}
 {"ts": "2026-04-27T18:38:39.597915+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 35, "event_type": "pair_completed", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "contract-migration"}
+{"ts": "2026-04-27T18:38:39.674890+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 36, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "contract-migration", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-04-27T18:38:39.676185+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 37, "event_type": "pair_started", "pair": "test", "phase_id": "contract-migration"}
+{"ts": "2026-04-27T18:38:39.676340+00:00", "run_id": "run-20260427T174615Z-f98ff2bb", "seq": 38, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "contract-migration"}
