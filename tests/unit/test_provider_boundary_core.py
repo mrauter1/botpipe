@@ -194,6 +194,42 @@ def test_render_required_inputs_marks_runtime_preconditions_required_even_for_op
     assert "| optional_input | /tmp/optional.md | yes |" in turn.prompt_text
 
 
+def test_render_provider_turn_prefers_route_infos_summary_over_legacy_route_contracts() -> None:
+    context = _turn_context()
+    turn = render_provider_turn(
+        ProviderTurnContext(
+            step_name=context.step_name,
+            turn_kind=context.turn_kind,
+            prompt=context.prompt,
+            context=context.context,
+            artifacts=context.artifacts,
+            session=context.session,
+            expected_output_schema=context.expected_output_schema,
+            available_routes=context.available_routes,
+            route_infos={
+                **context.route_infos,
+                "done": RouteInfo(summary="RouteInfo summary wins."),
+            },
+            route_contracts={
+                **context.route_contracts,
+                "done": {"summary": "Legacy route contract summary loses."},
+            },
+            readable_artifacts=context.readable_artifacts,
+            required_artifacts=context.required_artifacts,
+            writable_artifacts=context.writable_artifacts,
+            route_required_outputs=context.route_required_outputs,
+            route_required_artifacts=context.route_required_artifacts,
+            retry_feedback=context.retry_feedback,
+            route_handoff=context.route_handoff,
+            attempt=context.attempt,
+            max_attempts=context.max_attempts,
+        )
+    )
+
+    assert "RouteInfo summary wins." in turn.prompt_text
+    assert "Legacy route contract summary loses." not in turn.prompt_text
+
+
 def test_render_provider_turn_rejects_missing_prompt_text() -> None:
     context = _turn_context()
     context = ProviderTurnContext(
