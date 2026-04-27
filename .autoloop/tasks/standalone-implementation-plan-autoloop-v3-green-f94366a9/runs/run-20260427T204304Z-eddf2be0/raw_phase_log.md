@@ -505,3 +505,125 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m scoping the test phase around the public-surface and route-metadata changes first: reading the phase test artifacts, then checking the touched surface tests and adjacent helper coverage before I add anything.
+
+I’m checking the existing test coverage and the phase test artifacts first, then I’ll patch only the tests and phase-local test notes needed for this scope.
+
+I’ve confirmed most of the new surface is already covered. The remaining gap is the `stdlib` helper expectation that still looks legacy-shaped, plus the phase-local strategy and feedback artifacts.
+
+There are a few more stale tests than just the `stdlib` helper. I’m checking the adjacent validation and authoring-surface assertions now so I can patch the minimal set that actually tracks this phase’s behavior changes.
+
+The legacy validation tests are still asserting removed `route_contracts` fields. I’m reading the current constructor and compiled-step shapes now so I can rewrite those expectations against the final `route_infos` model instead of deleting coverage.
+
+The `workflow` shim change has a wider test impact than one file. I’m checking the tests that still import authoring classes from `workflow` so I can update only the ones that are actually validating the now-changed public surface.
+
+I’m at the point of edits now. Before patching, I’m checking the exact capability payload shape so the updated expectations match the live `route_infos` format instead of guessing.
+
+I’m patching the tests now. The changes are concentrated in four files: core validation expectations, `workflow` shim behavior, `stdlib` helper/capability fixtures, and the phase-local test notes.
+
+I hit one adjacent cleanup issue while checking the patched files: `test_primitives_and_stores.py` still uses `StrictSession` later in the file, so I’m fixing that import before I validate the test modules.
+
+The test rewrites are in place. I’m running lightweight validation now: syntax first, then a narrow pytest slice if the environment actually has the test dependencies installed.
+
+`pytest` still isn’t available in this shell, so I’m finishing the phase artifacts with the exact coverage map and recording the validation boundary explicitly.
+
+I’ve updated the strategy and feedback artifacts. I’m doing one last grep pass over the touched test files to make sure no stale `route_contracts` or `workflow`-authoring imports remain in the phase-local coverage I changed.
+
+Scope considered
+
+- Phase-local test work for `public-surface-and-route-metadata`.
+- Changed test coverage around the simple public surface, `workflow` shim behavior, route metadata normalization, and stdlib/capability payload expectations.
+- I did not migrate the broader runtime/contract suite that still targets later out-of-phase engine and bundled-workflow cleanup.
+
+What I analyzed
+
+- Existing phase-relevant unit tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1), [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:1), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1), and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:1).
+- The implemented route-metadata shape in `core/steps.py`, `core/compiler.py`, `core/validation.py`, and `core/workflow_capabilities.py`.
+- The shared decisions ledger, especially the explicit removal of `RouteContract` and the deactivation of `workflow` as a public authoring surface.
+
+What I changed
+
+- Updated [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1) to check `autoloop` re-exports and explicit `autoloop.simple` helper signatures instead of the stale doc/shim migration assertion.
+- Updated [tests/unit/test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py:1) so the `workflow` shim test now asserts authoring exports are gone while `workflow.primitives` remains available.
+- Rewrote the phase-relevant legacy `route_contracts` expectations in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1) to validate `route_infos`, `route_required_outputs`, required-output resolution, and handoff conflict behavior.
+- Updated [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py:1) so stdlib helpers assert `RouteInfo`, generated sample workflows import from `autoloop_v3.core`, capability payload expectations use `route_infos` / `route_required_outputs`, and authoring-doc tests read the current doc path via a small fallback helper.
+- Updated the phase artifacts in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/public-surface-and-route-metadata/test_strategy.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/test/phases/public-surface-and-route-metadata/feedback.md:1), and appended the non-obvious test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/decisions.txt:1).
+
+Key findings / decisions
+
+- The largest phase-local test regression was not just `RouteContract`; it was the intentional shutdown of `workflow` as an authoring API, which broke several tests and generated sample workflows that still imported from it.
+- Capability-inspection expectations needed to move to the new `route_infos` / `route_required_outputs` payload shape rather than only replacing helper names.
+- I used a doc-path fallback in tests because `docs/authoring.md` is absent in this checkout, while `legacy_docs/docs/authoring.md` contains the updated route-metadata wording.
+
+Open issues / next step
+
+- Validation run: `python3 -m py_compile tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/unit/test_stdlib_and_extensions.py`.
+- I attempted targeted `pytest`, but `/usr/bin/python3` in this shell does not have `pytest` installed.
+- Broader repo tests still contain many legacy `RouteContract` and `from workflow import ...` expectations outside this phase-local slice; those belong to later migration work rather than this scoped test pass.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m auditing the phase-local test changes and the surrounding regression surface now, then I’ll update only the test audit artifacts with either findings or completion status.
+
+I’ve found one likely gap already: the phase criteria call out removal of `route_contracts` from core step constructors, but the new tests only assert the positive `route_infos` path. I’m checking whether that rejection is covered anywhere else before I decide if it’s a blocker.
+
+I’ve narrowed this to two material coverage gaps: no explicit test that core step constructors reject `route_contracts`, and no meaningful coverage for the documented `system_step(fn)` callable/return variants beyond one happy path. I’m recording those now.
+
+Scope considered
+
+- Phase-local audit of the `public-surface-and-route-metadata` test pass.
+- The changed unit tests, the phase-local `test_strategy.md`, the shared decisions ledger, and the test audit artifacts only.
+
+What I analyzed
+
+- Coverage added in `tests/unit/test_simple_surface.py`, `tests/unit/test_primitives_and_stores.py`, `tests/unit/test_validation.py`, and `tests/unit/test_stdlib_and_extensions.py`.
+- The phase strategy and feedback artifacts.
+- The authoritative decisions around removing `RouteContract`, deactivating `workflow` as an authoring surface, and the required `system_step(fn)` callable contract.
+
+What I reviewed
+
+- Whether the tests cover AC-1 and AC-2 at the right level.
+- Whether the changed tests would catch likely regressions in route-metadata normalization and the new public/simple surface.
+- Whether the tests encode only the explicitly approved compatibility break.
+
+Key findings / decisions
+
+- I recorded 2 blocking findings in the phase feedback.
+- The first gap is direct regression coverage for the core constructor break: the tests do not assert that core step classes reject `route_contracts=`.
+- The second gap is `system_step(fn)` behavior coverage: only one `(state, "done")` path is tested, while the requested callable/return matrix is materially broader.
+- Criteria updated accordingly: `Reliability` and `Behavioral Intent` are true; `Coverage Quality`, `Regression Protection`, and `Edge Cases / Failure Paths` remain unchecked because of the blockers.
+
+Open issues / next step
+
+- Add explicit negative tests for legacy `route_contracts=` on core step constructors.
+- Add focused `system_step(fn)` tests for the documented signatures and return variants.
+- Re-audit after those tests are added.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
