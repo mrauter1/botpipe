@@ -1,0 +1,8 @@
+# Test Author ↔ Test Auditor Feedback
+
+- Task ID: standalone-implementation-plan-autoloop-v3-green-f94366a9
+- Pair: test
+- Phase ID: provider-and-engine-contract
+- Phase Directory Key: provider-and-engine-contract
+- Phase Title: Provider and engine contract
+- Scope: phase-local authoritative verifier artifact
