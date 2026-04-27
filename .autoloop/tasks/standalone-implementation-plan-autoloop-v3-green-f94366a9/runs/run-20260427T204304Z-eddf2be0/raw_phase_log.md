@@ -310,3 +310,102 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m addressing the reviewer blockers by first tracing the remaining legacy import surface and the actual shape of the contract bundles, so I can decide whether a small compatibility-preserving migration is possible inside this phase without reintroducing `RouteContract`.
+
+I’ve decided not to add a compatibility bridge for the deleted `RouteContract` path. The shared decisions explicitly permit breaking removal across bundled workflows/tests, so I’m fixing the actual phase blockers instead: `workflow/__init__.py` as a legacy authoring surface, and the missing explicit helper signatures in `autoloop.simple`.
+
+I’m tightening one more small contract detail while I’m here: `workflow_step(..., message_from=...)` should advertise path/artifact-capable typing rather than only `str`.
+
+The surface changes are in place. I’m doing a final compile check on the Python files I touched, then I’ll update the phase notes to reflect why I intentionally did not reintroduce `RouteContract` compatibility.
+
+Scope considered
+
+- Phase-local follow-up on the reviewer findings for `public-surface-and-route-metadata`.
+- I limited code changes to the requested public surface and shims: [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py:1) and [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1), plus the phase implementation notes.
+
+What I analyzed
+
+- The blocking feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/public-surface-and-route-metadata/feedback.md:1).
+- The explicit decisions ledger, especially the allowed breaking removal of `RouteContract` across bundled workflows/tests.
+- The live helper signatures and legacy `workflow` shim behavior.
+
+What I changed
+
+- Replaced the permissive `**kwargs` wrappers in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py:282) with explicit greenfield signatures for `step`, `review_step`, `system_step`, and `workflow_step`.
+- Converted [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py:1) into a non-authoring legacy shim that no longer re-exports the strict authoring surface.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/public-surface-and-route-metadata/implementation_notes.md:1) to document the reviewer-driven edits and the intentional non-restoration of `RouteContract` compatibility.
+
+Key findings / decisions
+
+- I did not reintroduce any `RouteContract` bridge. The shared decisions explicitly allow breaking removal across bundled workflows/tests, so restoring legacy compatibility here would conflict with the authoritative plan direction.
+- `workflow/__init__.py` now stops functioning as a second authoring API.
+- The public helper surface now advertises the requested callable contracts directly.
+
+Open issues / next step
+
+- I re-ran `python3 -m py_compile autoloop/simple.py workflow/__init__.py`.
+- I did not run `pytest`; the environment still lacks the runtime dependencies noted earlier.
+- The remaining reviewer point about active bundled workflow imports should be re-evaluated against the explicit decisions ledger, not treated as a compatibility regression to restore in this phase.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd0b9-a569-7570-8271-970e98ba60d5
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd0b9-a569-7570-8271-970e98ba60d5
+---
+I’m re-checking the reviewer blockers against the authoritative decisions and the live public surface, then I’ll close out the phase artifacts if the remaining changes satisfy the scoped contract.
+
+I found one remaining blocker after the second implementation pass: the deleted `core/route_contracts.py` still breaks the exported `stdlib` surface, independent of the allowed bundled-workflow/test breakage. I’m updating the review artifact to narrow the finding accordingly.
+
+Scope considered
+
+- Phase-local re-review of the public-surface and route-metadata changes after the second implementation pass.
+- Public exports/shims, the explicit helper signatures in `autoloop.simple`, and adjacent active import surfaces needed for regression analysis.
+
+What I analyzed
+
+- The authoritative decisions ledger, especially the explicit permission to break bundled workflow packages and tests during `RouteContract` removal.
+- The live contents of `workflow/__init__.py`, `autoloop/simple.py`, `stdlib/__init__.py`, and `stdlib/contracts.py`.
+- The existing review artifact to determine which prior blockers were actually resolved versus which remained.
+
+What I reviewed
+
+- `IMP-002`: resolved. `workflow/__init__.py` is no longer a second authoring API.
+- `IMP-003`: resolved. `autoloop.simple` now exposes explicit helper signatures.
+- `IMP-001`: still blocking, but narrowed. The allowed bundled-workflow/test breakage is no longer the issue; the remaining regression is the active `stdlib` surface still importing the deleted `core.route_contracts`.
+
+Key findings / decisions
+
+- One blocking finding remains.
+- The surviving blocker is outside the allowed bundled-workflow/test breakage boundary: `stdlib/__init__.py` eagerly imports `stdlib/contracts.py`, which still imports the deleted `core.route_contracts`.
+- Criteria remain unchecked because the active `stdlib` import path is still broken.
+
+Open issues / next step
+
+- Migrate `stdlib/contracts.py` off `RouteContract`, or remove those exports from `stdlib/__init__.py` in the same centralized change.
+- After that fix, re-review the phase artifacts and public surfaces for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
