@@ -146,3 +146,12 @@ No remaining blocking findings. The planning artifacts are ready for implementat
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=workflow-semantics-and-contracts,prompts-docs-and-report,tests-and-verification
+explicit=True
+current_phase_index=0
