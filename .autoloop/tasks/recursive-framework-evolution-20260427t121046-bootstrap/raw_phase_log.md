@@ -337,3 +337,46 @@ No blocking test gaps remain in this phase scope. Prompt wording is still not sn
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dcf86-5001-78b2-a22d-68d3d9a321ce
+---
+Auditing the added optimizer tests now. I’m checking the new regression coverage against the phase contract and the shared decisions, then I’ll mark the phase criteria and append any audit findings in the test feedback artifact.
+
+The coverage map is aligned with the phase contract, and the shared helper structure means one accepted-route preservation test plus the new parametrized skip-route test exercises the rewrite-risky logic where it actually branches. I’m doing a final pass over the added runtime test itself before I mark the audit artifacts complete.
+
+I found one material coverage gap in the current test set. The new regression test pins the deterministic skip gates, but it still doesn’t exercise the provider-emitted `*_not_applicable` handler branch that was part of the requested behavior change, so I’m marking the phase incomplete and recording the correction path in the audit artifacts.
+
+Scope considered
+
+The optimizer workflow semantics-and-contracts test surface only: the updated runtime regression tests in `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, the phase-local `test_strategy.md`, the test feedback artifact, and the shared decisions relevant to artifact-preservation behavior.
+
+What I analyzed
+
+I compared the requested behavior and decisions against the actual test coverage, with focus on failure-scenario ownership, accepted artifact preservation, not-applicable behavior, optimization-depth publication semantics, and soft candidate-budget behavior. I also checked the new skip-route regression test against the underlying workflow branching in `workflow.py`.
+
+What I reviewed
+
+The added coverage is reliable and directionally correct: it documents the AC-to-test mapping well, and the new parametrized regression test properly covers deterministic optional skip gates preserving pre-existing artifacts. The tests remain deterministic and do not encode any unconfirmed behavior break.
+
+Key findings / decisions
+
+`TST-001` is blocking. The suite still does not exercise the provider-emitted `*_not_applicable` handler branch in `_finalize_candidate_artifact`. The new test covers only deterministic `on_route_*` skip gates. A regression that rewrites an existing provider-authored artifact to the minimal empty payload when the pair step itself returns `producer_pass_not_applicable`, `verifier_rubric_pass_not_applicable`, `token_pass_not_applicable`, `adversarial_generation_skipped`, or `workflow_level_pass_not_applicable` would still pass current tests, even though the request explicitly forbids replacing valid provider-authored artifacts on not-applicable routes.
+
+Open issues / next step
+
+Add a handler-level or scripted full-workflow regression test that seeds an existing artifact, drives one of the pair steps through a `*_not_applicable` outcome, and asserts the artifact remains unchanged. Until that branch is covered, the phase should remain incomplete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
