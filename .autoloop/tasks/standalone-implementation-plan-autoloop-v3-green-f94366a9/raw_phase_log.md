@@ -1143,3 +1143,53 @@ Open issues / next step
 - I did not run the full suite.
 - Repo-wide `RouteContract` cleanup is still incomplete in out-of-phase areas, including bundled workflows and untouched legacy sections of `tests/contract/test_engine_contracts.py`.
 - The next phase should finish migrating those remaining legacy references, then run the full test suite and the final anti-regression greps.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0f3-26d1-78b0-ae1f-4f22714b9076
+---
+I’m reviewing the phase acceptance against the actual changed runtime seams now. I’m checking the criteria artifact, the feedback ledger, and the request-specific behaviors that were still easy to miss after the focused tests passed.
+
+Reviewing the provider/engine phase changes first, with focus on acceptance criteria and regression surfaces around prompts, hooks, and `WorkflowStep` execution.
+
+I’ve narrowed the remaining risk to whether the phase fully covers prompt-resolution semantics and whether any engine or rendering behavior contradicts the requested contract.
+
+I’m checking one remaining contract edge: whether the engine still accepts outcome JSON that omits `reason`, despite the prompt now claiming the control object must include it.
+
+I found one material contract mismatch: the rendered control-response contract now requires a `reason`, but the shared provider JSON parser still accepts outcome objects that omit it. I’m updating the reviewer artifacts with that blocking finding.
+
+Scope considered
+
+Phase-scoped review of the provider and engine contract work: `core/engine.py`, `core/providers/{models,rendering,rendered,fake,parsing}.py`, `core/prompts.py`, `runtime/prompts.py`, `core/workflow_capabilities.py`, and the focused tests added or changed for this phase.
+
+What I analyzed
+
+I checked the updated provider request/rendering path, hook finalization order, direct `WorkflowStep` runtime path, prompt-resolution behavior, and the shared outcome parser against the active phase contract and acceptance criteria. I also verified the reviewer artifacts and the current residual `RouteContract` references to separate in-scope issues from deferred cleanup.
+
+What I reviewed
+
+The main implementation is close to the requested model, and the focused tests reported by the producer are consistent with the touched surfaces. The remaining material issue is a contract mismatch between the rendered provider prompt and the runtime parser.
+
+Key findings / decisions
+
+I recorded one blocking finding in [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/provider-and-engine-contract/feedback.md>):
+`IMP-001` in [core/providers/parsing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/parsing.py:18): `parse_outcome_json()` still accepts control responses without `reason`, even though the rendered runtime contract now requires the exact `{tag, reason, payload}` shape. That means a provider can return `{"tag":"done"}` and still pass runtime parsing for non-`blocked`/`failed` routes, which fails AC-1.
+
+I left the phase criteria unchecked in [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/provider-and-engine-contract/criteria.md>) because this is a blocking correctness and validation gap.
+
+Open issues / next step
+
+Tighten the shared parser so `reason` is required for all control responses, then add a focused omission-case test so rendering, parsing, and engine validation stay aligned. After that, this phase should be ready for re-review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
