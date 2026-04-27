@@ -894,3 +894,130 @@ No open blocker remains in this phase-local test audit. The updated criteria and
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+I’m implementing the `simple-lowering` phase: adding the simple authoring surface and lowering path on top of the existing runtime. First I’m reading the phase artifacts and the relevant workflow/compiler/provider code to find the current seams and any compatibility constraints from the earlier phases.
+
+The phase artifacts are sparse, so I’m relying on the plan plus the earlier phase decisions. Next I’m mapping the current simple-surface stubs, workflow discovery, validation, and engine/compiler seams to see what already landed and what still needs lowering work.
+
+I have the shape of the current implementation now: `autoloop.simple` is still just declaration objects, while the core runtime only knows strict `Step` subclasses. I’m reading the engine and validation flow next to wire lowering at definition/compile time instead of inventing a parallel path.
+
+I’ve confirmed the runtime can stay unchanged for this slice if simple declarations lower into normal `LLMStep`/`PairStep`/`SystemStep` objects during workflow discovery. I’m checking which simple-step fields the current engine can actually carry so I can wire the supported subset now and leave future-only fields explicit in the notes instead of pretending they work.
+
+I’ve got a workable lowering design. I’m editing the simple declarations first to add explicit markers and chain metadata so the core validation layer can detect them without importing the public simple module back into the kernel.
+
+I found one gap while wiring the lowering: the per-step `routes=` declarations from the simple helpers need to merge into the same transition table as `flow`. I’m patching that now before I run the first compile-focused test slice.
+
+I’ve finished the core lowering pass: simple declarations are now converted into normal step objects during workflow discovery, with `flow`, entry inference, default single-step routing, and placeholder-based read inference wired into the existing validation path. I’m running the focused unit tests now to catch any structural mistakes before I touch the notes or wider validation coverage.
+
+The current surface tests only covered declaration objects, not the lowered compiled workflow. I’m adding compile-path assertions now so this phase actually locks in the one-step/two-step lowering behavior, entry inference, review-loop wiring, and conservative prompt-read inference.
+
+The compile-path tests are green, and the broader validation suite still passes after the discovery changes. I’m doing one more regression check on the strict shim because `describe_workflow_class` now recognizes simple declarations and I want to confirm that didn’t relax the existing strict surface by accident.
+
+I’ve finished the code changes. I’m updating the phase ledger and notes now with the non-obvious decisions from this slice, including the one deliberate deferment: `workflow_step` stays exposed on the simple surface but still fails at compile time until the later child-workflow execution phase lands.
+
+Scope considered
+
+- Phase-local `simple-lowering` only: the public simple surface, workflow discovery/lowering, and focused regression tests.
+
+What I analyzed
+
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+
+What I changed
+
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) now lowers `autoloop.simple` declarations into normal `LLMStep`/`PairStep`/`SystemStep` objects during `describe_workflow_class`, then feeds them through the existing validation/compiler path.
+- Added merging for explicit `transitions`, per-step `routes=`, and `flow = chain(...)`, plus entry inference, one-step default completion routing, review-step rework self-loops, and conservative inline placeholder `reads` inference.
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py) now exposes explicit markers/default chain metadata so the kernel can recognize simple declarations without importing the public module back into core.
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) now covers real compile-path behavior for one-step workflows, `chain(...)`, review-step accepted/rework routing, and ambiguous placeholder non-inference.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt).
+
+Key findings / decisions
+
+- Simple workflows now compile into the same `WorkflowDefinition` and `CompiledWorkflow` model as strict workflows; no parallel runtime path was added.
+- Prompt placeholder inference is intentionally narrow: inline prompts only, unique artifact names only, and never `requires` or provider control schemas.
+- `workflow_step(...)` remains exposed but compilation is still rejected for it in this phase; child-workflow graph nodes need the later runtime phase.
+
+Open issues / next step
+
+- Later phases still need runtime support for `workflow_step`, executable `before`/`after` semantics, and provider/model override consumption.
+- Validation run completed with:
+  - `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`
+  - `.venv/bin/python -m pytest -q tests/unit/test_validation.py`
+  - `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
+  - `.venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py`
+- I did not run the full repository test suite.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+I’m reviewing the `simple-lowering` implementation against the phase contract and the actual code diff. First I’m reading the phase criteria/feedback files and the implementation diff so I can assess coverage, regressions, and any phase-scope gaps before I update the review artifacts.
+
+The artifact files are still blank, so the review hinges on the actual lowering code. I’m reading the current `core/validation.py` and the added tests directly now, with an eye on phase-scope requirements like `workflow_step`, conservative inference, and compatibility with strict workflows.
+
+I found at least one likely phase gap on paper: `workflow_step(...)` still looks deferred even though it is in scope for this phase. I’m confirming that in the actual runtime by compiling a tiny simple workflow that uses `workflow_step`, and I’m checking file-backed prompt inference too because the phase contract didn’t limit placeholder inference to inline prompts.
+
+I have two blocking findings with concrete repros: `workflow_step(...)` still fails compilation outright, and file-backed simple prompts do not participate in placeholder-read inference. I’m writing those into the phase feedback now and marking the review criteria accordingly.
+
+Scope considered
+
+- Phase-local review for `simple-lowering`, limited to the implementation diff and the active phase artifacts.
+- Repo-wide exploration only where needed to verify the lowered workflow behavior and prompt-resolution dependency paths.
+
+What I analyzed
+
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/feedback.md)
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt)
+
+What I reviewed
+
+- The simple-step lowering path in `describe_workflow_class`.
+- Entry inference, `chain(...)` lowering, and review-step default-loop behavior.
+- Prompt-placeholder read inference behavior for inline and file-backed prompts.
+- Actual compile behavior for `workflow_step(...)` and file-backed prompt workflows via targeted repro scripts.
+- Phase artifact updates: criteria and reviewer feedback.
+
+Key findings / decisions
+
+- Recorded `IMP-001` as blocking: `workflow_step(...)` is still exposed but compilation intentionally fails, which conflicts with the active phase scope and deliverables.
+- Recorded `IMP-002` as blocking: placeholder-read inference only works for inline prompts and silently drops reads for `Path(...)` / `Prompt.file(...)` prompts, which misses part of the phase’s inference contract.
+- Updated the phase criteria to reflect an incomplete review outcome with blocking findings still open.
+
+Open issues / next step
+
+- Implement `workflow_step` lowering into the existing workflow-definition model, or get an authoritative clarification that defers it out of this phase.
+- Extend prompt-placeholder inference to file-backed prompts through the existing prompt-resolution seam and add regression coverage for that path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
