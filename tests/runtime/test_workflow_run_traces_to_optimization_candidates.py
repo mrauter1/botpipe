@@ -155,6 +155,31 @@ def test_capture_frame_context_normalizes_trace_corpus_from_seeded_runs(tmp_path
     del params
 
 
+def test_capture_frame_context_keeps_public_trace_filtered_but_internal_trace_complete(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _install_repo_optimizer_package(tmp_path)
+    _write_upstream_pass_downstream_fail_run(tmp_path, "release-upstream", "release_candidate_to_go_no_go", "run-upstream")
+    params, state, ctx, workflow_pkg = _bootstrap_context(tmp_path, monkeypatch, route_tags=["failed"])
+
+    next_state, event = workflow_pkg.WorkflowRunTracesToOptimizationCandidates.on_capture_frame_context(state, ctx)
+
+    public_corpus = json.loads((ctx.workflow_folder / "workflow_optimization_trace_corpus.json").read_text(encoding="utf-8"))
+    internal_corpus = json.loads(
+        (ctx.workflow_folder / "_workflow_optimization_internal_trace_corpus.json").read_text(encoding="utf-8")
+    )
+    report = json.loads((ctx.workflow_folder / "step_optimization_priority_report.json").read_text(encoding="utf-8"))
+
+    assert event.tag == "frame_context_captured"
+    assert next_state.eligible_run_count == 1
+    assert "all_step_observations" not in public_corpus
+    assert "static_step_graphs" not in public_corpus
+    assert [entry["step_name"] for entry in public_corpus["step_observations"]] == ["package"]
+    assert {entry["step_name"] for entry in internal_corpus["all_step_observations"]} == {"assessment", "package"}
+    assert report["ranked_steps"][0]["step_name"] == "assessment"
+    del params
+
+
 def test_rank_targets_writes_priority_report(tmp_path: Path, monkeypatch) -> None:
     _install_repo_optimizer_package(tmp_path)
     _write_observable_run(tmp_path, "release-good", "release_candidate_to_go_no_go", "run-good")
@@ -416,7 +441,12 @@ def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_pat
     assert not (workflow_folder / "invocation_contract.json").exists()
 
 
-def _bootstrap_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def _bootstrap_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    route_tags: list[str] | None = None,
+):
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
     _clear_workflow_modules()
@@ -425,7 +455,7 @@ def _bootstrap_context(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         selected_workflow="release_candidate_to_go_no_go",
         task_title="Release workflow optimization",
         run_statuses=["failed", "paused", "blocked"],
-        route_tags=["needs_rework", "needs_replan", "failed", "blocked"],
+        route_tags=route_tags or ["needs_rework", "needs_replan", "failed", "blocked"],
     )
     task_folder = tmp_path / ".autoloop" / "tasks" / "optimizer-task"
     workflow_folder = task_folder / "wf_workflow_run_traces_to_optimization_candidates"
@@ -686,6 +716,134 @@ def _write_observable_run(root: Path, task_id: str, workflow_name: str, run_id: 
                 "workflow_name": workflow_name,
                 "steps": [{"name": "assessment", "kind": "pair"}],
                 "transitions": {"steps": {"assessment": {"needs_rework": "assessment"}}, "global": {}},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return run_dir
+
+
+def _write_upstream_pass_downstream_fail_run(root: Path, task_id: str, workflow_name: str, run_id: str) -> Path:
+    run_dir = _write_minimal_run_metadata(root, task_id, workflow_name, run_id, "failed")
+    run_payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    run_payload["terminal"] = "FAIL"
+    run_payload["git_tracking"] = {
+        "commit_before_run": "commit-before-run",
+        "commit_after_run": "commit-after-run",
+    }
+    (run_dir / "run.json").write_text(json.dumps(run_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    raw_dir = run_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    (raw_dir / "000001_assessment_producer.txt").write_text("assessment producer\n", encoding="utf-8")
+    (raw_dir / "000002_package_producer.txt").write_text("package producer\n", encoding="utf-8")
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(
+            (
+                json.dumps(
+                    {
+                        "schema": "autoloop.runtime_trace/v1",
+                        "event_type": "step_finished",
+                        "sequence": 1,
+                        "step_name": "assessment",
+                        "step_kind": "pair",
+                        "event": {"tag": "assessment_complete"},
+                        "outcome": {"tag": "assessment_complete"},
+                        "provider_usage": {
+                            "producer": {
+                                "input_tokens": 200,
+                                "output_tokens": 40,
+                                "total_tokens": 240,
+                                "source": "provider",
+                            }
+                        },
+                        "raw_output_refs": {
+                            "producer": {
+                                "path": "raw/000001_assessment_producer.txt",
+                                "sha256": "unused",
+                                "bytes": 18,
+                            }
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "schema": "autoloop.runtime_trace/v1",
+                        "event_type": "step_finished",
+                        "sequence": 2,
+                        "step_name": "package",
+                        "step_kind": "pair",
+                        "event": {"tag": "failed"},
+                        "outcome": {"tag": "failed"},
+                        "provider_usage": {
+                            "producer": {
+                                "input_tokens": 40,
+                                "output_tokens": 10,
+                                "total_tokens": 50,
+                                "source": "provider",
+                            }
+                        },
+                        "raw_output_refs": {
+                            "producer": {
+                                "path": "raw/000002_package_producer.txt",
+                                "sha256": "unused",
+                                "bytes": 16,
+                            }
+                        },
+                    }
+                ),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "git_tracking.jsonl").write_text(
+        "\n".join(
+            (
+                json.dumps(
+                    {
+                        "schema": "autoloop.git_tracking/v1",
+                        "event_type": "step_committed",
+                        "sequence": 1,
+                        "step_name": "assessment",
+                        "commit_before_step": "commit-before-assessment",
+                        "commit_after_step": "commit-after-assessment",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "schema": "autoloop.git_tracking/v1",
+                        "event_type": "step_committed",
+                        "sequence": 2,
+                        "step_name": "package",
+                        "commit_before_step": "commit-before-package",
+                        "commit_after_step": "commit-after-package",
+                    }
+                ),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "static_step_graph.json").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.workflow_static_step_graph/v1",
+                "workflow_name": workflow_name,
+                "steps": [
+                    {"name": "assessment", "kind": "pair"},
+                    {"name": "package", "kind": "pair"},
+                ],
+                "transitions": {
+                    "steps": {
+                        "assessment": {"assessment_complete": "package"},
+                        "package": {"failed": "FAIL"},
+                    },
+                    "global": {},
+                },
             },
             indent=2,
             sort_keys=True,
