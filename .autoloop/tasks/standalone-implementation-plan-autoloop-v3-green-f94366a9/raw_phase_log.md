@@ -795,3 +795,46 @@ Validation performed:
 
 Not done:
 I did not run the full suite as an acceptance gate. A full-file run of `tests/runtime/test_workflow_reference_resolution.py` still exposes unrelated pre-existing failures around strict `workflow` shim imports, which are outside this phase’s scope and should be handled in a later migration pass.
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+
+
+---
+run_id=run-20260427T204304Z-eddf2be0 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd0db-c7fd-7173-84ff-2968d7779cd9
+---
+I’m reviewing only the phase-local artifacts and the request-relevant implementation surfaces. Next I’m checking the active criteria file and then I’ll write the blocking findings with concrete failure cases into the phase feedback file.
+
+Scope considered
+
+Phase-local review only. I reviewed the active normalization/discovery implementation surfaces referenced in the producer notes: `core/validation.py`, `core/compiler.py`, `runtime/loader.py`, `core/workflow_capabilities.py`, and the phase-scoped tests/notes under `.autoloop/tasks/.../normalization-and-discovery/`.
+
+What I analyzed
+
+I checked the changed lowering path, reserved-route injection, direct system-handler validation, read/require compilation, shared workflow discovery, and the added phase tests. I also reproduced request-relevant edge cases with the repo virtualenv to verify the behavioral consequences of the new logic.
+
+What I reviewed
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/normalization-and-discovery/feedback.md) with three blocking findings and left the criteria checkboxes in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-autoloop-v3-green-f94366a9/implement/phases/normalization-and-discovery/criteria.md) unchecked because the phase is not yet safe to accept.
+
+Key findings / decisions
+
+`IMP-001` blocking: workflow discovery now recognizes inherited simple declarations, but workflow definition discovery still ignores inherited declaration members, so discovered subclasses can fail to compile.
+
+`IMP-002` blocking: the new optional-read fallback swallows ambiguous declared-artifact reads and silently reinterprets them as workspace paths.
+
+`IMP-003` blocking: the requested validation for invalid after-hook route overrides is still missing; hook validation only checks arity.
+
+Open issues / next step
+
+The implementation should be revised to unify workflow-member enumeration between discovery and lowering, narrow optional-read fallback to the “unknown artifact” case only, and add the missing after-hook route-override validation plus tests. After that, the phase criteria can be re-evaluated.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
