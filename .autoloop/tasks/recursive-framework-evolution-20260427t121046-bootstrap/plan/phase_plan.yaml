@@ -10,6 +10,8 @@ phases:
   status: planned
   in_scope:
   - Add workflow-local failure seed artifact ownership and schema exposure.
+  - Align workflow_optimization_scope.json contract/publication fields so max_candidates_per_pass
+    is explicitly modeled and preserved as soft guidance.
   - Refactor mine_failures and candidate-pass handlers to validate accepted artifacts
     without deterministic rewrites.
   - Record optimization_depth and ablation_executed=false in optimizer publication
@@ -30,12 +32,13 @@ phases:
       artifacts are validated and counted without deterministic regeneration, truncation,
       or formatting rewrites.
   - id: AC-3
-    text: workflow_optimization_scorecard.json requires optimization_depth and ablation_executed=false,
+    text: workflow_optimization_scope.json explicitly preserves max_candidates_per_pass,
+      workflow_optimization_scorecard.json requires optimization_depth and ablation_executed=false,
       and package publication derives requires_ablation_before_promotion from validated
       candidate artifacts.
   deliverables:
   - Updated workflow.py handler semantics and package publication behavior.
-  - Updated contracts.py artifact and scorecard models.
+  - Updated contracts.py scope, artifact, and scorecard models.
   - Any minimal stdlib optimization helper adjustment required to expose the requested
     seed payload cleanly.
   risks:
@@ -88,6 +91,8 @@ phases:
   - Add runtime tests for preserved provider-authored failure artifacts, empty fallback
     behavior, invalid accepted artifacts, separate seeds, depth recording, and soft
     candidate budgets.
+  - Add contract and runtime assertions that workflow_optimization_scope.json retains
+    max_candidates_per_pass as a published soft-budget field.
   - Update helper tests for deterministic failure seed extraction and any changed
     helper payload shape.
   - Run the required pytest commands and full pytest when feasible.
@@ -104,8 +109,8 @@ phases:
       writes only the minimal empty fallback when absent.
   - id: AC-2
     text: Runtime tests prove optimization_depth is reflected in scope, scorecard,
-      packet, and receipt without creating reruns or ablation runs, and over-budget
-      candidate artifacts can still pass when accepted.
+      packet, and receipt, workflow_optimization_scope.json retains max_candidates_per_pass,
+      and no reruns or ablation runs are created.
   - id: AC-3
     text: Required targeted pytest commands pass, and full pytest is run and recorded
       in report.md when feasible.

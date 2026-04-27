@@ -80,3 +80,28 @@ The planner needs to revise the plan and phase contract so `workflow_optimizatio
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dcf7e-3436-7ee2-a913-8f9989f76c38
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dcf7e-3436-7ee2-a913-8f9989f76c38
+
+
+---
+run_id=run-20260427T151046Z-3a255053 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dcf7e-3436-7ee2-a913-8f9989f76c38
+---
+I’m revising the plan to close the verifier’s blocking gap without changing scope: the missing piece is explicit coverage for preserving `workflow_optimization_scope.max_candidates_per_pass` as a real contract/publication field, not just prompt guidance.
+
+I’m making the fix in the plan artifacts now. The change is small but concrete: add explicit scope-contract work and test coverage so the implementation can’t leave `max_candidates_per_pass` as an undocumented extra field.
+
+The plan patch partly matched but `phase_plan.yaml` formatting differs from the last writeback, so I’m reloading the exact current text and applying a smaller patch against the normalized YAML form.
+
+The plan now explicitly carries the scope-contract requirement through milestones, interfaces, compatibility, and tests. I’m doing the required YAML parse and a final readback to make sure the revised phase contract is still valid after the targeted edits.
+
+Updated the plan to explicitly carry `workflow_optimization_scope.max_candidates_per_pass` through the implementation contract. The revised [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/plan/plan.md) now treats `workflow_optimization_scope.json` as a first-class public contract, adds compatibility and regression notes for that field, and adds explicit test coverage for preserving it as soft guidance rather than a hard cap.
+
+I also revised [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/plan/phase_plan.yaml) so phase 1 covers scope-contract alignment and phase 3 covers scope-field assertions, then validated the YAML locally with `python3` and `yaml.safe_load`. [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t121046-bootstrap/plan/feedback.md) now records that this closes the verifier’s blocking gap.
