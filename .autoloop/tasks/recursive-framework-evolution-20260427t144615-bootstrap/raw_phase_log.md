@@ -962,3 +962,62 @@ Open issues / next step
   - `.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py`
   - `.venv/bin/python -m pytest -q tests/unit/test_provider_boundary_core.py`
 - I did not run the full repository test suite.
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd040-34c4-7763-be3b-323e34b516a4
+
+
+---
+run_id=run-20260427T174615Z-f98ff2bb | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd040-34c4-7763-be3b-323e34b516a4
+---
+I’m reviewing the `simple-lowering` implementation against the phase contract and the actual code diff. First I’m reading the phase criteria/feedback files and the implementation diff so I can assess coverage, regressions, and any phase-scope gaps before I update the review artifacts.
+
+The artifact files are still blank, so the review hinges on the actual lowering code. I’m reading the current `core/validation.py` and the added tests directly now, with an eye on phase-scope requirements like `workflow_step`, conservative inference, and compatibility with strict workflows.
+
+I found at least one likely phase gap on paper: `workflow_step(...)` still looks deferred even though it is in scope for this phase. I’m confirming that in the actual runtime by compiling a tiny simple workflow that uses `workflow_step`, and I’m checking file-backed prompt inference too because the phase contract didn’t limit placeholder inference to inline prompts.
+
+I have two blocking findings with concrete repros: `workflow_step(...)` still fails compilation outright, and file-backed simple prompts do not participate in placeholder-read inference. I’m writing those into the phase feedback now and marking the review criteria accordingly.
+
+Scope considered
+
+- Phase-local review for `simple-lowering`, limited to the implementation diff and the active phase artifacts.
+- Repo-wide exploration only where needed to verify the lowered workflow behavior and prompt-resolution dependency paths.
+
+What I analyzed
+
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/feedback.md)
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/implement/phases/simple-lowering/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/recursive-framework-evolution-20260427t144615-bootstrap/decisions.txt)
+
+What I reviewed
+
+- The simple-step lowering path in `describe_workflow_class`.
+- Entry inference, `chain(...)` lowering, and review-step default-loop behavior.
+- Prompt-placeholder read inference behavior for inline and file-backed prompts.
+- Actual compile behavior for `workflow_step(...)` and file-backed prompt workflows via targeted repro scripts.
+- Phase artifact updates: criteria and reviewer feedback.
+
+Key findings / decisions
+
+- Recorded `IMP-001` as blocking: `workflow_step(...)` is still exposed but compilation intentionally fails, which conflicts with the active phase scope and deliverables.
+- Recorded `IMP-002` as blocking: placeholder-read inference only works for inline prompts and silently drops reads for `Path(...)` / `Prompt.file(...)` prompts, which misses part of the phase’s inference contract.
+- Updated the phase criteria to reflect an incomplete review outcome with blocking findings still open.
+
+Open issues / next step
+
+- Implement `workflow_step` lowering into the existing workflow-definition model, or get an authoritative clarification that defers it out of this phase.
+- Extend prompt-placeholder inference to file-backed prompts through the existing prompt-resolution seam and add regression coverage for that path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
