@@ -662,3 +662,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd52b-25f6-7331-967e-c62f57b07c56
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd52b-25f6-7331-967e-c62f57b07c56
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd52b-25f6-7331-967e-c62f57b07c56
+---
+I’m auditing the phase-local test work against AC-1 through AC-3 and the active test strategy. I’ll verify that the new assertions actually cover the changed behavior, then I’ll update the audit artifacts with either a complete verdict or any gaps that would let a regression slip through.
+
+The coverage looks coherent and phase-focused so far. I’m just waiting for the last strictness pass to finish before I write the audit verdict into the phase artifacts.
+
+The audit is clean for this phase. I’m marking the test criteria complete and adding a short non-blocking audit note to the feedback artifact so later turns can see that the remaining broader failure is outside this cleanup scope, not a hole in the phase-local tests.
+
+Scope considered
+
+- Phase-local audit of the workflow-step cleanup and `BoardMutation` test coverage only.
+- I limited edits to the active `.autoloop/tasks/.../test/phases/workflow-step-cleanup-and-effect-pruning/` audit artifacts.
+
+What I analyzed
+
+- The current phase test strategy and feedback artifacts.
+- The repo tests covering AC-1 through AC-3 in `tests/unit/test_simple_surface.py`, `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, and `tests/strictness/test_no_compat.py`.
+- The shared decisions and reviewer/test-author notes to confirm the tests stay aligned with the approved greenfield cleanup intent.
+
+What I reviewed
+
+- AC-1 coverage: compile-time assertions that `workflow_step(...)` lowers to `WorkflowStep`, keeps `kind == "workflow"`, and leaves `system_handler` unset.
+- AC-2 coverage: both unit and contract assertions that no generated `on_<step>` handler is installed.
+- AC-3 coverage: public-surface absence checks for `autoloop`, `core`, and `autoloop_v3.core.effects`, plus strictness scanning for reintroduction of `BoardMutation` and the deleted generated helper token.
+- Verification commands passed:
+  - `.venv/bin/python -m pytest tests/unit/test_validation.py -k "board_mutation"`
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py -k "workflow_step or board_mutation"`
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py`
+
+Key findings / decisions
+
+- No blocking audit findings.
+- The added `core.effects` module-level absence check closes the only cheap AC-3 gap that remained after the implementation pass.
+- The test strategy now maps each acceptance criterion to concrete coverage and correctly treats the unrelated retry-aware validation failure as an external dependency-phase issue, not as a normalized expectation in this phase.
+
+Open issues / next step
+
+- The broader touched-suite failure in `tests/contract/test_engine_contracts.py::test_provider_invalid_question_retry_exhaustion_marks_failure_context` still exists, but it sits in the earlier retry-aware-event-validation track and is already documented as such.
+- This phase’s test coverage is otherwise complete and reliable.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
