@@ -996,3 +996,49 @@ The code and tests are green now. I’m writing the phase notes and the shared d
 
 **Open issues / next step**
 - No blocking issues remain for this phase. The only follow-up I’d flag is optional warning cleanup for those `schema` field-shadowing warnings.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+I’m reviewing the `strictness-and-doc-refresh` phase outputs now. I’ll inspect the phase artifacts, the touched diffs, and the recorded validation so I can update criteria and feedback against the actual implementation rather than the plan.
+
+I’ve got the phase notes and decision ledger. Next I’m reading the actual strictness test and the refreshed shims/docs directly to check that the implementation matches the accepted scope, not just the producer’s summary.
+
+I’ve finished the review pass. There are no blocking issues against the accepted scope, and the one out-of-phase engine touch is justified by a full-suite regression that it fixes rather than introduces. I’m updating the criteria and feedback artifacts now.
+
+Scope considered
+- Phase-local review of `strictness-and-doc-refresh`, limited to the active phase artifacts plus the touched framework/docs/tests surfaces needed to verify intent fidelity and regression safety.
+
+What I analyzed
+- The accepted phase contract, implementation notes, shared decisions ledger, and the touched files in `autoloop/`, `core/`, `workflow/`, `docs/`, and `tests/`.
+- The strictness scan coverage, the `workflow.primitives` shim/export surface, the refreshed authoring/docs wording, and the out-of-phase `core/engine.py` retry-failure-context fix.
+- The recorded validation, including the focused pytest slice and the full `.venv/bin/python -m pytest -q` run.
+
+What I reviewed
+- `tests/strictness/test_no_compat.py` for maintained-root scope, forbidden-token coverage, and shim/export assertions.
+- `workflow/primitives.py`, `workflow/__init__.py`, `autoloop/__init__.py`, `autoloop/simple.py`, `core/compiler.py`, `docs/architecture.md`, `docs/authoring.md`, and `cleanup.md` for phase-scope wording and authoring-surface conformance.
+- `core/engine.py` for the retry checkpoint metadata backfill that was added after full-suite verification exposed a regression.
+
+Key findings / decisions
+- No blocking findings.
+- The implementation satisfies AC-1 through AC-3: removed concepts are enforced by strictness coverage, public docs/docstrings point to `autoloop.simple` / `autoloop`, and `workflow.primitives` remains runtime-only.
+- The out-of-phase `Engine._ensure_retry_failure_context` edit is justified and safe: it restores the previously approved retry-aware event-validation contract and is validated by the passing full suite.
+- I updated the phase artifacts accordingly: all criteria boxes are checked, and feedback records no review findings.
+
+Open issues / next step
+- No blocking issues remain for this phase.
+- Optional follow-up outside this review: the existing pytest warnings about Pydantic `schema` field shadowing remain, but they are pre-existing and not introduced by this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

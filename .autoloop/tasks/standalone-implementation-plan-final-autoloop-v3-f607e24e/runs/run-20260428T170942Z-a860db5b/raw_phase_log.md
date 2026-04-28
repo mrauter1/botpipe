@@ -928,3 +928,117 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+I’m working the `strictness-and-doc-refresh` phase. I’ll inspect the phase artifacts, the current strictness test, and the `workflow`/docs surfaces first so the edits stay inside scope and align with prior phase changes.
+
+I have the phase scope and the current strictness baseline. Next I’m scanning for stale compatibility wording and checking the active docs/tests that will need to move to the stricter greenfield vocabulary.
+
+I’ve confirmed the remaining work is mostly in this phase: the strictness scan is still checking the wrong token set and several docstrings/docs still use future-lowering or compatibility framing. I’m checking the public export surfaces and the maintained docs/tests next so the edits line up with the acceptance criteria.
+
+The maintained tree still has a few neutralization points in docs and module docstrings, and the current anti-regression test is enforcing an older compatibility set instead of this task’s removed concepts. I’m checking the exact file set now so I can patch the strictness coverage and the wording refresh together, then run the focused test slice.
+
+I’ve isolated the wording that still needs neutralizing: the public package docstrings, the simple-surface declaration docstrings, the `core.compiler` artifact comment, and a few authoring doc bullets that still say “legacy” or “additive” where the current model is just “supported” or “authoring-only.” I’m patching those together with the stricter scan so the test coverage matches the docs refresh.
+
+Plan for this phase:
+- Tighten `tests/strictness/test_no_compat.py` around the actual removed concepts from this request, expand the maintained-root scan, and add public API assertions for `BoardMutation` absence plus `workflow.primitives` staying runtime-only.
+- Refresh stale wording in `autoloop/__init__.py`, `autoloop/simple.py`, `workflow/__init__.py`, `core/compiler.py`, and the active docs where the language still says future-lowering, additive public surface, or legacy support when a neutral current description is clearer.
+- Update the phase notes and run the focused strictness/doc test slice before deciding whether any broader test fallout needs cleanup.
+
+I’ve finished the scan and I’m editing the strictness test plus the active wording surfaces now. I’m also normalizing the few test assertions that still spell removed payload keys literally, because the new anti-regression scan is supposed to cover `tests/` as well.
+
+I’m in the test layer now. The strictness test is being retargeted to the actual forbidden vocabulary from this cleanup pass, and I’m converting the other absence-assertion tests to indirect token construction so the repo-wide scan can include `tests/` without immediately self-failing.
+
+The repo-wide token check is clean outside the strictness test itself, so I’m running the focused test slice now: strictness, doc baselines, and the updated payload/export tests that would regress if the new scan rules are wrong.
+
+The shell doesn’t have a `pytest` executable on `PATH` here. I’m retrying through `python -m pytest`, which is usually the repo-local path that still works in this environment.
+
+`python3` is available, but the environment doesn’t have `pytest` installed in that interpreter. I’m checking the repo’s local toolchain entrypoint so I can run the same tests through the project-managed environment instead of the system Python.
+
+One focused test is still anchored to the old “additive” wording in `docs/authoring.md`. I’m updating that test to the refreshed read-only wording rather than restoring the stale phrase in the docs.
+
+The focused slice is green. I’m running the full test suite once through the repo’s local virtualenv now, because this phase tightened repo-wide assertions and it’s the fastest way to catch any hidden text or export regressions outside the directly touched files.
+
+The full suite exposed one residual contract regression outside this phase’s primary files: a provider retry exhaustion checkpoint is missing `failure_context["provider_attributable"]`. That key is part of the approved event-validation contract, so I’m patching the engine metadata path before I close the phase.
+
+The failure is in the retry bookkeeping, not in the docs layer: retry exhaustion is backfilling `kind`, `step`, and `error`, but not the provider-attribution bit when the original exception metadata is incomplete. I’m making that fallback explicit for `ProviderExecutionError` so the checkpoint contract matches the earlier phase’s tests.
+
+The code and tests are green now. I’m writing the phase notes and the shared decision ledger entries next, including the one small out-of-phase engine fix that was required to get the full suite back to green.
+
+**Scope considered**
+- Maintained framework-owned surfaces for this phase: `autoloop/`, `core/`, `runtime/`, `extensions/`, `stdlib/`, `workflow/`, `tests/`, `docs/`, plus `Workflow_Instructions.md` and the working-tree note.
+
+**What I analyzed**
+- The phase artifacts, the existing strictness scan, the public shim surfaces, and the active docs/docstrings that still used future-lowering or compatibility framing.
+- Full-suite verification also exposed one earlier-phase regression in retry failure-context checkpointing.
+
+**What I changed**
+- Tightened [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) so it scans maintained roots only, forbids the removed route-contract / `contracts_path` / `BoardMutation` / generated-handler vocabulary, and asserts `workflow.primitives` stays runtime-only while `autoloop` and `core` do not export `BoardMutation`.
+- Refreshed stale wording in [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py), [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), [workflow/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflow/__init__.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), and [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md). I also added [cleanup.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/cleanup.md) as the active working-tree note expected by the doc baseline.
+- Converted the remaining tests that mentioned removed payload keys literally to indirect token construction, and patched [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py) so retry-exhaustion checkpoints always preserve `provider_attributable=True` for `ProviderExecutionError`.
+
+**Key findings / decisions**
+- The strictness scan now intentionally excludes `legacy_docs/`, `recursive_autoloop/`, and user `workflows/` packages so it enforces framework-owned maintained surfaces only.
+- The `core/engine.py` change was an out-of-phase regression fix found by full-suite validation; it restores the already-approved retry-aware event-validation contract rather than changing intended behavior.
+- Validation passed: the focused strictness/doc slice passed, and `.venv/bin/python -m pytest -q` finished with `941 passed`. Existing warnings remain about Pydantic `schema` field shadowing in `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`.
+
+**Open issues / next step**
+- No blocking issues remain for this phase. The only follow-up I’d flag is optional warning cleanup for those `schema` field-shadowing warnings.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+I’m reviewing the `strictness-and-doc-refresh` phase outputs now. I’ll inspect the phase artifacts, the touched diffs, and the recorded validation so I can update criteria and feedback against the actual implementation rather than the plan.
+
+I’ve got the phase notes and decision ledger. Next I’m reading the actual strictness test and the refreshed shims/docs directly to check that the implementation matches the accepted scope, not just the producer’s summary.
+
+I’ve finished the review pass. There are no blocking issues against the accepted scope, and the one out-of-phase engine touch is justified by a full-suite regression that it fixes rather than introduces. I’m updating the criteria and feedback artifacts now.
+
+Scope considered
+- Phase-local review of `strictness-and-doc-refresh`, limited to the active phase artifacts plus the touched framework/docs/tests surfaces needed to verify intent fidelity and regression safety.
+
+What I analyzed
+- The accepted phase contract, implementation notes, shared decisions ledger, and the touched files in `autoloop/`, `core/`, `workflow/`, `docs/`, and `tests/`.
+- The strictness scan coverage, the `workflow.primitives` shim/export surface, the refreshed authoring/docs wording, and the out-of-phase `core/engine.py` retry-failure-context fix.
+- The recorded validation, including the focused pytest slice and the full `.venv/bin/python -m pytest -q` run.
+
+What I reviewed
+- `tests/strictness/test_no_compat.py` for maintained-root scope, forbidden-token coverage, and shim/export assertions.
+- `workflow/primitives.py`, `workflow/__init__.py`, `autoloop/__init__.py`, `autoloop/simple.py`, `core/compiler.py`, `docs/architecture.md`, `docs/authoring.md`, and `cleanup.md` for phase-scope wording and authoring-surface conformance.
+- `core/engine.py` for the retry checkpoint metadata backfill that was added after full-suite verification exposed a regression.
+
+Key findings / decisions
+- No blocking findings.
+- The implementation satisfies AC-1 through AC-3: removed concepts are enforced by strictness coverage, public docs/docstrings point to `autoloop.simple` / `autoloop`, and `workflow.primitives` remains runtime-only.
+- The out-of-phase `Engine._ensure_retry_failure_context` edit is justified and safe: it restores the previously approved retry-aware event-validation contract and is validated by the passing full suite.
+- I updated the phase artifacts accordingly: all criteria boxes are checked, and feedback records no review findings.
+
+Open issues / next step
+- No blocking issues remain for this phase.
+- Optional follow-up outside this review: the existing pytest warnings about Pydantic `schema` field shadowing remain, but they are pre-existing and not introduced by this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
