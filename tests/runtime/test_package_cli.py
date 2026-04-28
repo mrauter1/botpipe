@@ -285,6 +285,31 @@ class Parameters(BaseModel):
     ]
 
 
+def test_cli_workflows_show_uses_spec_paths_for_specs_and_contracts_support_files(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    package_dir = _write_workflow_package(
+        tmp_path,
+        "review_workflow",
+        workflow_name="review",
+        class_name="ReviewWorkflow",
+    )
+    (package_dir / "specs.py").write_text("class Parameters:\n    pass\n", encoding="utf-8")
+    (package_dir / "contracts.py").write_text("# support schema\n", encoding="utf-8")
+
+    exit_code = cli.main(["workflows", "show", "review", "--root", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    payload = json.loads(captured.out)
+    assert "contracts_path" not in payload
+    assert payload["spec_paths"] == [
+        str(package_dir / "specs.py"),
+        str(package_dir / "contracts.py"),
+    ]
+
+
 def test_cli_workflow_resolution_prefers_canonical_names_and_rejects_ambiguous_aliases(
     tmp_path: Path,
     capsys,

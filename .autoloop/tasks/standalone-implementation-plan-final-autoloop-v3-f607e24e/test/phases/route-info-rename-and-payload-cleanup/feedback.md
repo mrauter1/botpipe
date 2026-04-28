@@ -6,3 +6,5 @@
 - Phase Directory Key: route-info-rename-and-payload-cleanup
 - Phase Title: Route-Info Rename And Payload Cleanup
 - Scope: phase-local authoritative verifier artifact
+
+- Added CLI-focused regression coverage in `tests/runtime/test_package_cli.py` for `workflows show`, asserting that `contracts_path` stays absent while `spec_paths` includes both `specs.py` and `contracts.py` when present. Re-ran the touched runtime/unit suites: `159 passed`.
