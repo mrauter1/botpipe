@@ -16,13 +16,13 @@
       "repository-verification"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "workflow-step-cleanup-and-effect-pruning"
+    "current_phase_index": 2,
+    "current_phase_id": "route-info-rename-and-payload-cleanup"
   },
   "phase_status": {
     "retry-aware-event-validation": "completed",
-    "workflow-step-cleanup-and-effect-pruning": "in_progress",
-    "route-info-rename-and-payload-cleanup": "planned",
+    "workflow-step-cleanup-and-effect-pruning": "completed",
+    "route-info-rename-and-payload-cleanup": "in_progress",
     "strictness-and-doc-refresh": "planned",
     "repository-verification": "planned"
   },
@@ -45,6 +45,19 @@
       "run_id": "run-20260428T170942Z-a860db5b",
       "status": "in_progress",
       "ts": "2026-04-28T17:37:47.428470+00:00"
+    },
+    {
+      "phase_id": "workflow-step-cleanup-and-effect-pruning",
+      "run_id": "run-20260428T170942Z-a860db5b",
+      "status": "completed",
+      "ts": "2026-04-28T17:49:14.200407+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "route-info-rename-and-payload-cleanup",
+      "run_id": "run-20260428T170942Z-a860db5b",
+      "status": "in_progress",
+      "ts": "2026-04-28T17:49:14.204951+00:00"
     }
   ]
 }
