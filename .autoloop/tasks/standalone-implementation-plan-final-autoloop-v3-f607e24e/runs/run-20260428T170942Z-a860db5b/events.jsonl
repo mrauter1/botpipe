@@ -72,3 +72,6 @@
 {"ts": "2026-04-28T18:22:44.334371+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 72, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "repository-verification", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-28T18:22:44.337728+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 73, "event_type": "pair_started", "pair": "test", "phase_id": "repository-verification"}
 {"ts": "2026-04-28T18:22:44.337886+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 74, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "repository-verification"}
+{"ts": "2026-04-28T18:23:51.043836+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 75, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "repository-verification"}
+{"ts": "2026-04-28T18:24:39.994485+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 76, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "repository-verification"}
+{"ts": "2026-04-28T18:24:40.033251+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 77, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "repository-verification"}
