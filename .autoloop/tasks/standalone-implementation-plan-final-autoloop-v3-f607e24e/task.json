@@ -16,15 +16,15 @@
       "repository-verification"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "repository-verification"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "retry-aware-event-validation": "completed",
     "workflow-step-cleanup-and-effect-pruning": "completed",
     "route-info-rename-and-payload-cleanup": "completed",
     "strictness-and-doc-refresh": "completed",
-    "repository-verification": "in_progress"
+    "repository-verification": "completed"
   },
   "phase_history": [
     {
@@ -84,6 +84,13 @@
       "run_id": "run-20260428T170942Z-a860db5b",
       "status": "in_progress",
       "ts": "2026-04-28T18:18:28.582906+00:00"
+    },
+    {
+      "phase_id": "repository-verification",
+      "run_id": "run-20260428T170942Z-a860db5b",
+      "status": "completed",
+      "ts": "2026-04-28T18:24:40.104922+00:00",
+      "pair": "test"
     }
   ]
 }
