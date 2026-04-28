@@ -10,11 +10,17 @@ from pydantic import BaseModel
 
 try:  # pragma: no branch - prefer installed-package imports when available
     from autoloop_v3.core import Artifact, Workflow as _StrictWorkflow
+    from autoloop_v3.core.artifacts import ResolvedArtifacts
+    from autoloop_v3.core.context import ChildWorkflowResult
+    from autoloop_v3.core.primitives import Checkpoint, Event, Outcome
     from autoloop_v3.core.prompts import Prompt
     from autoloop_v3.core.routes import Route, RouteInfo
     from autoloop_v3.core.steps import AfterHookResult
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from core import Artifact, Workflow as _StrictWorkflow
+    from core.artifacts import ResolvedArtifacts
+    from core.context import ChildWorkflowResult
+    from core.primitives import Checkpoint, Event, Outcome
     from core.prompts import Prompt
     from core.routes import Route, RouteInfo
     from core.steps import AfterHookResult
@@ -464,10 +470,15 @@ def _normalize_simple_route_infos(
 
 __all__ = [
     "AfterHookResult",
+    "Checkpoint",
+    "ChildWorkflowResult",
+    "Event",
     "Json",
     "Md",
+    "Outcome",
     "Prompt",
     "Raw",
+    "ResolvedArtifacts",
     "Route",
     "RouteInfo",
     "StrictWorkflow",

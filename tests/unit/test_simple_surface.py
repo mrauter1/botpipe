@@ -12,10 +12,15 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+from autoloop import Checkpoint, ChildWorkflowResult, Event, Outcome, ResolvedArtifacts
 from autoloop.simple import AfterHookResult, Json, Md, Prompt, Route, RouteInfo, StrictWorkflow, Workflow, chain, review_step, step, system_step, workflow_step
+from autoloop.simple import Checkpoint as SimpleCheckpoint
+from autoloop.simple import ChildWorkflowResult as SimpleChildWorkflowResult
+from autoloop.simple import Event as SimpleEvent
+from autoloop.simple import Outcome as SimpleOutcome
+from autoloop.simple import ResolvedArtifacts as SimpleResolvedArtifacts
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.errors import WorkflowValidationError
-from autoloop_v3.core.primitives import Event
 from autoloop_v3.core.prompts import PromptRegistry
 from autoloop_v3.runtime.prompts import FilesystemPromptRegistry
 from autoloop_v3.core.steps import SystemStep, WorkflowStep
@@ -357,10 +362,15 @@ def test_autoloop_simple_exports_requested_public_authoring_surface() -> None:
 
     for exported in (
         "AfterHookResult",
+        "Checkpoint",
+        "ChildWorkflowResult",
+        "Event",
         "Json",
         "Md",
+        "Outcome",
         "Prompt",
         "Raw",
+        "ResolvedArtifacts",
         "Route",
         "RouteInfo",
         "StrictWorkflow",
@@ -376,6 +386,16 @@ def test_autoloop_simple_exports_requested_public_authoring_surface() -> None:
         assert hasattr(autoloop_surface, exported)
 
     assert not hasattr(autoloop_surface, "Route" "Contract")
+    assert autoloop_surface.Checkpoint is SimpleCheckpoint
+    assert autoloop_surface.ChildWorkflowResult is SimpleChildWorkflowResult
+
+
+def test_autoloop_public_primitives_match_autoloop_simple_surface() -> None:
+    assert Event is SimpleEvent
+    assert Outcome is SimpleOutcome
+    assert Checkpoint is SimpleCheckpoint
+    assert ResolvedArtifacts is SimpleResolvedArtifacts
+    assert ChildWorkflowResult is SimpleChildWorkflowResult
 
 
 def test_autoloop_simple_helper_signatures_are_explicit() -> None:

@@ -173,3 +173,71 @@ phase_mode=single
 phase_ids=retry-feedback-and-public-primitives,workflow-surface-removal-and-runtime-renames,strictness-docs-and-proof
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd5ad-53a0-7103-9608-dd7340525b77
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd5ad-53a0-7103-9608-dd7340525b77
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5ad-53a0-7103-9608-dd7340525b77
+---
+I’m implementing the scoped phase only: retry-feedback specificity and public primitive exports. First I’m reading the phase artifacts and the relevant source/tests so I can patch the existing patterns rather than guessing.
+
+I’ve confirmed the phase artifacts and the current decisions ledger. Next I’m reading the retry helper, the two public API surfaces, and the focused tests that need to move with them.
+
+The public surface test file is larger than the first chunk; I’m reading the remainder now to avoid stepping on adjacent assertions when I add the export checks.
+
+I’ve got the affected tests in view. I’m checking the existing import fallback and `__all__` layout in `autoloop.simple` so the export patch matches the file’s current structure exactly.
+
+I’ve confirmed the fallback style: `autoloop.simple` prefers `autoloop_v3.*` imports and falls back to repo-root `core.*`. I’m checking the package layout and any nearby surface tests before I patch those imports and exports.
+
+There’s already adjacent coverage for primitive exports elsewhere, so I’m checking that boundary before editing. I want the new surface tests to complement the existing expectations instead of duplicating or contradicting them.
+
+I have enough context to patch. I’m editing the retry helper and both API surfaces first, then I’ll tighten the unit tests around the new payload detail handling and the added public exports.
+
+The scoped code changes are in. I’m reading the patched sections once and then running the focused unit tests for this phase before I touch the implementation notes artifact.
+
+The patch reads cleanly. I’m running the phase-targeted unit tests now: retry feedback and the public simple surface.
+
+The shell doesn’t have a `pytest` executable on `PATH`. I’m switching to `python -m pytest`, which is the safer repo-local invocation here.
+
+`python` is also absent from `PATH` here. I’m checking the available interpreter name and then rerunning the same focused tests with that interpreter.
+
+I found `/usr/bin/python3`, and the repo declares normal setuptools packaging. I’m rerunning the two scoped test modules with `python3 -m pytest`.
+
+The base interpreter is present, but `pytest` is not installed in that environment. I’m checking whether the repo already has a local virtualenv or tool wrapper so I can validate against the intended environment instead of assuming one.
+
+There’s a repo-local `.venv`, so I can validate in the actual project environment. I’m using `.venv/bin/python -m pytest` for the two scoped test modules now.
+
+The scoped tests passed in the project venv. I’m recording the implementation notes artifact now, including the exact files changed, the symbols touched, and the validation that succeeded.
+
+I’ve finished the scoped artifact updates. I’m doing one last pass over the diff and git status to make sure only the intended phase-local files changed.
+
+**Scope considered**
+Phase-local work only: retry-feedback specificity and public primitive exports. I limited edits to [core/providers/retries.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/retries.py), [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py), the two focused unit tests, and the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/implement/phases/retry-feedback-and-public-primitives/implementation_notes.md).
+
+**What I analyzed**
+I read the phase artifacts, the retry helper, both public API surfaces, and the existing simple-surface and retry tests. I also checked the repo’s import fallback pattern and validated against the repo-local `.venv` because the system `PATH` did not expose `pytest` or `python`.
+
+**What I changed**
+- `invalid_payload` retry summaries now include `_failure_context["error"]`, and also the selected route when `_failure_context["route"]` is present.
+- Retry guidance now explicitly tells providers how to repair `question`, `blocked`, and `failed` payloads.
+- `autoloop.simple` now imports and exports `Event`, `Outcome`, `Checkpoint`, `ResolvedArtifacts`, and `ChildWorkflowResult` through the existing installed-package / repo-root fallback pattern.
+- `autoloop` now re-exports the same primitives.
+- Tests now cover route-specific retry messaging, detail-only invalid payloads, and public primitive identity/presence across `autoloop` and `autoloop.simple`.
+
+**Key findings / decisions**
+- The existing `_failure_context_field(...)` helper was sufficient; no new retry-detail helper was needed.
+- Validation passed with:
+  - `.venv/bin/python -m pytest tests/unit/test_provider_retries.py`
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py`
+- The worktree already contains substantial unrelated changes; I did not touch them.
+
+**Open issues / next step**
+Later phases still need to handle the broader cleanup: deleting `workflow/`, renaming legacy terms, strictness updates, docs, and broader proof runs. I did not run the full suite in this phase.

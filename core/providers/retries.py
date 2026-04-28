@@ -46,6 +46,8 @@ def build_retry_feedback(
             "Action required:",
             "- Repair the issue using the current Runtime Step Contract.",
             "- Use only an allowed route.",
+            "- If selecting `question`, include a non-empty top-level `question`.",
+            "- If selecting `blocked` or `failed`, include a concise non-empty `reason`.",
             "- Write all artifacts required by the selected route.",
         )
     )
@@ -56,6 +58,12 @@ def _problem_summary(exc: Exception, *, step_name: str) -> str:
     if kind == "illegal_route":
         return f"The selected route was not allowed for step {step_name!r}."
     if kind == "invalid_payload":
+        route = _failure_context_field(exc, "route")
+        detail = _failure_context_field(exc, "error")
+        if detail and route:
+            return f"The selected route {route!r} has an invalid payload: {detail}."
+        if detail:
+            return f"The structured output payload is invalid: {detail}."
         return "The structured output payload did not satisfy the declared output contract."
     if kind == "missing_required_output_artifact":
         artifact_name = _failure_context_field(exc, "artifact_name")
