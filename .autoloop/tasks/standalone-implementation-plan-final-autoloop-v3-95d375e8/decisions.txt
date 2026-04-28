@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260428T194959Z-b17d6680" ts="2026-04-28T19:50:00.049589+00:00" />
+Delete the top-level `workflow/` package outright after callers are ported; do not leave a hard-fail shim or compatibility alias behind.
+`ResolvedWorkflow.package` removal affects active `stdlib/` helpers and multiple runtime suites, so caller updates must be treated as repo-wide proof work rather than a loader-local rename.
+The strictness suite must stop importing `workflow` and switch to path/regex assertions because package deletion is an intentional requested behavior break.
+The active docs baseline still points at root `cleanup.md` while this checkout only contains `cleanup3.md`; the docs/proof slice must make one working-tree note surface authoritative so full pytest is not blocked by pre-existing drift.
