@@ -481,3 +481,130 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd52b-25f6-7331-967e-c62f57b07c56
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd52b-25f6-7331-967e-c62f57b07c56
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd52b-25f6-7331-967e-c62f57b07c56
+---
+I’m treating this as a phase-scoped cleanup: remove generated `workflow_step(...)` residue, prune `BoardMutation` from active surfaces, and add regression coverage around both. First I’m reading the phase artifacts and the current engine/validation/effects paths to confirm the exact blast radius before editing.
+
+The phase artifacts are sparse, so I’m relying on the plan plus the current code. Next I’m locating the generated workflow-step helpers, `BoardMutation` references, and the existing lowering tests so I can cut only the intended surfaces and wire regression coverage where it already fits.
+
+I’ve confirmed the old generated handler code is still present but appears to be dead already, while `BoardMutation` is still actively imported, validated, and branched on. I’m checking the lowering path and the public export/tests next so I can delete the dead code cleanly and then update the assertions from “reject unimplemented” to “not part of the API.”
+
+I’ve verified the engine already executes `WorkflowStep` directly and owns child message/output handling, so the validation helpers can be deleted instead of migrated. I’m moving to edits now: remove the dead helper block and imports, delete `BoardMutation` and its branches, then replace the old validation test with absence checks plus a stricter workflow-step regression in the existing suites.
+
+I’ve checked the worktree and there’s a lot of unrelated churn, so I’m limiting edits to the phase-local files only. The code changes are straightforward deletions plus test rewrites; I’m not touching the broader contracts/stdlib payload work in this turn.
+
+The deletion pass is in place. I’m tightening the tests now in three spots: public absence for `BoardMutation`, scan-level regression tokens for the removed helper/API, and one contract assertion that the compiled `workflow_step` still runs as a real `WorkflowStep` with no generated system handler.
+
+The first verification pass exposed two issues: this environment has `python3`, not `python`, and my new strictness token would self-trip on the absence test because I used the removed name literally there. I’m fixing both before rerunning the targeted suites.
+
+The code scan is clean for the removed helper names and `BoardMutation`. The remaining blocker is just environment wiring: system Python has no `pytest`, but the repo has a local `.venv`, so I’m switching verification to that interpreter.
+
+The targeted assertions are passing. I’m doing one broader pass across the full touched test files now, not just the filtered cases, to catch import-time or neighboring regressions from the effect and validation deletions.
+
+The broader run exposed one existing failure outside this phase in the earlier retry-aware validation work: `tests/contract/test_engine_contracts.py::test_provider_invalid_question_retry_exhaustion_marks_failure_context` still expects `failure_context["provider_attributable"]`. I’m leaving that logic untouched in this phase and recording it explicitly in the phase notes so the next pass doesn’t mistake it for fallout from the cleanup deletions.
+
+Scope considered
+
+- Phase-local cleanup only: generated `workflow_step(...)` residue and `BoardMutation` effect pruning.
+- I did not take on the later stdlib/contracts-path/doc wording phase work.
+
+What I analyzed
+
+- `core/validation.py` for dead simple workflow-step helper code and effect validation branches.
+- `core/engine.py` for active workflow-step execution and route-effect dispatch.
+- `core/effects.py` and `core/__init__.py` for the public/internal `BoardMutation` surface.
+- Existing regressions/tests in `tests/unit/test_simple_surface.py`, `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, and `tests/strictness/test_no_compat.py`.
+
+What I changed
+
+- Deleted `BoardMutation` from [core/effects.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/effects.py:1) and removed its `core` export in [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:1).
+- Removed the now-dead `BoardMutation` engine/validation branches from [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:1510) and [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1568).
+- Deleted the stale generated workflow-step helper block from [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:1); Engine remains the single execution path for `WorkflowStep`.
+- Replaced the old “unimplemented BoardMutation” test with public absence assertions in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:177).
+- Strengthened workflow-step regression coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:4132) and strictness token coverage in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:18).
+- Updated the phase notes and shared decisions in the authoritative `.autoloop` artifacts.
+
+Key findings / decisions
+
+- The generated workflow-step handler code was already dead: `Engine._run_workflow_step(...)` is the real path, so deletion was safer than trying to preserve a duplicate fallback.
+- I deleted `BoardMutation` outright instead of privatizing it. That matches the greenfield direction better and prevents re-export of an unimplemented placeholder.
+- Unsupported route effects now fail through the generic unsupported-effect path rather than a `BoardMutation`-specific message.
+
+Open issues / next step
+
+- Targeted validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py -k "workflow_step or board_mutation"`
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py`
+- A broader pass over the touched suites exposed one pre-existing out-of-phase failure in earlier retry-aware validation work:
+  - `tests/contract/test_engine_contracts.py::test_provider_invalid_question_retry_exhaustion_marks_failure_context`
+  - It still expects `failure_context["provider_attributable"]`.
+- I left that logic untouched in this phase and recorded it in `implementation_notes.md` for the next pass.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd52b-25f6-7331-967e-c62f57b07c56
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd52b-25f6-7331-967e-c62f57b07c56
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd52b-25f6-7331-967e-c62f57b07c56
+---
+I’m reviewing the phase-local implementation against the active contract: generated `workflow_step` cleanup, `BoardMutation` removal, and the regression coverage around both. First I’m reading the current phase artifacts and then I’ll verify the actual code/test state against AC-1 through AC-3.
+
+I’ve got the phase artifacts. Now I’m verifying the actual source state: whether the deleted helper names are truly gone, whether `BoardMutation` still leaks through any active path, and whether the acceptance criteria are backed by passing tests rather than just notes.
+
+The implementation is mostly lining up with the phase contract. I’m waiting on the full touched-suite pass now, because that’s the one place the implementer reported a broader failure; I need to confirm whether it’s truly pre-existing and whether it blocks this phase.
+
+I’ve finished the verification pass. The scoped cleanup meets AC-1 through AC-3, and the only red test I found is the pre-existing retry-aware validation assertion the implementer already called out. I’m updating the phase artifacts now with a complete verdict plus that non-blocking note for continuity.
+
+Scope considered
+
+- Phase-local review of the `workflow-step-cleanup-and-effect-pruning` implementation only.
+- I limited artifact edits to the active `.autoloop/tasks/.../workflow-step-cleanup-and-effect-pruning/` reviewer files.
+
+What I analyzed
+
+- `core/effects.py`, `core/__init__.py`, `core/engine.py`, and `core/validation.py` for `BoardMutation` removal and dead generated workflow-step helper deletion.
+- `tests/unit/test_simple_surface.py`, `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, and `tests/strictness/test_no_compat.py` for AC-1 through AC-3 coverage.
+- The active phase notes and shared decisions to verify the implementation stayed within the approved scope.
+
+What I reviewed
+
+- Source scan: no active matches remained for `BoardMutation` or the deleted generated workflow-step helper symbols in maintained roots.
+- Targeted validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py -k "workflow_step or board_mutation"`
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py`
+- Broader touched-suite validation still has one pre-existing failure in the earlier retry-aware validation area:
+  - `tests/contract/test_engine_contracts.py::test_provider_invalid_question_retry_exhaustion_marks_failure_context`
+
+Key findings / decisions
+
+- No blocking findings in this phase scope.
+- AC-1 and AC-2 are satisfied: `workflow_step(...)` still compiles to `WorkflowStep`, has no compiled `system_handler`, and does not install `on_<step>` handlers.
+- AC-3 is satisfied: `BoardMutation` is not importable from `autoloop` or `core`, and the active engine/validation branches no longer special-case it.
+- I recorded one non-blocking continuity note in `feedback.md` about the unrelated pre-existing retry-aware validation failure.
+
+Open issues / next step
+
+- The phase-local cleanup is review-complete.
+- The earlier retry-aware-event-validation track should fix the remaining `failure_context["provider_attributable"]` expectation so the broader touched-suite pass is fully green.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

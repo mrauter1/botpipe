@@ -551,3 +551,60 @@ Open issues / next step
   - `tests/contract/test_engine_contracts.py::test_provider_invalid_question_retry_exhaustion_marks_failure_context`
   - It still expects `failure_context["provider_attributable"]`.
 - I left that logic untouched in this phase and recorded it in `implementation_notes.md` for the next pass.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd52b-25f6-7331-967e-c62f57b07c56
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd52b-25f6-7331-967e-c62f57b07c56
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd52b-25f6-7331-967e-c62f57b07c56
+---
+I’m reviewing the phase-local implementation against the active contract: generated `workflow_step` cleanup, `BoardMutation` removal, and the regression coverage around both. First I’m reading the current phase artifacts and then I’ll verify the actual code/test state against AC-1 through AC-3.
+
+I’ve got the phase artifacts. Now I’m verifying the actual source state: whether the deleted helper names are truly gone, whether `BoardMutation` still leaks through any active path, and whether the acceptance criteria are backed by passing tests rather than just notes.
+
+The implementation is mostly lining up with the phase contract. I’m waiting on the full touched-suite pass now, because that’s the one place the implementer reported a broader failure; I need to confirm whether it’s truly pre-existing and whether it blocks this phase.
+
+I’ve finished the verification pass. The scoped cleanup meets AC-1 through AC-3, and the only red test I found is the pre-existing retry-aware validation assertion the implementer already called out. I’m updating the phase artifacts now with a complete verdict plus that non-blocking note for continuity.
+
+Scope considered
+
+- Phase-local review of the `workflow-step-cleanup-and-effect-pruning` implementation only.
+- I limited artifact edits to the active `.autoloop/tasks/.../workflow-step-cleanup-and-effect-pruning/` reviewer files.
+
+What I analyzed
+
+- `core/effects.py`, `core/__init__.py`, `core/engine.py`, and `core/validation.py` for `BoardMutation` removal and dead generated workflow-step helper deletion.
+- `tests/unit/test_simple_surface.py`, `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, and `tests/strictness/test_no_compat.py` for AC-1 through AC-3 coverage.
+- The active phase notes and shared decisions to verify the implementation stayed within the approved scope.
+
+What I reviewed
+
+- Source scan: no active matches remained for `BoardMutation` or the deleted generated workflow-step helper symbols in maintained roots.
+- Targeted validation passed:
+  - `.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py -k "workflow_step or board_mutation"`
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py`
+- Broader touched-suite validation still has one pre-existing failure in the earlier retry-aware validation area:
+  - `tests/contract/test_engine_contracts.py::test_provider_invalid_question_retry_exhaustion_marks_failure_context`
+
+Key findings / decisions
+
+- No blocking findings in this phase scope.
+- AC-1 and AC-2 are satisfied: `workflow_step(...)` still compiles to `WorkflowStep`, has no compiled `system_handler`, and does not install `on_<step>` handlers.
+- AC-3 is satisfied: `BoardMutation` is not importable from `autoloop` or `core`, and the active engine/validation branches no longer special-case it.
+- I recorded one non-blocking continuity note in `feedback.md` about the unrelated pre-existing retry-aware validation failure.
+
+Open issues / next step
+
+- The phase-local cleanup is review-complete.
+- The earlier retry-aware-event-validation track should fix the remaining `failure_context["provider_attributable"]` expectation so the broader touched-suite pass is fully green.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
