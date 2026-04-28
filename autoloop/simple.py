@@ -1,4 +1,4 @@
-"""Progressive authoring declarations for simplified workflows."""
+"""Simple workflow authoring declarations."""
 
 from __future__ import annotations
 
@@ -26,11 +26,11 @@ ChainNode = object | tuple[object, str]
 
 
 class EmptyState(BaseModel):
-    """Placeholder state for simple workflows until lowering is wired in."""
+    """Default state model for workflows that do not declare ``State``."""
 
 
 class Workflow:
-    """Non-strict declaration surface for simplified workflow authoring."""
+    """Simple public authoring surface."""
 
     __workflow_abstract__ = True
     __strict_workflow__ = False
@@ -39,7 +39,7 @@ class Workflow:
 
 
 class StrictWorkflow(_StrictWorkflow):
-    """Strict declaration surface retained for opt-in explicit workflows."""
+    """Strict workflow authoring surface for explicit core-style definitions."""
 
     __workflow_abstract__ = True
     __strict_workflow__ = True
@@ -125,7 +125,7 @@ class _NamedDeclaration:
 
 
 class StepDeclaration(_NamedDeclaration):
-    """Foundation declaration for future simple-step lowering."""
+    """Simple step declaration lowered during workflow definition discovery."""
 
     kind = "llm"
 
@@ -162,7 +162,7 @@ class StepDeclaration(_NamedDeclaration):
 
 
 class ReviewStepDeclaration(_NamedDeclaration):
-    """Foundation declaration for future review-step lowering."""
+    """Simple review-step declaration lowered during workflow definition discovery."""
 
     kind = "review"
     default_chain_route = "accepted"
@@ -204,7 +204,7 @@ class ReviewStepDeclaration(_NamedDeclaration):
 
 
 class SystemStepDeclaration(_NamedDeclaration):
-    """Foundation declaration for future system-step lowering."""
+    """Simple system-step declaration lowered during workflow definition discovery."""
 
     kind = "system"
 
@@ -235,7 +235,7 @@ class SystemStepDeclaration(_NamedDeclaration):
 
 
 class WorkflowStep(_NamedDeclaration):
-    """Foundation declaration for future child-workflow step lowering."""
+    """Child-workflow invocation step declaration."""
 
     kind = "workflow"
 

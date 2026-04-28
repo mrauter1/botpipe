@@ -19,6 +19,7 @@ PUBLIC_PROVIDER_FACTORY_FLAG = "--provider" + "-factory"
 LEGACY_WRAPPER_MODE = "AUTOLOOP_" + "CLI_MODE"
 LEGACY_WRAPPER_DETECT = "detect_auto" + "loop_cli_mode"
 LEGACY_REPO_LAYOUT = "src/auto" + "loop/"
+REMOVED_CONTRACTS_PATH = "contracts" + "_path"
 GLOBAL_INTENT_FLAG = "--in" + "tent"
 GLOBAL_PAIRS_FLAG = "--pa" + "irs"
 GLOBAL_TASK_ID_FLAG = "--task" + "-id"
@@ -303,7 +304,7 @@ def test_cli_workflows_show_uses_spec_paths_for_specs_and_contracts_support_file
 
     assert exit_code == 0
     payload = json.loads(captured.out)
-    assert "contracts_path" not in payload
+    assert REMOVED_CONTRACTS_PATH not in payload
     assert payload["spec_paths"] == [
         str(package_dir / "specs.py"),
         str(package_dir / "contracts.py"),

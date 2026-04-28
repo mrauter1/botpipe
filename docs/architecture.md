@@ -14,7 +14,7 @@ The internal workflow kernel lives under:
 The public authoring contract does not point workflow authors at internal modules.
 Public workflow code imports from `autoloop.simple` or `autoloop`.
 
-`autoloop.simple` is the preferred progressive authoring surface:
+`autoloop.simple` is the active public authoring surface:
 
 - `Workflow`, `StrictWorkflow`
 - `step`, `review_step`, `workflow_step`, `system_step`, `chain`

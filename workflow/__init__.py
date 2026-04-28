@@ -1,7 +1,7 @@
-"""Legacy workflow shim.
+"""Workflow namespace shim.
 
-The active public authoring surface is `autoloop.simple` (or `autoloop`).
-This module intentionally no longer re-exports authoring primitives.
+Use `autoloop.simple` or `autoloop` for public workflow authoring.
+This module intentionally does not re-export authoring primitives.
 """
 
 from __future__ import annotations

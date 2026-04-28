@@ -76,7 +76,7 @@ from .flow import ChildWorkflow
 __all__ = ["ChildWorkflow"]
 ```
 
-Legacy packages may continue to re-export from `.workflow` instead. If the workflow defines workflow-specific parameters, the package may also re-export `Parameters`.
+Packages may also re-export from `.workflow` when that is the executable module. If the workflow defines workflow-specific parameters, the package may also re-export `Parameters`.
 
 ## Workflow Parameters
 
@@ -94,7 +94,7 @@ If a workflow supports parameters, expose a `Parameters` model through one of th
 1. `Workflow.Parameters`
 2. module-level `Parameters` in the executable flow module
 3. package-exported `Parameters`
-4. legacy package conventions such as `params.py`
+4. package-local `params.py` when the workflow keeps parameters there
 
 The runtime validates and coerces `-wf` values through that model before execution starts. `specs.py` is never scanned specially; if you want it involved, import from it explicitly.
 
@@ -111,9 +111,9 @@ When a workflow declares `Parameters`, treat `ctx.params` as the default typed b
 
 Bootstrap handlers should project already-typed values from `ctx.params` into workflow state and invocation artifacts instead of re-reading and re-normalizing `ctx.workflow_params`.
 
-`ctx.workflow_params` remains the compatibility/raw-mapping dict surface. Keep using the existing lifecycle helpers such as `open_workflow_sessions(...)` and `write_invocation_contract(...)` explicitly from workflow code rather than hiding bootstrap setup in runtime behavior.
+`ctx.workflow_params` remains the raw mapping surface. Keep using the existing lifecycle helpers such as `open_workflow_sessions(...)` and `write_invocation_contract(...)` explicitly from workflow code rather than hiding bootstrap setup in runtime behavior.
 
-When the same parameter bundle appears in more than one workflow, prefer additive stdlib-owned parameter models under `stdlib/parameters.py` before copying the same field scaffold again. Shared task framing, selected-workflow framing, and portfolio-review bundles belong there; workflow-specific identifier rules, literal pre-normalization, allow-lists, defaults, and order-sensitive output should stay in the local `params.py`.
+When the same parameter bundle appears in more than one workflow, prefer shared stdlib-owned parameter models under `stdlib/parameters.py` before copying the same field scaffold again. Shared task framing, selected-workflow framing, and portfolio-review bundles belong there; workflow-specific identifier rules, literal pre-normalization, allow-lists, defaults, and order-sensitive output should stay in the local `params.py`.
 
 ## Step Control Contracts
 
@@ -545,7 +545,7 @@ Validation helper boundary:
 - use `require_existing_artifact_paths(...)` and `read_required_text(...)` for mechanical publish-step artifact existence and non-empty text checks
 - use `validate_publication_boundary(...)`, `validate_authoritative_artifact_subset(...)`, `require_true_flag(...)`, and `validate_no_hidden_execution_signal(...)` for reusable publish-handler mechanics
 - use `extract_workflow_names_from_capability_snapshot(...)` and `extract_workflow_names_from_portfolio_health(...)` when governance-facing workflows need the shared workflow-name snapshot surface instead of copying local readers
-- treat those publication-validation and snapshot-reader helpers as one additive governance/diagnostic helper family in `stdlib/validation.py`, not as a publication framework or runtime policy seam
+- treat those publication-validation and snapshot-reader helpers as one shared governance/diagnostic helper family in `stdlib/validation.py`, not as a publication framework or runtime policy seam
 - use the selected-workflow snapshot validators in the same module when multiple workflows need the same capability, authoring-surface, decomposition-surface, or cross-artifact selected-workflow-name checks
   - `validate_selected_workflow_capability_snapshot(...)` validates the compiled selected-workflow snapshot contract
   - `validate_selected_workflow_authoring_surface_snapshot(...)` validates the editable selected-workflow surface contract
@@ -676,7 +676,7 @@ Family boundary:
 
 ## Optional Selected-Workflow Adaptation Helpers
 
-`stdlib/adaptation.py` provides a small additive seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
+`stdlib/adaptation.py` provides a small authoring seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
 
 ```python
 from autoloop_v3.stdlib import (
@@ -719,7 +719,7 @@ Refinement helper boundary:
 - it reuses the shared workflow resolution and catalog seams instead of ad hoc repo scraping or `workflow.toml` expansion
 - it writes the authoritative selected-workflow authoring-surface payload built in `core/workflow_capabilities.py`, so later helpers and workflows consume one canonical editable-surface shape
 - it keeps the compiled selected-workflow contract separate from the editable selected-workflow surface; workflows that need both should call `write_selected_workflow_capability_snapshot(...)` and `write_selected_workflow_authoring_surface(...)` explicitly
-- it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional legacy support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
+- it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
 - it writes the canonical result to `selected_workflow_authoring_surface.json` by default
 - it does not mutate, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
 - it does not add CLI flags, new `workflow.toml` fields, or runtime-owned refinement automation
@@ -728,7 +728,7 @@ Refinement helper boundary:
 
 ## Optional Decomposition Surface Helpers
 
-`stdlib/decomposition.py` provides a narrow authoring-only seam for workflows that need one additive, read-only artifact combining a selected workflow's identity, editable authoring surface, and compiled step/route topology.
+`stdlib/decomposition.py` provides a narrow authoring-only seam for workflows that need one read-only artifact combining a selected workflow's identity, editable authoring surface, and compiled step/route topology.
 
 ```python
 from autoloop_v3.stdlib import write_selected_workflow_decomposition_surface
@@ -739,11 +739,11 @@ write_selected_workflow_decomposition_surface(ctx, "release_candidate_to_go_no_g
 Decomposition helper boundary:
 
 - the helper writes only workflow-local JSON artifacts under `ctx.workflow_folder`
-- it is additive and read-only: it snapshots existing workflow/compiler data and does not mutate selected workflow files
+- it is read-only: it snapshots existing workflow/compiler data and does not mutate selected workflow files
 - it reuses the shared workflow resolution, catalog, and compiler seams instead of ad hoc repo scraping or `workflow.toml` expansion
 - it writes the authoritative selected-workflow decomposition payload built in `core/workflow_capabilities.py`, so authoring-surface and compiled-surface fields stay synchronized across decomposition consumers
 - it combines selected workflow identity, editable authoring surface paths, repo-root-relative path metadata, and compiled step/route topology in one artifact
-- it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional legacy support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
+- it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
 - compiled step summaries include session names, readable/required/writable/log artifacts, available routes, route infos, route-required outputs, local route targets, and package-relative plus repo-relative prompt paths
 - it writes the canonical result to `selected_workflow_decomposition_surface.json` by default
 - it does not mutate, auto-decompose, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
