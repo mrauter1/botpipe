@@ -58,7 +58,7 @@ The only runtime behavior change is in provider retry feedback for invalid struc
    - Current consumers exist in `stdlib/` and multiple runtime suites, so this is broader than a local loader rename.
 3. Active docs baseline drift exists around `cleanup.md`.
    - The active docs tests still treat root `cleanup.md` as maintained, but the file is absent in this checkout while `cleanup3.md` exists.
-   - The docs cleanup/proof slice must leave the baseline aligned to one active working-tree note surface instead of ignoring the mismatch and discovering it at full-suite time.
+   - Treat this as a pre-existing proof risk only. Do not proactively broaden the plan into working-tree note ownership changes unless the requested docs cleanup and phase-3 validation actually fail there.
 
 ## Implementation Milestones
 
@@ -70,6 +70,10 @@ The only runtime behavior change is in provider retry feedback for invalid struc
 - Add route-specific and generic fallback tests in `tests/unit/test_provider_retries.py`
 - Expose `Event`, `Outcome`, `Checkpoint`, `ResolvedArtifacts`, and `ChildWorkflowResult` from `autoloop.simple`
   - use the same installed-package / repo-root fallback import style already present in `autoloop/simple.py`
+  - import them from the exact modules required by the request:
+    - `Event`, `Outcome`, `Checkpoint` from `core.primitives`
+    - `ResolvedArtifacts` from `core.artifacts`
+    - `ChildWorkflowResult` from `core.context`
 - Re-export the same names from `autoloop/__init__.py`
 - Update public API tests to pin identity and presence on both surfaces
 
@@ -109,10 +113,10 @@ The only runtime behavior change is in provider retry feedback for invalid struc
   - removed `ResolvedWorkflow.package`
   - public primitive exports on `autoloop` and `autoloop.simple`
 - Update active docs/examples so they only import from `autoloop` / `autoloop.simple`
-- Align the active docs baseline to the real maintained working-tree note surface
-  - either restore/update `cleanup.md` if it is still authoritative
-  - or change the baseline/tests/docs consistently if `cleanup3.md` is the intended active note
-  - do not leave both the baseline and working-tree note ownership ambiguous
+- Treat the `cleanup.md` versus `cleanup3.md` mismatch as a pre-existing validation risk
+  - do not proactively expand scope into working-tree note ownership changes
+  - only touch that baseline if phase-3 validation fails there after the requested docs/example cleanup
+  - if it does fail there, use the smallest proof-oriented correction rather than renaming the maintained docs surface speculatively
 - Run the targeted tests from the request, then full `pytest`
 
 ## Interface and Contract Updates
@@ -150,6 +154,13 @@ Public exports to add on both surfaces:
 - `Checkpoint`
 - `ResolvedArtifacts`
 - `ChildWorkflowResult`
+
+Required `autoloop/simple.py` import sources:
+
+- `Event`, `Outcome`, `Checkpoint` from `core.primitives`
+- `ResolvedArtifacts` from `core.artifacts`
+- `ChildWorkflowResult` from `core.context`
+- preserve the existing installed-package / repo-root fallback import pattern when adding these imports
 
 ### Runtime/provider feedback contract
 
@@ -209,7 +220,7 @@ Final proof:
 - `R3`: `ResolvedWorkflow.package` removal can miss non-loader callers.
   - Control: use repo-wide search hits as the authoritative caller list; update `stdlib/` and runtime suites in the same milestone.
 - `R4`: active docs proof can fail for reasons unrelated to the requested import cleanup because the baseline still expects `cleanup.md`.
-  - Control: make working-tree note ownership explicit during the docs slice instead of deferring the mismatch to full-suite proof.
+  - Control: treat this as a pre-existing proof risk and only correct it if the requested docs cleanup and validation actually fail there.
 
 ## Rollback Guidance
 

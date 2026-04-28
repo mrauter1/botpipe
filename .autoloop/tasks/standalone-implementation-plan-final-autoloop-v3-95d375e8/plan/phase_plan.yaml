@@ -11,8 +11,10 @@ phases:
   - Update `core/providers/retries.py` invalid-payload summaries and retry action
     guidance.
   - Add route-specific and generic fallback coverage in `tests/unit/test_provider_retries.py`.
-  - Import and export `Event`, `Outcome`, `Checkpoint`, `ResolvedArtifacts`, and `ChildWorkflowResult`
-    from `autoloop.simple` and `autoloop`.
+  - Import `Event`, `Outcome`, and `Checkpoint` from `core.primitives`, `ResolvedArtifacts`
+    from `core.artifacts`, and `ChildWorkflowResult` from `core.context` into `autoloop.simple`,
+    using the existing installed-package / repo-root fallback style, then re-export
+    them from `autoloop.simple` and `autoloop`.
   - Update `tests/unit/test_simple_surface.py` to pin the public primitive identities
     and presence.
   out_of_scope:
@@ -26,9 +28,10 @@ phases:
       present, includes the selected route when both route and error exist, and falls
       back to the generic invalid-payload message otherwise.
   - id: AC-2
-    text: '`autoloop.simple` and `autoloop` both export `Event`, `Outcome`, `Checkpoint`,
-      `ResolvedArtifacts`, and `ChildWorkflowResult`, with tests asserting identity
-      across the two surfaces.'
+    text: '`autoloop.simple` imports `Event`, `Outcome`, and `Checkpoint` from `core.primitives`,
+      `ResolvedArtifacts` from `core.artifacts`, and `ChildWorkflowResult` from `core.context`
+      through the file''s existing fallback pattern, and `autoloop.simple` plus `autoloop`
+      both export those names with tests asserting identity across the two surfaces.'
   deliverables:
   - Updated retry helper and retry tests.
   - Updated public export surfaces and simple-surface tests.
@@ -97,8 +100,9 @@ phases:
     removed `ResolvedWorkflow.package`, and the new public primitive exports.
   - Refresh active docs and examples to import only from `autoloop` or `autoloop.simple`
     and remove forbidden compatibility terminology.
-  - Align the active docs baseline with the real maintained working-tree note surface
-    so full pytest is not blocked by `cleanup.md` drift.
+  - Treat the `cleanup.md` versus `cleanup3.md` mismatch as a pre-existing proof risk
+    and touch that baseline only if the requested docs cleanup plus validation fail
+    there.
   - Run the required targeted tests and then full `pytest`.
   out_of_scope:
   - Broad documentation rewrites outside the active maintained docs/test surface.
@@ -123,10 +127,10 @@ phases:
   risks:
   - Strictness can over-ban the general word `workflow` instead of just the deleted
     imports and symbols.
-  - Docs proof can fail on the pre-existing `cleanup.md` mismatch unless the authoritative
-    active note is made explicit.
+  - Docs proof can fail on the pre-existing `cleanup.md` mismatch even if the requested
+    docs cleanup itself is correct.
   rollback:
   - Revert only the strictness regex expansion if it blocks valid `workflow_package`
     or support-file references.
-  - Revert docs-baseline alignment separately if the repo decides on a different authoritative
-    working-tree note path.
+  - Revert any proof-only `cleanup.md` baseline correction separately if later repo
+    history restores a different authoritative working-tree note path.
