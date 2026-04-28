@@ -783,3 +783,52 @@ I’m at the close-out step now. I’m recording the phase-local decisions and i
 **Open issues / next step**
 - Full-repo `pytest` was not run in this phase; that remains for the later full-validation pass.
 - The strictness/doc cleanup phase can now build on these removal assertions to forbid reintroduction of `contracts_path` and the old stdlib helper names.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd535-a0b8-7793-b050-1d0eaf676326
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd535-a0b8-7793-b050-1d0eaf676326
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd535-a0b8-7793-b050-1d0eaf676326
+---
+I’m auditing the route-info rename and payload cleanup implementation now. I’ll verify the touched discovery and payload code against the phase contract, check the targeted regression coverage, then update the phase criteria and review feedback artifacts accordingly.
+
+The code grep is clean in maintained source; the only remaining `contracts_path` references are negative assertions in tests. I’m reading the final source state directly now to verify there isn’t a payload path or discovery edge case that the targeted tests missed.
+
+The implementation matches the phase contract as written: the old stdlib helper names and dedicated `contracts_path` payload fields are removed, `contracts.py` is preserved through `spec_paths`, and the targeted regression coverage exercises the affected discovery and payload builders. I’m marking the criteria complete and recording that I found no blocking issues.
+
+Scope considered
+- Phase-local route-info rename and payload cleanup only.
+- Touched discovery/payload surfaces in `stdlib`, `core/workflow_catalog.py`, `core/workflow_capabilities.py`, `runtime/cli.py`, and the directly affected tests.
+
+What I analyzed
+- Final source state for `review_gate_infos` / `publication_gate_infos` and removal of `stdlib/contracts.py`.
+- `WorkflowCatalogEntry` and `WorkflowCapabilityEntry` field surfaces after `contracts_path` removal.
+- Discovery and fallback support-file handling through `_spec_paths(...)` and `_support_spec_paths(...)`.
+- Public payload builders for capability, authoring-surface, decomposition, and CLI workflow JSON.
+- Targeted validation noted in the implementation artifact and reflected in tests.
+
+What I reviewed
+- `contracts.py` is preserved only through `spec_paths` and therefore still reaches `editable_paths`.
+- `contracts_path` and `contracts_path_repo_relative` are absent from maintained source payload builders and CLI output.
+- Old stdlib helper names and module path are removed from maintained source; remaining occurrences are negative assertions in tests.
+- Targeted coverage exists for stdlib exports, catalog discovery, capability payloads, authoring surfaces, decomposition payloads, and workflow-reference inspection.
+
+Key findings / decisions
+- No blocking findings.
+- Updated `criteria.md` to complete all review gates.
+- Appended `IMP-000` to `feedback.md` to record a clean review result.
+
+Open issues / next step
+- No phase-local blockers remain.
+- Full-repo validation remains for the later full-test phase, but this phase’s requested surfaces are covered.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
