@@ -164,3 +164,12 @@ No open blocking issues remain in the planning artifacts. The plan can proceed t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=retry-feedback-and-public-primitives,workflow-surface-removal-and-runtime-renames,strictness-docs-and-proof
+explicit=True
+current_phase_index=0
