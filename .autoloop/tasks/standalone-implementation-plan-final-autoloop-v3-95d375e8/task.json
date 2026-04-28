@@ -14,12 +14,12 @@
       "strictness-docs-and-proof"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "retry-feedback-and-public-primitives"
+    "current_phase_index": 1,
+    "current_phase_id": "workflow-surface-removal-and-runtime-renames"
   },
   "phase_status": {
-    "retry-feedback-and-public-primitives": "in_progress",
-    "workflow-surface-removal-and-runtime-renames": "planned",
+    "retry-feedback-and-public-primitives": "completed",
+    "workflow-surface-removal-and-runtime-renames": "in_progress",
     "strictness-docs-and-proof": "planned"
   },
   "phase_history": [
@@ -28,6 +28,19 @@
       "run_id": "run-20260428T194959Z-b17d6680",
       "status": "in_progress",
       "ts": "2026-04-28T19:59:58.817022+00:00"
+    },
+    {
+      "phase_id": "retry-feedback-and-public-primitives",
+      "run_id": "run-20260428T194959Z-b17d6680",
+      "status": "completed",
+      "ts": "2026-04-28T20:06:59.009370+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "workflow-surface-removal-and-runtime-renames",
+      "run_id": "run-20260428T194959Z-b17d6680",
+      "status": "in_progress",
+      "ts": "2026-04-28T20:06:59.015557+00:00"
     }
   ]
 }
