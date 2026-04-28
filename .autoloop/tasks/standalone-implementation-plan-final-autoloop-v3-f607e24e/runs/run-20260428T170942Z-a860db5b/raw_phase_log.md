@@ -164,3 +164,130 @@ phase_mode=single
 phase_ids=retry-aware-event-validation,workflow-step-cleanup-and-effect-pruning,route-info-rename-and-payload-cleanup,strictness-and-doc-refresh,repository-verification
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+I’m working on the retry-aware event-validation phase only. First step is to read the phase artifacts and inspect the engine, validation, and existing retry/test paths so the change stays inside the approved scope.
+
+I’ve confirmed the phase artifacts are thin and the main contract lives in `core/engine.py` plus `tests/contract/test_engine_contracts.py`. Next I’m reading the exact validation/finalization paths and the existing retry tests so I can wire the helper into the right stages without changing unrelated behavior.
+
+The current shape is clear: provider steps already have the retry loop and `Outcome` validation; invalid `Event`s are slipping through later, after middleware/hook/mapping. I’m checking the exact middleware and hook normalization path now so I can keep provider attribution conservative and avoid retrying deterministic hook bugs.
+
+I’ve got the wiring plan now. The main change is to separate candidate-event attribution from final-event attribution so provider-step retries still work, but explicit hook-created `Event`s stay deterministic and hard-fail.
+
+I found the phase session file path from the preamble doesn’t exist in the workspace, so I’m proceeding from the authoritative request plus phase artifacts already present on disk. I have enough context to edit now: engine validation first, then targeted contract tests, then phase notes and decision entries for the non-obvious attribution rule.
+
+I’m about to patch the engine and the contract tests. The code change is local to `core/engine.py`; the test change stays in the existing engine contract suite so the new attribution rules get exercised through the real retry loop.
+
+The engine and contract suite are patched. I’m running a targeted subset now, because the risky parts are attribution on provider steps, explicit hook events, and workflow-step child mapping.
+
+The repo environment doesn’t have `pytest` or `python` on PATH. I’m checking the local toolchain entrypoints so I can still run the targeted verification instead of guessing.
+
+`pytest` isn’t installed here, so I can’t run the real test suite. I’m doing two lower-level checks instead: `py_compile` for syntax, and a small direct engine script that exercises the new retry and hard-fail paths without needing the test runner.
+
+The ad-hoc runtime check is blocked too: the base interpreter is present, but the environment doesn’t have `pydantic`, so importing the engine fails before execution. I’m doing a final source pass on the touched blocks now and then I’ll record the environment limitation in the phase notes.
+
+I’ve finished the code and test edits. The remaining work is documentation for the phase itself: I’m recording the attribution rule and the verification limits in the authoritative phase notes so later turns don’t drift.
+
+I’ve finished the phase work. I’m pulling exact file locations for the helper, the after-hook attribution split, and the new contract tests so the close-out is precise and easy to inspect.
+
+Scope considered
+
+- Phase-local retry-aware event validation only.
+- Touched engine execution/after-hook validation in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:445) and contract coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:807).
+- Updated the phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/implementation_notes.md:1) and appended the non-obvious attribution rules in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/decisions.txt:9).
+
+What I analyzed
+
+- The provider retry loop, `_next_retry_feedback(...)`, step finalization, middleware application, after-hook normalization, and child-workflow mapping in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:496).
+- Existing contract tests for illegal routes, invalid provider payloads, artifact-validation retries, hook overrides, and workflow-step child mapping in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:710).
+
+What I changed
+
+- Added shared `Event` validation in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:1331) for illegal routes plus missing `question`/`reason` payloads.
+- Wired validation into:
+  - system-step results before finalization at [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:453)
+  - workflow-step child mapping at [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:678)
+  - middleware-produced events at [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:828)
+  - candidate/final event validation inside `_finalize_step_result(...)` at [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:885)
+- Split final-event attribution at the after-hook boundary: route-string retags stay provider-attributable, explicit hook `Event` overrides become deterministic workflow-code errors at [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:963).
+- Kept provider steps on the existing retry loop by passing provider attribution through pair/llm finalization at [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:547) and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:629).
+- Added contract tests for:
+  - provider invalid question retry/recovery and retry exhaustion at [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:807)
+  - provider invalid blocked/failed retry recovery at [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:897)
+  - strict system-step question/failed validation at [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:990)
+  - provider-attributable middleware illegal route at [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:2334)
+  - after-hook route-string retry vs explicit-event hard fail at [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:3618)
+  - malformed child-workflow pause question rejection at [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:3871)
+
+Key findings / decisions
+
+- Provider-attributable invalid `Event`s now raise `ProviderExecutionError` with `illegal_route` or `invalid_payload` metadata, so the existing retry feedback path remains authoritative.
+- Explicit hook-returned `Event`s are the deterministic boundary. They now hard-fail both event validation and final artifact validation instead of retrying the provider.
+- Deterministic illegal routes now fail from `_validate_event(...)` as `WorkflowExecutionError` rather than falling through to `RoutingError`. That stays within the requested hard-fail model.
+
+Open issues / next step
+
+- Validation performed: `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`.
+- I could not run `pytest` here because `pytest` is not installed, and I could not run a direct engine smoke script because the interpreter environment is missing `pydantic`. The next step is to run the targeted contract tests in the project’s real Python environment.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+I’m reviewing only the retry-aware event-validation phase and the corresponding implementation diff. First I’m reading the reviewer artifacts and the touched engine/test changes so I can mark criteria accurately and write concrete findings if anything is off.
+
+I found a likely regression in the existing contract suite: a pre-existing system-step hook test still expects a bare route-string retag to `"question"` to pause successfully, but the new centralized validation correctly makes that event invalid because no question text is preserved. I’m checking for any similar stale expectations before I write the review finding.
+
+I have one blocking review issue. The engine change looks aligned with intent, but the phase left a stale pre-existing contract test expecting an invalid deterministic `question` retag to succeed, which means the touched suite is now internally contradictory.
+
+Scope considered
+
+- Phase-local retry-aware event-validation work only.
+- Reviewed the touched engine flow in `core/engine.py`, the touched contract tests in `tests/contract/test_engine_contracts.py`, and the phase artifacts under `.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/`.
+
+What I analyzed
+
+- Event validation call sites for system steps, workflow-step child mapping, middleware events, candidate events, and final events.
+- After-hook attribution handling, especially the explicit-event vs route-string split.
+- Existing and newly added contract tests against the new invariant that invalid `question` / `blocked` / `failed` events must never be accepted.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/criteria.md:1) checkboxes to reflect the current state.
+- Appended one prioritized blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/feedback.md:1).
+- The blocking issue is a stale touched contract test that still expects an invalid deterministic `question` retag to pause successfully even though the new centralized validation now correctly rejects it.
+
+Key findings / decisions
+
+- `IMP-001` blocking: `test_system_step_hooks_can_override_route_after_candidate_validation` is no longer valid under the new invariant and should be updated to either return an explicit valid `Event("question", question=...)` or expect `WorkflowExecutionError`.
+- I did not find a second blocking architecture issue in the engine change itself; the review failure is the mismatched touched test/validation contract.
+
+Open issues / next step
+
+- Fix `IMP-001`, then rerun the touched contract suite in the real project environment.
+- Current loop result is `INCOMPLETE` because the phase artifacts still contain a blocking review finding.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
