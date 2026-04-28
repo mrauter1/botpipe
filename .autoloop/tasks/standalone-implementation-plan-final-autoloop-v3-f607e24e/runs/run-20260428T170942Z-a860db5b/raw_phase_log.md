@@ -1136,3 +1136,115 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd550-6626-7d22-88d9-05c32dc764ae
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd550-6626-7d22-88d9-05c32dc764ae
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd550-6626-7d22-88d9-05c32dc764ae
+---
+I’m verifying the cleanup pass against the scoped phase contract: targeted suites first, then full `pytest`, and I’ll only widen into code changes if verification exposes regressions or missed cleanup.
+
+I’ve got the scoped verifier artifacts. Next I’m mapping the existing test surfaces and repo-standard commands so the verification sequence matches the implementation contract before I run anything expensive.
+
+The repository layout is narrower than the old `autoloop_v3/` paths in `git status`; the active roots are the top-level packages here, and the focused suites exist where the plan expects them. I’m checking `pyproject.toml` now for the established verification commands before running targeted tests.
+
+Plan for this phase:
+1. Run the focused suites for engine retries, simple-surface lowering, stdlib/payload surfaces, and strictness/docs.
+2. If any focused suite fails, trace the regression to the smallest relevant code path and patch it.
+3. Re-run the affected focused suites, then run full `pytest`.
+4. Record verification results and any non-obvious decisions in the phase notes and decisions ledger.
+
+I’ve narrowed the initial pass to the suites that exercise the changed contracts directly: provider/event validation, simple-surface lowering, stdlib/payload surfaces, and strictness/docs. If these are green, I’ll move straight to full `pytest`; if not, I’ll patch only the failing path and re-run the relevant slice.
+
+The first verification command failed at the environment level: `pytest` is not on `PATH`. I’m checking the local Python entrypoint and installed tooling so I can use the repo’s actual test runner rather than inventing one.
+
+There’s a local `.venv`, so I’m switching to that interpreter for the verification run.
+
+The focused run is underway and the contract-heavy suites are clearing so far. I’m waiting for the payload, runtime, and strictness slices to finish before deciding whether any repair work is needed.
+
+The focused suites passed cleanly, so I’m moving to the full repository test run. I haven’t found an established repo-standard lint/type command in `pyproject.toml`, so verification remains test-led unless the full run exposes something unexpected.
+
+The full run is progressing normally through the runtime matrix with no failures so far. I’m letting it complete before I touch the phase notes.
+
+The full suite is past halfway and still green. Once this finishes I’ll update the repository-verification notes with the exact commands and the no-rollback-needed result.
+
+Verification is complete: focused suites and full `pytest` both passed. I’m writing the phase notes now with the exact command sequence, the environment detail (`.venv/bin/python -m pytest`), and the residual warnings profile so later phases don’t misread this turn.
+
+I’m making the last artifact-only edits now: one ledger note to pin the verifier command/environment, and the phase notes summarizing the focused and full runs plus the warning profile.
+
+Scope considered
+
+Repository-verification only: focused test coverage for engine retry/event validation, simple-surface lowering, stdlib/payload cleanup, strictness/docs, then full-suite verification. I did not widen into product-code edits because verification stayed green.
+
+What I analyzed
+
+I checked the phase artifacts, current test layout, and repo config. `pyproject.toml` does not declare a repo-standard lint/type command, and `pytest` is not on `PATH`, so the authoritative verifier path for this turn was the repo virtualenv.
+
+What I changed
+
+I updated the phase notes in [implementation_notes.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/repository-verification/implementation_notes.md>) and recorded the verification-environment decision in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/decisions.txt>). No product code changed in this phase.
+
+Key findings / decisions
+
+Focused verification passed:
+`.venv/bin/python -m pytest tests/contract/test_engine_contracts.py tests/unit/test_provider_retries.py tests/unit/test_simple_surface.py tests/unit/test_stdlib_and_extensions.py tests/runtime/test_package_cli.py tests/runtime/test_compatibility_runtime.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py`
+Result: `276 passed in 3.79s`
+
+Full verification passed:
+`.venv/bin/python -m pytest`
+Result: `942 passed, 588 warnings in 64.28s`
+
+The warnings are repeated existing Pydantic `UserWarning` entries from `workflows/workflow_run_traces_to_optimization_candidates/contracts.py` for models with a `schema` field. They did not require rollback or compatibility restoration.
+
+Open issues / next step
+
+No blocking issues in this phase. The cleanup pass verifies cleanly as implemented; only the existing warning profile remains if you want a separate warning-reduction follow-up.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd550-6626-7d22-88d9-05c32dc764ae
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd550-6626-7d22-88d9-05c32dc764ae
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd550-6626-7d22-88d9-05c32dc764ae
+---
+I’m reviewing the repository-verification phase artifacts against the phase contract now: criteria accuracy first, then whether the recorded verification sequence and outcomes support a clean `COMPLETE` result with no hidden drift.
+
+The phase artifacts line up with the contract: focused suites precede full `pytest`, the fallback to `.venv/bin/python -m pytest` is justified by the environment, and there’s no evidence of a hidden compatibility rollback. I’m marking criteria and leaving an explicit no-findings review entry.
+
+Scope considered
+
+Repository-verification phase only. I reviewed the phase contract, the implementation notes recorded for this phase, the relevant shared decisions, and the verifier-owned artifact files in the active phase directory.
+
+What I analyzed
+
+I checked whether the recorded verification sequence matches the accepted plan: focused pytest coverage for the edited surfaces first, then full `pytest`, plus any established lightweight lint/type command if present. I also checked whether the environment fallback to `.venv/bin/python -m pytest` was justified and whether the warning profile implied any missed regression triage or rollback pressure.
+
+What I reviewed
+
+I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/repository-verification/criteria.md>) to mark all criteria satisfied and appended a no-findings review entry to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/repository-verification/feedback.md>). The phase artifacts consistently show targeted verification before the full suite, no product-code edits in this phase, and no compatibility rollback.
+
+Key findings / decisions
+
+No blocking findings. The recorded results support AC-1 through AC-3: focused suites passed before the full run, full `pytest` passed, and the absence of a repo-declared lint/type command in `pyproject.toml` makes the test-led verification record acceptable for this phase. The repeated Pydantic warnings are documented as non-failing existing warnings and do not undermine the phase outcome.
+
+Open issues / next step
+
+No review blockers remain for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
