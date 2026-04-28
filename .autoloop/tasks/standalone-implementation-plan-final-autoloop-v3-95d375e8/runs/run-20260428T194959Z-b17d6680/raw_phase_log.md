@@ -8,3 +8,85 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/runs/run-20260428T194959Z-b17d6680/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+I’m treating the request snapshot as the implementation contract and checking the current repo state against it before I touch the plan artifacts. First step is to read the existing plan files, the latest decision block, and the code/test areas named in the spec so the plan matches the actual dependency surface.
+
+The planning artifacts are effectively blank, so I’m building the plan from the repo state rather than editing an existing decomposition. Next I’m tracing the concrete rename/export/delete surfaces named in the request so the phase plan covers actual files and regression points instead of just restating the spec.
+
+The grep sweep shows this is a real cross-cutting cleanup, but still contained to the files the request predicted: public exports, loader/catalog/capabilities, CLI payloads, store naming, validation, strictness, and a few active docs/tests. I’m reading those seams directly now so the written plan can call out the actual implementation order, the import fallout from deleting `workflow/`, and the places where strictness tests themselves must be rewritten.
+
+I’ve confirmed the core risk shape: the requested cleanup is intentionally breaking greenfield-only surfaces, but there are active tests and doc-baseline assertions still enforcing the soon-to-be-deleted `workflow` shim. I’m reading those tests and doc references next so the plan can explicitly sequence the breakage, replacement assertions, and final verification gates instead of leaving them implicit.
+
+Two non-obvious planning constraints are clear now. First, `tests/strictness/test_no_compat.py` currently imports the very package the request says must be deleted, so strictness has to be rewritten before deletion lands or the suite will fail immediately. Second, the active doc-baseline tests still require wording that preserves `workflow.primitives`, so the plan needs an explicit docs-and-doc-tests cleanup slice rather than treating docs as an afterthought.
+
+I have enough repo context to draft the actual decomposition. I’m checking one existing task plan and the current verifier criteria format now so the artifacts I write match the repository’s planning conventions, then I’ll update `plan.md`, `phase_plan.yaml`, `feedback.md`, and the current decisions block in one pass.
+
+I found one repo-state oddity worth carrying into the plan: `tests/test_architecture_baseline_docs.py` still treats `cleanup.md` as an active doc, but that file does not exist at repo root in this checkout. I’m checking whether that is intentional replacement by `cleanup3.md` or just existing drift, because the final plan should call it out as a pre-existing validation risk instead of letting an implementer discover it late during full-suite proof.
+
+I’m at the edit point. I’m writing a three-phase plan that keeps the request’s implementation order intact while making two repo-specific proof risks explicit: `workflow` consumers must be ported before the package is deleted, and the active docs baseline currently has drift around the missing root `cleanup.md` surface.
+
+The plan artifacts are written. I’m validating the machine-readable phase file now and doing a quick content check on the edited artifacts; if the YAML shape is off, I’ll fix it before ending the turn.
+
+The YAML has one structural issue from the first patch: I left the original empty `phases: []` line above the real phases list. I’m removing that duplicate key and re-validating with `python3` instead of `python`, since this environment only exposes the latter.
+
+Updated the planning artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/feedback.md), and the current turn block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt).
+
+The plan is decomposed into three ordered phases: `retry-feedback-and-public-primitives`, `workflow-surface-removal-and-runtime-renames`, and `strictness-docs-and-proof`. It keeps the request’s greenfield deletion/rename boundary explicit, calls out repo-wide `ResolvedWorkflow.package` fallout, and records the active docs proof risk around the missing root `cleanup.md` vs present `cleanup3.md` so later phases do not miss it.
+
+`phase_plan.yaml` was validated locally with `python3` + `yaml.safe_load` and parses successfully with 3 phases.
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+I found two material planning gaps. One is direct intent drift: the plan doesn’t preserve the user’s exact `autoloop/simple.py` import-source contract, only the broad export outcome. The other is an unresolved branch around `cleanup.md` vs `cleanup3.md`; that makes the docs/proof slice non-concrete and can silently expand scope away from the requested cleanup work.
+
+I’ve recorded the blocking findings and lowered the plan gate accordingly. I’m doing one quick readback on `criteria.md` and `feedback.md`, then I’ll close with the verifier summary and the required loop-control promise.
+
+Scope considered
+
+Planning artifacts for this task only: [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt), against the immutable request snapshot and the current repo state only where needed for regression analysis.
+
+What I analyzed
+
+I checked the request’s exact implementation contract against the plan narrative and the machine-readable phases, with focus on the requested hard requirements: retry-feedback specificity, exact public primitive exports, `workflow/` deletion, named renames, `ResolvedWorkflow.package` removal, strictness guards, docs scope, and proof sequencing. I also validated that `phase_plan.yaml` has coherent dependencies and valid YAML structure.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/criteria.md) to reflect that the plan is not yet fully ready, and I appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/feedback.md) as `PLAN-001` and `PLAN-002`.
+
+Key findings / decisions
+
+`PLAN-001` is blocking: the plan preserves the export outcome but drops the user’s exact `autoloop/simple.py` import-source contract. The request explicitly requires `Event` / `Outcome` / `Checkpoint` from `core.primitives`, `ResolvedArtifacts` from `core.artifacts`, and `ChildWorkflowResult` from `core.context`, using the existing fallback style.
+
+`PLAN-002` is blocking: the docs/proof slice leaves an unresolved “either/or” branch around `cleanup.md` vs `cleanup3.md`. That makes the plan non-concrete and can silently expand scope into unrelated docs-baseline ownership work.
+
+Open issues / next step
+
+The planner needs to revise the plan so it explicitly pins the `autoloop/simple.py` import modules and removes or resolves the `cleanup.md` / `cleanup3.md` branch with one minimal safe direction. Until then, the plan should remain gated as incomplete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
