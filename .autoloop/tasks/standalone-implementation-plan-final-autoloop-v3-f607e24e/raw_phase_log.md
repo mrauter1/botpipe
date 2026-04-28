@@ -386,3 +386,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+I’m treating this as the dedicated test pass for the retry-aware event-validation phase. First I’m reading the phase test artifacts and the current engine contract coverage to see whether the implementation already covers the acceptance surface or if a targeted extra test is still needed.
+
+The current contract suite covers most of the phase already. I’m adding one small checkpoint assertion on the invalid-question exhaustion path, because that is the highest-signal way to prove AC-3: an invalid pause event never becomes a persisted `pending_question`.
+
+The repo-side test change and the phase artifacts are patched. I’m doing one final syntax check plus a readback of the strategy/feedback so the test-phase outputs are internally consistent.
+
+Scope considered
+
+- Phase-local retry-aware event-validation test pass only.
+- Focused on the existing engine contract suite plus the test-phase artifacts in `.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/test/phases/retry-aware-event-validation/`.
+
+What I analyzed
+
+- The current retry-aware event-validation coverage already added in `tests/contract/test_engine_contracts.py`.
+- The phase acceptance criteria, especially AC-3 around rejecting invalid PAUSE/FAIL events before checkpoint persistence.
+- The shared decisions governing provider-attributable route-string retags vs deterministic explicit hook events.
+
+What I changed
+
+- Strengthened `test_provider_invalid_question_retry_exhaustion_marks_failure_context` in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:943) to assert `checkpoint.stage == "ask"` and `checkpoint.pending_question is None`, which directly proves an invalid pause event is not persisted.
+- Appended the AC-3-focused test decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/decisions.txt:15).
+- Wrote the behavior-to-test coverage map, preserved invariants, failure paths, reliability notes, and known gaps in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/test/phases/retry-aware-event-validation/test_strategy.md:1).
+- Appended a concise test-summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/test/phases/retry-aware-event-validation/feedback.md:1).
+
+Key findings / decisions
+
+- The highest-risk uncovered acceptance point was AC-3, so I anchored the extra assertion on the invalid-question retry-exhaustion checkpoint path.
+- I did not add a separate pair-step verifier invalid-event test in this turn; the strategy documents that gap and why the shared provider-step finalization coverage already exercises the changed event-validation logic.
+
+Open issues / next step
+
+- Validation performed: `python3 -m py_compile tests/contract/test_engine_contracts.py`.
+- I could not run `pytest` in this environment, and direct runtime execution is still blocked by missing importable runtime dependencies, so this remains a compile-checked, source-authored test pass rather than an executed suite pass.

@@ -6,3 +6,6 @@
 - Phase Directory Key: retry-aware-event-validation
 - Phase Title: Retry-Aware Event Validation
 - Scope: phase-local authoritative verifier artifact
+
+- Added checkpoint persistence coverage for AC-3 by asserting the invalid-question retry-exhaustion checkpoint retains failure metadata but does not persist `pending_question`.
+- Recorded the behavior-to-test coverage map, preserved invariants, failure paths, and known gaps in `test_strategy.md`.
