@@ -486,3 +486,105 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd5b3-bd38-7710-907b-ee5db657226f
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+I’m validating the test-phase deliverables against the implemented workflow-surface cleanup. I’ll inspect the active test artifacts, confirm the changed behavior is already covered by deterministic tests, then update only the phase-local test strategy and feedback files unless I find a missing regression guard.
+
+I didn’t find a missing regression guard beyond what already landed in the repository tests, so I’m documenting the effective coverage map and the non-obvious test assertions that now protect this phase.
+
+Scope considered
+
+- Phase-local test deliverables for the workflow-surface removal and runtime rename pass.
+- I reviewed the already-landed repo tests that cover the deleted `workflow` surface, renamed payload/runtime fields, and preserved invariants, then updated only the phase-local test artifacts and shared decision ledger.
+
+What I analyzed
+
+- The active phase contract, shared decisions, and implemented coverage points in `tests/strictness`, `tests/runtime`, `tests/unit`, and `tests/contract`.
+- The proof-bearing assertions for `workflow_py_path`, `ResolvedWorkflow.reference`, `is_run_key_bound_to_slot`, route-specific invalid-payload retry feedback, and the restored `cleanup.md` docs baseline.
+
+What I changed
+
+- Updated `.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/workflow-surface-removal-and-runtime-renames/test_strategy.md` with an explicit behavior-to-test coverage map, preserved invariants, failure paths, and validation set.
+- Appended a concise summary to `.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/workflow-surface-removal-and-runtime-renames/feedback.md`.
+- Appended two non-obvious test decisions to `.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt`.
+- No additional repository test-code edits were needed in this turn because the existing landed tests already cover the scoped behavior and passed full proof.
+
+Key findings / decisions
+
+- Coverage is now explicitly mapped for:
+  - deleted `workflow/` package regression guards
+  - `workflow_py_path` / `workflow_py_path_repo_relative` payload consistency
+  - `ResolvedWorkflow.package` removal via `reference`
+  - preserved run-key normalization after the helper rename
+  - route-specific invalid-payload retry feedback in both unit and contract layers
+  - active docs baseline ownership through `cleanup.md`
+- The full proof run remains `.venv/bin/python -m pytest`.
+
+Open issues / next step
+
+- No scoped test gaps were identified after the passing full-suite proof.
+- The phase-local test artifacts are ready for audit.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd5b3-bd38-7710-907b-ee5db657226f
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+I’m auditing the phase-local test coverage artifacts against the requested cleanup scope and the final proof run. I’ll review the strategy/feedback files, spot-check the implemented regression guards in the repo tests, then update only the test audit artifacts.
+
+The strategy is aligned with the changed behavior, and the spot-checks match the actual repo tests and decisions ledger. I’m marking the audit criteria complete and recording that there are no audit findings.
+
+Scope considered
+
+- Phase-local audit of the workflow-surface removal test coverage and test artifacts only.
+- I reviewed the active test strategy and feedback, the shared decisions ledger, and spot-checked the landed repo tests that enforce the requested cleanup behavior.
+
+What I analyzed
+
+- The phase contract and decisions around deleting `workflow/`, removing `ResolvedWorkflow.package`, renaming to `workflow_py_path`, preserving run-key behavior, and restoring `cleanup.md`.
+- The explicit coverage map in `test_strategy.md` against the actual repo tests in `tests/strictness`, `tests/runtime`, `tests/unit`, and `tests/contract`.
+
+What I reviewed
+
+- Coverage quality for deleted-surface regression guards, renamed payload/runtime fields, and public/reference-only loader behavior.
+- Edge/failure-path coverage for route-specific invalid-payload retry feedback and nullable authoring-surface paths.
+- Reliability signals from the deterministic path/regex strictness checks and the recorded full `.venv/bin/python -m pytest` proof run.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The test strategy matches the implemented regression guards and the scoped behavior is adequately protected.
+
+Open issues / next step
+
+- No open test-audit issues remain for this phase.
+- The test audit can be accepted as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

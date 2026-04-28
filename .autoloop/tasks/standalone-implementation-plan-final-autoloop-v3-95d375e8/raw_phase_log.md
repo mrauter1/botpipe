@@ -540,3 +540,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd5b3-bd38-7710-907b-ee5db657226f
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+I’m auditing the phase-local test coverage artifacts against the requested cleanup scope and the final proof run. I’ll review the strategy/feedback files, spot-check the implemented regression guards in the repo tests, then update only the test audit artifacts.
+
+The strategy is aligned with the changed behavior, and the spot-checks match the actual repo tests and decisions ledger. I’m marking the audit criteria complete and recording that there are no audit findings.
+
+Scope considered
+
+- Phase-local audit of the workflow-surface removal test coverage and test artifacts only.
+- I reviewed the active test strategy and feedback, the shared decisions ledger, and spot-checked the landed repo tests that enforce the requested cleanup behavior.
+
+What I analyzed
+
+- The phase contract and decisions around deleting `workflow/`, removing `ResolvedWorkflow.package`, renaming to `workflow_py_path`, preserving run-key behavior, and restoring `cleanup.md`.
+- The explicit coverage map in `test_strategy.md` against the actual repo tests in `tests/strictness`, `tests/runtime`, `tests/unit`, and `tests/contract`.
+
+What I reviewed
+
+- Coverage quality for deleted-surface regression guards, renamed payload/runtime fields, and public/reference-only loader behavior.
+- Edge/failure-path coverage for route-specific invalid-payload retry feedback and nullable authoring-surface paths.
+- Reliability signals from the deterministic path/regex strictness checks and the recorded full `.venv/bin/python -m pytest` proof run.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The test strategy matches the implemented regression guards and the scoped behavior is adequately protected.
+
+Open issues / next step
+
+- No open test-audit issues remain for this phase.
+- The test audit can be accepted as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
