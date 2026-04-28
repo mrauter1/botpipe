@@ -95,7 +95,7 @@ class WorkflowCapabilityEntry:
     doc_path: Path | None
     authoring_shape: AuthoringShape
     flow_path: Path | None
-    legacy_workflow_path: Path | None
+    workflow_py_path: Path | None
     package_init_path: Path | None
     package_module: str | None
     workflow_module: str | None
@@ -280,7 +280,7 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
         "entry_step_name": entry.entry_step_name,
         "flow_path": None if entry.flow_path is None else str(entry.flow_path),
         "global_transitions": dict(entry.global_transitions),
-        "legacy_workflow_path": None if entry.legacy_workflow_path is None else str(entry.legacy_workflow_path),
+        "workflow_py_path": None if entry.workflow_py_path is None else str(entry.workflow_py_path),
         "manifest_path": None if entry.manifest_path is None else str(entry.manifest_path),
         "package_dir": str(entry.package_dir),
         "package_folder": str(entry.package_folder),
@@ -367,6 +367,7 @@ def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) 
     doc_path = _optional_path_string(entry.doc_path)
     manifest_path = _optional_path_string(entry.manifest_path)
     params_path = _optional_path_string(entry.params_path)
+    workflow_py_path = _optional_path_string(entry.workflow_py_path)
     editable_paths = sorted(
         {
             str(entry.source_path),
@@ -401,6 +402,7 @@ def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) 
         "spec_paths": spec_paths,
         "test_paths": test_paths,
         "workflow_name": entry.workflow_name,
+        "workflow_py_path": workflow_py_path,
         "workflow_path": str(entry.workflow_path),
     }
 
@@ -462,6 +464,10 @@ def selected_workflow_decomposition_surface_payload(
             "test_paths_repo_relative": _repo_relative_list(
                 repo_root_path,
                 decomposition_authoring_surface["test_paths"],
+            ),
+            "workflow_py_path_repo_relative": _optional_repo_relative(
+                repo_root_path,
+                decomposition_authoring_surface["workflow_py_path"],
             ),
             "workflow_path_repo_relative": _optional_repo_relative(
                 repo_root_path,
@@ -546,8 +552,8 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
     params_path = catalog_entry.params_path if catalog_entry is not None else _support_params_path(source_path)
     doc_path = catalog_entry.doc_path if catalog_entry is not None else (doc_paths[0] if doc_paths else None)
     flow_path = catalog_entry.flow_path if catalog_entry is not None else (source_path if source_path.name == "flow.py" else None)
-    legacy_workflow_path = (
-        catalog_entry.legacy_workflow_path
+    workflow_py_path = (
+        catalog_entry.workflow_py_path
         if catalog_entry is not None
         else (source_path if source_path.name == "workflow.py" else None)
     )
@@ -588,7 +594,7 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
         doc_path=doc_path,
         authoring_shape=reference.authoring_shape,
         flow_path=flow_path,
-        legacy_workflow_path=legacy_workflow_path,
+        workflow_py_path=workflow_py_path,
         package_init_path=package_init_path,
         package_module=package_module,
         workflow_module=workflow_module,

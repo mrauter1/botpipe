@@ -97,12 +97,12 @@ def test_workflow_package_to_composable_building_blocks_aliases_resolve_to_same_
     hyphenated = resolve_workflow_reference(REPO_ROOT, "workflow-package-to-building-blocks")
     decomposition = resolve_workflow_reference(REPO_ROOT, "workflow-decomposition-package")
 
-    assert canonical.package.package_name == "workflow_package_to_composable_building_blocks"
-    assert hyphenated.package.package_name == canonical.package.package_name
-    assert decomposition.package.package_name == canonical.package.package_name
-    assert canonical.package.workflow_name == "workflow_package_to_composable_building_blocks"
-    assert hyphenated.package.workflow_name == canonical.package.workflow_name
-    assert decomposition.package.workflow_name == canonical.package.workflow_name
+    assert canonical.reference.package_name == "workflow_package_to_composable_building_blocks"
+    assert hyphenated.reference.package_name == canonical.reference.package_name
+    assert decomposition.reference.package_name == canonical.reference.package_name
+    assert canonical.reference.workflow_name == "workflow_package_to_composable_building_blocks"
+    assert hyphenated.reference.workflow_name == canonical.reference.workflow_name
+    assert decomposition.reference.workflow_name == canonical.reference.workflow_name
 
 
 def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_control_contracts(

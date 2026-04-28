@@ -351,3 +351,88 @@ No phase-local test-audit issue remains for this slice. Later phases still need 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd5b3-bd38-7710-907b-ee5db657226f
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+I’m implementing the workflow-surface removal and rename pass in the scoped areas only. I’ll inspect the current references to `workflow`, `legacy_workflow_path`, the loader/catalog helpers, and the phase notes before editing.
+
+The repo already has a large unrelated dirty worktree, so I’m treating the root-level modules as the active code and ignoring unrelated deletions. Next I’m reading the concrete implementation sites and the current tests before patching.
+
+I’ve confirmed the active rename surfaces: catalog/capability entries, loader, session-key helper, validation, stdlib callers, and tests/docs that still pin the removed workflow surface. I’m reading those callers now so the patch stays consistent across runtime payloads and proof suites.
+
+I have the main blast radius mapped. Next I’m patching the runtime/dataclass renames and deleting the `workflow` surface in one pass so the payloads, call sites, and tests move together.
+
+Plan:
+1. Rename the runtime/catalog/session-key surfaces and update the loader/stdlib callers.
+2. Rewrite tests and strictness guards around the deleted `workflow` package and removed symbols.
+3. Delete `workflow/`, update the active docs baseline, then run the requested targeted suites before broader pytest.
+
+I’m editing the core/runtime surfaces now: removing the last `workflow`-package dependencies, renaming the requested fields/helpers, and updating the direct callers before I touch the test guardrails.
+
+The first rename pass is in place. I’m tightening the payload surfaces now so the capability JSON, authoring/decomposition payloads, and CLI output all expose the same `workflow_py_path` contract before I rewrite the strictness suite.
+
+The strictness scan surfaced a second-order issue: a few active tests still mention removed names as string literals, which would make the guard self-fail. I’m converting those assertions to split-token constants and updating the docs baseline expectations at the same time.
+
+The renamed symbols are now gone from active source and tests. I’m deleting the actual `workflow/` package next and then I’ll run the scoped suites to catch any remaining contract drift before widening to docs/full proof.
+
+The code and test surfaces are aligned enough to start proof. I’m running the requested targeted suites first to catch any remaining rename or deletion fallout before I touch broader docs/full-suite issues.
+
+The environment doesn’t have a `pytest` entrypoint on `PATH`. I’m checking the project’s Python environment and rerunning the targeted suites with the available interpreter.
+
+A project virtualenv is present at `.venv/`. I’m rerunning the targeted tests with `.venv/bin/python -m pytest`.
+
+The requested targeted suites are passing so far. I’m collecting the remaining session outputs, then I’ll run the adjacent proof surfaces that were likely to break from `ResolvedWorkflow.package` removal and the docs baseline drift.
+
+The adjacent proof run found exactly the expected fallout: two remaining stdlib callers still used `resolved.package`, a few deeper tests still pinned that property, and the active docs baseline really does need `cleanup.md`. I’m fixing those concrete misses now rather than broadening anything else.
+
+The remaining misses are patched, including the active `cleanup.md` note. I’m rerunning the failing subset before attempting the full suite.
+
+The previously failing subsets are clean now. I’m collecting the last runtime package-suite output, then I’ll run full `pytest` for final proof.
+
+Full `pytest` exposed broader regression surfaces beyond the scoped targeted suites. I’m reading the failing contract tests first and will fix only the concrete fallout from this cleanup pass before rerunning the suite.
+
+The remaining full-suite failures were all expected contract assertions that still pinned the old generic retry text. I’ve updated them to the new route-specific feedback contract and I’m rerunning that subset first.
+
+The last focused contract slice passed. I’m letting the full suite run through now for final proof.
+
+I’ve reached green proof: all targeted suites and full `pytest` pass. I’m updating the phase notes and shared decisions ledger with the non-obvious outcomes from this turn, then I’ll summarize the scope and validation.
+
+Scope considered
+
+- Phase-local cleanup for workflow surface removal and runtime renames only.
+- I avoided unrelated dirty worktree changes outside the requested root-level `autoloop` / `core` / `runtime` / `stdlib` / `tests` / `docs` surfaces.
+
+What I analyzed
+
+- Runtime/catalog/capability loaders in [runtime/loader.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/loader.py), [core/workflow_catalog.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_catalog.py), [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), and session-key handling in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py).
+- Remaining `workflow` callers in stdlib/tests, strictness coverage in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), and the active docs baseline in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+
+What I changed
+
+- Deleted the root `workflow/` package entirely and removed `("workflow", "Workflow")` support from workflow-class detection.
+- Renamed `legacy_workflow_path` to `workflow_py_path`, `_load_legacy_parameter_type` to `_load_parameters_from_params_py`, and `is_legacy_run_key` to `is_run_key_bound_to_slot`.
+- Removed `ResolvedWorkflow.package`; all callers now use `resolved.reference`.
+- Updated selected-workflow stdlib payloads and CLI/capability payloads to surface `workflow_py_path`.
+- Rewrote strictness coverage to forbid the removed symbols/imports by path and regex, updated runtime/unit/contract tests to the new retry-feedback and loader contracts, and restored [cleanup.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/cleanup.md) as the maintained greenfield note.
+
+Key findings / decisions
+
+- Full proof required touching additional stdlib callers in [stdlib/company.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/company.py) and [stdlib/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/portfolio.py) because `ResolvedWorkflow.package` removal propagated beyond loader-local tests.
+- The active docs baseline still treated `cleanup.md` as authoritative, so I restored that file rather than repointing the baseline to `cleanup3.md`.
+- Validation passed with `.venv/bin/python -m pytest`: `945 passed`. The suite still emits existing non-failing warnings from workflow contract models that shadow `BaseModel.schema`.
+
+Open issues / next step
+
+- No blocking issues remain for this phase.
+- If you want, the next step is to review only the intentional file set for commit hygiene, since the repo still has unrelated pre-existing dirty worktree entries.

@@ -20,6 +20,7 @@ LEGACY_WRAPPER_MODE = "AUTOLOOP_" + "CLI_MODE"
 LEGACY_WRAPPER_DETECT = "detect_auto" + "loop_cli_mode"
 LEGACY_REPO_LAYOUT = "src/auto" + "loop/"
 REMOVED_CONTRACTS_PATH = "contracts" + "_path"
+REMOVED_WORKFLOW_PY_FIELD = "legacy_" + "workflow_path"
 GLOBAL_INTENT_FLAG = "--in" + "tent"
 GLOBAL_PAIRS_FLAG = "--pa" + "irs"
 GLOBAL_TASK_ID_FLAG = "--task" + "-id"
@@ -266,9 +267,11 @@ class Parameters(BaseModel):
     assert payload["authoring_shape"] == "manifest_package"
     assert payload["source_path"] == str(tmp_path / "workflows" / "review_workflow" / "workflow.py")
     assert payload["manifest_path"] == str(tmp_path / "workflows" / "review_workflow" / "workflow.toml")
+    assert payload["workflow_py_path"] == str(tmp_path / "workflows" / "review_workflow" / "workflow.py")
     assert payload["parameters_supported"] is True
     assert payload["workflow_class"] == "ReviewWorkflow"
     assert payload["state_model"].endswith("ReviewWorkflow.State")
+    assert REMOVED_WORKFLOW_PY_FIELD not in payload
     assert payload["transitions"] == {
         "global": {},
         "steps": {
@@ -305,6 +308,7 @@ def test_cli_workflows_show_uses_spec_paths_for_specs_and_contracts_support_file
     assert exit_code == 0
     payload = json.loads(captured.out)
     assert REMOVED_CONTRACTS_PATH not in payload
+    assert REMOVED_WORKFLOW_PY_FIELD not in payload
     assert payload["spec_paths"] == [
         str(package_dir / "specs.py"),
         str(package_dir / "contracts.py"),

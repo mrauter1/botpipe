@@ -10,7 +10,12 @@ import pytest
 from autoloop_v3.core.errors import WorkflowExecutionError
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop_v3.runtime.loader import WorkflowDiscoveryError, inspect_workflow_reference, resolve_workflow_reference
+from autoloop_v3.runtime.loader import (
+    ResolvedWorkflow,
+    WorkflowDiscoveryError,
+    inspect_workflow_reference,
+    resolve_workflow_reference,
+)
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from core.primitives import Outcome
 
@@ -287,6 +292,10 @@ class SimpleExample(Workflow):
         "blocked": "PAUSE",
         "failed": "FAIL",
     }
+
+
+def test_resolved_workflow_exposes_reference_only() -> None:
+    assert not hasattr(ResolvedWorkflow, "package")
 
 
 def test_module_and_class_references_run_through_the_same_resolver_path(tmp_path: Path) -> None:

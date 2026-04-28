@@ -177,7 +177,7 @@ def _resolve_selected_workflow_names(
     else:
         raw_workflows = workflows
     selected = {
-        resolve_workflow_reference(repo_root, workflow).package.workflow_name
+        resolve_workflow_reference(repo_root, workflow).reference.workflow_name
         for workflow in raw_workflows
     }
     if not selected:

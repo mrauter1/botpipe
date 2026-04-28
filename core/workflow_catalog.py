@@ -38,7 +38,7 @@ class WorkflowCatalogEntry:
     authoring_shape: AuthoringShape
     source_path: Path
     flow_path: Path | None
-    legacy_workflow_path: Path | None
+    workflow_py_path: Path | None
     package_init_path: Path | None
     package_module: str | None
     workflow_module: str | None
@@ -96,16 +96,16 @@ def discover_workflow_catalog(root: str | Path) -> tuple[WorkflowCatalogEntry, .
         )
         _register_entry(entries, entry, seen_sources=seen_sources, seen_names=seen_names)
 
-    for legacy_path in sorted(workflows_root.glob("*/workflow.py")):
-        if (legacy_path.parent / "flow.py").is_file():
+    for workflow_py_path in sorted(workflows_root.glob("*/workflow.py")):
+        if (workflow_py_path.parent / "flow.py").is_file():
             continue
         entry = _build_entry(
             root_path,
             workflows_root,
-            legacy_path.resolve(),
+            workflow_py_path.resolve(),
             manifest_path=None,
-            workflow_name=legacy_path.parent.name,
-            title=_default_title(legacy_path.parent.name),
+            workflow_name=workflow_py_path.parent.name,
+            title=_default_title(workflow_py_path.parent.name),
             description=None,
             aliases=(),
         )
@@ -184,7 +184,7 @@ def _build_entry(
         authoring_shape=authoring_shape,
         source_path=source_path,
         flow_path=source_path if source_path.name == "flow.py" else None,
-        legacy_workflow_path=source_path if source_path.name == "workflow.py" else None,
+        workflow_py_path=source_path if source_path.name == "workflow.py" else None,
         package_init_path=package_init_path,
         package_module=package_module,
         workflow_module=workflow_module,
@@ -246,9 +246,9 @@ def _preferred_workflow_source(package_dir: Path) -> Path | None:
     preferred = package_dir / "flow.py"
     if preferred.is_file():
         return preferred.resolve()
-    legacy = package_dir / "workflow.py"
-    if legacy.is_file():
-        return legacy.resolve()
+    workflow_py_path = package_dir / "workflow.py"
+    if workflow_py_path.is_file():
+        return workflow_py_path.resolve()
     return None
 
 

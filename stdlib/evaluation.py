@@ -38,7 +38,7 @@ def write_validated_eval_case_manifest(
     snapshot = read_json_object(snapshot_path)
     selected_workflow_name, capability = validate_selected_workflow_capability_snapshot(
         snapshot,
-        expected_selected_workflow_name=resolved.package.workflow_name,
+        expected_selected_workflow_name=resolved.reference.workflow_name,
         expected_label="the resolved workflow",
     )
 

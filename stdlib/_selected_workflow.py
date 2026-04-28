@@ -25,7 +25,7 @@ class SelectedWorkflowCapture:
 
     @property
     def selected_workflow_name(self) -> str:
-        return self.resolved.package.workflow_name
+        return self.resolved.reference.workflow_name
 
 
 @dataclass(frozen=True, slots=True)
