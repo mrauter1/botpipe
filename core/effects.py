@@ -35,16 +35,6 @@ class Advance:
 
 
 @dataclass(frozen=True, slots=True)
-class BoardMutation:
-    worklist: object | str
-    kind: Literal[
-        "split_active_work_item",
-        "reprioritize_remaining_work_items",
-        "retire_active_work_item",
-    ]
-
-
-@dataclass(frozen=True, slots=True)
 class Handoff:
     message: str
 
@@ -57,7 +47,6 @@ class Handoff:
 
 __all__ = [
     "Advance",
-    "BoardMutation",
     "Effect",
     "Handoff",
     "Refresh",
