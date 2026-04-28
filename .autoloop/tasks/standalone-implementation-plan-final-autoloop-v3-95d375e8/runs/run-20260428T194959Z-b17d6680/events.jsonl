@@ -47,3 +47,4 @@
 {"ts": "2026-04-28T20:34:02.232368+00:00", "run_id": "run-20260428T194959Z-b17d6680", "seq": 47, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strictness-docs-and-proof"}
 {"ts": "2026-04-28T20:34:02.263839+00:00", "run_id": "run-20260428T194959Z-b17d6680", "seq": 48, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strictness-docs-and-proof"}
 {"ts": "2026-04-28T20:34:02.338052+00:00", "run_id": "run-20260428T194959Z-b17d6680", "seq": 49, "event_type": "phase_completed", "pair": "test", "phase_id": "strictness-docs-and-proof", "phase_mode": "single"}
+{"ts": "2026-04-28T20:34:02.411828+00:00", "run_id": "run-20260428T194959Z-b17d6680", "seq": 50, "event_type": "run_finished", "status": "success", "exit_code": 0}
