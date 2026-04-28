@@ -155,3 +155,12 @@ No open plan issues remain. The criteria checklist is fully checked, the feedbac
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=retry-aware-event-validation,workflow-step-cleanup-and-effect-pruning,route-info-rename-and-payload-cleanup,strictness-and-doc-refresh,repository-verification
+explicit=True
+current_phase_index=0
