@@ -82,3 +82,32 @@ The next planning turn should expand the stale wording cleanup scope to a repo-w
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dd511-718b-76f1-a433-7d2456076dc6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dd511-718b-76f1-a433-7d2456076dc6
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd511-718b-76f1-a433-7d2456076dc6
+---
+I’m addressing the verifier findings only: I’ll confirm the current artifact state, check whether a new decisions header was created for this turn, then patch the plan and phase contract to widen the stale-term cleanup scope and add the retry-feedback audit note.
+
+I found the new turn header in `decisions.txt`, so I can append cleanly without touching earlier blocks. I’m patching the plan and phase contract now to explicitly cover active `core/` comment cleanup and the `_next_retry_feedback(...)` audit the verifier called out.
+
+The phase file formatting was normalized by prior YAML tooling, so I’m re-reading the exact current lines before patching it again.
+
+The narrative plan is fixed. I’m appending the change log and the two non-obvious constraints to the verifier-facing feedback and the new decisions block, then I’ll re-parse the YAML.
+
+Updated [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/plan/phase_plan.yaml) to address both verifier findings.
+
+The plan now explicitly:
+- widens stale-term cleanup to a targeted repo-wide grep across active maintained roots, including active `core/` comment/docstring cleanup such as [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:110),
+- and adds an explicit `_next_retry_feedback(...)` audit against the full request-defined retry-kind set.
+
+I also appended the resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/plan/feedback.md) and recorded the non-obvious constraints under the new turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/decisions.txt). `phase_plan.yaml` re-validated successfully with `python3` + `yaml.safe_load` (`ok 5`).

@@ -3,3 +3,6 @@ Provider-attributable invalid Events must reuse the existing ProviderExecutionEr
 contracts.py remains a valid user spec/support filename only through spec_paths and editable_paths; contracts_path is intentionally removed from public payloads instead of renamed.
 workflow/primitives.py stays only as a runtime primitive shim in this pass; it must not regain authoring helpers or step-class exports.
 legacy_workflow_path can remain internally for now if a neutral rename is not cheap, but this pass should not document it as a compatibility surface.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260428T170942Z-a860db5b" ts="2026-04-28T17:15:47.219782+00:00" />
+Stale wording cleanup in this pass must cover active code comments/docstrings across maintained roots, including core/ cleanup targets such as core/compiler.py, not only public-facing authoring modules and docs.
+The event-validation phase must explicitly audit _next_retry_feedback(...) against the full request-defined retry-kind set so invalid-event retries do not drift from existing feedback behavior.

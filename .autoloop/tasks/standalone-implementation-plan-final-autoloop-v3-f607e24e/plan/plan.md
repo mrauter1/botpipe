@@ -26,6 +26,7 @@ Explicitly out of scope:
 - `stdlib/contracts.py` and `stdlib/__init__.py` still use the old helper names.
 - `core/workflow_catalog.py`, `core/workflow_capabilities.py`, and `runtime/cli.py` still expose `contracts_path`; `contracts.py` is not yet normalized into `spec_paths`.
 - `autoloop/__init__.py`, `autoloop/simple.py`, and `workflow/__init__.py` still contain stale compatibility or future-lowering language.
+- `core/compiler.py` still contains stale compatibility wording (`artifact_items(...): authoritative=False preserves the compatibility alias map`), so the terminology cleanup must cover active core code comments/docstrings, not only public authoring modules and docs.
 - Existing tests already cover provider retry behavior, simple-surface lowering, workflow shims, and capability payloads, so the safest approach is to extend those suites rather than invent new harnesses.
 
 ## Implementation contract
@@ -43,6 +44,7 @@ Required changes:
 - Factor reserved-route payload checks into a shared helper only if it reduces duplication between `_validate_outcome(...)` and `_validate_event(...)` without weakening the current provider error metadata.
 - Keep `_validate_outcome(...)` as the provider `Outcome` validator and preserve its retry metadata contract.
 - Call `_validate_event(...)` after system handler normalization, after child-workflow result mapping, after middleware returns an `Event`, before after-hook finalization for the candidate event, and again after the after hook for the final event.
+- Audit `_next_retry_feedback(...)` explicitly and keep it aligned with the request’s full retry-kind set: `illegal_route`, `invalid_payload`, `missing_required_output_artifact`, `invalid_output_artifact`, `malformed_provider_output`, and `provider_transport_failure`.
 - Keep provider attribution conservative:
   - provider outcome and verifier outcome: `True`
   - middleware event on provider steps: `True`
@@ -123,8 +125,9 @@ Files:
 - `tests/test_architecture_baseline_docs.py`
 - `autoloop/__init__.py`
 - `autoloop/simple.py`
+- `core/compiler.py`
 - `workflow/__init__.py`
-- active docs under `docs/`
+- active code/doc roots under `autoloop/`, `core/`, `runtime/`, `stdlib/`, `workflow/`, `tests/`, and `docs/`
 
 Required changes:
 
@@ -141,14 +144,15 @@ Required changes:
   - `_install_simple_workflow_step_handler`
 - Exclude the strictness test file itself or construct forbidden strings indirectly.
 - Keep `contracts.py` allowed only as a filename-level spec/support concept.
-- Update stale wording from additive/compatibility/future-lowering language to current greenfield wording.
+- Run a targeted repo-wide grep across active code/doc roots for stale additive/compatibility/future-lowering phrases, then update the remaining active code comments/docstrings and docs to current greenfield wording.
+- Update stale wording from additive/compatibility/future-lowering language to current greenfield wording, including active `core/` comments such as the compatibility wording in `core/compiler.py`.
 - Keep `workflow/primitives.py` as a runtime primitive shim only; do not expand its exports.
 - Ensure docs/examples import from `autoloop.simple` or `autoloop`, not `workflow.primitives`.
 
 Validation targets:
 
 - Strictness scan covers the maintained active tree only.
-- Public docs no longer describe compatibility surfaces as active authoring APIs.
+- Public docs and active code comments/docstrings no longer describe compatibility surfaces as active authoring APIs or future lowering plans.
 - `workflow.primitives.__all__` remains limited to runtime primitives.
 
 ### Milestone 5: Full verification and rollback check

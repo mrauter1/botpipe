@@ -12,6 +12,8 @@ phases:
     checks where it reduces duplication safely.
   - Wire Event validation into system-step results, workflow-step child-result mapping,
     middleware-produced events, candidate events, and final events.
+  - Audit _next_retry_feedback(...) against the full retry-kind set named in the request
+    and preserve existing feedback behavior while adding invalid-event retries.
   - Preserve ProviderExecutionError retry metadata for provider-attributable invalid
     events and WorkflowExecutionError for deterministic workflow-code invalid events.
   - Add targeted retry and hard-failure tests for invalid question/blocked/failed
@@ -30,9 +32,14 @@ phases:
   - id: AC-3
     text: Invalid PAUSE/FAIL events are rejected before checkpointing and cannot be
       persisted.
+  - id: AC-4
+    text: _next_retry_feedback(...) still covers illegal_route, invalid_payload, missing_required_output_artifact,
+      invalid_output_artifact, malformed_provider_output, and provider_transport_failure.
   deliverables:
   - A concrete engine plan covering helper signatures, provider attribution rules,
     and exact validation call sites.
+  - An explicit retry-feedback audit note covering the named retry kinds that invalid-event
+    handling depends on.
   - Targeted test additions for provider retries, retry exhaustion, system-step failures,
     hook behavior, and workflow-step child mapping.
   risks:
@@ -128,8 +135,9 @@ phases:
     route-contract, contracts_path, BoardMutation, and generated-handler terms.
   - Add public API assertions for removed BoardMutation exports and workflow/primitives.py
     authoring-surface restrictions.
-  - Update stale docstrings and docs in autoloop/, workflow/, and docs/ to remove
-    additive, legacy, and future-lowering wording.
+  - Run a targeted repo-wide grep across active code/doc roots, then update remaining
+    stale additive, compatibility, and future-lowering wording in autoloop/, core/,
+    runtime/, stdlib/, workflow/, tests/, and docs/.
   - Keep workflow/primitives.py as a runtime primitive shim only and ensure docs import
     from autoloop.simple or autoloop.
   out_of_scope:
@@ -142,18 +150,21 @@ phases:
     text: Strictness tests fail if removed compatibility terms or generated-handler
       identifiers reappear in active source/docs.
   - id: AC-2
-    text: Public docs and docstrings describe autoloop.simple or autoloop as the active
-      authoring surface.
+    text: Public docs plus active code comments/docstrings in the maintained tree
+      describe autoloop.simple or autoloop as the active authoring surface and drop
+      stale compatibility/future-lowering wording.
   - id: AC-3
     text: workflow.primitives exports runtime primitives only and does not advertise
       authoring helpers or step classes.
   deliverables:
   - An anti-regression token scan plan with active-root scope and exclusions.
-  - A documentation refresh checklist for active modules and docs.
+  - A documentation and active-code wording refresh checklist that explicitly includes
+    core/ cleanup targets such as core/compiler.py.
   risks:
   - The strictness test can produce false positives if forbidden strings are written
     directly in the test body.
-  - Doc refresh may miss non-obvious stale wording in module docstrings.
+  - Doc refresh may miss non-obvious stale wording in active core/runtime/stdlib code
+    comments unless the grep scope is enforced.
   rollback:
   - If the scan is too broad, narrow exclusions precisely rather than weakening the
     forbidden token set.
