@@ -42,7 +42,6 @@ class WorkflowCatalogEntry:
     package_init_path: Path | None
     package_module: str | None
     workflow_module: str | None
-    contracts_path: Path | None = None
     spec_paths: tuple[Path, ...] = ()
     prompt_paths: tuple[Path, ...] = ()
     asset_paths: tuple[Path, ...] = ()
@@ -189,7 +188,6 @@ def _build_entry(
         package_init_path=package_init_path,
         package_module=package_module,
         workflow_module=workflow_module,
-        contracts_path=_contracts_path(source_path),
         spec_paths=_spec_paths(source_path),
         prompt_paths=_prompt_paths(source_path),
         asset_paths=_asset_paths(source_path),
@@ -314,18 +312,14 @@ def _params_path(source_path: Path) -> Path | None:
     return params_path.resolve() if params_path.is_file() else None
 
 
-def _contracts_path(source_path: Path) -> Path | None:
-    if source_path.name not in {"flow.py", "workflow.py", "__init__.py"}:
-        return None
-    contracts_path = source_path.parent / "contracts.py"
-    return contracts_path.resolve() if contracts_path.is_file() else None
-
-
 def _spec_paths(source_path: Path) -> tuple[Path, ...]:
     if source_path.name not in {"flow.py", "workflow.py", "__init__.py"}:
         return ()
-    specs_path = source_path.parent / "specs.py"
-    return (specs_path.resolve(),) if specs_path.is_file() else ()
+    return tuple(
+        candidate.resolve()
+        for filename in ("specs.py", "contracts.py")
+        if (candidate := source_path.parent / filename).is_file()
+    )
 
 
 def _prompt_paths(source_path: Path) -> tuple[Path, ...]:

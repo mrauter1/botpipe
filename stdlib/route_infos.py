@@ -8,7 +8,7 @@ except ImportError:  # pragma: no cover - direct repo-root import fallback
     from core.routes import RouteInfo
 
 
-def review_gate_contracts(
+def review_gate_infos(
     *,
     complete: str = "review_complete",
     rework: str = "needs_rework",
@@ -28,7 +28,7 @@ def review_gate_contracts(
     }
 
 
-def publication_gate_contracts(
+def publication_gate_infos(
     *,
     published: str = "published",
     required_artifacts: tuple[str, ...] = (),
@@ -43,4 +43,4 @@ def publication_gate_contracts(
     }
 
 
-__all__ = ["publication_gate_contracts", "review_gate_contracts"]
+__all__ = ["publication_gate_infos", "review_gate_infos"]

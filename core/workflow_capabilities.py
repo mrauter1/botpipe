@@ -92,7 +92,6 @@ class WorkflowCapabilityEntry:
     workflow_path: Path
     source_path: Path
     params_path: Path | None
-    contracts_path: Path | None
     doc_path: Path | None
     authoring_shape: AuthoringShape
     flow_path: Path | None
@@ -275,7 +274,6 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
         "artifact_count": len(entry.artifacts),
         "asset_paths": [str(path) for path in entry.asset_paths],
         "authoring_shape": entry.authoring_shape,
-        "contracts_path": None if entry.contracts_path is None else str(entry.contracts_path),
         "description": entry.description,
         "doc_path": None if entry.doc_path is None else str(entry.doc_path),
         "doc_paths": [str(path) for path in entry.doc_paths],
@@ -366,7 +364,6 @@ def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) 
     spec_paths = [str(path) for path in entry.spec_paths]
     test_paths = [str(path) for path in entry.test_paths]
     package_init_path = _optional_path_string(entry.package_init_path)
-    contracts_path = _optional_path_string(entry.contracts_path)
     doc_path = _optional_path_string(entry.doc_path)
     manifest_path = _optional_path_string(entry.manifest_path)
     params_path = _optional_path_string(entry.params_path)
@@ -379,7 +376,6 @@ def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) 
                     manifest_path,
                     package_init_path,
                     params_path,
-                    contracts_path,
                     doc_path,
                     runtime_test_path,
                     *spec_paths,
@@ -393,7 +389,6 @@ def selected_workflow_authoring_surface_payload(entry: WorkflowCapabilityEntry) 
     )
     return {
         "asset_paths": asset_paths,
-        "contracts_path": contracts_path,
         "doc_path": doc_path,
         "editable_paths": editable_paths,
         "manifest_path": manifest_path,
@@ -430,10 +425,6 @@ def selected_workflow_decomposition_surface_payload(
             "asset_paths_repo_relative": _repo_relative_list(
                 repo_root_path,
                 decomposition_authoring_surface["asset_paths"],
-            ),
-            "contracts_path_repo_relative": _optional_repo_relative(
-                repo_root_path,
-                decomposition_authoring_surface["contracts_path"],
             ),
             "doc_path_repo_relative": _optional_repo_relative(repo_root_path, decomposition_authoring_surface["doc_path"]),
             "editable_paths_repo_relative": _repo_relative_list(
@@ -553,7 +544,6 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
     doc_paths = catalog_entry.doc_paths if catalog_entry is not None else _support_doc_paths(package_dir)
     test_paths = catalog_entry.test_paths if catalog_entry is not None else _support_test_paths(package_dir)
     params_path = catalog_entry.params_path if catalog_entry is not None else _support_params_path(source_path)
-    contracts_path = catalog_entry.contracts_path if catalog_entry is not None else _support_contracts_path(source_path)
     doc_path = catalog_entry.doc_path if catalog_entry is not None else (doc_paths[0] if doc_paths else None)
     flow_path = catalog_entry.flow_path if catalog_entry is not None else (source_path if source_path.name == "flow.py" else None)
     legacy_workflow_path = (
@@ -595,7 +585,6 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
         workflow_path=source_path,
         source_path=source_path,
         params_path=params_path,
-        contracts_path=contracts_path,
         doc_path=doc_path,
         authoring_shape=reference.authoring_shape,
         flow_path=flow_path,
@@ -785,17 +774,14 @@ def _support_params_path(source_path: Path) -> Path | None:
     return _optional_file(source_path.parent / "params.py")
 
 
-def _support_contracts_path(source_path: Path) -> Path | None:
-    if source_path.name not in {"flow.py", "workflow.py", "__init__.py"}:
-        return None
-    return _optional_file(source_path.parent / "contracts.py")
-
-
 def _support_spec_paths(source_path: Path) -> tuple[Path, ...]:
     if source_path.name not in {"flow.py", "workflow.py", "__init__.py"}:
         return ()
-    specs_path = _optional_file(source_path.parent / "specs.py")
-    return () if specs_path is None else (specs_path,)
+    return tuple(
+        path
+        for filename in ("specs.py", "contracts.py")
+        if (path := _optional_file(source_path.parent / filename)) is not None
+    )
 
 
 def _support_asset_paths(source_path: Path) -> tuple[Path, ...]:
