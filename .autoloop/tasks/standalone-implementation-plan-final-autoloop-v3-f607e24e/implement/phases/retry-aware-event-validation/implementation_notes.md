@@ -27,6 +27,7 @@
 
 - Step 1.1-1.5: implemented shared event validation, provider/deterministic attribution, and finalization wiring in `core/engine.py`.
 - Step 1.6: added engine contract coverage for provider retries, retry exhaustion, deterministic system failures, hook behavior, middleware illegal routes, and malformed child-workflow pause mapping.
+- Reviewer follow-up: updated the stale system-step after-hook contract test so it now supplies a valid explicit `question` event instead of expecting an invalid route-string retag to pause successfully.
 - Phase-only note: later cleanup phases still own generated workflow-step residue, `BoardMutation`, naming cleanup, payload cleanup, and docs/docstrings outside this event-validation scope.
 
 ## Intended behavior changes
@@ -35,6 +36,7 @@
 - Provider-step invalid Events from middleware, provider-default events, and route-string hook retags now surface as `ProviderExecutionError` with retry metadata (`illegal_route` or `invalid_payload`) and reuse the existing retry loop.
 - Explicit hook-returned `Event` values now cross a deterministic boundary: invalid final Events and final artifact failures hard-fail with `WorkflowExecutionError`.
 - Workflow-step child pause/fail mapping is now validated before finalization, so malformed child pause questions cannot persist.
+- Deterministic system-step after-hook coverage now reflects the new invariant by using an explicit valid `Event("question", question=...)` override instead of an invalid route-only retag.
 
 ## Preserved invariants
 
@@ -51,6 +53,7 @@
 ## Validation performed
 
 - `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`
+- Re-ran `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py` after the reviewer follow-up test fix.
 - Attempted targeted `pytest` selection, but `pytest` is not installed in this environment.
 - Attempted direct runtime smoke script, but the interpreter environment is missing `pydantic`, so import-time execution is blocked.
 

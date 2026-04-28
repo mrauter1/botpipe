@@ -291,3 +291,50 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+I’m addressing the reviewer’s blocking finding only. First I’m reopening the affected contract test and the surrounding hook-validation behavior so I can align the stale expectation with the new deterministic event invariant without widening scope.
+
+I’m fixing the stale system-hook test by making it produce a valid explicit `question` event instead of an invalid route-string retag. That keeps the original coverage goal, matches the new invariant, and stays inside the reviewer’s suggested fix directions.
+
+The reviewer finding is patched. I’m doing one last syntax check and a quick readback of the adjusted test plus the phase notes so the follow-up is self-consistent.
+
+Scope considered
+
+- Phase-local retry-aware event-validation follow-up only.
+- Fixed the reviewer’s blocking finding in the touched contract test and updated the phase notes/decision ledger.
+
+What I analyzed
+
+- The blocking review note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/feedback.md:10).
+- The stale system-hook test in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:3574).
+- The current centralized event-validation behavior in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:905).
+
+What I changed
+
+- Updated `test_system_step_hooks_can_override_route_after_candidate_validation` so the after hook now returns an explicit valid `Event("question", question="Need input?")` instead of an invalid route-only retag, and tightened the assertion to check the carried question payload in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:3574).
+- Appended the non-obvious deterministic-hook rule under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/decisions.txt:13).
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/implementation_notes.md:1) to record the reviewer follow-up and the extra validation pass.
+
+Key findings / decisions
+
+- The reviewer’s blocking issue was valid: the old test expected an invalid deterministic `question` event to pause successfully, which contradicts the new centralized validator.
+- I chose the reviewer’s “explicit valid Event” fix path rather than changing the test to expect failure, because it preserves useful system-step after-hook override coverage while staying aligned with the new invariant.
+
+Open issues / next step
+
+- Validation performed: `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`.
+- I still could not run `pytest` here because `pytest` is not installed, and direct runtime execution is still blocked by the missing `pydantic` dependency in the interpreter environment.
+- The next step is re-review / rerun in the real project environment so the reviewer can clear the phase criteria.
