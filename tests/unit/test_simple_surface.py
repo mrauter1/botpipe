@@ -38,13 +38,23 @@ def _probe_simple_surface(*pythonpath: Path, cwd: Path) -> dict[str, object]:
     env["PYTHONPATH"] = os.pathsep.join(str(path) for path in pythonpath)
     probe = """
 import json
-from autoloop.simple import Json, RouteInfo, StrictWorkflow, Workflow
+from autoloop import Checkpoint, ChildWorkflowResult, Event, Outcome, ResolvedArtifacts
+from autoloop.simple import Checkpoint as SimpleCheckpoint
+from autoloop.simple import ChildWorkflowResult as SimpleChildWorkflowResult
+from autoloop.simple import Event as SimpleEvent
+from autoloop.simple import Json, Outcome as SimpleOutcome, ResolvedArtifacts as SimpleResolvedArtifacts
+from autoloop.simple import RouteInfo, StrictWorkflow, Workflow
 
 print(json.dumps({
     "workflow_module": Workflow.__module__,
     "strict_module": StrictWorkflow.__module__,
     "artifact_name": Json("note").name,
     "route_info_module": RouteInfo.__module__,
+    "checkpoint_identity": Checkpoint is SimpleCheckpoint,
+    "child_workflow_result_identity": ChildWorkflowResult is SimpleChildWorkflowResult,
+    "event_identity": Event is SimpleEvent,
+    "outcome_identity": Outcome is SimpleOutcome,
+    "resolved_artifacts_identity": ResolvedArtifacts is SimpleResolvedArtifacts,
 }))
 """
     completed = subprocess.run(
@@ -69,6 +79,11 @@ def test_autoloop_simple_imports_in_installed_package_mode(tmp_path: Path) -> No
     assert payload["strict_module"] == "autoloop.simple"
     assert payload["artifact_name"] == "note"
     assert payload["route_info_module"] == "core.routes"
+    assert payload["checkpoint_identity"] is True
+    assert payload["child_workflow_result_identity"] is True
+    assert payload["event_identity"] is True
+    assert payload["outcome_identity"] is True
+    assert payload["resolved_artifacts_identity"] is True
 
 
 def test_autoloop_simple_imports_with_repo_root_fallback_only() -> None:
@@ -78,6 +93,11 @@ def test_autoloop_simple_imports_with_repo_root_fallback_only() -> None:
     assert payload["strict_module"] == "autoloop.simple"
     assert payload["artifact_name"] == "note"
     assert payload["route_info_module"] == "core.routes"
+    assert payload["checkpoint_identity"] is True
+    assert payload["child_workflow_result_identity"] is True
+    assert payload["event_identity"] is True
+    assert payload["outcome_identity"] is True
+    assert payload["resolved_artifacts_identity"] is True
 
 
 def test_prompt_inline_and_file_primitives_preserve_origin_metadata(tmp_path: Path) -> None:

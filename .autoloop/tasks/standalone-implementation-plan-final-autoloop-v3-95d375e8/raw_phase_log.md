@@ -279,3 +279,39 @@ No phase-local issues remain for this slice. Later phases still need to handle t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd5ad-53a0-7103-9608-dd7340525b77
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd5ad-53a0-7103-9608-dd7340525b77
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5ad-53a0-7103-9608-dd7340525b77
+---
+I’m handling the phase-local test slice only: verifying the new retry-feedback and public-export coverage, then updating the test strategy and test feedback artifacts to match what’s actually enforced.
+
+The existing tests are already close, but there’s one worthwhile hardening point: the installed-package probe only exercised `autoloop.simple`, not root `autoloop` re-exports. I’m extending that probe so the test phase explicitly verifies both surfaces under the fallback/import-mode boundary.
+
+I’ve tightened the installed-package probe to cover the root `autoloop` re-exports as well. I’m rerunning the two scoped unit modules now to verify the stronger coverage stays green.
+
+The stronger test passed. I’m recording the behavior-to-test map, a concise test-phase summary, and one non-obvious test decision so later turns don’t accidentally weaken the installed-package coverage.
+
+Scope considered
+Phase-local test work only: the retry-feedback behavior, the `autoloop.simple` / `autoloop` primitive export surface, and the phase test artifacts.
+
+What I analyzed
+I reviewed the scoped implementation changes in `core/providers/retries.py`, `autoloop/simple.py`, `autoloop/__init__.py`, and the existing coverage in `tests/unit/test_provider_retries.py` and `tests/unit/test_simple_surface.py`. I also checked the shared decisions and the current phase test artifacts.
+
+What I changed
+I strengthened `tests/unit/test_simple_surface.py` so the existing installed-package and repo-root import probes now also verify that root `autoloop` re-exports `Event`, `Outcome`, `Checkpoint`, `ResolvedArtifacts`, and `ChildWorkflowResult` as the exact same objects exposed by `autoloop.simple`. I updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/retry-feedback-and-public-primitives/test_strategy.md), appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/retry-feedback-and-public-primitives/feedback.md), and recorded the non-obvious installed-package coverage decision in `decisions.txt`.
+
+Key findings / decisions
+The existing retry-feedback tests were already covering the requested route-specific and fallback behavior, so the only worthwhile hardening was on the import-mode boundary. `.venv/bin/python -m pytest tests/unit/test_provider_retries.py tests/unit/test_simple_surface.py` passed after the stronger probe.
+
+Open issues / next step
+No scoped test issue remains for this phase. Later phases still need separate test work for the out-of-scope cleanup items such as `workflow/` deletion, renames, strictness, and docs.
