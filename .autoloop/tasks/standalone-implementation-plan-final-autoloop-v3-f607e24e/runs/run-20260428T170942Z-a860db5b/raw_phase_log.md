@@ -832,3 +832,99 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd535-a0b8-7793-b050-1d0eaf676326
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd535-a0b8-7793-b050-1d0eaf676326
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd535-a0b8-7793-b050-1d0eaf676326
+---
+I’m covering the route-info rename and payload cleanup from the test side now. I’ll audit what the implementation already validated, identify any remaining blind spots in the phase scope, then add only the tests needed to close those gaps and update the phase test artifacts.
+
+I found the main remaining gap: the implementation phase covered capability builders and discovery directly, but there isn’t yet a CLI-level assertion that `workflows show` and `workflows list` keep `contracts.py` in `spec_paths` while omitting `contracts_path`. I’m adding that regression coverage in the package CLI suite rather than duplicating lower-level tests.
+
+I’ve isolated one worthwhile regression hole: CLI `workflows show` still needs a direct assertion that it dropped `contracts_path` while preserving both `specs.py` and `contracts.py` in `spec_paths`. I’m adding that focused test now, then I’ll update the phase test strategy and feedback artifacts.
+
+The repo tests were already covering the lower-level payload builders, so I kept this addition narrow and CLI-specific. I’m running the package CLI suite plus the previously touched runtime/unit suites to verify the new assertion and keep the phase coverage coherent.
+
+Scope considered
+- Phase-local route-info rename and payload cleanup only.
+- Existing lower-level coverage in `tests/unit/test_stdlib_and_extensions.py`, `tests/runtime/test_compatibility_runtime.py`, and `tests/runtime/test_workflow_reference_resolution.py`.
+- Remaining CLI regression surface in `tests/runtime/test_package_cli.py`.
+
+What I analyzed
+- Whether the implementation-phase tests already covered all in-scope surfaces.
+- Discovery/capability coverage for `contracts.py` through `spec_paths`.
+- Public payload coverage for authoring/decomposition builders.
+- Runtime CLI coverage for `workflows show`, which is part of the phase contract and had not yet asserted the new `spec_paths`/no-`contracts_path` shape directly.
+
+What I changed
+- Added a focused CLI regression test in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) that asserts:
+  - `workflows show` does not emit `contracts_path`
+  - `spec_paths` includes both `specs.py` and `contracts.py` when both exist
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/test/phases/route-info-rename-and-payload-cleanup/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, flake controls, and known gaps.
+- Appended a concise validation summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/test/phases/route-info-rename-and-payload-cleanup/feedback.md).
+
+Key findings / decisions
+- The main gap was CLI-level coverage; lower-level capability and authoring/decomposition payload coverage was already present.
+- I kept the added test narrow and deterministic instead of duplicating existing builder tests.
+- Validation run:
+  - `.venv/bin/python -m pytest tests/runtime/test_package_cli.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_workflow_reference_resolution.py tests/unit/test_stdlib_and_extensions.py -q`
+  - Result: `159 passed`
+
+Open issues / next step
+- No phase-local test blockers remain.
+- Full strictness scanning for legacy token reintroduction remains for the later strictness phase.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd535-a0b8-7793-b050-1d0eaf676326
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd535-a0b8-7793-b050-1d0eaf676326
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd535-a0b8-7793-b050-1d0eaf676326
+---
+I’m auditing the phase-local test additions now. I’ll verify that the new and existing tests cover the changed rename and payload surfaces, check for missed regression risk or flaky setup, then update the test audit artifacts accordingly.
+
+The coverage is consistent with the phase contract: lower-level discovery and payload builders are already exercised, and the new CLI test closes the remaining public-surface gap without adding flake risk. I’m marking the audit criteria complete and recording a clean audit result.
+
+Scope considered
+- Phase-local test coverage for route-info rename and payload cleanup only.
+- Existing coverage in `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_compatibility_runtime.py`, plus the new CLI regression test in `tests/runtime/test_package_cli.py`.
+- Phase-local audit artifacts under `.autoloop/tasks/.../test/phases/route-info-rename-and-payload-cleanup/`.
+
+What I analyzed
+- The phase contract and shared decisions for `contracts.py` discovery through `spec_paths` and removal of dedicated `contracts_path` payload fields.
+- The producer’s updated `test_strategy.md` and feedback summary.
+- The concrete assertions covering stdlib rename removal, catalog/capability payload cleanup, authoring/decomposition payload invariants, and CLI `workflows show`.
+
+What I reviewed
+- `tests/runtime/test_package_cli.py` now directly asserts the CLI surface omits `contracts_path` and preserves `spec_paths` ordering for `specs.py` plus `contracts.py`.
+- `tests/unit/test_stdlib_and_extensions.py` covers capability, authoring-surface, decomposition, and editable-path invariants.
+- `tests/runtime/test_compatibility_runtime.py` covers shallow discovery and imported inspection behavior for `contracts.py` via `spec_paths`.
+- The phase test strategy documents coverage scope, preserved invariants, edge cases, stabilization approach, and known gaps.
+
+Key findings / decisions
+- No blocking audit findings.
+- Updated `criteria.md` to mark all audit gates complete.
+- Appended `TST-000` to `feedback.md` to record a clean audit result.
+
+Open issues / next step
+- No phase-local test blockers remain.
+- Full strictness scanning remains appropriately deferred to the later strictness phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

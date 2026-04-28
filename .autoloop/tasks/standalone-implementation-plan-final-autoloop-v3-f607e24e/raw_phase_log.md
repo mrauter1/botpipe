@@ -882,3 +882,49 @@ Key findings / decisions
 Open issues / next step
 - No phase-local test blockers remain.
 - Full strictness scanning for legacy token reintroduction remains for the later strictness phase.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd535-a0b8-7793-b050-1d0eaf676326
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd535-a0b8-7793-b050-1d0eaf676326
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd535-a0b8-7793-b050-1d0eaf676326
+---
+I’m auditing the phase-local test additions now. I’ll verify that the new and existing tests cover the changed rename and payload surfaces, check for missed regression risk or flaky setup, then update the test audit artifacts accordingly.
+
+The coverage is consistent with the phase contract: lower-level discovery and payload builders are already exercised, and the new CLI test closes the remaining public-surface gap without adding flake risk. I’m marking the audit criteria complete and recording a clean audit result.
+
+Scope considered
+- Phase-local test coverage for route-info rename and payload cleanup only.
+- Existing coverage in `tests/unit/test_stdlib_and_extensions.py` and `tests/runtime/test_compatibility_runtime.py`, plus the new CLI regression test in `tests/runtime/test_package_cli.py`.
+- Phase-local audit artifacts under `.autoloop/tasks/.../test/phases/route-info-rename-and-payload-cleanup/`.
+
+What I analyzed
+- The phase contract and shared decisions for `contracts.py` discovery through `spec_paths` and removal of dedicated `contracts_path` payload fields.
+- The producer’s updated `test_strategy.md` and feedback summary.
+- The concrete assertions covering stdlib rename removal, catalog/capability payload cleanup, authoring/decomposition payload invariants, and CLI `workflows show`.
+
+What I reviewed
+- `tests/runtime/test_package_cli.py` now directly asserts the CLI surface omits `contracts_path` and preserves `spec_paths` ordering for `specs.py` plus `contracts.py`.
+- `tests/unit/test_stdlib_and_extensions.py` covers capability, authoring-surface, decomposition, and editable-path invariants.
+- `tests/runtime/test_compatibility_runtime.py` covers shallow discovery and imported inspection behavior for `contracts.py` via `spec_paths`.
+- The phase test strategy documents coverage scope, preserved invariants, edge cases, stabilization approach, and known gaps.
+
+Key findings / decisions
+- No blocking audit findings.
+- Updated `criteria.md` to mark all audit gates complete.
+- Appended `TST-000` to `feedback.md` to record a clean audit result.
+
+Open issues / next step
+- No phase-local test blockers remain.
+- Full strictness scanning remains appropriately deferred to the later strictness phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
