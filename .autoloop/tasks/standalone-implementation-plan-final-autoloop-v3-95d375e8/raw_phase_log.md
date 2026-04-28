@@ -436,3 +436,53 @@ Open issues / next step
 
 - No blocking issues remain for this phase.
 - If you want, the next step is to review only the intentional file set for commit hygiene, since the repo still has unrelated pre-existing dirty worktree entries.
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd5b3-bd38-7710-907b-ee5db657226f
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5b3-bd38-7710-907b-ee5db657226f
+---
+I’m reviewing the phase-local implementation against the active criteria and the final proof results. I’ll inspect the phase artifacts, verify the requested scope from the changed runtime/test surfaces, then update the criteria and feedback files only.
+
+The review scope is clean against the requested contract: the deleted surface is actually gone, the renamed runtime/public surfaces are consistent, and the implementation notes line up with the proof run. I’m marking the criteria complete and recording that there are no review findings.
+
+Scope considered
+
+- Phase-local review of the workflow-surface removal and runtime rename implementation only.
+- I limited edits to the active phase artifacts and reviewed the changed runtime, stdlib, test, and docs surfaces for dependency and regression coverage.
+
+What I analyzed
+
+- The authoritative request, active phase contract, implementation notes, and shared decisions ledger.
+- The implemented rename/deletion surfaces around `workflow_py_path`, `ResolvedWorkflow.reference`, `_load_parameters_from_params_py`, `is_run_key_bound_to_slot`, strictness scanning, and the restored `cleanup.md` docs baseline.
+- Proof signals from the targeted suites and the final `.venv/bin/python -m pytest` run.
+
+What I reviewed
+
+- `workflow/` deletion and strictness enforcement against reintroduction.
+- Runtime/catalog/capability/CLI payload consistency for `workflow_py_path`.
+- Remaining callers of `ResolvedWorkflow.package` and run-key helper behavior after rename.
+- Docs/test alignment for the greenfield `autoloop` / `autoloop.simple` surface.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- The implementation matches the requested greenfield cleanup behavior, and the final proof run passed.
+
+Open issues / next step
+
+- No open review issues for this phase.
+- Phase review can be accepted as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
