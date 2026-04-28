@@ -241,3 +241,53 @@ Open issues / next step
 
 - Validation performed: `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`.
 - I could not run `pytest` here because `pytest` is not installed, and I could not run a direct engine smoke script because the interpreter environment is missing `pydantic`. The next step is to run the targeted contract tests in the project’s real Python environment.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd51a-324b-7d81-81d6-b391d5ec4aa0
+---
+I’m reviewing only the retry-aware event-validation phase and the corresponding implementation diff. First I’m reading the reviewer artifacts and the touched engine/test changes so I can mark criteria accurately and write concrete findings if anything is off.
+
+I found a likely regression in the existing contract suite: a pre-existing system-step hook test still expects a bare route-string retag to `"question"` to pause successfully, but the new centralized validation correctly makes that event invalid because no question text is preserved. I’m checking for any similar stale expectations before I write the review finding.
+
+I have one blocking review issue. The engine change looks aligned with intent, but the phase left a stale pre-existing contract test expecting an invalid deterministic `question` retag to succeed, which means the touched suite is now internally contradictory.
+
+Scope considered
+
+- Phase-local retry-aware event-validation work only.
+- Reviewed the touched engine flow in `core/engine.py`, the touched contract tests in `tests/contract/test_engine_contracts.py`, and the phase artifacts under `.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/`.
+
+What I analyzed
+
+- Event validation call sites for system steps, workflow-step child mapping, middleware events, candidate events, and final events.
+- After-hook attribution handling, especially the explicit-event vs route-string split.
+- Existing and newly added contract tests against the new invariant that invalid `question` / `blocked` / `failed` events must never be accepted.
+
+What I reviewed
+
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/criteria.md:1) checkboxes to reflect the current state.
+- Appended one prioritized blocking finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/implement/phases/retry-aware-event-validation/feedback.md:1).
+- The blocking issue is a stale touched contract test that still expects an invalid deterministic `question` retag to pause successfully even though the new centralized validation now correctly rejects it.
+
+Key findings / decisions
+
+- `IMP-001` blocking: `test_system_step_hooks_can_override_route_after_candidate_validation` is no longer valid under the new invariant and should be updated to either return an explicit valid `Event("question", question=...)` or expect `WorkflowExecutionError`.
+- I did not find a second blocking architecture issue in the engine change itself; the review failure is the mismatched touched test/validation contract.
+
+Open issues / next step
+
+- Fix `IMP-001`, then rerun the touched contract suite in the real project environment.
+- Current loop result is `INCOMPLETE` because the phase artifacts still contain a blocking review finding.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
