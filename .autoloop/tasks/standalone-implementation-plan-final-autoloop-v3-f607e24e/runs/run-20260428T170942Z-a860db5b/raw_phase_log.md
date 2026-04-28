@@ -1042,3 +1042,97 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+I’m validating the phase from the test-author side now. I’ll inspect the active test artifacts and the strictness/doc test coverage that already landed, then decide whether any additional repository tests are still needed before I update the phase test strategy and feedback.
+
+The current coverage is close, but there’s one obvious gap: the new active `cleanup.md` note is only checked for existence and forbidden route-contract terms, not for the actual greenfield authoring guidance it was added to carry. I’m adding a focused baseline test for that file, then I’ll update the phase test strategy and feedback.
+
+I found a small but real coverage gap and I’m closing it with one focused docs-baseline test: `cleanup.md` now gets checked for the greenfield authoring guidance it was introduced to carry, not just for existence.
+
+The repository test gap is closed and the targeted slice is green. I’m writing the phase test strategy and the test feedback summary now, with an explicit behavior-to-coverage map and the stabilization notes for this phase.
+
+Scope considered
+- Phase-local test authoring for `strictness-and-doc-refresh`, focused on the maintained-tree strictness scan, public shim restrictions, and active docs/working-tree-note coverage.
+
+What I analyzed
+- The updated strictness suite in `tests/strictness/test_no_compat.py`.
+- The docs baseline coverage in `tests/test_architecture_baseline_docs.py`.
+- The adjacent retry-aware checkpoint regression test in `tests/contract/test_engine_contracts.py`.
+- The implement/review artifacts to confirm what was already covered and where the remaining test gap was.
+
+What I changed
+- Added one repository test in `tests/test_architecture_baseline_docs.py` to assert that `cleanup.md` carries the intended greenfield authoring guidance, not just existence and forbidden-token hygiene.
+- Updated `.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/test/phases/strictness-and-doc-refresh/test_strategy.md` with an explicit behavior-to-coverage map, invariants, edge cases, and known gaps.
+- Appended a concise validation summary to `.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-f607e24e/test/phases/strictness-and-doc-refresh/feedback.md`.
+
+Key findings / decisions
+- The main remaining coverage gap was the new active `cleanup.md` note: before this turn it was only checked for existence and forbidden route-contract terms.
+- I kept the test addition narrow and deterministic so it validates the new maintained-doc surface without broadening the phase scope.
+- Validation run: `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py tests/strictness/test_no_compat.py -q` passed with `15 passed in 0.27s`.
+
+Open issues / next step
+- No blocking test gaps remain in this phase scope.
+- I did not widen coverage into archived docs or user workflow packages; that exclusion stays intentional per the phase contract.
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+
+
+---
+run_id=run-20260428T170942Z-a860db5b | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd542-3bb1-7612-ad1d-de36d12d7f4f
+---
+I’m auditing the `strictness-and-doc-refresh` test outputs now. I’ll inspect the active test artifacts, the added coverage in the repository tests, and the validation evidence before I update the audit criteria and feedback.
+
+I’m not seeing a coverage or reliability gap that rises to a blocking audit finding. I’m updating the audit criteria and feedback artifacts now to reflect that the phase coverage is sufficient and aligned with the accepted scope.
+
+Scope considered
+- Phase-local audit of the `strictness-and-doc-refresh` test outputs, limited to the active test artifacts plus the touched repository tests that implement the phase coverage.
+
+What I analyzed
+- The phase contract and acceptance criteria.
+- The shared decisions ledger for scan-root scope, shim policy, and the out-of-phase retry-failure-context regression fix.
+- The updated `tests/strictness/test_no_compat.py`, `tests/test_architecture_baseline_docs.py`, and the referenced adjacent regression guard in `tests/contract/test_engine_contracts.py`.
+- The recorded validation evidence from the test author and the earlier full-suite implementation run.
+
+What I reviewed
+- `test_strategy.md` for an explicit behavior-to-coverage map, invariants, edge cases, stability notes, and known gaps.
+- `feedback.md` for a concise, accurate summary of the added coverage.
+- The repository tests to confirm they cover:
+  - maintained-tree forbidden-token scanning and scan exclusions
+  - removed `BoardMutation` export assertions
+  - `workflow.primitives` runtime-only restrictions
+  - active docs and `cleanup.md` greenfield authoring guidance
+  - the adjacent retry-exhaustion checkpoint metadata regression
+
+Key findings / decisions
+- No blocking audit findings.
+- Coverage is sufficient for AC-1 through AC-3 and is targeted at the right regression surfaces.
+- The added `cleanup.md` assertion closes the one obvious remaining docs-baseline gap from the previous turn.
+- The tests are deterministic file-content/module-surface assertions with no timing, ordering, or network flake risk.
+
+Open issues / next step
+- No blocking issues remain for this phase.
+- No additional widening of test scope is needed; the current exclusions for archived docs and user workflow packages remain intentional per the phase contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
