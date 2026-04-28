@@ -47,3 +47,46 @@ Updated the planning artifacts in [plan.md](/home/rauter/autoloop_v3_bkp/autoloo
 The plan is decomposed into three ordered phases: `retry-feedback-and-public-primitives`, `workflow-surface-removal-and-runtime-renames`, and `strictness-docs-and-proof`. It keeps the request’s greenfield deletion/rename boundary explicit, calls out repo-wide `ResolvedWorkflow.package` fallout, and records the active docs proof risk around the missing root `cleanup.md` vs present `cleanup3.md` so later phases do not miss it.
 
 `phase_plan.yaml` was validated locally with `python3` + `yaml.safe_load` and parses successfully with 3 phases.
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+I found two material planning gaps. One is direct intent drift: the plan doesn’t preserve the user’s exact `autoloop/simple.py` import-source contract, only the broad export outcome. The other is an unresolved branch around `cleanup.md` vs `cleanup3.md`; that makes the docs/proof slice non-concrete and can silently expand scope away from the requested cleanup work.
+
+I’ve recorded the blocking findings and lowered the plan gate accordingly. I’m doing one quick readback on `criteria.md` and `feedback.md`, then I’ll close with the verifier summary and the required loop-control promise.
+
+Scope considered
+
+Planning artifacts for this task only: [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt), against the immutable request snapshot and the current repo state only where needed for regression analysis.
+
+What I analyzed
+
+I checked the request’s exact implementation contract against the plan narrative and the machine-readable phases, with focus on the requested hard requirements: retry-feedback specificity, exact public primitive exports, `workflow/` deletion, named renames, `ResolvedWorkflow.package` removal, strictness guards, docs scope, and proof sequencing. I also validated that `phase_plan.yaml` has coherent dependencies and valid YAML structure.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/criteria.md) to reflect that the plan is not yet fully ready, and I appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/feedback.md) as `PLAN-001` and `PLAN-002`.
+
+Key findings / decisions
+
+`PLAN-001` is blocking: the plan preserves the export outcome but drops the user’s exact `autoloop/simple.py` import-source contract. The request explicitly requires `Event` / `Outcome` / `Checkpoint` from `core.primitives`, `ResolvedArtifacts` from `core.artifacts`, and `ChildWorkflowResult` from `core.context`, using the existing fallback style.
+
+`PLAN-002` is blocking: the docs/proof slice leaves an unresolved “either/or” branch around `cleanup.md` vs `cleanup3.md`. That makes the plan non-concrete and can silently expand scope into unrelated docs-baseline ownership work.
+
+Open issues / next step
+
+The planner needs to revise the plan so it explicitly pins the `autoloop/simple.py` import modules and removes or resolves the `cleanup.md` / `cleanup3.md` branch with one minimal safe direction. Until then, the plan should remain gated as incomplete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
