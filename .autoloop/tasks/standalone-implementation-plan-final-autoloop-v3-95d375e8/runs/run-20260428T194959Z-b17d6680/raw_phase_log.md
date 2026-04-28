@@ -727,3 +727,110 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+---
+I’m handling the test-phase follow-through for `strictness-docs-and-proof`. I’ll inspect the phase test artifacts and the current docs/strictness coverage, then add any missing regression guard before updating the test strategy and feedback.
+
+I found one small gap worth closing: the docs import-surface guard scans `docs/` and `Workflow_Instructions.md`, but not the maintained `cleanup.md` note even though that file is part of the active docs surface. I’m tightening that test and then rerunning the focused proof.
+
+The test change is in place. I’m rerunning the focused docs-proof suite now to confirm the expanded scan still passes cleanly.
+
+The focused proof passed. I’m recording the added coverage in the test-phase artifacts and the shared decision ledger so later turns preserve the `cleanup.md` scan requirement.
+
+Scope considered
+
+- Phase-local test follow-through for `strictness-docs-and-proof`
+- Active docs-baseline and strictness regression coverage
+- Phase test artifacts and the shared decision ledger
+
+What I analyzed
+
+- [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py)
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/strictness-docs-and-proof/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/strictness-docs-and-proof/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt)
+
+What I changed
+
+- Tightened [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) so the public-import-surface guard also scans `cleanup.md`, not just `docs/*.md` and `Workflow_Instructions.md`.
+- Updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/strictness-docs-and-proof/test_strategy.md) with a behavior-to-coverage map, invariants, edge cases, validation, and known gaps.
+- Appended a concise summary to phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/strictness-docs-and-proof/feedback.md).
+- Recorded the non-obvious coverage decision under the current header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt).
+
+Key findings / decisions
+
+- The maintained working-tree note is part of the active docs surface, so it should be covered by the same import-surface regression guard as the rest of the maintained docs.
+- Focused proof passed after the refinement:
+  - `.venv/bin/python -m pytest tests/test_architecture_baseline_docs.py`
+  - `.venv/bin/python -m pytest tests/strictness/test_no_compat.py`
+- I did not rerun the full targeted list or full suite in this turn because that proof was already completed and recorded during implementation; this turn only extended the affected docs-baseline guard.
+
+Open issues / next step
+
+- No blocking test gaps remain in this phase-local scope.
+- If needed, the next auditor pass can verify the updated test artifact notes and the added `cleanup.md` coverage.
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+---
+I’m auditing the test-phase work for `strictness-docs-and-proof`. I’ll inspect the phase criteria/feedback, the updated test strategy, and the current docs/strictness test coverage before I write the audit result.
+
+The test-phase addition is aligned with the phase scope and closes a real maintained-doc regression gap without broadening behavior. I’m updating the audit artifacts now and marking the test phase complete.
+
+Scope considered
+
+- Phase-local audit of the `strictness-docs-and-proof` test work
+- Active test artifacts, the refined docs-baseline test, and the focused rerun evidence
+
+What I analyzed
+
+- [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/strictness-docs-and-proof/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/test/phases/strictness-docs-and-proof/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt)
+
+What I reviewed
+
+- Whether the added test coverage closes a real maintained-doc regression gap
+- Whether the strategy accurately maps changed behavior, invariants, edge cases, and narrowed validation scope
+- Whether the focused reruns are sufficient and low-flake for the specific change made in this test turn
+- Whether the test-phase artifacts now reflect the audited outcome
+
+Key findings / decisions
+
+- No blocking findings.
+- Scanning `cleanup.md` in the public-import-surface guard is aligned with the shared decisions and materially improves regression protection for the maintained docs surface.
+- The test strategy correctly documents that this turn revalidated only the affected proof slice because broader targeted/full-suite proof was already recorded earlier.
+- I updated the audit artifacts: all criteria boxes are checked and the feedback file now records a no-findings audit result.
+
+Open issues / next step
+
+- No open test-audit issues remain in this phase-local scope.
+- The test phase is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
