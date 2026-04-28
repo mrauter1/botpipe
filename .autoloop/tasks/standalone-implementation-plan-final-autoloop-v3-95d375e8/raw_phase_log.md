@@ -669,3 +669,61 @@ Open issues / next step
 
 - No blocking issues remain for this phase.
 - If you want, the next step is to commit the accumulated cleanup patch.
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd5c4-8571-70b2-b989-bd19a3d68ae6
+---
+I’m reviewing the `strictness-docs-and-proof` phase artifacts against the implementation diff and the requested acceptance criteria. I’ll inspect the phase criteria/feedback files, the scoped code/doc changes, and the recorded proof before updating the review artifacts.
+
+The phase-specific code diff is small, but I need to review the resulting file contents directly because some of this tree is currently unstaged/untracked relative to the repo root. I’m reading the current strictness and docs-baseline tests plus the touched docs to verify the final state, not just the patch fragment.
+
+I’ve finished the review pass. I found no blocking issues in the phase-local scope, so I’m updating the verifier artifacts accordingly and marking the phase complete.
+
+The verifier artifacts are updated. I’m doing a final readback of the criteria and feedback so the completion block reflects the persisted review state exactly.
+
+Scope considered
+
+- Phase-local review of `strictness-docs-and-proof`, limited to the active maintained docs/tests surface and the phase artifact files.
+- Request intent, shared decisions, current strictness/docs tests, touched docs, and recorded proof results.
+
+What I analyzed
+
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py)
+- [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py)
+- [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md)
+- [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt)
+- The recorded targeted-test and full-suite proof from the implementation turn
+
+What I reviewed
+
+- Strictness coverage for deleted `workflow` surfaces, forbidden symbols, and the `_install_simple_workflow_step_handler` guard
+- Maintained docs/examples for public import-surface conformance
+- Proof completeness against the required targeted list and final full `pytest`
+- Verifier artifacts in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/implement/phases/strictness-docs-and-proof/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/implement/phases/strictness-docs-and-proof/feedback.md)
+
+Key findings / decisions
+
+- No blocking findings.
+- The maintained docs now avoid non-public `workflows.*`, `.flow`, and `.workflow` import examples, which is consistent with the phase decision to keep public authoring on `autoloop` / `autoloop.simple`.
+- The verifier artifacts were updated: all criteria boxes are checked, and feedback records a no-findings review result.
+- The recorded proof is sufficient for AC-3, including the required targeted suites and a passing full `pytest` run (`946 passed`).
+
+Open issues / next step
+
+- No open review issues in this phase-local scope.
+- Phase review is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
