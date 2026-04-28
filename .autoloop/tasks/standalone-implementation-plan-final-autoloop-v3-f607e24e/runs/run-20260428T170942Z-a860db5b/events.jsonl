@@ -62,3 +62,7 @@
 {"ts": "2026-04-28T18:17:37.735511+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 62, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strictness-and-doc-refresh"}
 {"ts": "2026-04-28T18:18:28.462905+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 63, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "strictness-and-doc-refresh"}
 {"ts": "2026-04-28T18:18:28.493246+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 64, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "strictness-and-doc-refresh"}
+{"ts": "2026-04-28T18:18:28.579904+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 65, "event_type": "phase_completed", "pair": "test", "phase_id": "strictness-and-doc-refresh", "phase_mode": "single"}
+{"ts": "2026-04-28T18:18:28.584047+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 66, "event_type": "phase_started", "phase_id": "repository-verification", "phase_mode": "single"}
+{"ts": "2026-04-28T18:18:28.585548+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 67, "event_type": "pair_started", "pair": "implement", "phase_id": "repository-verification"}
+{"ts": "2026-04-28T18:18:28.585642+00:00", "run_id": "run-20260428T170942Z-a860db5b", "seq": 68, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "repository-verification"}
