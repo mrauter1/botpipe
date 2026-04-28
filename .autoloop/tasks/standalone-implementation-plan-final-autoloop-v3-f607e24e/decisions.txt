@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260428T170942Z-a860db5b" ts="2026-04-28T17:09:43.051194+00:00" />
+Provider-attributable invalid Events must reuse the existing ProviderExecutionError retry loop and feedback path; this pass must not introduce a second retry mechanism.
+contracts.py remains a valid user spec/support filename only through spec_paths and editable_paths; contracts_path is intentionally removed from public payloads instead of renamed.
+workflow/primitives.py stays only as a runtime primitive shim in this pass; it must not regain authoring helpers or step-class exports.
+legacy_workflow_path can remain internally for now if a neutral rename is not cheap, but this pass should not document it as a compatibility surface.
