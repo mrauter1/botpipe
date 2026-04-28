@@ -68,15 +68,7 @@ workflows/
 
 `specs.py` is ordinary Python, not a runtime convention. Use it to keep `flow.py` readable when the workflow grows. The runtime does not enforce one folder structure beyond resolving the workflow reference you asked it to run.
 
-When a package uses `__init__.py`, it should re-export the main workflow class:
-
-```python
-from .flow import ChildWorkflow
-
-__all__ = ["ChildWorkflow"]
-```
-
-Packages may also re-export from `.workflow` when that is the executable module. If the workflow defines workflow-specific parameters, the package may also re-export `Parameters`.
+When a package uses `__init__.py`, it should re-export the main workflow class and any workflow-specific `Parameters` from the executable module so package-local imports stay straightforward.
 
 ## Workflow Parameters
 
@@ -896,17 +888,7 @@ Capability snapshot boundary:
 
 ## Workflow Composition
 
-Runtime-backed contexts can invoke child workflows by package name or imported main class:
-
-```python
-from workflows.child_workflow import ChildWorkflow
-
-result = ctx.invoke_workflow(
-    ChildWorkflow,
-    message="Do the child task",
-    parameters={"mode": "strict"},
-)
-```
+Runtime-backed contexts can invoke child workflows by package name or by a workflow class object that is already in scope:
 
 ```python
 result = ctx.invoke_workflow(

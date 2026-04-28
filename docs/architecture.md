@@ -57,11 +57,7 @@ workflows/
 
 Legacy `workflow.py` packages remain supported. A single Python file is also a first-class runnable entrypoint. The framework does not enforce one folder structure for execution.
 
-Workflow packages are still reusable building blocks. When a package uses `__init__.py`, it should re-export the main workflow class so direct imports remain first-class:
-
-```python
-from workflows.autoloop_v1 import AutoloopV1
-```
+Workflow packages are still reusable building blocks. When a package uses `__init__.py`, it should re-export the main workflow class so package-local imports stay straightforward without changing the public authoring surface.
 
 `workflow.toml` is optional for execution and metadata-only when present. It is limited to human-facing fields such as `name`, `title`, `description`, and `aliases`. It does not define topology, prompts, transitions, parameters, route policy, artifacts, or execution semantics.
 
