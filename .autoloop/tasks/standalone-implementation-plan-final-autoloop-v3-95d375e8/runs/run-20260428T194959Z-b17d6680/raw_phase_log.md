@@ -90,3 +90,77 @@ The planner needs to revise the plan so it explicitly pins the `autoloop/simple.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+I’m revising the plan against the verifier’s two blocking findings rather than broadening scope. First I’m checking the current planning artifacts and the latest decisions header so I can patch only the missing contract details: the exact `autoloop/simple.py` import sources and a single concrete direction for the `cleanup.md` drift.
+
+I have the fix scope. I’m not reopening the plan broadly; I’m making two focused corrections: pinning the exact `autoloop/simple.py` import modules in the public-export phase, and narrowing the `cleanup.md` drift note to a pre-existing proof risk rather than an open implementation branch.
+
+The first patch failed because `phase_plan.yaml` is currently in normalized YAML formatting, not the quoted form I originally wrote. I’m re-reading the exact current text and patching the plan and phase file with smaller targeted hunks so the verifier fixes land cleanly.
+
+I’ve got the exact current text now. I’m applying a smaller patch that only changes the two verifier gaps, then I’ll re-parse `phase_plan.yaml` and read back the affected sections.
+
+The targeted fixes are in. I’m validating the YAML and reading back the changed sections to confirm the plan now says one concrete thing about the docs-note drift and carries the exact import-source contract the verifier asked for.
+
+Revised [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/plan.md) and [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/phase_plan.yaml) to address both verifier blockers.
+
+The plan now explicitly pins the `autoloop/simple.py` import-source contract from the request: `Event` / `Outcome` / `Checkpoint` from `core.primitives`, `ResolvedArtifacts` from `core.artifacts`, and `ChildWorkflowResult` from `core.context`, while preserving the existing installed-package / repo-root fallback style. It also removes the open `cleanup.md` versus `cleanup3.md` branch and treats that mismatch as a pre-existing proof risk that should only be touched if phase-3 validation actually fails there.
+
+I appended the planner follow-up to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/feedback.md) and added the durable constraints under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt). `phase_plan.yaml` was re-validated locally with `python3` + `yaml.safe_load` and parses successfully with 3 phases.
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+
+
+---
+run_id=run-20260428T194959Z-b17d6680 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd5a4-32c4-7810-8e55-95a03ae21b7a
+---
+The revised plan now carries the missing import-module contract and no longer leaves an open docs-surface branch. I’m marking the criteria complete and adding a final verification note to feedback so the artifact history shows that the earlier blockers were rechecked and cleared.
+
+I’ve updated the gate and recorded the closure note. I’m doing one short readback on `criteria.md` and `feedback.md`, then I’ll finish with the required verifier summary and final loop-control promise.
+
+Scope considered
+
+The active planning artifacts for this task only: [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/criteria.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/decisions.txt), checked against the immutable request snapshot and the clarified planner/verifier history in this run.
+
+What I analyzed
+
+I re-audited the revised plan specifically against the two prior blockers, then re-checked the full request coverage: exact retry-feedback behavior, exact `autoloop/simple.py` import sources, public exports, `workflow/` deletion, `legacy_*` renames, `ResolvedWorkflow.package` removal, strictness guards, docs boundaries, rollback/validation, and phase sequencing. I also verified the phase contract remains coherent and parseable.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/criteria.md) so all verification gates are checked, and I appended a closure note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/standalone-implementation-plan-final-autoloop-v3-95d375e8/plan/feedback.md) as `PLAN-003 | non-blocking` to record that the earlier blockers were resolved.
+
+Key findings / decisions
+
+`PLAN-001` is resolved: the plan now explicitly requires `Event` / `Outcome` / `Checkpoint` from `core.primitives`, `ResolvedArtifacts` from `core.artifacts`, and `ChildWorkflowResult` from `core.context`, while preserving the existing fallback import pattern in `autoloop/simple.py`.
+
+`PLAN-002` is resolved: the plan no longer leaves an either/or implementation branch around `cleanup.md` versus `cleanup3.md`; it now treats that mismatch as a pre-existing proof risk that should only be touched if phase-3 validation actually fails there.
+
+No new blocking findings were identified. The plan is now concrete, implementation-ready, and aligned with the request snapshot.
+
+Open issues / next step
+
+No open blocking issues remain in the planning artifacts. The plan can proceed to implementation as written.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
