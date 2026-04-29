@@ -17,13 +17,13 @@
       "verification-and-strictness"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "compiler-validation-normalization"
+    "current_phase_index": 2,
+    "current_phase_id": "engine-provider-persistence"
   },
   "phase_status": {
     "public-surface-cleanup": "completed",
-    "compiler-validation-normalization": "in_progress",
-    "engine-provider-persistence": "planned",
+    "compiler-validation-normalization": "completed",
+    "engine-provider-persistence": "in_progress",
     "consumer-migration-and-package-cleanup": "planned",
     "verification-and-strictness": "planned"
   },
@@ -46,6 +46,19 @@
       "run_id": "run-20260429T212742Z-82f66970",
       "status": "in_progress",
       "ts": "2026-04-29T22:10:42.760063+00:00"
+    },
+    {
+      "phase_id": "compiler-validation-normalization",
+      "run_id": "run-20260429T212742Z-82f66970",
+      "status": "completed",
+      "ts": "2026-04-29T22:51:25.393892+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "engine-provider-persistence",
+      "run_id": "run-20260429T212742Z-82f66970",
+      "status": "in_progress",
+      "ts": "2026-04-29T22:51:25.396253+00:00"
     }
   ]
 }
