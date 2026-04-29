@@ -709,3 +709,56 @@ Open issues / next step
 - Provider payload keys such as `route_infos` and `route_required_outputs` are still legacy and remain for the later provider/runtime phase.
 - Low-level `core` consumers and broader repo tests that still use `RouteInfo`, `Route.complete`, or `required_outputs` need follow-up migration in later phases.
 - I could not run pytest or import-time runtime tests here because the environment is missing `pytest` and runtime dependencies like `pydantic`.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb4b-6028-7802-9a75-652b8666c65c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+Reviewing the producer’s second pass now against the two prior blockers. I’m checking whether the route surface is canonical enough for this phase and whether simple step state is truly model-backed at runtime while item-scoped state is actually suppressed.
+
+Reviewing the second implementation pass against the two prior blocking findings and the phase acceptance criteria. I’m checking the active review artifacts and the changed compiler/state paths before updating the phase verdict.
+
+The remaining question is whether the producer fixed the substantive issues or only moved them. I’m sampling the active route and state code paths directly before I change the review verdict.
+
+The phase-scoped code paths now line up with the two prior fixes: canonical `Route` handling on the active simple/compiler path, and model-backed step state with item-state suppression instead of partial public dict access. I’m updating the review artifacts to reflect a complete pass.
+
+Scope considered
+
+- Phase-local review of `compiler-validation-normalization` only.
+- The active request snapshot, phase contract, prior findings `IMP-001` and `IMP-002`, implementation notes, and the changed route/state/compiler paths.
+
+What I analyzed
+
+- `core/routes.py`, `core/validation.py`, `core/compiler.py`, `core/context.py`, `core/engine.py`.
+- Focused tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) and [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py).
+- The phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/compiler-validation-normalization/implementation_notes.md) and the run ledger in `decisions.txt`.
+
+What I reviewed
+
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/compiler-validation-normalization/criteria.md) to mark the phase complete.
+- I appended a cycle-2 resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/compiler-validation-normalization/feedback.md).
+
+Key findings / decisions
+
+- No new blocking findings.
+- `IMP-001` is addressed for phase scope: the active simple/compiler route path now uses canonical `Route` metadata, rejects `required_outputs=`, removes `Route.complete`, and no longer special-cases `SUCCESS` in the public route helper.
+- `IMP-002` is addressed for phase scope: simple step state is now runtime model-backed and checkpoint-serialized, while incomplete `item_state` and `step_item_state` public surfaces are suppressed instead of exposed as dict-backed mutable proxies.
+- Legacy provider payload keys and low-level compatibility shims still exist outside this phase boundary, but that matches the explicit deferment of provider payload rewrites.
+
+Open issues / next step
+
+- The next phase should handle the still-legacy provider/runtime payload surfaces such as `route_infos` and `route_required_outputs`.
+- Full repo-wide migration of low-level `core` compatibility names remains separate from this phase-local compiler/validation review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
