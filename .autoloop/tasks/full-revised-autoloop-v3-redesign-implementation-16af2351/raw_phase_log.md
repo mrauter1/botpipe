@@ -47,3 +47,54 @@ Updated the planning artifacts at [plan.md](/home/rauter/autoloop_v3_bkp/autoloo
 The written plan is tied to the actual repository seams in `autoloop/simple.py`, `core/validation.py`, `core/compiler.py`, `core/engine.py`, `runtime/static_graph.py`, docs, and the compatibility-heavy test suites. It also makes the main intentional break explicit: hook-based route redirection should be retired in the hook/state phase rather than preserved implicitly.
 
 Verification: `phase_plan.yaml` was parsed successfully with `python3` using `yaml.safe_load` (`parsed_ok 5`).
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd95e-747f-7d02-a6e2-5aa7db9bf6a1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019dd95e-747f-7d02-a6e2-5aa7db9bf6a1
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd95e-747f-7d02-a6e2-5aa7db9bf6a1
+---
+I’m auditing the generated plan against the full redesign spec, not just checking formatting. First I’m re-reading the written artifacts, the criteria, and the authoritative request/decisions to identify any missing intent coverage, unsafe regressions, or phase-contract gaps before I mark criteria or append findings.
+
+I’ve identified three blocking gaps: two are intent-coverage holes in core public API/compiler behavior, and one is a sequencing conflict between the written plan and the shared decisions on when docs/examples must leave the legacy surface. I’m appending them to verifier feedback now; the criteria remain unchecked because the plan is not yet safe to mark complete.
+
+Scope considered
+
+- The authoritative request snapshot, raw log, shared decisions, and the generated planning artifacts under `.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/plan`.
+
+What I analyzed
+
+- Intent coverage against the redesign spec, especially public API targets, compiler responsibilities, prompt/reference behavior, compatibility rules, intentional behavior breaks, and migration sequencing.
+- `phase_plan.yaml` structure and dependency ordering.
+- Consistency between `plan.md`, `phase_plan.yaml`, and `decisions.txt`.
+
+What I reviewed
+
+- `plan.md` for milestone coverage, risk controls, migration notes, and rollback planning.
+- `phase_plan.yaml` for parseability, phase coherence, acceptance criteria, and deferments.
+- `feedback.md` continuity and `criteria.md` gating state.
+- `decisions.txt` for sequencing constraints that later turns must not contradict.
+
+Key findings / decisions
+
+- `phase_plan.yaml` is valid YAML and structurally coherent enough to parse, but the plan is not complete.
+- `PLAN-001` blocking: the plan does not explicitly schedule the requested `python_step` public API shape, return contract, and `system_step` compatibility migration.
+- `PLAN-002` blocking: the plan does not explicitly schedule the redesigned prompt model and placeholder/reference compiler behavior, despite that being a core part of the requested authoring surface and compile-time invariants.
+- `PLAN-003` blocking: the plan conflicts with `decisions.txt` on sequencing for docs/examples, deferring them to cleanup even though the shared decision says the canonical surface must be reflected immediately.
+- `criteria.md` remains unchecked because intent fidelity, behavioral safety, completeness, technical debt control, and compatibility planning are not yet satisfied with those gaps.
+
+Open issues / next step
+
+- The planner needs to revise `plan.md` and `phase_plan.yaml` to add explicit `python_step` scope, explicit prompt/reference compiler scope, and consistent early docs/examples migration sequencing.
+- After that revision, re-run verification against the same criteria and shared decisions.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
