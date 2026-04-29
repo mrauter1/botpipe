@@ -746,3 +746,66 @@ No open issues for this phase. The phase can proceed as complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+---
+I’m checking the phase’s existing test coverage and the test-phase artifacts first, then I’ll add any missing regression tests and update the phase strategy and feedback.
+
+The current tests cover the declaration surface and contract split well. I’m looking for runtime gaps now, especially around `review_session` behavior, because that’s the part most likely to regress without a direct test.
+
+I found two concrete runtime gaps worth pinning down in tests: the explicit `review_session` override path, and the strict runtime path where `review_requires` intentionally forces the verifier to stop before review if the do artifact is missing.
+
+I’ve chosen two additive contract tests: one to lock down the `review_session` runtime split, and one to lock down the strict `review_requires` failure path. Both are deterministic and hit the highest-risk regression surfaces left uncovered.
+
+The new tests are in place. I’m running the affected contract file now to catch any mismatch in the session-binding assertions or the strict `review_requires` failure path.
+
+The contract suite passed cleanly. I’m doing a quick pass over the updated phase artifacts and then I’ll close this turn with the coverage summary and validation result.
+
+I’m tightening one assertion in the new session test so it’s less self-referential and easier to read if it ever fails.
+
+The assertion cleanup didn’t change behavior; the contract suite is still green. I’m wrapping up with the phase summary and the files I updated.
+
+Scope considered
+
+Active phase only: `do-review-step-and-route-required-writes`, focused on request-relevant regression coverage for `do_review_step`, split do/review contracts, `review_requires`, `review_session`, and route-specific `required_writes`.
+
+What I analyzed
+
+I reviewed the active phase contract, the shared decisions ledger, the current phase artifacts, and the existing test coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py). I specifically checked for runtime gaps that were not already covered by the implementation-phase tests.
+
+What I changed
+
+I added two contract tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py):
+- `test_do_review_step_review_session_override_uses_distinct_verifier_session_slot`
+- `test_do_review_step_review_requires_fail_before_verifier_when_declared`
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/do-review-step-and-route-required-writes/test_strategy.md) with an explicit behavior-to-coverage map, appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/do-review-step-and-route-required-writes/feedback.md), and recorded the non-obvious test coverage decisions under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+Key findings / decisions
+
+The main uncovered regression surfaces were runtime-only:
+- `review_session` needed a direct contract test to prove producer and verifier persist separate session slots.
+- `review_requires` needed a strict failure-path test to prove the verifier is skipped when the author explicitly requires a missing do artifact.
+
+Validation run:
+- `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q`
+- Result: `84 passed in 0.83s`
+
+Open issues / next step
+
+No open issues in this phase’s test scope. Phase-specific hook lifecycle coverage remains intentionally deferred to the later hook/state phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
