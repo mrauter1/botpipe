@@ -567,3 +567,50 @@ Key findings / decisions
 Open issues / next step
 - No test-author blocker remains for this phase.
 - The next step is test-phase verification/audit against the updated strategy and feedback artifacts.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m auditing the phase test layer now. I’ll verify that the new docs regression test and the broader coverage map actually protect the changed phase-1 behavior, then I’ll update the test audit artifacts to complete state if no material gaps remain.
+
+The test layer is in good shape: the new doc test is deterministic, targeted, and actually closes the last regression seam from the implementation review. I’m marking the audit complete and appending a final audit note so the feedback file reflects that there are no remaining test-layer blockers.
+
+Scope considered
+- Phase `canonical-surface-and-topology-lowering` test layer only.
+- I audited the active test artifacts plus the phase-relevant tests that were added or relied on for this slice.
+- I did not expand into unrelated repository code or non-phase test churn.
+
+What I analyzed
+- The test audit artifacts: `criteria.md`, `feedback.md`, and `test_strategy.md`.
+- The changed phase-relevant tests in `tests/test_architecture_baseline_docs.py`, `tests/unit/test_simple_surface.py`, `tests/runtime/test_runtime_static_graph.py`, and `tests/runtime/test_package_cli.py`.
+- The shared decisions that define the allowed compatibility seam around the scoped `PairStep(...)` doc example.
+
+What I reviewed
+- Coverage quality for AC-1 through AC-5.
+- Regression protection for the `Prompt.ref(...)` compile-time collision case and the final docs-boundary drift case.
+- Failure-path and edge-case coverage for unknown/ambiguous placeholders and registry-vs-filesystem prompt resolution.
+- Reliability of the new docs regression test and the temp-module setup used by the prompt-ref regression test.
+
+Key findings / decisions
+- No blocking test findings remain.
+- The added docs regression test closes the last meaningful gap by pinning the canonical `Prompt.file(...)` example and the explicit compatibility fence around the scoped `PairStep(...)` snippet.
+- The overall phase test slice is deterministic and appropriate for the changed behavior; it does not encode an unconfirmed regression or behavior break.
+- I marked all test audit criteria complete and appended a final audit note to the phase feedback.
+
+Open issues / next step
+- No open test-audit blockers remain for this phase.
+- The test phase is ready to be treated as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
