@@ -16,15 +16,15 @@
       "workflow-migration-and-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "workflow-migration-and-cleanup"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "canonical-surface-and-topology-lowering": "completed",
     "do-review-step-and-route-required-writes": "completed",
     "hook-state-session-and-topology-metadata": "completed",
     "feedforward-operations": "completed",
-    "workflow-migration-and-cleanup": "in_progress"
+    "workflow-migration-and-cleanup": "completed"
   },
   "phase_history": [
     {
@@ -84,6 +84,13 @@
       "run_id": "run-20260429T131217Z-aa749982",
       "status": "in_progress",
       "ts": "2026-04-29T15:47:27.702635+00:00"
+    },
+    {
+      "phase_id": "workflow-migration-and-cleanup",
+      "run_id": "run-20260429T131217Z-aa749982",
+      "status": "completed",
+      "ts": "2026-04-29T17:20:19.941271+00:00",
+      "pair": "test"
     }
   ]
 }
