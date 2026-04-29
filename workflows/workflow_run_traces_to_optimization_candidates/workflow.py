@@ -23,7 +23,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_publication_receipt,
         write_workflow_json,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.optimization import (
         OptimizationArtifactSpec,
         EXCLUDED_RUN_REPORT_SCHEMA,
@@ -53,7 +53,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_publication_receipt,
         write_workflow_json,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.optimization import (
         OptimizationArtifactSpec,
         EXCLUDED_RUN_REPORT_SCHEMA,
@@ -69,9 +69,8 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_optimization_refinement_evidence,
     )
 
-from core import RouteInfo
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FINISH, Outcome, Prompt, Route, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ADVERSARIAL_CASES_ROUTE_CONTRACTS,
@@ -250,31 +249,10 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     workflow_optimization_packet = Artifact("{workflow_folder}/workflow_optimization_packet.md")
     optimization_publication_receipt = Artifact.json("{workflow_folder}/optimization_publication_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    capture_frame_context = SystemStep(
-        name="capture_frame_context",
-        requires=[request, invocation_contract],
-        produces={
-            "selected_workflow_capability": selected_workflow_capability,
-            "selected_workflow_authoring_surface": selected_workflow_authoring_surface,
-            "selected_workflow_decomposition_surface": selected_workflow_decomposition_surface,
-            "selected_workflow_source_manifest": selected_workflow_source_manifest,
-            "workflow_optimization_scope": workflow_optimization_scope,
-            "workflow_optimization_trace_corpus": workflow_optimization_trace_corpus,
-            "workflow_optimization_internal_trace_corpus": workflow_optimization_internal_trace_corpus,
-            "excluded_run_report": excluded_run_report,
-            "workflow_failure_scenario_seeds": workflow_failure_scenario_seeds,
-        },
-    )
-    frame = PairStep(
-        name="frame",
+    frame = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -290,24 +268,24 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "selected_workflow_capability": selected_workflow_capability,
-            "selected_workflow_authoring_surface": selected_workflow_authoring_surface,
-            "selected_workflow_decomposition_surface": selected_workflow_decomposition_surface,
-            "selected_workflow_source_manifest": selected_workflow_source_manifest,
-            "workflow_optimization_scope": workflow_optimization_scope,
-            "workflow_optimization_trace_corpus": workflow_optimization_trace_corpus,
-            "excluded_run_report": excluded_run_report,
-            "workflow_failure_scenario_seeds": workflow_failure_scenario_seeds,
-        },
-        expected_output_schema=FrameOptimizationPayload,
-        route_infos=FRAME_ROUTE_CONTRACTS,
+        writes=[
+            selected_workflow_capability,
+            selected_workflow_authoring_surface,
+            selected_workflow_decomposition_surface,
+            selected_workflow_source_manifest,
+            workflow_optimization_scope,
+            workflow_optimization_trace_corpus,
+            excluded_run_report,
+            workflow_failure_scenario_seeds,
+        ],
+        accepted="optimization_scope_framed",
+        control_schema=FrameOptimizationPayload,
+        routes=FRAME_ROUTE_CONTRACTS,
     )
-    rank_targets = PairStep(
-        name="rank_targets",
+    rank_targets = do_review_step(
+        do=Prompt.file("prompts/rank_targets_producer.md"),
+        review=Prompt.file("prompts/rank_targets_verifier.md"),
         session=rank_targets_session,
-        producer="prompts/rank_targets_producer.md",
-        verifier="prompts/rank_targets_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -317,18 +295,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_optimization_scope,
             workflow_optimization_trace_corpus,
         ],
-        produces={
-            "step_trace_metrics": step_trace_metrics,
-            "step_optimization_priority_report": step_optimization_priority_report,
-        },
-        expected_output_schema=RankTargetsPayload,
-        route_infos=RANK_TARGETS_ROUTE_CONTRACTS,
+        writes=[step_trace_metrics, step_optimization_priority_report],
+        accepted="targets_ranked",
+        control_schema=RankTargetsPayload,
+        routes=RANK_TARGETS_ROUTE_CONTRACTS,
     )
-    mine_failures = PairStep(
-        name="mine_failures",
+    mine_failures = do_review_step(
+        do=Prompt.file("prompts/mine_failures_producer.md"),
+        review=Prompt.file("prompts/mine_failures_verifier.md"),
         session=mine_failures_session,
-        producer="prompts/mine_failures_producer.md",
-        verifier="prompts/mine_failures_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -339,15 +314,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             step_optimization_priority_report,
             workflow_failure_scenario_seeds,
         ],
-        produces={"workflow_failure_scenarios": workflow_failure_scenarios},
-        expected_output_schema=FailureScenarioPayload,
-        route_infos=MINE_FAILURES_ROUTE_CONTRACTS,
+        writes=[workflow_failure_scenarios],
+        accepted="failure_scenarios_mined",
+        control_schema=FailureScenarioPayload,
+        routes=MINE_FAILURES_ROUTE_CONTRACTS,
     )
-    optimize_producer = PairStep(
-        name="optimize_producer",
+    optimize_producer = do_review_step(
+        do=Prompt.file("prompts/optimize_producer_producer.md"),
+        review=Prompt.file("prompts/optimize_producer_verifier.md"),
         session=optimize_producer_session,
-        producer="prompts/optimize_producer_producer.md",
-        verifier="prompts/optimize_producer_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -356,17 +331,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_failure_scenarios,
             step_optimization_priority_report,
         ],
-        produces={
-            "producer_prompt_optimization_candidates": producer_prompt_optimization_candidates,
-        },
-        expected_output_schema=CandidatePassPayload,
-        route_infos=OPTIMIZE_PRODUCER_ROUTE_CONTRACTS,
+        writes=[producer_prompt_optimization_candidates],
+        accepted="producer_candidates_ready",
+        control_schema=CandidatePassPayload,
+        routes=OPTIMIZE_PRODUCER_ROUTE_CONTRACTS,
     )
-    optimize_verifier_rubric = PairStep(
-        name="optimize_verifier_rubric",
+    optimize_verifier_rubric = do_review_step(
+        do=Prompt.file("prompts/optimize_verifier_rubric_producer.md"),
+        review=Prompt.file("prompts/optimize_verifier_rubric_verifier.md"),
         session=optimize_verifier_rubric_session,
-        producer="prompts/optimize_verifier_rubric_producer.md",
-        verifier="prompts/optimize_verifier_rubric_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -375,30 +348,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_failure_scenarios,
             step_optimization_priority_report,
         ],
-        produces={
-            "verifier_rubric_optimization_candidates": verifier_rubric_optimization_candidates,
-        },
-        expected_output_schema=CandidatePassPayload,
-        route_infos=OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS,
+        writes=[verifier_rubric_optimization_candidates],
+        accepted="verifier_rubric_candidates_ready",
+        control_schema=CandidatePassPayload,
+        routes=OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS,
     )
-    route_optimize_tokens = SystemStep(
-        name="route_optimize_tokens",
-        produces={"token_optimization_candidates": token_optimization_candidates},
-        route_infos={
-            "token_optimization_enabled": RouteInfo(
-                summary="Token optimization remains enabled, so the workflow continues into the token candidate pass.",
-            ),
-            "token_pass_not_applicable": RouteInfo(
-                summary="Token optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                required_outputs=("token_optimization_candidates",),
-            ),
-        },
-    )
-    optimize_tokens = PairStep(
-        name="optimize_tokens",
+    optimize_tokens = do_review_step(
+        do=Prompt.file("prompts/optimize_tokens_producer.md"),
+        review=Prompt.file("prompts/optimize_tokens_verifier.md"),
         session=optimize_tokens_session,
-        producer="prompts/optimize_tokens_producer.md",
-        verifier="prompts/optimize_tokens_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -407,28 +365,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_optimization_trace_corpus,
             step_optimization_priority_report,
         ],
-        produces={"token_optimization_candidates": token_optimization_candidates},
-        expected_output_schema=CandidatePassPayload,
-        route_infos=OPTIMIZE_TOKENS_ROUTE_CONTRACTS,
+        writes=[token_optimization_candidates],
+        accepted="token_candidates_ready",
+        control_schema=CandidatePassPayload,
+        routes=OPTIMIZE_TOKENS_ROUTE_CONTRACTS,
     )
-    route_adversarial_cases = SystemStep(
-        name="route_adversarial_cases",
-        produces={"adversarial_case_candidates": adversarial_case_candidates},
-        route_infos={
-            "adversarial_generation_enabled": RouteInfo(
-                summary="Adversarial case generation remains enabled, so the workflow continues into the adversarial candidate pass.",
-            ),
-            "adversarial_generation_skipped": RouteInfo(
-                summary="Adversarial case generation was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                required_outputs=("adversarial_case_candidates",),
-            ),
-        },
-    )
-    adversarial_cases = PairStep(
-        name="adversarial_cases",
+    adversarial_cases = do_review_step(
+        do=Prompt.file("prompts/adversarial_cases_producer.md"),
+        review=Prompt.file("prompts/adversarial_cases_verifier.md"),
         session=adversarial_cases_session,
-        producer="prompts/adversarial_cases_producer.md",
-        verifier="prompts/adversarial_cases_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -436,30 +381,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_failure_scenarios,
             step_optimization_priority_report,
         ],
-        produces={"adversarial_case_candidates": adversarial_case_candidates},
-        expected_output_schema=AdversarialCasesPayload,
-        route_infos=ADVERSARIAL_CASES_ROUTE_CONTRACTS,
+        writes=[adversarial_case_candidates],
+        accepted="adversarial_cases_ready",
+        control_schema=AdversarialCasesPayload,
+        routes=ADVERSARIAL_CASES_ROUTE_CONTRACTS,
     )
-    route_workflow_level = SystemStep(
-        name="route_workflow_level",
-        produces={
-            "workflow_level_optimization_candidates": workflow_level_optimization_candidates,
-        },
-        route_infos={
-            "workflow_level_enabled": RouteInfo(
-                summary="Workflow-level optimization remains enabled, so the workflow continues into the cross-step candidate pass.",
-            ),
-            "workflow_level_pass_not_applicable": RouteInfo(
-                summary="Workflow-level optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
-                required_outputs=("workflow_level_optimization_candidates",),
-            ),
-        },
-    )
-    workflow_level = PairStep(
-        name="workflow_level",
+    workflow_level = do_review_step(
+        do=Prompt.file("prompts/workflow_level_producer.md"),
+        review=Prompt.file("prompts/workflow_level_verifier.md"),
         session=workflow_level_session,
-        producer="prompts/workflow_level_producer.md",
-        verifier="prompts/workflow_level_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -470,17 +400,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_optimization_trace_corpus,
             step_optimization_priority_report,
         ],
-        produces={
-            "workflow_level_optimization_candidates": workflow_level_optimization_candidates,
-        },
-        expected_output_schema=CandidatePassPayload,
-        route_infos=WORKFLOW_LEVEL_ROUTE_CONTRACTS,
+        writes=[workflow_level_optimization_candidates],
+        accepted="workflow_level_candidates_ready",
+        control_schema=CandidatePassPayload,
+        routes=WORKFLOW_LEVEL_ROUTE_CONTRACTS,
     )
-    package = PairStep(
-        name="package",
+    package = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -493,101 +421,19 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             excluded_run_report,
             optimization_package_checklist,
         ],
-        produces={
-            "workflow_optimization_scorecard": workflow_optimization_scorecard,
-            "workflow_optimization_packet": workflow_optimization_packet,
-        },
-        expected_output_schema=OptimizationPackagePayload,
-        route_infos=PACKAGE_ROUTE_CONTRACTS,
-    )
-    publish_optimization_packet = SystemStep(
-        name="publish_optimization_packet",
-        requires=[
-            selected_workflow_capability,
-            selected_workflow_authoring_surface,
-            selected_workflow_decomposition_surface,
-            selected_workflow_source_manifest,
-            workflow_optimization_scope,
-            workflow_optimization_trace_corpus,
-            excluded_run_report,
-            workflow_optimization_scorecard,
-            workflow_optimization_packet,
-        ],
-        produces={
-            "workflow_refinement_evidence": workflow_refinement_evidence,
-            "optimization_publication_receipt": optimization_publication_receipt,
-        },
+        writes=[workflow_optimization_scorecard, workflow_optimization_packet],
+        accepted="optimization_packet_ready",
+        control_schema=OptimizationPackagePayload,
+        routes=PACKAGE_ROUTE_CONTRACTS,
     )
 
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_frame_context},
-            capture_frame_context: {"frame_context_captured": frame},
-            frame: {
-                "optimization_scope_framed": rank_targets,
-                "no_eligible_trace_evidence": package,
-                "needs_rework": frame,
-            },
-            rank_targets: {
-                "targets_ranked": mine_failures,
-                "insufficient_evidence": package,
-                "needs_rework": rank_targets,
-            },
-            mine_failures: {
-                "failure_scenarios_mined": optimize_producer,
-                "no_failure_scenarios": route_optimize_tokens,
-                "needs_rework": mine_failures,
-            },
-            optimize_producer: {
-                "producer_candidates_ready": optimize_verifier_rubric,
-                "producer_pass_not_applicable": optimize_verifier_rubric,
-                "needs_rework": optimize_producer,
-            },
-            optimize_verifier_rubric: {
-                "verifier_rubric_candidates_ready": route_optimize_tokens,
-                "verifier_rubric_pass_not_applicable": route_optimize_tokens,
-                "needs_rework": optimize_verifier_rubric,
-            },
-            route_optimize_tokens: {
-                "token_optimization_enabled": optimize_tokens,
-                "token_pass_not_applicable": route_adversarial_cases,
-            },
-            optimize_tokens: {
-                "token_candidates_ready": route_adversarial_cases,
-                "token_pass_not_applicable": route_adversarial_cases,
-                "needs_rework": optimize_tokens,
-            },
-            route_adversarial_cases: {
-                "adversarial_generation_enabled": adversarial_cases,
-                "adversarial_generation_skipped": route_workflow_level,
-            },
-            adversarial_cases: {
-                "adversarial_cases_ready": route_workflow_level,
-                "adversarial_generation_skipped": route_workflow_level,
-                "needs_rework": adversarial_cases,
-            },
-            route_workflow_level: {
-                "workflow_level_enabled": workflow_level,
-                "workflow_level_pass_not_applicable": package,
-            },
-            workflow_level: {
-                "workflow_level_candidates_ready": package,
-                "workflow_level_pass_not_applicable": package,
-                "needs_rework": workflow_level,
-            },
-            package: {
-                "optimization_packet_ready": publish_optimization_packet,
-                "needs_rework": package,
-            },
-            publish_optimization_packet: {"optimization_candidates_published": SUCCESS},
-        },
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_frame_context"},
     )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         selected_workflow_name = resolve_selected_workflow_name(ctx.root, params.selected_workflow)
         next_state = state.model_copy(
@@ -662,8 +508,23 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_frame_context(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_frame_context",
+        requires=[request, invocation_contract],
+        writes=[
+            selected_workflow_capability,
+            selected_workflow_authoring_surface,
+            selected_workflow_decomposition_surface,
+            selected_workflow_source_manifest,
+            workflow_optimization_scope,
+            workflow_optimization_trace_corpus,
+            workflow_optimization_internal_trace_corpus,
+            excluded_run_report,
+            workflow_failure_scenario_seeds,
+        ],
+        routes={"frame_context_captured": "frame"},
+    )
+    def capture_frame_context(state: State, ctx):
         frame_capture = capture_optimization_frame_context(
             ctx=ctx,
             selected_workflow_reference=state.selected_workflow_reference,
@@ -747,8 +608,22 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
                 )
         return state.model_copy(update={"failure_status": outcome.tag})
 
-    @staticmethod
-    def on_route_optimize_tokens(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="route_optimize_tokens",
+        writes=[token_optimization_candidates],
+        routes={
+            "token_optimization_enabled": Route.to(
+                "optimize_tokens",
+                summary="Token optimization remains enabled, so the workflow continues into the token candidate pass.",
+            ),
+            "token_pass_not_applicable": Route.to(
+                "route_adversarial_cases",
+                summary="Token optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
+                required_writes=("token_optimization_candidates",),
+            ),
+        },
+    )
+    def route_optimize_tokens(state: State, ctx):
         if state.include_token_optimization:
             return state, Event("token_optimization_enabled")
         finalize_optional_optimization_artifact(
@@ -791,8 +666,22 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         )
         return state.model_copy(update={"token_status": outcome.tag})
 
-    @staticmethod
-    def on_route_adversarial_cases(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="route_adversarial_cases",
+        writes=[adversarial_case_candidates],
+        routes={
+            "adversarial_generation_enabled": Route.to(
+                "adversarial_cases",
+                summary="Adversarial case generation remains enabled, so the workflow continues into the adversarial candidate pass.",
+            ),
+            "adversarial_generation_skipped": Route.to(
+                "route_workflow_level",
+                summary="Adversarial case generation was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
+                required_writes=("adversarial_case_candidates",),
+            ),
+        },
+    )
+    def route_adversarial_cases(state: State, ctx):
         if state.include_adversarial_generation:
             return state, Event("adversarial_generation_enabled")
         finalize_optional_optimization_artifact(
@@ -815,8 +704,22 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         )
         return state.model_copy(update={"adversarial_status": outcome.tag})
 
-    @staticmethod
-    def on_route_workflow_level(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="route_workflow_level",
+        writes=[workflow_level_optimization_candidates],
+        routes={
+            "workflow_level_enabled": Route.to(
+                "workflow_level",
+                summary="Workflow-level optimization remains enabled, so the workflow continues into the cross-step candidate pass.",
+            ),
+            "workflow_level_pass_not_applicable": Route.to(
+                "package",
+                summary="Workflow-level optimization was disabled explicitly, so the workflow publishes an empty candidate artifact and skips the pass.",
+                required_writes=("workflow_level_optimization_candidates",),
+            ),
+        },
+    )
+    def route_workflow_level(state: State, ctx):
         if state.include_workflow_level_candidates:
             return state, Event("workflow_level_enabled")
         finalize_optional_optimization_artifact(
@@ -844,8 +747,23 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
         del artifacts
         return state.model_copy(update={"packaging_status": outcome.tag})
 
-    @staticmethod
-    def on_publish_optimization_packet(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_optimization_packet",
+        requires=[
+            selected_workflow_capability,
+            selected_workflow_authoring_surface,
+            selected_workflow_decomposition_surface,
+            selected_workflow_source_manifest,
+            workflow_optimization_scope,
+            workflow_optimization_trace_corpus,
+            excluded_run_report,
+            workflow_optimization_scorecard,
+            workflow_optimization_packet,
+        ],
+        writes=[workflow_refinement_evidence, optimization_publication_receipt],
+        routes={"optimization_candidates_published": FINISH},
+    )
+    def publish_optimization_packet(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -983,6 +901,8 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             receipt_payload,
         )
         return state.model_copy(update={"published": True}), Event("optimization_candidates_published")
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

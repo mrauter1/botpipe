@@ -188,7 +188,7 @@ The runtime injects only:
 
 - `expected_output_schema`
 - `available_routes`
-- `route_infos`
+- step-local `Route.to(...)` metadata
 
 Payload models used by the package:
 

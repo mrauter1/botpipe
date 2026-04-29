@@ -15,7 +15,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         run_child_workflow,
         write_workflow_portfolio_snapshot,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -32,11 +32,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         run_child_workflow,
         write_workflow_portfolio_snapshot,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     CANDIDATE_WORKFLOW_SET_SUMMARY_ARTIFACT,
@@ -100,21 +100,10 @@ class TaskToWorkflowStrategy(Workflow):
     strategy_next_action = Artifact("{workflow_folder}/strategy_next_action.md")
     strategy_receipt = Artifact("{workflow_folder}/strategy_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    capture_workflow_portfolio = SystemStep(
-        name="capture_workflow_portfolio",
-        requires=[request, invocation_contract],
-        produces={"workflow_portfolio_snapshot": workflow_portfolio_snapshot},
-    )
-    frame_task = PairStep(
-        name="frame_task",
+    frame_task = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -123,36 +112,15 @@ class TaskToWorkflowStrategy(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "task_strategy_brief": task_strategy_brief,
-            "workflow_selection_criteria": workflow_selection_criteria,
-        },
-        expected_output_schema=TaskFramingPayload,
-        route_infos=FRAME_TASK_ROUTE_CONTRACTS,
+        writes=[task_strategy_brief, workflow_selection_criteria],
+        accepted="task_framed",
+        control_schema=TaskFramingPayload,
+        routes=FRAME_TASK_ROUTE_CONTRACTS,
     )
-    build_candidate_workflow_set = SystemStep(
-        name="build_candidate_workflow_set",
-        requires=[
-            request,
-            invocation_contract,
-            workflow_portfolio_snapshot,
-            task_strategy_brief,
-            workflow_selection_criteria,
-        ],
-        produces={
-            "workflow_candidate_matrix": workflow_candidate_matrix,
-            "workflow_gap_analysis": workflow_gap_analysis,
-            "candidate_route_posture": candidate_route_posture,
-            "candidate_workflow_set": candidate_workflow_set,
-            "candidate_workflow_set_summary": candidate_workflow_set_summary,
-            "candidate_next_action": candidate_next_action,
-        },
-    )
-    select_strategy = PairStep(
-        name="select_strategy",
+    select_strategy = do_review_step(
+        do=Prompt.file("prompts/select_producer.md"),
+        review=Prompt.file("prompts/select_verifier.md"),
         session=selection_session,
-        producer="prompts/select_producer.md",
-        verifier="prompts/select_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -166,15 +134,15 @@ class TaskToWorkflowStrategy(Workflow):
             candidate_workflow_set_summary,
             candidate_next_action,
         ],
-        produces={"strategy_decision": strategy_decision},
-        expected_output_schema=StrategySelectionPayload,
-        route_infos=SELECT_STRATEGY_ROUTE_CONTRACTS,
+        writes=[strategy_decision],
+        accepted="strategy_selected",
+        control_schema=StrategySelectionPayload,
+        routes=SELECT_STRATEGY_ROUTE_CONTRACTS,
     )
-    package_strategy = PairStep(
-        name="package_strategy",
+    package_strategy = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -190,61 +158,19 @@ class TaskToWorkflowStrategy(Workflow):
             candidate_next_action,
             strategy_decision,
         ],
-        produces={
-            "workflow_strategy_package": workflow_strategy_package,
-            "strategy_summary": strategy_summary,
-            "strategy_next_action": strategy_next_action,
-        },
-        expected_output_schema=StrategyPackagePayload,
-        route_infos=PACKAGE_STRATEGY_ROUTE_CONTRACTS,
-    )
-    publish_strategy = SystemStep(
-        name="publish_strategy",
-        requires=[
-            workflow_portfolio_snapshot,
-            workflow_candidate_matrix,
-            workflow_gap_analysis,
-            candidate_route_posture,
-            candidate_workflow_set,
-            candidate_workflow_set_summary,
-            candidate_next_action,
-            strategy_decision,
-            workflow_strategy_package,
-            strategy_summary,
-            strategy_next_action,
-        ],
-        produces={"strategy_receipt": strategy_receipt},
+        writes=[workflow_strategy_package, strategy_summary, strategy_next_action],
+        accepted="strategy_package_ready",
+        control_schema=StrategyPackagePayload,
+        routes=PACKAGE_STRATEGY_ROUTE_CONTRACTS,
     )
 
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_workflow_portfolio},
-            capture_workflow_portfolio: {"portfolio_snapshotted": frame_task},
-            frame_task: {
-                "task_framed": build_candidate_workflow_set,
-                "needs_rework": frame_task,
-                "needs_replan": frame_task,
-            },
-            build_candidate_workflow_set: {"candidate_workflow_set_built": select_strategy},
-            select_strategy: {
-                "strategy_selected": package_strategy,
-                "needs_rework": select_strategy,
-                "needs_replan": frame_task,
-            },
-            package_strategy: {
-                "strategy_package_ready": publish_strategy,
-                "needs_rework": package_strategy,
-                "needs_replan": select_strategy,
-            },
-            publish_strategy: {"strategy_published": SUCCESS},
-        },
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_workflow_portfolio"},
     )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -274,8 +200,13 @@ class TaskToWorkflowStrategy(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_workflow_portfolio(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_workflow_portfolio",
+        requires=[request, invocation_contract],
+        writes=[workflow_portfolio_snapshot],
+        routes={"portfolio_snapshotted": "frame_task"},
+    )
+    def capture_workflow_portfolio(state: State, ctx):
         snapshot_path = write_workflow_portfolio_snapshot(ctx)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"workflow portfolio snapshot was not written at {snapshot_path}")
@@ -290,8 +221,26 @@ class TaskToWorkflowStrategy(Workflow):
         del artifacts
         return state.model_copy(update={"framing_status": outcome.tag})
 
-    @staticmethod
-    def on_build_candidate_workflow_set(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="build_candidate_workflow_set",
+        requires=[
+            request,
+            invocation_contract,
+            workflow_portfolio_snapshot,
+            task_strategy_brief,
+            workflow_selection_criteria,
+        ],
+        writes=[
+            workflow_candidate_matrix,
+            workflow_gap_analysis,
+            candidate_route_posture,
+            candidate_workflow_set,
+            candidate_workflow_set_summary,
+            candidate_next_action,
+        ],
+        routes={"candidate_workflow_set_built": "select_strategy"},
+    )
+    def build_candidate_workflow_set(state: State, ctx):
         child_result = run_child_workflow(
             ctx,
             "task_to_candidate_workflow_set",
@@ -374,8 +323,25 @@ class TaskToWorkflowStrategy(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_strategy(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_strategy",
+        requires=[
+            workflow_portfolio_snapshot,
+            workflow_candidate_matrix,
+            workflow_gap_analysis,
+            candidate_route_posture,
+            candidate_workflow_set,
+            candidate_workflow_set_summary,
+            candidate_next_action,
+            strategy_decision,
+            workflow_strategy_package,
+            strategy_summary,
+            strategy_next_action,
+        ],
+        writes=[strategy_receipt],
+        routes={"strategy_published": FINISH},
+    )
+    def publish_strategy(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "workflow_portfolio_snapshot": workflow_folder / "workflow_portfolio_snapshot.json",
@@ -557,6 +523,8 @@ class TaskToWorkflowStrategy(Workflow):
                 "published": True,
             }
         ), Event("strategy_published")
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

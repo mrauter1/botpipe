@@ -14,7 +14,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_string_list,
         run_child_workflow,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -30,11 +30,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_string_list,
         run_child_workflow,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS,
@@ -96,27 +96,10 @@ class SecurityFindingToVerifiedRemediation(Workflow):
     closure_evidence_requirements = Artifact("{workflow_folder}/closure_evidence_requirements.md")
     remediation_receipt = Artifact("{workflow_folder}/remediation_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    compose_evidence_pack = SystemStep(
-        name="compose_evidence_pack",
-        requires=[request, invocation_contract],
-        produces={
-            "finding_scope_brief": finding_scope_brief,
-            "security_evidence_pack": security_evidence_pack,
-            "security_evidence_pack_summary": security_evidence_pack_summary,
-            "security_evidence_gap_register": security_evidence_gap_register,
-            "security_evidence_pack_receipt": security_evidence_pack_receipt,
-        },
-    )
-    assess_security_finding = PairStep(
-        name="assess_security_finding",
+    assess_security_finding = do_review_step(
+        do=Prompt.file("prompts/assessment_producer.md"),
+        review=Prompt.file("prompts/assessment_verifier.md"),
         session=assessment_session,
-        producer="prompts/assessment_producer.md",
-        verifier="prompts/assessment_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -126,21 +109,21 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             security_evidence_gap_register,
             security_evidence_pack_receipt,
         ],
-        produces={
-            "exploit_summary": exploit_summary,
-            "affected_surface": affected_surface,
-            "root_cause_analysis": root_cause_analysis,
-            "remediation_options": remediation_options,
-            "assessment_summary": assessment_summary,
-        },
-        expected_output_schema=SecurityAssessmentPayload,
-        route_infos=ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS,
+        writes=[
+            exploit_summary,
+            affected_surface,
+            root_cause_analysis,
+            remediation_options,
+            assessment_summary,
+        ],
+        accepted="finding_assessed",
+        control_schema=SecurityAssessmentPayload,
+        routes=ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS,
     )
-    plan_verified_remediation = PairStep(
-        name="plan_verified_remediation",
+    plan_verified_remediation = do_review_step(
+        do=Prompt.file("prompts/remediation_producer.md"),
+        review=Prompt.file("prompts/remediation_verifier.md"),
         session=remediation_session,
-        producer="prompts/remediation_producer.md",
-        verifier="prompts/remediation_verifier.md",
         requires=[
             invocation_contract,
             security_evidence_pack_summary,
@@ -150,21 +133,21 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             remediation_options,
             assessment_summary,
         ],
-        produces={
-            "selected_remediation_plan": selected_remediation_plan,
-            "verification_plan": verification_plan,
-            "rollout_plan": rollout_plan,
-            "rollback_safety_plan": rollback_safety_plan,
-            "remediation_summary": remediation_summary,
-        },
-        expected_output_schema=VerifiedRemediationPayload,
-        route_infos=PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS,
+        writes=[
+            selected_remediation_plan,
+            verification_plan,
+            rollout_plan,
+            rollback_safety_plan,
+            remediation_summary,
+        ],
+        accepted="remediation_planned",
+        control_schema=VerifiedRemediationPayload,
+        routes=PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS,
     )
-    prepare_closure_package = PairStep(
-        name="prepare_closure_package",
+    prepare_closure_package = do_review_step(
+        do=Prompt.file("prompts/closure_producer.md"),
+        review=Prompt.file("prompts/closure_verifier.md"),
         session=closure_session,
-        producer="prompts/closure_producer.md",
-        verifier="prompts/closure_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -183,58 +166,23 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             rollback_safety_plan,
             remediation_summary,
         ],
-        produces={
-            "security_remediation_package": security_remediation_package,
-            "stakeholder_communication_draft": stakeholder_communication_draft,
-            "closure_evidence_requirements": closure_evidence_requirements,
-        },
-        expected_output_schema=SecurityClosurePackagePayload,
-        route_infos=PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS,
-    )
-    publish_remediation = SystemStep(
-        name="publish_remediation",
-        requires=[
-            security_evidence_pack_summary,
-            remediation_summary,
-            selected_remediation_plan,
-            verification_plan,
-            rollout_plan,
-            rollback_safety_plan,
+        writes=[
             security_remediation_package,
             stakeholder_communication_draft,
             closure_evidence_requirements,
         ],
-        produces={"remediation_receipt": remediation_receipt},
+        accepted="closure_package_ready",
+        control_schema=SecurityClosurePackagePayload,
+        routes=PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS,
     )
 
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": compose_evidence_pack},
-            compose_evidence_pack: {"evidence_pack_adopted": assess_security_finding},
-            assess_security_finding: {
-                "finding_assessed": plan_verified_remediation,
-                "needs_rework": assess_security_finding,
-                "needs_replan": compose_evidence_pack,
-            },
-            plan_verified_remediation: {
-                "remediation_planned": prepare_closure_package,
-                "needs_rework": plan_verified_remediation,
-                "needs_replan": assess_security_finding,
-            },
-            prepare_closure_package: {
-                "closure_package_ready": publish_remediation,
-                "needs_rework": prepare_closure_package,
-                "needs_replan": plan_verified_remediation,
-            },
-            publish_remediation: {"remediation_published": SUCCESS},
-        },
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "compose_evidence_pack"},
     )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -270,8 +218,19 @@ class SecurityFindingToVerifiedRemediation(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_compose_evidence_pack(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="compose_evidence_pack",
+        requires=[request, invocation_contract],
+        writes=[
+            finding_scope_brief,
+            security_evidence_pack,
+            security_evidence_pack_summary,
+            security_evidence_gap_register,
+            security_evidence_pack_receipt,
+        ],
+        routes={"evidence_pack_adopted": "assess_security_finding"},
+    )
+    def compose_evidence_pack(state: State, ctx):
         child = run_child_workflow(
             ctx,
             "investigation_request_to_evidence_pack",
@@ -381,8 +340,23 @@ class SecurityFindingToVerifiedRemediation(Workflow):
         del artifacts
         return state.model_copy(update={"closure_status": outcome.tag})
 
-    @staticmethod
-    def on_publish_remediation(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_remediation",
+        requires=[
+            security_evidence_pack_summary,
+            remediation_summary,
+            selected_remediation_plan,
+            verification_plan,
+            rollout_plan,
+            rollback_safety_plan,
+            security_remediation_package,
+            stakeholder_communication_draft,
+            closure_evidence_requirements,
+        ],
+        writes=[remediation_receipt],
+        routes={"remediation_published": FINISH},
+    )
+    def publish_remediation(state: State, ctx):
         required_paths = {
             "security_evidence_pack_summary": ctx.workflow_folder / "security_evidence_pack_summary.json",
             "security_evidence_pack_receipt": ctx.workflow_folder / "security_evidence_pack_receipt.json",
@@ -468,6 +442,8 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "published": True,
             }
         ), Event("remediation_published")
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

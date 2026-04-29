@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from core import RouteInfo
+from autoloop import Route, SELF
 
 
 class SecurityAssessmentPayload(BaseModel):
@@ -41,9 +41,10 @@ class SecurityClosurePackagePayload(BaseModel):
 
 
 ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS = {
-    "finding_assessed": RouteInfo(
+    "finding_assessed": Route.to(
+        "plan_verified_remediation",
         summary="The finding has an explicit exploit summary, affected-surface map, root-cause analysis, remediation options, and machine-readable assessment summary.",
-        required_outputs=(
+        required_writes=(
             "exploit_summary",
             "affected_surface",
             "root_cause_analysis",
@@ -52,9 +53,10 @@ ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS = {
         ),
         handoff="Locks the security assessment so remediation planning can proceed against an explicit exploit and evidence boundary.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same assessment boundary still holds, but the exploit analysis, root-cause reasoning, or remediation options need local repair.",
-        required_outputs=(
+        required_writes=(
             "exploit_summary",
             "affected_surface",
             "root_cause_analysis",
@@ -63,16 +65,18 @@ ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS = {
         ),
         handoff="Keeps the security assessment local and reruns the same step for tighter exploit analysis and option comparison.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "compose_evidence_pack",
         summary="The evidence boundary, affected surface, or remediation framing changed materially and the evidence-pack stage must be revisited.",
         handoff="Routes back to evidence-pack composition because the current security-assessment boundary is no longer authoritative.",
     ),
 }
 
 PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS = {
-    "remediation_planned": RouteInfo(
+    "remediation_planned": Route.to(
+        "prepare_closure_package",
         summary="The workflow has a selected remediation plan, verification strategy, rollout guidance, rollback safety plan, and machine-readable remediation summary.",
-        required_outputs=(
+        required_writes=(
             "selected_remediation_plan",
             "verification_plan",
             "rollout_plan",
@@ -81,9 +85,10 @@ PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS = {
         ),
         handoff="Promotes the security finding from assessment into execution-ready remediation planning.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same remediation-planning boundary holds, but the chosen remediation, verification plan, or rollout detail needs local repair.",
-        required_outputs=(
+        required_writes=(
             "selected_remediation_plan",
             "verification_plan",
             "rollout_plan",
@@ -92,32 +97,36 @@ PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS = {
         ),
         handoff="Keeps remediation planning local and reruns the same step for tighter implementation and verification planning.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "assess_security_finding",
         summary="The assessment conclusion or fix strategy changed materially enough that the security finding must be reassessed before planning continues.",
         handoff="Returns the workflow to the security-assessment step because the current remediation boundary is materially wrong.",
     ),
 }
 
 PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS = {
-    "closure_package_ready": RouteInfo(
+    "closure_package_ready": Route.to(
+        "publish_remediation",
         summary="The final remediation package, stakeholder communication draft, and closure-evidence requirements are aligned to the selected remediation plan.",
-        required_outputs=(
+        required_writes=(
             "security_remediation_package",
             "stakeholder_communication_draft",
             "closure_evidence_requirements",
         ),
         handoff="Advances the workflow to deterministic publication of the closure-ready remediation receipt.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same closure-packaging boundary holds, but the package, communication draft, or closure evidence contract needs local repair.",
-        required_outputs=(
+        required_writes=(
             "security_remediation_package",
             "stakeholder_communication_draft",
             "closure_evidence_requirements",
         ),
         handoff="Keeps closure packaging local and reruns the same step for final packaging corrections.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "plan_verified_remediation",
         summary="Closure packaging revealed a material change in the remediation or verification story and planning must be revisited.",
         handoff="Routes back to remediation planning because the closure package no longer matches the planned fix and proof contract.",
     ),

@@ -33,7 +33,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_selected_workflow_decomposition_surface,
     )
     from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -61,11 +61,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_selected_workflow_decomposition_surface,
     )
     from stdlib._selected_workflow import capture_selected_workflow
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     CandidateDecompositionBuildPayload,
@@ -152,26 +152,10 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
     rollback_plan = Artifact("{workflow_folder}/rollback_plan.md")
     workflow_decomposition_receipt = Artifact("{workflow_folder}/workflow_decomposition_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    capture_decomposition_context = SystemStep(
-        name="capture_decomposition_context",
-        requires=[request, invocation_contract],
-        produces={
-            "selected_workflow_decomposition_surface": selected_workflow_decomposition_surface,
-            "baseline_parent_workflow_surface": baseline_parent_workflow_surface,
-            "baseline_parent_manifest": baseline_parent_manifest,
-            "decomposition_evidence_manifest": decomposition_evidence_manifest,
-        },
-    )
-    frame_decomposition_request = PairStep(
-        name="frame_decomposition_request",
+    frame_decomposition_request = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -182,18 +166,15 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "decomposition_request_brief": decomposition_request_brief,
-            "decomposition_acceptance_criteria": decomposition_acceptance_criteria,
-        },
-        expected_output_schema=DecompositionRequestFramingPayload,
-        route_infos=FRAME_DECOMPOSITION_REQUEST_ROUTE_CONTRACTS,
+        writes=[decomposition_request_brief, decomposition_acceptance_criteria],
+        accepted="decomposition_request_framed",
+        control_schema=DecompositionRequestFramingPayload,
+        routes=FRAME_DECOMPOSITION_REQUEST_ROUTE_CONTRACTS,
     )
-    design_decomposition_plan = PairStep(
-        name="design_decomposition_plan",
+    design_decomposition_plan = do_review_step(
+        do=Prompt.file("prompts/design_producer.md"),
+        review=Prompt.file("prompts/design_verifier.md"),
         session=design_session,
-        producer="prompts/design_producer.md",
-        verifier="prompts/design_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -204,20 +185,20 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             decomposition_acceptance_criteria,
             decomposition_package_checklist,
         ],
-        produces={
-            "extraction_strategy": extraction_strategy,
-            "building_block_interface_contracts": building_block_interface_contracts,
-            "parent_rewrite_plan": parent_rewrite_plan,
-            "regression_guardrails": regression_guardrails,
-        },
-        expected_output_schema=DecompositionPlanPayload,
-        route_infos=DESIGN_DECOMPOSITION_PLAN_ROUTE_CONTRACTS,
+        writes=[
+            extraction_strategy,
+            building_block_interface_contracts,
+            parent_rewrite_plan,
+            regression_guardrails,
+        ],
+        accepted="decomposition_plan_designed",
+        control_schema=DecompositionPlanPayload,
+        routes=DESIGN_DECOMPOSITION_PLAN_ROUTE_CONTRACTS,
     )
-    implement_candidate_decomposition = PairStep(
-        name="implement_candidate_decomposition",
+    implement_candidate_decomposition = do_review_step(
+        do=Prompt.file("prompts/implement_producer.md"),
+        review=Prompt.file("prompts/implement_verifier.md"),
         session=build_session,
-        producer="prompts/implement_producer.md",
-        verifier="prompts/implement_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -232,20 +213,20 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             parent_rewrite_plan,
             regression_guardrails,
         ],
-        produces={
-            "candidate_decomposition_surface": candidate_decomposition_surface,
-            "candidate_building_block_index": candidate_building_block_index,
-            "decomposition_build_report": decomposition_build_report,
-            "candidate_diff_summary": candidate_diff_summary,
-        },
-        expected_output_schema=CandidateDecompositionBuildPayload,
-        route_infos=IMPLEMENT_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
+        writes=[
+            candidate_decomposition_surface,
+            candidate_building_block_index,
+            decomposition_build_report,
+            candidate_diff_summary,
+        ],
+        accepted="candidate_decomposition_built",
+        control_schema=CandidateDecompositionBuildPayload,
+        routes=IMPLEMENT_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
     )
-    evaluate_candidate_decomposition = PairStep(
-        name="evaluate_candidate_decomposition",
+    evaluate_candidate_decomposition = do_review_step(
+        do=Prompt.file("prompts/evaluate_producer.md"),
+        review=Prompt.file("prompts/evaluate_verifier.md"),
         session=evaluate_session,
-        producer="prompts/evaluate_producer.md",
-        verifier="prompts/evaluate_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -265,64 +246,24 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             decomposition_build_report,
             candidate_diff_summary,
         ],
-        produces={
-            "decomposition_verification_report": decomposition_verification_report,
-            "composition_migration_guide": composition_migration_guide,
-            "promotion_record": promotion_record,
-            "rollback_plan": rollback_plan,
-        },
-        expected_output_schema=CandidateDecompositionEvaluationPayload,
-        route_infos=EVALUATE_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
-    )
-    publish_candidate_decomposition = SystemStep(
-        name="publish_candidate_decomposition",
-        requires=[
-            selected_workflow_decomposition_surface,
-            baseline_parent_manifest,
-            decomposition_evidence_manifest,
-            candidate_decomposition_manifest,
-            candidate_building_block_index,
+        writes=[
             decomposition_verification_report,
             composition_migration_guide,
             promotion_record,
             rollback_plan,
         ],
-        produces={"workflow_decomposition_receipt": workflow_decomposition_receipt},
+        accepted="candidate_decomposition_evaluated",
+        control_schema=CandidateDecompositionEvaluationPayload,
+        routes=EVALUATE_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
     )
 
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_decomposition_context},
-            capture_decomposition_context: {"decomposition_context_captured": frame_decomposition_request},
-            frame_decomposition_request: {
-                "decomposition_request_framed": design_decomposition_plan,
-                "needs_rework": frame_decomposition_request,
-                "needs_replan": frame_decomposition_request,
-            },
-            design_decomposition_plan: {
-                "decomposition_plan_designed": implement_candidate_decomposition,
-                "needs_rework": design_decomposition_plan,
-                "needs_replan": frame_decomposition_request,
-            },
-            implement_candidate_decomposition: {
-                "candidate_decomposition_built": evaluate_candidate_decomposition,
-                "needs_rework": implement_candidate_decomposition,
-                "needs_replan": design_decomposition_plan,
-            },
-            evaluate_candidate_decomposition: {
-                "candidate_decomposition_evaluated": publish_candidate_decomposition,
-                "needs_rework": implement_candidate_decomposition,
-                "needs_replan": design_decomposition_plan,
-            },
-            publish_candidate_decomposition: {"candidate_decomposition_published": SUCCESS},
-        },
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_decomposition_context"},
     )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
 
         next_state = state.model_copy(
@@ -364,8 +305,18 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_decomposition_context(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_decomposition_context",
+        requires=[request, invocation_contract],
+        writes=[
+            selected_workflow_decomposition_surface,
+            baseline_parent_workflow_surface,
+            baseline_parent_manifest,
+            decomposition_evidence_manifest,
+        ],
+        routes={"decomposition_context_captured": "frame_decomposition_request"},
+    )
+    def capture_decomposition_context(state: State, ctx):
         capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
         repo_root = capture.repo_root
         try:
@@ -535,8 +486,23 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_candidate_decomposition(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_candidate_decomposition",
+        requires=[
+            selected_workflow_decomposition_surface,
+            baseline_parent_manifest,
+            decomposition_evidence_manifest,
+            candidate_decomposition_manifest,
+            candidate_building_block_index,
+            decomposition_verification_report,
+            composition_migration_guide,
+            promotion_record,
+            rollback_plan,
+        ],
+        writes=[workflow_decomposition_receipt],
+        routes={"candidate_decomposition_published": FINISH},
+    )
+    def publish_candidate_decomposition(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "selected_workflow_decomposition_surface": workflow_folder / "selected_workflow_decomposition_surface.json",
@@ -687,6 +653,8 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         return state.model_copy(update={"selected_workflow_name": selected_workflow_name, "published": True}), Event(
             "candidate_decomposition_published"
         )
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

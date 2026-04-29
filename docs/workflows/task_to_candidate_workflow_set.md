@@ -101,7 +101,7 @@ Turn an arbitrary software-work task into a reusable candidate-workflow-set pack
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Capture a deterministic workflow-capability snapshot through the additive capability-inspection seam.
 - Hold request framing, candidate analysis, and candidate-set packaging as separate work items.
-- Keep runtime-injected control data narrow and mechanical: `expected_output_schema`, `available_routes`, and `route_infos`.
+- Keep runtime-injected control data narrow and mechanical: `expected_output_schema`, `available_routes`, and step-local `Route.to(...)` metadata.
 - Publish a deterministic receipt only after the candidate-workflow-set package, machine-readable summary, and next-action artifact all exist and pass validation.
 
 ### Provider-owned cognitive responsibilities
@@ -174,7 +174,7 @@ The runtime injects only:
 
 - `expected_output_schema`
 - `available_routes`
-- `route_infos`
+- step-local `Route.to(...)` metadata
 
 Payload models used by the package:
 

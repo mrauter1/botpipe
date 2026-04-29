@@ -11,7 +11,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import JsonArtifactSpec
 
-from core import RouteInfo
+from autoloop import Route, SELF
 
 from ..task_to_candidate_workflow_set.contracts import CandidateWorkflowSetSummaryPayload
 
@@ -75,51 +75,60 @@ STRATEGY_SUMMARY_ARTIFACT = JsonArtifactSpec("strategy_summary.json", StrategySu
 
 
 FRAME_TASK_ROUTE_CONTRACTS = {
-    "task_framed": RouteInfo(
+    "task_framed": Route.to(
+        "build_candidate_workflow_set",
         summary="The task trigger, sponsor, desired outcome, and strategy-selection criteria are explicit enough to compare portfolio options without hidden assumptions.",
-        required_outputs=("task_strategy_brief", "workflow_selection_criteria"),
+        required_writes=("task_strategy_brief", "workflow_selection_criteria"),
         handoff="Locks the task framing so workflow comparison can proceed against an explicit problem and acceptance boundary.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same framing boundary still holds, but the brief or selection criteria need local repair before the portfolio is compared.",
-        required_outputs=("task_strategy_brief", "workflow_selection_criteria"),
+        required_writes=("task_strategy_brief", "workflow_selection_criteria"),
         handoff="Keeps the task-framing work item local and reruns the same step for stronger strategy criteria.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        SELF,
         summary="The task trigger, desired outcome, or strategy boundary changed materially and the task must be reframed before any portfolio decision is credible.",
         handoff="Resets the framing boundary before workflow selection continues.",
     ),
 }
 
 SELECT_STRATEGY_ROUTE_CONTRACTS = {
-    "strategy_selected": RouteInfo(
+    "strategy_selected": Route.to(
+        "package_strategy",
         summary="The child candidate-workflow-set package was consumed explicitly, the workflow-builder baseline remained visible, and one explicit strategy route was selected without running it.",
-        required_outputs=("strategy_decision",),
+        required_writes=("strategy_decision",),
         handoff="Locks the selected strategy route and recommended workflows so packaging can produce a durable handoff instead of hidden execution.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same strategy-selection boundary holds, but the route rationale or its use of the child candidate package needs local repair.",
-        required_outputs=("strategy_decision",),
+        required_writes=("strategy_decision",),
         handoff="Keeps portfolio selection local and reruns the same step for a clearer reuse-versus-rebuild decision.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "frame_task",
         summary="The framing, child candidate set, or legal strategy route changed materially and the task must be reframed before selection continues.",
         handoff="Returns the workflow to framing because the current portfolio comparison is no longer authoritative.",
     ),
 }
 
 PACKAGE_STRATEGY_ROUTE_CONTRACTS = {
-    "strategy_package_ready": RouteInfo(
+    "strategy_package_ready": Route.to(
+        "publish_strategy",
         summary="The terminal strategy package, machine-readable summary, and next-action artifact all exist and make the selected route explicit without triggering downstream execution.",
-        required_outputs=("workflow_strategy_package", "strategy_summary", "strategy_next_action"),
+        required_writes=("workflow_strategy_package", "strategy_summary", "strategy_next_action"),
         handoff="Advances the front-door workflow to deterministic publication of the strategy package and receipt.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The selected route still stands, but the strategy package, summary, or next-action artifact needs local repair before publication.",
-        required_outputs=("workflow_strategy_package", "strategy_summary", "strategy_next_action"),
+        required_writes=("workflow_strategy_package", "strategy_summary", "strategy_next_action"),
         handoff="Keeps strategy packaging local and reruns the same step for packaging corrections only.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "select_strategy",
         summary="Packaging revealed that the chosen strategy route, recommended workflows, or handoff contract changed materially and selection must be revisited.",
         handoff="Routes back to strategy selection because the current package no longer matches the chosen route.",
     ),

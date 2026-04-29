@@ -31,7 +31,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -60,11 +60,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS,
@@ -161,25 +161,10 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
     recursive_improvement_next_actions = Artifact("{workflow_folder}/recursive_improvement_next_actions.md")
     recursive_improvement_cycle_receipt = Artifact("{workflow_folder}/recursive_improvement_cycle_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    capture_company_operation_context = SystemStep(
-        name="capture_company_operation_context",
-        requires=[request, invocation_contract],
-        produces={
-            "workflow_capability_snapshot": workflow_capability_snapshot,
-            "workflow_portfolio_health_snapshot": workflow_portfolio_health_snapshot,
-            "company_operation_snapshot": company_operation_snapshot,
-        },
-    )
-    frame_company_operation = PairStep(
-        name="frame_company_operation",
+    frame_company_operation = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -190,18 +175,15 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "company_operation_brief": company_operation_brief,
-            "recursive_improvement_criteria": recursive_improvement_criteria,
-        },
-        expected_output_schema=CompanyOperationFramingPayload,
-        route_infos=FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS,
+        writes=[company_operation_brief, recursive_improvement_criteria],
+        accepted="company_operation_framed",
+        control_schema=CompanyOperationFramingPayload,
+        routes=FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS,
     )
-    analyze_recursive_improvement_pressures = PairStep(
-        name="analyze_recursive_improvement_pressures",
+    analyze_recursive_improvement_pressures = do_review_step(
+        do=Prompt.file("prompts/analyze_producer.md"),
+        review=Prompt.file("prompts/analyze_verifier.md"),
         session=analysis_session,
-        producer="prompts/analyze_producer.md",
-        verifier="prompts/analyze_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -211,19 +193,19 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             company_operation_brief,
             recursive_improvement_criteria,
         ],
-        produces={
-            "company_pressure_map": company_pressure_map,
-            "recursive_improvement_priority_matrix": recursive_improvement_priority_matrix,
-            "recursive_improvement_candidates": recursive_improvement_candidates,
-        },
-        expected_output_schema=RecursiveImprovementAnalysisPayload,
-        route_infos=ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS,
+        writes=[
+            company_pressure_map,
+            recursive_improvement_priority_matrix,
+            recursive_improvement_candidates,
+        ],
+        accepted="recursive_improvement_pressures_analyzed",
+        control_schema=RecursiveImprovementAnalysisPayload,
+        routes=ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS,
     )
-    package_recursive_improvement_cycle = PairStep(
-        name="package_recursive_improvement_cycle",
+    package_recursive_improvement_cycle = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -237,58 +219,23 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             recursive_improvement_priority_matrix,
             recursive_improvement_candidates,
         ],
-        produces={
-            "recursive_improvement_cycle": recursive_improvement_cycle,
-            "recursive_improvement_summary": recursive_improvement_summary,
-            "recursive_improvement_next_actions": recursive_improvement_next_actions,
-        },
-        expected_output_schema=RecursiveImprovementCyclePayload,
-        route_infos=PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS,
-    )
-    publish_recursive_improvement_cycle = SystemStep(
-        name="publish_recursive_improvement_cycle",
-        requires=[
-            workflow_capability_snapshot,
-            workflow_portfolio_health_snapshot,
-            company_operation_snapshot,
-            company_pressure_map,
-            recursive_improvement_priority_matrix,
-            recursive_improvement_candidates,
+        writes=[
             recursive_improvement_cycle,
             recursive_improvement_summary,
             recursive_improvement_next_actions,
         ],
-        produces={"recursive_improvement_cycle_receipt": recursive_improvement_cycle_receipt},
+        accepted="recursive_improvement_cycle_ready",
+        control_schema=RecursiveImprovementCyclePayload,
+        routes=PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS,
     )
 
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_company_operation_context},
-            capture_company_operation_context: {"company_operation_context_captured": frame_company_operation},
-            frame_company_operation: {
-                "company_operation_framed": analyze_recursive_improvement_pressures,
-                "needs_rework": frame_company_operation,
-                "needs_replan": frame_company_operation,
-            },
-            analyze_recursive_improvement_pressures: {
-                "recursive_improvement_pressures_analyzed": package_recursive_improvement_cycle,
-                "needs_rework": analyze_recursive_improvement_pressures,
-                "needs_replan": frame_company_operation,
-            },
-            package_recursive_improvement_cycle: {
-                "recursive_improvement_cycle_ready": publish_recursive_improvement_cycle,
-                "needs_rework": package_recursive_improvement_cycle,
-                "needs_replan": analyze_recursive_improvement_pressures,
-            },
-            publish_recursive_improvement_cycle: {"recursive_improvement_cycle_published": SUCCESS},
-        },
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_company_operation_context"},
     )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -333,8 +280,17 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_company_operation_context(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_company_operation_context",
+        requires=[request, invocation_contract],
+        writes=[
+            workflow_capability_snapshot,
+            workflow_portfolio_health_snapshot,
+            company_operation_snapshot,
+        ],
+        routes={"company_operation_context_captured": "frame_company_operation"},
+    )
+    def capture_company_operation_context(state: State, ctx):
         capability_path = write_workflow_capability_snapshot(ctx)
         health_path = write_workflow_portfolio_health_snapshot(
             ctx,
@@ -529,8 +485,23 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             raise ValueError("package verifier payload priority_categories must match the analyzed recursive-improvement context")
         return state.model_copy(update={"packaging_status": outcome.tag})
 
-    @staticmethod
-    def on_publish_recursive_improvement_cycle(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_recursive_improvement_cycle",
+        requires=[
+            workflow_capability_snapshot,
+            workflow_portfolio_health_snapshot,
+            company_operation_snapshot,
+            company_pressure_map,
+            recursive_improvement_priority_matrix,
+            recursive_improvement_candidates,
+            recursive_improvement_cycle,
+            recursive_improvement_summary,
+            recursive_improvement_next_actions,
+        ],
+        writes=[recursive_improvement_cycle_receipt],
+        routes={"recursive_improvement_cycle_published": FINISH},
+    )
+    def publish_recursive_improvement_cycle(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -753,6 +724,8 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             ),
             Event("recursive_improvement_cycle_published"),
         )
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

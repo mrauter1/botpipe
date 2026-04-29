@@ -143,7 +143,7 @@ Runtime behavior:
 
 - `control_schema` defines the JSON-schema-like contract for `Outcome.payload`
 - `available_routes` is derived mechanically from the declared step-local routes plus reserved routes
-- `route_infos` carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
+- step-local `Route.to(...)` metadata carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
 - `route_required_outputs` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
 - route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific required outputs
 - mapping-style global `transitions` declarations remain a compatibility fallback; greenfield workflow authoring should prefer step-local `routes={...}`
@@ -156,7 +156,7 @@ Authoring rules:
 - reserve runtime-injected control data for the shared Runtime Step Contract: readable inputs, required inputs, writable artifacts, available routes, route summaries and route-required outputs, explicit expected output payload requirements, optional route handoff, and optional retry feedback
 - continue using `Outcome.tag` as the route carrier
 - use `needs_rework` when the current work-item boundary still holds and `needs_replan` when the boundary changed materially
-- do not declare provider control schemas on `SystemStep`; system steps pick routes by returning `Event(...)`
+- do not declare provider control schemas on `python_step(...)`; Python steps pick routes by returning `Event(...)`
 
 ## Runtime Config And Provider Selection
 
@@ -189,7 +189,7 @@ If a workflow or template documents operational usage, keep it on this typed sur
 
 Concrete runtime adapters live under `runtime/providers/`, but that package is framework-owned implementation detail. Workflow authors should target the typed runtime config surface and the generic CLI flags rather than importing provider adapters or describing non-public factory hooks.
 
-For `PairStep` verifiers and `LLMStep` prompts, treat the provider-facing completion contract as strict JSON. The runtime now validates verifier and single-LLM outcomes locally, so prompts should ask for one JSON object matching the declared routes and payload contract rather than free-form prose.
+For `do_review_step(...)` verifiers and provider-backed `step(...)` prompts, treat the provider-facing completion contract as strict JSON. The runtime now validates verifier and single-LLM outcomes locally, so prompts should ask for one JSON object matching the declared routes and payload contract rather than free-form prose.
 
 ## Runtime Observability Defaults
 
@@ -284,7 +284,7 @@ New runs are message-first:
 
 The runtime persists resumability through an opaque `session_id` plus optional `provider_metadata`. Workflow code should treat session continuity as opaque runtime state and use the `Session` / context APIs rather than depending on persisted payload details.
 
-Every workflow also has an implicit default session slot named `default`. `LLMStep` and `PairStep` use that slot automatically when no explicit `session=` is declared.
+Every workflow also has an implicit default session slot named `default`. Provider-backed `step(...)` and `do_review_step(...)` declarations use that slot automatically when no explicit `session=` is declared.
 
 `Continuity` defines the default reuse policy for a session slot:
 
@@ -417,7 +417,7 @@ assess = step(
 )
 ```
 
-Global `transitions = {...}` and `SUCCESS` remain compatibility inputs for migrated workflows, but they are no longer the primary public authoring examples.
+Legacy global `transitions = {...}` and `SUCCESS` remain compatibility inputs for migrated workflows, but canonical authoring should declare step-local `routes={...}` and terminate with `FINISH`.
 
 Use `Route.to(...)`, `Route.complete(...)`, `Route.pause(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
 
@@ -439,10 +439,9 @@ gates = Worklist.from_artifact(
     status="status",
 )
 
-assess = PairStep(
-    name="assess",
-    producer="prompts/assess_producer.md",
-    verifier="prompts/assess_verifier.md",
+assess = do_review_step(
+    do=Prompt.file("prompts/assess_producer.md"),
+    review=Prompt.file("prompts/assess_verifier.md"),
     scope=gates,
 )
 ```
@@ -655,7 +654,7 @@ Company operation snapshot boundary:
 - it writes only workflow-local JSON artifacts under `ctx.workflow_folder`
 - it does not mutate `.autoloop` task or run state, workflow packages, or external business systems
 - it does not add CLI flags, runtime-owned company scoring, automatic prioritization, or hidden downstream execution
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, `route_infos`, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
 - workflow code and prompt templates still own company framing, recursive-improvement analysis, prioritization policy, publication gating, and next-cycle recommendations
 - it does not auto-rank tasks, auto-select improvements, auto-run downstream workflows, or imply external CRM, incident, or ticketing integration
 
@@ -727,7 +726,7 @@ Refinement helper boundary:
 - it writes the canonical result to `selected_workflow_authoring_surface.json` by default
 - it does not mutate, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
 - it does not add CLI flags, new `workflow.toml` fields, or runtime-owned refinement automation
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, `route_infos`, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
 - prompt templates and workflow code still own refinement policy, baseline/candidate strategy, file copying, verification evidence, and promotion/rollback decisions
 
 ## Optional Decomposition Surface Helpers
@@ -752,7 +751,7 @@ Decomposition helper boundary:
 - it writes the canonical result to `selected_workflow_decomposition_surface.json` by default
 - it does not mutate, auto-decompose, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned decomposition automation, or hidden downstream routing
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, `route_infos`, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
 - workflow code and prompt templates still own decomposition policy, baseline/candidate strategy, building-block extraction boundaries, verification evidence, and promotion/rollback decisions
 
 ## Optional Candidate-Surface Publication Helpers
@@ -811,7 +810,7 @@ Diagnostic helper boundary:
 - it does not mutate `.autoloop` run state or selected workflow files
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned diagnostics automation, or hidden downstream routing
 - it does not auto-cluster failure modes, auto-rank severity, or impose runtime-owned failure-mode policy
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, `route_infos`, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
 - workflow code and prompt templates still own diagnostic framing, failure-mode clustering, severity ranking, publication gating, and next-action recommendations
 
 ## Optional Evaluation Manifest Helpers
@@ -847,7 +846,7 @@ Evaluation helper boundary:
 - it validates expected artifacts against the selected workflow's compiled artifact surface derived from the selected-workflow capability snapshot
 - it writes the canonical result to `validated_eval_case_manifest.json` by default
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned evaluation execution, or hidden downstream routing
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, `route_infos`, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
 - workflows still own evaluation policy, category coverage requirements, prompt semantics, publication gating, and any downstream execution behavior in workflow code and prompt templates
 
 ## Optional Optimization Helpers
@@ -894,7 +893,7 @@ Capability snapshot boundary:
 - it uses the separate capability-inspection seam to capture catalog metadata plus normalized workflow parameters and compiled step summaries
 - compiled step summaries include the declared artifact surface, available routes, route infos, route-required outputs, prompt paths, and whether a typed output schema exists
 - it does not add new `workflow.toml` fields and does not change the lightweight non-importing catalog discovery contract
-- it reuses only the existing narrow runtime-injected control metadata: readable inputs, required inputs, writable artifacts, `available_routes`, `route_infos`, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it reuses only the existing narrow runtime-injected control metadata: readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
 - it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
 - portfolio workflows still own comparison policy, fit-gap reasoning, adaptation policy, and downstream routing in workflow code and prompt templates
 

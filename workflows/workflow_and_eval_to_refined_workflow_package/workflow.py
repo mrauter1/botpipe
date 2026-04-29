@@ -31,7 +31,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_selected_workflow_authoring_surface,
         write_selected_workflow_capability_snapshot,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -59,11 +59,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_selected_workflow_authoring_surface,
         write_selected_workflow_capability_snapshot,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
@@ -171,31 +171,10 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     rollback_plan = Artifact("{workflow_folder}/rollback_plan.md")
     workflow_refinement_receipt = Artifact("{workflow_folder}/workflow_refinement_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    capture_refinement_context = SystemStep(
-        name="capture_refinement_context",
-        requires=[request, invocation_contract],
-        produces={
-            "selected_workflow_capability": selected_workflow_capability,
-            "selected_workflow_authoring_surface": selected_workflow_authoring_surface,
-            "baseline_workflow_surface": baseline_workflow_surface,
-            "baseline_workflow_manifest": baseline_workflow_manifest,
-            "baseline_evaluation_summary": baseline_evaluation_summary,
-            "baseline_evaluation_findings": baseline_evaluation_findings,
-            "baseline_failure_modes": baseline_failure_modes,
-            "baseline_refinement_evidence": baseline_refinement_evidence,
-            "baseline_refinement_evidence_summary": baseline_refinement_evidence_summary,
-        },
-    )
-    frame_refinement_request = PairStep(
-        name="frame_refinement_request",
+    frame_refinement_request = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -210,18 +189,15 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "refinement_request_brief": refinement_request_brief,
-            "refinement_acceptance_criteria": refinement_acceptance_criteria,
-        },
-        expected_output_schema=RefinementRequestFramingPayload,
-        route_infos=FRAME_REFINEMENT_REQUEST_ROUTE_CONTRACTS,
+        writes=[refinement_request_brief, refinement_acceptance_criteria],
+        accepted="refinement_request_framed",
+        control_schema=RefinementRequestFramingPayload,
+        routes=FRAME_REFINEMENT_REQUEST_ROUTE_CONTRACTS,
     )
-    design_refinement_plan = PairStep(
-        name="design_refinement_plan",
+    design_refinement_plan = do_review_step(
+        do=Prompt.file("prompts/design_producer.md"),
+        review=Prompt.file("prompts/design_verifier.md"),
         session=design_session,
-        producer="prompts/design_producer.md",
-        verifier="prompts/design_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -235,19 +211,15 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             refinement_request_brief,
             refinement_acceptance_criteria,
         ],
-        produces={
-            "refinement_strategy": refinement_strategy,
-            "workflow_change_plan": workflow_change_plan,
-            "regression_guardrails": regression_guardrails,
-        },
-        expected_output_schema=WorkflowRefinementPlanPayload,
-        route_infos=DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
+        writes=[refinement_strategy, workflow_change_plan, regression_guardrails],
+        accepted="refinement_plan_designed",
+        control_schema=WorkflowRefinementPlanPayload,
+        routes=DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
     )
-    implement_refined_workflow = PairStep(
-        name="implement_refined_workflow",
+    implement_refined_workflow = do_review_step(
+        do=Prompt.file("prompts/implement_producer.md"),
+        review=Prompt.file("prompts/implement_verifier.md"),
         session=build_session,
-        producer="prompts/implement_producer.md",
-        verifier="prompts/implement_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -259,20 +231,20 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             workflow_change_plan,
             regression_guardrails,
         ],
-        produces={
-            "candidate_workflow_surface": candidate_workflow_surface,
-            "candidate_workflow_manifest": candidate_workflow_manifest,
-            "refinement_build_report": refinement_build_report,
-            "candidate_diff_summary": candidate_diff_summary,
-        },
-        expected_output_schema=WorkflowRefinementBuildPayload,
-        route_infos=IMPLEMENT_REFINED_WORKFLOW_ROUTE_CONTRACTS,
+        writes=[
+            candidate_workflow_surface,
+            candidate_workflow_manifest,
+            refinement_build_report,
+            candidate_diff_summary,
+        ],
+        accepted="workflow_refinement_applied",
+        control_schema=WorkflowRefinementBuildPayload,
+        routes=IMPLEMENT_REFINED_WORKFLOW_ROUTE_CONTRACTS,
     )
-    evaluate_refined_workflow = PairStep(
-        name="evaluate_refined_workflow",
+    evaluate_refined_workflow = do_review_step(
+        do=Prompt.file("prompts/evaluate_producer.md"),
+        review=Prompt.file("prompts/evaluate_verifier.md"),
         session=evaluate_session,
-        producer="prompts/evaluate_producer.md",
-        verifier="prompts/evaluate_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -292,68 +264,24 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             refinement_build_report,
             candidate_diff_summary,
         ],
-        produces={
-            "refinement_verification_report": refinement_verification_report,
-            "evaluation_delta_report": evaluation_delta_report,
-            "promotion_record": promotion_record,
-            "rollback_plan": rollback_plan,
-        },
-        expected_output_schema=WorkflowRefinementEvaluationPayload,
-        route_infos=EVALUATE_REFINED_WORKFLOW_ROUTE_CONTRACTS,
-    )
-    publish_refined_workflow = SystemStep(
-        name="publish_refined_workflow",
-        requires=[
-            selected_workflow_capability,
-            selected_workflow_authoring_surface,
-            baseline_workflow_manifest,
-            baseline_evaluation_summary,
-            baseline_evaluation_findings,
-            baseline_failure_modes,
-            baseline_refinement_evidence,
-            baseline_refinement_evidence_summary,
-            candidate_workflow_manifest,
+        writes=[
             refinement_verification_report,
             evaluation_delta_report,
             promotion_record,
             rollback_plan,
         ],
-        produces={"workflow_refinement_receipt": workflow_refinement_receipt},
+        accepted="workflow_refinement_evaluated",
+        control_schema=WorkflowRefinementEvaluationPayload,
+        routes=EVALUATE_REFINED_WORKFLOW_ROUTE_CONTRACTS,
     )
 
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_refinement_context},
-            capture_refinement_context: {"refinement_context_captured": frame_refinement_request},
-            frame_refinement_request: {
-                "refinement_request_framed": design_refinement_plan,
-                "needs_rework": frame_refinement_request,
-                "needs_replan": frame_refinement_request,
-            },
-            design_refinement_plan: {
-                "refinement_plan_designed": implement_refined_workflow,
-                "needs_rework": design_refinement_plan,
-                "needs_replan": frame_refinement_request,
-            },
-            implement_refined_workflow: {
-                "workflow_refinement_applied": evaluate_refined_workflow,
-                "needs_rework": implement_refined_workflow,
-                "needs_replan": design_refinement_plan,
-            },
-            evaluate_refined_workflow: {
-                "workflow_refinement_evaluated": publish_refined_workflow,
-                "needs_rework": implement_refined_workflow,
-                "needs_replan": design_refinement_plan,
-            },
-            publish_refined_workflow: {"workflow_refinement_published": SUCCESS},
-        },
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_refinement_context"},
     )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
 
         next_state = state.model_copy(
@@ -398,8 +326,23 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_refinement_context(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_refinement_context",
+        requires=[request, invocation_contract],
+        writes=[
+            selected_workflow_capability,
+            selected_workflow_authoring_surface,
+            baseline_workflow_surface,
+            baseline_workflow_manifest,
+            baseline_evaluation_summary,
+            baseline_evaluation_findings,
+            baseline_failure_modes,
+            baseline_refinement_evidence,
+            baseline_refinement_evidence_summary,
+        ],
+        routes={"refinement_context_captured": "frame_refinement_request"},
+    )
+    def capture_refinement_context(state: State, ctx):
         repo_root = _repo_root_from_context(ctx)
         capability_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
         authoring_surface_path = write_selected_workflow_authoring_surface(ctx, state.selected_workflow_reference)
@@ -557,8 +500,27 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_refined_workflow(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_refined_workflow",
+        requires=[
+            selected_workflow_capability,
+            selected_workflow_authoring_surface,
+            baseline_workflow_manifest,
+            baseline_evaluation_summary,
+            baseline_evaluation_findings,
+            baseline_failure_modes,
+            baseline_refinement_evidence,
+            baseline_refinement_evidence_summary,
+            candidate_workflow_manifest,
+            refinement_verification_report,
+            evaluation_delta_report,
+            promotion_record,
+            rollback_plan,
+        ],
+        writes=[workflow_refinement_receipt],
+        routes={"workflow_refinement_published": FINISH},
+    )
+    def publish_refined_workflow(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "selected_workflow_capability": workflow_folder / "selected_workflow_capability.json",
@@ -719,6 +681,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         return state.model_copy(update={"selected_workflow_name": selected_workflow_name, "published": True}), Event(
             "workflow_refinement_published"
         )
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

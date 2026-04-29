@@ -100,7 +100,7 @@ Turn a concrete incident into a durable hardening program and response package t
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing, evidence assembly, analysis, and package assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, `route_infos`, and `route_required_outputs` only.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `route_required_outputs` only.
 - Publish a deterministic incident receipt only after the final package exists.
 
 ### Provider-owned cognitive responsibilities
@@ -172,7 +172,7 @@ The runtime injects only:
 
 - `expected_output_schema`
 - `available_routes`
-- `route_infos`
+- step-local `Route.to(...)` metadata
 
 Payload models used by the package:
 

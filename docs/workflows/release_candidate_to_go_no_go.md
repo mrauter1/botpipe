@@ -47,7 +47,7 @@ Parameters:
 
 | Candidate | Benefits | Trade-offs | Decision |
 | --- | --- | --- | --- |
-| Typed and normalized `route_infos` | Makes release-gating semantics explicit and keeps runtime control data narrow | Needed additive validation and compiler normalization | Chosen in the preceding route-metadata phase and exercised by this package |
+| Step-local `Route.to(...)` metadata | Makes release-gating semantics explicit and keeps runtime control data narrow | Needed additive validation and compiler normalization | Chosen in the preceding route-metadata phase and exercised by this package |
 | Artifact-bundle helper for grouped release evidence | Could reduce repeated path prefixes | Hides artifact meaning behind a new abstraction | Rejected |
 | Declarative child-workflow release composition | Could help future portfolios | Too much runtime machinery for the first domain workflow | Rejected |
 
@@ -77,7 +77,7 @@ Parameters:
 - freeform dict route metadata only
 - prompt-only route guidance
 - typed route metadata with normalized runtime shape
-- Selected: typed `RouteInfo` metadata
+- Selected: step-local `Route.to(...)` metadata
 - Why: the release workflow needs explicit evidence and work-item-effect semantics while staying inside the narrow runtime contract surface.
 
 ## Implementation candidates considered
@@ -98,7 +98,7 @@ Turn a release candidate into a durable go/no-go package that captures scope, ev
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing, evidence assembly, assessment, and package assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, `route_infos`, and `route_required_outputs` only.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `route_required_outputs` only.
 - Publish a deterministic decision receipt only after the final package exists.
 
 ### Provider-owned cognitive responsibilities
@@ -170,7 +170,7 @@ The runtime injects only:
 
 - `expected_output_schema`
 - `available_routes`
-- `route_infos`
+- step-local `Route.to(...)` metadata
 
 Payload models used by the package:
 

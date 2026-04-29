@@ -115,7 +115,7 @@ Turn an arbitrary software-work task into an explicit strategy package that choo
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Capture a deterministic snapshot of the current workflow portfolio through the shared catalog seam.
 - Hold task framing, strategy selection, and strategy packaging as separate work items.
-- Keep runtime control data narrow and mechanical: `expected_output_schema`, `available_routes`, and `route_infos`.
+- Keep runtime control data narrow and mechanical: `expected_output_schema`, `available_routes`, and step-local `Route.to(...)` metadata.
 - Publish a deterministic receipt only after the terminal package, machine-readable summary, and next-action artifact all exist.
 
 ### Provider-owned cognitive responsibilities
@@ -192,7 +192,7 @@ The runtime injects only:
 
 - `expected_output_schema`
 - `available_routes`
-- `route_infos`
+- step-local `Route.to(...)` metadata
 
 Step payload models:
 

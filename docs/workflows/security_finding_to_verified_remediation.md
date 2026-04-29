@@ -111,7 +111,7 @@ Turn a security finding into an execution-ready remediation and closure package 
 - Keep child `question` and `blocked` propagation explicit in workflow code.
 - Require the child workflow to succeed, reach `evidence_pack_published`, and produce the expected artifacts before parent-local adoption.
 - Hold security assessment, remediation planning, and closure packaging as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, and `route_infos`.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, and step-local `Route.to(...)` metadata.
 - Publish a deterministic remediation receipt only after the terminal package artifacts and machine-readable summaries exist.
 
 ### Provider-owned cognitive responsibilities
@@ -200,7 +200,7 @@ The runtime injects only:
 
 - `expected_output_schema`
 - `available_routes`
-- `route_infos`
+- step-local `Route.to(...)` metadata
 
 Step payload models:
 

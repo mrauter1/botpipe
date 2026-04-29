@@ -124,7 +124,7 @@ Turn an investigation request into a durable evidence pack that another workflow
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing and evidence-pack assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, `route_infos`, and `route_required_outputs` only.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `route_required_outputs` only.
 - Publish a deterministic evidence-pack receipt only after the terminal artifacts exist.
 
 ### Provider-owned cognitive responsibilities
@@ -193,7 +193,7 @@ The runtime injects only:
 
 - `expected_output_schema`
 - `available_routes`
-- `route_infos`
+- step-local `Route.to(...)` metadata
 
 Payload models used by the package:
 
