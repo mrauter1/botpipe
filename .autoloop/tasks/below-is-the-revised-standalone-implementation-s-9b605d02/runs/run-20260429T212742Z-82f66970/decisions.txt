@@ -1,0 +1,6 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260429T212742Z-82f66970" ts="2026-04-29T21:27:42.225736+00:00" />
+Public backward compatibility is intentionally removed for authoring/import surfaces; only persisted run-data readers may normalize legacy payloads such as SUCCESS terminals or legacy default-session naming when resume requires it.
+Phase order is fixed as public/simple surface cleanup first, compiler/validation second, and engine/provider/persistence third so the runtime can switch to one canonical compiled contract instead of perpetuating dual schemas.
+Canonical workflow state and parameter authoring uses Pydantic `State` and `Params` namespaces plus step `state=BaseModelSubclass`; public `Parameters`, `StateVar`, and `Param` are treated as banned names rather than supported aliases.
+Step-local `routes` plus declaration order and explicit `entry` replace public `flow`, `transitions`, and `chain`; any temporary lowering support for old topology declarations must stay internal and disappear from public docs/tests.
+`llm` and `classify` remain value-returning operations with their own operation contract and must not continue reusing route-bearing step/provider schemas.
