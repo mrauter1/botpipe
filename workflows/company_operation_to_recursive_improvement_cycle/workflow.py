@@ -63,7 +63,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -161,9 +161,9 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
     recursive_improvement_next_actions = Artifact("{workflow_folder}/recursive_improvement_next_actions.md")
     recursive_improvement_cycle_receipt = Artifact("{workflow_folder}/recursive_improvement_cycle_receipt.json")
 
-    frame_company_operation = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_company_operation = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -176,13 +176,12 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             workflow_instructions,
         ],
         writes=[company_operation_brief, recursive_improvement_criteria],
-        accepted="company_operation_framed",
         control_schema=CompanyOperationFramingPayload,
         routes=FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS,
     )
-    analyze_recursive_improvement_pressures = do_review_step(
-        do=Prompt.file("prompts/analyze_producer.md"),
-        review=Prompt.file("prompts/analyze_verifier.md"),
+    analyze_recursive_improvement_pressures = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/analyze_producer.md"),
+        verifier_prompt=Prompt.file("prompts/analyze_verifier.md"),
         session=analysis_session,
         requires=[
             request,
@@ -198,13 +197,12 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             recursive_improvement_priority_matrix,
             recursive_improvement_candidates,
         ],
-        accepted="recursive_improvement_pressures_analyzed",
         control_schema=RecursiveImprovementAnalysisPayload,
         routes=ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS,
     )
-    package_recursive_improvement_cycle = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    package_recursive_improvement_cycle = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -224,7 +222,6 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             recursive_improvement_summary,
             recursive_improvement_next_actions,
         ],
-        accepted="recursive_improvement_cycle_ready",
         control_schema=RecursiveImprovementCyclePayload,
         routes=PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS,
     )

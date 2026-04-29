@@ -25,7 +25,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -142,9 +142,9 @@ class TaskToCandidateWorkflowSet(Workflow):
             raise ValueError("workflow_capability_snapshot.json must define a positive workflow_count")
         return state, Event("workflow_capabilities_captured")
 
-    frame_candidate_request = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_candidate_request = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -155,14 +155,13 @@ class TaskToCandidateWorkflowSet(Workflow):
             workflow_instructions,
         ],
         writes=[candidate_request_brief, candidate_selection_criteria],
-        accepted="candidate_request_framed",
         control_schema=CandidateRequestFramingPayload,
         routes=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
     )
 
-    analyze_candidate_workflows = do_review_step(
-        do=Prompt.file("prompts/analyze_producer.md"),
-        review=Prompt.file("prompts/analyze_verifier.md"),
+    analyze_candidate_workflows = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/analyze_producer.md"),
+        verifier_prompt=Prompt.file("prompts/analyze_verifier.md"),
         session=analysis_session,
         requires=[
             request,
@@ -172,14 +171,13 @@ class TaskToCandidateWorkflowSet(Workflow):
             candidate_selection_criteria,
         ],
         writes=[workflow_candidate_matrix, workflow_gap_analysis, candidate_route_posture],
-        accepted="candidate_workflows_analyzed",
         control_schema=CandidateWorkflowAnalysisPayload,
         routes=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
     )
 
-    package_candidate_workflow_set = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    package_candidate_workflow_set = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -193,7 +191,6 @@ class TaskToCandidateWorkflowSet(Workflow):
             candidate_route_posture,
         ],
         writes=[candidate_workflow_set, candidate_workflow_set_summary, candidate_next_action],
-        accepted="candidate_workflow_set_ready",
         control_schema=CandidateWorkflowSetPayload,
         routes=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
     )

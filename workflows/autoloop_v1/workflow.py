@@ -13,7 +13,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from extensions import SessionPaths
     from stdlib.control import event_on_outcome_tags
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .conventions import AutoloopV1SessionPathStrategy, phase_dir_key
@@ -43,30 +43,27 @@ class AutoloopV1(Workflow):
     impl_notes = Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/implementation_notes.md")
     test_strat = Artifact("{task_folder}/test/phases/{state.phase.dir_key}/test_strategy.md")
 
-    plan = do_review_step(
-        do=Prompt.file("prompts/plan_producer.md"),
-        review=Prompt.file("prompts/plan_verifier.md"),
+    plan = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/plan_producer.md"),
+        verifier_prompt=Prompt.file("prompts/plan_verifier.md"),
         session=plan_session,
         requires=[request],
         writes=[phase_plan],
-        accepted="plan_ready",
         routes={"plan_ready": "activate_next_phase", "needs_replan": "plan"},
     )
-    implement = do_review_step(
-        do=Prompt.file("prompts/implement_producer.md"),
-        review=Prompt.file("prompts/implement_verifier.md"),
+    implement = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/implement_producer.md"),
+        verifier_prompt=Prompt.file("prompts/implement_verifier.md"),
         session=phase_session,
         requires=[phase_plan],
         writes=[impl_notes],
-        accepted="implemented",
         routes={"implemented": "test", "needs_replan": "plan"},
     )
-    test = do_review_step(
-        do=Prompt.file("prompts/test_producer.md"),
-        review=Prompt.file("prompts/test_verifier.md"),
+    test = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/test_producer.md"),
+        verifier_prompt=Prompt.file("prompts/test_verifier.md"),
         session=phase_session,
         writes=[test_strat],
-        accepted="phase_passed",
         routes={"phase_passed": "activate_next_phase", "needs_replan": "plan"},
     )
 

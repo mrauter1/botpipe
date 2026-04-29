@@ -62,7 +62,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
-from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -171,9 +171,9 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
     rollback_plan = Artifact("{workflow_folder}/rollback_plan.md")
     workflow_refinement_receipt = Artifact("{workflow_folder}/workflow_refinement_receipt.json")
 
-    frame_refinement_request = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_refinement_request = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -190,13 +190,12 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             workflow_instructions,
         ],
         writes=[refinement_request_brief, refinement_acceptance_criteria],
-        accepted="refinement_request_framed",
         control_schema=RefinementRequestFramingPayload,
         routes=FRAME_REFINEMENT_REQUEST_ROUTE_CONTRACTS,
     )
-    design_refinement_plan = do_review_step(
-        do=Prompt.file("prompts/design_producer.md"),
-        review=Prompt.file("prompts/design_verifier.md"),
+    design_refinement_plan = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/design_producer.md"),
+        verifier_prompt=Prompt.file("prompts/design_verifier.md"),
         session=design_session,
         requires=[
             request,
@@ -212,13 +211,12 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             refinement_acceptance_criteria,
         ],
         writes=[refinement_strategy, workflow_change_plan, regression_guardrails],
-        accepted="refinement_plan_designed",
         control_schema=WorkflowRefinementPlanPayload,
         routes=DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
     )
-    implement_refined_workflow = do_review_step(
-        do=Prompt.file("prompts/implement_producer.md"),
-        review=Prompt.file("prompts/implement_verifier.md"),
+    implement_refined_workflow = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/implement_producer.md"),
+        verifier_prompt=Prompt.file("prompts/implement_verifier.md"),
         session=build_session,
         requires=[
             request,
@@ -237,13 +235,12 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             refinement_build_report,
             candidate_diff_summary,
         ],
-        accepted="workflow_refinement_applied",
         control_schema=WorkflowRefinementBuildPayload,
         routes=IMPLEMENT_REFINED_WORKFLOW_ROUTE_CONTRACTS,
     )
-    evaluate_refined_workflow = do_review_step(
-        do=Prompt.file("prompts/evaluate_producer.md"),
-        review=Prompt.file("prompts/evaluate_verifier.md"),
+    evaluate_refined_workflow = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/evaluate_producer.md"),
+        verifier_prompt=Prompt.file("prompts/evaluate_verifier.md"),
         session=evaluate_session,
         requires=[
             request,
@@ -270,7 +267,6 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             promotion_record,
             rollback_plan,
         ],
-        accepted="workflow_refinement_evaluated",
         control_schema=WorkflowRefinementEvaluationPayload,
         routes=EVALUATE_REFINED_WORKFLOW_ROUTE_CONTRACTS,
     )

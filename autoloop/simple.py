@@ -9,38 +9,41 @@ from typing import Any, Mapping, Sequence
 from pydantic import BaseModel
 
 try:  # pragma: no branch - prefer installed-package imports when available
-    from autoloop_v3.core import Artifact, Workflow as _StrictWorkflow
+    from autoloop_v3.core import Artifact
     from autoloop_v3.core.artifacts import ResolvedArtifacts
     from autoloop_v3.core.context import ChildWorkflowResult
-    from autoloop_v3.core.descriptors import Param, StateVar
     from autoloop_v3.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-    from autoloop_v3.core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF, SUCCESS
+    from autoloop_v3.core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF
     from autoloop_v3.core.prompts import Prompt
-    from autoloop_v3.core.routes import Route, RouteInfo
+    from autoloop_v3.core.routes import Route
     from autoloop_v3.core.sessions import Continuity
     from autoloop_v3.core.steps import AfterHookResult
     from autoloop_v3.core.steps import Session
+    from autoloop_v3.core.worklists import Worklist
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from core import Artifact, Workflow as _StrictWorkflow
+    from core import Artifact
     from core.artifacts import ResolvedArtifacts
     from core.context import ChildWorkflowResult
-    from core.descriptors import Param, StateVar
     from core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-    from core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF, SUCCESS
+    from core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF
     from core.prompts import Prompt
-    from core.routes import Route, RouteInfo
+    from core.routes import Route
     from core.sessions import Continuity
     from core.steps import AfterHookResult
     from core.steps import Session
+    from core.worklists import Worklist
 
 
 PromptInput = str | Path | Prompt
 RouteMapping = Mapping[str, Route | object]
-ChainNode = object | tuple[object, str]
 
 
 class EmptyState(BaseModel):
     """Default state model for workflows that do not declare ``State``."""
+
+
+class EmptyParams(BaseModel):
+    """Default params model for workflows that do not declare ``Params``."""
 
 
 class Workflow:
@@ -50,13 +53,6 @@ class Workflow:
     __strict_workflow__ = False
     extensions: tuple[object, ...] = ()
     State = EmptyState
-
-
-class StrictWorkflow(_StrictWorkflow):
-    """Strict workflow authoring surface for explicit core-style definitions."""
-
-    __workflow_abstract__ = True
-    __strict_workflow__ = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,11 +133,22 @@ class _NamedDeclaration:
         if self.name is None:
             self.name = attr_name
 
+    def __getattr__(self, item: str) -> Artifact | ArtifactSpec:
+        for collection_name in ("outputs", "review_outputs"):
+            try:
+                artifacts = object.__getattribute__(self, collection_name)
+            except AttributeError:
+                artifacts = ()
+            for artifact in artifacts:
+                if getattr(artifact, "name", None) == item:
+                    return artifact
+        raise AttributeError(item)
+
 
 class StepDeclaration(_NamedDeclaration):
     """Simple step declaration lowered during workflow definition discovery."""
 
-    kind = "llm"
+    kind = "step"
 
     def __init__(
         self,
@@ -151,11 +158,7 @@ class StepDeclaration(_NamedDeclaration):
         reads: Sequence[ArtifactInput] = (),
         requires: Sequence[ArtifactInput] = (),
         writes: Sequence[Artifact | ArtifactSpec] = (),
-        out: Artifact | ArtifactSpec | None = None,
-        outputs: Sequence[Artifact | ArtifactSpec] = (),
         routes: RouteMapping | None = None,
-        route_infos: Mapping[str, RouteInfo | str] | None = None,
-        route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
         on_route: Any | None = None,
@@ -168,10 +171,9 @@ class StepDeclaration(_NamedDeclaration):
         self.prompt = _normalize_simple_prompt(prompt)
         self.reads = tuple(reads)
         self.requires = tuple(requires)
-        self.outputs = _normalize_outputs(out=out, outputs=outputs, writes=writes)
+        self.outputs = _normalize_writes(writes)
         self.writes = self.outputs
         self.routes = dict(routes or {})
-        self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
         self.on_route = on_route
@@ -181,77 +183,66 @@ class StepDeclaration(_NamedDeclaration):
         self.control_routes = control_routes
 
 
-class ReviewStepDeclaration(_NamedDeclaration):
-    """Simple review-step declaration lowered during workflow definition discovery."""
+class ProduceVerifyStepDeclaration(_NamedDeclaration):
+    """Simple producer/verifier declaration lowered during workflow definition discovery."""
 
-    kind = "review"
+    kind = "produce_verify"
     default_chain_route = "accepted"
 
     def __init__(
         self,
-        producer: PromptInput,
-        verifier: PromptInput,
+        producer_prompt: PromptInput,
+        verifier_prompt: PromptInput,
         *,
         name: str | None = None,
         reads: Sequence[ArtifactInput] = (),
         requires: Sequence[ArtifactInput] = (),
-        review_requires: Sequence[ArtifactInput] = (),
-        writes: Sequence[Artifact | ArtifactSpec] = (),
-        review_writes: Sequence[Artifact | ArtifactSpec] = (),
-        out: Artifact | ArtifactSpec | None = None,
-        outputs: Sequence[Artifact | ArtifactSpec] = (),
-        accepted: str = "accepted",
-        rework: str = "needs_rework",
+        verifier_reads: Sequence[ArtifactInput] = (),
+        verifier_requires: Sequence[ArtifactInput] = (),
+        producer_writes: Sequence[Artifact | ArtifactSpec] = (),
+        verifier_writes: Sequence[Artifact | ArtifactSpec] = (),
         routes: RouteMapping | None = None,
-        route_infos: Mapping[str, RouteInfo | str] | None = None,
-        before: Any | None = None,
-        after: Any | None = None,
-        route_summaries: Mapping[str, str] | None = None,
+        state: type[BaseModel] | None = None,
+        before_producer: Any | None = None,
+        after_producer: Any | None = None,
+        before_verifier: Any | None = None,
+        after_verifier: Any | None = None,
         control_schema: Any | None = None,
         retry: Any | None = None,
         session: Any | None = None,
-        review_session: Any | None = None,
-        state: Mapping[str, Any] | None = None,
-        before_do: Any | None = None,
-        after_do: Any | None = None,
-        before_review: Any | None = None,
-        after_review: Any | None = None,
+        verifier_session: Any | None = None,
         on_route: Any | None = None,
         control_routes: bool = True,
     ) -> None:
         super().__init__(name=name)
-        self.producer = _normalize_simple_prompt(producer)
-        self.verifier = _normalize_simple_prompt(verifier)
+        self.producer_prompt = _normalize_simple_prompt(producer_prompt)
+        self.verifier_prompt = _normalize_simple_prompt(verifier_prompt)
         self.reads = tuple(reads)
         self.requires = tuple(requires)
-        self.review_requires = tuple(review_requires)
-        self.outputs = _normalize_outputs(out=out, outputs=outputs, writes=writes)
+        self.verifier_reads = tuple(verifier_reads)
+        self.verifier_requires = tuple(verifier_requires)
+        self.outputs = _normalize_writes(producer_writes)
         self.writes = self.outputs
-        self.review_outputs = tuple(review_writes)
-        self.review_writes = self.review_outputs
-        self.accepted = accepted
-        self.rework = rework
+        self.review_outputs = _normalize_writes(verifier_writes)
+        self.verifier_writes = self.review_outputs
         self.routes = dict(routes or {})
-        self.before = before
-        self.after = after
-        self.state = dict(state or {})
-        self.before_do = before_do
-        self.after_do = after_do
-        self.before_review = before_review
-        self.after_review = after_review
+        self.state = state
+        self.before_producer = before_producer
+        self.after_producer = after_producer
+        self.before_verifier = before_verifier
+        self.after_verifier = after_verifier
         self.on_route = on_route
-        self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.control_schema = control_schema
         self.retry = retry
         self.session = session
-        self.review_session = review_session
+        self.verifier_session = verifier_session
         self.control_routes = control_routes
 
 
-class SystemStepDeclaration(_NamedDeclaration):
-    """Simple system-step declaration lowered during workflow definition discovery."""
+class PythonStepDeclaration(_NamedDeclaration):
+    """Simple python-step declaration lowered during workflow definition discovery."""
 
-    kind = "system"
+    kind = "python"
 
     def __set_name__(self, owner: type[object], attr_name: str) -> None:
         super().__set_name__(owner, attr_name)
@@ -269,11 +260,7 @@ class SystemStepDeclaration(_NamedDeclaration):
         reads: Sequence[ArtifactInput] = (),
         requires: Sequence[ArtifactInput] = (),
         writes: Sequence[Artifact | ArtifactSpec] = (),
-        out: Artifact | ArtifactSpec | None = None,
-        outputs: Sequence[Artifact | ArtifactSpec] = (),
         routes: RouteMapping | None = None,
-        route_infos: Mapping[str, RouteInfo | str] | None = None,
-        route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
         on_route: Any | None = None,
@@ -283,10 +270,9 @@ class SystemStepDeclaration(_NamedDeclaration):
         self.fn = fn
         self.reads = tuple(reads)
         self.requires = tuple(requires)
-        self.outputs = _normalize_outputs(out=out, outputs=outputs, writes=writes)
+        self.outputs = _normalize_writes(writes)
         self.writes = self.outputs
         self.routes = dict(routes or {})
-        self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
         self.on_route = on_route
@@ -310,11 +296,7 @@ class WorkflowStep(_NamedDeclaration):
         reads: Sequence[ArtifactInput] = (),
         requires: Sequence[ArtifactInput] = (),
         writes: Sequence[Artifact | ArtifactSpec] = (),
-        out: Artifact | ArtifactSpec | None = None,
-        outputs: Sequence[Artifact | ArtifactSpec] = (),
         routes: RouteMapping | None = None,
-        route_infos: Mapping[str, RouteInfo | str] | None = None,
-        route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
         on_route: Any | None = None,
@@ -328,10 +310,9 @@ class WorkflowStep(_NamedDeclaration):
         self.input = input
         self.reads = tuple(reads)
         self.requires = tuple(requires)
-        self.outputs = _normalize_outputs(out=out, outputs=outputs, writes=writes)
+        self.outputs = _normalize_writes(writes)
         self.writes = self.outputs
         self.routes = dict(routes or {})
-        self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
         self.on_route = on_route
@@ -383,12 +364,6 @@ class OperationStepDeclaration(_NamedDeclaration):
         return handler
 
 
-@dataclass(frozen=True, slots=True)
-class FlowSpec:
-    __autoloop_simple_flow_spec__ = True
-    items: tuple[ChainNode, ...]
-
-
 def step(
     prompt: PromptInput,
     *,
@@ -396,11 +371,7 @@ def step(
     reads: Sequence[ArtifactInput] = (),
     requires: Sequence[ArtifactInput] = (),
     writes: Sequence[Artifact | ArtifactSpec] = (),
-    out: Artifact | ArtifactSpec | None = None,
-    outputs: Sequence[Artifact | ArtifactSpec] = (),
     routes: RouteMapping | None = None,
-    route_infos: Mapping[str, RouteInfo | str] | None = None,
-    route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
     on_route: Any | None = None,
@@ -415,11 +386,7 @@ def step(
         reads=reads,
         requires=requires,
         writes=writes,
-        out=out,
-        outputs=outputs,
         routes=routes,
-        route_infos=route_infos,
-        route_summaries=route_summaries,
         before=before,
         after=after,
         on_route=on_route,
@@ -430,134 +397,51 @@ def step(
     )
 
 
-def review_step(
-    producer: PromptInput,
-    verifier: PromptInput,
+def produce_verify_step(
     *,
+    producer_prompt: PromptInput,
+    verifier_prompt: PromptInput,
     name: str | None = None,
     reads: Sequence[ArtifactInput] = (),
     requires: Sequence[ArtifactInput] = (),
-    review_requires: Sequence[ArtifactInput] = (),
-    writes: Sequence[Artifact | ArtifactSpec] = (),
-    review_writes: Sequence[Artifact | ArtifactSpec] = (),
-    out: Artifact | ArtifactSpec | None = None,
-    outputs: Sequence[Artifact | ArtifactSpec] = (),
-    accepted: str = "accepted",
-    rework: str = "needs_rework",
+    verifier_reads: Sequence[ArtifactInput] = (),
+    verifier_requires: Sequence[ArtifactInput] = (),
+    producer_writes: Sequence[Artifact | ArtifactSpec] = (),
+    verifier_writes: Sequence[Artifact | ArtifactSpec] = (),
     routes: RouteMapping | None = None,
-    route_infos: Mapping[str, RouteInfo | str] | None = None,
-    route_summaries: Mapping[str, str] | None = None,
-    before: Any | None = None,
-    after: Any | None = None,
-    state: Mapping[str, Any] | None = None,
-    before_do: Any | None = None,
-    after_do: Any | None = None,
-    before_review: Any | None = None,
-    after_review: Any | None = None,
+    state: type[BaseModel] | None = None,
+    before_producer: Any | None = None,
+    after_producer: Any | None = None,
+    before_verifier: Any | None = None,
+    after_verifier: Any | None = None,
     on_route: Any | None = None,
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
-    review_session: Any | None = None,
+    verifier_session: Any | None = None,
     control_routes: bool = True,
-) -> ReviewStepDeclaration:
-    return ReviewStepDeclaration(
-        producer,
-        verifier,
+) -> ProduceVerifyStepDeclaration:
+    return ProduceVerifyStepDeclaration(
+        producer_prompt,
+        verifier_prompt,
         name=name,
         reads=reads,
         requires=requires,
-        review_requires=review_requires,
-        writes=writes,
-        review_writes=review_writes,
-        out=out,
-        outputs=outputs,
-        accepted=accepted,
-        rework=rework,
+        verifier_reads=verifier_reads,
+        verifier_requires=verifier_requires,
+        producer_writes=producer_writes,
+        verifier_writes=verifier_writes,
         routes=routes,
-        route_infos=route_infos,
-        before=before,
-        after=after,
         state=state,
-        before_do=before_do,
-        after_do=after_do,
-        before_review=before_review,
-        after_review=after_review,
+        before_producer=before_producer,
+        after_producer=after_producer,
+        before_verifier=before_verifier,
+        after_verifier=after_verifier,
         on_route=on_route,
-        route_summaries=route_summaries,
         control_schema=control_schema,
         retry=retry,
         session=session,
-        review_session=review_session,
-        control_routes=control_routes,
-    )
-
-
-def do_review_step(
-    do: PromptInput | None = None,
-    *,
-    review: PromptInput | None = None,
-    producer: PromptInput | None = None,
-    verifier: PromptInput | None = None,
-    name: str | None = None,
-    reads: Sequence[ArtifactInput] = (),
-    requires: Sequence[ArtifactInput] = (),
-    review_requires: Sequence[ArtifactInput] = (),
-    writes: Sequence[Artifact | ArtifactSpec] = (),
-    review_writes: Sequence[Artifact | ArtifactSpec] = (),
-    out: Artifact | ArtifactSpec | None = None,
-    outputs: Sequence[Artifact | ArtifactSpec] = (),
-    accepted: str = "accepted",
-    rework: str = "needs_rework",
-    routes: RouteMapping | None = None,
-    route_infos: Mapping[str, RouteInfo | str] | None = None,
-    route_summaries: Mapping[str, str] | None = None,
-    before: Any | None = None,
-    after: Any | None = None,
-    state: Mapping[str, Any] | None = None,
-    before_do: Any | None = None,
-    after_do: Any | None = None,
-    before_review: Any | None = None,
-    after_review: Any | None = None,
-    on_route: Any | None = None,
-    control_schema: Any | None = None,
-    retry: Any | None = None,
-    session: Any | None = None,
-    review_session: Any | None = None,
-    control_routes: bool = True,
-) -> ReviewStepDeclaration:
-    normalized_do = do if do is not None else producer
-    normalized_review = review if review is not None else verifier
-    if normalized_do is None or normalized_review is None:
-        raise TypeError("do_review_step() requires both do= and review= prompts")
-    return ReviewStepDeclaration(
-        normalized_do,
-        normalized_review,
-        name=name,
-        reads=reads,
-        requires=requires,
-        review_requires=review_requires,
-        writes=writes,
-        review_writes=review_writes,
-        out=out,
-        outputs=outputs,
-        accepted=accepted,
-        rework=rework,
-        routes=routes,
-        route_infos=route_infos,
-        before=before,
-        after=after,
-        state=state,
-        before_do=before_do,
-        after_do=after_do,
-        before_review=before_review,
-        after_review=after_review,
-        on_route=on_route,
-        route_summaries=route_summaries,
-        control_schema=control_schema,
-        retry=retry,
-        session=session,
-        review_session=review_session,
+        verifier_session=verifier_session,
         control_routes=control_routes,
     )
 
@@ -569,29 +453,21 @@ def python_step(
     reads: Sequence[ArtifactInput] = (),
     requires: Sequence[ArtifactInput] = (),
     writes: Sequence[Artifact | ArtifactSpec] = (),
-    out: Artifact | ArtifactSpec | None = None,
-    outputs: Sequence[Artifact | ArtifactSpec] = (),
     routes: RouteMapping | None = None,
-    route_infos: Mapping[str, RouteInfo | str] | None = None,
-    route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
     on_route: Any | None = None,
     control_routes: bool = True,
-) -> SystemStepDeclaration | Any:
+) -> PythonStepDeclaration | Any:
     if fn is None:
-        def decorator(inner: Any) -> SystemStepDeclaration:
-            return SystemStepDeclaration(
+        def decorator(inner: Any) -> PythonStepDeclaration:
+            return PythonStepDeclaration(
                 inner,
                 name=name,
                 reads=reads,
                 requires=requires,
                 writes=writes,
-                out=out,
-                outputs=outputs,
                 routes=routes,
-                route_infos=route_infos,
-                route_summaries=route_summaries,
                 before=before,
                 after=after,
                 on_route=on_route,
@@ -599,52 +475,13 @@ def python_step(
             )
 
         return decorator
-    return SystemStepDeclaration(
+    return PythonStepDeclaration(
         fn,
         name=name,
         reads=reads,
         requires=requires,
         writes=writes,
-        out=out,
-        outputs=outputs,
         routes=routes,
-        route_infos=route_infos,
-        route_summaries=route_summaries,
-        before=before,
-        after=after,
-        on_route=on_route,
-        control_routes=control_routes,
-    )
-
-
-def system_step(
-    fn: Any | None = None,
-    *,
-    name: str | None = None,
-    reads: Sequence[ArtifactInput] = (),
-    requires: Sequence[ArtifactInput] = (),
-    writes: Sequence[Artifact | ArtifactSpec] = (),
-    out: Artifact | ArtifactSpec | None = None,
-    outputs: Sequence[Artifact | ArtifactSpec] = (),
-    routes: RouteMapping | None = None,
-    route_infos: Mapping[str, RouteInfo | str] | None = None,
-    route_summaries: Mapping[str, str] | None = None,
-    before: Any | None = None,
-    after: Any | None = None,
-    on_route: Any | None = None,
-    control_routes: bool = True,
-) -> SystemStepDeclaration | Any:
-    return python_step(
-        fn,
-        name=name,
-        reads=reads,
-        requires=requires,
-        writes=writes,
-        out=out,
-        outputs=outputs,
-        routes=routes,
-        route_infos=route_infos,
-        route_summaries=route_summaries,
         before=before,
         after=after,
         on_route=on_route,
@@ -663,11 +500,7 @@ def workflow_step(
     reads: Sequence[ArtifactInput] = (),
     requires: Sequence[ArtifactInput] = (),
     writes: Sequence[Artifact | ArtifactSpec] = (),
-    out: Artifact | ArtifactSpec | None = None,
-    outputs: Sequence[Artifact | ArtifactSpec] = (),
     routes: RouteMapping | None = None,
-    route_infos: Mapping[str, RouteInfo | str] | None = None,
-    route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
     on_route: Any | None = None,
@@ -683,11 +516,7 @@ def workflow_step(
         reads=reads,
         requires=requires,
         writes=writes,
-        out=out,
-        outputs=outputs,
         routes=routes,
-        route_infos=route_infos,
-        route_summaries=route_summaries,
         before=before,
         after=after,
         on_route=on_route,
@@ -695,22 +524,10 @@ def workflow_step(
     )
 
 
-def chain(*items: ChainNode) -> FlowSpec:
-    return FlowSpec(items=tuple(items))
-
-
-def _normalize_outputs(
-    *,
-    out: Artifact | ArtifactSpec | None,
-    outputs: Sequence[Artifact | ArtifactSpec],
+def _normalize_writes(
     writes: Sequence[Artifact | ArtifactSpec],
 ) -> tuple[Artifact | ArtifactSpec, ...]:
-    if writes and outputs:
-        raise TypeError("use either writes= or outputs=, not both")
-    declared = list(writes or outputs)
-    if out is not None:
-        declared.insert(0, out)
-    return tuple(declared)
+    return tuple(writes)
 
 
 def _normalize_simple_prompt(prompt: PromptInput) -> Prompt:
@@ -721,25 +538,6 @@ def _normalize_simple_prompt(prompt: PromptInput) -> Prompt:
     if isinstance(prompt, str):
         return Prompt.inline(prompt)
     raise TypeError(f"unsupported prompt type: {type(prompt)!r}")
-
-
-def _normalize_simple_route_infos(
-    route_infos: Mapping[str, RouteInfo | str] | None,
-    *,
-    route_summaries: Mapping[str, str] | None = None,
-) -> dict[str, RouteInfo]:
-    normalized: dict[str, RouteInfo] = {}
-    for route_name, summary in dict(route_summaries or {}).items():
-        normalized[route_name] = RouteInfo(summary=summary)
-    for route_name, info in dict(route_infos or {}).items():
-        if isinstance(info, str):
-            normalized[route_name] = RouteInfo(summary=info)
-            continue
-        if isinstance(info, RouteInfo):
-            normalized[route_name] = info
-            continue
-        raise TypeError("route_infos values must be RouteInfo instances or summary strings")
-    return normalized
 
 
 def _normalize_simple_choices(choices: Sequence[str]) -> tuple[str, ...]:
@@ -860,27 +658,20 @@ __all__ = [
     "Md",
     "Outcome",
     "PAUSE",
-    "Param",
     "Prompt",
     "Raw",
     "ResolvedArtifacts",
     "Route",
-    "RouteInfo",
     "SELF",
-    "StateVar",
-    "SUCCESS",
     "Session",
-    "StrictWorkflow",
     "Text",
     "Workflow",
+    "Worklist",
     "WorkflowStep",
     "classify",
-    "chain",
-    "do_review_step",
     "llm",
+    "produce_verify_step",
     "python_step",
-    "review_step",
     "step",
-    "system_step",
     "workflow_step",
 ]

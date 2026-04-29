@@ -39,7 +39,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -112,9 +112,9 @@ class WorkflowToEvalSuite(Workflow):
     validated_eval_case_manifest = Artifact("{workflow_folder}/validated_eval_case_manifest.json")
     workflow_eval_suite_receipt = Artifact("{workflow_folder}/workflow_eval_suite_receipt.json")
 
-    frame_evaluation_target = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_evaluation_target = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -125,13 +125,12 @@ class WorkflowToEvalSuite(Workflow):
             workflow_instructions,
         ],
         writes=[evaluation_request_brief, evaluation_dimensions],
-        accepted="evaluation_target_framed",
         control_schema=EvaluationTargetFramingPayload,
         routes=FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS,
     )
-    design_eval_cases = do_review_step(
-        do=Prompt.file("prompts/design_producer.md"),
-        review=Prompt.file("prompts/design_verifier.md"),
+    design_eval_cases = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/design_producer.md"),
+        verifier_prompt=Prompt.file("prompts/design_verifier.md"),
         session=design_session,
         requires=[
             request,
@@ -147,13 +146,12 @@ class WorkflowToEvalSuite(Workflow):
             eval_case_manifest,
             eval_rubric,
         ],
-        accepted="eval_cases_designed",
         control_schema=EvalCaseDesignPayload,
         routes=DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
     )
-    package_workflow_eval_suite = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    package_workflow_eval_suite = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -169,7 +167,6 @@ class WorkflowToEvalSuite(Workflow):
             eval_rubric,
         ],
         writes=[workflow_eval_suite, workflow_eval_suite_summary, workflow_eval_next_action],
-        accepted="workflow_eval_suite_ready",
         control_schema=WorkflowEvalSuitePayload,
         routes=PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS,
     )

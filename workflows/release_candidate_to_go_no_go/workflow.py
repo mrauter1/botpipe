@@ -23,7 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -83,9 +83,9 @@ class ReleaseCandidateToGoNoGo(Workflow):
     release_communications_draft = Artifact("{workflow_folder}/release_communications_draft.md")
     decision_receipt = Artifact("{workflow_folder}/decision_receipt.json")
 
-    frame_release = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_release = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -95,13 +95,12 @@ class ReleaseCandidateToGoNoGo(Workflow):
             workflow_instructions,
         ],
         writes=[release_scope_brief, decision_criteria, evidence_intake_register],
-        accepted="release_framed",
         control_schema=ReleaseFramingPayload,
         routes=FRAME_RELEASE_ROUTE_CONTRACTS,
     )
-    assemble_evidence_pack = do_review_step(
-        do=Prompt.file("prompts/evidence_producer.md"),
-        review=Prompt.file("prompts/evidence_verifier.md"),
+    assemble_evidence_pack = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/evidence_producer.md"),
+        verifier_prompt=Prompt.file("prompts/evidence_verifier.md"),
         session=evidence_session,
         requires=[
             request,
@@ -111,13 +110,12 @@ class ReleaseCandidateToGoNoGo(Workflow):
             evidence_intake_register,
         ],
         writes=[release_inventory, test_evidence_pack, operational_readiness, rollback_readiness, blocking_issues],
-        accepted="evidence_pack_ready",
         control_schema=ReleaseEvidencePayload,
         routes=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
     )
-    assess_go_no_go = do_review_step(
-        do=Prompt.file("prompts/assessment_producer.md"),
-        review=Prompt.file("prompts/assessment_verifier.md"),
+    assess_go_no_go = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/assessment_producer.md"),
+        verifier_prompt=Prompt.file("prompts/assessment_verifier.md"),
         session=assessment_session,
         requires=[
             release_scope_brief,
@@ -130,13 +128,12 @@ class ReleaseCandidateToGoNoGo(Workflow):
             blocking_issues,
         ],
         writes=[go_no_go_assessment, risk_register, decision_summary],
-        accepted="assessment_ready",
         control_schema=ReleaseAssessmentPayload,
         routes=ASSESS_GO_NO_GO_ROUTE_CONTRACTS,
     )
-    prepare_decision_package = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    prepare_decision_package = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -154,7 +151,6 @@ class ReleaseCandidateToGoNoGo(Workflow):
             decision_summary,
         ],
         writes=[release_decision_package, release_communications_draft],
-        accepted="decision_package_ready",
         control_schema=ReleaseDecisionPackagePayload,
         routes=PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS,
     )

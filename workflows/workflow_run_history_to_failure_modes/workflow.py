@@ -59,7 +59,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -135,9 +135,9 @@ class WorkflowRunHistoryToFailureModes(Workflow):
     diagnostic_next_actions = Artifact("{workflow_folder}/diagnostic_next_actions.md")
     failure_mode_diagnostic_receipt = Artifact("{workflow_folder}/failure_mode_diagnostic_receipt.json")
 
-    frame_diagnostic_scope = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_diagnostic_scope = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -149,13 +149,12 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             workflow_instructions,
         ],
         writes=[diagnostic_scope_brief, run_history_scope],
-        accepted="diagnostic_scope_framed",
         control_schema=DiagnosticScopePayload,
         routes=FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS,
     )
-    map_failure_modes = do_review_step(
-        do=Prompt.file("prompts/analyze_producer.md"),
-        review=Prompt.file("prompts/analyze_verifier.md"),
+    map_failure_modes = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/analyze_producer.md"),
+        verifier_prompt=Prompt.file("prompts/analyze_verifier.md"),
         session=analysis_session,
         requires=[
             request,
@@ -166,13 +165,12 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             run_history_scope,
         ],
         writes=[failure_mode_map, failure_mode_manifest, recurring_weak_points],
-        accepted="failure_modes_mapped",
         control_schema=FailureModeMapPayload,
         routes=MAP_FAILURE_MODES_ROUTE_CONTRACTS,
     )
-    package_improvement_pressure = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    package_improvement_pressure = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -187,7 +185,6 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             recurring_weak_points,
         ],
         writes=[improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions],
-        accepted="improvement_pressure_packaged",
         control_schema=ImprovementPressurePayload,
         routes=PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS,
     )

@@ -15,7 +15,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -95,9 +95,9 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
     generated_doc = Artifact("{package_folder}/../../docs/workflows/{state.package_name}.md")
     generated_test = Artifact("{package_folder}/../../tests/runtime/test_{state.package_name}.py")
 
-    frame_candidate = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_candidate = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -110,13 +110,12 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             existing_workflow_prompts,
         ],
         writes=[candidate_comparison, selected_workflow_brief],
-        accepted="candidate_selected",
         control_schema=CandidateSelectionPayload,
         routes=FRAME_CANDIDATE_ROUTE_CONTRACTS,
     )
-    design_package = do_review_step(
-        do=Prompt.file("prompts/design_producer.md"),
-        review=Prompt.file("prompts/design_verifier.md"),
+    design_package = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/design_producer.md"),
+        verifier_prompt=Prompt.file("prompts/design_verifier.md"),
         session=design_session,
         requires=[
             request,
@@ -134,13 +133,12 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             selected_workflow_brief,
         ],
         writes=[workflow_package_spec, step_contracts, prompt_contract_matrix, verification_plan],
-        accepted="design_accepted",
         control_schema=WorkflowDesignPayload,
         routes=DESIGN_PACKAGE_ROUTE_CONTRACTS,
     )
-    build_package = do_review_step(
-        do=Prompt.file("prompts/build_producer.md"),
-        review=Prompt.file("prompts/build_verifier.md"),
+    build_package = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/build_producer.md"),
+        verifier_prompt=Prompt.file("prompts/build_verifier.md"),
         session=build_session,
         requires=[
             request,
@@ -171,13 +169,12 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             generated_test,
             build_report,
         ],
-        accepted="package_built",
         control_schema=WorkflowBuildPayload,
         routes=BUILD_PACKAGE_ROUTE_CONTRACTS,
     )
-    evaluate_package = do_review_step(
-        do=Prompt.file("prompts/evaluate_producer.md"),
-        review=Prompt.file("prompts/evaluate_verifier.md"),
+    evaluate_package = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/evaluate_producer.md"),
+        verifier_prompt=Prompt.file("prompts/evaluate_verifier.md"),
         session=evaluate_session,
         requires=[
             request,
@@ -190,7 +187,6 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             generated_layout,
         ],
         writes=[verification_report, promotion_record, rollback_plan],
-        accepted="evaluation_passed",
         control_schema=WorkflowEvaluationPayload,
         routes=EVALUATE_PACKAGE_ROUTE_CONTRACTS,
     )

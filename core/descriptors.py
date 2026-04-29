@@ -129,6 +129,11 @@ def materialize_descriptor_defaults(fields: Mapping[str, DescriptorField] | tupl
 
 
 def effective_state_model(workflow_cls: type[Any], *, fallback_model: type[BaseModel]) -> type[BaseModel]:
+    if getattr(workflow_cls, "__strict_workflow__", True) is False:
+        base_model = getattr(workflow_cls, "State", None)
+        if not isinstance(base_model, type) or not issubclass(base_model, BaseModel):
+            return fallback_model
+        return base_model
     base_model = getattr(workflow_cls, "State", None)
     if not isinstance(base_model, type) or not issubclass(base_model, BaseModel):
         base_model = fallback_model
@@ -143,6 +148,13 @@ def effective_state_model(workflow_cls: type[Any], *, fallback_model: type[BaseM
 
 
 def effective_parameters_model(workflow_cls: type[Any]) -> type[BaseModel] | None:
+    if getattr(workflow_cls, "__strict_workflow__", True) is False:
+        base_model = getattr(workflow_cls, "Params", None)
+        if base_model is None:
+            return None
+        if not isinstance(base_model, type) or not issubclass(base_model, BaseModel):
+            return None
+        return base_model
     base_model = getattr(workflow_cls, "Parameters", None)
     if base_model is not None and (not isinstance(base_model, type) or not issubclass(base_model, BaseModel)):
         return None

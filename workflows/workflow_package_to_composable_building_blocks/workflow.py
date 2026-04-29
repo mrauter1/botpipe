@@ -64,7 +64,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
-from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -152,9 +152,9 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
     rollback_plan = Artifact("{workflow_folder}/rollback_plan.md")
     workflow_decomposition_receipt = Artifact("{workflow_folder}/workflow_decomposition_receipt.json")
 
-    frame_decomposition_request = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_decomposition_request = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -167,13 +167,12 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             workflow_instructions,
         ],
         writes=[decomposition_request_brief, decomposition_acceptance_criteria],
-        accepted="decomposition_request_framed",
         control_schema=DecompositionRequestFramingPayload,
         routes=FRAME_DECOMPOSITION_REQUEST_ROUTE_CONTRACTS,
     )
-    design_decomposition_plan = do_review_step(
-        do=Prompt.file("prompts/design_producer.md"),
-        review=Prompt.file("prompts/design_verifier.md"),
+    design_decomposition_plan = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/design_producer.md"),
+        verifier_prompt=Prompt.file("prompts/design_verifier.md"),
         session=design_session,
         requires=[
             request,
@@ -191,13 +190,12 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             parent_rewrite_plan,
             regression_guardrails,
         ],
-        accepted="decomposition_plan_designed",
         control_schema=DecompositionPlanPayload,
         routes=DESIGN_DECOMPOSITION_PLAN_ROUTE_CONTRACTS,
     )
-    implement_candidate_decomposition = do_review_step(
-        do=Prompt.file("prompts/implement_producer.md"),
-        review=Prompt.file("prompts/implement_verifier.md"),
+    implement_candidate_decomposition = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/implement_producer.md"),
+        verifier_prompt=Prompt.file("prompts/implement_verifier.md"),
         session=build_session,
         requires=[
             request,
@@ -219,13 +217,12 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             decomposition_build_report,
             candidate_diff_summary,
         ],
-        accepted="candidate_decomposition_built",
         control_schema=CandidateDecompositionBuildPayload,
         routes=IMPLEMENT_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
     )
-    evaluate_candidate_decomposition = do_review_step(
-        do=Prompt.file("prompts/evaluate_producer.md"),
-        review=Prompt.file("prompts/evaluate_verifier.md"),
+    evaluate_candidate_decomposition = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/evaluate_producer.md"),
+        verifier_prompt=Prompt.file("prompts/evaluate_verifier.md"),
         session=evaluate_session,
         requires=[
             request,
@@ -252,7 +249,6 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             promotion_record,
             rollback_plan,
         ],
-        accepted="candidate_decomposition_evaluated",
         control_schema=CandidateDecompositionEvaluationPayload,
         routes=EVALUATE_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
     )

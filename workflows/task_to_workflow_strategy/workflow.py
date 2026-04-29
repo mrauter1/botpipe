@@ -35,7 +35,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -100,9 +100,9 @@ class TaskToWorkflowStrategy(Workflow):
     strategy_next_action = Artifact("{workflow_folder}/strategy_next_action.md")
     strategy_receipt = Artifact("{workflow_folder}/strategy_receipt.json")
 
-    frame_task = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_task = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -113,13 +113,12 @@ class TaskToWorkflowStrategy(Workflow):
             workflow_instructions,
         ],
         writes=[task_strategy_brief, workflow_selection_criteria],
-        accepted="task_framed",
         control_schema=TaskFramingPayload,
         routes=FRAME_TASK_ROUTE_CONTRACTS,
     )
-    select_strategy = do_review_step(
-        do=Prompt.file("prompts/select_producer.md"),
-        review=Prompt.file("prompts/select_verifier.md"),
+    select_strategy = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/select_producer.md"),
+        verifier_prompt=Prompt.file("prompts/select_verifier.md"),
         session=selection_session,
         requires=[
             request,
@@ -135,13 +134,12 @@ class TaskToWorkflowStrategy(Workflow):
             candidate_next_action,
         ],
         writes=[strategy_decision],
-        accepted="strategy_selected",
         control_schema=StrategySelectionPayload,
         routes=SELECT_STRATEGY_ROUTE_CONTRACTS,
     )
-    package_strategy = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    package_strategy = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -159,7 +157,6 @@ class TaskToWorkflowStrategy(Workflow):
             strategy_decision,
         ],
         writes=[workflow_strategy_package, strategy_summary, strategy_next_action],
-        accepted="strategy_package_ready",
         control_schema=StrategyPackagePayload,
         routes=PACKAGE_STRATEGY_ROUTE_CONTRACTS,
     )

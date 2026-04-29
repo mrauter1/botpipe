@@ -37,7 +37,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -104,9 +104,9 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
     validated_workflow_parameters = Artifact("{workflow_folder}/validated_workflow_parameters.json")
     adapted_execution_plan_receipt = Artifact("{workflow_folder}/adapted_execution_plan_receipt.json")
 
-    frame_adaptation_request = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_adaptation_request = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -117,13 +117,12 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             workflow_instructions,
         ],
         writes=[adaptation_request_brief, adaptation_success_criteria],
-        accepted="adaptation_request_framed",
         control_schema=AdaptationRequestFramingPayload,
         routes=FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS,
     )
-    analyze_adaptation_surface = do_review_step(
-        do=Prompt.file("prompts/analyze_producer.md"),
-        review=Prompt.file("prompts/analyze_verifier.md"),
+    analyze_adaptation_surface = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/analyze_producer.md"),
+        verifier_prompt=Prompt.file("prompts/analyze_verifier.md"),
         session=analysis_session,
         requires=[
             request,
@@ -133,13 +132,12 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             adaptation_success_criteria,
         ],
         writes=[workflow_fit_assessment, step_adaptation_matrix],
-        accepted="adaptation_surface_analyzed",
         control_schema=AdaptationSurfaceAnalysisPayload,
         routes=ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS,
     )
-    package_adapted_execution_plan = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    package_adapted_execution_plan = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -157,7 +155,6 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             adapted_execution_summary,
             adapted_execution_next_action,
         ],
-        accepted="adapted_execution_plan_ready",
         control_schema=AdaptedExecutionPlanPayload,
         routes=PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS,
     )

@@ -23,7 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -104,9 +104,9 @@ class InvestigationRequestToEvidencePack(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    frame_investigation = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_investigation = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -120,14 +120,13 @@ class InvestigationRequestToEvidencePack(Workflow):
             investigation_objectives,
             evidence_intake_register,
         ],
-        accepted="investigation_framed",
         control_schema=InvestigationFramingPayload,
         routes=FRAME_INVESTIGATION_ROUTE_CONTRACTS,
     )
 
-    assemble_evidence_pack = do_review_step(
-        do=Prompt.file("prompts/evidence_producer.md"),
-        review=Prompt.file("prompts/evidence_verifier.md"),
+    assemble_evidence_pack = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/evidence_producer.md"),
+        verifier_prompt=Prompt.file("prompts/evidence_verifier.md"),
         session=evidence_session,
         requires=[
             request,
@@ -145,7 +144,6 @@ class InvestigationRequestToEvidencePack(Workflow):
             evidence_pack,
             evidence_pack_summary,
         ],
-        accepted="evidence_pack_ready",
         control_schema=InvestigationEvidencePackPayload,
         routes=ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
     )

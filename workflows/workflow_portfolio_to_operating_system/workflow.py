@@ -57,7 +57,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -240,9 +240,9 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             Event("portfolio_context_captured"),
         )
 
-    frame_portfolio_governance = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_portfolio_governance = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -254,14 +254,13 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             workflow_instructions,
         ],
         writes=[portfolio_governance_brief, portfolio_decision_criteria],
-        accepted="portfolio_governance_framed",
         control_schema=PortfolioGovernanceFramingPayload,
         routes=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
     )
 
-    analyze_portfolio_operating_model = do_review_step(
-        do=Prompt.file("prompts/analyze_producer.md"),
-        review=Prompt.file("prompts/analyze_verifier.md"),
+    analyze_portfolio_operating_model = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/analyze_producer.md"),
+        verifier_prompt=Prompt.file("prompts/analyze_verifier.md"),
         session=analysis_session,
         requires=[
             request,
@@ -272,14 +271,13 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             portfolio_decision_criteria,
         ],
         writes=[workflow_lifecycle_matrix, portfolio_gap_analysis, portfolio_change_candidates],
-        accepted="portfolio_operating_model_analyzed",
         control_schema=PortfolioOperatingModelPayload,
         routes=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
     )
 
-    package_portfolio_operating_system = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    package_portfolio_operating_system = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -298,7 +296,6 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             portfolio_operating_summary,
             portfolio_next_actions,
         ],
-        accepted="portfolio_operating_system_ready",
         control_schema=PortfolioOperatingSystemPayload,
         routes=PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
     )

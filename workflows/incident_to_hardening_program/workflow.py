@@ -21,7 +21,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -124,9 +124,9 @@ class IncidentToHardeningProgram(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    frame_incident = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame_incident = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -140,14 +140,13 @@ class IncidentToHardeningProgram(Workflow):
             response_objectives,
             evidence_intake_register,
         ],
-        accepted="incident_framed",
         control_schema=IncidentFramingPayload,
         routes=FRAME_INCIDENT_ROUTE_CONTRACTS,
     )
 
-    assemble_evidence_pack = do_review_step(
-        do=Prompt.file("prompts/evidence_producer.md"),
-        review=Prompt.file("prompts/evidence_verifier.md"),
+    assemble_evidence_pack = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/evidence_producer.md"),
+        verifier_prompt=Prompt.file("prompts/evidence_verifier.md"),
         session=evidence_session,
         requires=[
             incident_scope_brief,
@@ -161,14 +160,13 @@ class IncidentToHardeningProgram(Workflow):
             observability_gaps,
             evidence_gap_register,
         ],
-        accepted="evidence_pack_ready",
         control_schema=IncidentEvidencePayload,
         routes=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
     )
 
-    rank_cause_hypotheses = do_review_step(
-        do=Prompt.file("prompts/analysis_producer.md"),
-        review=Prompt.file("prompts/analysis_verifier.md"),
+    rank_cause_hypotheses = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/analysis_producer.md"),
+        verifier_prompt=Prompt.file("prompts/analysis_verifier.md"),
         session=analysis_session,
         requires=[
             incident_scope_brief,
@@ -185,14 +183,13 @@ class IncidentToHardeningProgram(Workflow):
             validation_plan,
             incident_summary,
         ],
-        accepted="hypotheses_ranked",
         control_schema=IncidentHypothesisPayload,
         routes=RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS,
     )
 
-    prepare_hardening_program = do_review_step(
-        do=Prompt.file("prompts/program_producer.md"),
-        review=Prompt.file("prompts/program_verifier.md"),
+    prepare_hardening_program = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/program_producer.md"),
+        verifier_prompt=Prompt.file("prompts/program_verifier.md"),
         session=program_session,
         requires=[
             incident_package_checklist,
@@ -215,7 +212,6 @@ class IncidentToHardeningProgram(Workflow):
             stakeholder_communications_draft,
             incident_resolution_package,
         ],
-        accepted="hardening_program_ready",
         control_schema=IncidentHardeningProgramPayload,
         routes=PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS,
     )

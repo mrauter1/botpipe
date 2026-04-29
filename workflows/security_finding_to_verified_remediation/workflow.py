@@ -33,7 +33,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -96,9 +96,9 @@ class SecurityFindingToVerifiedRemediation(Workflow):
     closure_evidence_requirements = Artifact("{workflow_folder}/closure_evidence_requirements.md")
     remediation_receipt = Artifact("{workflow_folder}/remediation_receipt.json")
 
-    assess_security_finding = do_review_step(
-        do=Prompt.file("prompts/assessment_producer.md"),
-        review=Prompt.file("prompts/assessment_verifier.md"),
+    assess_security_finding = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/assessment_producer.md"),
+        verifier_prompt=Prompt.file("prompts/assessment_verifier.md"),
         session=assessment_session,
         requires=[
             request,
@@ -116,13 +116,12 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             remediation_options,
             assessment_summary,
         ],
-        accepted="finding_assessed",
         control_schema=SecurityAssessmentPayload,
         routes=ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS,
     )
-    plan_verified_remediation = do_review_step(
-        do=Prompt.file("prompts/remediation_producer.md"),
-        review=Prompt.file("prompts/remediation_verifier.md"),
+    plan_verified_remediation = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/remediation_producer.md"),
+        verifier_prompt=Prompt.file("prompts/remediation_verifier.md"),
         session=remediation_session,
         requires=[
             invocation_contract,
@@ -140,13 +139,12 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             rollback_safety_plan,
             remediation_summary,
         ],
-        accepted="remediation_planned",
         control_schema=VerifiedRemediationPayload,
         routes=PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS,
     )
-    prepare_closure_package = do_review_step(
-        do=Prompt.file("prompts/closure_producer.md"),
-        review=Prompt.file("prompts/closure_verifier.md"),
+    prepare_closure_package = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/closure_producer.md"),
+        verifier_prompt=Prompt.file("prompts/closure_verifier.md"),
         session=closure_session,
         requires=[
             request,
@@ -171,7 +169,6 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             stakeholder_communication_draft,
             closure_evidence_requirements,
         ],
-        accepted="closure_package_ready",
         control_schema=SecurityClosurePackagePayload,
         routes=PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS,
     )

@@ -167,3 +167,78 @@ phase_mode=single
 phase_ids=public-surface-cleanup,compiler-validation-normalization,engine-provider-persistence,consumer-migration-and-package-cleanup,verification-and-strictness
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+I’m implementing the `public-surface-cleanup` phase: trim the exported API to the canonical surface and rename the simple authoring declarations to the new producer/verifier and Pydantic-state model. I’ll read the active phase artifacts and the relevant package entrypoints first, then patch only the code paths needed for this phase plus the regression tests they imply.
+
+The active phase artifact confirms this pass is intentionally narrow: public exports plus the simple declaration layer, not the full compiler/runtime rename. I’m checking `autoloop/simple.py`, `autoloop/__init__.py`, and the current simple-surface tests to see how much of the canonical surface already exists versus what still depends on legacy aliases.
+
+`autoloop/simple.py` is still a compatibility facade with legacy aliases baked into its signatures and exports. I’m reading the rest of that file now to see what can be removed in-phase without breaking the lowering path, then I’ll patch the tests around the canonical API instead of preserving the old surface.
+
+The lowering path already has partial producer/verifier support in the compiled model, so I’m focusing next on the simple-to-core validation bridge. That’s the narrowest place to enforce `state=BaseModelSubclass`, `Params`, and the canonical simple step signatures without dragging the whole engine refactor into this phase.
+
+A few other tests and doc assertions still import the removed aliases from `autoloop.simple`, so this phase isn’t just `__init__` and one unit file. I’m inspecting those direct consumers now and will update only the ones that validate the public authoring surface, leaving deeper compiler/runtime compatibility tests for later phases.
+
+The biggest regression surface is the repository’s own authored workflows: many of them import `do_review_step` from `autoloop`. If I remove that export without updating those packages, the public surface becomes canonical but the in-repo examples stop importing. I’m checking how those workflows use the old signature so I can decide whether a focused repo-wide rename is safe in this phase.
+
+I’ve narrowed the work to three layers for this phase: the `autoloop` export surface, the `autoloop.simple` declaration API, and the repo’s own public-authoring consumers that import those names. I’m checking the current git state before editing so I can avoid stepping on unrelated changes.
+
+I have enough context to edit safely. The next patch removes the legacy names from `autoloop`/`autoloop.simple`, adds the canonical `produce_verify_step` declaration, and updates the validation bridge so simple workflows use `State` / `Params` and step `state=BaseModelSubclass` instead of descriptor mappings.
+
+The simple-surface test file is mostly legacy coverage for the aliases we’re deleting. I’m replacing it with focused phase tests that assert the new import surface, the canonical declaration signatures, and the Pydantic `State` / `Params` / step-state behavior.
+
+The surface layer is patched. I’m running focused tests now against the new import contract and the simple authoring bridge before touching the phase notes.
+
+The repo doesn’t have `pytest` on the shell PATH, so I’m rerunning through the project virtualenv. If that fails, I’ll switch to `python -m pytest` from the same interpreter to keep the environment stable.
+
+Two failures are real code gaps and three are test-shape mismatches. I’m patching declaration attribute access for simple artifact refs, reordering the root export list to the canonical order, and tightening the tests to trigger validation at compile time where this codebase actually validates workflow classes.
+
+The remaining failure is a straightforward `__getattr__` recursion bug on declarations without `review_outputs`. I’m tightening that accessor and rerunning the same focused suite.
+
+The unit surface tests are green. I’m doing one runtime-reference test and one engine-contract test next to catch import/collection regressions in the repo’s own canonicalized `produce_verify_step` consumers.
+
+The code changes are in place and the focused surface tests passed. I’m writing the phase notes and the turn decisions now so the next phase inherits the exact compatibility boundaries and the intentionally deferred work.
+
+Scope considered
+
+- `autoloop` root exports, `autoloop.simple` authoring declarations, the simple-surface validation bridge, the repo-authored workflows that imported removed simple aliases, and the phase notes/decision log.
+- I kept deeper core/runtime compatibility work out of scope except for the minimal validation changes needed to support `Params` and step `state=BaseModelSubclass` on the simple surface.
+
+What I analyzed
+
+- `autoloop/__init__.py` and `autoloop/simple.py` still exported and accepted legacy names like `do_review_step`, `review_step`, `system_step`, `chain`, `StateVar`, `Param`, `SUCCESS`, and `RouteInfo`.
+- `core/descriptors.py` and `core/validation.py` still assumed descriptor-backed simple state/params and mapping-based step state.
+- Repo workflows under `workflows/*/workflow.py` were still importing `do_review_step` from `autoloop` and using `do=` / `review=` plus redundant `accepted=` tags.
+
+What I changed
+
+- Trimmed `autoloop` root exports to the canonical surface only and removed the removed alias re-exports.
+- Reworked `autoloop.simple` to expose `produce_verify_step`, `python_step`, `step`, `workflow_step`, canonical `writes`, and `Worklist`, while removing public `do_review_step`, `review_step`, `system_step`, `chain`, `StrictWorkflow`, `StateVar`, `Param`, `RouteInfo`, and `SUCCESS`.
+- Updated the simple validation/descriptors path so simple workflows use `Params = BaseModel`, `State = BaseModel`, and step `state=BaseModelSubclass`; descriptor-backed simple authoring is now rejected.
+- Added simple-declaration artifact attribute access so references like `prepare.brief` still work on the canonical surface.
+- Replaced the legacy simple-surface tests with canonical presence/absence and compile-time validation coverage, updated strictness/runtime/contract consumers that depended on the removed aliases, and migrated the repo-authored simple workflows to `produce_verify_step(producer_prompt=..., verifier_prompt=...)`.
+
+Key findings / decisions
+
+- I kept internal lowering support for legacy `flow` / `transitions` paths in validation so the next phases can remove them deliberately without reintroducing public aliases.
+- Step-local Pydantic state is lowered into descriptor-like field metadata during validation so the existing engine/checkpoint state store can keep working unchanged in this phase.
+- Package-level/runtime `Parameters` discovery and broader core/runtime renames like `SUCCESS`/`RouteInfo` are still deferred; this pass enforces the canonical names on the public simple authoring surface only.
+
+Open issues / next step
+
+- The deeper compiler/runtime/static-graph/provider payload cleanup is still pending, especially the internal `SUCCESS`, `RouteInfo`, `required_outputs`, and `produces` vocabulary.
+- I updated the repo-authored simple workflows, but I did not run the full suite; I ran:
+  - `.venv/bin/pytest tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py tests/unit/test_primitives_and_stores.py -q`
+  - `.venv/bin/pytest tests/runtime/test_workflow_reference_resolution.py::test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection tests/contract/test_engine_contracts.py::test_produce_verify_step_sends_split_phase_contracts_without_implicitly_requiring_producer_writes -q`

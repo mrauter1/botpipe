@@ -69,7 +69,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_optimization_refinement_evidence,
     )
 
-from autoloop import Event, FINISH, Outcome, Prompt, Route, Session, Workflow, do_review_step, python_step
+from autoloop import Event, FINISH, Outcome, Prompt, Route, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -249,9 +249,9 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     workflow_optimization_packet = Artifact("{workflow_folder}/workflow_optimization_packet.md")
     optimization_publication_receipt = Artifact.json("{workflow_folder}/optimization_publication_receipt.json")
 
-    frame = do_review_step(
-        do=Prompt.file("prompts/frame_producer.md"),
-        review=Prompt.file("prompts/frame_verifier.md"),
+    frame = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/frame_producer.md"),
+        verifier_prompt=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
         requires=[
             request,
@@ -278,13 +278,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             excluded_run_report,
             workflow_failure_scenario_seeds,
         ],
-        accepted="optimization_scope_framed",
         control_schema=FrameOptimizationPayload,
         routes=FRAME_ROUTE_CONTRACTS,
     )
-    rank_targets = do_review_step(
-        do=Prompt.file("prompts/rank_targets_producer.md"),
-        review=Prompt.file("prompts/rank_targets_verifier.md"),
+    rank_targets = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/rank_targets_producer.md"),
+        verifier_prompt=Prompt.file("prompts/rank_targets_verifier.md"),
         session=rank_targets_session,
         requires=[
             request,
@@ -296,13 +295,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_optimization_trace_corpus,
         ],
         writes=[step_trace_metrics, step_optimization_priority_report],
-        accepted="targets_ranked",
         control_schema=RankTargetsPayload,
         routes=RANK_TARGETS_ROUTE_CONTRACTS,
     )
-    mine_failures = do_review_step(
-        do=Prompt.file("prompts/mine_failures_producer.md"),
-        review=Prompt.file("prompts/mine_failures_verifier.md"),
+    mine_failures = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/mine_failures_producer.md"),
+        verifier_prompt=Prompt.file("prompts/mine_failures_verifier.md"),
         session=mine_failures_session,
         requires=[
             request,
@@ -315,13 +313,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_failure_scenario_seeds,
         ],
         writes=[workflow_failure_scenarios],
-        accepted="failure_scenarios_mined",
         control_schema=FailureScenarioPayload,
         routes=MINE_FAILURES_ROUTE_CONTRACTS,
     )
-    optimize_producer = do_review_step(
-        do=Prompt.file("prompts/optimize_producer_producer.md"),
-        review=Prompt.file("prompts/optimize_producer_verifier.md"),
+    optimize_producer = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/optimize_producer_producer.md"),
+        verifier_prompt=Prompt.file("prompts/optimize_producer_verifier.md"),
         session=optimize_producer_session,
         requires=[
             request,
@@ -332,13 +329,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             step_optimization_priority_report,
         ],
         writes=[producer_prompt_optimization_candidates],
-        accepted="producer_candidates_ready",
         control_schema=CandidatePassPayload,
         routes=OPTIMIZE_PRODUCER_ROUTE_CONTRACTS,
     )
-    optimize_verifier_rubric = do_review_step(
-        do=Prompt.file("prompts/optimize_verifier_rubric_producer.md"),
-        review=Prompt.file("prompts/optimize_verifier_rubric_verifier.md"),
+    optimize_verifier_rubric = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/optimize_verifier_rubric_producer.md"),
+        verifier_prompt=Prompt.file("prompts/optimize_verifier_rubric_verifier.md"),
         session=optimize_verifier_rubric_session,
         requires=[
             request,
@@ -349,13 +345,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             step_optimization_priority_report,
         ],
         writes=[verifier_rubric_optimization_candidates],
-        accepted="verifier_rubric_candidates_ready",
         control_schema=CandidatePassPayload,
         routes=OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS,
     )
-    optimize_tokens = do_review_step(
-        do=Prompt.file("prompts/optimize_tokens_producer.md"),
-        review=Prompt.file("prompts/optimize_tokens_verifier.md"),
+    optimize_tokens = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/optimize_tokens_producer.md"),
+        verifier_prompt=Prompt.file("prompts/optimize_tokens_verifier.md"),
         session=optimize_tokens_session,
         requires=[
             request,
@@ -366,13 +361,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             step_optimization_priority_report,
         ],
         writes=[token_optimization_candidates],
-        accepted="token_candidates_ready",
         control_schema=CandidatePassPayload,
         routes=OPTIMIZE_TOKENS_ROUTE_CONTRACTS,
     )
-    adversarial_cases = do_review_step(
-        do=Prompt.file("prompts/adversarial_cases_producer.md"),
-        review=Prompt.file("prompts/adversarial_cases_verifier.md"),
+    adversarial_cases = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/adversarial_cases_producer.md"),
+        verifier_prompt=Prompt.file("prompts/adversarial_cases_verifier.md"),
         session=adversarial_cases_session,
         requires=[
             request,
@@ -382,13 +376,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             step_optimization_priority_report,
         ],
         writes=[adversarial_case_candidates],
-        accepted="adversarial_cases_ready",
         control_schema=AdversarialCasesPayload,
         routes=ADVERSARIAL_CASES_ROUTE_CONTRACTS,
     )
-    workflow_level = do_review_step(
-        do=Prompt.file("prompts/workflow_level_producer.md"),
-        review=Prompt.file("prompts/workflow_level_verifier.md"),
+    workflow_level = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/workflow_level_producer.md"),
+        verifier_prompt=Prompt.file("prompts/workflow_level_verifier.md"),
         session=workflow_level_session,
         requires=[
             request,
@@ -401,13 +394,12 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             step_optimization_priority_report,
         ],
         writes=[workflow_level_optimization_candidates],
-        accepted="workflow_level_candidates_ready",
         control_schema=CandidatePassPayload,
         routes=WORKFLOW_LEVEL_ROUTE_CONTRACTS,
     )
-    package = do_review_step(
-        do=Prompt.file("prompts/package_producer.md"),
-        review=Prompt.file("prompts/package_verifier.md"),
+    package = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/package_producer.md"),
+        verifier_prompt=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
         requires=[
             request,
@@ -422,7 +414,6 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             optimization_package_checklist,
         ],
         writes=[workflow_optimization_scorecard, workflow_optimization_packet],
-        accepted="optimization_packet_ready",
         control_schema=OptimizationPackagePayload,
         routes=PACKAGE_ROUTE_CONTRACTS,
     )

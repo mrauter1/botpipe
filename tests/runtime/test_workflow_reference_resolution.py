@@ -264,12 +264,11 @@ def test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_cap
         """
 from __future__ import annotations
 
-from autoloop.simple import Workflow, chain, step
+from autoloop.simple import Workflow, step
 
 
 class SimpleExample(Workflow):
     a = step("Do A.")
-    flow = chain(a)
 """.strip()
         + "\n",
         encoding="utf-8",

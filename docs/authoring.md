@@ -8,12 +8,12 @@ Use:
 
 ```python
 from autoloop.simple import Workflow, Prompt, Route, FINISH
-from autoloop.simple import Json, Md, Text, Raw, step, do_review_step, workflow_step, python_step
+from autoloop.simple import Json, Md, Text, Raw, step, produce_verify_step, workflow_step, python_step
 ```
 
 Use `from autoloop.simple import ...` or `from autoloop import ...` in public workflow code and examples.
 `core/*` remains the internal kernel surface for strict runtime code and tests; it is not the public authoring API.
-Legacy aliases still exist for migrated code, but new workflow code should stay on the canonical surface instead of `StrictWorkflow`, `review_step`, `system_step`, `outputs`, `out`, `SUCCESS`, or `chain`.
+Legacy aliases are intentionally removed from the public authoring surface; use the canonical names instead of `StrictWorkflow`, `review_step`, `system_step`, `outputs`, `out`, `SUCCESS`, or `chain`.
 
 Greenfield authoring defaults:
 
@@ -22,7 +22,7 @@ Greenfield authoring defaults:
 - `Prompt.inline(...)`, `Prompt.file(...)`, and `Prompt.ref(...)` are the canonical prompt forms.
 - `reads` are optional context and do not fail when missing.
 - `requires` are hard input preconditions.
-- `writes` is the canonical output surface; `out` and `outputs` remain compatibility aliases.
+- `writes` is the canonical output surface.
 - artifact schemas validate files and stay distinct from provider `control_schema`.
 - `python_step(fn)` does not require an `on_<step>` handler.
 - `workflow_step(...)` lowers to a real `WorkflowStep`.
@@ -113,7 +113,7 @@ When the same parameter bundle appears in more than one workflow, prefer shared 
 
 ## Step Control Contracts
 
-Provider-backed simple steps may declare structured control contracts directly on `step(...)` and `do_review_step(...)`. The runtime renders those declarations into one shared human-readable Runtime Step Contract before CLI-backed providers run.
+Provider-backed simple steps may declare structured control contracts directly on `step(...)` and `produce_verify_step(...)`. The runtime renders those declarations into one shared human-readable Runtime Step Contract before CLI-backed providers run.
 
 ```python
 from pydantic import BaseModel
@@ -190,7 +190,7 @@ If a workflow or template documents operational usage, keep it on this typed sur
 
 Concrete runtime adapters live under `runtime/providers/`, but that package is framework-owned implementation detail. Workflow authors should target the typed runtime config surface and the generic CLI flags rather than importing provider adapters or describing non-public factory hooks.
 
-For `do_review_step(...)` verifiers and provider-backed `step(...)` prompts, treat the provider-facing completion contract as strict JSON. The runtime now validates verifier and single-LLM outcomes locally, so prompts should ask for one JSON object matching the declared routes and payload contract rather than free-form prose.
+For `produce_verify_step(...)` verifiers and provider-backed `step(...)` prompts, treat the provider-facing completion contract as strict JSON. The runtime now validates verifier and single-LLM outcomes locally, so prompts should ask for one JSON object matching the declared routes and payload contract rather than free-form prose.
 
 ## Runtime Observability Defaults
 
@@ -285,7 +285,7 @@ New runs are message-first:
 
 The runtime persists resumability through an opaque `session_id` plus optional `provider_metadata`. Workflow code should treat session continuity as opaque runtime state and use the `Session` / context APIs rather than depending on persisted payload details.
 
-Every workflow also has an implicit default session slot named `default`. Provider-backed `step(...)` and `do_review_step(...)` declarations use that slot automatically when no explicit `session=` is declared.
+Every workflow also has an implicit default session slot named `default`. Provider-backed `step(...)` and `produce_verify_step(...)` declarations use that slot automatically when no explicit `session=` is declared.
 
 `Continuity` defines the default reuse policy for a session slot:
 
@@ -329,7 +329,7 @@ report = Artifact("{workflow_folder}/report.md")
 Step-local artifacts can now be declared inline:
 
 ```python
-from autoloop.simple import FINISH, Json, Md, Prompt, Route, do_review_step
+from autoloop.simple import FINISH, Json, Md, Prompt, Route, produce_verify_step
 
 
 class Summary(BaseModel):
@@ -337,9 +337,9 @@ class Summary(BaseModel):
     ready: bool
 
 
-draft = do_review_step(
-    do=Prompt.file("prompts/draft_producer.md"),
-    review=Prompt.file("prompts/draft_verifier.md"),
+draft = produce_verify_step(
+    producer_prompt=Prompt.file("prompts/draft_producer.md"),
+    verifier_prompt=Prompt.file("prompts/draft_verifier.md"),
     writes=[
         Json("summary", Summary, required=True),
         Md("report", required=True),
@@ -440,9 +440,9 @@ gates = Worklist.from_artifact(
     status="status",
 )
 
-assess = do_review_step(
-    do=Prompt.file("prompts/assess_producer.md"),
-    review=Prompt.file("prompts/assess_verifier.md"),
+assess = produce_verify_step(
+    producer_prompt=Prompt.file("prompts/assess_producer.md"),
+    verifier_prompt=Prompt.file("prompts/assess_verifier.md"),
     scope=gates,
 )
 ```
