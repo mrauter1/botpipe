@@ -1348,3 +1348,191 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m working the `consumer-migration-and-package-cleanup` phase: migrate remaining consumers/docs/tests to the canonical API and finish stdlib versus `autoloop_optimizer` cleanup without pulling unrelated changes into scope. I’ll start by reading the phase artifacts and scanning the repo for remaining banned names and duplicate optimizer surfaces.
+
+The remaining legacy surface is concentrated in consumer tests and workflow packages, with capability inspection still intentionally legacy-shaped from the previous phase. I’m narrowing to active source, docs, tests, and optimizer/stdlib directories to determine which consumers must move now and which compatibility adapters should stay internal.
+
+I’ve confirmed two broad buckets: consumer assertions still hard-code legacy runtime vocabulary, and several workflow/stdlib modules still depend on old package fallbacks and duplicated optimizer helpers. Next I’m reading the active stdlib/optimizer entry points and the few workflow packages that still import `autoloop_v3` or expose `Parameters`, so I can patch the canonical source rather than chasing generated fixtures.
+
+The canonical API cleanup already landed in the engine, but repo-authored workflow packages still advertise `Parameters` and dual import fallbacks. I’m checking loader behavior now so I can switch package consumers to `Params` cleanly and avoid breaking runtime discovery.
+
+The bigger migration is now clear: package discovery and repo-authored workflows still revolve around `Parameters`, and the remaining workflow docs still describe old pair/system/output names. I’m reading one representative workflow package plus the loader/capability entry points to make the `Params` switch once, then I’ll fan that across workflow packages and tests.
+
+The workflow/package layer still uses the old `Parameters` contract, and the remaining test suite is split between canonical simple-surface tests and legacy low-level assertions that now point at removed compiled fields. I’m checking the current compiled/runtime field names so I can rewrite those consumer assertions to the active contract instead of guessing.
+
+I have enough context to start the migration pass.
+
+Plan:
+1. Switch workflow package parameter/export conventions from `Parameters` to `Params`, and update loader/capability inspection to resolve only the canonical package model while failing clearly on `Parameters`.
+2. Remove package-level `autoloop_v3` / repo-root fallback imports from active workflow packages and optimizer helpers, pointing active consumers at one canonical import path.
+3. Shrink the active `stdlib` surface to generic helpers and move workflow-application consumers to `autoloop_optimizer`.
+4. Rewrite active docs/tests that still assert legacy consumer vocabulary like `route_required_outputs`, `SUCCESS`, `pair`, `system`, and `Parameters`.
+5. Run focused suites for loader/package discovery, workflow integration, stdlib/optimizer helpers, and strictness, then update the phase notes and decision ledger with any non-obvious migration choices.
+
+I’m moving from analysis into edits now. First patch is the package/runtime contract: `Params` becomes the only active workflow-parameter export, capability inspection flips to canonical `writes`/`routes`, and CLI inspection stops emitting the legacy payload keys.
+
+I’m on the workflow-package sweep now: renaming the package-level parameter model to `Params`, removing `autoloop_v3`/fallback import blocks from active packages, and leaving `params.py` as the file name so discovery doesn’t need a second filesystem migration.
+
+The bulk rename is mechanical enough that I’m doing it as a repo-local sweep rather than hand-editing each package. After that I’ll come back and collapse the remaining import-fallback blocks to single canonical imports.
+
+I’ve finished the name rename; the remaining package cleanup is mostly the old dual-import scaffolding. I’m collapsing those `autoloop_v3` fallback blocks in the active workflow package models next, then I’ll do the same for workflow contracts and optimizer helpers.
+
+The workflow packages are on one import path now. I’m switching the shared optimizer helpers next, because they still depend on the legacy capability payload shape and on `autoloop_v3` import fallbacks.
+
+The only remaining consumers of the duplicate stdlib optimizer modules are tests, which is the right point to cut over. I’m removing those duplicate source modules now so the canonical ownership is enforced by the tree itself, then I’ll repair the tests against `autoloop_optimizer` and the canonical payload names.
+
+I’ve finished the first migration pass through workflow packages and optimizer/stdlib imports. Next I’m validating the resulting breakage surface in tests and then I’ll patch the remaining consumer-facing docs/tests to the canonical `Params` / `writes` / `required_writes` contract.
+
+The focused test run didn’t execute because `pytest` is not on `PATH`, so I’m checking the repo’s expected runner before validating. I also have the concrete remaining migration surface now: docs and a large set of non-compat tests still assert legacy `Parameters` / `route_required_outputs` / `SUCCESS` payloads.
+
+The active phase artifact doesn’t add extra reviewer constraints; the main remaining work is exactly the repo-wide consumer migration from the plan. I’m narrowing that to canonical docs and non-compat tests first, and I’ll leave explicit compatibility fixtures carrying legacy names where they are still testing reader/backward-compat paths.
+
+I’ve confirmed the migration split now: compatibility-only files can keep legacy fixtures, but several non-compat runtime/unit tests are still asserting the old consumer payload shape directly. I’m checking which of those now need assertion rewrites versus which are still intentionally pinned to internal low-level scaffolding.
+
+I’ve separated the work into two buckets: mechanically safe consumer rewrites, and files that need semantic assertion updates because the inspected object shape changed. I’m doing the safe bulk migration first so the remaining diffs are smaller and easier to review.
+
+The bulk rewrite exposed the next real gap: several workflow-package tests were asserting canonical names on the wrong object. Provider-call assertions are fine with `route_required_writes`, but compiled-step assertions need to read the compiled route metadata instead of the old step-local compatibility fields.
+
+I’m patching the semantic mismatches now: compiled workflow assertions need to use `compiled.route(...)`, and provider-call assertions need the canonical `routes` / `route_required_writes` fields. After that I’ll move to the remaining unit consumer tests around `stdlib` and capability inspection.
+
+The next breakage surface is `tests/unit/test_stdlib_and_extensions.py`: it still imports optimizer helpers from deleted `stdlib` paths and still expects legacy capability payload keys. I’m reading just the relevant sections so I can migrate that file without dragging the compatibility-runtime suite into scope.
+
+I need one real payload sample from the migrated capability-inspection path before I rewrite the unit expectations around it. I’m generating that from the code directly instead of guessing the exact JSON shape.
+
+The first focused runtime test exposed a real regression unrelated to the assertion rewrites: topology hashing is trying to JSON-serialize an `Artifact` object during `compile_workflow()`. I’m tracing that now because it blocks all of the workflow-package validation, and it needs to be fixed before the consumer-facing test updates are meaningful.
+
+The serialization failure is coming from topology-hash payload generation, not from the consumer tests. I’m making that payload normalize prompt-reference entries defensively so compile-time hashing can’t be broken by non-string internal references.
+
+The prompt-ref normalization wasn’t enough; there’s at least one more non-JSON value leaking into the topology-hash payload. I’m introspecting the actual payload object directly so I can fix the precise field instead of adding blind conversions everywhere.
+
+The failing assertion exposed a second underlying bug: compiled route metadata was still letting the raw route declaration override the already-normalized required-write list. I’m fixing that in the compiler so consumer tests can assert against the canonical qualified names instead of adapting to a stale internal leak.
+
+I’ve finished the route-shape migration on the workflow-package runtime tests and fixed the compiler regression those tests uncovered. I’m now cleaning the remaining `Params`/doc wording stragglers with smaller scripted edits because the big one-liner replacement became too error-prone.
+
+The docs grep is down to canonical wording only in the sections I touched; the remaining noisy hits there are ordinary words like “route” or “output,” not the removed API keys. I’ve kicked off a focused runtime-suite pass now to see what still breaks after the loader/compiler/test rewrites.
+
+The collection failures are from tests still importing optimizer writers from `stdlib`, which I intentionally trimmed. I’m moving those imports to `autoloop_optimizer` now so the consumer layer matches the package split instead of restoring the old stdlib surface.
+
+The optimizer package is importable only through the repo package namespace here, not as a standalone top-level package. I’m switching the migrated test imports to `autoloop_v3.autoloop_optimizer.*` so they match the package layout instead of weakening the optimizer package back into a dual import surface.
+
+The next runtime blocker is compiled pair-step metadata still carrying some raw artifact objects through to provider contract assembly. I’m hardening the engine’s provider-ref lookup so it canonicalizes those references on the way in instead of assuming every compiled field is already a plain string.
+
+I’m recording the actual migration decisions and touched surfaces now so the next turn does not have to reconstruct them from diffs. The current state is meaningful but not clean enough to call done: the focused runtime suite still has a large failing tail beyond the issues I already fixed.
+
+Scope considered
+
+Consumer-facing workflow packages, loader/capability inspection, optimizer-vs-stdlib package boundaries, canonical docs, and the active runtime/unit consumer tests tied to this phase. I stayed out of unrelated dirty `.autoloop` files and did not touch reviewer-owned `criteria.md`.
+
+What I analyzed
+
+I traced the remaining legacy consumer surface after the earlier phases: workflow package `Params` exports, capability inspection payload shape, stdlib re-exports of optimizer helpers, workflow-package docs, and the runtime tests that still asserted `Parameters`, `route_required_outputs`, `route_infos`, `produces`, and `SUCCESS`. I also validated the migrated path with focused pytest runs, which exposed two real runtime regressions in topology/static-graph JSON serialization and provider-contract artifact lookup.
+
+What I changed
+
+I migrated workflow package consumers to canonical `Params`, removed workflow-package fallback imports, and moved active optimizer/application imports toward `autoloop_optimizer` instead of `stdlib`. I updated capability inspection and CLI inspection to emit canonical `writes`, `routes`, `required_writes`, canonical step kinds, and `FINISH` targets. I trimmed `stdlib/__init__.py` to generic helpers and deleted duplicated optimizer/application modules from `stdlib`.
+
+I also updated a large slice of docs and runtime tests toward the canonical contract, recorded the phase notes and decisions, and fixed two runtime blockers uncovered during validation:
+- `core/compiler.py` now normalizes topology-hash JSON serialization and preserves normalized compiled-route required writes.
+- `runtime/static_graph.py` now JSON-normalizes prompt references/static graph payloads.
+- `core/engine.py` now canonicalizes raw artifact references before building provider artifact/readable refs.
+
+Key findings / decisions
+
+The repo layout still requires consumer imports through `autoloop_v3.autoloop_optimizer.*`, not top-level `autoloop_optimizer.*`, because that package still uses repo-package-relative imports. I recorded that in `decisions.txt`.
+
+The work is not complete yet. The focused runtime suite still has a large failing tail after the fixes above. The first broad blockers I removed were:
+- topology/static-graph payloads trying to serialize raw `Artifact` objects
+- provider-contract assembly receiving raw artifact references instead of canonical artifact names
+
+Open issues / next step
+
+The remaining work is to finish migrating the still-failing runtime/unit consumer tests and the remaining helper expectations to the canonical contract, then rerun the focused suites. Current validation status:
+- `tests/runtime/test_workflow_builder_package.py::test_workflow_builder_package_compiles_with_explicit_control_contracts` passes
+- the broader focused runtime suite still fails heavily, so this phase is only partially implemented at this point
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m reviewing the active phase artifacts and validating the implementation against the phase acceptance criteria first. Then I’ll record the blocking regressions already visible from the focused runtime validation into the reviewer feedback artifact.
+
+Reviewing the phase artifacts and the changed consumer-facing contract first, then I’ll verify the remaining failure surface with targeted reads and test evidence before updating the review artifacts.
+
+I’ve got the phase notes and decisions. Next I’m checking the representative failing runtime paths against the changed code so the review findings tie to concrete symbols and failure modes rather than just the aggregate test count.
+
+The broad suite still contains both legacy-surface tests and newer canonical assertions. I’m narrowing to a representative current failure in the migrated runtime tests, because that gives a stronger blocker than citing the aggregate failure count alone.
+
+The representative failure is concrete: the migrated runtime test expects typed route metadata, but the request capture is receiving plain dicts. I’m checking where the engine builds provider route payloads, because that determines whether this is a fake-provider regression or a broader runtime contract leak.
+
+One material issue is already visible without rerunning more tests: capability inspection still carries the old shape as an adapter. I’m checking the exact fields it emits, because the active phase explicitly required migrating capability inspection itself to the canonical terminology.
+
+I also need to check acceptance criterion AC-1 directly, not just infer it from test failures. I’m grepping the active consumer surfaces for banned names to see whether the migration itself is still incomplete in docs, workflows, and active tests.
+
+The migration gap is broader than one failing assertion. Active tests and even generated contract strings still mention banned names, so I’m checking the stdlib/optimizer boundary next to see whether AC-2 was actually completed or only partially redirected.
+
+I have enough to draft the blockers, but I want exact file/line anchors for each one so the feedback is actionable and stable. Then I’ll update the criteria and feedback artifacts only.
+
+I’ve got enough blockers for the code paths. One last pass through the docs gives me a clean anchor for the consumer-facing part of AC-1, then I’ll write the review artifacts and stop.
+
+I have the review set: four blockers covering incomplete consumer migration, a concrete provider contract regression, legacy capability inspection shape, and unfinished stdlib/optimizer separation. I’m writing those findings into the phase artifacts now.
+
+The review artifacts are updated. I’m doing one quick readback to make sure the findings and reviewer status are recorded cleanly, then I’ll close with the verifier summary and loop-control result.
+
+Scope considered
+
+The active consumer-migration phase only: changed consumer-facing runtime/tests/docs/workflow-package surfaces, capability inspection, and stdlib versus `autoloop_optimizer` separation. I did not review unrelated dirty repo state outside what was needed to assess regression risk.
+
+What I analyzed
+
+I read the phase criteria, feedback stub, implementation notes, and run decisions first. Then I checked the changed runtime/provider boundary, capability-inspection shape, stdlib exports, representative active workflow imports, and the migrated runtime tests that the implementer already flagged as still failing.
+
+What I reviewed
+
+I reproduced the current representative runtime failure with:
+`./.venv/bin/python -m pytest tests/runtime/test_workflow_builder_package.py::test_workflow_builder_package_runs_and_generates_a_compilable_package --maxfail=1 -q`
+
+I also verified the concrete code paths behind it:
+- `core/engine.py::_routes_for_step`
+- `core/providers/fake.py::ProviderCall`
+- `core/workflow_capabilities.py`
+- `stdlib/__init__.py`
+- active runtime tests and docs still containing banned consumer names
+
+Key findings / decisions
+
+I recorded four blocking findings in the phase feedback artifact and left all criteria boxes unchecked.
+- `IMP-001`: active docs/tests/generated fixtures still use banned names, so AC-1 is not met.
+- `IMP-002`: provider route metadata is emitted as plain dicts instead of the typed `ProviderRoute` contract, causing a concrete runtime regression.
+- `IMP-003`: capability inspection still exposes legacy `transitions` / `global_transitions`, which contradicts the phase scope.
+- `IMP-004`: `stdlib` still exports application-specific optimizer helpers/models, so AC-2 is not complete.
+
+Open issues / next step
+
+The phase should go back to implementation. The next pass needs to finish the active consumer migration, unify the provider route payload shape, move capability inspection to canonical route metadata, and complete the stdlib/optimizer split before this phase can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
