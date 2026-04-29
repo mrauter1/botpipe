@@ -2,140 +2,183 @@ version: 1
 task_id: below-is-the-revised-standalone-implementation-s-9b605d02
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/request.md
 phases:
-  - phase_id: "public-surface-cleanup"
-    title: "Canonical Public Surface"
-    objective: "Replace compatibility-heavy authoring exports and simple declarations with the single canonical Autoloop API."
-    status: "planned"
-    in_scope:
-      - "Trim `autoloop` public exports to the canonical list only."
-      - "Rename simple-surface primitives and arguments to `produce_verify_step`, `producer_prompt`, `verifier_prompt`, `writes`, and Pydantic `state=Model`."
-      - "Remove public `StrictWorkflow`, `RouteInfo`, `chain`, `review_step`, `do_review_step`, `system_step`, `StateVar`, and `Param`."
-    out_of_scope:
-      - "Persisted run-file migration logic."
-      - "Optimizer package relocation."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Importing any removed public symbol from `autoloop` fails while canonical imports succeed."
-      - id: "AC-2"
-        text: "Simple-surface declarations accept only canonical argument names and BaseModel-based state declarations."
-    deliverables:
-      - "Updated public exports and simple authoring declarations."
-      - "Presence/absence tests for the canonical import surface."
-    risks:
-      - "Docs/tests/workflows currently import removed aliases and will fail until later migration phases land."
-      - "Simple lowering currently depends on legacy state and route metadata shapes."
-    rollback:
-      - "Restore the previous export list and simple factory signatures in one revert if downstream migration is not ready."
-  - phase_id: "compiler-validation-normalization"
-    title: "Compiler And Validation Canonicalization"
-    objective: "Make compiled workflow metadata, topology derivation, state/params validation, and route metadata canonical."
-    status: "planned"
-    in_scope:
-      - "Rename compiled kinds and fields to canonical names such as `step`, `produce_verify`, `python`, `operation`, `writes`, and `required_writes`."
-      - "Derive topology from declaration order, explicit `entry`, and step-local `routes` instead of public `flow` or `transitions`."
-      - "Encode canonical injected default routes and control-route behavior for plain steps, produce/verify steps, python/workflow steps, and operation nodes."
-      - "Replace descriptor-backed `StateVar` and `Param` handling with Pydantic `State` and `Params` models."
-      - "Migrate step state, item state, and step-item state contracts to explicit Pydantic models or suppress incomplete public surfaces."
-      - "Adopt `global_session` / `global` as the canonical default-session surface."
-    out_of_scope:
-      - "Provider payload rewrites."
-      - "Repo-wide docs/test migration."
-    dependencies:
-      - "public-surface-cleanup"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Compiled workflow metadata no longer exposes legacy names such as `produces`, `required_outputs`, `RouteInfo`, or `SUCCESS`."
-      - id: "AC-2"
-        text: "Validation rejects `Parameters`, descriptor state declarations, and public topology authoring via `flow`, `transitions`, or `chain`."
-      - id: "AC-3"
-        text: "Injected default-route semantics, `control_routes=False`, and item/step-item state contracts are explicit, testable, and no longer rely on legacy descriptor behavior."
-    deliverables:
-      - "Updated compiler, validation, route, primitive, and step models."
-      - "Canonical topology/state/session contract generation inputs."
-    risks:
-      - "Topology derivation changes can reorder steps or break implicit control routes."
-      - "State/params migration can break loader and prompt-reference assumptions."
-    rollback:
-      - "Revert compiler/validation dataclass and lowering changes together if canonical topology cannot be reproduced safely."
-  - phase_id: "engine-provider-persistence"
-    title: "Runtime Contract Cleanup"
-    objective: "Switch execution, provider requests, topology artifacts, and persisted run metadata to the canonical contract while preserving only narrow resume migrations."
-    status: "planned"
-    in_scope:
-      - "Update engine routing, child workflow terminal mapping, hook lifecycle, and artifact validation to use canonical terminals and write semantics."
-      - "Split operation execution from route-bearing harness turns and emit canonical provider turn kinds."
-      - "Centralize schema IDs in `core/schema_registry.py` and migrate runtime/tracing/static-graph/git-tracking plus optimizer payload writers onto imported constants."
-      - "Make runtime config the sole public git-tracking control surface and remove workflow-declared git-tracking from canonical authoring."
-      - "Rewrite static graph, topology artifacts, trace/run metadata, and checkpoint payloads to canonical fields only."
-      - "Add minimal reader-side normalization for legacy persisted terminal/session naming needed for resume."
-    out_of_scope:
-      - "Workflow/docs/stdlib/optimizer migration."
-    dependencies:
-      - "compiler-validation-normalization"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Run results, topology artifacts, and provider payloads emit `FINISH`, canonical kinds, and `writes`/`required_writes` only."
-      - id: "AC-2"
-        text: "Old persisted run payloads that still contain legacy terminal or default-session naming can be normalized internally when resume support is required."
-      - id: "AC-3"
-        text: "Schema IDs are sourced from one registry module and runtime git tracking is the only canonical public control surface, with legacy workflow declarations removed or explicitly ignored/deprecated."
-    deliverables:
-      - "Updated engine, runtime artifact writers, provider boundary contracts, and persistence readers/writers."
-      - "Checkpoint/resume and provider-boundary regression coverage."
-    risks:
-      - "Resume incompatibility can strand existing run folders."
-      - "Provider renderers and topology hashes can drift from compiler state if migrated incompletely."
-    rollback:
-      - "Revert runtime writers/readers as one unit and preserve the canonical compiler model if resume or provider regressions surface."
-  - phase_id: "consumer-migration-and-package-cleanup"
-    title: "Consumer Migration"
-    objective: "Migrate repo consumers to the canonical contract and finish optimizer-vs-stdlib package separation."
-    status: "planned"
-    in_scope:
-      - "Update docs, workflow packages, fixtures, and tests to canonical names only."
-      - "Migrate capability inspection, runtime git-tracking/tests, worklist item-state/tests, and stdlib/optimizer helpers from legacy terminology to canonical terminology."
-      - "Remove duplicated optimizer/application helpers from `stdlib` in favor of `autoloop_optimizer`."
-      - "Remove obsolete package alias/fallback behavior when no longer needed for active runtime packaging."
-    out_of_scope:
-      - "New workflow features beyond the cleanup spec."
-    dependencies:
-      - "engine-provider-persistence"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Active docs/tests/workflow packages no longer use banned names except in explicit migration fixtures."
-      - id: "AC-2"
-        text: "Application-specific helpers have one canonical home under `autoloop_optimizer`."
-    deliverables:
-      - "Migrated docs, fixtures, workflow packages, and helper modules."
-      - "Reduced stdlib surface with duplicate optimizer helpers removed or relocated."
-    risks:
-      - "Broad test/doc churn can hide remaining runtime contract mismatches."
-      - "Deleting package aliases too early can break loader or CLI paths."
-    rollback:
-      - "Restore moved helper modules or alias shims temporarily only if a concrete runtime packaging dependency remains."
-  - phase_id: "verification-and-strictness"
-    title: "Verification Gate"
-    objective: "Prove the cleanup is complete, canonical, and regression-safe across imports, compilation, runtime execution, artifacts, and resume."
-    status: "planned"
-    in_scope:
-      - "Add strict import and grep tests for removed names and removed emitted payload keys."
-      - "Run targeted unit, contract, runtime, loader, topology, provider, and resume coverage."
-      - "Verify canonical topology/hash/session/output artifacts and explicit migration-reader allowances."
-    out_of_scope:
-      - "Additional feature work."
-    dependencies:
-      - "consumer-migration-and-package-cleanup"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Strictness tests fail on banned public names or legacy emitted payload keys outside explicit migration fixtures/readers."
-      - id: "AC-2"
-        text: "Targeted suites covering simple authoring, validation, engine/runtime, provider boundaries, topology artifacts, and resume pass on the canonical contract."
-    deliverables:
-      - "Strictness coverage for removed names and payload keys."
-      - "Executed regression suite with canonical artifact and resume validation."
-    risks:
-      - "Residual legacy strings in docs/tests or topology fixtures can block final acceptance."
-      - "Migration-reader exceptions can accidentally widen back into public compatibility."
-    rollback:
-      - "Hold final acceptance and revert the most recent migration phase if strictness or resume checks reveal unresolved drift."
+- phase_id: public-surface-cleanup
+  title: Canonical Public Surface
+  objective: Replace compatibility-heavy authoring exports and simple declarations
+    with the single canonical Autoloop API.
+  status: planned
+  in_scope:
+  - Trim `autoloop` public exports to the canonical list only.
+  - Rename simple-surface primitives and arguments to `produce_verify_step`, `producer_prompt`,
+    `verifier_prompt`, `writes`, and Pydantic `state=Model`.
+  - Remove public `StrictWorkflow`, `RouteInfo`, `chain`, `review_step`, `do_review_step`,
+    `system_step`, `StateVar`, and `Param`.
+  out_of_scope:
+  - Persisted run-file migration logic.
+  - Optimizer package relocation.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Importing any removed public symbol from `autoloop` fails while canonical
+      imports succeed.
+  - id: AC-2
+    text: Simple-surface declarations accept only canonical argument names and BaseModel-based
+      state declarations.
+  deliverables:
+  - Updated public exports and simple authoring declarations.
+  - Presence/absence tests for the canonical import surface.
+  risks:
+  - Docs/tests/workflows currently import removed aliases and will fail until later
+    migration phases land.
+  - Simple lowering currently depends on legacy state and route metadata shapes.
+  rollback:
+  - Restore the previous export list and simple factory signatures in one revert if
+    downstream migration is not ready.
+- phase_id: compiler-validation-normalization
+  title: Compiler And Validation Canonicalization
+  objective: Make compiled workflow metadata, topology derivation, state/params validation,
+    and route metadata canonical.
+  status: planned
+  in_scope:
+  - Rename compiled kinds and fields to canonical names such as `step`, `produce_verify`,
+    `python`, `operation`, `writes`, and `required_writes`.
+  - Derive topology from declaration order, explicit `entry`, and step-local `routes`
+    instead of public `flow` or `transitions`.
+  - Encode canonical injected default routes and control-route behavior for plain
+    steps, produce/verify steps, python/workflow steps, and operation nodes.
+  - Replace descriptor-backed `StateVar` and `Param` handling with Pydantic `State`
+    and `Params` models.
+  - Migrate step state, item state, and step-item state contracts to explicit Pydantic
+    models or suppress incomplete public surfaces.
+  - Adopt `global_session` / `global` as the canonical default-session surface.
+  out_of_scope:
+  - Provider payload rewrites.
+  - Repo-wide docs/test migration.
+  dependencies:
+  - public-surface-cleanup
+  acceptance_criteria:
+  - id: AC-1
+    text: Compiled workflow metadata no longer exposes legacy names such as `produces`,
+      `required_outputs`, `RouteInfo`, or `SUCCESS`.
+  - id: AC-2
+    text: Validation rejects `Parameters`, descriptor state declarations, and public
+      topology authoring via `flow`, `transitions`, or `chain`.
+  - id: AC-3
+    text: Injected default-route semantics, `control_routes=False`, and item/step-item
+      state contracts are explicit, testable, and no longer rely on legacy descriptor
+      behavior.
+  deliverables:
+  - Updated compiler, validation, route, primitive, and step models.
+  - Canonical topology/state/session contract generation inputs.
+  risks:
+  - Topology derivation changes can reorder steps or break implicit control routes.
+  - State/params migration can break loader and prompt-reference assumptions.
+  rollback:
+  - Revert compiler/validation dataclass and lowering changes together if canonical
+    topology cannot be reproduced safely.
+- phase_id: engine-provider-persistence
+  title: Runtime Contract Cleanup
+  objective: Switch execution, provider requests, topology artifacts, and persisted
+    run metadata to the canonical contract while preserving only narrow resume migrations.
+  status: planned
+  in_scope:
+  - Update engine routing, child workflow terminal mapping, hook lifecycle, and artifact
+    validation to use canonical terminals and write semantics.
+  - Split operation execution from route-bearing harness turns and emit canonical
+    provider turn kinds.
+  - Centralize schema IDs in `core/schema_registry.py` and migrate runtime/tracing/static-graph/git-tracking
+    plus optimizer payload writers onto imported constants.
+  - Make runtime config the sole public git-tracking control surface and remove workflow-declared
+    git-tracking from canonical authoring.
+  - Rewrite static graph, topology artifacts, trace/run metadata, and checkpoint payloads
+    to canonical fields only.
+  - Add minimal reader-side normalization for legacy persisted terminal/session naming
+    needed for resume.
+  out_of_scope:
+  - Workflow/docs/stdlib/optimizer migration.
+  dependencies:
+  - compiler-validation-normalization
+  acceptance_criteria:
+  - id: AC-1
+    text: Run results, topology artifacts, and provider payloads emit `FINISH`, canonical
+      kinds, and `writes`/`required_writes` only.
+  - id: AC-2
+    text: Old persisted run payloads that still contain legacy terminal or default-session
+      naming can be normalized internally when resume support is required.
+  - id: AC-3
+    text: Schema IDs are sourced from one registry module and runtime git tracking
+      is the only canonical public control surface, with legacy workflow declarations
+      removed or explicitly ignored/deprecated.
+  deliverables:
+  - Updated engine, runtime artifact writers, provider boundary contracts, and persistence
+    readers/writers.
+  - Checkpoint/resume and provider-boundary regression coverage.
+  risks:
+  - Resume incompatibility can strand existing run folders.
+  - Provider renderers and topology hashes can drift from compiler state if migrated
+    incompletely.
+  rollback:
+  - Revert runtime writers/readers as one unit and preserve the canonical compiler
+    model if resume or provider regressions surface.
+- phase_id: consumer-migration-and-package-cleanup
+  title: Consumer Migration
+  objective: Migrate repo consumers to the canonical contract and finish optimizer-vs-stdlib
+    package separation.
+  status: planned
+  in_scope:
+  - Update docs, workflow packages, fixtures, and tests to canonical names only.
+  - Migrate capability inspection, runtime git-tracking/tests, worklist item-state/tests,
+    and stdlib/optimizer helpers from legacy terminology to canonical terminology.
+  - Remove duplicated optimizer/application helpers from `stdlib` in favor of `autoloop_optimizer`.
+  - Remove obsolete package alias/fallback behavior when no longer needed for active
+    runtime packaging.
+  out_of_scope:
+  - New workflow features beyond the cleanup spec.
+  dependencies:
+  - engine-provider-persistence
+  acceptance_criteria:
+  - id: AC-1
+    text: Active docs/tests/workflow packages no longer use banned names except in
+      explicit migration fixtures.
+  - id: AC-2
+    text: Application-specific helpers have one canonical home under `autoloop_optimizer`.
+  deliverables:
+  - Migrated docs, fixtures, workflow packages, and helper modules.
+  - Reduced stdlib surface with duplicate optimizer helpers removed or relocated.
+  risks:
+  - Broad test/doc churn can hide remaining runtime contract mismatches.
+  - Deleting package aliases too early can break loader or CLI paths.
+  rollback:
+  - Restore moved helper modules or alias shims temporarily only if a concrete runtime
+    packaging dependency remains.
+- phase_id: verification-and-strictness
+  title: Verification Gate
+  objective: Prove the cleanup is complete, canonical, and regression-safe across
+    imports, compilation, runtime execution, artifacts, and resume.
+  status: planned
+  in_scope:
+  - Add strict import and grep tests for removed names and removed emitted payload
+    keys.
+  - Run targeted unit, contract, runtime, loader, topology, provider, and resume coverage.
+  - Verify canonical topology/hash/session/output artifacts and explicit migration-reader
+    allowances.
+  out_of_scope:
+  - Additional feature work.
+  dependencies:
+  - consumer-migration-and-package-cleanup
+  acceptance_criteria:
+  - id: AC-1
+    text: Strictness tests fail on banned public names or legacy emitted payload keys
+      outside explicit migration fixtures/readers.
+  - id: AC-2
+    text: Targeted suites covering simple authoring, validation, engine/runtime, provider
+      boundaries, topology artifacts, and resume pass on the canonical contract.
+  deliverables:
+  - Strictness coverage for removed names and payload keys.
+  - Executed regression suite with canonical artifact and resume validation.
+  risks:
+  - Residual legacy strings in docs/tests or topology fixtures can block final acceptance.
+  - Migration-reader exceptions can accidentally widen back into public compatibility.
+  rollback:
+  - Hold final acceptance and revert the most recent migration phase if strictness
+    or resume checks reveal unresolved drift.
