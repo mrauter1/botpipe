@@ -97,3 +97,4 @@
 {"ts": "2026-04-29T17:20:19.798892+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 97, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "workflow-migration-and-cleanup"}
 {"ts": "2026-04-29T17:20:19.840548+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 98, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "workflow-migration-and-cleanup"}
 {"ts": "2026-04-29T17:20:19.941967+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 99, "event_type": "phase_completed", "pair": "test", "phase_id": "workflow-migration-and-cleanup", "phase_mode": "single"}
+{"ts": "2026-04-29T17:20:20.041456+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 100, "event_type": "run_finished", "status": "success", "exit_code": 0}
