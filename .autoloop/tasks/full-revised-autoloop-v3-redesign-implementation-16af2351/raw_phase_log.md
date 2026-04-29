@@ -1891,3 +1891,54 @@ Validation performed:
 Open issues / next step
 
 This is still a partial phase checkpoint, not a full close. The remaining legacy workflow packages still need the same declaration migration pass, most workflow-local route bundles still need the `RouteInfo` to `Route.to(...)` cleanup, and the compatibility-era docs/examples were not cleaned in this batch.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m rechecking the remaining legacy workflow and docs surfaces after the producer’s second pass. Then I’ll update the phase feedback and criteria to reflect the blockers that still remain versus the progress that was made.
+
+I’m rechecking the remaining migration gaps against the reviewer findings, then I’ll update the phase artifacts only.
+
+The remaining blockers are still concentrated in legacy workflow declarations, workflow docs, and `RouteInfo`-style route metadata. I’m updating the reviewer artifacts to reflect the narrowed set precisely.
+
+I’ve confirmed the outstanding blockers by search. I’m checking the actual changed file set once more so the findings stay tied to the current producer patch rather than stale repo state.
+
+I’m recording the narrowed blocking findings now. The criteria still remain fully unchecked because the acceptance criteria are still not satisfied.
+
+The reviewer artifact now reflects the reduced but still blocking gap set. I’m doing a final read-through of the phase artifacts before closing the verifier turn.
+
+Scope considered
+
+Active verifier scope for `workflow-migration-and-cleanup` only. I reviewed the producer’s cycle-2 migration batch, the phase artifacts, and the remaining request-relevant workflow/doc compatibility surfaces without touching repository code.
+
+What I analyzed
+
+I checked the current tree for the remaining legacy workflow declarations, remaining docs that still teach compatibility-era authoring, and remaining `RouteInfo` / `route_infos` usage across bundled workflows and contract modules. I also verified the producer’s implementation notes so the review stayed aligned with the actual migration plan and declared non-changes.
+
+What I reviewed
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/feedback.md) with follow-up blocking findings `IMP-004` through `IMP-006`, reflecting the narrowed but still incomplete gap set after the second producer pass. [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/criteria.md) remains fully unchecked, which is still accurate because none of the phase acceptance criteria are satisfied end-to-end yet.
+
+Key findings / decisions
+
+- `IMP-004` blocking: six bundled workflows still use `PairStep`, `SystemStep`, `SUCCESS`, and global `transitions`, so AC-1 remains open. The remaining files are [company_operation_to_recursive_improvement_cycle](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/workflow.py:66), [security_finding_to_verified_remediation](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py:36), [task_to_workflow_strategy](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:38), [workflow_and_eval_to_refined_workflow_package](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py:65), [workflow_package_to_composable_building_blocks](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py:67), and [workflow_run_traces_to_optimization_candidates](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py:73).
+- `IMP-005` blocking: the docs still present compatibility-era constructs as normal authoring guidance, including `PairStep`, `SystemStep`, `SUCCESS`, global `transitions`, `RouteInfo`, and `route_infos`. That still blocks the documentation portion of AC-1.
+- `IMP-006` blocking: even migrated workflows still depend on public `route_infos` / `RouteInfo`, including [release_candidate_to_go_no_go](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py:101), [workflow_idea_to_workflow_package](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/workflow.py:116), [workflow_run_history_to_failure_modes](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py:155), and [workflow_to_eval_suite](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py:131), plus multiple `workflows/*/contracts.py` modules. That keeps AC-3 blocked.
+
+Open issues / next step
+
+Finish the remaining six workflow declaration migrations, complete the second-pass `RouteInfo` / `route_infos` cleanup across bundled workflows and contract modules, and then rewrite the remaining docs/examples so canonical authoring is the only primary path. After that, rerun the strictness/docs/contract/runtime/workflow integration suites and revisit whether any compatibility exports can actually be removed safely.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
