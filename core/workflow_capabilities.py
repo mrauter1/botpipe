@@ -617,7 +617,11 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
         },
         global_transitions={tag: _legacy_capability_target(route.target) for tag, route in compiled.global_routes.items()},
         steps=tuple(
-            _compiled_step_capability(step, default_session_name=compiled.default_session_name)
+            _compiled_step_capability(
+                step,
+                default_session_name=compiled.default_session_name,
+                step_routes=compiled.routes.get(step.name, {}),
+            )
             for step in compiled.steps.values()
         ),
     )
@@ -656,19 +660,46 @@ def _legacy_capability_target(target: str) -> str:
     return "SUCCESS" if target == "FINISH" else target
 
 
-def _compiled_step_capability(step, *, default_session_name: str) -> WorkflowStepCapability:
+def _legacy_capability_step_kind(kind: str) -> str:
+    if kind == "produce_verify":
+        return "pair"
+    if kind == "step":
+        return "llm"
+    if kind == "python":
+        return "system"
+    return kind
+
+
+def _compiled_route_infos(step_routes: Mapping[str, Any]) -> dict[str, RouteInfo]:
+    route_infos: dict[str, RouteInfo] = {}
+    for route_name, route in step_routes.items():
+        route_infos[route_name] = RouteInfo(
+            summary=route.summary,
+            required_outputs=tuple(route.required_writes),
+            handoff=route.handoff,
+        )
+    return route_infos
+
+
+def _compiled_step_capability(
+    step,
+    *,
+    default_session_name: str,
+    step_routes: Mapping[str, Any],
+) -> WorkflowStepCapability:
+    route_infos = _compiled_route_infos(step_routes)
     return WorkflowStepCapability(
         name=step.name,
-        kind=step.kind,
+        kind=_legacy_capability_step_kind(step.kind),
         session_name=None if step.session_name == default_session_name else step.session_name,
         reads=step.reads,
         requires=step.requires,
-        produces=step.produces,
+        produces=step.writes,
         log_artifacts=step.log_artifacts,
         available_routes=step.available_routes,
         expected_output_schema=step.expected_output_schema,
-        route_infos=dict(step.route_infos),
-        route_required_outputs=dict(step.route_required_outputs),
+        route_infos=route_infos,
+        route_required_outputs={route_name: info.required_outputs for route_name, info in route_infos.items()},
         producer_prompt=_prompt_path(step.producer_prompt),
         verifier_prompt=_prompt_path(step.verifier_prompt),
     )

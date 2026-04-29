@@ -9,12 +9,13 @@ from typing import Any, Mapping
 from ..core.compiler import CompiledRoute, CompiledWorkflow
 from ..core.primitives import FAIL, FINISH, PAUSE
 from ..core.prompts import Prompt
+from ..core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
 
 
-STATIC_GRAPH_SCHEMA = "autoloop.workflow_static_step_graph/v1"
+STATIC_GRAPH_SCHEMA = WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 STATIC_GRAPH_FILENAME = "static_step_graph.json"
 
-TOPOLOGY_SCHEMA = "autoloop.workflow_topology/v1"
+TOPOLOGY_SCHEMA = WORKFLOW_TOPOLOGY_SCHEMA
 TOPOLOGY_FILENAME = "topology.json"
 TOPOLOGY_MERMAID_FILENAME = "topology.mmd"
 ROUTE_TABLE_FILENAME = "route_table.md"
@@ -83,8 +84,8 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "workflow_name": compiled.workflow_name,
         "source_hash": compiled.source_hash,
         "topology_hash": compiled.topology_hash,
-        "entry_step": compiled.entry_step_name,
-        "terminals": {"FINISH": FINISH, "PAUSE": PAUSE, "FAIL": FAIL},
+        "entry": compiled.entry_step_name,
+        "terminals": [FINISH, PAUSE, FAIL],
         "steps": [
             {
                 "name": step.name,

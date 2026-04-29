@@ -970,3 +970,96 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+I’m working the `engine-provider-persistence` phase. I’ll read the active phase artifacts and the runtime/compiler surfaces they point at, then I’ll patch the canonical contract changes only where this phase owns them.
+
+The phase notes are mostly blank, and the referenced session file path is stale. I’m locating the actual runtime files and then I’ll inspect the engine/provider modules that still emit legacy contract fields.
+
+I’ve confirmed the active repo-root tree is the one to change. The highest-risk surfaces are `core/primitives.py`, `core/compiler.py`, `core/providers/*`, `core/engine.py`, and the runtime artifact writers/tests that still emit `SUCCESS`, `route_infos`, and `required_outputs`.
+
+Plan:
+1. Inspect the compiled/runtime contract types and persistence writers to find the single-source data structures.
+2. Patch canonical runtime fields first: terminals, session slot naming, route/write metadata, provider turn payloads, and schema constants.
+3. Add narrow legacy-read normalization for persisted `SUCCESS` and `"default"` session payloads only where resume/load paths need it.
+4. Update focused tests for provider boundaries, tracing/static graph, git tracking, and resume/runtime behavior.
+5. Record the phase mapping and non-obvious decisions in the phase notes and decision ledger.
+
+I have the main contract edges now. The engine and provider code still carry legacy names internally even when the compiled surface is partially canonical, so I’m narrowing the patch to the source-of-truth dataclasses plus the runtime writers before I touch tests.
+
+The remaining legacy footprint is broad in tests, but the runtime sources themselves are concentrated. I’m checking the schema-string and optimizer surfaces now so I can keep the code change centralized instead of sprinkling one-off constants around.
+
+I’m editing the runtime contract sources now. The patch will centralize schema IDs, rename provider-boundary fields and turn kinds, normalize legacy terminal/session payloads on read, and make the topology/run artifacts emit only the canonical names for this phase.
+
+The first bulk patch didn’t apply cleanly against the current engine file, so I’m switching to smaller targeted edits. That keeps the blast radius controlled and avoids drifting over nearby in-flight changes.
+
+The source patch compiles. I’m updating the regression tests that directly cover this phase now: provider boundary, engine contracts, topology/tracing/git-tracking, and compatibility resume behavior.
+
+I’ve finished the runtime/provider contract pass and I’m checking the remaining persistence and regression surfaces now. Next I’m patching the compatibility tests around legacy terminal/session normalization, then I’ll run focused pytest coverage and update the phase notes.
+
+I’ve narrowed the remaining breakage to compatibility coverage that still expects legacy `SUCCESS` and `default` session names. I’m reading those exact tests now so I can either update them to canonical outputs or add narrow legacy-reader assertions where resume compatibility is still intentional.
+
+I’ve confirmed the explicit compatibility test for the legacy global-session resume path already expects canonical `FINISH`. I’m doing one last repo-wide pass over runtime/provider modules for any remaining emitted legacy fields before I run pytest, so I don’t just chase test failures one by one.
+
+I found a few generated `__pycache__` artifacts from the compile pass and I’m cleaning those out before test execution so the working tree stays limited to source and tests. Then I’m running the targeted runtime/provider suites that exercise the new canonical contract and the legacy reader normalization path.
+
+The direct `python3 -m pytest` path isn’t available in this environment because `pytest` is not installed in the active interpreter. I’m checking the repo’s local test entrypoint or virtualenv next so I can still run the focused suite instead of stopping at a compile-only check.
+
+The repo-local virtualenv is present, so I can run the focused suite after all. I’m switching to `.venv/bin/python` now and using that for the runtime/provider regression pass.
+
+The focused suites are running cleanly so far. I’m waiting for completion and then I’ll update the phase notes with the exact files, invariants, and remaining non-changes.
+
+The failing surface is the capability-inspection serializer, not the engine path. It’s still projecting old compiled fields like `produces`, so I’m updating that metadata layer to consume the canonical compiled contract instead of the removed aliases.
+
+The breakage is from a metadata adapter that still exposes the old inspection shape. I’m keeping that layer behaviorally stable for now and just remapping the new compiled internals back into it, instead of expanding this phase into a full capability-surface migration.
+
+I’m editing the capability adapter now. The change is narrow: it will rebuild the old inspection DTOs from canonical compiled `writes` and compiled route metadata, without reintroducing those legacy names back into the engine or provider path.
+
+The compatibility adapter patch fixed the remaining targeted failures. I’m letting the full focused suite finish now, then I’ll capture the exact validation set and phase notes before closing the turn.
+
+I created a lot of `__pycache__` churn by cleaning generated files too broadly, and I’m correcting that now. I’m restoring only the tracked `.pyc` files to their exact `HEAD` content and deleting only the new untracked `.pyc` artifacts, so the source diff stays clean and I don’t touch the unrelated dirty tree.
+
+I’m writing the phase notes and decision ledger now. I’m recording one explicit boundary: runtime/provider/persistence outputs are canonical in this phase, while the workflow-capability inspection adapter stays legacy-shaped on top of the canonical compiled model to avoid dragging optimizer and CLI consumer migration into the same turn.
+
+Scope considered
+
+- Phase `engine-provider-persistence` only: engine routing, provider request/response contracts, topology/static-graph artifacts, trace/run/git-tracking payloads, checkpoint/session normalization, and the narrow persistence compatibility path.
+- I did not broaden this into workflow/docs/stdlib/optimizer consumer migration beyond what was required to keep the existing capability-inspection adapter working.
+
+What I analyzed
+
+- Runtime/provider path in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [core/providers/models.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/models.py), [core/providers/rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendered.py), [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py), [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py), [runtime/tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/tracing.py), [runtime/git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/git_tracking.py), [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py).
+- Persistence/session normalization in [core/primitives.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/primitives.py), [core/sessions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/sessions.py), [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py), and [core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/operations.py).
+- Downstream breakage surfaced in capability inspection, so I also patched [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py) as a legacy adapter over the new compiled contract.
+
+What I changed
+
+- Added [core/schema_registry.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/schema_registry.py) and moved runtime/static-graph/git-tracking/optimizer schema ids onto imported constants.
+- Canonicalized runtime/provider payloads to `FINISH`, `turn_kind="step"`, `routes`, `route_required_writes`, `producer_prompt`, `verifier_prompt`, and `producer_raw_output`.
+- Switched topology/static-graph/run metadata writers to canonical fields like `entry` and `terminals: ["FINISH", "PAUSE", "FAIL"]`.
+- Added narrow reader-side normalization for persisted legacy `"SUCCESS"` terminals and `"default"` session-slot naming during resume/session-store hydration.
+- Updated focused regression coverage in `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/runtime/test_runtime_tracing.py`, and `tests/runtime/test_runtime_git_tracking.py`.
+- Updated the phase notes and decision ledger in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt).
+
+Key findings / decisions
+
+- The runtime/provider/persistence surfaces are now canonical, but `core.workflow_capabilities` intentionally remains a legacy-shaped inspection adapter so out-of-phase optimizer/CLI consumers do not break yet.
+- Legacy compatibility is reader-side only for persisted run/session payloads; I did not reintroduce legacy names into the active engine/provider writers.
+- Validation run: `.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py tests/runtime/test_compatibility_runtime.py -q` and it passed with `87 passed`.
+
+Open issues / next step
+
+- I did not run the full repo test suite; broader consumer suites that still assert legacy inspection/provider fields should be migrated in a later phase rather than folded into this runtime-contract pass.
+- The repo root is in a heavily dirty/untracked state outside this phase scope, so I kept changes localized and did not absorb unrelated worktree noise.

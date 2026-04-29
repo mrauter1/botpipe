@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig
+from autoloop_v3.core.schema_registry import GIT_TRACKING_SCHEMA
 from autoloop_v3.runtime.git_tracking import RuntimeGitTracker, RuntimeGitTrackingError
 
 
@@ -146,10 +147,11 @@ def test_git_tracking_run_policy_commits_at_run_boundaries(tmp_path: Path) -> No
     assert finish_payload["created_commit"] is True
     assert log_messages == [
         "autoloop: metadata demo run-1",
-        "autoloop: finish demo run-1 SUCCESS",
+        "autoloop: finish demo run-1 FINISH",
         "autoloop: init demo run-1",
         "init",
     ]
+    assert finish_payload["terminal"] == "FINISH"
     assert [record["event_type"] for record in git_tracking_lines] == [
         "run_initialized",
         "step_observed",
@@ -189,7 +191,7 @@ def test_git_tracking_step_policy_commits_after_each_step(tmp_path: Path) -> Non
     assert after_step["created_commit"] is True
     assert log_messages == [
         "autoloop: metadata demo run-1",
-        "autoloop: finish demo run-1 SUCCESS",
+        "autoloop: finish demo run-1 FINISH",
         "autoloop: step demo run-1 1 ask",
         "autoloop: init demo run-1",
         "init",
@@ -330,7 +332,7 @@ def test_git_tracking_resume_appends_without_overwriting(tmp_path: Path) -> None
     run_dir.mkdir(parents=True)
     (run_dir / "run.json").write_text("{}\n", encoding="utf-8")
     existing_record = {
-        "schema": "autoloop.git_tracking/v1",
+        "schema": GIT_TRACKING_SCHEMA,
         "event_type": "step_committed",
         "sequence": 1,
         "step_name": "existing",

@@ -19,6 +19,7 @@ from .errors import ProviderExecutionError, WorkflowExecutionError
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest
 from .providers.protocols import LLMProvider
+from .sessions import DEFAULT_SESSION_NAME
 from .stores.protocols import SessionBinding
 
 
@@ -40,7 +41,7 @@ class OperationRuntime:
     source_hash: str | None = None
     step_name: str | None = None
     step_visit: int | None = None
-    default_session_name: str = "default"
+    default_session_name: str = DEFAULT_SESSION_NAME
     occurrence_counts: dict[str, int] = field(default_factory=dict)
 
 

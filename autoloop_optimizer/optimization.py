@@ -11,10 +11,32 @@ from pathlib import Path
 from typing import Any, Callable
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
+    from ..core.schema_registry import (
+        WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA,
+        WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA,
+        WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA,
+        WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA,
+        WORKFLOW_OPTIMIZATION_SOURCE_MANIFEST_SCHEMA,
+        WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA,
+        WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA,
+        WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
+        WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
+    )
     from ..core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
     from ..runtime.loader import resolve_workflow_reference
     from ..runtime.workspace import list_run_records
 except ImportError:  # pragma: no cover - direct repo-root import fallback
+    from autoloop_v3.core.schema_registry import (
+        WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA,
+        WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA,
+        WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA,
+        WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA,
+        WORKFLOW_OPTIMIZATION_SOURCE_MANIFEST_SCHEMA,
+        WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA,
+        WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA,
+        WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
+        WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
+    )
     from autoloop_v3.core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
     from autoloop_v3.runtime.loader import resolve_workflow_reference
     from autoloop_v3.runtime.workspace import list_run_records
@@ -42,14 +64,14 @@ from .adaptation import write_selected_workflow_capability_snapshot
 from .decomposition import write_selected_workflow_decomposition_surface
 from .refinement import write_selected_workflow_authoring_surface
 
-TRACE_CORPUS_SCHEMA = "autoloop.workflow_optimization.trace_corpus/v1"
-SOURCE_MANIFEST_SCHEMA = "autoloop.workflow_optimization.source_manifest/v1"
-EXCLUDED_RUN_REPORT_SCHEMA = "autoloop.workflow_optimization.excluded_run_report/v1"
-REFINEMENT_EVIDENCE_SCHEMA = "autoloop.workflow_refinement_evidence/v1"
-STEP_TRACE_METRICS_SCHEMA = "autoloop.workflow_optimization.step_trace_metrics/v1"
-STEP_PRIORITY_REPORT_SCHEMA = "autoloop.workflow_optimization.step_priority_report/v1"
-FAILURE_SCENARIO_SEEDS_SCHEMA = "autoloop.workflow_optimization.failure_scenario_seeds/v1"
-FAILURE_SCENARIOS_SCHEMA = "autoloop.workflow_optimization.failure_scenarios/v1"
+TRACE_CORPUS_SCHEMA = WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA
+SOURCE_MANIFEST_SCHEMA = WORKFLOW_OPTIMIZATION_SOURCE_MANIFEST_SCHEMA
+EXCLUDED_RUN_REPORT_SCHEMA = WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA
+REFINEMENT_EVIDENCE_SCHEMA = WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA
+STEP_TRACE_METRICS_SCHEMA = WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA
+STEP_PRIORITY_REPORT_SCHEMA = WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA
+FAILURE_SCENARIO_SEEDS_SCHEMA = WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA
+FAILURE_SCENARIOS_SCHEMA = WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA
 
 _ELIGIBLE_STATUS_LABELS = frozenset({"failed", "paused", "blocked"})
 _PROMPT_SURFACE_SUFFIXES = ("_producer.md", "_verifier.md", ".md")
@@ -334,7 +356,7 @@ def capture_optimization_frame_context(
         ctx,
         "workflow_optimization_scope.json",
         {
-            "schema": "autoloop.workflow_optimization.scope/v1",
+            "schema": WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA,
             "selected_workflow": selected_workflow_name,
             "task_title": task_title,
             "run_refs": list(run_refs),

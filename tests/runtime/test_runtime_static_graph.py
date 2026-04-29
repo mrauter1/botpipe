@@ -13,6 +13,7 @@ from autoloop_v3.runtime.static_graph import (
     workflow_static_step_graph_payload,
     workflow_topology_payload,
 )
+from autoloop_v3.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 from core import Artifact, PairStep, RouteInfo, SUCCESS, SystemStep, Workflow
 from core.primitives import Event, Outcome
 
@@ -120,10 +121,10 @@ def test_topology_artifacts_are_written_additively_with_canonical_finish_surface
     assert (tmp_path / "state_contracts.json").exists()
     assert (tmp_path / "session_contracts.json").exists()
     assert (tmp_path / "compile_report.md").exists()
-    assert topology["entry_step"] == "assessment"
+    assert topology["entry"] == "assessment"
     assert topology["source_hash"] == compiled.source_hash
     assert topology["topology_hash"] == compiled.topology_hash
-    assert topology["terminals"]["FINISH"] == "FINISH"
+    assert topology["terminals"] == ["FINISH", "PAUSE", "FAIL"]
     assert topology["steps"][1]["routes"][0]["target"] == "FINISH"
     assert topology["steps"][0]["hooks"]["before"] is None
     assert topology["steps"][0]["state_model"] is None
@@ -142,3 +143,11 @@ def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None
     assert finish["routes"][0]["target"] == "FINISH"
     assert payload["source_hash"] == compiled.source_hash
     assert payload["topology_hash"] == compiled.topology_hash
+
+
+def test_static_graph_schema_uses_registry_constant() -> None:
+    compiled = compile_workflow(_StaticGraphWorkflow)
+
+    payload = workflow_static_step_graph_payload(compiled)
+
+    assert payload["schema"] == WORKFLOW_STATIC_STEP_GRAPH_SCHEMA

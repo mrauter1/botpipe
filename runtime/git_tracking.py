@@ -8,11 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from ..extensions.git.repo import GitRepo
+from ..core.primitives import normalize_terminal
+from ..core.schema_registry import GIT_TRACKING_SCHEMA as CANONICAL_GIT_TRACKING_SCHEMA
 from .config import GitTrackingRuntimeConfig
 from .workspace import append_run_git_step, update_run_git_tracking
 
 
-GIT_TRACKING_SCHEMA = "autoloop.git_tracking/v1"
+GIT_TRACKING_SCHEMA = CANONICAL_GIT_TRACKING_SCHEMA
 GIT_TRACKING_FILENAME = "git_tracking.jsonl"
 
 
@@ -107,7 +109,7 @@ class RuntimeGitTracker:
     def after_run(self, *, terminal: str | None) -> dict[str, object]:
         if not self._active:
             return dict(self._prepared_payload)
-        result = self._operate(lambda: self._after_run_operation(terminal=terminal))
+        result = self._operate(lambda: self._after_run_operation(terminal=normalize_terminal(terminal)))
         if result is None:
             return dict(self._prepared_payload)
         return result

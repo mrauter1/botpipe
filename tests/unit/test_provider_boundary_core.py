@@ -14,6 +14,7 @@ from autoloop_v3.core.providers.models import (
     ProducerResponse,
     ProviderArtifactRef,
     ProviderReadableRef,
+    ProviderRoute,
     ProviderTurnContext,
     TokenUsage,
     VerifierRequest,
@@ -23,7 +24,6 @@ from autoloop_v3.core.providers.parsing import parse_outcome_json
 from autoloop_v3.core.providers.rendered import RenderedLLMProvider
 from autoloop_v3.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
 from autoloop_v3.core.providers.rendering import render_provider_turn
-from autoloop_v3.core.routes import RouteInfo
 from autoloop_v3.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from autoloop_v3.core.stores.protocols import SessionBinding
 
@@ -99,9 +99,9 @@ def _turn_context(
             },
         },
         available_routes=("done", "needs_rework"),
-        route_infos={
-            "done": RouteInfo(summary="Package the accepted design.", required_outputs=("design_doc", "decision_record")),
-            "needs_rework": RouteInfo(summary="Repair the current design before packaging.", required_outputs=("design_doc",)),
+        routes={
+            "done": ProviderRoute(summary="Package the accepted design.", required_writes=("design_doc", "decision_record")),
+            "needs_rework": ProviderRoute(summary="Repair the current design before packaging.", required_writes=("design_doc",)),
         },
         readable_artifacts=(
             _readable_ref(
@@ -134,7 +134,7 @@ def _turn_context(
                 schema_name="DecisionRecord",
             ),
         ),
-        route_required_outputs={
+        route_required_writes={
             "done": ("design_doc", "decision_record"),
             "needs_rework": ("design_doc",),
         },
@@ -211,13 +211,13 @@ def test_render_required_inputs_marks_runtime_preconditions_required_even_for_op
             session=context.session,
             expected_output_schema=context.expected_output_schema,
             available_routes=context.available_routes,
-            route_infos=context.route_infos,
+            routes=context.routes,
             readable_artifacts=context.readable_artifacts,
             required_artifacts=(
                 _artifact_ref("optional_input", path="/tmp/optional.md", required=False),
             ),
             writable_artifacts=context.writable_artifacts,
-            route_required_outputs=context.route_required_outputs,
+            route_required_writes=context.route_required_writes,
             retry_feedback=context.retry_feedback,
             route_handoff=context.route_handoff,
             attempt=context.attempt,
@@ -228,7 +228,7 @@ def test_render_required_inputs_marks_runtime_preconditions_required_even_for_op
     assert "| optional_input | /tmp/optional.md | yes |" in turn.prompt_text
 
 
-def test_render_provider_turn_uses_route_infos_summary() -> None:
+def test_render_provider_turn_uses_route_summary() -> None:
     context = _turn_context()
     turn = render_provider_turn(
         ProviderTurnContext(
@@ -240,14 +240,14 @@ def test_render_provider_turn_uses_route_infos_summary() -> None:
             session=context.session,
             expected_output_schema=context.expected_output_schema,
             available_routes=context.available_routes,
-            route_infos={
-                **context.route_infos,
-                "done": RouteInfo(summary="RouteInfo summary wins."),
+            routes={
+                **context.routes,
+                "done": ProviderRoute(summary="route summary wins."),
             },
             readable_artifacts=context.readable_artifacts,
             required_artifacts=context.required_artifacts,
             writable_artifacts=context.writable_artifacts,
-            route_required_outputs=context.route_required_outputs,
+            route_required_writes=context.route_required_writes,
             retry_feedback=context.retry_feedback,
             route_handoff=context.route_handoff,
             attempt=context.attempt,
@@ -255,7 +255,7 @@ def test_render_provider_turn_uses_route_infos_summary() -> None:
         )
     )
 
-    assert "RouteInfo summary wins." in turn.prompt_text
+    assert "route summary wins." in turn.prompt_text
 
 
 def test_render_provider_turn_uses_raw_text_response_contract_for_producer_turns() -> None:
@@ -270,11 +270,11 @@ def test_render_provider_turn_uses_raw_text_response_contract_for_producer_turns
             session=context.session,
             expected_output_schema=context.expected_output_schema,
             available_routes=context.available_routes,
-            route_infos=context.route_infos,
+            routes=context.routes,
             readable_artifacts=context.readable_artifacts,
             required_artifacts=context.required_artifacts,
             writable_artifacts=context.writable_artifacts,
-            route_required_outputs=context.route_required_outputs,
+            route_required_writes=context.route_required_writes,
             retry_feedback=context.retry_feedback,
             route_handoff=context.route_handoff,
             attempt=context.attempt,
@@ -299,11 +299,11 @@ def test_render_provider_turn_rejects_missing_prompt_text() -> None:
         session=context.session,
         expected_output_schema=context.expected_output_schema,
         available_routes=context.available_routes,
-        route_infos=context.route_infos,
+        routes=context.routes,
         readable_artifacts=context.readable_artifacts,
         required_artifacts=context.required_artifacts,
         writable_artifacts=context.writable_artifacts,
-        route_required_outputs=context.route_required_outputs,
+        route_required_writes=context.route_required_writes,
         retry_feedback=context.retry_feedback,
         route_handoff=context.route_handoff,
         attempt=context.attempt,
@@ -396,7 +396,7 @@ def test_fake_provider_can_emit_usage() -> None:
     producer_response = provider.run_producer(
         ProducerRequest(
             step_name="draft",
-            prompt=ResolvedPrompt(path="draft.md", text="Write a draft."),
+            producer_prompt=ResolvedPrompt(path="draft.md", text="Write a draft."),
             context=object(),
             artifacts=object(),
         )
@@ -404,8 +404,8 @@ def test_fake_provider_can_emit_usage() -> None:
     verifier_response = provider.run_verifier(
         VerifierRequest(
             step_name="verify",
-            prompt=ResolvedPrompt(path="verify.md", text="Verify the draft."),
-            raw_output="draft",
+            verifier_prompt=ResolvedPrompt(path="verify.md", text="Verify the draft."),
+            producer_raw_output="draft",
             context=object(),
             artifacts=object(),
         )
@@ -438,7 +438,7 @@ def test_rendered_llm_provider_returns_producer_response() -> None:
     response = provider.run_producer(
         ProducerRequest(
             step_name="draft",
-            prompt=ResolvedPrompt(path="draft.md", text="Write the draft."),
+            producer_prompt=ResolvedPrompt(path="draft.md", text="Write the draft."),
             context=object(),
             artifacts=object(),
             session=binding,
@@ -465,8 +465,8 @@ def test_rendered_llm_provider_parses_verifier_outcome_and_excludes_raw_output_f
     response = provider.run_verifier(
         VerifierRequest(
             step_name="verify",
-            prompt=ResolvedPrompt(path="verify.md", text="Verify the package."),
-            raw_output="producer raw output that must stay out of the prompt",
+            verifier_prompt=ResolvedPrompt(path="verify.md", text="Verify the package."),
+            producer_raw_output="producer raw output that must stay out of the prompt",
             context=object(),
             artifacts=object(),
             session=None,

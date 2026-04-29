@@ -14,12 +14,13 @@ from ..core.compiler import CompiledWorkflow
 from ..core.extensions import StepFinish, StepStart, TerminalFinish
 from ..core.providers.models import StepProviderUsage
 from ..core.primitives import Event, Outcome
+from ..core.schema_registry import RUNTIME_TRACE_SCHEMA
 from .config import TracingRuntimeConfig
 from .static_graph import STATIC_GRAPH_FILENAME, write_static_step_graph_payload, write_topology_artifacts
 from .workspace import append_run_warning, update_run_tracing
 
 
-TRACE_SCHEMA = "autoloop.runtime_trace/v1"
+TRACE_SCHEMA = RUNTIME_TRACE_SCHEMA
 RAW_DIRNAME = "raw"
 _SAFE_STEP_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -210,13 +211,13 @@ class RuntimeTraceWriter:
     def _persist_raw_outputs(self, *, sequence: int, event: StepFinish) -> dict[str, dict[str, object]]:
         refs: dict[str, dict[str, object]] = {}
         raw_output_by_role: list[tuple[str, str]] = []
-        if event.step_kind == "pair":
+        if event.step_kind == "produce_verify":
             if event.producer_raw_output is not None:
                 raw_output_by_role.append(("producer", event.producer_raw_output))
             if event.verifier_raw_output is not None:
                 raw_output_by_role.append(("verifier", event.verifier_raw_output))
-        elif event.step_kind == "llm" and event.producer_raw_output is not None:
-            raw_output_by_role.append(("llm", event.producer_raw_output))
+        elif event.step_kind == "step" and event.producer_raw_output is not None:
+            raw_output_by_role.append(("step", event.producer_raw_output))
         for role, text in raw_output_by_role:
             refs[role] = self._persist_raw_output(sequence=sequence, step_name=event.step_name, role=role, text=text)
         return refs

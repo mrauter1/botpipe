@@ -13,6 +13,15 @@ if TYPE_CHECKING:
 ContinuityKind = Literal["run", "task", "work_item", "fresh", "key"]
 SessionKeyDomain = Literal["run", "task", "work_item", "fresh", "explicit_scope", "explicit_key"]
 DEFAULT_SESSION_NAME = "global"
+LEGACY_DEFAULT_SESSION_NAME = "default"
+
+
+def canonical_session_slot_name(name: str) -> str:
+    """Normalize persisted legacy session slot names to the canonical slot."""
+
+    if name == LEGACY_DEFAULT_SESSION_NAME:
+        return DEFAULT_SESSION_NAME
+    return name
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,9 +104,11 @@ def derive_session_key(slot: str, continuity: Continuity, context: "Context") ->
 
 
 __all__ = [
+    "canonical_session_slot_name",
     "Continuity",
     "ContinuityKind",
     "DEFAULT_SESSION_NAME",
+    "LEGACY_DEFAULT_SESSION_NAME",
     "SessionKey",
     "SessionKeyDomain",
     "derive_session_key",

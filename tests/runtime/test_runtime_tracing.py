@@ -11,6 +11,7 @@ from autoloop_v3.core.extensions import RunBinding, StepFinish, StepStart, Termi
 from autoloop_v3.core.providers.models import StepProviderUsage, TokenUsage
 from autoloop_v3.core.primitives import Event, Outcome
 from autoloop_v3.runtime.config import TracingRuntimeConfig
+from autoloop_v3.core.schema_registry import RUNTIME_TRACE_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 from autoloop_v3.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
 from autoloop_v3.runtime.workspace import next_observability_sequence
 
@@ -49,7 +50,7 @@ def _writer(run_dir: Path, *, config: TracingRuntimeConfig | None = None) -> Run
         run_id=run_dir.name,
         config=config or TracingRuntimeConfig(),
         static_step_graph={
-            "schema": "autoloop.workflow_static_step_graph/v1",
+            "schema": WORKFLOW_STATIC_STEP_GRAPH_SCHEMA,
             "workflow_name": "demo",
             "steps": [],
             "transitions": {"steps": {}, "global": {}},
@@ -57,7 +58,7 @@ def _writer(run_dir: Path, *, config: TracingRuntimeConfig | None = None) -> Run
     )
 
 
-def _step_start(run_dir: Path, *, step_name: str = "assessment", step_kind: str = "pair") -> StepStart:
+def _step_start(run_dir: Path, *, step_name: str = "assessment", step_kind: str = "produce_verify") -> StepStart:
     return StepStart(
         binding=_binding(run_dir),
         step_name=step_name,
@@ -70,7 +71,7 @@ def _step_finish(
     run_dir: Path,
     *,
     step_name: str = "assessment",
-    step_kind: str = "pair",
+    step_kind: str = "produce_verify",
     producer_raw_output: str | None = "producer output\n",
     verifier_raw_output: str | None = "verifier output\n",
     provider_usage: StepProviderUsage | None = None,
@@ -89,7 +90,7 @@ def _step_finish(
     )
 
 
-def _terminal(run_dir: Path, *, terminal: str = "SUCCESS") -> TerminalFinish:
+def _terminal(run_dir: Path, *, terminal: str = "FINISH") -> TerminalFinish:
     return TerminalFinish(
         binding=_binding(run_dir),
         terminal=terminal,
@@ -118,7 +119,7 @@ def test_runtime_trace_initialization_persists_static_step_graph(tmp_path: Path)
 
     payload = json.loads((run_dir / "static_step_graph.json").read_text(encoding="utf-8"))
 
-    assert payload["schema"] == "autoloop.workflow_static_step_graph/v1"
+    assert payload["schema"] == WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
     assert payload["workflow_name"] == "demo"
 
 
@@ -140,7 +141,7 @@ def test_runtime_trace_records_step_started_and_finished(tmp_path: Path) -> None
     assert lines[1]["state_after"]["note"] == "after"
 
 
-def test_runtime_trace_writes_pair_raw_producer_and_verifier_files(tmp_path: Path) -> None:
+def test_runtime_trace_writes_produce_verify_raw_producer_and_verifier_files(tmp_path: Path) -> None:
     run_dir = _run_dir(tmp_path)
     writer = _writer(run_dir)
 
@@ -156,14 +157,14 @@ def test_runtime_trace_writes_llm_raw_file(tmp_path: Path) -> None:
     event = _step_finish(
         run_dir,
         step_name="survey",
-        step_kind="llm",
-        producer_raw_output="llm output\n",
+        step_kind="step",
+        producer_raw_output="step output\n",
         verifier_raw_output=None,
     )
 
     writer.step_finished(sequence=2, event=event, commit_before_step="abc123")
 
-    assert (run_dir / "raw" / "000002_survey_llm.txt").read_text(encoding="utf-8") == "llm output\n"
+    assert (run_dir / "raw" / "000002_survey_step.txt").read_text(encoding="utf-8") == "step output\n"
 
 
 def test_runtime_trace_records_raw_file_sha256_and_bytes(tmp_path: Path) -> None:
@@ -255,7 +256,7 @@ def test_runtime_trace_disabled_still_persists_static_step_graph(tmp_path: Path)
 
     assert not (run_dir / "trace.jsonl").exists()
     payload = json.loads((run_dir / "static_step_graph.json").read_text(encoding="utf-8"))
-    assert payload["schema"] == "autoloop.workflow_static_step_graph/v1"
+    assert payload["schema"] == WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
     assert payload["workflow_name"] == "demo"
 
 
@@ -272,7 +273,7 @@ def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_pa
         task_id="task-1",
         run_id=run_dir.name,
         config=TracingRuntimeConfig(failure_mode="ignore"),
-        static_step_graph={"schema": "autoloop.workflow_static_step_graph/v1"},
+        static_step_graph={"schema": WORKFLOW_STATIC_STEP_GRAPH_SCHEMA},
     )
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
@@ -304,11 +305,12 @@ def test_runtime_trace_terminal_writes_terminal_event_payload(tmp_path: Path) ->
     run_dir = _run_dir(tmp_path)
     writer = _writer(run_dir)
 
-    writer.terminal(event=_terminal(run_dir, terminal="SUCCESS"))
+    writer.terminal(event=_terminal(run_dir, terminal="FINISH"))
 
     record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert record["event_type"] == "terminal"
-    assert record["terminal"] == "SUCCESS"
+    assert record["schema"] == RUNTIME_TRACE_SCHEMA
+    assert record["terminal"] == "FINISH"
     assert record["step_name"] == "assessment"
     assert record["state"]["note"] == "done"
     assert record["outcome"]["tag"] == "ready"
@@ -345,25 +347,25 @@ def test_trace_resume_uses_next_sequence_and_never_overwrites_raw_files(tmp_path
     (run_dir / "git_tracking.jsonl").write_text(json.dumps({"sequence": 7}) + "\n", encoding="utf-8")
     raw_dir = run_dir / "raw"
     raw_dir.mkdir()
-    existing_raw = raw_dir / "000007_existing_llm.txt"
+    existing_raw = raw_dir / "000007_existing_step.txt"
     existing_raw.write_text("keep\n", encoding="utf-8")
     writer = _writer(run_dir)
 
     next_sequence = next_observability_sequence(run_dir)
     writer.step_finished(
         sequence=next_sequence,
-        event=_step_finish(run_dir, step_name="resume step", step_kind="llm", producer_raw_output="fresh\n", verifier_raw_output=None),
+        event=_step_finish(run_dir, step_name="resume step", step_kind="step", producer_raw_output="fresh\n", verifier_raw_output=None),
         commit_before_step="abc123",
     )
 
     assert next_sequence == 8
     assert existing_raw.read_text(encoding="utf-8") == "keep\n"
-    assert (run_dir / "raw" / "000008_resume_step_llm.txt").read_text(encoding="utf-8") == "fresh\n"
+    assert (run_dir / "raw" / "000008_resume_step_step.txt").read_text(encoding="utf-8") == "fresh\n"
 
     with pytest.raises(RuntimeTraceError, match="refusing to overwrite existing raw output file"):
         writer.step_finished(
             sequence=7,
-            event=_step_finish(run_dir, step_name="existing", step_kind="llm", producer_raw_output="clobber\n", verifier_raw_output=None),
+            event=_step_finish(run_dir, step_name="existing", step_kind="step", producer_raw_output="clobber\n", verifier_raw_output=None),
             commit_before_step="abc123",
         )
 
@@ -374,6 +376,6 @@ def test_trace_resume_falls_back_to_raw_sequence_when_jsonl_is_missing_or_malfor
     (run_dir / "git_tracking.jsonl").write_text(json.dumps({"event_type": "run_initialized"}) + "\n", encoding="utf-8")
     raw_dir = run_dir / "raw"
     raw_dir.mkdir()
-    (raw_dir / "000009_existing_llm.txt").write_text("keep\n", encoding="utf-8")
+    (raw_dir / "000009_existing_step.txt").write_text("keep\n", encoding="utf-8")
 
     assert next_observability_sequence(run_dir) == 10

@@ -102,18 +102,18 @@ def _required_by_routes(context: ProviderTurnContext, ref: ProviderArtifactRef) 
     required_by = [
         route
         for route in context.available_routes
-        if ref.name in _route_required_outputs(context, route)
-        or ref.qualified_name in _route_required_outputs(context, route)
+        if ref.name in _route_required_writes(context, route)
+        or ref.qualified_name in _route_required_writes(context, route)
     ]
     return ", ".join(required_by) if required_by else "none"
 
 
-def _route_required_outputs(context: ProviderTurnContext, route: str) -> tuple[str, ...]:
-    return tuple(context.route_required_outputs.get(route, ()))
+def _route_required_writes(context: ProviderTurnContext, route: str) -> tuple[str, ...]:
+    return tuple(context.route_required_writes.get(route, ()))
 
 
-def _render_route_required_outputs(context: ProviderTurnContext, route: str) -> str:
-    required = _route_required_outputs(context, route)
+def _render_route_required_writes(context: ProviderTurnContext, route: str) -> str:
+    required = _route_required_writes(context, route)
     return ", ".join(required) if required else "none"
 
 
@@ -306,17 +306,17 @@ def _render_routes(context: ProviderTurnContext) -> str:
         (
             route,
             _route_summary(context, route),
-            _render_route_required_outputs(context, route),
+            _render_route_required_writes(context, route),
         )
         for route in context.available_routes
     ]
     if not rows:
         rows.append(("none", "No routes were declared.", "none"))
-    return _markdown_table(("Route", "Meaning", "Required outputs for this route"), rows)
+    return _markdown_table(("Route", "Meaning", "Required writes for this route"), rows)
 
 
 def _route_summary(context: ProviderTurnContext, route: str) -> str:
-    info = context.route_infos.get(route)
+    info = context.routes.get(route)
     if isinstance(info, Mapping):
         summary = info.get("summary")
         if isinstance(summary, str) and summary.strip():
