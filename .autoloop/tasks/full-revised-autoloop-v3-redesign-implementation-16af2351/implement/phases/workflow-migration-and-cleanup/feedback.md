@@ -66,3 +66,10 @@
   Concrete issue: the implementation notes explicitly say the strictness/docs/contract/runtime/workflow integration suites were not run after the broad workflow and doc migration. This phase’s acceptance criteria require those suites to pass without depending on removed compatibility surfaces.
   Risk / regression scenario: the workflow migration touched many first-party packages and contract modules at once. Without running the required suites, regressions in inspect expectations, docs assertions, or compatibility cleanup boundaries can survive unnoticed until a later cleanup removes the shim they still rely on.
   Minimal fix direction: run the required strictness/docs/contract/runtime/workflow integration suites in a valid environment and fix any remaining compatibility-surface dependencies they expose before marking the phase complete.
+
+## Follow-up Review - Cycle 4
+
+- Resolution note
+  `IMP-007` is resolved: first-party workflow packages no longer import `core.RouteInfo` or pass `route_infos=...`, and the remaining contract bundles now lower through canonical `Route.to(...)`.
+  `IMP-008` is resolved: the producer ran the required strictness/docs/contract/runtime validation sweep and reported `680 passed` for `tests/strictness/test_no_compat.py`, `tests/test_architecture_baseline_docs.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime`.
+  No new findings in this review cycle.

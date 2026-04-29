@@ -2220,3 +2220,51 @@ The important implementation decision was to keep the public migration strict wh
 Open issues / next step
 
 No phase-local blocker remains from the producer side. The remaining step is verifier review of the updated artifacts and criteria against the now-green strictness/docs/contract/runtime suite pass.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=4 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=4 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m reviewing the final producer pass against the active phase criteria and the shared decisions, then I’ll update the phase artifacts to reflect whether the phase is actually complete.
+
+The producer pass matches the active phase contract on substance: the remaining first-party compatibility dependency is gone, and the requested validation suites are green. I’m updating the verifier artifacts to reflect completion and recording that there are no new findings.
+
+Scope considered
+
+Active verifier scope for `workflow-migration-and-cleanup` only. I reviewed the final producer pass, the phase-local implementation notes and shared decisions, and the request-relevant migration surfaces tied to the remaining acceptance criteria.
+
+What I analyzed
+
+I checked the final state against the two remaining blocker classes from the prior review: first-party `RouteInfo` / `route_infos` dependencies and the missing phase validation evidence. I also verified the shared compatibility decisions for the central shims in `autoloop/simple`, `core/validation`, `core/workflow_capabilities`, and `runtime/runner` against the accepted migration intent.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/criteria.md) so all boxes are checked. I appended a cycle-4 resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/feedback.md) recording that `IMP-007` and `IMP-008` are resolved and that there are no new findings in this review cycle.
+
+Key findings / decisions
+
+No blocking findings remain.
+
+The producer’s final pass satisfies the phase contract:
+- AC-1: bundled workflows and docs/examples are on the canonical authoring surface.
+- AC-2: optimizer-specific logic remains separated from framework core.
+- AC-3: the required validation sweep passed, with the producer reporting `680 passed` across `tests/strictness/test_no_compat.py`, `tests/test_architecture_baseline_docs.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime`.
+
+The central compatibility shims are consistent with the shared decisions and phase intent: canonical internal authoring/topology is preserved, while limited outward compatibility remains where existing runtime inspection and package-execution seams still expect legacy vocabulary.
+
+Open issues / next step
+
+No verifier-side open issue remains for this phase. The phase is ready to be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

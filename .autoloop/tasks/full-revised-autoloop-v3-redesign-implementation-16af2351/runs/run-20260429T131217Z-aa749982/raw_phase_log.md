@@ -2081,3 +2081,190 @@ Finish the second-pass `RouteInfo` cleanup for the remaining eight workflow pack
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=4 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=4 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m taking the remaining verifier blockers as the scope: finish the last first-party `RouteInfo` / `route_infos` cleanup, then run the required test slices to see whether the compatibility surface can actually be demoted safely.
+
+I’ve got the remaining eight packages. Next I’m reading one converted pair and a couple of the remaining legacy pairs side by side so I can apply the same route-bundle migration pattern without changing workflow behavior.
+
+I have the migration pattern now. I’m checking the exact `needs_replan` targets in the remaining workflows before editing so the new `Route.to(...)` bundles preserve the existing control flow instead of relying on any implicit defaults.
+
+I’ve confirmed most of these are mechanical `needs_replan` folds, but I’m checking for any non-default `needs_rework` routes before I patch the contracts. That’s the one place a blind SELF conversion would change topology.
+
+I’m about to edit the remaining eight workflow packages and their contract bundles. After that I’ll map the repo’s actual test layout to the acceptance-criteria suites so the validation run is concrete rather than guessed.
+
+I’m filling in the accepted-route targets now. Those need the exact next step names from each workflow class, because once the `route_infos` shim is gone the route bundle becomes the full topology source.
+
+I’m collecting the exact remaining contract bodies before patching. The edit is still mechanical, but it spans enough files that I’d rather patch from the actual text than risk one malformed route bundle.
+
+I’m applying the second-pass route metadata cleanup now. The edits are isolated to the eight remaining workflow contract modules and their paired workflow declarations.
+
+The first half of the route-bundle cleanup is in. I’m finishing the remaining four contract modules and then I’ll switch the paired workflow declarations off `route_infos=` in one pass.
+
+The workflow-declaration patch hit one context mismatch in `workflow_idea_to_workflow_package`. I’m re-reading the exact blocks and then I’ll apply the declaration cleanup in smaller patches so I don’t lose momentum to one mismatched hunk.
+
+The code migration is complete. I’m checking for any remaining first-party `RouteInfo` usage, then I’ll compile the touched files and start the phase-required test slices.
+
+The first-party workflow code no longer uses `RouteInfo`. I’m running the phase-required test slices now: strictness, docs, contract, and the runtime suite. That will tell us whether the remaining compatibility cleanup can actually be closed.
+
+`pytest` isn’t on PATH here. I’m retrying through `python3 -m pytest`, which usually matches this repo’s local environment layout.
+
+There’s no global `pytest` module either. I’m checking whether the repo already has a local virtualenv or another project-local test runner, because I want to use the existing environment rather than invent one.
+
+There is a repo-local virtualenv. I’m rerunning the full phase validation through `./.venv/bin/pytest` so the result reflects the environment this repo actually uses.
+
+The suite is running in the project virtualenv now. I’m waiting on the first pass before deciding whether we need test-failure follow-up changes or just artifact updates.
+
+The test run exposed a real runtime regression in the `autoloop_optimizer` split: three runtime suites fail during import because the fallback import path re-enters `runtime.loader` as a top-level module. I’m fixing that before I rerun the suite.
+
+The import error is from the package-split fallback path, not from the workflow migration itself. I’m tracing every `autoloop_optimizer` fallback import now so I can fix them consistently instead of patching only the first failing module.
+
+The failure mode is broader than one helper. `autoloop_optimizer` still uses pre-split fallback imports that assume `runtime` and `core` are importable as top-level packages, which they are not. I’m updating those fallbacks to the package-qualified `autoloop_v3.*` paths so the sibling package layout is actually safe under test.
+
+I’m changing the package-split fallbacks to use `autoloop_v3.*` imports instead of top-level `core` / `runtime` modules. That preserves the direct package split without relying on an import layout that the repo doesn’t actually support.
+
+The import-path fix is in. I’m recompiling the optimizer package and rerunning the three suites that failed at collection before I go back to the full phase validation.
+
+Collection is fixed. The targeted runtime rerun is now failing inside the migrated workflow/tests, which is useful: the remaining breakage is in behavior, not packaging. I’m pulling the full failure output next.
+
+The suite is now telling us two concrete migration regressions. One is structural: some canonicalized workflows are compiling with duplicate step names. The other is behavioral: a few tests still expect preserved `on_<step>` helpers that disappeared during the decorator migration. I’m inspecting those workflow classes now.
+
+The duplicate-step failure is caused by explicit `entry = bootstrap` aliases on simple declarations; those need to be string entries, not object aliases, with the current lowering path. I’m checking which migrated workflows also still need preserved `on_<step>` helpers so I can fix the runtime regressions in one pass instead of one package at a time.
+
+The runtime tests are also enforcing a compatibility seam I hadn’t preserved during the decorator migration: first-party workflows still expose callable `on_bootstrap` / `on_capture_*` helpers. I’m measuring how broad that gap is before I choose between a local fix and a shared migration pattern.
+
+The remaining failures are revealing that the migration pattern itself needs one compatibility seam restored, not just another batch of workflow-local edits. I’m looking at the `python_step` lowering path now to see whether I can centralize the `on_<step>` preservation and the `entry = bootstrap` alias handling instead of hand-patching every migrated workflow.
+
+I can fix both runtime regressions in the lowering layer instead of editing every migrated workflow again: dedupe aliased simple declarations by object identity, and restore `on_<step>` helper aliases automatically for `python_step(...)` declarations. I’m verifying the existing lowering path before I patch that centrally.
+
+The compiler already treats `on_<system-step>` as a valid 1- or 2-arg handler. I’m patching validation so the migration automatically exposes those aliases for decorated Python steps and stops double-counting `entry = bootstrap` aliases during simple-step discovery.
+
+The compatibility seam is now restored centrally in validation. I’m recompiling that layer and rerunning the three previously failing runtime suites before I go back to the full phase pass.
+
+The structural regressions are mostly cleared. There are still a few behavioral failures in those three suites, so I’m pulling the specific assertions now instead of guessing.
+
+I don’t want to overcorrect the compiler if the remaining order expectations are really workflow-local. I’m checking how many tests assert compiled step order before I decide between a central traversal-order change and a smaller workflow-file reorder.
+
+The cleanest fix here is still central. I’m making two changes: execution order for compiled simple workflows will follow the entry-step traversal instead of raw class-body order, and `python_step(...)` declarations will publish their `on_<step>` helpers at class-definition time so tests and direct callers keep working.
+
+I’ve confirmed the two central fixes. I’m patching `SystemStepDeclaration.__set_name__` for the helper alias, and I’m switching simple-workflow step ordering to an entry-rooted traversal so the compiled order matches the explicit workflow topology instead of whatever order the class body happened to use.
+
+The lowering layer now restores the direct callable helpers at class-definition time and orders compiled simple workflows from the explicit entry step outward. I’m rerunning the three failing suites again.
+
+I’m closing the remaining `RouteInfo` cleanup fallout by validating the central compatibility fixes in `core/validation.py` and `autoloop/simple.py`, then rerunning the phase test slices that were failing.
+
+The alias shim compiles cleanly. I’m checking the validation changes and then going straight back to the runtime slices that previously exposed the migration regressions.
+
+The targeted runtime slice is materially better already: collection and the first candidate-workflow assertions are passing again. I’m waiting on the rest of that batch before broadening back out to the full phase suites.
+
+The compatibility seams fixed the runtime regressions in the previously failing workflow packages. I’m rerunning the broader strictness/docs/contract/runtime phase suites now to see what still blocks AC-3.
+
+The broader phase suites are no longer failing in runtime first. The remaining blockers are in strictness/docs, which is exactly where legacy compatibility references should surface.
+
+The expanded suite is almost through. I’m holding for the full failure report before deciding whether the remaining work is confined to compatibility tests or if anything broader regressed.
+
+The remaining failures are now narrow and concrete: two doc-contract assertions and two compatibility/runtime behaviors. I’m reading those exact contracts and patching the compatibility paths centrally instead of scattering workflow-specific fixes again.
+
+I’ve isolated the last phase blockers to one docs wording cleanup and two compatibility shims in shared runtime/inspection code. I’m patching those centrally now so the remaining suites move together instead of via test-local workarounds.
+
+The remaining fixes are in place: docs wording is aligned with the strictness contract, and the two compatibility shims now live in shared inspection/runner code. I’m running the narrow failing tests first before another full phase sweep.
+
+The previously failing doc and compatibility checks are green. I’m rerunning the full phase validation sweep now to confirm there isn’t any adjacent fallout before I update the phase notes.
+
+The broad sweep is through the runtime-heavy middle without new failures. I’m waiting on the last third so I can close this phase slice with real suite evidence instead of a partial pass.
+
+The phase validation suite is clean: `680 passed`. I’m updating the phase notes and the shared decision ledger now with the compatibility fixes that mattered, then I’ll close with the exact scope and validation summary.
+
+I have the final state now: first-party `RouteInfo` cleanup is finished and the required suites are green. I’m tightening the implementation notes to match that end state and recording the compatibility decisions that made the migration safe.
+
+Scope considered
+
+The active `workflow-migration-and-cleanup` phase only. I stayed on first-party workflow migration fallout, remaining compatibility-surface cleanup, shared runtime/inspection compatibility shims, public docs wording, and the phase-local notes/decision ledger.
+
+What I analyzed
+
+I used the verifier’s remaining blockers as the boundary: first-party `RouteInfo` / `route_infos` usage and the unrun phase suites. I rechecked the remaining workflow packages, the simple-surface lowering path in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), workflow compilation/discovery in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) and [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py), runtime package execution in [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), and the strictness/docs/runtime tests that were still failing after the workflow migrations.
+
+What I changed
+
+I finished the second-pass first-party route cleanup. The remaining workflow packages now use canonical `routes=` plus `Route.to(...)` route maps instead of `route_infos=` / `RouteInfo`, including [workflows/investigation_request_to_evidence_pack](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/investigation_request_to_evidence_pack), [workflows/task_to_candidate_workflow_set](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_candidate_workflow_set), [workflows/incident_to_hardening_program](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/incident_to_hardening_program), [workflows/release_candidate_to_go_no_go](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go), [workflows/workflow_idea_to_workflow_package](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package), [workflows/workflow_to_eval_suite](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite), [workflows/workflow_run_history_to_failure_modes](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes), and [workflows/workflow_portfolio_to_operating_system](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system).
+
+I fixed the migration regressions centrally instead of patching workflows one-by-one:
+- [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py) now restores callable `on_<step>` aliases for `python_step(...)` declarations.
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) now deduplicates reused simple declarations and orders compiled steps from the resolved entry traversal, which preserves explicit `entry = bootstrap` behavior in migrated classes.
+- [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py) now keeps legacy outward inspection targets by reporting `SUCCESS` where compiled topology uses `FINISH`.
+- [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py) now persists a default session binding for package runs that finish without opening any session explicitly, preserving the compatibility-runtime expectation.
+
+I also cleaned the remaining doc wording drift in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md), and [cleanup.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/cleanup.md), then updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/implementation_notes.md) and appended the non-obvious compatibility decisions under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+Key findings / decisions
+
+All phase acceptance-suite checks requested by the verifier now pass:
+- `./.venv/bin/pytest tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py tests/contract/test_engine_contracts.py tests/runtime`
+- Result: `680 passed`
+
+The important implementation decision was to keep the public migration strict while preserving legacy outward compatibility where tests still require it. That means compiled topology and workflow authoring stay canonical (`FINISH`, step-local `routes`, `Route.to(...)`), while compatibility-facing inspection/runtime seams still expose `SUCCESS` transitions and a persisted default session when older tooling expects them.
+
+Open issues / next step
+
+No phase-local blocker remains from the producer side. The remaining step is verifier review of the updated artifacts and criteria against the now-green strictness/docs/contract/runtime suite pass.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=4 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=4 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m reviewing the final producer pass against the active phase criteria and the shared decisions, then I’ll update the phase artifacts to reflect whether the phase is actually complete.
+
+The producer pass matches the active phase contract on substance: the remaining first-party compatibility dependency is gone, and the requested validation suites are green. I’m updating the verifier artifacts to reflect completion and recording that there are no new findings.
+
+Scope considered
+
+Active verifier scope for `workflow-migration-and-cleanup` only. I reviewed the final producer pass, the phase-local implementation notes and shared decisions, and the request-relevant migration surfaces tied to the remaining acceptance criteria.
+
+What I analyzed
+
+I checked the final state against the two remaining blocker classes from the prior review: first-party `RouteInfo` / `route_infos` dependencies and the missing phase validation evidence. I also verified the shared compatibility decisions for the central shims in `autoloop/simple`, `core/validation`, `core/workflow_capabilities`, and `runtime/runner` against the accepted migration intent.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/criteria.md) so all boxes are checked. I appended a cycle-4 resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/feedback.md) recording that `IMP-007` and `IMP-008` are resolved and that there are no new findings in this review cycle.
+
+Key findings / decisions
+
+No blocking findings remain.
+
+The producer’s final pass satisfies the phase contract:
+- AC-1: bundled workflows and docs/examples are on the canonical authoring surface.
+- AC-2: optimizer-specific logic remains separated from framework core.
+- AC-3: the required validation sweep passed, with the producer reporting `680 passed` across `tests/strictness/test_no_compat.py`, `tests/test_architecture_baseline_docs.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime`.
+
+The central compatibility shims are consistent with the shared decisions and phase intent: canonical internal authoring/topology is preserved, while limited outward compatibility remains where existing runtime inspection and package-execution seams still expect legacy vocabulary.
+
+Open issues / next step
+
+No verifier-side open issue remains for this phase. The phase is ready to be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
