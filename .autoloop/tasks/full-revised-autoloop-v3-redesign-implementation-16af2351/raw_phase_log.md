@@ -1418,3 +1418,56 @@ Open issues / next step
 - Syntax validation passed with `python3 -m py_compile core/operations.py tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py`.
 - Full test execution is still not possible in this environment because `pytest` and `pydantic` are missing.
 - The next step is verifier review of `IMP-001` against the new rendered-provider regression coverage.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+I’m re-reviewing the narrowed follow-up for `IMP-001`: the shared operation prompt normalization path and the two new rendered-provider regression tests. I’ll verify that the blocker is actually resolved before I update the phase criteria.
+
+The blocker is fixed at the right seam and the new tests cover both direct and helper usage through the rendered provider path. I’m marking the phase criteria complete now; I’m not adding a new feedback item because I didn’t find any remaining issues in scope.
+
+Scope considered
+
+- The follow-up fix for `IMP-001` only.
+- Shared feedforward prompt normalization in `core/operations.py`.
+- The added rendered-provider regression coverage in `tests/unit/test_simple_surface.py` and `tests/contract/test_engine_contracts.py`.
+- Phase artifacts in the active feedforward-operations directory.
+
+What I analyzed
+
+- Whether bare-string feedforward prompts now normalize at the shared operation boundary instead of only at one public wrapper.
+- Whether the direct standalone path and the ambient helper path inside `python_step` both hit the corrected code path.
+- Whether the new tests exercise the real rendered-provider path that exposed the original bug.
+
+What I reviewed
+
+- `core/operations.py:_resolve_prompt` and `_normalize_operation_prompt`.
+- The direct rendered-provider regression test for standalone `llm("...")` / `classify("...")`.
+- The helper-path regression test for `llm("...")` / `classify("...")` inside `python_step`.
+- The updated implementation notes and the appended feedforward decision entry for cycle 2.
+
+Key findings / decisions
+
+- No new findings in scope.
+- The prior blocking issue `IMP-001` is resolved: bare strings now become inline prompts at the shared operation boundary, which covers both standalone calls and helper-function calls inside workflows.
+- The added regression tests cover the real rendered-provider path that previously failed, which closes the gap that allowed the bug through cycle 1.
+- I marked all phase criteria complete in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/feedforward-operations/criteria.md).
+
+Open issues / next step
+
+- No blocking or non-blocking review findings remain for this phase in the reviewed scope.
+- `feedback.md` still contains the historical `IMP-001` entry from cycle 1; I did not edit reviewer history, but I am treating it as resolved by the current implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
