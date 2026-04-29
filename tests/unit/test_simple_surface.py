@@ -27,8 +27,10 @@ from autoloop.simple import (
     StateVar,
     StrictWorkflow,
     Workflow,
+    classify,
     chain,
     do_review_step,
+    llm,
     python_step,
     review_step,
     step,
@@ -43,6 +45,7 @@ from autoloop.simple import ResolvedArtifacts as SimpleResolvedArtifacts
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.errors import WorkflowValidationError
 from autoloop_v3.core.prompts import PromptRegistry
+from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.prompts import FilesystemPromptRegistry
 from autoloop_v3.core.steps import SystemStep, WorkflowStep
 
@@ -409,6 +412,61 @@ def test_simple_entry_defaults_to_first_declared_step_without_flow() -> None:
     assert compiled.routes["second"]["done"].target == "FINISH"
 
 
+def test_standalone_llm_and_classify_use_operation_provider_path() -> None:
+    class Summary(BaseModel):
+        title: str
+
+    provider = ScriptedLLMProvider(
+        operation_turns=(
+            '{"title":"Release summary"}',
+            "medium",
+        )
+    )
+
+    summary = llm("Generate a summary.", returns=Summary, provider=provider)
+    risk = classify("Classify risk.", choices=["low", "medium", "high"], provider=provider)
+
+    assert summary.title == "Release summary"
+    assert risk == "medium"
+    assert [call.kind for call in provider.calls] == ["operation", "operation"]
+    assert provider.calls[0].operation_kind == "llm"
+    assert provider.calls[1].operation_kind == "classify"
+
+
+def test_standalone_operations_retry_on_parse_and_choice_failures() -> None:
+    class Summary(BaseModel):
+        title: str
+
+    provider = ScriptedLLMProvider(
+        operation_turns=(
+            "not json",
+            '{"title":"Recovered"}',
+            "invalid",
+            "high",
+        )
+    )
+
+    summary = llm("Generate a summary.", returns=Summary, retry=2, provider=provider)
+    risk = classify("Classify risk.", choices=["low", "medium", "high"], retry=2, provider=provider)
+
+    assert summary.title == "Recovered"
+    assert risk == "high"
+    assert [call.attempt for call in provider.calls] == [1, 2, 1, 2]
+
+
+def test_llm_and_classify_step_compile_as_value_nodes_without_control_routes() -> None:
+    class ValueWorkflow(Workflow):
+        summary = llm.step(prompt="Summarize the brief.", returns=str)
+        verdict = classify.step(prompt="Classify {summary.value}.", choices=["solid", "weak"])
+
+    compiled = compile_workflow(ValueWorkflow)
+
+    assert compiled.steps["summary"].kind == "system"
+    assert compiled.steps["verdict"].kind == "system"
+    assert compiled.steps["summary"].available_routes == ("done",)
+    assert compiled.steps["verdict"].available_routes == ("done",)
+
+
 def test_simple_routes_support_string_forward_refs_and_self() -> None:
     class RoutedWorkflow(Workflow):
         prepare = step(
@@ -622,8 +680,10 @@ def test_autoloop_simple_exports_requested_public_authoring_surface() -> None:
         "Text",
         "Workflow",
         "WorkflowStep",
+        "classify",
         "chain",
         "do_review_step",
+        "llm",
         "python_step",
         "review_step",
         "step",

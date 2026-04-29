@@ -13,6 +13,7 @@ try:  # pragma: no branch - prefer installed-package imports when available
     from autoloop_v3.core.artifacts import ResolvedArtifacts
     from autoloop_v3.core.context import ChildWorkflowResult
     from autoloop_v3.core.descriptors import Param, StateVar
+    from autoloop_v3.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
     from autoloop_v3.core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF, SUCCESS
     from autoloop_v3.core.prompts import Prompt
     from autoloop_v3.core.routes import Route, RouteInfo
@@ -24,6 +25,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from core.artifacts import ResolvedArtifacts
     from core.context import ChildWorkflowResult
     from core.descriptors import Param, StateVar
+    from core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
     from core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF, SUCCESS
     from core.prompts import Prompt
     from core.routes import Route, RouteInfo
@@ -326,6 +328,51 @@ class WorkflowStep(_NamedDeclaration):
         self.after = after
         self.on_route = on_route
         self.control_routes = control_routes
+
+
+class OperationStepDeclaration(_NamedDeclaration):
+    """Simple feedforward value-producing declaration."""
+
+    kind = "operation"
+
+    def __init__(
+        self,
+        operation_kind: str,
+        prompt: PromptInput,
+        *,
+        returns: Any = str,
+        choices: Sequence[str] = (),
+        name: str | None = None,
+        reads: Sequence[ArtifactInput] = (),
+        requires: Sequence[ArtifactInput] = (),
+        retry: int = 3,
+    ) -> None:
+        super().__init__(name=name)
+        self.operation_kind = operation_kind
+        self.prompt = _normalize_simple_prompt(prompt)
+        self.returns = returns
+        self.choices = _normalize_simple_choices(choices) if operation_kind == "classify" else ()
+        self.reads = tuple(reads)
+        self.requires = tuple(requires)
+        self.retry = retry
+        self.control_routes = False
+
+    def build_handler(self) -> Any:
+        step_name = self.name or "<operation>"
+        spec = OperationStepSpec(
+            operation_kind=self.operation_kind,
+            prompt=self.prompt,
+            returns=self.returns,
+            choices=tuple(self.choices),
+            retry=self.retry,
+        )
+
+        def handler(ctx: Any) -> str:
+            execute_step_operation(ctx, step_name=step_name, spec=spec)
+            return "done"
+
+        handler.__name__ = f"_operation_step_{step_name}"
+        return handler
 
 
 @dataclass(frozen=True, slots=True)
@@ -687,6 +734,112 @@ def _normalize_simple_route_infos(
     return normalized
 
 
+def _normalize_simple_choices(choices: Sequence[str]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for choice in choices:
+        if not isinstance(choice, str) or not choice.strip():
+            raise TypeError("classification choices must be non-empty strings")
+        normalized.append(choice.strip())
+    if not normalized:
+        raise TypeError("classification choices must not be empty")
+    unique = tuple(dict.fromkeys(normalized))
+    if len(unique) != len(normalized):
+        raise TypeError("classification choices must not repeat")
+    return unique
+
+
+class _LLMOperationSurface:
+    def __call__(
+        self,
+        prompt: PromptInput,
+        *,
+        returns: Any = str,
+        retry: int = 3,
+        provider: Any | None = None,
+        prompt_registry: Any | None = None,
+        context: Any | None = None,
+        run_folder: Path | None = None,
+    ) -> Any:
+        normalized_prompt = _normalize_simple_prompt(prompt)
+        return llm_call(
+            normalized_prompt,
+            returns=returns,
+            retry=retry,
+            provider=provider,
+            prompt_registry=prompt_registry,
+            context=context,
+            run_folder=run_folder,
+        )
+
+    def step(
+        self,
+        *,
+        prompt: PromptInput,
+        returns: Any = str,
+        name: str | None = None,
+        reads: Sequence[ArtifactInput] = (),
+        requires: Sequence[ArtifactInput] = (),
+        retry: int = 3,
+    ) -> OperationStepDeclaration:
+        return OperationStepDeclaration(
+            "llm",
+            prompt,
+            returns=returns,
+            name=name,
+            reads=reads,
+            requires=requires,
+            retry=retry,
+        )
+
+
+class _ClassifyOperationSurface:
+    def __call__(
+        self,
+        prompt: PromptInput,
+        *,
+        choices: Sequence[str],
+        retry: int = 3,
+        provider: Any | None = None,
+        prompt_registry: Any | None = None,
+        context: Any | None = None,
+        run_folder: Path | None = None,
+    ) -> str:
+        normalized_prompt = _normalize_simple_prompt(prompt)
+        return classify_call(
+            normalized_prompt,
+            choices=choices,
+            retry=retry,
+            provider=provider,
+            prompt_registry=prompt_registry,
+            context=context,
+            run_folder=run_folder,
+        )
+
+    def step(
+        self,
+        *,
+        prompt: PromptInput,
+        choices: Sequence[str],
+        name: str | None = None,
+        reads: Sequence[ArtifactInput] = (),
+        requires: Sequence[ArtifactInput] = (),
+        retry: int = 3,
+    ) -> OperationStepDeclaration:
+        return OperationStepDeclaration(
+            "classify",
+            prompt,
+            choices=choices,
+            name=name,
+            reads=reads,
+            requires=requires,
+            retry=retry,
+        )
+
+
+llm = _LLMOperationSurface()
+classify = _ClassifyOperationSurface()
+
+
 __all__ = [
     "AfterHookResult",
     "Checkpoint",
@@ -713,8 +866,10 @@ __all__ = [
     "Text",
     "Workflow",
     "WorkflowStep",
+    "classify",
     "chain",
     "do_review_step",
+    "llm",
     "python_step",
     "review_step",
     "step",

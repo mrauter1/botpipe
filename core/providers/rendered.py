@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from .models import (
     LLMRequest,
+    OperationRequest,
+    OperationResponse,
     OutcomeResponse,
     ProducerRequest,
     ProducerResponse,
@@ -51,6 +53,17 @@ class RenderedLLMProvider:
         outcome = parse_outcome_json(result.raw_text)
         return OutcomeResponse(
             outcome=outcome,
+            session=result.session,
+            metadata=result.metadata,
+            usage=result.usage,
+        )
+
+    def run_operation(self, request: OperationRequest) -> OperationResponse:
+        context = _operation_context(request)
+        turn = render_provider_turn(context)
+        result = self._transport.run_turn(turn)
+        return OperationResponse(
+            raw_output=result.raw_text,
             session=result.session,
             metadata=result.metadata,
             usage=result.usage,
@@ -118,6 +131,28 @@ def _llm_context(request: LLMRequest) -> ProviderTurnContext:
         route_required_outputs=request.route_required_outputs,
         retry_feedback=request.retry_feedback,
         route_handoff=request.route_handoff,
+        attempt=request.attempt,
+        max_attempts=request.max_attempts,
+    )
+
+
+def _operation_context(request: OperationRequest) -> ProviderTurnContext:
+    return ProviderTurnContext(
+        step_name=request.step_name,
+        turn_kind="operation",
+        prompt=request.prompt,
+        context=object() if request.context is None else request.context,
+        artifacts=object(),
+        session=request.session,
+        expected_output_schema=request.return_schema,
+        available_routes=request.choices,
+        route_infos={},
+        readable_artifacts=(),
+        required_artifacts=(),
+        writable_artifacts=(),
+        route_required_outputs={},
+        retry_feedback=request.retry_feedback,
+        route_handoff=None,
         attempt=request.attempt,
         max_attempts=request.max_attempts,
     )

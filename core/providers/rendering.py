@@ -33,30 +33,33 @@ def render_provider_turn_with_policy(
     """Render a provider turn into a shared markdown prompt using the supplied policy."""
 
     prompt_text = _require_prompt_text(context)
-    sections = [
-        f"# Step: {context.step_name}",
-        "",
-        prompt_text,
-        "",
-        "## Runtime Step Contract",
-        "",
-        "### Readable inputs",
-        _render_readable_inputs(context),
-        "",
-        "### Required inputs",
-        _render_required_inputs(context),
-        "",
-        "### Declared artifacts this step may write",
-        "Declared writable artifacts are governed output surfaces, not an exclusive allow-list. "
-        "Other workspace files remain writable unless runtime policy says otherwise.",
-        "",
-        _render_writable_artifacts(context),
-        "",
-        "### Available routes",
-        _render_routes(context),
-        "",
-        *_response_contract_sections(context),
-    ]
+    if context.turn_kind == "operation":
+        sections = _operation_sections(context, prompt_text=prompt_text)
+    else:
+        sections = [
+            f"# Step: {context.step_name}",
+            "",
+            prompt_text,
+            "",
+            "## Runtime Step Contract",
+            "",
+            "### Readable inputs",
+            _render_readable_inputs(context),
+            "",
+            "### Required inputs",
+            _render_required_inputs(context),
+            "",
+            "### Declared artifacts this step may write",
+            "Declared writable artifacts are governed output surfaces, not an exclusive allow-list. "
+            "Other workspace files remain writable unless runtime policy says otherwise.",
+            "",
+            _render_writable_artifacts(context),
+            "",
+            "### Available routes",
+            _render_routes(context),
+            "",
+            *_response_contract_sections(context),
+        ]
     if context.route_handoff and context.route_handoff.strip():
         sections.extend(
             [
@@ -79,7 +82,7 @@ def render_provider_turn_with_policy(
         turn_kind=context.turn_kind,
         prompt_text=rendered_prompt,
         session=context.session,
-        expected_response="raw_text" if context.turn_kind == "producer" else "outcome_json",
+        expected_response="raw_text" if context.turn_kind in {"producer", "operation"} else "outcome_json",
     )
 
 
@@ -175,6 +178,39 @@ def _response_contract_sections(context: ProviderTurnContext) -> list[str]:
         "### Control response",
         _render_control_response(context.expected_output_schema),
     ]
+
+
+def _operation_sections(context: ProviderTurnContext, *, prompt_text: str) -> list[str]:
+    return [
+        f"# Operation: {context.step_name}",
+        "",
+        prompt_text,
+        "",
+        "## Runtime Operation Contract",
+        _render_operation_response(context),
+    ]
+
+
+def _render_operation_response(context: ProviderTurnContext) -> str:
+    if context.available_routes:
+        choices = ", ".join(context.available_routes)
+        return "\n".join(
+            [
+                "Return raw text containing exactly one declared choice.",
+                f"Allowed choices: {choices}.",
+                "Do not wrap the answer in additional prose.",
+            ]
+        )
+    if isinstance(context.expected_output_schema, Mapping):
+        return "\n".join(
+            [
+                "Return exactly one JSON value matching this schema:",
+                "```json",
+                json.dumps(context.expected_output_schema, indent=2, sort_keys=True),
+                "```",
+            ]
+        )
+    return "Return a non-empty raw-text value only."
 
 
 def _render_control_response(schema: Mapping[str, Any] | None) -> str:

@@ -8,6 +8,7 @@ from autoloop_v3.core.errors import ProviderExecutionError
 from autoloop_v3.core.prompts import ResolvedPrompt
 from autoloop_v3.core.providers.models import (
     LLMRequest,
+    OperationRequest,
     OutcomeResponse,
     ProducerRequest,
     ProducerResponse,
@@ -506,3 +507,26 @@ def test_rendered_llm_provider_parses_llm_outcome() -> None:
     assert response.outcome.reason == "Needs local repair."
     assert response.outcome.question == "Fix it?"
     assert response.usage == usage
+
+
+def test_rendered_llm_provider_runs_value_operation_as_raw_text() -> None:
+    usage = TokenUsage(total_tokens=5, source="codex")
+    transport = _TransportStub(result_text='{"summary":"ready"}', usage=usage)
+    provider = RenderedLLMProvider(transport)
+
+    response = provider.run_operation(
+        OperationRequest(
+            step_name="summary",
+            prompt=ResolvedPrompt(path="summary.md", text="Summarize the report."),
+            context=None,
+            session=None,
+            operation_kind="llm",
+            return_schema={"type": "object", "properties": {"summary": {"type": "string"}}},
+        )
+    )
+
+    assert response.raw_output == '{"summary":"ready"}'
+    assert response.usage == usage
+    assert transport.seen_turns is not None
+    assert transport.seen_turns[0].turn_kind == "operation"
+    assert transport.seen_turns[0].expected_response == "raw_text"

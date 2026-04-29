@@ -9,7 +9,7 @@ from .models import TokenUsage
 from ..stores import SessionBinding
 
 
-ProviderTurnKind = Literal["producer", "verifier", "llm"]
+ProviderTurnKind = Literal["producer", "verifier", "llm", "operation"]
 ExpectedProviderResponse = Literal["raw_text", "outcome_json"]
 
 
