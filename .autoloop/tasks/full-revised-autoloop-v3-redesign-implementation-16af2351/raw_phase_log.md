@@ -1624,3 +1624,55 @@ Open issues / next step
 
 - Full pytest execution is still blocked here because `pytest` and `pydantic` are not installed in this workspace.
 - The next step is re-audit of `TST-001` now that standalone classify replay drift is covered.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+I’m doing the re-audit on the narrow classify replay follow-up only. If the classify-specific mismatch case is now covered and the strategy reflects it, I’ll mark the phase complete without adding another audit finding.
+
+The classify-specific mismatch case is now covered at the right seam and the strategy reflects it explicitly. I’m marking the audit criteria complete; I don’t have a new finding to append for this cycle.
+
+Scope considered
+
+- The cycle-2 follow-up for `TST-001` only.
+- The standalone replay/mismatch test in `tests/unit/test_simple_surface.py`.
+- The phase-owned artifacts `criteria.md`, `feedback.md`, and `test_strategy.md`.
+
+What I analyzed
+
+- Whether standalone `classify(...)` replay drift is now covered at the same deterministic seam as standalone `llm(...)`.
+- Whether the updated strategy now states the classify-specific mismatch case explicitly instead of leaving it implied.
+- Whether the replay tests remain deterministic and aligned with the shared decisions on explicit `callsite=` usage.
+
+What I reviewed
+
+- `tests/unit/test_simple_surface.py::test_standalone_operations_replay_and_fail_loudly_on_fingerprint_mismatch`
+- The AC-1 section and failure-path bullets in `test_strategy.md`
+- The existing audit history in `feedback.md`
+
+Key findings / decisions
+
+- No new audit findings.
+- The prior blocking issue `TST-001` is resolved: the standalone replay test now covers both:
+  - `llm(...)` mismatch on changed prompt content
+  - `classify(...)` mismatch on changed declared `choices`
+- I marked all test audit criteria complete in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/feedforward-operations/criteria.md).
+
+Open issues / next step
+
+- No blocking or non-blocking test-audit findings remain in the reviewed scope.
+- `feedback.md` retains the historical `TST-001` entry from the prior cycle; I treated it as resolved by the current follow-up rather than rewriting audit history.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
