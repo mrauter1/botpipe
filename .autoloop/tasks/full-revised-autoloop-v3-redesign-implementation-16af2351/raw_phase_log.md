@@ -1808,3 +1808,86 @@ Finish migrating the remaining bundled workflows, migrate or internalize the `Ro
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m taking the reviewer findings as the working delta for this cycle. First I’m mapping the remaining legacy workflow and docs surfaces so I can finish the canonical migration without pulling unrelated cleanup into scope.
+
+I have three workstreams to clear: remaining legacy workflow declarations, `RouteInfo` contract bundles, and the lingering compatibility examples in docs. I’m reading representative workflow and contract pairs now so I can do the conversion mechanically and keep the route semantics identical.
+
+The workflow files are still very regular, which means I can convert them without inventing new runtime behavior. I’m checking the route and step primitives next so the contract-module migration lands on the exact canonical `Route.to(...)` shape the compiler already expects.
+
+The remaining workflow packages all follow the same old shape: `SystemStep`/`PairStep` declarations plus one transition table. I’m pulling the transition blocks together now so I can migrate each step declaration directly from the existing topology instead of inferring anything new.
+
+`workflow_run_traces_to_optimization_candidates` and `autoloop_v1` are the only remaining files that look materially different from the standard three-step or four-step building-block pattern. I’m reading those separately before I start patching so I can keep the migration mechanical everywhere else.
+
+The code migration is the bigger risk surface, but the docs block the phase as well. I’m checking whether the workflow package docs use a common phrase pattern so I can clean them uniformly instead of doing ad hoc wording edits.
+
+I’m starting with one full package conversion end to end: contract routes, workflow declarations, and system-step handlers. Once that pattern is in place, the rest of the building-block workflows can follow it without inventing new behavior.
+
+The first end-to-end package conversion needs a careful rebase against the current file shape before I touch the rest. I’m reopening the exact declaration block now and then I’ll patch it in smaller chunks so I don’t lose any existing handler logic.
+
+The first converted workflow now has the right primitives, but I need to lock the class entry explicitly because the decorated bootstrap method is declared later in the class body than the review steps. I’m checking that shape before I stamp the same pattern onto the other workflow packages.
+
+I’m switching to the faster migration path for the remaining legacy workflow files: convert the declarations to `python_step(...)` / `do_review_step(...)` first while preserving the existing route metadata bundles. That clears the canonical-surface blocker without reopening the route contract text in every package at once.
+
+The standard building-block packages are patching cleanly with the same shape: `do_review_step(...)` for the verifier-managed nodes and decorated `python_step(...)` handlers for bootstrap/publish. I’m applying that unchanged to the remaining straight-line workflow packages before I come back to the more specialized ones.
+
+I’ve got a repeatable migration pattern now, so I’m applying it to the other straight-line builder packages while keeping their payload models, file layout, and publication logic untouched. The only behavior change in these files is how the topology is declared.
+
+I’m covering the small-but-important compatibility holdouts now. `autoloop_v1` is one of them, and it converts cleanly because the behavior already lives in explicit handlers; only the declaration surface is legacy.
+
+I’ve converted a first batch of the remaining legacy workflow packages. I’m compiling that batch now before I expand the same edits further, so I can catch any declaration-shape mistakes while the diff is still localized.
+
+I’m stopping the code migration batch at a compile-clean checkpoint and recording the mechanical decisions before I either expand further or hand off. The remaining work is still clear, but I don’t want to blur the boundary between clean converted packages and untouched ones.
+
+A workflow doc file shows up as a pure deletion in the working tree and it’s unrelated to the code batch I just compiled. I’m checking that now so I don’t accidentally absorb or report a stray dirty change as part of this phase work.
+
+I’m rewriting the phase notes now so they match the actual migration checkpoint instead of the earlier partial pass. That will capture what’s now compile-clean, what remains intentionally deferred, and the exact acceptance-criteria status.
+
+Scope considered
+
+The active `workflow-migration-and-cleanup` phase only. I kept the work on bundled workflow declaration migration plus the phase-local notes/decision ledger, and I avoided touching the unrelated deleted dirty file `docs/workflows/workflow_run_traces_to_optimization_candidates.md`.
+
+What I analyzed
+
+I used the reviewer findings as the delta and rechecked the remaining bundled workflow files for `PairStep` / `SystemStep` / global `transitions` usage. I also verified the current simple-surface lowering so I could migrate workflow declarations without changing their publication logic, payload models, artifact paths, or session semantics.
+
+What I changed
+
+I converted a first additional batch of bundled workflows from legacy declarations to canonical `python_step(...)` / `do_review_step(...)` authoring while preserving their existing handlers:
+- [workflows/autoloop_v1/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/workflow.py)
+- [workflows/candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py)
+- [workflows/release_candidate_to_go_no_go/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py)
+- [workflows/workflow_idea_to_workflow_package/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_idea_to_workflow_package/workflow.py)
+- [workflows/workflow_run_history_to_failure_modes/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_history_to_failure_modes/workflow.py)
+- [workflows/workflow_to_eval_suite/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_to_eval_suite/workflow.py)
+
+I also migrated one route-contract bundle off public `RouteInfo` onto canonical `Route.to(...)`:
+- [workflows/candidate_workflow_to_adapted_execution_plan/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/contracts.py)
+
+I updated the shared phase notes and appended the non-obvious migration decisions in:
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt)
+
+Key findings / decisions
+
+The migration pattern is stable: keep workflow-local `on_<step>` handlers and publication validators, replace legacy declarations with `do_review_step(...)` and decorated `python_step(...)`, and add explicit `entry = bootstrap` where the decorated bootstrap handler now appears later in the class body.
+
+Validation performed:
+- `python3 -m py_compile workflows/autoloop_v1/workflow.py workflows/candidate_workflow_to_adapted_execution_plan/workflow.py workflows/candidate_workflow_to_adapted_execution_plan/contracts.py workflows/release_candidate_to_go_no_go/workflow.py workflows/workflow_idea_to_workflow_package/workflow.py workflows/workflow_to_eval_suite/workflow.py workflows/workflow_run_history_to_failure_modes/workflow.py`
+
+Open issues / next step
+
+This is still a partial phase checkpoint, not a full close. The remaining legacy workflow packages still need the same declaration migration pass, most workflow-local route bundles still need the `RouteInfo` to `Route.to(...)` cleanup, and the compatibility-era docs/examples were not cleaned in this batch.

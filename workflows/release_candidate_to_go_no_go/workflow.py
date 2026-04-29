@@ -9,7 +9,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         read_json_object,
         require_non_empty_string,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -20,11 +20,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         read_json_object,
         require_non_empty_string,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
@@ -83,16 +83,10 @@ class ReleaseCandidateToGoNoGo(Workflow):
     release_communications_draft = Artifact("{workflow_folder}/release_communications_draft.md")
     decision_receipt = Artifact("{workflow_folder}/decision_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    frame_release = PairStep(
-        name="frame_release",
+    frame_release = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -100,19 +94,16 @@ class ReleaseCandidateToGoNoGo(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "release_scope_brief": release_scope_brief,
-            "decision_criteria": decision_criteria,
-            "evidence_intake_register": evidence_intake_register,
-        },
-        expected_output_schema=ReleaseFramingPayload,
+        writes=[release_scope_brief, decision_criteria, evidence_intake_register],
+        accepted="release_framed",
+        control_schema=ReleaseFramingPayload,
+        routes={"needs_replan": "frame_release"},
         route_infos=FRAME_RELEASE_ROUTE_CONTRACTS,
     )
-    assemble_evidence_pack = PairStep(
-        name="assemble_evidence_pack",
+    assemble_evidence_pack = do_review_step(
+        do=Prompt.file("prompts/evidence_producer.md"),
+        review=Prompt.file("prompts/evidence_verifier.md"),
         session=evidence_session,
-        producer="prompts/evidence_producer.md",
-        verifier="prompts/evidence_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -120,21 +111,16 @@ class ReleaseCandidateToGoNoGo(Workflow):
             decision_criteria,
             evidence_intake_register,
         ],
-        produces={
-            "release_inventory": release_inventory,
-            "test_evidence_pack": test_evidence_pack,
-            "operational_readiness": operational_readiness,
-            "rollback_readiness": rollback_readiness,
-            "blocking_issues": blocking_issues,
-        },
-        expected_output_schema=ReleaseEvidencePayload,
+        writes=[release_inventory, test_evidence_pack, operational_readiness, rollback_readiness, blocking_issues],
+        accepted="evidence_pack_ready",
+        control_schema=ReleaseEvidencePayload,
+        routes={"needs_replan": "frame_release"},
         route_infos=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
     )
-    assess_go_no_go = PairStep(
-        name="assess_go_no_go",
+    assess_go_no_go = do_review_step(
+        do=Prompt.file("prompts/assessment_producer.md"),
+        review=Prompt.file("prompts/assessment_verifier.md"),
         session=assessment_session,
-        producer="prompts/assessment_producer.md",
-        verifier="prompts/assessment_verifier.md",
         requires=[
             release_scope_brief,
             decision_criteria,
@@ -145,19 +131,16 @@ class ReleaseCandidateToGoNoGo(Workflow):
             rollback_readiness,
             blocking_issues,
         ],
-        produces={
-            "go_no_go_assessment": go_no_go_assessment,
-            "risk_register": risk_register,
-            "decision_summary": decision_summary,
-        },
-        expected_output_schema=ReleaseAssessmentPayload,
+        writes=[go_no_go_assessment, risk_register, decision_summary],
+        accepted="assessment_ready",
+        control_schema=ReleaseAssessmentPayload,
+        routes={"needs_replan": "frame_release"},
         route_infos=ASSESS_GO_NO_GO_ROUTE_CONTRACTS,
     )
-    prepare_decision_package = PairStep(
-        name="prepare_decision_package",
+    prepare_decision_package = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -173,51 +156,20 @@ class ReleaseCandidateToGoNoGo(Workflow):
             risk_register,
             decision_summary,
         ],
-        produces={
-            "release_decision_package": release_decision_package,
-            "release_communications_draft": release_communications_draft,
-        },
-        expected_output_schema=ReleaseDecisionPackagePayload,
+        writes=[release_decision_package, release_communications_draft],
+        accepted="decision_package_ready",
+        control_schema=ReleaseDecisionPackagePayload,
+        routes={"needs_replan": "assess_go_no_go"},
         route_infos=PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS,
     )
-    publish_decision = SystemStep(
-        name="publish_decision",
-        requires=[decision_summary, release_decision_package, release_communications_draft],
-        produces={"decision_receipt": decision_receipt},
+
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "frame_release"},
     )
-
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": frame_release},
-            frame_release: {
-                "release_framed": assemble_evidence_pack,
-                "needs_rework": frame_release,
-                "needs_replan": frame_release,
-            },
-            assemble_evidence_pack: {
-                "evidence_pack_ready": assess_go_no_go,
-                "needs_rework": assemble_evidence_pack,
-                "needs_replan": frame_release,
-            },
-            assess_go_no_go: {
-                "assessment_ready": prepare_decision_package,
-                "needs_rework": assess_go_no_go,
-                "needs_replan": frame_release,
-            },
-            prepare_decision_package: {
-                "decision_package_ready": publish_decision,
-                "needs_rework": prepare_decision_package,
-                "needs_replan": assess_go_no_go,
-            },
-            publish_decision: {"decision_published": SUCCESS},
-        },
-    )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -279,8 +231,13 @@ class ReleaseCandidateToGoNoGo(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_decision(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_decision",
+        requires=[decision_summary, release_decision_package, release_communications_draft],
+        writes=[decision_receipt],
+        routes={"decision_published": FINISH},
+    )
+    def publish_decision(state: State, ctx):
         summary_path = ctx.workflow_folder / "decision_summary.json"
         decision_package_path = ctx.workflow_folder / "release_decision_package.md"
         communications_path = ctx.workflow_folder / "release_communications_draft.md"
@@ -315,6 +272,8 @@ class ReleaseCandidateToGoNoGo(Workflow):
         return state.model_copy(update={"published": True, "recommended_decision": recommended_decision}), Event(
             "decision_published"
         )
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

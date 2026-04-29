@@ -9,80 +9,59 @@
 
 ## Files Changed
 
-- `workflows/investigation_request_to_evidence_pack/workflow.py`
-- `workflows/incident_to_hardening_program/workflow.py`
-- `workflows/task_to_candidate_workflow_set/workflow.py`
-- `workflows/workflow_portfolio_to_operating_system/workflow.py`
-- `autoloop_optimizer/__init__.py`
-- `autoloop_optimizer/_selected_workflow.py`
-- `autoloop_optimizer/adaptation.py`
-- `autoloop_optimizer/candidate_surfaces.py`
-- `autoloop_optimizer/company.py`
-- `autoloop_optimizer/decomposition.py`
-- `autoloop_optimizer/diagnostics.py`
-- `autoloop_optimizer/evaluation.py`
-- `autoloop_optimizer/optimization.py`
-- `autoloop_optimizer/portfolio.py`
-- `autoloop_optimizer/refinement.py`
-- `stdlib/_selected_workflow.py`
-- `stdlib/adaptation.py`
-- `stdlib/candidate_surfaces.py`
-- `stdlib/company.py`
-- `stdlib/decomposition.py`
-- `stdlib/diagnostics.py`
-- `stdlib/evaluation.py`
-- `stdlib/optimization.py`
-- `stdlib/portfolio.py`
-- `stdlib/refinement.py`
-- `docs/authoring.md`
-- `docs/architecture.md`
-- `pyproject.toml`
+- `workflows/autoloop_v1/workflow.py`
+- `workflows/candidate_workflow_to_adapted_execution_plan/contracts.py`
+- `workflows/candidate_workflow_to_adapted_execution_plan/workflow.py`
+- `workflows/release_candidate_to_go_no_go/workflow.py`
+- `workflows/workflow_idea_to_workflow_package/workflow.py`
+- `workflows/workflow_run_history_to_failure_modes/workflow.py`
+- `workflows/workflow_to_eval_suite/workflow.py`
 - `.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt`
 
 ## Symbols Touched
 
-- Workflow declarations: `bootstrap`, `capture_*`, `publish_*`, `frame_*`, `analyze_*`, `package_*`
-- New package surface: `autoloop_optimizer.*`
-- Compatibility shim modules: `stdlib._selected_workflow`, `stdlib.adaptation`, `stdlib.candidate_surfaces`, `stdlib.company`, `stdlib.decomposition`, `stdlib.diagnostics`, `stdlib.evaluation`, `stdlib.optimization`, `stdlib.portfolio`, `stdlib.refinement`
+- Canonical workflow declarations: `bootstrap`, `capture_*`, `publish_*`, `plan`, `implement`, `test`, `frame_*`, `design_*`, `build_*`, `evaluate_*`, `map_failure_modes`, `package_improvement_pressure`
+- Route metadata bundle: `FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS`, `ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS`, `PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS`
 
 ## Checklist Mapping
 
-- AC-1 partial: migrated four bundled workflow packages from `SystemStep` / `PairStep` plus global `transitions` to `python_step(...)` / `do_review_step(...)` with step-local `routes` and `Prompt.file(...)`
-- AC-2 partial: moved optimizer/application helper implementations into sibling package `autoloop_optimizer`, leaving `stdlib` compatibility shims
-- AC-3 deferred: full suite migration, remaining bundled workflows, and doc/test cleanup not completed in this turn
+- AC-1 partial: converted additional bundled workflows from `PairStep` / `SystemStep` plus global `transitions` to `do_review_step(...)` / `python_step(...)`, including `autoloop_v1`, `candidate_workflow_to_adapted_execution_plan`, `release_candidate_to_go_no_go`, `workflow_idea_to_workflow_package`, `workflow_run_history_to_failure_modes`, and `workflow_to_eval_suite`
+- AC-2 partial: prior `autoloop_optimizer` split remains in place; no new stdlib moves in this turn
+- AC-3 deferred: remaining bundled workflows, route-metadata cleanup, doc cleanup, and suite migration are not finished in this turn
 
 ## Assumptions
 
-- Existing workflow-local `on_<step>` outcome handlers remain valid compatibility seams for `do_review_step(...)` during migration
-- `stdlib` shims may remain temporarily while call sites move to `autoloop_optimizer`
+- Existing workflow-local `on_<step>` outcome handlers remain valid compatibility seams while the declaration surface moves to `do_review_step(...)`
+- Publication validators and deterministic artifact checks stay workflow-local during this phase rather than moving into shared helpers
 
 ## Preserved Invariants
 
-- Publication validators and receipt payload logic stay workflow-local
-- Existing artifact paths, state models, session names, and verifier payload schemas remain unchanged
-- Runtime control middleware `on_outcome = event_on_outcome_tags(...)` remains active
+- Workflow-local publication semantics, artifact paths, session names, and verifier payload schemas remain unchanged
+- Runtime control middleware `on_outcome = event_on_outcome_tags(...)` remains active on the migrated workflow packages
+- Child-workflow adoption logic in `task_to_workflow_strategy` was intentionally not touched in this checkpoint
 
 ## Intended Behavior Changes
 
-- The migrated workflows now declare topology on the step objects themselves instead of relying on global `transitions`
-- Optimizer/application helpers are now housed under `autoloop_optimizer` rather than living only in `stdlib`
+- The migrated workflow packages now declare topology on the step objects instead of relying on global `transitions`
+- Converted workflow packages now use canonical `Prompt.file(...)`, `python_step(...)`, `do_review_step(...)`, and `FINISH`
+- `candidate_workflow_to_adapted_execution_plan/contracts.py` now carries canonical `Route.to(...)` route metadata instead of public `RouteInfo`
 
 ## Known Non-Changes
 
-- Route metadata bundles still use `route_infos` / `RouteInfo` compatibility inputs
-- Remaining bundled workflows, docs, and tests still need canonical-surface cleanup
-- Top-level `autoloop` exports were not reduced in this turn
+- Several bundled workflows still need the same declaration migration pass, especially `company_operation_to_recursive_improvement_cycle`, `security_finding_to_verified_remediation`, `task_to_workflow_strategy`, `workflow_and_eval_to_refined_workflow_package`, `workflow_package_to_composable_building_blocks`, and `workflow_run_traces_to_optimization_candidates`
+- Most workflow-local contract bundles still use `RouteInfo` / `route_infos`
+- Remaining compatibility-era docs/examples were not cleaned up in this checkpoint
+- I did not touch the unrelated deleted dirty file `docs/workflows/workflow_run_traces_to_optimization_candidates.md`
 
 ## Expected Side Effects
 
-- Compiler/inspect output for the four migrated workflows should now reflect step-local route declarations sourced from the simple surface
-- Existing imports from `stdlib` continue to resolve through the compatibility shims
+- Converted workflow packages now rely on explicit `entry = bootstrap` where the decorated bootstrap handler appears later in the class body than the review-step declarations
+- Provider/runtime inspection for the migrated packages should now derive their topology from step-local declarations rather than from a package-local transition table
 
 ## Validation Performed
 
-- `python3 -m py_compile workflows/investigation_request_to_evidence_pack/workflow.py workflows/incident_to_hardening_program/workflow.py workflows/task_to_candidate_workflow_set/workflow.py workflows/workflow_portfolio_to_operating_system/workflow.py autoloop_optimizer/__init__.py autoloop_optimizer/_selected_workflow.py autoloop_optimizer/adaptation.py autoloop_optimizer/candidate_surfaces.py autoloop_optimizer/company.py autoloop_optimizer/decomposition.py autoloop_optimizer/diagnostics.py autoloop_optimizer/evaluation.py autoloop_optimizer/optimization.py autoloop_optimizer/portfolio.py autoloop_optimizer/refinement.py stdlib/_selected_workflow.py stdlib/adaptation.py stdlib/candidate_surfaces.py stdlib/company.py stdlib/decomposition.py stdlib/diagnostics.py stdlib/evaluation.py stdlib/optimization.py stdlib/portfolio.py stdlib/refinement.py`
+- `python3 -m py_compile workflows/autoloop_v1/workflow.py workflows/candidate_workflow_to_adapted_execution_plan/workflow.py workflows/candidate_workflow_to_adapted_execution_plan/contracts.py workflows/release_candidate_to_go_no_go/workflow.py workflows/workflow_idea_to_workflow_package/workflow.py workflows/workflow_to_eval_suite/workflow.py workflows/workflow_run_history_to_failure_modes/workflow.py`
 
 ## Deduplication / Centralization
 
-- Centralized moved optimizer/application helper implementations under `autoloop_optimizer`
-- Replaced copied helper bodies in `stdlib` with import-only shims to avoid duplicated logic
+- Reused the same migration pattern across straight-line bundled workflows: preserve workflow-local handlers, lower agentic nodes to `do_review_step(...)`, lower deterministic nodes to decorated `python_step(...)`, and keep route policy local until the later `Route.to(...)` cleanup pass

@@ -5,18 +5,18 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
         write_publication_receipt,
     )
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     BUILD_PACKAGE_ROUTE_CONTRACTS,
@@ -95,16 +95,10 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
     generated_doc = Artifact("{package_folder}/../../docs/workflows/{state.package_name}.md")
     generated_test = Artifact("{package_folder}/../../tests/runtime/test_{state.package_name}.py")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    frame_candidate = PairStep(
-        name="frame_candidate",
+    frame_candidate = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -115,18 +109,16 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             existing_workflow_definition,
             existing_workflow_prompts,
         ],
-        produces={
-            "candidate_comparison": candidate_comparison,
-            "selected_workflow_brief": selected_workflow_brief,
-        },
-        expected_output_schema=CandidateSelectionPayload,
+        writes=[candidate_comparison, selected_workflow_brief],
+        accepted="candidate_selected",
+        control_schema=CandidateSelectionPayload,
+        routes={"needs_replan": "frame_candidate"},
         route_infos=FRAME_CANDIDATE_ROUTE_CONTRACTS,
     )
-    design_package = PairStep(
-        name="design_package",
+    design_package = do_review_step(
+        do=Prompt.file("prompts/design_producer.md"),
+        review=Prompt.file("prompts/design_verifier.md"),
         session=design_session,
-        producer="prompts/design_producer.md",
-        verifier="prompts/design_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -142,20 +134,16 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             candidate_comparison,
             selected_workflow_brief,
         ],
-        produces={
-            "workflow_package_spec": workflow_package_spec,
-            "step_contracts": step_contracts,
-            "prompt_contract_matrix": prompt_contract_matrix,
-            "verification_plan": verification_plan,
-        },
-        expected_output_schema=WorkflowDesignPayload,
+        writes=[workflow_package_spec, step_contracts, prompt_contract_matrix, verification_plan],
+        accepted="design_accepted",
+        control_schema=WorkflowDesignPayload,
+        routes={"needs_replan": "frame_candidate"},
         route_infos=DESIGN_PACKAGE_ROUTE_CONTRACTS,
     )
-    build_package = PairStep(
-        name="build_package",
+    build_package = do_review_step(
+        do=Prompt.file("prompts/build_producer.md"),
+        review=Prompt.file("prompts/build_verifier.md"),
         session=build_session,
-        producer="prompts/build_producer.md",
-        verifier="prompts/build_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -170,29 +158,30 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             existing_workflow_definition,
             builder_checklist,
         ],
-        produces={
-            "generated_package_root": generated_package_root,
-            "generated_single_file": generated_single_file,
-            "generated_flow": generated_flow,
-            "generated_specs": generated_specs,
-            "generated_init": generated_init,
-            "generated_manifest": generated_manifest,
-            "generated_prompts_dir": generated_prompts_dir,
-            "generated_assets_dir": generated_assets_dir,
-            "generated_prompt_index": generated_prompt_index,
-            "generated_layout": generated_layout,
-            "generated_doc": generated_doc,
-            "generated_test": generated_test,
-            "build_report": build_report,
-        },
-        expected_output_schema=WorkflowBuildPayload,
+        writes=[
+            generated_package_root,
+            generated_single_file,
+            generated_flow,
+            generated_specs,
+            generated_init,
+            generated_manifest,
+            generated_prompts_dir,
+            generated_assets_dir,
+            generated_prompt_index,
+            generated_layout,
+            generated_doc,
+            generated_test,
+            build_report,
+        ],
+        accepted="package_built",
+        control_schema=WorkflowBuildPayload,
+        routes={"needs_replan": "design_package"},
         route_infos=BUILD_PACKAGE_ROUTE_CONTRACTS,
     )
-    evaluate_package = PairStep(
-        name="evaluate_package",
+    evaluate_package = do_review_step(
+        do=Prompt.file("prompts/evaluate_producer.md"),
+        review=Prompt.file("prompts/evaluate_verifier.md"),
         session=evaluate_session,
-        producer="prompts/evaluate_producer.md",
-        verifier="prompts/evaluate_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -203,52 +192,19 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             build_report,
             generated_layout,
         ],
-        produces={
-            "verification_report": verification_report,
-            "promotion_record": promotion_record,
-            "rollback_plan": rollback_plan,
-        },
-        expected_output_schema=WorkflowEvaluationPayload,
+        writes=[verification_report, promotion_record, rollback_plan],
+        accepted="evaluation_passed",
+        control_schema=WorkflowEvaluationPayload,
+        routes={"needs_replan": "design_package", "needs_rework": "build_package"},
         route_infos=EVALUATE_PACKAGE_ROUTE_CONTRACTS,
     )
-    publish_package = SystemStep(
-        name="publish_package",
-        requires=[promotion_record, rollback_plan],
-        produces={"publish_receipt": publish_receipt},
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "frame_candidate"},
     )
-
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": frame_candidate},
-            frame_candidate: {
-                "candidate_selected": design_package,
-                "needs_rework": frame_candidate,
-                "needs_replan": frame_candidate,
-            },
-            design_package: {
-                "design_accepted": build_package,
-                "needs_rework": design_package,
-                "needs_replan": frame_candidate,
-            },
-            build_package: {
-                "package_built": evaluate_package,
-                "needs_rework": build_package,
-                "needs_replan": design_package,
-            },
-            evaluate_package: {
-                "evaluation_passed": publish_package,
-                "needs_rework": build_package,
-                "needs_replan": design_package,
-            },
-            publish_package: {"package_published": SUCCESS},
-        },
-    )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -311,8 +267,13 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         del artifacts
         return state.model_copy(update={"evaluation_status": outcome.tag})
 
-    @staticmethod
-    def on_publish_package(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_package",
+        requires=[promotion_record, rollback_plan],
+        writes=[publish_receipt],
+        routes={"package_published": FINISH},
+    )
+    def publish_package(state: State, ctx):
         promotion_path = ctx.workflow_folder / "promotion_record.md"
         rollback_path = ctx.workflow_folder / "rollback_plan.md"
         if not promotion_path.exists():
@@ -332,6 +293,8 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             },
         )
         return state.model_copy(update={"published": True}), Event("package_published")
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

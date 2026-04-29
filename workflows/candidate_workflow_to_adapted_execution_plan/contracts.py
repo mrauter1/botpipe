@@ -1,4 +1,4 @@
-"""Workflow-local output contracts for the adaptation-planning building block."""
+"""Workflow-local contracts for the adaptation-planning building block."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import JsonArtifactSpec
 
-from core import RouteInfo
+from autoloop import Route, SELF
 
 
 class AdaptationRequestFramingPayload(BaseModel):
@@ -84,43 +84,50 @@ VALIDATED_WORKFLOW_PARAMETERS_ARTIFACT = JsonArtifactSpec(
 
 
 FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS = {
-    "adaptation_request_framed": RouteInfo(
+    "adaptation_request_framed": Route.to(
+        "analyze_adaptation_surface",
         summary="The selected workflow, task trigger, terminal outcome, and adaptation acceptance surface are explicit enough to analyze the chosen workflow without guesswork.",
-        required_outputs=("adaptation_request_brief", "adaptation_success_criteria"),
+        required_writes=("adaptation_request_brief", "adaptation_success_criteria"),
         handoff="Locks the adaptation-request framing so fit, parameterization, and execution-surface analysis can proceed against an explicit contract.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same framing boundary still holds, but the brief or success criteria need local repair before adaptation analysis can continue.",
-        required_outputs=("adaptation_request_brief", "adaptation_success_criteria"),
+        required_writes=("adaptation_request_brief", "adaptation_success_criteria"),
         handoff="Keeps adaptation framing local and reruns the same step for clearer task and acceptance boundaries.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        SELF,
         summary="The task trigger, selected workflow, or execution boundary changed materially and the adaptation request must be reframed.",
         handoff="Returns the workflow to framing because the current adaptation boundary is no longer authoritative.",
     ),
 }
 
 ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS = {
-    "adaptation_surface_analyzed": RouteInfo(
+    "adaptation_surface_analyzed": Route.to(
+        "package_adapted_execution_plan",
         summary="The fit assessment and step-adaptation matrix explain what stays fixed, what must be parameterized, and what execution risks remain before packaging.",
-        required_outputs=("workflow_fit_assessment", "step_adaptation_matrix"),
+        required_writes=("workflow_fit_assessment", "step_adaptation_matrix"),
         handoff="Locks the selected workflow's fit and adaptation surface so packaging can publish an execution-ready handoff.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same analysis boundary holds, but the fit assessment or step-adaptation matrix needs local repair.",
-        required_outputs=("workflow_fit_assessment", "step_adaptation_matrix"),
+        required_writes=("workflow_fit_assessment", "step_adaptation_matrix"),
         handoff="Keeps adaptation analysis local and reruns the same step for stronger fit and parameterization evidence.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "frame_adaptation_request",
         summary="Analysis proved that the selected workflow, acceptance boundary, or execution shape changed materially and framing must be revisited.",
         handoff="Routes back to framing because the chosen workflow or acceptance boundary is no longer credible as stated.",
     ),
 }
 
 PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS = {
-    "adapted_execution_plan_ready": RouteInfo(
+    "adapted_execution_plan_ready": Route.to(
+        "publish_adapted_execution_plan",
         summary="The terminal adapted-execution plan, proposed workflow-parameter artifact, machine-readable summary, and next-action artifact are complete and ready for deterministic publication.",
-        required_outputs=(
+        required_writes=(
             "adapted_execution_plan",
             "proposed_workflow_parameters",
             "adapted_execution_summary",
@@ -128,9 +135,10 @@ PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS = {
         ),
         handoff="Advances the building block to deterministic publication of the adapted plan, validated parameters, and receipt.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same selected workflow and adaptation boundary still hold, but the package artifacts need local repair before publication.",
-        required_outputs=(
+        required_writes=(
             "adapted_execution_plan",
             "proposed_workflow_parameters",
             "adapted_execution_summary",
@@ -138,7 +146,8 @@ PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS = {
         ),
         handoff="Keeps packaging local and reruns the same step for summary, parameter, or next-action corrections only.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "analyze_adaptation_surface",
         summary="Packaging revealed that the selected workflow, adaptation boundary, or execution handoff changed materially and analysis must be revisited.",
         handoff="Routes back to analysis because the current package no longer matches the authoritative adaptation surface.",
     ),

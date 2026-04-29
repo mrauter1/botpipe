@@ -29,7 +29,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_selected_workflow_run_history_snapshot,
     )
     from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -56,11 +56,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_selected_workflow_run_history_snapshot,
     )
     from stdlib._selected_workflow import capture_selected_workflow
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     DiagnosticScopePayload,
@@ -135,24 +135,10 @@ class WorkflowRunHistoryToFailureModes(Workflow):
     diagnostic_next_actions = Artifact("{workflow_folder}/diagnostic_next_actions.md")
     failure_mode_diagnostic_receipt = Artifact("{workflow_folder}/failure_mode_diagnostic_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    capture_run_history_context = SystemStep(
-        name="capture_run_history_context",
-        requires=[request, invocation_contract],
-        produces={
-            "selected_workflow_capability": selected_workflow_capability,
-            "selected_workflow_run_history": selected_workflow_run_history,
-        },
-    )
-    frame_diagnostic_scope = PairStep(
-        name="frame_diagnostic_scope",
+    frame_diagnostic_scope = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -162,18 +148,16 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "diagnostic_scope_brief": diagnostic_scope_brief,
-            "run_history_scope": run_history_scope,
-        },
-        expected_output_schema=DiagnosticScopePayload,
+        writes=[diagnostic_scope_brief, run_history_scope],
+        accepted="diagnostic_scope_framed",
+        control_schema=DiagnosticScopePayload,
+        routes={"needs_replan": "frame_diagnostic_scope"},
         route_infos=FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS,
     )
-    map_failure_modes = PairStep(
-        name="map_failure_modes",
+    map_failure_modes = do_review_step(
+        do=Prompt.file("prompts/analyze_producer.md"),
+        review=Prompt.file("prompts/analyze_verifier.md"),
         session=analysis_session,
-        producer="prompts/analyze_producer.md",
-        verifier="prompts/analyze_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -182,19 +166,16 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             diagnostic_scope_brief,
             run_history_scope,
         ],
-        produces={
-            "failure_mode_map": failure_mode_map,
-            "failure_mode_manifest": failure_mode_manifest,
-            "recurring_weak_points": recurring_weak_points,
-        },
-        expected_output_schema=FailureModeMapPayload,
+        writes=[failure_mode_map, failure_mode_manifest, recurring_weak_points],
+        accepted="failure_modes_mapped",
+        control_schema=FailureModeMapPayload,
+        routes={"needs_replan": "frame_diagnostic_scope"},
         route_infos=MAP_FAILURE_MODES_ROUTE_CONTRACTS,
     )
-    package_improvement_pressure = PairStep(
-        name="package_improvement_pressure",
+    package_improvement_pressure = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -207,59 +188,19 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             failure_mode_manifest,
             recurring_weak_points,
         ],
-        produces={
-            "improvement_opportunities": improvement_opportunities,
-            "improvement_opportunities_summary": improvement_opportunities_summary,
-            "diagnostic_next_actions": diagnostic_next_actions,
-        },
-        expected_output_schema=ImprovementPressurePayload,
+        writes=[improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions],
+        accepted="improvement_pressure_packaged",
+        control_schema=ImprovementPressurePayload,
+        routes={"needs_replan": "map_failure_modes"},
         route_infos=PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS,
     )
-    publish_failure_mode_package = SystemStep(
-        name="publish_failure_mode_package",
-        requires=[
-            selected_workflow_capability,
-            selected_workflow_run_history,
-            diagnostic_scope_brief,
-            run_history_scope,
-            failure_mode_map,
-            failure_mode_manifest,
-            recurring_weak_points,
-            improvement_opportunities,
-            improvement_opportunities_summary,
-            diagnostic_next_actions,
-        ],
-        produces={"failure_mode_diagnostic_receipt": failure_mode_diagnostic_receipt},
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_run_history_context"},
     )
-
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_run_history_context},
-            capture_run_history_context: {"run_history_context_captured": frame_diagnostic_scope},
-            frame_diagnostic_scope: {
-                "diagnostic_scope_framed": map_failure_modes,
-                "needs_rework": frame_diagnostic_scope,
-                "needs_replan": frame_diagnostic_scope,
-            },
-            map_failure_modes: {
-                "failure_modes_mapped": package_improvement_pressure,
-                "needs_rework": map_failure_modes,
-                "needs_replan": frame_diagnostic_scope,
-            },
-            package_improvement_pressure: {
-                "improvement_pressure_packaged": publish_failure_mode_package,
-                "needs_rework": package_improvement_pressure,
-                "needs_replan": map_failure_modes,
-            },
-            publish_failure_mode_package: {"failure_mode_diagnostics_published": SUCCESS},
-        },
-    )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
 
         next_state = state.model_copy(
@@ -297,8 +238,13 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_run_history_context(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_run_history_context",
+        requires=[request, invocation_contract],
+        writes=[selected_workflow_capability, selected_workflow_run_history],
+        routes={"run_history_context_captured": "frame_diagnostic_scope"},
+    )
+    def capture_run_history_context(state: State, ctx):
         capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
         capability_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
         history_path = write_selected_workflow_run_history_snapshot(
@@ -429,8 +375,24 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_failure_mode_package(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_failure_mode_package",
+        requires=[
+            selected_workflow_capability,
+            selected_workflow_run_history,
+            diagnostic_scope_brief,
+            run_history_scope,
+            failure_mode_map,
+            failure_mode_manifest,
+            recurring_weak_points,
+            improvement_opportunities,
+            improvement_opportunities_summary,
+            diagnostic_next_actions,
+        ],
+        writes=[failure_mode_diagnostic_receipt],
+        routes={"failure_mode_diagnostics_published": FINISH},
+    )
+    def publish_failure_mode_package(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -828,6 +790,8 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             ),
             Event("failure_mode_diagnostics_published"),
         )
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

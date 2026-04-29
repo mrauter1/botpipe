@@ -18,7 +18,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_validated_eval_case_manifest,
     )
     from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -36,11 +36,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_validated_eval_case_manifest,
     )
     from stdlib._selected_workflow import capture_selected_workflow
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
@@ -112,21 +112,10 @@ class WorkflowToEvalSuite(Workflow):
     validated_eval_case_manifest = Artifact("{workflow_folder}/validated_eval_case_manifest.json")
     workflow_eval_suite_receipt = Artifact("{workflow_folder}/workflow_eval_suite_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    capture_selected_workflow_contract = SystemStep(
-        name="capture_selected_workflow_contract",
-        requires=[request, invocation_contract],
-        produces={"selected_workflow_capability": selected_workflow_capability},
-    )
-    frame_evaluation_target = PairStep(
-        name="frame_evaluation_target",
+    frame_evaluation_target = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -135,18 +124,16 @@ class WorkflowToEvalSuite(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "evaluation_request_brief": evaluation_request_brief,
-            "evaluation_dimensions": evaluation_dimensions,
-        },
-        expected_output_schema=EvaluationTargetFramingPayload,
+        writes=[evaluation_request_brief, evaluation_dimensions],
+        accepted="evaluation_target_framed",
+        control_schema=EvaluationTargetFramingPayload,
+        routes={"needs_replan": "frame_evaluation_target"},
         route_infos=FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS,
     )
-    design_eval_cases = PairStep(
-        name="design_eval_cases",
+    design_eval_cases = do_review_step(
+        do=Prompt.file("prompts/design_producer.md"),
+        review=Prompt.file("prompts/design_verifier.md"),
         session=design_session,
-        producer="prompts/design_producer.md",
-        verifier="prompts/design_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -154,21 +141,22 @@ class WorkflowToEvalSuite(Workflow):
             evaluation_request_brief,
             evaluation_dimensions,
         ],
-        produces={
-            "benchmark_case_matrix": benchmark_case_matrix,
-            "edge_case_matrix": edge_case_matrix,
-            "adversarial_case_matrix": adversarial_case_matrix,
-            "eval_case_manifest": eval_case_manifest,
-            "eval_rubric": eval_rubric,
-        },
-        expected_output_schema=EvalCaseDesignPayload,
+        writes=[
+            benchmark_case_matrix,
+            edge_case_matrix,
+            adversarial_case_matrix,
+            eval_case_manifest,
+            eval_rubric,
+        ],
+        accepted="eval_cases_designed",
+        control_schema=EvalCaseDesignPayload,
+        routes={"needs_replan": "frame_evaluation_target"},
         route_infos=DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
     )
-    package_workflow_eval_suite = PairStep(
-        name="package_workflow_eval_suite",
+    package_workflow_eval_suite = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -182,61 +170,19 @@ class WorkflowToEvalSuite(Workflow):
             eval_case_manifest,
             eval_rubric,
         ],
-        produces={
-            "workflow_eval_suite": workflow_eval_suite,
-            "workflow_eval_suite_summary": workflow_eval_suite_summary,
-            "workflow_eval_next_action": workflow_eval_next_action,
-        },
-        expected_output_schema=WorkflowEvalSuitePayload,
+        writes=[workflow_eval_suite, workflow_eval_suite_summary, workflow_eval_next_action],
+        accepted="workflow_eval_suite_ready",
+        control_schema=WorkflowEvalSuitePayload,
+        routes={"needs_replan": "design_eval_cases"},
         route_infos=PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS,
     )
-    publish_workflow_eval_suite = SystemStep(
-        name="publish_workflow_eval_suite",
-        requires=[
-            selected_workflow_capability,
-            benchmark_case_matrix,
-            edge_case_matrix,
-            adversarial_case_matrix,
-            eval_case_manifest,
-            eval_rubric,
-            workflow_eval_suite,
-            workflow_eval_suite_summary,
-            workflow_eval_next_action,
-        ],
-        produces={
-            "validated_eval_case_manifest": validated_eval_case_manifest,
-            "workflow_eval_suite_receipt": workflow_eval_suite_receipt,
-        },
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_selected_workflow_contract"},
     )
-
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_selected_workflow_contract},
-            capture_selected_workflow_contract: {"selected_workflow_contract_captured": frame_evaluation_target},
-            frame_evaluation_target: {
-                "evaluation_target_framed": design_eval_cases,
-                "needs_rework": frame_evaluation_target,
-                "needs_replan": frame_evaluation_target,
-            },
-            design_eval_cases: {
-                "eval_cases_designed": package_workflow_eval_suite,
-                "needs_rework": design_eval_cases,
-                "needs_replan": frame_evaluation_target,
-            },
-            package_workflow_eval_suite: {
-                "workflow_eval_suite_ready": publish_workflow_eval_suite,
-                "needs_rework": package_workflow_eval_suite,
-                "needs_replan": design_eval_cases,
-            },
-            publish_workflow_eval_suite: {"workflow_eval_suite_published": SUCCESS},
-        },
-    )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -270,8 +216,13 @@ class WorkflowToEvalSuite(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_selected_workflow_contract(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_selected_workflow_contract",
+        requires=[request, invocation_contract],
+        writes=[selected_workflow_capability],
+        routes={"selected_workflow_contract_captured": "frame_evaluation_target"},
+    )
+    def capture_selected_workflow_contract(state: State, ctx):
         capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
         snapshot_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
         if not snapshot_path.exists():
@@ -361,8 +312,23 @@ class WorkflowToEvalSuite(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_workflow_eval_suite(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_workflow_eval_suite",
+        requires=[
+            selected_workflow_capability,
+            benchmark_case_matrix,
+            edge_case_matrix,
+            adversarial_case_matrix,
+            eval_case_manifest,
+            eval_rubric,
+            workflow_eval_suite,
+            workflow_eval_suite_summary,
+            workflow_eval_next_action,
+        ],
+        writes=[validated_eval_case_manifest, workflow_eval_suite_receipt],
+        routes={"workflow_eval_suite_published": FINISH},
+    )
+    def publish_workflow_eval_suite(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -574,6 +540,8 @@ class WorkflowToEvalSuite(Workflow):
             ),
             Event("workflow_eval_suite_published"),
         )
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

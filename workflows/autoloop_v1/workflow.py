@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from autoloop_v3.extensions import SessionPaths
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from extensions import SessionPaths
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
 
-from core import Artifact, FAIL, GLOBAL, PAUSE, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .conventions import AutoloopV1SessionPathStrategy, phase_dir_key
 from .parity import AutoloopV1Parity
@@ -43,59 +43,36 @@ class AutoloopV1(Workflow):
     impl_notes = Artifact("{task_folder}/implement/phases/{state.phase.dir_key}/implementation_notes.md")
     test_strat = Artifact("{task_folder}/test/phases/{state.phase.dir_key}/test_strategy.md")
 
-    plan = PairStep(
-        name="plan",
+    plan = do_review_step(
+        do=Prompt.file("prompts/plan_producer.md"),
+        review=Prompt.file("prompts/plan_verifier.md"),
         session=plan_session,
-        producer="prompts/plan_producer.md",
-        verifier="prompts/plan_verifier.md",
         requires=[request],
-        produces={"phase_plan": phase_plan},
+        writes=[phase_plan],
+        accepted="plan_ready",
+        routes={"plan_ready": "activate_next_phase", "needs_replan": "plan"},
     )
-    activate_next_phase = SystemStep(name="activate_next_phase")
-    implement = PairStep(
-        name="implement",
+    implement = do_review_step(
+        do=Prompt.file("prompts/implement_producer.md"),
+        review=Prompt.file("prompts/implement_verifier.md"),
         session=phase_session,
-        producer="prompts/implement_producer.md",
-        verifier="prompts/implement_verifier.md",
         requires=[phase_plan],
-        produces={"impl_notes": impl_notes},
+        writes=[impl_notes],
+        accepted="implemented",
+        routes={"implemented": "test", "needs_replan": "plan"},
     )
-    test = PairStep(
-        name="test",
+    test = do_review_step(
+        do=Prompt.file("prompts/test_producer.md"),
+        review=Prompt.file("prompts/test_verifier.md"),
         session=phase_session,
-        producer="prompts/test_producer.md",
-        verifier="prompts/test_verifier.md",
-        produces={"test_strat": test_strat},
+        writes=[test_strat],
+        accepted="phase_passed",
+        routes={"phase_passed": "activate_next_phase", "needs_replan": "plan"},
     )
 
     extensions = (
         SessionPaths(AutoloopV1SessionPathStrategy()),
         AutoloopV1Parity(),
-    )
-
-    entry = plan
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            GLOBAL: {"failed": FAIL},
-            plan: {
-                "plan_ready": activate_next_phase,
-                "needs_replan": plan,
-            },
-            activate_next_phase: {
-                "phase_selected": implement,
-                "workflow_complete": SUCCESS,
-            },
-            implement: {
-                "implemented": test,
-                "needs_replan": plan,
-            },
-            test: {
-                "phase_passed": activate_next_phase,
-                "needs_replan": plan,
-            },
-        },
     )
 
     def on_start(self, ctx) -> None:
@@ -108,8 +85,11 @@ class AutoloopV1(Workflow):
         phases = _load_phase_plan(artifacts.phase_plan.read_text())
         return state.model_copy(update={"phases": phases, "phase_index": -1, "phase": None})
 
-    @staticmethod
-    def on_activate_next_phase(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="activate_next_phase",
+        routes={"phase_selected": "implement", "workflow_complete": FINISH},
+    )
+    def activate_next_phase(state: State, ctx):
         next_index = state.phase_index + 1
         if next_index >= len(state.phases):
             return state, Event("workflow_complete")
@@ -124,6 +104,8 @@ class AutoloopV1(Workflow):
     @staticmethod
     def on_test(state: State, outcome: Outcome, artifacts):
         return state
+
+    entry = plan
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 

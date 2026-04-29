@@ -16,7 +16,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_validated_workflow_parameters,
     )
     from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
     from autoloop_v3.stdlib.lifecycle import (
         open_workflow_sessions,
         write_invocation_contract,
@@ -34,11 +34,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_validated_workflow_parameters,
     )
     from stdlib._selected_workflow import capture_selected_workflow
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ADAPTED_EXECUTION_SUMMARY_ARTIFACT,
@@ -104,21 +104,10 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
     validated_workflow_parameters = Artifact("{workflow_folder}/validated_workflow_parameters.json")
     adapted_execution_plan_receipt = Artifact("{workflow_folder}/adapted_execution_plan_receipt.json")
 
-    bootstrap = SystemStep(
-        name="bootstrap",
-        requires=[request],
-        produces={"invocation_contract": invocation_contract},
-    )
-    capture_selected_workflow_contract = SystemStep(
-        name="capture_selected_workflow_contract",
-        requires=[request, invocation_contract],
-        produces={"selected_workflow_capability": selected_workflow_capability},
-    )
-    frame_adaptation_request = PairStep(
-        name="frame_adaptation_request",
+    frame_adaptation_request = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
         session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -127,18 +116,15 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        produces={
-            "adaptation_request_brief": adaptation_request_brief,
-            "adaptation_success_criteria": adaptation_success_criteria,
-        },
-        expected_output_schema=AdaptationRequestFramingPayload,
-        route_infos=FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS,
+        writes=[adaptation_request_brief, adaptation_success_criteria],
+        accepted="adaptation_request_framed",
+        control_schema=AdaptationRequestFramingPayload,
+        routes=FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS,
     )
-    analyze_adaptation_surface = PairStep(
-        name="analyze_adaptation_surface",
+    analyze_adaptation_surface = do_review_step(
+        do=Prompt.file("prompts/analyze_producer.md"),
+        review=Prompt.file("prompts/analyze_verifier.md"),
         session=analysis_session,
-        producer="prompts/analyze_producer.md",
-        verifier="prompts/analyze_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -146,18 +132,15 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             adaptation_request_brief,
             adaptation_success_criteria,
         ],
-        produces={
-            "workflow_fit_assessment": workflow_fit_assessment,
-            "step_adaptation_matrix": step_adaptation_matrix,
-        },
-        expected_output_schema=AdaptationSurfaceAnalysisPayload,
-        route_infos=ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS,
+        writes=[workflow_fit_assessment, step_adaptation_matrix],
+        accepted="adaptation_surface_analyzed",
+        control_schema=AdaptationSurfaceAnalysisPayload,
+        routes=ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS,
     )
-    package_adapted_execution_plan = PairStep(
-        name="package_adapted_execution_plan",
+    package_adapted_execution_plan = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
         session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
         requires=[
             request,
             invocation_contract,
@@ -168,60 +151,24 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             workflow_fit_assessment,
             step_adaptation_matrix,
         ],
-        produces={
-            "adapted_execution_plan": adapted_execution_plan,
-            "proposed_workflow_parameters": proposed_workflow_parameters,
-            "adapted_execution_summary": adapted_execution_summary,
-            "adapted_execution_next_action": adapted_execution_next_action,
-        },
-        expected_output_schema=AdaptedExecutionPlanPayload,
-        route_infos=PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS,
-    )
-    publish_adapted_execution_plan = SystemStep(
-        name="publish_adapted_execution_plan",
-        requires=[
-            selected_workflow_capability,
-            workflow_fit_assessment,
-            step_adaptation_matrix,
+        writes=[
             adapted_execution_plan,
             proposed_workflow_parameters,
             adapted_execution_summary,
             adapted_execution_next_action,
         ],
-        produces={
-            "validated_workflow_parameters": validated_workflow_parameters,
-            "adapted_execution_plan_receipt": adapted_execution_plan_receipt,
-        },
+        accepted="adapted_execution_plan_ready",
+        control_schema=AdaptedExecutionPlanPayload,
+        routes=PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS,
     )
 
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_selected_workflow_contract},
-            capture_selected_workflow_contract: {"selected_workflow_contract_captured": frame_adaptation_request},
-            frame_adaptation_request: {
-                "adaptation_request_framed": analyze_adaptation_surface,
-                "needs_rework": frame_adaptation_request,
-                "needs_replan": frame_adaptation_request,
-            },
-            analyze_adaptation_surface: {
-                "adaptation_surface_analyzed": package_adapted_execution_plan,
-                "needs_rework": analyze_adaptation_surface,
-                "needs_replan": frame_adaptation_request,
-            },
-            package_adapted_execution_plan: {
-                "adapted_execution_plan_ready": publish_adapted_execution_plan,
-                "needs_rework": package_adapted_execution_plan,
-                "needs_replan": analyze_adaptation_surface,
-            },
-            publish_adapted_execution_plan: {"adapted_execution_plan_published": SUCCESS},
-        },
+    @python_step(
+        name="bootstrap",
+        requires=[request],
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_selected_workflow_contract"},
     )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -253,8 +200,13 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_selected_workflow_contract(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_selected_workflow_contract",
+        requires=[request, invocation_contract],
+        writes=[selected_workflow_capability],
+        routes={"selected_workflow_contract_captured": "frame_adaptation_request"},
+    )
+    def capture_selected_workflow_contract(state: State, ctx):
         capture = capture_selected_workflow(ctx, state.selected_workflow_reference)
         snapshot_path = write_selected_workflow_capability_snapshot(ctx, state.selected_workflow_reference)
         if not snapshot_path.exists():
@@ -314,8 +266,21 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_adapted_execution_plan(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_adapted_execution_plan",
+        requires=[
+            selected_workflow_capability,
+            workflow_fit_assessment,
+            step_adaptation_matrix,
+            adapted_execution_plan,
+            proposed_workflow_parameters,
+            adapted_execution_summary,
+            adapted_execution_next_action,
+        ],
+        writes=[validated_workflow_parameters, adapted_execution_plan_receipt],
+        routes={"adapted_execution_plan_published": FINISH},
+    )
+    def publish_adapted_execution_plan(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {
@@ -457,5 +422,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             ),
             Event("adapted_execution_plan_published"),
         )
+
+    entry = bootstrap
 
     on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
