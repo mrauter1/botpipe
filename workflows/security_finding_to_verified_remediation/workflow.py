@@ -109,7 +109,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             security_evidence_gap_register,
             security_evidence_pack_receipt,
         ],
-        writes=[
+        producer_writes=[
             exploit_summary,
             affected_surface,
             root_cause_analysis,
@@ -132,7 +132,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             remediation_options,
             assessment_summary,
         ],
-        writes=[
+        producer_writes=[
             selected_remediation_plan,
             verification_plan,
             rollout_plan,
@@ -164,7 +164,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             rollback_safety_plan,
             remediation_summary,
         ],
-        writes=[
+        producer_writes=[
             security_remediation_package,
             stakeholder_communication_draft,
             closure_evidence_requirements,

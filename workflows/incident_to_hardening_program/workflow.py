@@ -135,7 +135,7 @@ class IncidentToHardeningProgram(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[
+        producer_writes=[
             incident_scope_brief,
             response_objectives,
             evidence_intake_register,
@@ -153,7 +153,7 @@ class IncidentToHardeningProgram(Workflow):
             response_objectives,
             evidence_intake_register,
         ],
-        writes=[
+        producer_writes=[
             incident_timeline,
             affected_surface,
             blast_radius,
@@ -177,7 +177,7 @@ class IncidentToHardeningProgram(Workflow):
             observability_gaps,
             evidence_gap_register,
         ],
-        writes=[
+        producer_writes=[
             cause_hypothesis_ranking,
             immediate_mitigation_plan,
             validation_plan,
@@ -205,7 +205,7 @@ class IncidentToHardeningProgram(Workflow):
             validation_plan,
             incident_summary,
         ],
-        writes=[
+        producer_writes=[
             hardening_program,
             hardening_backlog,
             follow_up_owners,

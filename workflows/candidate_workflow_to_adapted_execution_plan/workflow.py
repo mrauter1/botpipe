@@ -116,7 +116,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[adaptation_request_brief, adaptation_success_criteria],
+        producer_writes=[adaptation_request_brief, adaptation_success_criteria],
         control_schema=AdaptationRequestFramingPayload,
         routes=FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS,
     )
@@ -131,7 +131,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             adaptation_request_brief,
             adaptation_success_criteria,
         ],
-        writes=[workflow_fit_assessment, step_adaptation_matrix],
+        producer_writes=[workflow_fit_assessment, step_adaptation_matrix],
         control_schema=AdaptationSurfaceAnalysisPayload,
         routes=ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS,
     )
@@ -149,7 +149,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             workflow_fit_assessment,
             step_adaptation_matrix,
         ],
-        writes=[
+        producer_writes=[
             adapted_execution_plan,
             proposed_workflow_parameters,
             adapted_execution_summary,

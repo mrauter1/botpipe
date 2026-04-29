@@ -268,7 +268,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[
+        producer_writes=[
             selected_workflow_capability,
             selected_workflow_authoring_surface,
             selected_workflow_decomposition_surface,
@@ -294,7 +294,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_optimization_scope,
             workflow_optimization_trace_corpus,
         ],
-        writes=[step_trace_metrics, step_optimization_priority_report],
+        producer_writes=[step_trace_metrics, step_optimization_priority_report],
         control_schema=RankTargetsPayload,
         routes=RANK_TARGETS_ROUTE_CONTRACTS,
     )
@@ -312,7 +312,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             step_optimization_priority_report,
             workflow_failure_scenario_seeds,
         ],
-        writes=[workflow_failure_scenarios],
+        producer_writes=[workflow_failure_scenarios],
         control_schema=FailureScenarioPayload,
         routes=MINE_FAILURES_ROUTE_CONTRACTS,
     )
@@ -328,7 +328,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_failure_scenarios,
             step_optimization_priority_report,
         ],
-        writes=[producer_prompt_optimization_candidates],
+        producer_writes=[producer_prompt_optimization_candidates],
         control_schema=CandidatePassPayload,
         routes=OPTIMIZE_PRODUCER_ROUTE_CONTRACTS,
     )
@@ -344,7 +344,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_failure_scenarios,
             step_optimization_priority_report,
         ],
-        writes=[verifier_rubric_optimization_candidates],
+        producer_writes=[verifier_rubric_optimization_candidates],
         control_schema=CandidatePassPayload,
         routes=OPTIMIZE_VERIFIER_RUBRIC_ROUTE_CONTRACTS,
     )
@@ -360,7 +360,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_optimization_trace_corpus,
             step_optimization_priority_report,
         ],
-        writes=[token_optimization_candidates],
+        producer_writes=[token_optimization_candidates],
         control_schema=CandidatePassPayload,
         routes=OPTIMIZE_TOKENS_ROUTE_CONTRACTS,
     )
@@ -375,7 +375,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_failure_scenarios,
             step_optimization_priority_report,
         ],
-        writes=[adversarial_case_candidates],
+        producer_writes=[adversarial_case_candidates],
         control_schema=AdversarialCasesPayload,
         routes=ADVERSARIAL_CASES_ROUTE_CONTRACTS,
     )
@@ -393,7 +393,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             workflow_optimization_trace_corpus,
             step_optimization_priority_report,
         ],
-        writes=[workflow_level_optimization_candidates],
+        producer_writes=[workflow_level_optimization_candidates],
         control_schema=CandidatePassPayload,
         routes=WORKFLOW_LEVEL_ROUTE_CONTRACTS,
     )
@@ -413,7 +413,7 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             excluded_run_report,
             optimization_package_checklist,
         ],
-        writes=[workflow_optimization_scorecard, workflow_optimization_packet],
+        producer_writes=[workflow_optimization_scorecard, workflow_optimization_packet],
         control_schema=OptimizationPackagePayload,
         routes=PACKAGE_ROUTE_CONTRACTS,
     )

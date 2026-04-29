@@ -154,7 +154,7 @@ class TaskToCandidateWorkflowSet(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[candidate_request_brief, candidate_selection_criteria],
+        producer_writes=[candidate_request_brief, candidate_selection_criteria],
         control_schema=CandidateRequestFramingPayload,
         routes=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
     )
@@ -170,7 +170,7 @@ class TaskToCandidateWorkflowSet(Workflow):
             candidate_request_brief,
             candidate_selection_criteria,
         ],
-        writes=[workflow_candidate_matrix, workflow_gap_analysis, candidate_route_posture],
+        producer_writes=[workflow_candidate_matrix, workflow_gap_analysis, candidate_route_posture],
         control_schema=CandidateWorkflowAnalysisPayload,
         routes=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
     )
@@ -190,7 +190,7 @@ class TaskToCandidateWorkflowSet(Workflow):
             workflow_gap_analysis,
             candidate_route_posture,
         ],
-        writes=[candidate_workflow_set, candidate_workflow_set_summary, candidate_next_action],
+        producer_writes=[candidate_workflow_set, candidate_workflow_set_summary, candidate_next_action],
         control_schema=CandidateWorkflowSetPayload,
         routes=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
     )

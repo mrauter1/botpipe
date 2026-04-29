@@ -94,7 +94,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[release_scope_brief, decision_criteria, evidence_intake_register],
+        producer_writes=[release_scope_brief, decision_criteria, evidence_intake_register],
         control_schema=ReleaseFramingPayload,
         routes=FRAME_RELEASE_ROUTE_CONTRACTS,
     )
@@ -109,7 +109,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             decision_criteria,
             evidence_intake_register,
         ],
-        writes=[release_inventory, test_evidence_pack, operational_readiness, rollback_readiness, blocking_issues],
+        producer_writes=[release_inventory, test_evidence_pack, operational_readiness, rollback_readiness, blocking_issues],
         control_schema=ReleaseEvidencePayload,
         routes=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
     )
@@ -127,7 +127,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             rollback_readiness,
             blocking_issues,
         ],
-        writes=[go_no_go_assessment, risk_register, decision_summary],
+        producer_writes=[go_no_go_assessment, risk_register, decision_summary],
         control_schema=ReleaseAssessmentPayload,
         routes=ASSESS_GO_NO_GO_ROUTE_CONTRACTS,
     )
@@ -150,7 +150,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
             risk_register,
             decision_summary,
         ],
-        writes=[release_decision_package, release_communications_draft],
+        producer_writes=[release_decision_package, release_communications_draft],
         control_schema=ReleaseDecisionPackagePayload,
         routes=PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS,
     )

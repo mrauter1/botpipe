@@ -175,7 +175,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[company_operation_brief, recursive_improvement_criteria],
+        producer_writes=[company_operation_brief, recursive_improvement_criteria],
         control_schema=CompanyOperationFramingPayload,
         routes=FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS,
     )
@@ -192,7 +192,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             company_operation_brief,
             recursive_improvement_criteria,
         ],
-        writes=[
+        producer_writes=[
             company_pressure_map,
             recursive_improvement_priority_matrix,
             recursive_improvement_candidates,
@@ -217,7 +217,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             recursive_improvement_priority_matrix,
             recursive_improvement_candidates,
         ],
-        writes=[
+        producer_writes=[
             recursive_improvement_cycle,
             recursive_improvement_summary,
             recursive_improvement_next_actions,

@@ -109,7 +109,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             existing_workflow_definition,
             existing_workflow_prompts,
         ],
-        writes=[candidate_comparison, selected_workflow_brief],
+        producer_writes=[candidate_comparison, selected_workflow_brief],
         control_schema=CandidateSelectionPayload,
         routes=FRAME_CANDIDATE_ROUTE_CONTRACTS,
     )
@@ -132,7 +132,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             candidate_comparison,
             selected_workflow_brief,
         ],
-        writes=[workflow_package_spec, step_contracts, prompt_contract_matrix, verification_plan],
+        producer_writes=[workflow_package_spec, step_contracts, prompt_contract_matrix, verification_plan],
         control_schema=WorkflowDesignPayload,
         routes=DESIGN_PACKAGE_ROUTE_CONTRACTS,
     )
@@ -154,7 +154,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             existing_workflow_definition,
             builder_checklist,
         ],
-        writes=[
+        producer_writes=[
             generated_package_root,
             generated_single_file,
             generated_flow,
@@ -186,7 +186,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
             build_report,
             generated_layout,
         ],
-        writes=[verification_report, promotion_record, rollback_plan],
+        producer_writes=[verification_report, promotion_record, rollback_plan],
         control_schema=WorkflowEvaluationPayload,
         routes=EVALUATE_PACKAGE_ROUTE_CONTRACTS,
     )

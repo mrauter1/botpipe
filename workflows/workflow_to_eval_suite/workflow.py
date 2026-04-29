@@ -124,7 +124,7 @@ class WorkflowToEvalSuite(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[evaluation_request_brief, evaluation_dimensions],
+        producer_writes=[evaluation_request_brief, evaluation_dimensions],
         control_schema=EvaluationTargetFramingPayload,
         routes=FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS,
     )
@@ -139,7 +139,7 @@ class WorkflowToEvalSuite(Workflow):
             evaluation_request_brief,
             evaluation_dimensions,
         ],
-        writes=[
+        producer_writes=[
             benchmark_case_matrix,
             edge_case_matrix,
             adversarial_case_matrix,
@@ -166,7 +166,7 @@ class WorkflowToEvalSuite(Workflow):
             eval_case_manifest,
             eval_rubric,
         ],
-        writes=[workflow_eval_suite, workflow_eval_suite_summary, workflow_eval_next_action],
+        producer_writes=[workflow_eval_suite, workflow_eval_suite_summary, workflow_eval_next_action],
         control_schema=WorkflowEvalSuitePayload,
         routes=PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS,
     )

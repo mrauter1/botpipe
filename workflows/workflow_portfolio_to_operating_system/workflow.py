@@ -253,7 +253,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[portfolio_governance_brief, portfolio_decision_criteria],
+        producer_writes=[portfolio_governance_brief, portfolio_decision_criteria],
         control_schema=PortfolioGovernanceFramingPayload,
         routes=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
     )
@@ -270,7 +270,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             portfolio_governance_brief,
             portfolio_decision_criteria,
         ],
-        writes=[workflow_lifecycle_matrix, portfolio_gap_analysis, portfolio_change_candidates],
+        producer_writes=[workflow_lifecycle_matrix, portfolio_gap_analysis, portfolio_change_candidates],
         control_schema=PortfolioOperatingModelPayload,
         routes=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
     )
@@ -291,7 +291,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             portfolio_gap_analysis,
             portfolio_change_candidates,
         ],
-        writes=[
+        producer_writes=[
             workflow_portfolio_operating_system,
             portfolio_operating_summary,
             portfolio_next_actions,

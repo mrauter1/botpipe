@@ -189,7 +189,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[refinement_request_brief, refinement_acceptance_criteria],
+        producer_writes=[refinement_request_brief, refinement_acceptance_criteria],
         control_schema=RefinementRequestFramingPayload,
         routes=FRAME_REFINEMENT_REQUEST_ROUTE_CONTRACTS,
     )
@@ -210,7 +210,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             refinement_request_brief,
             refinement_acceptance_criteria,
         ],
-        writes=[refinement_strategy, workflow_change_plan, regression_guardrails],
+        producer_writes=[refinement_strategy, workflow_change_plan, regression_guardrails],
         control_schema=WorkflowRefinementPlanPayload,
         routes=DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
     )
@@ -229,7 +229,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             workflow_change_plan,
             regression_guardrails,
         ],
-        writes=[
+        producer_writes=[
             candidate_workflow_surface,
             candidate_workflow_manifest,
             refinement_build_report,
@@ -261,7 +261,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
             refinement_build_report,
             candidate_diff_summary,
         ],
-        writes=[
+        producer_writes=[
             refinement_verification_report,
             evaluation_delta_report,
             promotion_record,

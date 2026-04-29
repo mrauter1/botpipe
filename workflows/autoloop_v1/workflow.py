@@ -48,7 +48,7 @@ class AutoloopV1(Workflow):
         verifier_prompt=Prompt.file("prompts/plan_verifier.md"),
         session=plan_session,
         requires=[request],
-        writes=[phase_plan],
+        producer_writes=[phase_plan],
         routes={"plan_ready": "activate_next_phase", "needs_replan": "plan"},
     )
     implement = produce_verify_step(
@@ -56,14 +56,14 @@ class AutoloopV1(Workflow):
         verifier_prompt=Prompt.file("prompts/implement_verifier.md"),
         session=phase_session,
         requires=[phase_plan],
-        writes=[impl_notes],
+        producer_writes=[impl_notes],
         routes={"implemented": "test", "needs_replan": "plan"},
     )
     test = produce_verify_step(
         producer_prompt=Prompt.file("prompts/test_producer.md"),
         verifier_prompt=Prompt.file("prompts/test_verifier.md"),
         session=phase_session,
-        writes=[test_strat],
+        producer_writes=[test_strat],
         routes={"phase_passed": "activate_next_phase", "needs_replan": "plan"},
     )
 

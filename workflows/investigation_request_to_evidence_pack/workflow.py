@@ -115,7 +115,7 @@ class InvestigationRequestToEvidencePack(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[
+        producer_writes=[
             investigation_scope_brief,
             investigation_objectives,
             evidence_intake_register,
@@ -136,7 +136,7 @@ class InvestigationRequestToEvidencePack(Workflow):
             evidence_intake_register,
             evidence_pack_checklist,
         ],
-        writes=[
+        producer_writes=[
             evidence_source_inventory,
             evidence_coverage_matrix,
             evidence_findings,

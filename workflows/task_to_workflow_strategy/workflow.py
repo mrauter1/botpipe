@@ -112,7 +112,7 @@ class TaskToWorkflowStrategy(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[task_strategy_brief, workflow_selection_criteria],
+        producer_writes=[task_strategy_brief, workflow_selection_criteria],
         control_schema=TaskFramingPayload,
         routes=FRAME_TASK_ROUTE_CONTRACTS,
     )
@@ -133,7 +133,7 @@ class TaskToWorkflowStrategy(Workflow):
             candidate_workflow_set_summary,
             candidate_next_action,
         ],
-        writes=[strategy_decision],
+        producer_writes=[strategy_decision],
         control_schema=StrategySelectionPayload,
         routes=SELECT_STRATEGY_ROUTE_CONTRACTS,
     )
@@ -156,7 +156,7 @@ class TaskToWorkflowStrategy(Workflow):
             candidate_next_action,
             strategy_decision,
         ],
-        writes=[workflow_strategy_package, strategy_summary, strategy_next_action],
+        producer_writes=[workflow_strategy_package, strategy_summary, strategy_next_action],
         control_schema=StrategyPackagePayload,
         routes=PACKAGE_STRATEGY_ROUTE_CONTRACTS,
     )

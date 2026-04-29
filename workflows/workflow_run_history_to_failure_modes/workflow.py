@@ -148,7 +148,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             framework_authoring_doc,
             workflow_instructions,
         ],
-        writes=[diagnostic_scope_brief, run_history_scope],
+        producer_writes=[diagnostic_scope_brief, run_history_scope],
         control_schema=DiagnosticScopePayload,
         routes=FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS,
     )
@@ -164,7 +164,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             diagnostic_scope_brief,
             run_history_scope,
         ],
-        writes=[failure_mode_map, failure_mode_manifest, recurring_weak_points],
+        producer_writes=[failure_mode_map, failure_mode_manifest, recurring_weak_points],
         control_schema=FailureModeMapPayload,
         routes=MAP_FAILURE_MODES_ROUTE_CONTRACTS,
     )
@@ -184,7 +184,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
             failure_mode_manifest,
             recurring_weak_points,
         ],
-        writes=[improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions],
+        producer_writes=[improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions],
         control_schema=ImprovementPressurePayload,
         routes=PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS,
     )
