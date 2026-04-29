@@ -472,3 +472,54 @@ Open issues / next step
 
 - I did not add new tests for the remaining non-blocking authoring-doc vocabulary drift (`Parameters`, `route_infos`, `route_required_outputs`).
 - The next test-auditor pass should be able to mark this phase complete if it agrees that the new compile-sweep test closes the repo-consumer regression gap.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+I’m auditing the added regression test and the updated strategy against the phase scope first, then I’ll mark the criteria and note any remaining coverage gaps.
+
+The added test closes the only material regression gap I can find. I’m marking the audit artifacts accordingly and keeping the remaining doc-vocabulary drift as a non-blocking note only.
+
+Scope considered
+
+- The phase-scoped test coverage for the canonical public-surface cleanup: root export/import checks, canonical simple declaration checks, and the new repo-wide workflow compile-sweep regression guard.
+- I focused on the added test in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:57), the reused public-surface suites, and the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/public-surface-cleanup/test_strategy.md).
+
+What I analyzed
+
+- The active test strategy and test-author feedback artifacts.
+- The run-local decisions, especially the rationale for adding a repo-wide workflow discovery/compile sweep.
+- The targeted tests and their execution behavior, including the existing warning output from `workflow_run_traces_to_optimization_candidates/contracts.py`.
+
+What I reviewed
+
+- The new compile-sweep test is well placed and directly covers the regression that slipped through earlier: checked-in workflows drifting back to banned `produce_verify_step(..., writes=...)` usage.
+- The focused public-surface suites still cover AC-1 and AC-2 explicitly.
+- I reran:
+  - `.venv/bin/pytest tests/runtime/test_workflow_integration_parity.py::test_all_repo_workflow_packages_resolve_and_compile_under_canonical_simple_surface tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py -q`
+- Result: `16 passed`, with only pre-existing warnings from workflow contract models.
+
+Key findings / decisions
+
+- No blocking audit findings remain.
+- `TST-001` is non-blocking only: the new compile sweep inherits existing Pydantic warnings, but the assertions are stable because they do not depend on warning text or ordering.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/public-surface-cleanup/criteria.md) to fully checked status and appended the audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/public-surface-cleanup/feedback.md).
+
+Open issues / next step
+
+- The only remaining follow-up is optional warning cleanup outside this phase’s blocking scope.
+- Test coverage for this public-surface pass is sufficient to mark the phase complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

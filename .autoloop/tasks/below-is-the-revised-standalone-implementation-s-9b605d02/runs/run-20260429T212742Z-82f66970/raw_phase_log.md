@@ -418,3 +418,108 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+I’m starting with the regression surface the reviewer found: repo workflow packages that still used the banned `produce_verify_step(..., writes=...)` shape. I’ll look for the best existing test home before adding new coverage.
+
+There’s already a lot of per-workflow coverage, but the regression that slipped through was “repo package compiles as a whole,” not any one workflow’s happy path. I’m checking the integration test files for a natural place to add one deterministic sweep instead of duplicating many per-workflow assertions.
+
+I found a good home for the regression test: the existing repo-workflow integration/parity file already exercises package discovery and compile paths. I’m adding one compile sweep there instead of scattering per-workflow assertions.
+
+The new test is in. I’m running it with the focused public-surface suite so the strategy and feedback can reflect real execution rather than just static coverage claims.
+
+The new coverage passes. I’m recording why this test exists, since it plugs a gap the per-workflow tests missed, then I’ll update the test strategy and phase feedback artifacts.
+
+Scope considered
+
+- The phase-scoped public-surface cleanup test surface: canonical root exports, canonical simple declaration signatures, and the repo workflow-package regression that slipped through the first implementation pass.
+- I focused on changed behavior and added only one new regression guard in the runtime/integration layer.
+
+What I analyzed
+
+- Existing public-surface coverage in `tests/unit/test_simple_surface.py` and `tests/strictness/test_no_compat.py`.
+- Existing repo workflow package coverage in `tests/runtime/test_workflow_integration_parity.py` and other per-workflow runtime suites.
+- The reviewer-found gap: per-workflow tests existed, but nothing guaranteed that every checked-in repo workflow still instantiated the canonical `produce_verify_step` signature.
+
+What I changed
+
+- Added `test_all_repo_workflow_packages_resolve_and_compile_under_canonical_simple_surface` to [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:57).
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/public-surface-cleanup/test_strategy.md) with a behavior-to-test coverage map, invariants, edge cases, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/public-surface-cleanup/feedback.md).
+- Recorded the non-obvious test rationale in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt) under the current test-author block.
+
+Key findings / decisions
+
+- The right regression guard is a repo-wide workflow discovery/compile sweep, not more one-off workflow assertions.
+- I stabilized the new test against module-cache leakage with `importlib.invalidate_caches()` and the existing `_clear_workflow_modules()` helper.
+- Validation passed:
+  - `.venv/bin/pytest tests/runtime/test_workflow_integration_parity.py::test_all_repo_workflow_packages_resolve_and_compile_under_canonical_simple_surface tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py -q`
+- The run emitted existing Pydantic warnings from `workflow_run_traces_to_optimization_candidates/contracts.py`, but the new test is deterministic because it asserts compile success only and does not depend on warning text or ordering.
+
+Open issues / next step
+
+- I did not add new tests for the remaining non-blocking authoring-doc vocabulary drift (`Parameters`, `route_infos`, `route_required_outputs`).
+- The next test-auditor pass should be able to mark this phase complete if it agrees that the new compile-sweep test closes the repo-consumer regression gap.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+I’m auditing the added regression test and the updated strategy against the phase scope first, then I’ll mark the criteria and note any remaining coverage gaps.
+
+The added test closes the only material regression gap I can find. I’m marking the audit artifacts accordingly and keeping the remaining doc-vocabulary drift as a non-blocking note only.
+
+Scope considered
+
+- The phase-scoped test coverage for the canonical public-surface cleanup: root export/import checks, canonical simple declaration checks, and the new repo-wide workflow compile-sweep regression guard.
+- I focused on the added test in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py:57), the reused public-surface suites, and the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/public-surface-cleanup/test_strategy.md).
+
+What I analyzed
+
+- The active test strategy and test-author feedback artifacts.
+- The run-local decisions, especially the rationale for adding a repo-wide workflow discovery/compile sweep.
+- The targeted tests and their execution behavior, including the existing warning output from `workflow_run_traces_to_optimization_candidates/contracts.py`.
+
+What I reviewed
+
+- The new compile-sweep test is well placed and directly covers the regression that slipped through earlier: checked-in workflows drifting back to banned `produce_verify_step(..., writes=...)` usage.
+- The focused public-surface suites still cover AC-1 and AC-2 explicitly.
+- I reran:
+  - `.venv/bin/pytest tests/runtime/test_workflow_integration_parity.py::test_all_repo_workflow_packages_resolve_and_compile_under_canonical_simple_surface tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py -q`
+- Result: `16 passed`, with only pre-existing warnings from workflow contract models.
+
+Key findings / decisions
+
+- No blocking audit findings remain.
+- `TST-001` is non-blocking only: the new compile sweep inherits existing Pydantic warnings, but the assertions are stable because they do not depend on warning text or ordering.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/public-surface-cleanup/criteria.md) to fully checked status and appended the audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/public-surface-cleanup/feedback.md).
+
+Open issues / next step
+
+- The only remaining follow-up is optional warning cleanup outside this phase’s blocking scope.
+- Test coverage for this public-surface pass is sufficient to mark the phase complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
