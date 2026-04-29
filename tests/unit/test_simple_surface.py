@@ -237,6 +237,9 @@ def test_simple_workflow_injects_canonical_default_routes_by_step_kind() -> None
 
 def test_simple_workflow_respects_control_routes_false_and_custom_semantic_routes() -> None:
     class CustomRoutesWorkflow(simple.Workflow):
+        class ChildWorkflow(simple.Workflow):
+            finish = simple.step(prompt="Finish child.")
+
         start = simple.step(
             prompt="Start.",
             routes={"ready": "review"},
@@ -248,13 +251,27 @@ def test_simple_workflow_respects_control_routes_false_and_custom_semantic_route
             routes={"approved": simple.FINISH},
             control_routes=False,
         )
+        publish = simple.python_step(
+            lambda ctx: None,
+            routes={"published": "handoff"},
+            control_routes=False,
+        )
+        handoff = simple.workflow_step(
+            ChildWorkflow,
+            routes={"done_with_child": simple.FINISH},
+            control_routes=False,
+        )
 
     compiled = compile_workflow(CustomRoutesWorkflow)
 
     assert set(compiled.routes["start"]) == {"ready"}
     assert compiled.routes["start"]["ready"].target == "review"
     assert set(compiled.routes["review"]) == {"approved"}
-    assert compiled.routes["review"]["approved"].target == "FINISH"
+    assert compiled.routes["review"]["approved"].target == "publish"
+    assert set(compiled.routes["publish"]) == {"published"}
+    assert compiled.routes["publish"]["published"].target == "handoff"
+    assert set(compiled.routes["handoff"]) == {"done_with_child"}
+    assert compiled.routes["handoff"]["done_with_child"].target == "FINISH"
 
 
 def test_simple_workflow_rejects_parameters_namespace_instead_of_params() -> None:
@@ -304,6 +321,20 @@ def test_simple_workflow_rejects_item_state_prompt_placeholders() -> None:
         match="item.state, which is not part of the canonical simple-workflow surface",
     ):
         compile_workflow(ItemStateWorkflow)
+
+
+def test_simple_workflow_rejects_step_item_state_prompt_placeholders() -> None:
+    class StepItemStateWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt=simple.Prompt.inline("Inspect {review.item_state.attempts}."),
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="step item_state, which is not part of the canonical simple-workflow surface",
+    ):
+        compile_workflow(StepItemStateWorkflow)
 
 
 def test_simple_runtime_step_state_uses_pydantic_models_and_serializes_for_checkpoints() -> None:

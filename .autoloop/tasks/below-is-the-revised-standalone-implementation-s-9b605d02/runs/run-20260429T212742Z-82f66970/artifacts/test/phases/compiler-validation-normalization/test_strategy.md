@@ -14,7 +14,7 @@
 - AC-2 canonical validation rules:
   `tests/unit/test_simple_surface.py` asserts `Parameters` is rejected, non-`BaseModel` step state is rejected, and class-level `transitions` are rejected on the simple surface.
 - AC-3 route injection and state/public-surface behavior:
-  `tests/unit/test_simple_surface.py` asserts default routes by step kind, `control_routes=False` removes injected control routes and implicit semantic defaults, simple runtime step state stays model-backed through checkpoint serialization, and `item_state` / `step_item_state` fail fast when the model-backed public surface is not implemented.
+  `tests/unit/test_simple_surface.py` asserts default routes by step kind, `control_routes=False` removes injected control routes and implicit semantic defaults for `step`, `produce_verify_step`, `python_step`, and `workflow_step`, simple runtime step state stays model-backed through checkpoint serialization, and `item_state` / `step_item_state` fail fast when the model-backed public surface is not implemented.
 
 ## Preserved invariants checked
 
@@ -26,6 +26,7 @@
 
 - Invalid legacy keywords on simple declarations raise `TypeError`.
 - `item.state` prompt placeholders fail validation instead of compiling to a partial public surface.
+- `step_name.item_state` prompt placeholders fail validation instead of compiling to a partial public surface.
 - Restored step-state payloads rehydrate to the declared Pydantic step model rather than remaining raw dicts.
 
 ## Known gaps
