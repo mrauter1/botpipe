@@ -64,6 +64,7 @@
 - Plain simple steps default to route tag `done` and lower the terminal target to canonical `FINISH`.
 - Class namespace declaration order now determines default entry and default next-step lowering for the simple surface.
 - Simple prompt placeholders fail early for unknown or ambiguous artifact references when prompt text is available at compile time.
+- `Prompt.ref(...)` compile-time placeholder analysis now preserves registry semantics instead of opportunistically reading same-named local prompt files.
 - Runtime tracing writes additive canonical topology artifacts beside the legacy static graph payload.
 
 ## Known Non-Changes
@@ -76,12 +77,15 @@
 
 - New runs receive `topology.json`, `topology.mmd`, `route_table.md`, `artifact_contracts.json`, `prompt_refs.json`, `state_contracts.json`, `session_contracts.json`, and `compile_report.md`.
 - Public workflow scaffolds and docs now steer new code toward the canonical surface instead of legacy `chain` plus `system_step`.
+- Registry-backed prompt declarations no longer pick up compile-time inferred reads from colliding workflow-local files unless prompt text is explicitly available on the prompt object.
 
 ## Validation Performed
 
 - `python3 -m py_compile autoloop/simple.py core/validation.py core/routes.py core/compiler.py core/engine.py runtime/static_graph.py runtime/tracing.py runtime/runner.py runtime/cli.py`
 - `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py tests/test_architecture_baseline_docs.py`
 - `./.venv/bin/python -m pytest -q tests/runtime/test_package_cli.py`
+- `python3 -m py_compile core/validation.py`
+- `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py tests/test_architecture_baseline_docs.py tests/runtime/test_package_cli.py`
 
 ## Deduplication / Centralization
 

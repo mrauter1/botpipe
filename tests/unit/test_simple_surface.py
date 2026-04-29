@@ -145,6 +145,38 @@ def test_prompt_ref_preserves_registry_origin_metadata() -> None:
     assert resolved.text == "Registry prompt.\n"
 
 
+def test_prompt_ref_compile_time_analysis_does_not_read_same_named_filesystem_prompt(tmp_path: Path) -> None:
+    prompt_path = tmp_path / "review.md"
+    prompt_path.write_text("Use {missing_artifact}.", encoding="utf-8")
+    module_path = tmp_path / "registry_prompt_workflow.py"
+    module_path.write_text(
+        "\n".join(
+            [
+                "from autoloop.simple import Prompt, Workflow, step",
+                "",
+                "class RegistryPromptWorkflow(Workflow):",
+                "    note = step(Prompt.ref('review.md'))",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    module_name = "test_registry_prompt_workflow"
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+        compiled = compile_workflow(module.RegistryPromptWorkflow)
+    finally:
+        sys.modules.pop(module_name, None)
+
+    assert compiled.steps["note"].reads == ()
+
+
 def test_route_primitives_accept_optional_metadata_without_changing_target_or_effects() -> None:
     route = Route.complete(
         summary="Step completed cleanly.",

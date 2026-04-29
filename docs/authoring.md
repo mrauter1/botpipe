@@ -113,45 +113,41 @@ When the same parameter bundle appears in more than one workflow, prefer shared 
 
 ## Step Control Contracts
 
-Provider-owned steps may declare structured control contracts directly on `PairStep` and `LLMStep`. The runtime renders those declarations into one shared human-readable Runtime Step Contract before CLI-backed providers run.
+Provider-backed simple steps may declare structured control contracts directly on `step(...)` and `do_review_step(...)`. The runtime renders those declarations into one shared human-readable Runtime Step Contract before CLI-backed providers run.
 
 ```python
 from pydantic import BaseModel
+
+from autoloop.simple import FINISH, Md, Prompt, Route, step
 
 
 class ReviewPayload(BaseModel):
     summary: str
 
 
-review_report = Artifact.md("review_report.md", required=True)
-
-review = PairStep(
-    name="review",
-    producer="prompts/review_producer.md",
-    verifier="prompts/review_verifier.md",
-    produces={"review_report": review_report},
-    expected_output_schema=ReviewPayload,
-)
-
-transitions = {
-    review: {
-        "review_complete": Route.complete(
+review = step(
+    prompt=Prompt.file("prompts/review.md"),
+    writes=[Md("review_report", required=True)],
+    control_schema=ReviewPayload,
+    routes={
+        "review_complete": Route.to(
+            FINISH,
             summary="Review artifacts and verdict are complete.",
-            required_outputs=("review_report",),
+            required_writes=["review_report"],
         )
-    }
-}
+    },
+)
 ```
 
 Runtime behavior:
 
-- `expected_output_schema` defines the JSON-schema-like contract for `Outcome.payload`
-- `available_routes` is derived mechanically from the declared workflow transitions plus reserved routes
+- `control_schema` defines the JSON-schema-like contract for `Outcome.payload`
+- `available_routes` is derived mechanically from the declared step-local routes plus reserved routes
 - `route_infos` carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
 - `route_required_outputs` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
 - route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific required outputs
-- mapping-style transition declarations remain valid; when route metadata is absent, the runtime falls back to inferred summaries from reserved tags or topology
-- `retry_policy` controls provider-attributable retries and defaults to `ProviderRetryPolicy(max_attempts=3)` on `PairStep` and `LLMStep`
+- mapping-style global `transitions` declarations remain a compatibility fallback; greenfield workflow authoring should prefer step-local `routes={...}`
+- `retry_policy` controls provider-attributable retries and defaults to `ProviderRetryPolicy(max_attempts=3)` on provider-backed steps
 - the rendered Runtime Step Contract can also include resolved-target route handoff text and retry feedback when the engine supplies them
 
 Authoring rules:
@@ -332,34 +328,41 @@ report = Artifact("{workflow_folder}/report.md")
 Step-local artifacts can now be declared inline:
 
 ```python
+from autoloop.simple import FINISH, Json, Md, Prompt, Route, do_review_step
+
+
 class Summary(BaseModel):
     summary: str
     ready: bool
 
 
-draft = PairStep(
-    name="draft",
-    producer="prompts/draft_producer.md",
-    verifier="prompts/draft_verifier.md",
-    produces={
-        "summary": Artifact.json("summary.json", schema=Summary, required=True),
-        "report": Artifact.md("report.md", required=True),
+draft = do_review_step(
+    do=Prompt.file("prompts/draft_producer.md"),
+    review=Prompt.file("prompts/draft_verifier.md"),
+    writes=[
+        Json("summary", Summary, required=True),
+        Md("report", required=True),
+    ],
+    routes={
+        "ready": Route.to(
+            FINISH,
+            required_writes=["summary", "report"],
+        ),
     },
 )
 ```
 
 The step exposes those artifacts as attributes, so downstream steps may write `requires=[draft.summary, draft.report]`.
 
-Selected-route output obligations live on transitions, for example:
+Selected-route output obligations live on the step-local route declarations, for example:
 
 ```python
-transitions = {
-    draft: {
-        "ready": Route.complete(
-            summary="The report and summary are ready.",
-            required_outputs=("summary", "report"),
-        )
-    }
+routes = {
+    "ready": Route.to(
+        FINISH,
+        summary="The report and summary are ready.",
+        required_writes=["summary", "report"],
+    )
 }
 ```
 
@@ -369,49 +372,52 @@ Path rules:
 - class-level relative paths resolve under `workflow_folder`
 - step-local relative paths resolve under `{workflow_folder}/{step_name}/`
 
-`produces` and `requires` are different contracts:
+`writes` and `requires` are different contracts:
 
 - `requires` means the artifact must already exist before the step runs
-- `produces` means the step owns a writable output handle
+- `writes` means the step owns a governed writable output handle
 
 Artifact schema and provider output schema are also different:
 
 - `Artifact.schema` validates artifact file content on disk
-- `expected_output_schema` validates `Outcome.payload`
+- `control_schema` validates `Outcome.payload`
 
 Requiredness rules:
 
-- `Artifact.required=True` makes that produced artifact required by default on successful completion
-- `Route.required_outputs` is the selected-route-specific override
-- optional produced artifacts may be absent
-- optional produced artifacts that exist and declare a schema still validate
+- `Md(..., required=True)` or `Json(..., required=True)` makes that declared write required by default on successful completion
+- `Route.required_writes` is the selected-route-specific override
+- optional writes may be absent
+- optional schema-bearing writes that exist still validate
 
 ## Typed Routes And Effects
 
-Dict transition shorthand remains valid:
+Canonical public topology is step-local:
 
 ```python
-transitions = {ask: {"done": SUCCESS}}
+ask = step("Ask the reviewer.", routes={"done": FINISH})
 ```
 
-Advanced routes use Python objects, not a string DSL:
+Advanced routes still use Python objects, not a string DSL:
 
 ```python
-transitions = {
-    assess: {
+assess = step(
+    prompt=Prompt.file("prompts/assess.md"),
+    writes=[Md("assessment", required=False)],
+    routes={
         "passed": Route.to(
-            SUCCESS,
-            SetStatus(gates, "completed"),
-            Advance(gates),
+            FINISH,
+            summary="Assessment is complete and ready to hand off.",
+            required_writes=["assessment"],
         ),
         "needs_rework": Route.to(
-            assess,
-            ResetCompletion(gates),
-            Handoff("Repair the findings and preserve the current work-item boundary."),
+            SELF,
+            handoff="Repair the findings and preserve the current work-item boundary.",
         ),
-    }
-}
+    },
+)
 ```
+
+Global `transitions = {...}` and `SUCCESS` remain compatibility inputs for migrated workflows, but they are no longer the primary public authoring examples.
 
 Use `Route.to(...)`, `Route.complete(...)`, `Route.pause(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
 

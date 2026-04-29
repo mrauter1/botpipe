@@ -328,3 +328,51 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m addressing the two reviewer findings only: `Prompt.ref(...)` compile-time semantics in validation, and the remaining legacy public examples in `docs/authoring.md`. After that I’ll rerun the targeted phase tests and update the phase notes.
+
+I’ve confirmed both findings in-place. I’m patching the validation branch so `Prompt.ref(...)` no longer searches workflow-relative files, then I’m rewriting the remaining legacy examples in `docs/authoring.md` onto the canonical phase-1 simple surface and adding a regression test for the prompt-name collision case.
+
+I’m at the edit stage. The code change is small and centralized in `core/validation.py`; the larger diff is the doc cleanup, where I’m converting the remaining public examples from legacy `PairStep`/`transitions`/`SUCCESS` patterns into the canonical simple-surface equivalents instead of leaving mixed guidance.
+
+The code and doc fixes are in. I’m running the same targeted phase checks plus the simple-surface suite again to make sure the registry-prompt change didn’t create a validation regression elsewhere.
+
+The reviewer-specific fixes are green. I’m just updating the phase ledger now so the next turn doesn’t lose the semantic boundary we restored for `Prompt.ref(...)`.
+
+Scope considered
+- Phase `canonical-surface-and-topology-lowering` only.
+- I addressed the two reviewer findings in the active phase feedback: `IMP-001` and `IMP-002`.
+- I did not pull unrelated dirty files into scope.
+
+What I analyzed
+- `core/validation.py` compile-time prompt text resolution for `Prompt.ref(...)` versus `Prompt.file(...)`.
+- The remaining legacy public examples in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md).
+- The existing simple-surface tests around prompt metadata and compile-time placeholder validation.
+
+What I changed
+- In [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), `_simple_prompt_text(...)` now preserves registry semantics by not searching workflow-relative files for `Prompt.ref(...)`.
+- In [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), I added a regression test covering a registry prompt name that collides with a local file.
+- In [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), I rewrote the remaining public examples away from `PairStep`, global `transitions`, and `SUCCESS` toward `step(...)` / `do_review_step(...)`, `writes`, step-local `routes`, `FINISH`, and `SELF`.
+- I updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/canonical-surface-and-topology-lowering/implementation_notes.md) and appended the non-obvious `Prompt.ref(...)` semantics note under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+Key findings / decisions
+- `Prompt.ref(...)` compile-time analysis now matches runtime intent: registry prompts no longer inherit same-named local prompt files during placeholder validation or inferred-read extraction.
+- The public authoring doc no longer uses legacy transition/SUCCESS examples as primary guidance for the phase-1 surface.
+- Validation passed after the fixes: `python3 -m py_compile core/validation.py` and `70` targeted tests passed across simple-surface, runtime-static-graph, docs, and package-CLI coverage.
+
+Open issues / next step
+- No known blocking issues remain from the reviewer feedback I was asked to address.
+- The next step is verifier re-review against the updated phase artifacts and targeted regression surface.
