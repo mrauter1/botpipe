@@ -112,8 +112,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         writes=[candidate_comparison, selected_workflow_brief],
         accepted="candidate_selected",
         control_schema=CandidateSelectionPayload,
-        routes={"needs_replan": "frame_candidate"},
-        route_infos=FRAME_CANDIDATE_ROUTE_CONTRACTS,
+        routes=FRAME_CANDIDATE_ROUTE_CONTRACTS,
     )
     design_package = do_review_step(
         do=Prompt.file("prompts/design_producer.md"),
@@ -137,8 +136,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         writes=[workflow_package_spec, step_contracts, prompt_contract_matrix, verification_plan],
         accepted="design_accepted",
         control_schema=WorkflowDesignPayload,
-        routes={"needs_replan": "frame_candidate"},
-        route_infos=DESIGN_PACKAGE_ROUTE_CONTRACTS,
+        routes=DESIGN_PACKAGE_ROUTE_CONTRACTS,
     )
     build_package = do_review_step(
         do=Prompt.file("prompts/build_producer.md"),
@@ -175,8 +173,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         ],
         accepted="package_built",
         control_schema=WorkflowBuildPayload,
-        routes={"needs_replan": "design_package"},
-        route_infos=BUILD_PACKAGE_ROUTE_CONTRACTS,
+        routes=BUILD_PACKAGE_ROUTE_CONTRACTS,
     )
     evaluate_package = do_review_step(
         do=Prompt.file("prompts/evaluate_producer.md"),
@@ -195,8 +192,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         writes=[verification_report, promotion_record, rollback_plan],
         accepted="evaluation_passed",
         control_schema=WorkflowEvaluationPayload,
-        routes={"needs_replan": "design_package", "needs_rework": "build_package"},
-        route_infos=EVALUATE_PACKAGE_ROUTE_CONTRACTS,
+        routes=EVALUATE_PACKAGE_ROUTE_CONTRACTS,
     )
     @python_step(
         name="bootstrap",

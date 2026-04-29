@@ -18,8 +18,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..core.compiler import compile_workflow
     from ..runtime.loader import resolve_workflow_reference
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.compiler import compile_workflow
-    from runtime.loader import resolve_workflow_reference
+    from autoloop_v3.core.compiler import compile_workflow
+    from autoloop_v3.runtime.loader import resolve_workflow_reference
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..stdlib.validation import (
@@ -30,7 +30,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_string_list,
     )
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib.validation import (
+    from autoloop_v3.stdlib.validation import (
         normalize_optional_string,
         require_mapping,
         require_non_empty_string,

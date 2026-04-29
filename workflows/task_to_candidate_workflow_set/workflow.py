@@ -156,9 +156,8 @@ class TaskToCandidateWorkflowSet(Workflow):
         ],
         writes=[candidate_request_brief, candidate_selection_criteria],
         accepted="candidate_request_framed",
-        routes={"needs_replan": "frame_candidate_request"},
         control_schema=CandidateRequestFramingPayload,
-        route_infos=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
+        routes=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
     )
 
     analyze_candidate_workflows = do_review_step(
@@ -174,9 +173,8 @@ class TaskToCandidateWorkflowSet(Workflow):
         ],
         writes=[workflow_candidate_matrix, workflow_gap_analysis, candidate_route_posture],
         accepted="candidate_workflows_analyzed",
-        routes={"needs_replan": "frame_candidate_request"},
         control_schema=CandidateWorkflowAnalysisPayload,
-        route_infos=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
+        routes=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
     )
 
     package_candidate_workflow_set = do_review_step(
@@ -196,9 +194,8 @@ class TaskToCandidateWorkflowSet(Workflow):
         ],
         writes=[candidate_workflow_set, candidate_workflow_set_summary, candidate_next_action],
         accepted="candidate_workflow_set_ready",
-        routes={"needs_replan": "analyze_candidate_workflows"},
         control_schema=CandidateWorkflowSetPayload,
-        route_infos=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
+        routes=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
     )
 
     @staticmethod

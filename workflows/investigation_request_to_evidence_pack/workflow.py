@@ -121,9 +121,8 @@ class InvestigationRequestToEvidencePack(Workflow):
             evidence_intake_register,
         ],
         accepted="investigation_framed",
-        routes={"needs_replan": "frame_investigation"},
         control_schema=InvestigationFramingPayload,
-        route_infos=FRAME_INVESTIGATION_ROUTE_CONTRACTS,
+        routes=FRAME_INVESTIGATION_ROUTE_CONTRACTS,
     )
 
     assemble_evidence_pack = do_review_step(
@@ -147,9 +146,8 @@ class InvestigationRequestToEvidencePack(Workflow):
             evidence_pack_summary,
         ],
         accepted="evidence_pack_ready",
-        routes={"needs_replan": "frame_investigation"},
         control_schema=InvestigationEvidencePackPayload,
-        route_infos=ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
+        routes=ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
     )
 
     @staticmethod

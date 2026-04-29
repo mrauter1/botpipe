@@ -15,9 +15,9 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..runtime.loader import resolve_workflow_reference
     from ..runtime.workspace import list_run_records
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
-    from runtime.loader import resolve_workflow_reference
-    from runtime.workspace import list_run_records
+    from autoloop_v3.core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
+    from autoloop_v3.runtime.loader import resolve_workflow_reference
+    from autoloop_v3.runtime.workspace import list_run_records
 
 from ._selected_workflow import capture_selected_workflow, inspect_selected_workflow
 try:  # pragma: no branch - supports both package and direct repo-root imports
@@ -30,8 +30,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         validate_selected_workflow_decomposition_surface_snapshot,
     )
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib.lifecycle import write_workflow_json
-    from stdlib.validation import (
+    from autoloop_v3.stdlib.lifecycle import write_workflow_json
+    from autoloop_v3.stdlib.validation import (
         require_non_empty_string,
         require_positive_int,
         require_string_list,

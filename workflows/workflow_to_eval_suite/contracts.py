@@ -11,7 +11,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import JsonArtifactSpec
 
-from core import RouteInfo
+from autoloop import Route, SELF
 
 
 CaseKind = Literal["benchmark", "edge", "adversarial"]
@@ -105,26 +105,30 @@ WORKFLOW_EVAL_SUITE_SUMMARY_ARTIFACT = JsonArtifactSpec(
 
 
 FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS = {
-    "evaluation_target_framed": RouteInfo(
+    "evaluation_target_framed": Route.to(
+        "design_eval_cases",
         summary="The selected workflow, evaluation objective, and acceptance dimensions are explicit enough for benchmark, edge, and adversarial case design.",
-        required_outputs=("evaluation_request_brief", "evaluation_dimensions"),
+        required_writes=("evaluation_request_brief", "evaluation_dimensions"),
         handoff="Locks the evaluation-target framing so case and rubric design can proceed against an explicit evaluation contract.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same evaluation-target framing boundary holds, but the framing artifacts need local repair before case design can continue.",
-        required_outputs=("evaluation_request_brief", "evaluation_dimensions"),
+        required_writes=("evaluation_request_brief", "evaluation_dimensions"),
         handoff="Keeps evaluation framing local and reruns the same step for clearer target and acceptance guidance.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "frame_evaluation_target",
         summary="The selected workflow, evaluation objective, or acceptance boundary changed materially and the evaluation target must be reframed.",
         handoff="Returns the workflow to framing because the current evaluation boundary is no longer authoritative.",
     ),
 }
 
 DESIGN_EVAL_CASES_ROUTE_CONTRACTS = {
-    "eval_cases_designed": RouteInfo(
+    "eval_cases_designed": Route.to(
+        "package_workflow_eval_suite",
         summary="Benchmark, edge, and adversarial case coverage plus the evaluation rubric are explicit and ready for terminal suite packaging.",
-        required_outputs=(
+        required_writes=(
             "benchmark_case_matrix",
             "edge_case_matrix",
             "adversarial_case_matrix",
@@ -133,9 +137,10 @@ DESIGN_EVAL_CASES_ROUTE_CONTRACTS = {
         ),
         handoff="Locks the evaluation cases and rubric so the workflow can package a publication-ready eval suite.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same case-design boundary still holds, but the case matrices, manifest, or rubric need local repair.",
-        required_outputs=(
+        required_writes=(
             "benchmark_case_matrix",
             "edge_case_matrix",
             "adversarial_case_matrix",
@@ -144,32 +149,36 @@ DESIGN_EVAL_CASES_ROUTE_CONTRACTS = {
         ),
         handoff="Keeps evaluation design local and reruns the same step for stronger case coverage or rubric clarity.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "frame_evaluation_target",
         summary="Case design proved the selected workflow, evaluation objective, or acceptance boundary changed materially and framing must be revisited.",
         handoff="Routes back to framing because the current evaluation target is no longer credible as stated.",
     ),
 }
 
 PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS = {
-    "workflow_eval_suite_ready": RouteInfo(
+    "workflow_eval_suite_ready": Route.to(
+        "publish_workflow_eval_suite",
         summary="The terminal eval-suite package, machine-readable summary, and next-action artifact are complete and ready for deterministic publication of the validated manifest and receipt.",
-        required_outputs=(
+        required_writes=(
             "workflow_eval_suite",
             "workflow_eval_suite_summary",
             "workflow_eval_next_action",
         ),
         handoff="Advances the building block to deterministic publication of the validated eval-case manifest and receipt.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same evaluation-suite packaging boundary still holds, but the package artifacts need local repair before publication.",
-        required_outputs=(
+        required_writes=(
             "workflow_eval_suite",
             "workflow_eval_suite_summary",
             "workflow_eval_next_action",
         ),
         handoff="Keeps packaging local and reruns the same step for suite, summary, or next-action corrections only.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "design_eval_cases",
         summary="Packaging revealed that the designed evaluation surface changed materially and case design must be revisited.",
         handoff="Routes back to case design because the package no longer matches the authoritative evaluation surface.",
     ),

@@ -141,9 +141,8 @@ class IncidentToHardeningProgram(Workflow):
             evidence_intake_register,
         ],
         accepted="incident_framed",
-        routes={"needs_replan": "frame_incident"},
         control_schema=IncidentFramingPayload,
-        route_infos=FRAME_INCIDENT_ROUTE_CONTRACTS,
+        routes=FRAME_INCIDENT_ROUTE_CONTRACTS,
     )
 
     assemble_evidence_pack = do_review_step(
@@ -163,9 +162,8 @@ class IncidentToHardeningProgram(Workflow):
             evidence_gap_register,
         ],
         accepted="evidence_pack_ready",
-        routes={"needs_replan": "frame_incident"},
         control_schema=IncidentEvidencePayload,
-        route_infos=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
+        routes=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
     )
 
     rank_cause_hypotheses = do_review_step(
@@ -188,9 +186,8 @@ class IncidentToHardeningProgram(Workflow):
             incident_summary,
         ],
         accepted="hypotheses_ranked",
-        routes={"needs_replan": "frame_incident"},
         control_schema=IncidentHypothesisPayload,
-        route_infos=RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS,
+        routes=RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS,
     )
 
     prepare_hardening_program = do_review_step(
@@ -219,9 +216,8 @@ class IncidentToHardeningProgram(Workflow):
             incident_resolution_package,
         ],
         accepted="hardening_program_ready",
-        routes={"needs_replan": "rank_cause_hypotheses"},
         control_schema=IncidentHardeningProgramPayload,
-        route_infos=PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS,
+        routes=PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS,
     )
 
     @staticmethod

@@ -11,7 +11,7 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import JsonArtifactSpec
 
-from core import RouteInfo
+from autoloop import Route, SELF
 
 
 PublicationBoundary = Literal["operating_system_publication_only"]
@@ -93,59 +93,68 @@ PORTFOLIO_OPERATING_SUMMARY_ARTIFACT = JsonArtifactSpec(
 
 
 FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS = {
-    "portfolio_governance_framed": RouteInfo(
+    "portfolio_governance_framed": Route.to(
+        "analyze_portfolio_operating_model",
         summary="The sponsor, focus workflows, governance scope, and lifecycle decision criteria are explicit enough for portfolio operating-model analysis.",
-        required_outputs=("portfolio_governance_brief", "portfolio_decision_criteria"),
+        required_writes=("portfolio_governance_brief", "portfolio_decision_criteria"),
         handoff="Locks the portfolio-governance framing so lifecycle analysis can proceed against an explicit scope and acceptance boundary.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same governance-framing boundary still holds, but the brief or criteria need local repair before lifecycle analysis can continue.",
-        required_outputs=("portfolio_governance_brief", "portfolio_decision_criteria"),
+        required_writes=("portfolio_governance_brief", "portfolio_decision_criteria"),
         handoff="Keeps governance framing local and reruns the same step for stronger scope or criteria articulation only.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "frame_portfolio_governance",
         summary="The portfolio scope, sponsor pressure, or governance objective changed materially and framing must restart.",
         handoff="Routes back to governance framing because the current scope boundary is no longer authoritative.",
     ),
 }
 
 ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS = {
-    "portfolio_operating_model_analyzed": RouteInfo(
+    "portfolio_operating_model_analyzed": Route.to(
+        "package_portfolio_operating_system",
         summary="The lifecycle matrix, gap analysis, and change-candidate manifest assess the scoped workflow portfolio explicitly and are ready for governance packaging.",
-        required_outputs=("workflow_lifecycle_matrix", "portfolio_gap_analysis", "portfolio_change_candidates"),
+        required_writes=("workflow_lifecycle_matrix", "portfolio_gap_analysis", "portfolio_change_candidates"),
         handoff="Locks the analyzed workflow set, lifecycle postures, and change candidates so packaging can publish a governance recommendation without reinterpreting the evidence.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same lifecycle-analysis boundary still holds, but the matrix, gap analysis, or change-candidate manifest need local repair.",
-        required_outputs=("workflow_lifecycle_matrix", "portfolio_gap_analysis", "portfolio_change_candidates"),
+        required_writes=("workflow_lifecycle_matrix", "portfolio_gap_analysis", "portfolio_change_candidates"),
         handoff="Keeps portfolio lifecycle analysis local and reruns the same step for clearer evidence-backed recommendations only.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "frame_portfolio_governance",
         summary="Lifecycle analysis revealed that the focus set, governance criteria, or evidence boundary changed materially and framing must be revisited.",
         handoff="Routes back to framing because the current lifecycle-analysis scope is no longer credible.",
     ),
 }
 
 PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS = {
-    "portfolio_operating_system_ready": RouteInfo(
+    "portfolio_operating_system_ready": Route.to(
+        "publish_portfolio_operating_system",
         summary="The governance package, machine-readable summary, and next-actions artifact are aligned and ready for deterministic publication.",
-        required_outputs=(
+        required_writes=(
             "workflow_portfolio_operating_system",
             "portfolio_operating_summary",
             "portfolio_next_actions",
         ),
         handoff="Advances the workflow to deterministic governance publication without hidden downstream execution.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same governance-packaging boundary still holds, but the package, summary, or next-actions artifact need local repair before publication.",
-        required_outputs=(
+        required_writes=(
             "workflow_portfolio_operating_system",
             "portfolio_operating_summary",
             "portfolio_next_actions",
         ),
         handoff="Keeps governance packaging local and reruns the same step for packaging corrections only.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "analyze_portfolio_operating_model",
         summary="Packaging revealed that the lifecycle recommendations or change candidates changed materially and lifecycle analysis must be revisited.",
         handoff="Routes back to lifecycle analysis because the current governance package no longer matches the authoritative operating model.",
     ),

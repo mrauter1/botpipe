@@ -8,7 +8,7 @@ from typing import Any
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..core.workflow_capabilities import selected_workflow_authoring_surface_payload
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.workflow_capabilities import selected_workflow_authoring_surface_payload
+    from autoloop_v3.core.workflow_capabilities import selected_workflow_authoring_surface_payload
 
 from ._selected_workflow import inspect_selected_workflow, write_selected_workflow_artifact
 

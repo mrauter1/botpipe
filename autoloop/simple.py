@@ -253,6 +253,14 @@ class SystemStepDeclaration(_NamedDeclaration):
 
     kind = "system"
 
+    def __set_name__(self, owner: type[object], attr_name: str) -> None:
+        super().__set_name__(owner, attr_name)
+        if self.name is None:
+            return
+        handler_name = f"on_{self.name}"
+        if handler_name not in owner.__dict__:
+            setattr(owner, handler_name, staticmethod(self.fn))
+
     def __init__(
         self,
         fn: Any,

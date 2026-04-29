@@ -21,7 +21,7 @@ Public workflow code imports from `autoloop.simple` or `autoloop`.
 - `Json`, `Md`, `Text`, `Raw`
 - `Prompt`, `Route`, `FINISH`, `SELF`
 
-Compatibility aliases still exist for migrated packages, but the active public contract stays on the canonical `autoloop.simple` / `autoloop` surface rather than `StrictWorkflow`, `review_step`, `system_step`, `SUCCESS`, `out`, `outputs`, or `chain`.
+Legacy aliases still exist for migrated packages, but the active public contract stays on the canonical `autoloop.simple` / `autoloop` surface rather than `StrictWorkflow`, `review_step`, `system_step`, `SUCCESS`, `out`, `outputs`, or `chain`.
 
 `core/*` remains the internal kernel for strict runtime code and tests. It is not a second public authoring API.
 

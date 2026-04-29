@@ -97,8 +97,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         writes=[release_scope_brief, decision_criteria, evidence_intake_register],
         accepted="release_framed",
         control_schema=ReleaseFramingPayload,
-        routes={"needs_replan": "frame_release"},
-        route_infos=FRAME_RELEASE_ROUTE_CONTRACTS,
+        routes=FRAME_RELEASE_ROUTE_CONTRACTS,
     )
     assemble_evidence_pack = do_review_step(
         do=Prompt.file("prompts/evidence_producer.md"),
@@ -114,8 +113,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         writes=[release_inventory, test_evidence_pack, operational_readiness, rollback_readiness, blocking_issues],
         accepted="evidence_pack_ready",
         control_schema=ReleaseEvidencePayload,
-        routes={"needs_replan": "frame_release"},
-        route_infos=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
+        routes=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
     )
     assess_go_no_go = do_review_step(
         do=Prompt.file("prompts/assessment_producer.md"),
@@ -134,8 +132,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         writes=[go_no_go_assessment, risk_register, decision_summary],
         accepted="assessment_ready",
         control_schema=ReleaseAssessmentPayload,
-        routes={"needs_replan": "frame_release"},
-        route_infos=ASSESS_GO_NO_GO_ROUTE_CONTRACTS,
+        routes=ASSESS_GO_NO_GO_ROUTE_CONTRACTS,
     )
     prepare_decision_package = do_review_step(
         do=Prompt.file("prompts/package_producer.md"),
@@ -159,8 +156,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         writes=[release_decision_package, release_communications_draft],
         accepted="decision_package_ready",
         control_schema=ReleaseDecisionPackagePayload,
-        routes={"needs_replan": "assess_go_no_go"},
-        route_infos=PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS,
+        routes=PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS,
     )
 
     @python_step(

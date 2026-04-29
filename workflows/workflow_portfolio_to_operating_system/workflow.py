@@ -255,9 +255,8 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         ],
         writes=[portfolio_governance_brief, portfolio_decision_criteria],
         accepted="portfolio_governance_framed",
-        routes={"needs_replan": "frame_portfolio_governance"},
         control_schema=PortfolioGovernanceFramingPayload,
-        route_infos=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
+        routes=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
     )
 
     analyze_portfolio_operating_model = do_review_step(
@@ -274,9 +273,8 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         ],
         writes=[workflow_lifecycle_matrix, portfolio_gap_analysis, portfolio_change_candidates],
         accepted="portfolio_operating_model_analyzed",
-        routes={"needs_replan": "frame_portfolio_governance"},
         control_schema=PortfolioOperatingModelPayload,
-        route_infos=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
+        routes=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
     )
 
     package_portfolio_operating_system = do_review_step(
@@ -301,9 +299,8 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             portfolio_next_actions,
         ],
         accepted="portfolio_operating_system_ready",
-        routes={"needs_replan": "analyze_portfolio_operating_model"},
         control_schema=PortfolioOperatingSystemPayload,
-        route_infos=PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
+        routes=PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
     )
 
     @staticmethod

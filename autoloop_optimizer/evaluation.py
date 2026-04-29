@@ -9,7 +9,7 @@ from typing import Any
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
+    from autoloop_v3.runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
 
 from .adaptation import write_selected_workflow_capability_snapshot
 try:  # pragma: no branch - supports both package and direct repo-root imports
@@ -22,8 +22,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         validate_selected_workflow_capability_snapshot,
     )
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib.lifecycle import write_workflow_json
-    from stdlib.validation import (
+    from autoloop_v3.stdlib.lifecycle import write_workflow_json
+    from autoloop_v3.stdlib.validation import (
         read_json_object,
         require_mapping,
         require_non_empty_string,

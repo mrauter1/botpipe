@@ -13,7 +13,7 @@ from autoloop.simple import Json, Md, Text, Raw, step, do_review_step, workflow_
 
 Use `from autoloop.simple import ...` or `from autoloop import ...` in public workflow code and examples.
 `core/*` remains the internal kernel surface for strict runtime code and tests; it is not the public authoring API.
-Compatibility aliases still exist for migrated code, but new workflow code should stay on the canonical surface instead of `StrictWorkflow`, `review_step`, `system_step`, `outputs`, `out`, `SUCCESS`, or `chain`.
+Legacy aliases still exist for migrated code, but new workflow code should stay on the canonical surface instead of `StrictWorkflow`, `review_step`, `system_step`, `outputs`, `out`, `SUCCESS`, or `chain`.
 
 Greenfield authoring defaults:
 
@@ -144,6 +144,7 @@ Runtime behavior:
 - `control_schema` defines the JSON-schema-like contract for `Outcome.payload`
 - `available_routes` is derived mechanically from the declared step-local routes plus reserved routes
 - step-local `Route.to(...)` metadata carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
+- `route_infos` carries optional per-route summary, handoff, and normalized route metadata for compatibility inspection surfaces
 - `route_required_outputs` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
 - route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific required outputs
 - mapping-style global `transitions` declarations remain a compatibility fallback; greenfield workflow authoring should prefer step-local `routes={...}`

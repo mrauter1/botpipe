@@ -612,10 +612,10 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
             for name, artifact in compiled.artifact_items(authoritative=True)
         ),
         transitions={
-            step_name: {tag: route.target for tag, route in routes.items()}
+            step_name: {tag: _legacy_capability_target(route.target) for tag, route in routes.items()}
             for step_name, routes in compiled.routes.items()
         },
-        global_transitions={tag: route.target for tag, route in compiled.global_routes.items()},
+        global_transitions={tag: _legacy_capability_target(route.target) for tag, route in compiled.global_routes.items()},
         steps=tuple(
             _compiled_step_capability(step, default_session_name=compiled.default_session_name)
             for step in compiled.steps.values()
@@ -650,6 +650,10 @@ def _compiled_artifact_capability(name: str, artifact) -> WorkflowArtifactCapabi
         workflow_level=artifact.workflow_level,
         producer_steps=tuple(artifact.producer_steps),
     )
+
+
+def _legacy_capability_target(target: str) -> str:
+    return "SUCCESS" if target == "FINISH" else target
 
 
 def _compiled_step_capability(step, *, default_session_name: str) -> WorkflowStepCapability:

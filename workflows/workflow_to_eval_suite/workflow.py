@@ -127,8 +127,7 @@ class WorkflowToEvalSuite(Workflow):
         writes=[evaluation_request_brief, evaluation_dimensions],
         accepted="evaluation_target_framed",
         control_schema=EvaluationTargetFramingPayload,
-        routes={"needs_replan": "frame_evaluation_target"},
-        route_infos=FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS,
+        routes=FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS,
     )
     design_eval_cases = do_review_step(
         do=Prompt.file("prompts/design_producer.md"),
@@ -150,8 +149,7 @@ class WorkflowToEvalSuite(Workflow):
         ],
         accepted="eval_cases_designed",
         control_schema=EvalCaseDesignPayload,
-        routes={"needs_replan": "frame_evaluation_target"},
-        route_infos=DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
+        routes=DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
     )
     package_workflow_eval_suite = do_review_step(
         do=Prompt.file("prompts/package_producer.md"),
@@ -173,8 +171,7 @@ class WorkflowToEvalSuite(Workflow):
         writes=[workflow_eval_suite, workflow_eval_suite_summary, workflow_eval_next_action],
         accepted="workflow_eval_suite_ready",
         control_schema=WorkflowEvalSuitePayload,
-        routes={"needs_replan": "design_eval_cases"},
-        route_infos=PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS,
+        routes=PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS,
     )
     @python_step(
         name="bootstrap",

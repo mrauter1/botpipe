@@ -151,8 +151,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         writes=[diagnostic_scope_brief, run_history_scope],
         accepted="diagnostic_scope_framed",
         control_schema=DiagnosticScopePayload,
-        routes={"needs_replan": "frame_diagnostic_scope"},
-        route_infos=FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS,
+        routes=FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS,
     )
     map_failure_modes = do_review_step(
         do=Prompt.file("prompts/analyze_producer.md"),
@@ -169,8 +168,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         writes=[failure_mode_map, failure_mode_manifest, recurring_weak_points],
         accepted="failure_modes_mapped",
         control_schema=FailureModeMapPayload,
-        routes={"needs_replan": "frame_diagnostic_scope"},
-        route_infos=MAP_FAILURE_MODES_ROUTE_CONTRACTS,
+        routes=MAP_FAILURE_MODES_ROUTE_CONTRACTS,
     )
     package_improvement_pressure = do_review_step(
         do=Prompt.file("prompts/package_producer.md"),
@@ -191,8 +189,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         writes=[improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions],
         accepted="improvement_pressure_packaged",
         control_schema=ImprovementPressurePayload,
-        routes={"needs_replan": "map_failure_modes"},
-        route_infos=PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS,
+        routes=PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS,
     )
     @python_step(
         name="bootstrap",

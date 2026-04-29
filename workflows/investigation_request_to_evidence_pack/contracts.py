@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from core import RouteInfo
+from autoloop import Route, SELF
 
 
 class InvestigationFramingPayload(BaseModel):
@@ -29,26 +29,30 @@ class InvestigationEvidencePackPayload(BaseModel):
 
 
 FRAME_INVESTIGATION_ROUTE_CONTRACTS = {
-    "investigation_framed": RouteInfo(
+    "investigation_framed": Route.to(
+        "assemble_evidence_pack",
         summary="The investigation boundary, objectives, and evidence intake plan are explicit and authoritative.",
-        required_outputs=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
+        required_writes=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
         handoff="Locks the investigation framing so evidence assembly can proceed against a fixed boundary.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same investigation framing boundary holds, but the scope brief or objectives need local repair.",
-        required_outputs=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
+        required_writes=("investigation_scope_brief", "investigation_objectives", "evidence_intake_register"),
         handoff="Keeps the investigation framing boundary intact and reruns the same step for local correction.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "frame_investigation",
         summary="The investigation trigger, downstream consumer, or evidence surface changed materially and must be reframed.",
         handoff="Resets the investigation framing boundary before downstream evidence work continues.",
     ),
 }
 
 ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS = {
-    "evidence_pack_ready": RouteInfo(
+    "evidence_pack_ready": Route.to(
+        "publish_evidence_pack",
         summary="The evidence pack captures inspected sources, coverage, findings, unresolved gaps, and a machine-readable summary.",
-        required_outputs=(
+        required_writes=(
             "evidence_source_inventory",
             "evidence_coverage_matrix",
             "evidence_findings",
@@ -58,9 +62,10 @@ ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS = {
         ),
         handoff="Promotes the investigation evidence pack to deterministic publication and downstream reuse.",
     ),
-    "needs_rework": RouteInfo(
+    "needs_rework": Route.to(
+        SELF,
         summary="The same evidence-pack boundary holds, but source tracing, coverage, or gap handling needs local repair.",
-        required_outputs=(
+        required_writes=(
             "evidence_source_inventory",
             "evidence_findings",
             "evidence_gap_register",
@@ -68,7 +73,8 @@ ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS = {
         ),
         handoff="Keeps evidence assembly local and reruns the same step for tighter source tracing and packaging.",
     ),
-    "needs_replan": RouteInfo(
+    "needs_replan": Route.to(
+        "frame_investigation",
         summary="The investigation boundary or evidence plan changed materially enough that framing must be revisited.",
         handoff="Routes back to investigation framing because the evidence contract is no longer authoritative.",
     ),

@@ -10,13 +10,13 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..core.workflow_capabilities import WorkflowCapabilityEntry, inspect_workflow_reference
     from ..runtime.loader import ResolvedWorkflow, resolve_workflow_reference
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.workflow_capabilities import WorkflowCapabilityEntry, inspect_workflow_reference
-    from runtime.loader import ResolvedWorkflow, resolve_workflow_reference
+    from autoloop_v3.core.workflow_capabilities import WorkflowCapabilityEntry, inspect_workflow_reference
+    from autoloop_v3.runtime.loader import ResolvedWorkflow, resolve_workflow_reference
 
 try:  # pragma: no branch - supports both package and direct repo-root imports
     from ..stdlib.lifecycle import write_workflow_json
 except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib.lifecycle import write_workflow_json
+    from autoloop_v3.stdlib.lifecycle import write_workflow_json
 
 
 @dataclass(frozen=True, slots=True)
