@@ -189,11 +189,14 @@ class ReviewStepDeclaration(_NamedDeclaration):
         name: str | None = None,
         reads: Sequence[ArtifactInput] = (),
         requires: Sequence[ArtifactInput] = (),
+        review_requires: Sequence[ArtifactInput] = (),
         writes: Sequence[Artifact | ArtifactSpec] = (),
+        review_writes: Sequence[Artifact | ArtifactSpec] = (),
         out: Artifact | ArtifactSpec | None = None,
         outputs: Sequence[Artifact | ArtifactSpec] = (),
         accepted: str = "accepted",
         rework: str = "needs_rework",
+        routes: RouteMapping | None = None,
         route_infos: Mapping[str, RouteInfo | str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
@@ -201,6 +204,7 @@ class ReviewStepDeclaration(_NamedDeclaration):
         control_schema: Any | None = None,
         retry: Any | None = None,
         session: Any | None = None,
+        review_session: Any | None = None,
         control_routes: bool = True,
     ) -> None:
         super().__init__(name=name)
@@ -208,16 +212,21 @@ class ReviewStepDeclaration(_NamedDeclaration):
         self.verifier = _normalize_simple_prompt(verifier)
         self.reads = tuple(reads)
         self.requires = tuple(requires)
+        self.review_requires = tuple(review_requires)
         self.outputs = _normalize_outputs(out=out, outputs=outputs, writes=writes)
         self.writes = self.outputs
+        self.review_outputs = tuple(review_writes)
+        self.review_writes = self.review_outputs
         self.accepted = accepted
         self.rework = rework
+        self.routes = dict(routes or {})
         self.before = before
         self.after = after
         self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.control_schema = control_schema
         self.retry = retry
         self.session = session
+        self.review_session = review_session
         self.control_routes = control_routes
 
 
@@ -351,11 +360,14 @@ def review_step(
     name: str | None = None,
     reads: Sequence[ArtifactInput] = (),
     requires: Sequence[ArtifactInput] = (),
+    review_requires: Sequence[ArtifactInput] = (),
     writes: Sequence[Artifact | ArtifactSpec] = (),
+    review_writes: Sequence[Artifact | ArtifactSpec] = (),
     out: Artifact | ArtifactSpec | None = None,
     outputs: Sequence[Artifact | ArtifactSpec] = (),
     accepted: str = "accepted",
     rework: str = "needs_rework",
+    routes: RouteMapping | None = None,
     route_infos: Mapping[str, RouteInfo | str] | None = None,
     route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
@@ -363,6 +375,7 @@ def review_step(
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
+    review_session: Any | None = None,
     control_routes: bool = True,
 ) -> ReviewStepDeclaration:
     return ReviewStepDeclaration(
@@ -371,11 +384,14 @@ def review_step(
         name=name,
         reads=reads,
         requires=requires,
+        review_requires=review_requires,
         writes=writes,
+        review_writes=review_writes,
         out=out,
         outputs=outputs,
         accepted=accepted,
         rework=rework,
+        routes=routes,
         route_infos=route_infos,
         before=before,
         after=after,
@@ -383,6 +399,7 @@ def review_step(
         control_schema=control_schema,
         retry=retry,
         session=session,
+        review_session=review_session,
         control_routes=control_routes,
     )
 
@@ -396,11 +413,14 @@ def do_review_step(
     name: str | None = None,
     reads: Sequence[ArtifactInput] = (),
     requires: Sequence[ArtifactInput] = (),
+    review_requires: Sequence[ArtifactInput] = (),
     writes: Sequence[Artifact | ArtifactSpec] = (),
+    review_writes: Sequence[Artifact | ArtifactSpec] = (),
     out: Artifact | ArtifactSpec | None = None,
     outputs: Sequence[Artifact | ArtifactSpec] = (),
     accepted: str = "accepted",
     rework: str = "needs_rework",
+    routes: RouteMapping | None = None,
     route_infos: Mapping[str, RouteInfo | str] | None = None,
     route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
@@ -408,6 +428,7 @@ def do_review_step(
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
+    review_session: Any | None = None,
     control_routes: bool = True,
 ) -> ReviewStepDeclaration:
     normalized_do = do if do is not None else producer
@@ -420,11 +441,14 @@ def do_review_step(
         name=name,
         reads=reads,
         requires=requires,
+        review_requires=review_requires,
         writes=writes,
+        review_writes=review_writes,
         out=out,
         outputs=outputs,
         accepted=accepted,
         rework=rework,
+        routes=routes,
         route_infos=route_infos,
         before=before,
         after=after,
@@ -432,6 +456,7 @@ def do_review_step(
         control_schema=control_schema,
         retry=retry,
         session=session,
+        review_session=review_session,
         control_routes=control_routes,
     )
 

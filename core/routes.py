@@ -53,13 +53,16 @@ class Route:
     target: object | None = None
     effects: tuple[Effect, ...] = ()
     summary: str | None = None
-    required_outputs: tuple[str, ...] = ()
+    required_outputs: tuple[str, ...] | None = None
     handoff: str | None = None
     on_taken: object | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "summary", _normalize_optional_text(self.summary, field_name="summary"))
-        object.__setattr__(self, "required_outputs", _normalize_required_outputs(self.required_outputs))
+        if self.required_outputs is None:
+            object.__setattr__(self, "required_outputs", None)
+        else:
+            object.__setattr__(self, "required_outputs", _normalize_required_outputs(self.required_outputs))
         object.__setattr__(self, "handoff", _normalize_optional_text(self.handoff, field_name="handoff"))
 
     @staticmethod
@@ -67,7 +70,7 @@ class Route:
         target: object,
         *effects: Effect,
         summary: str | None = None,
-        required_outputs: tuple[str, ...] = (),
+        required_outputs: Iterable[str] | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
@@ -81,7 +84,7 @@ class Route:
             required_outputs=(
                 _normalize_required_outputs(required_writes)
                 if required_writes is not None
-                else tuple(required_outputs)
+                else (_normalize_required_outputs(required_outputs) if required_outputs is not None else None)
             ),
             handoff=handoff,
             on_taken=on_taken,
@@ -91,7 +94,7 @@ class Route:
     def complete(
         *effects: Effect,
         summary: str | None = None,
-        required_outputs: tuple[str, ...] = (),
+        required_outputs: Iterable[str] | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
@@ -110,7 +113,7 @@ class Route:
     def pause(
         *effects: Effect,
         summary: str | None = None,
-        required_outputs: tuple[str, ...] = (),
+        required_outputs: Iterable[str] | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
@@ -129,7 +132,7 @@ class Route:
     def fail(
         *effects: Effect,
         summary: str | None = None,
-        required_outputs: tuple[str, ...] = (),
+        required_outputs: Iterable[str] | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
@@ -145,7 +148,7 @@ class Route:
         )
 
     @property
-    def required_writes(self) -> tuple[str, ...]:
+    def required_writes(self) -> tuple[str, ...] | None:
         return self.required_outputs
 
 

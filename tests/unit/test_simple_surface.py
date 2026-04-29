@@ -22,6 +22,7 @@ from autoloop.simple import (
     Route,
     RouteInfo,
     SELF,
+    Session,
     StrictWorkflow,
     Workflow,
     chain,
@@ -417,6 +418,37 @@ def test_do_review_step_accepts_canonical_prompt_names() -> None:
     assert compiled.routes["assess"]["needs_rework"].target == "assess"
 
 
+def test_do_review_step_supports_separate_review_contracts_and_custom_routes() -> None:
+    class ReviewWorkflow(Workflow):
+        main = Session()
+        reviewer = Session()
+
+        assess = do_review_step(
+            do=Prompt.inline("Assess."),
+            review=Prompt.inline("Review."),
+            writes=[Md("draft")],
+            review_requires=["draft"],
+            review_writes=[Json("decision")],
+            routes={
+                "approved": Route.to(FINISH, required_writes=["draft", "decision"]),
+                "rejected": Route.to(FINISH, required_writes=["decision"]),
+            },
+            session=main,
+            review_session=reviewer,
+        )
+
+    compiled = compile_workflow(ReviewWorkflow)
+    step = compiled.steps["assess"]
+
+    assert step.available_routes == ("approved", "rejected", "question", "blocked", "failed")
+    assert step.do_writes == ("assess.draft",)
+    assert step.review_writes == ("assess.decision",)
+    assert step.review_requires == ("assess.draft",)
+    assert step.review_session_name == "reviewer"
+    assert compiled.routes["assess"]["approved"].target == "FINISH"
+    assert compiled.routes["assess"]["rejected"].target == "FINISH"
+
+
 def test_control_routes_can_be_disabled_for_simple_steps() -> None:
     class MinimalWorkflow(Workflow):
         note = step("Write a note.", control_routes=False)
@@ -603,11 +635,14 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "name",
         "reads",
         "requires",
+        "review_requires",
         "writes",
+        "review_writes",
         "out",
         "outputs",
         "accepted",
         "rework",
+        "routes",
         "route_infos",
         "route_summaries",
         "before",
@@ -615,6 +650,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "control_schema",
         "retry",
         "session",
+        "review_session",
         "control_routes",
     )
     assert tuple(inspect.signature(simple_surface.review_step).parameters) == (
@@ -623,11 +659,14 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "name",
         "reads",
         "requires",
+        "review_requires",
         "writes",
+        "review_writes",
         "out",
         "outputs",
         "accepted",
         "rework",
+        "routes",
         "route_infos",
         "route_summaries",
         "before",
@@ -635,6 +674,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "control_schema",
         "retry",
         "session",
+        "review_session",
         "control_routes",
     )
     assert tuple(inspect.signature(simple_surface.python_step).parameters) == (
