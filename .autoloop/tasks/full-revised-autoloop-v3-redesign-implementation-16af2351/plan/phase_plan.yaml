@@ -1,4 +1,226 @@
 version: 1
 task_id: full-revised-autoloop-v3-redesign-implementation-16af2351
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/runs/run-20260429T131217Z-aa749982/request.md
-phases: []
+phases:
+- phase_id: canonical-surface-and-topology-lowering
+  title: Canonical surface and topology lowering
+  objective: Make the new public authoring surface compile through the existing FSM
+    by centering step-local routes, canonical terminals, canonical writes, and deterministic
+    declaration ordering.
+  status: planned
+  in_scope:
+  - Add public FINISH and SELF while preserving SUCCESS compatibility.
+  - Make step-local routes the canonical public topology source for step, python_step,
+    and workflow_step.
+  - Add writes as the public artifact output surface with deprecated out and outputs
+    aliases.
+  - Resolve string step targets, direct step refs, terminals, SELF, and Route.to targets
+    through one normalization path.
+  - Replace module-counter-driven declaration ordering with class namespace ordering
+    for compiled entry and default next-step behavior.
+  - Emit richer topology artifacts additively beside the existing static graph payload.
+  out_of_scope:
+  - Splitting do and review provider contracts.
+  - Adding StateVar, Param, or hook context semantics.
+  - Adding feedforward llm or classify operations.
+  - Removing global transitions fallback.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: Plain step defaults use done as the route tag and FINISH as the terminal
+      target without breaking SUCCESS compatibility.
+  - id: AC-2
+    text: String forward references, direct step references, SELF, explicit entry,
+      and first-declared entry all compile deterministically.
+  - id: AC-3
+    text: Canonical topology artifacts and inspect/static-graph outputs are emitted
+      additively without regressing existing consumers.
+  deliverables:
+  - Updated public exports and simple authoring declarations for FINISH, SELF, and
+    writes.
+  - Compiler and validation changes for step-local route lowering and declaration-order-based
+    topology.
+  - Targeted tests covering terminal aliasing, step-local routes, entry selection,
+    and artifact naming.
+  risks:
+  - Terminal rename drift across run results, CLI inspect output, and static graph
+    payloads.
+  - Ordering changes could silently alter existing topology if not covered by resume
+    and compatibility tests.
+  rollback:
+  - Revert canonical surface additions while keeping the prior lowering path intact.
+  - Disable new topology artifact emission if it destabilizes inspect or runtime outputs.
+- phase_id: do-review-step-and-route-required-writes
+  title: Do review step and route required writes
+  objective: Introduce do_review_step as the canonical paired step with separate do
+    and review contracts, artifacts, sessions, and route-specific required writes.
+  status: planned
+  in_scope:
+  - Add do_review_step with review_step compatibility alias.
+  - Support do and review prompt names plus deprecated producer and verifier aliases.
+  - Separate writes and review_writes, requires and review_requires, and session and
+    review_session.
+  - Validate route-level required_writes across both do and review artifact sets.
+  - Split provider-facing do and review contract rendering and parsing without rewriting
+    the engine wholesale.
+  out_of_scope:
+  - Descriptor-based workflow state and params.
+  - Feedforward llm and classify APIs.
+  - Deleting PairStep compatibility.
+  dependencies:
+  - canonical-surface-and-topology-lowering
+  acceptance_criteria:
+  - id: AC-1
+    text: do_review_step supports separate do and review prompts, artifacts, and session
+      overrides while preserving review_step compatibility.
+  - id: AC-2
+    text: Review execution does not implicitly require all do writes unless the workflow
+      author declares that strictness.
+  - id: AC-3
+    text: Selected-route required_writes validate correctly for accepted, needs_rework,
+      and custom review routes.
+  deliverables:
+  - Canonical do_review_step public API and lowering path.
+  - Compiled metadata and provider contract support for separate do and review phases.
+  - Runtime and contract tests covering review defaults, custom routes, and route-specific
+    required writes.
+  risks:
+  - Provider request or parser changes could regress current CLI-backed provider integrations.
+  - Required-write normalization could mis-handle mixed do and review artifact names.
+  rollback:
+  - Retain legacy review_step and PairStep behavior and revert canonical paired-step
+    additions.
+  - Temporarily fall back to unified paired-step provider rendering if split requests
+    prove unstable.
+- phase_id: hook-state-session-and-topology-metadata
+  title: Hook state session and topology metadata
+  objective: Add the requested hook contract, public state and param surfaces, global
+    session helpers, and resume-safe topology metadata without destabilizing checkpoint
+    behavior.
+  status: planned
+  in_scope:
+  - Add StateVar and Param descriptors alongside existing State and Parameters compatibility
+    paths.
+  - Add hook surfaces for before, after, on_route, route on_taken, and do review lifecycle
+    variants.
+  - Expand context with state, step_state, item_state, step_item_state, values, artifacts,
+    params, meta, route, and outcome surfaces.
+  - Add global session reset and set helpers and persist deterministic session state
+    across checkpoints and resumes.
+  - Emit hook events, topology hash, source hash, prompt refs, state contracts, session
+    contracts, and compile reports.
+  - Fail resume when the saved topology differs from the current compiled topology.
+  out_of_scope:
+  - Feedforward llm and classify runtime operations.
+  - Top-level parallel FSM execution.
+  - Optimizer stdlib extraction.
+  dependencies:
+  - do-review-step-and-route-required-writes
+  acceptance_criteria:
+  - id: AC-1
+    text: Hooks execute in the requested order, emit observable events, and can mutate
+      state or artifacts without redirecting topology.
+  - id: AC-2
+    text: StateVar and Param support immutable defaults, factories, checkpoint persistence,
+      and prompt or context access.
+  - id: AC-3
+    text: Runs record topology metadata and resume fails clearly when topology hashes
+      do not match.
+  deliverables:
+  - Context and engine support for the new hook and state surfaces.
+  - Expanded topology and compile artifact generation with hash persistence.
+  - Tests for hook order, hook failure checkpointing, state persistence, session reset
+    or set behavior, and resume mismatch handling.
+  risks:
+  - Removing hook-based route redirection could break compatibility tests or bundled
+    workflows that still rely on AfterHookResult route overrides.
+  - State or session persistence changes could corrupt checkpoints if serialization
+    boundaries are missed.
+  rollback:
+  - Keep legacy hook semantics active and revert new hook return restrictions if the
+    migration slice is incomplete.
+  - Disable resume hash enforcement while preserving recorded topology artifacts if
+    persistence changes prove unstable.
+- phase_id: feedforward-operations
+  title: Feedforward operations
+  objective: Add standalone and step-declared llm and classify operations with retry,
+    replay, and deterministic fingerprints on a value-returning provider path.
+  status: planned
+  in_scope:
+  - Add llm and classify callable runtime APIs and .step declaration helpers.
+  - Add a provider operation path that returns typed values instead of route outcomes.
+  - Implement deterministic operation fingerprints, replay lookup, mismatch failure,
+    and retry on provider or parsing errors.
+  - Support usage inside python_step and helper functions.
+  out_of_scope:
+  - Implicit routing from classify.step results.
+  - A new top-level workflow parallelism model.
+  - Broad provider architecture rewrites unrelated to value-returning operations.
+  dependencies:
+  - hook-state-session-and-topology-metadata
+  acceptance_criteria:
+  - id: AC-1
+    text: Standalone llm and classify calls return typed values, retry on provider
+      or parse failures, and fail loudly on fingerprint mismatches.
+  - id: AC-2
+    text: llm.step and classify.step compile as value-producing workflow nodes without
+      implicit classifier routing.
+  - id: AC-3
+    text: Recorded successful operation results replay deterministically across reruns
+      and resumes.
+  deliverables:
+  - Public llm and classify APIs and compiled step helpers.
+  - Provider operation request or response support plus replay recording.
+  - Tests for standalone operations, step-declared operations, retry behavior, replay
+    hits, and mismatch failures.
+  risks:
+  - Replay fingerprint design could be too weak and silently reuse stale values.
+  - Provider adapters may diverge if operation and route execution paths are not kept
+    narrowly aligned.
+  rollback:
+  - Remove public llm and classify exports and keep operation logic private until
+    deterministic replay is stable.
+  - Disable replay reuse and keep retry-only behavior if fingerprinting proves unsafe.
+- phase_id: workflow-migration-and-cleanup
+  title: Workflow migration and cleanup
+  objective: Move bundled workflows, docs, stdlib packaging, and compatibility surfaces
+    onto the final canonical model once the lower-level behavior is stable.
+  status: planned
+  in_scope:
+  - Update built-in workflows, examples, prompts, docs, and inspect expectations to
+    the canonical API.
+  - Move optimizer and application-specific stdlib material out of framework core
+    into autoloop_optimizer or an equivalent sibling package layout.
+  - Demote or remove deprecated public surfaces once migrated workflows and tests
+    no longer rely on them.
+  - Retire legacy documentation emphasis on StrictWorkflow, RouteInfo, chain, global
+    transitions, public produces, and public-first reads.
+  out_of_scope:
+  - Net-new runtime features beyond migration fallout.
+  - Unrelated workflow redesigns outside the canonical API shift.
+  dependencies:
+  - feedforward-operations
+  acceptance_criteria:
+  - id: AC-1
+    text: Bundled workflows and docs use the canonical API and stop introducing new
+      examples on deprecated surfaces.
+  - id: AC-2
+    text: Optimizer-specific stdlib logic is no longer housed in the framework core
+      package.
+  - id: AC-3
+    text: Strictness, docs, contract, runtime, and workflow integration suites pass
+      without depending on removed public compatibility surfaces.
+  deliverables:
+  - Migrated workflows, docs, and prompts.
+  - Separated optimizer-specific package layout.
+  - Final compatibility cleanup patches and regression-test updates.
+  risks:
+  - Stdlib extraction can cause broad import churn if attempted before core behavior
+    is stable.
+  - Removing compatibility exports too early can strand runtime workflows or inspect
+    tooling.
+  rollback:
+  - Restore compatibility exports and import bridges while keeping migrated docs on
+    the canonical surface.
+  - Stage stdlib extraction behind temporary bridges if the sibling package move is
+    not mechanically complete.

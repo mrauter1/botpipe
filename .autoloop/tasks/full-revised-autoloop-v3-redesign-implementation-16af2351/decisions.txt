@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260429T131217Z-aa749982" ts="2026-04-29T13:12:17.986940+00:00" />
+Lower the redesigned public authoring model through the existing `core.validation` and `core.compiler` pipeline first and defer engine rewrites to later focused phases.
+Keep `SUCCESS`, `review_step`, `system_step`, `out`/`outputs`, `transitions`, `flow`, `RouteInfo`, and public `produces` as compatibility inputs until cleanup, but move new docs, examples, and topology artifacts to `FINISH`, `do_review_step`, `python_step`, `writes`, and step-local `routes` immediately.
+Treat hook-based route redirection as an intentional compatibility break to remove in the hook/state phase because the requested hook contract must observe and enrich routes without silently changing topology.
+Keep legacy static graph and inspect payloads additive during migration; introduce richer topology artifacts before deleting old payload keys or filenames.
