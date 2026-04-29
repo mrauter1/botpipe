@@ -1123,3 +1123,50 @@ No open phase-local issues. This phase is verified complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+I’m reviewing the phase’s current test coverage and the test-phase artifacts first. Then I’ll either add the missing regression coverage or formalize the existing coverage in the phase strategy and feedback so this phase has an explicit behavior-to-test map.
+
+The core behavior already has broad coverage, including the producer’s new LLM-step regression test. I’m looking for the smallest worthwhile refinement that adds phase-relevant signal rather than duplicating that work.
+
+I found one worthwhile refinement: the current regression test proves the final file lands in the refreshed location, but it doesn’t assert what `on_taken` itself observed through `ctx.artifacts`. I’m tightening that test so it directly proves the rebinding contract inside the hook, then I’ll update the test-phase strategy and feedback.
+
+The refined regression test is green. I’m recording the explicit behavior-to-test map now, plus a short feedback note that captures exactly what this test phase added and why it is stable.
+
+Scope considered
+
+Phase-local test work for `hook-state-session-and-topology-metadata`, focused on the route-hook artifact-refresh regression and the phase’s explicit behavior-to-test coverage map.
+
+What I analyzed
+
+I reviewed the current phase artifacts, the shared decisions ledger, and the existing coverage in `tests/contract/test_engine_contracts.py`, `tests/runtime/test_workspace_and_context.py`, `tests/unit/test_simple_surface.py`, and adjacent placeholder/artifact tests to avoid duplicating already-covered behavior.
+
+What I changed
+
+I refined `tests/contract/test_engine_contracts.py::test_route_hooks_re_resolve_artifact_paths_between_on_route_and_on_taken` so it now asserts the path seen inside `on_taken` is already rebound to the post-`on_route` state-derived artifact location, and also checks the persisted state and final filesystem output. That makes the regression test verify the hook context contract directly, not just the eventual write target.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/hook-state-session-and-topology-metadata/test_strategy.md) with an explicit acceptance-criteria-to-test map and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/hook-state-session-and-topology-metadata/feedback.md). I also recorded the non-obvious test intent in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+Key findings / decisions
+
+The useful gap was not final output coverage but hook-context coverage: without asserting what `on_taken` itself observes through `ctx.artifacts`, a stale rebinding bug could be partially masked by later filesystem checks. The refined test closes that gap deterministically.
+
+Validation passed:
+`python3 -m py_compile tests/contract/test_engine_contracts.py`
+`./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "test_route_hooks_re_resolve_artifact_paths_between_on_route_and_on_taken"`
+
+Open issues / next step
+
+No blocking test gap remains in this targeted area. The test artifacts are ready for auditor review.
