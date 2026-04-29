@@ -589,3 +589,59 @@ Open issues / next step
 - Provider request payloads still carry legacy keys like `route_infos` and `route_required_outputs`; that remains for the later engine/provider phase.
 - Low-level/core public cleanup is still incomplete; legacy internal class names remain in the root `core` package.
 - Once dependencies are available, the next step is to run the focused simple-surface/static-graph tests and then continue the provider/runtime payload migration.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb4b-6028-7802-9a75-652b8666c65c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+I’m reviewing the compiler-validation-normalization implementation against the phase contract and the recorded decisions. First I’m reading the review artifacts and the relevant source diffs so I can update criteria accurately and log only the material findings.
+
+Reviewing the producer changes against the phase contract now. I’m checking the compiled metadata, validation path, and any remaining public or artifact-facing legacy fields before I update the phase review artifacts.
+
+The main review question now is whether the phase actually met its acceptance criteria, not whether the code compiles. I’m checking for two likely gaps: incomplete item-state public surface, and any remaining legacy names still exposed through compiled or topology-facing data.
+
+The changed tests only cover a narrow slice of the contract. I’m checking the untouched simple API for `scope` and item-state semantics now, because AC-3 requires those surfaces to be explicit or suppressed rather than left half-migrated.
+
+There is a more material gap than the test coverage: the route model itself still carries legacy public surface. I’m confirming whether that leakage is limited to internal compatibility or still exposed directly from the active package API and compiler-facing modules.
+
+The state model migration looks partial rather than complete. I’m verifying whether step state is only validated as a `BaseModel` class or actually instantiated and restored as a model at runtime, because that changes whether the phase is merely incomplete or behaviorally incorrect.
+
+I’ve narrowed the review to two material gaps: the route surface still accepts and exports removed legacy names, and the step-state migration stops at validation instead of carrying through runtime storage. I’m collecting exact file/line references before I write the findings and criteria.
+
+I have enough to write the review. The phase is not ready to mark complete: the route API still exposes banned legacy names, and the Pydantic step-state migration stops before runtime storage and resume semantics.
+
+Scope considered
+- Phase-local review of `compiler-validation-normalization` against the active request snapshot, phase contract, implementation notes, and changed request-relevant code paths.
+- Review scope centered on `core/routes.py`, `core/validation.py`, `core/compiler.py`, `core/context.py`, `core/engine.py`, `runtime/static_graph.py`, and the focused tests the producer updated.
+
+What I analyzed
+- The active phase artifacts: `criteria.md`, `feedback.md`, and `implementation_notes.md`.
+- The route canonicalization path from public/simple authoring through validation, compiled metadata, and topology emission.
+- The state/params migration path, especially how declared Pydantic step state is lowered, stored, resumed, and exposed through `ctx`.
+
+What I reviewed
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/compiler-validation-normalization/criteria.md) to keep the checklist unchecked and record the incomplete verdict.
+- I appended two blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/compiler-validation-normalization/feedback.md): `IMP-001` and `IMP-002`.
+
+Key findings / decisions
+- `IMP-001` blocking: the route model is still not canonical. [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py:23) still exports `RouteInfo`, still accepts `required_outputs`, still keeps `Route.complete`, and still normalizes `SUCCESS`; [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:682) still lowers simple routes through `route_infos` and `RouteInfo`.
+- `IMP-002` blocking: the Pydantic state migration stops at validation. [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:798) converts step state models into descriptor-like field metadata, while [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py:174) and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:2465) still store step/item state as plain dicts behind `MutableStateProxy`, not model instances.
+- Provider payload legacy keys remain, but I did not mark that as blocking here because the phase contract explicitly lists provider payload rewrites as out of scope.
+
+Open issues / next step
+- Replace the remaining active `RouteInfo` / `required_outputs` / `SUCCESS` route-authoring and validation path with canonical `Route` / `required_writes` / `FINISH`, keeping any migration reader private.
+- Carry the Pydantic state migration through runtime storage, checkpointing, and resume for step and item-scoped state, or suppress the incomplete public state surfaces until that model-backed path exists.
+- Re-run the focused tests once the environment has the missing runtime dependencies.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
