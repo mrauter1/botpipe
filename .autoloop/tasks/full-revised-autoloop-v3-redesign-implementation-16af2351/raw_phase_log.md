@@ -276,3 +276,55 @@ I’m recording the phase intent and the compatibility boundaries now. The main 
 - No blocking issues remain for this phase.
 - Out-of-scope items are still deferred: `review_writes`, phase-specific do/review provider contracts, `StateVar`/`Param`, hook-context semantics, and feedforward `llm()` / `classify()`.
 - Validation completed: syntax compile passed, `49` targeted canonical-surface tests passed, and `20` package CLI tests passed.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m auditing the phase-1 implementation against the acceptance criteria and adjacent compatibility surfaces. First I’m reading the phase artifacts, then I’ll spot-check the touched lowering/runtime paths for gaps the targeted tests may have missed.
+
+I’ve found at least one concrete phase-gap candidate in the docs surface: `docs/authoring.md` still contains public examples using `transitions = {… SUCCESS}` and `Route.to(SUCCESS, …)`, which contradicts the phase requirement to move public examples/templates to the canonical `FINISH`/step-local-routes surface. I’m checking whether there’s also a code-path issue beyond documentation drift.
+
+I found a second concrete issue beyond docs drift: compile-time prompt-reference analysis does not respect `Prompt.ref(...)` registry semantics. In `core/validation.py`, `_simple_prompt_text(...)` resolves any `Prompt.path` against workflow-relative files, so a registry prompt can silently borrow a same-named filesystem prompt during compile-time validation and inferred-read extraction.
+
+Scope considered
+- Phase `canonical-surface-and-topology-lowering` only.
+- I reviewed the phase artifacts plus the touched authoring, validation, runtime-topology, and docs surfaces needed to judge AC-1 through AC-5.
+- I did not expand into unrelated dirty files outside this phase scope.
+
+What I analyzed
+- Phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and the shared `decisions.txt`.
+- Request-relevant code paths in `autoloop/simple.py`, `core/validation.py`, `core/compiler.py`, `runtime/static_graph.py`, `runtime/tracing.py`, and `runtime/runner.py`.
+- Public guidance surfaces in `docs/authoring.md`, `docs/architecture.md`, `cleanup.md`, and the CLI scaffold path.
+- The targeted tests the implementer ran, with focus on gaps not covered by those checks.
+
+What I reviewed
+- `FINISH` / `SUCCESS` compatibility handling and canonical topology emission.
+- `python_step` lowering and system-step return normalization coverage.
+- Step-local route lowering, declaration-order entry/default-next behavior, and named target resolution.
+- Compile-time prompt placeholder analysis, especially `Prompt.inline/file/ref`.
+- Whether public docs/examples/templates actually moved to the canonical phase-1 surface.
+
+Key findings / decisions
+- I recorded two blocking findings in `feedback.md`.
+- `IMP-001` blocks on compile/runtime drift for `Prompt.ref(...)`: compile-time prompt analysis currently treats registry prompt paths like filesystem prompt paths when a same-named local file exists.
+- `IMP-002` blocks on intent fidelity for AC-5: `docs/authoring.md` still teaches legacy public examples built around `PairStep`, global `transitions`, and `SUCCESS` instead of the canonical `step` / `do_review_step` / `writes` / step-local `routes` / `FINISH` surface.
+- Because of those findings, I left the phase criteria unchecked.
+
+Open issues / next step
+- Fix `core/validation.py:_simple_prompt_text` so `Prompt.ref(...)` preserves registry semantics during compile-time placeholder analysis, then add a collision regression test.
+- Rewrite the remaining legacy public examples in `docs/authoring.md` onto the canonical phase-1 surface and demote legacy transition examples to compatibility-only notes.
+- Re-run the targeted phase tests after those fixes and then re-evaluate the criteria.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
