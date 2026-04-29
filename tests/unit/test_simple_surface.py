@@ -712,12 +712,36 @@ def test_simple_system_step_lowers_to_core_system_handler_without_on_step_method
     compiled = compile_workflow(SystemWorkflow)
 
     assert isinstance(compiled.steps["run"].step, SystemStep)
-    assert "on_run" not in SystemWorkflow.__dict__
+    assert callable(getattr(SystemWorkflow, "on_run"))
 
     next_state, event = compiled.steps["run"].system_handler(_SystemWorkflowState(), object())
 
     assert next_state.notes == 1
     assert event.tag == "done"
+
+
+def test_python_step_entry_alias_preserves_bootstrap_order_and_installs_compat_handler() -> None:
+    class EntryWorkflow(Workflow):
+        State = _SystemWorkflowState
+
+        review = do_review_step(
+            do=Prompt.inline("Assess the draft."),
+            review=Prompt.inline("Review the draft."),
+            writes=[Md("draft")],
+        )
+
+        @python_step(routes={"ready": "review"})
+        def bootstrap(ctx):
+            return "ready"
+
+        entry = bootstrap
+
+    compiled = compile_workflow(EntryWorkflow)
+
+    assert compiled.entry_step_name == "bootstrap"
+    assert tuple(compiled.steps) == ("bootstrap", "review")
+    assert isinstance(compiled.steps["bootstrap"].step, SystemStep)
+    assert callable(getattr(EntryWorkflow, "on_bootstrap"))
 
 
 @pytest.mark.parametrize(
