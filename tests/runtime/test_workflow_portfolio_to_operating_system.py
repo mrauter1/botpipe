@@ -83,14 +83,14 @@ def test_workflow_portfolio_to_operating_system_compiles_with_explicit_control_c
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["portfolio_governance_framed"]) == [
+    assert list(compiled.route("frame_portfolio_governance", "portfolio_governance_framed").required_writes) == [
         "frame_portfolio_governance.portfolio_governance_brief",
         "frame_portfolio_governance.portfolio_decision_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["analyze_portfolio_operating_model"]
-    assert list(analysis_step.route_required_outputs["portfolio_operating_model_analyzed"]) == [
+    assert list(compiled.route("analyze_portfolio_operating_model", "portfolio_operating_model_analyzed").required_writes) == [
         "analyze_portfolio_operating_model.workflow_lifecycle_matrix",
         "analyze_portfolio_operating_model.portfolio_gap_analysis",
         "analyze_portfolio_operating_model.portfolio_change_candidates",
@@ -98,7 +98,7 @@ def test_workflow_portfolio_to_operating_system_compiles_with_explicit_control_c
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_portfolio_operating_system"]
-    assert list(package_step.route_required_outputs["portfolio_operating_system_ready"]) == [
+    assert list(compiled.route("package_portfolio_operating_system", "portfolio_operating_system_ready").required_writes) == [
         "package_portfolio_operating_system.workflow_portfolio_operating_system",
         "package_portfolio_operating_system.portfolio_operating_summary",
         "package_portfolio_operating_system.portfolio_next_actions",
@@ -618,7 +618,7 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
     operating_summary = json.loads((workflow_dir / "portfolio_operating_summary.json").read_text(encoding="utf-8"))
     operating_receipt = json.loads((workflow_dir / "portfolio_operating_system_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "workflow_capability_snapshot.json").exists()
     assert (workflow_dir / "workflow_portfolio_health_snapshot.json").exists()
     assert (workflow_dir / "portfolio_governance_brief.md").exists()
@@ -752,7 +752,7 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
             "run_id": "run-diagnostics-success",
             "status": "success",
             "task_id": "portfolio-gamma",
-            "terminal": "SUCCESS",
+            "terminal": "FINISH",
             "updated_at": "2026-04-24T07:40:00+00:00",
         }
     ]
@@ -869,7 +869,7 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
         "blocked",
         "failed",
     )
-    assert list(provider.calls[5].route_required_outputs["portfolio_operating_system_ready"]) == [
+    assert list(provider.calls[5].route_required_writes["portfolio_operating_system_ready"]) == [
         "package_portfolio_operating_system.workflow_portfolio_operating_system",
         "package_portfolio_operating_system.portfolio_operating_summary",
         "package_portfolio_operating_system.portfolio_next_actions",
@@ -1601,7 +1601,7 @@ def _seed_portfolio_run_health(root: Path) -> dict[str, Path]:
             created_at="2026-04-24T07:30:00+00:00",
             updated_at="2026-04-24T07:40:00+00:00",
             request_text="Publish workflow failure pressure for the release governance loop.\n",
-            terminal="SUCCESS",
+            terminal="FINISH",
         ),
         "candidate_set_success": _write_run_summary_record(
             root,
@@ -1612,7 +1612,7 @@ def _seed_portfolio_run_health(root: Path) -> dict[str, Path]:
             created_at="2026-04-22T07:00:00+00:00",
             updated_at="2026-04-22T07:05:00+00:00",
             request_text="Publish a ranked candidate set for the delivery planning initiative.\n",
-            terminal="SUCCESS",
+            terminal="FINISH",
         ),
     }
 

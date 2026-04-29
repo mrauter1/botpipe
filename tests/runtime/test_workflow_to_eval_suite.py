@@ -22,7 +22,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from autoloop_v3.stdlib import write_selected_workflow_capability_snapshot
+from autoloop_v3.autoloop_optimizer.adaptation import write_selected_workflow_capability_snapshot
 from core.primitives import Outcome
 
 
@@ -83,14 +83,14 @@ def test_workflow_to_eval_suite_package_compiles_with_explicit_control_contracts
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["evaluation_target_framed"]) == [
+    assert list(compiled.route("frame_evaluation_target", "evaluation_target_framed").required_writes) == [
         "frame_evaluation_target.evaluation_request_brief",
         "frame_evaluation_target.evaluation_dimensions",
     ]
     assert frame_step.expected_output_schema is not None
 
     design_step = compiled.steps["design_eval_cases"]
-    assert list(design_step.route_required_outputs["eval_cases_designed"]) == [
+    assert list(compiled.route("design_eval_cases", "eval_cases_designed").required_writes) == [
         "design_eval_cases.benchmark_case_matrix",
         "design_eval_cases.edge_case_matrix",
         "design_eval_cases.adversarial_case_matrix",
@@ -100,7 +100,7 @@ def test_workflow_to_eval_suite_package_compiles_with_explicit_control_contracts
     assert design_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_workflow_eval_suite"]
-    assert list(package_step.route_required_outputs["workflow_eval_suite_ready"]) == [
+    assert list(compiled.route("package_workflow_eval_suite", "workflow_eval_suite_ready").required_writes) == [
         "package_workflow_eval_suite.workflow_eval_suite",
         "package_workflow_eval_suite.workflow_eval_suite_summary",
         "package_workflow_eval_suite.workflow_eval_next_action",
@@ -764,7 +764,7 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
     validated_manifest = json.loads((workflow_dir / "validated_eval_case_manifest.json").read_text(encoding="utf-8"))
     suite_receipt = json.loads((workflow_dir / "workflow_eval_suite_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "selected_workflow_capability.json").exists()
     assert (workflow_dir / "evaluation_request_brief.md").exists()
     assert (workflow_dir / "evaluation_dimensions.md").exists()
@@ -957,7 +957,7 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
         "package_workflow_eval_suite",
         "package_workflow_eval_suite",
     ]
-    assert list(provider.calls[1].route_required_outputs["evaluation_target_framed"]) == [
+    assert list(provider.calls[1].route_required_writes["evaluation_target_framed"]) == [
         "frame_evaluation_target.evaluation_request_brief",
         "frame_evaluation_target.evaluation_dimensions",
     ]
@@ -969,7 +969,7 @@ def test_workflow_to_eval_suite_package_runs_and_publishes_terminal_eval_artifac
         "blocked",
         "failed",
     )
-    assert list(provider.calls[5].route_required_outputs["workflow_eval_suite_ready"]) == [
+    assert list(provider.calls[5].route_required_writes["workflow_eval_suite_ready"]) == [
         "package_workflow_eval_suite.workflow_eval_suite",
         "package_workflow_eval_suite.workflow_eval_suite_summary",
         "package_workflow_eval_suite.workflow_eval_next_action",

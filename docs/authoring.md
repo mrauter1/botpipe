@@ -13,7 +13,7 @@ from autoloop.simple import Json, Md, Text, Raw, step, produce_verify_step, work
 
 Use `from autoloop.simple import ...` or `from autoloop import ...` in public workflow code and examples.
 `core/*` remains the internal kernel surface for strict runtime code and tests; it is not the public authoring API.
-Legacy aliases are intentionally removed from the public authoring surface; use the canonical names instead of `StrictWorkflow`, `review_step`, `system_step`, `outputs`, `out`, `SUCCESS`, or `chain`.
+Legacy aliases are intentionally removed from the public authoring surface; use the canonical workflow, route, prompt, and artifact names consistently.
 
 Greenfield authoring defaults:
 
@@ -72,9 +72,9 @@ workflows/
 
 `specs.py` is ordinary Python, not a runtime convention. Use it to keep `flow.py` readable when the workflow grows. The runtime does not enforce one folder structure beyond resolving the workflow reference you asked it to run.
 
-When a package uses `__init__.py`, it should re-export the main workflow class and any workflow-specific `Parameters` from the executable module so package-local imports stay straightforward.
+When a package uses `__init__.py`, it should re-export the main workflow class and any workflow-specific `Params` from the executable module so package-local imports stay straightforward.
 
-## Workflow Parameters
+## Workflow Params
 
 Top-level CLI runs pass workflow-specific parameters through repeatable `-wf` pairs:
 
@@ -85,11 +85,11 @@ autoloop run review task-42 \
   -wf reviewer security
 ```
 
-If a workflow supports parameters, expose a `Parameters` model through one of the supported resolution points. Resolution order is:
+If a workflow supports parameters, expose a `Params` model through one of the supported resolution points. Resolution order is:
 
-1. `Workflow.Parameters`
-2. module-level `Parameters` in the executable flow module
-3. package-exported `Parameters`
+1. `Workflow.Params`
+2. module-level `Params` in the executable flow module
+3. package-exported `Params`
 4. package-local `params.py` when the workflow keeps parameters there
 
 The runtime validates and coerces `-wf` values through that model before execution starts. `specs.py` is never scanned specially; if you want it involved, import from it explicitly.
@@ -101,9 +101,9 @@ ctx.params.mode
 ctx.workflow_params["mode"]
 ```
 
-`ctx.params` is the typed `Parameters` model for the workflow. `ctx.workflow_params` remains the compatibility dict surface.
+`ctx.params` is the typed `Params` model for the workflow. `ctx.workflow_params` remains the compatibility dict surface.
 
-When a workflow declares `Parameters`, treat `ctx.params` as the default typed bootstrap surface and workflow-authoring surface.
+When a workflow declares `Params`, treat `ctx.params` as the default typed bootstrap surface and workflow-authoring surface.
 
 Bootstrap handlers should project already-typed values from `ctx.params` into workflow state and invocation artifacts instead of re-reading and re-normalizing `ctx.workflow_params`.
 
@@ -144,8 +144,7 @@ Runtime behavior:
 - `control_schema` defines the JSON-schema-like contract for `Outcome.payload`
 - `available_routes` is derived mechanically from the declared step-local routes plus reserved routes
 - step-local `Route.to(...)` metadata carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
-- `route_infos` carries optional per-route summary, handoff, and normalized route metadata for compatibility inspection surfaces
-- `route_required_outputs` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
+- `required_writes` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
 - route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific required outputs
 - mapping-style global `transitions` declarations remain a compatibility fallback; greenfield workflow authoring should prefer step-local `routes={...}`
 - `retry_policy` controls provider-attributable retries and defaults to `ProviderRetryPolicy(max_attempts=3)` on provider-backed steps
@@ -418,7 +417,7 @@ assess = step(
 )
 ```
 
-Legacy global `transitions = {...}` and `SUCCESS` remain compatibility inputs for migrated workflows, but canonical authoring should declare step-local `routes={...}` and terminate with `FINISH`.
+Canonical authoring declares step-local `routes={...}` and terminates with `FINISH`.
 
 Use `Route.to(...)`, `Route.complete(...)`, `Route.pause(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
 
@@ -560,7 +559,7 @@ Validation helper boundary:
 - keep package section requirements, scoped-task extraction, unknown-reference checks, state-drift assertions, and receipt shaping in workflow code
 - the helpers only validate explicit workflow-local inputs and artifacts; they do not add runtime-owned routing, publication policy, or hidden execution
 
-For workflow `Parameters` models, reuse the shared Pydantic validator factories instead of copying the same `field_validator(...)` bodies into every `params.py`.
+For workflow `Params` models, reuse the shared Pydantic validator factories instead of copying the same `field_validator(...)` bodies into every `params.py`.
 
 ```python
 from autoloop_v3.stdlib import (
@@ -571,7 +570,7 @@ from autoloop_v3.stdlib import (
 )
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     task_title: str
     selected_workflow: str
     sponsor_role: str | None = None
@@ -591,7 +590,7 @@ class Parameters(BaseModel):
 Parameter-model helper boundary:
 
 - generic `params.py` mechanics belong in stdlib rather than repeated local `field_validator(...)` loops
-- keep field lists explicit in the `Parameters` model so required, optional, repeatable, and bounded fields stay easy to read
+- keep field lists explicit in the `Params` model so required, optional, repeatable, and bounded fields stay easy to read
 - keep workflow-specific identifier rules, literal pre-normalization, and order-sensitive output local when the shared seam would hide intent
 - these helpers do not change runtime-owned parameter coercion; `runtime/loader.py` still owns workflow-parameter validation and error surfacing
 
@@ -655,7 +654,7 @@ Company operation snapshot boundary:
 - it writes only workflow-local JSON artifacts under `ctx.workflow_folder`
 - it does not mutate `.autoloop` task or run state, workflow packages, or external business systems
 - it does not add CLI flags, runtime-owned company scoring, automatic prioritization, or hidden downstream execution
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - workflow code and prompt templates still own company framing, recursive-improvement analysis, prioritization policy, publication gating, and next-cycle recommendations
 - it does not auto-rank tasks, auto-select improvements, auto-run downstream workflows, or imply external CRM, incident, or ticketing integration
 
@@ -727,7 +726,7 @@ Refinement helper boundary:
 - it writes the canonical result to `selected_workflow_authoring_surface.json` by default
 - it does not mutate, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
 - it does not add CLI flags, new `workflow.toml` fields, or runtime-owned refinement automation
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - prompt templates and workflow code still own refinement policy, baseline/candidate strategy, file copying, verification evidence, and promotion/rollback decisions
 
 ## Optional Decomposition Surface Helpers
@@ -752,7 +751,7 @@ Decomposition helper boundary:
 - it writes the canonical result to `selected_workflow_decomposition_surface.json` by default
 - it does not mutate, auto-decompose, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned decomposition automation, or hidden downstream routing
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - workflow code and prompt templates still own decomposition policy, baseline/candidate strategy, building-block extraction boundaries, verification evidence, and promotion/rollback decisions
 
 ## Optional Candidate-Surface Publication Helpers
@@ -811,7 +810,7 @@ Diagnostic helper boundary:
 - it does not mutate `.autoloop` run state or selected workflow files
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned diagnostics automation, or hidden downstream routing
 - it does not auto-cluster failure modes, auto-rank severity, or impose runtime-owned failure-mode policy
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - workflow code and prompt templates still own diagnostic framing, failure-mode clustering, severity ranking, publication gating, and next-action recommendations
 
 ## Optional Evaluation Manifest Helpers
@@ -847,7 +846,7 @@ Evaluation helper boundary:
 - it validates expected artifacts against the selected workflow's compiled artifact surface derived from the selected-workflow capability snapshot
 - it writes the canonical result to `validated_eval_case_manifest.json` by default
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned evaluation execution, or hidden downstream routing
-- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it does not widen the runtime-injected control contract beyond readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - workflows still own evaluation policy, category coverage requirements, prompt semantics, publication gating, and any downstream execution behavior in workflow code and prompt templates
 
 ## Optional Optimization Helpers
@@ -894,7 +893,7 @@ Capability snapshot boundary:
 - it uses the separate capability-inspection seam to capture catalog metadata plus normalized workflow parameters and compiled step summaries
 - compiled step summaries include the declared artifact surface, available routes, route infos, route-required outputs, prompt paths, and whether a typed output schema exists
 - it does not add new `workflow.toml` fields and does not change the lightweight non-importing catalog discovery contract
-- it reuses only the existing narrow runtime-injected control metadata: readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `route_required_outputs`, and an explicit `expected_output_schema` when present
+- it reuses only the existing narrow runtime-injected control metadata: readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
 - portfolio workflows still own comparison policy, fit-gap reasoning, adaptation policy, and downstream routing in workflow code and prompt templates
 

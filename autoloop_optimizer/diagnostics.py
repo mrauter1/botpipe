@@ -7,16 +7,10 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..runtime.workspace import list_run_records
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.runtime.workspace import list_run_records
+from ..runtime.workspace import list_run_records
 
 from ._selected_workflow import capture_selected_workflow, write_selected_workflow_artifact
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..stdlib.validation import require_non_empty_string
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.stdlib.validation import require_non_empty_string
+from ..stdlib.validation import require_non_empty_string
 
 
 def write_selected_workflow_run_history_snapshot(

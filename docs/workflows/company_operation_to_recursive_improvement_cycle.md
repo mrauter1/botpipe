@@ -37,7 +37,7 @@ autoloop run company_operation_to_recursive_improvement_cycle <task-id> \
   -wf max_messages_per_task 5
 ```
 
-Parameters:
+Params:
 
 - `task_title` required
 - `sponsor_role` optional

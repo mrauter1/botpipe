@@ -1,4 +1,4 @@
-from .params import Parameters
+from .params import Params
 from .workflow import WorkflowRunTracesToOptimizationCandidates
 
-__all__ = ["Parameters", "WorkflowRunTracesToOptimizationCandidates"]
+__all__ = ["Params", "WorkflowRunTracesToOptimizationCandidates"]

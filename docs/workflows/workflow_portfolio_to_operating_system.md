@@ -33,7 +33,7 @@ autoloop run workflow_portfolio_to_operating_system <task-id> \
   -wf max_runs_per_workflow 10
 ```
 
-Parameters:
+Params:
 
 - `task_title` required
 - `sponsor_role` optional

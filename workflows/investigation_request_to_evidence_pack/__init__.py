@@ -1,4 +1,4 @@
-from .params import Parameters
+from .params import Params
 from .workflow import InvestigationRequestToEvidencePack
 
-__all__ = ["Parameters", "InvestigationRequestToEvidencePack"]
+__all__ = ["Params", "InvestigationRequestToEvidencePack"]

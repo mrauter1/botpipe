@@ -28,7 +28,7 @@ autoloop run workflow_to_eval_suite <task-id> \
   -wf evidence_expectations "Need benchmark, edge, adversarial coverage plus a validated manifest."
 ```
 
-Parameters:
+Params:
 
 - `selected_workflow` required
 - `task_title` required

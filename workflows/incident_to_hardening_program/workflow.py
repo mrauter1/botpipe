@@ -4,22 +4,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib import (
-        read_json_object,
-        require_non_empty_string,
-        require_non_negative_int,
-    )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags
-    from autoloop_v3.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import (
-        read_json_object,
-        require_non_empty_string,
-        require_non_negative_int,
-    )
-    from stdlib.control import event_on_outcome_tags
-    from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
+from stdlib import (
+    read_json_object,
+    require_non_empty_string,
+    require_non_negative_int,
+)
+from stdlib.control import event_on_outcome_tags
+from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact

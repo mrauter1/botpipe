@@ -31,7 +31,7 @@ autoloop run workflow_and_eval_to_refined_workflow_package <task-id> \
   -wf target_test_command "pytest -q tests/runtime/test_release_candidate_to_go_no_go.py"
 ```
 
-Parameters:
+Params:
 
 - `selected_workflow` required
 - `task_title` required

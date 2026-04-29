@@ -4,15 +4,12 @@ from __future__ import annotations
 
 from typing import Literal
 
-try:
-    from autoloop_v3.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     """Invocation contract for ``workflow_idea_to_workflow_package``."""
 
     package_name: str
@@ -51,4 +48,4 @@ class Parameters(BaseModel):
     )
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

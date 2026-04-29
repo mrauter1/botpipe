@@ -11,18 +11,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.core.compiler import CompiledWorkflow, compile_workflow
-    from autoloop_v3.core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
-    from autoloop_v3.runtime.stores.filesystem import (
-        ensure_session_payload_placeholder,
-        load_session_payload,
-        set_pending_session_note,
-    )
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from core.compiler import CompiledWorkflow, compile_workflow
-    from core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
-    from runtime.stores.filesystem import ensure_session_payload_placeholder, load_session_payload, set_pending_session_note
+from core.compiler import CompiledWorkflow, compile_workflow
+from core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
+from runtime.stores.filesystem import ensure_session_payload_placeholder, load_session_payload, set_pending_session_note
 
 from .conventions import autoloop_v1_session_path
 

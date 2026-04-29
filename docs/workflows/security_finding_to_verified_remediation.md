@@ -29,7 +29,7 @@ autoloop run security_finding_to_verified_remediation <task-id> \
   -wf deployment_constraints "Preserve emergency admin access during rollout."
 ```
 
-Parameters:
+Params:
 
 - `finding_title` required
 - `finding_source` required: `pentest`, `bug_bounty`, `scanner`, `internal_review`, `customer_report`, or `other`

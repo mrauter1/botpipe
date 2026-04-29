@@ -104,22 +104,22 @@ def test_workflow_builder_package_compiles_with_explicit_control_contracts(monke
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["candidate_selected"]) == [
+    assert list(compiled.route("frame_candidate", "candidate_selected").required_writes) == [
         "frame_candidate.candidate_comparison",
         "frame_candidate.selected_workflow_brief",
     ]
-    assert frame_step.route_infos["candidate_selected"].handoff == (
+    assert compiled.route("frame_candidate", "candidate_selected").handoff == (
         "Locks the selected addition and its classification for downstream design."
     )
     assert frame_step.expected_output_schema is not None
 
     build_step = compiled.steps["build_package"]
     assert "package_built" in build_step.available_routes
-    assert "needs_replan" in build_step.route_infos
+    assert "needs_replan" in compiled.routes["build_package"]
     assert build_step.expected_output_schema is not None
 
     evaluate_step = compiled.steps["evaluate_package"]
-    assert list(evaluate_step.route_required_outputs["evaluation_passed"]) == [
+    assert list(compiled.route("evaluate_package", "evaluation_passed").required_writes) == [
         "evaluate_package.verification_report",
         "evaluate_package.promotion_record",
         "evaluate_package.rollback_plan",
@@ -455,7 +455,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(
                             "Objective: build a release-readiness workflow package.",
                             f"Authoring shape: {authoring_shape}.",
                             "Control flow: bootstrap -> review -> verify -> publish.",
-                            "Runtime control contract: only expected_output_schema, available_routes, route_infos, and route_required_outputs.",
+                            "Runtime control contract: only expected_output_schema, available_routes, route_infos, and route_required_writes.",
                             "",
                         )
                     )
@@ -613,7 +613,7 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(
     invocation_contract = json.loads((workflow_dir / "invocation_contract.json").read_text(encoding="utf-8"))
     publish_receipt = json.loads((workflow_dir / "publish_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "invocation_contract.json").exists()
     assert (workflow_dir / "candidate_comparison.md").exists()
     assert (workflow_dir / "workflow_package_spec.md").exists()
@@ -689,11 +689,11 @@ def test_workflow_builder_package_runs_and_generates_a_compilable_package(
         "blocked",
         "failed",
     )
-    assert list(provider.calls[5].route_required_outputs["package_built"]) == [
+    assert list(provider.calls[5].route_required_writes["package_built"]) == [
         "build_package.generated_layout",
         "build_package.build_report",
     ]
-    assert provider.calls[5].route_infos["package_built"].handoff == (
+    assert provider.calls[5].routes["package_built"].handoff == (
         "Promotes the generated workflow surface to evaluation."
     )
     assert (run_dir / "run.json").exists()

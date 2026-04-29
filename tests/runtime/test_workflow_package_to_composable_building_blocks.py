@@ -140,14 +140,14 @@ def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_c
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["decomposition_request_framed"]) == [
+    assert list(compiled.route("frame_decomposition_request", "decomposition_request_framed").required_writes) == [
         "frame_decomposition_request.decomposition_request_brief",
         "frame_decomposition_request.decomposition_acceptance_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     design_step = compiled.steps["design_decomposition_plan"]
-    assert list(design_step.route_required_outputs["decomposition_plan_designed"]) == [
+    assert list(compiled.route("design_decomposition_plan", "decomposition_plan_designed").required_writes) == [
         "design_decomposition_plan.extraction_strategy",
         "design_decomposition_plan.building_block_interface_contracts",
         "design_decomposition_plan.parent_rewrite_plan",
@@ -156,7 +156,7 @@ def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_c
     assert design_step.expected_output_schema is not None
 
     implement_step = compiled.steps["implement_candidate_decomposition"]
-    assert list(implement_step.route_required_outputs["candidate_decomposition_built"]) == [
+    assert list(compiled.route("implement_candidate_decomposition", "candidate_decomposition_built").required_writes) == [
         "implement_candidate_decomposition.candidate_decomposition_surface",
         "implement_candidate_decomposition.candidate_building_block_index",
         "implement_candidate_decomposition.decomposition_build_report",
@@ -172,7 +172,7 @@ def test_workflow_package_to_composable_building_blocks_compiles_with_explicit_c
     }
 
     evaluate_step = compiled.steps["evaluate_candidate_decomposition"]
-    assert list(evaluate_step.route_required_outputs["candidate_decomposition_evaluated"]) == [
+    assert list(compiled.route("evaluate_candidate_decomposition", "candidate_decomposition_evaluated").required_writes) == [
         "evaluate_candidate_decomposition.decomposition_verification_report",
         "evaluate_candidate_decomposition.composition_migration_guide",
         "evaluate_candidate_decomposition.promotion_record",
@@ -604,7 +604,7 @@ def test_workflow_package_to_composable_building_blocks_runs_and_publishes_candi
     )
     receipt = json.loads((run.workflow_dir / "workflow_decomposition_receipt.json").read_text(encoding="utf-8"))
 
-    assert run.result.terminal == "SUCCESS"
+    assert run.result.terminal == "FINISH"
     assert (run.workflow_dir / "selected_workflow_decomposition_surface.json").exists()
     assert (run.workflow_dir / "baseline_parent_workflow_surface").exists()
     assert (run.workflow_dir / "baseline_parent_manifest.json").exists()
@@ -703,7 +703,7 @@ def test_workflow_package_to_composable_building_blocks_runs_and_publishes_candi
         "evaluate_candidate_decomposition",
         "evaluate_candidate_decomposition",
     ]
-    assert list(run.provider.calls[1].route_required_outputs["decomposition_request_framed"]) == [
+    assert list(run.provider.calls[1].route_required_writes["decomposition_request_framed"]) == [
         "frame_decomposition_request.decomposition_request_brief",
         "frame_decomposition_request.decomposition_acceptance_criteria",
     ]
@@ -715,7 +715,7 @@ def test_workflow_package_to_composable_building_blocks_runs_and_publishes_candi
         "blocked",
         "failed",
     )
-    assert list(run.provider.calls[7].route_required_outputs["candidate_decomposition_evaluated"]) == [
+    assert list(run.provider.calls[7].route_required_writes["candidate_decomposition_evaluated"]) == [
         "evaluate_candidate_decomposition.decomposition_verification_report",
         "evaluate_candidate_decomposition.composition_migration_guide",
         "evaluate_candidate_decomposition.promotion_record",

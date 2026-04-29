@@ -6,10 +6,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib import JsonArtifactSpec
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import JsonArtifactSpec
+from stdlib import JsonArtifactSpec
 
 from autoloop import Route, SELF
 

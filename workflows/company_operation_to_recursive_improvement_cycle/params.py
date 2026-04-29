@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-try:
-    from autoloop_v3.stdlib import PortfolioReviewParameters, deduped_string_list_fields, positive_int_fields
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import PortfolioReviewParameters, deduped_string_list_fields, positive_int_fields
+from stdlib import PortfolioReviewParameters, deduped_string_list_fields, positive_int_fields
 
 from pydantic import Field
 
 
-class Parameters(PortfolioReviewParameters):
+class Params(PortfolioReviewParameters):
     """Invocation contract for ``company_operation_to_recursive_improvement_cycle``."""
 
     focus_tasks: list[str] = Field(default_factory=list)
@@ -29,4 +26,4 @@ class Parameters(PortfolioReviewParameters):
     )
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

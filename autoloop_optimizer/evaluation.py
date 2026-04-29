@@ -6,30 +6,17 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
+from ..runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
 
 from .adaptation import write_selected_workflow_capability_snapshot
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..stdlib.lifecycle import write_workflow_json
-    from ..stdlib.validation import (
-        read_json_object,
-        require_mapping,
-        require_non_empty_string,
-        require_string_list,
-        validate_selected_workflow_capability_snapshot,
-    )
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.stdlib.lifecycle import write_workflow_json
-    from autoloop_v3.stdlib.validation import (
-        read_json_object,
-        require_mapping,
-        require_non_empty_string,
-        require_string_list,
-        validate_selected_workflow_capability_snapshot,
-    )
+from ..stdlib.lifecycle import write_workflow_json
+from ..stdlib.validation import (
+    read_json_object,
+    require_mapping,
+    require_non_empty_string,
+    require_string_list,
+    validate_selected_workflow_capability_snapshot,
+)
 
 _CASE_KIND_ORDER = {"benchmark": 0, "edge": 1, "adversarial": 2}
 
@@ -186,28 +173,35 @@ def _workflow_artifact_surface(capability: Mapping[str, Any]) -> set[str]:
             raw_step,
             f"selected_workflow_capability.json steps[{index}] must be a JSON object",
         )
-        for key in ("requires", "produces", "log_artifacts"):
+        for key in ("requires", "writes", "log_artifacts"):
             names = _optional_string_list(step.get(key), key)
             artifacts.update(names)
             qualified_candidates.extend(name for name in names if "." in name)
-        route_required_outputs = step.get("route_required_outputs")
-        if route_required_outputs is None:
+        routes = step.get("routes")
+        if routes is None:
             continue
-        if not isinstance(route_required_outputs, Mapping):
+        if not isinstance(routes, Mapping):
             raise ValueError(
-                "selected_workflow_capability.json route_required_outputs must be a JSON object when present"
+                "selected_workflow_capability.json routes must be a JSON object when present"
             )
-        for route_name, raw_required_outputs in route_required_outputs.items():
+        for route_name, raw_route in routes.items():
+            route = require_mapping(
+                raw_route,
+                f"selected_workflow_capability.json routes[{route_name!r}] must be a JSON object",
+            )
+            raw_required_writes = route.get("required_writes")
+            if raw_required_writes is None:
+                continue
             names = require_string_list(
-                    raw_required_outputs,
-                    (
-                        "selected_workflow_capability.json "
-                        f"route_required_outputs[{route_name!r}] must be a string list when present"
-                    ),
-                    min_length=0,
-                    dedupe=True,
-                    sort_output=True,
-                )
+                raw_required_writes,
+                (
+                    "selected_workflow_capability.json "
+                    f"routes[{route_name!r}].required_writes must be a string list when present"
+                ),
+                min_length=0,
+                dedupe=True,
+                sort_output=True,
+            )
             artifacts.update(names)
             qualified_candidates.extend(name for name in names if "." in name)
 

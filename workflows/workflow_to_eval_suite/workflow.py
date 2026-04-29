@@ -6,38 +6,21 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib import (
-        read_json_object,
-        require_existing_artifact_paths,
-        require_non_empty_string,
-        require_string_list,
-        validate_selected_workflow_artifact_alignment,
-        validate_selected_workflow_capability_snapshot,
-        write_selected_workflow_capability_snapshot,
-        write_validated_eval_case_manifest,
-    )
-    from autoloop_v3.stdlib._selected_workflow import capture_selected_workflow
-    from autoloop_v3.stdlib.control import event_on_outcome_tags
-    from autoloop_v3.stdlib.lifecycle import (
-        open_workflow_sessions,
-        write_invocation_contract,
-        write_publication_receipt,
-    )
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import (
-        read_json_object,
-        require_existing_artifact_paths,
-        require_non_empty_string,
-        require_string_list,
-        validate_selected_workflow_artifact_alignment,
-        validate_selected_workflow_capability_snapshot,
-        write_selected_workflow_capability_snapshot,
-        write_validated_eval_case_manifest,
-    )
-    from stdlib._selected_workflow import capture_selected_workflow
-    from stdlib.control import event_on_outcome_tags
-    from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
+from autoloop_optimizer import (
+    capture_selected_workflow,
+    write_selected_workflow_capability_snapshot,
+    write_validated_eval_case_manifest,
+)
+from stdlib import (
+    read_json_object,
+    require_existing_artifact_paths,
+    require_non_empty_string,
+    require_string_list,
+    validate_selected_workflow_artifact_alignment,
+    validate_selected_workflow_capability_snapshot,
+)
+from stdlib.control import event_on_outcome_tags
+from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact

@@ -105,20 +105,20 @@ def test_task_to_workflow_strategy_package_compiles_with_explicit_control_contra
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["task_framed"]) == [
+    assert list(compiled.route("frame_task", "task_framed").required_writes) == [
         "frame_task.task_strategy_brief",
         "frame_task.workflow_selection_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     selection_step = compiled.steps["select_strategy"]
-    assert list(selection_step.route_required_outputs["strategy_selected"]) == [
+    assert list(compiled.route("select_strategy", "strategy_selected").required_writes) == [
         "select_strategy.strategy_decision"
     ]
     assert selection_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_strategy"]
-    assert list(package_step.route_required_outputs["strategy_package_ready"]) == [
+    assert list(compiled.route("package_strategy", "strategy_package_ready").required_writes) == [
         "package_strategy.workflow_strategy_package",
         "package_strategy.strategy_summary",
         "package_strategy.strategy_next_action",
@@ -816,7 +816,7 @@ def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_
     strategy_summary = json.loads((workflow_dir / "strategy_summary.json").read_text(encoding="utf-8"))
     strategy_receipt = json.loads((workflow_dir / "strategy_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "workflow_portfolio_snapshot.json").exists()
     assert (workflow_dir / "task_strategy_brief.md").exists()
     assert (workflow_dir / "workflow_candidate_matrix.md").exists()
@@ -939,7 +939,7 @@ def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_
         "package_strategy",
         "package_strategy",
     ]
-    assert list(provider.calls[7].route_required_outputs["candidate_workflow_set_ready"]) == [
+    assert list(provider.calls[7].route_required_writes["candidate_workflow_set_ready"]) == [
         "package_candidate_workflow_set.candidate_workflow_set",
         "package_candidate_workflow_set.candidate_workflow_set_summary",
         "package_candidate_workflow_set.candidate_next_action",
@@ -952,7 +952,7 @@ def test_task_to_workflow_strategy_package_runs_and_publishes_terminal_strategy_
         "blocked",
         "failed",
     )
-    assert list(provider.calls[11].route_required_outputs["strategy_package_ready"]) == [
+    assert list(provider.calls[11].route_required_writes["strategy_package_ready"]) == [
         "package_strategy.workflow_strategy_package",
         "package_strategy.strategy_summary",
         "package_strategy.strategy_next_action",
@@ -1362,7 +1362,7 @@ def test_task_to_workflow_strategy_runs_and_publishes_concrete_adapt_handoff_wit
     workflow_strategy_package = (workflow_dir / "workflow_strategy_package.md").read_text(encoding="utf-8")
     strategy_next_action = (workflow_dir / "strategy_next_action.md").read_text(encoding="utf-8")
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert strategy_summary == {
         "authoritative_artifacts": [
             "workflow_strategy_package",

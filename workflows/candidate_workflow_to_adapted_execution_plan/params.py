@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-try:
-    from autoloop_v3.stdlib import SelectedWorkflowTaskFramingWithEvidenceParameters
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import SelectedWorkflowTaskFramingWithEvidenceParameters
+from stdlib import SelectedWorkflowTaskFramingWithEvidenceParameters
 
-class Parameters(SelectedWorkflowTaskFramingWithEvidenceParameters):
+class Params(SelectedWorkflowTaskFramingWithEvidenceParameters):
     """Invocation contract for ``candidate_workflow_to_adapted_execution_plan``."""
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

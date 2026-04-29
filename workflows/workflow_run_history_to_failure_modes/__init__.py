@@ -1,4 +1,4 @@
-from .params import Parameters
+from .params import Params
 from .workflow import WorkflowRunHistoryToFailureModes
 
-__all__ = ["Parameters", "WorkflowRunHistoryToFailureModes"]
+__all__ = ["Params", "WorkflowRunHistoryToFailureModes"]

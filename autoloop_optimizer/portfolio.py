@@ -6,23 +6,12 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.workflow_capabilities import inspect_workflow_capabilities, workflow_capability_payload
-    from ..core.workflow_catalog import discover_workflow_catalog
-    from ..runtime.loader import resolve_workflow_reference
-    from ..runtime.workspace import list_workflow_run_summaries
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.core.workflow_capabilities import inspect_workflow_capabilities, workflow_capability_payload
-    from autoloop_v3.core.workflow_catalog import discover_workflow_catalog
-    from autoloop_v3.runtime.loader import resolve_workflow_reference
-    from autoloop_v3.runtime.workspace import list_workflow_run_summaries
-
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..stdlib.lifecycle import write_workflow_json
-    from ..stdlib.validation import require_non_empty_string
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.stdlib.lifecycle import write_workflow_json
-    from autoloop_v3.stdlib.validation import require_non_empty_string
+from ..core.workflow_capabilities import inspect_workflow_capabilities, workflow_capability_payload
+from ..core.workflow_catalog import discover_workflow_catalog
+from ..runtime.loader import resolve_workflow_reference
+from ..runtime.workspace import list_workflow_run_summaries
+from ..stdlib.lifecycle import write_workflow_json
+from ..stdlib.validation import require_non_empty_string
 
 
 def write_workflow_portfolio_snapshot(

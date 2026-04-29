@@ -14,29 +14,15 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.compiler import compile_workflow
-    from ..runtime.loader import resolve_workflow_reference
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.core.compiler import compile_workflow
-    from autoloop_v3.runtime.loader import resolve_workflow_reference
-
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..stdlib.validation import (
-        normalize_optional_string,
-        require_mapping,
-        require_non_empty_string,
-        require_positive_int,
-        require_string_list,
-    )
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.stdlib.validation import (
-        normalize_optional_string,
-        require_mapping,
-        require_non_empty_string,
-        require_positive_int,
-        require_string_list,
-    )
+from ..core.compiler import compile_workflow
+from ..runtime.loader import resolve_workflow_reference
+from ..stdlib.validation import (
+    normalize_optional_string,
+    require_mapping,
+    require_non_empty_string,
+    require_positive_int,
+    require_string_list,
+)
 
 
 def normalize_candidate_surface_boundary(
@@ -665,15 +651,15 @@ def _resolve_overlay_source_root(repo_root: Path) -> Path:
     if _is_runnable_repo_root(repo_root):
         return repo_root
     try:
-        import autoloop_v3
+        import autoloop
     except ImportError as exc:  # pragma: no cover - defensive fallback for broken test/runtime setup
         raise ValueError(
-            "publish-time overlay validation requires a runnable repo root or an importable autoloop_v3 package"
+            "publish-time overlay validation requires a runnable repo root or an importable autoloop package"
         ) from exc
 
-    package_root = Path(autoloop_v3.__file__).resolve().parent
+    package_root = Path(autoloop.__file__).resolve().parent.parent
     if not _is_runnable_repo_root(package_root):
-        raise ValueError(f"autoloop_v3 package root is not runnable for overlay validation: {package_root}")
+        raise ValueError(f"autoloop package root is not runnable for overlay validation: {package_root}")
     return package_root
 
 

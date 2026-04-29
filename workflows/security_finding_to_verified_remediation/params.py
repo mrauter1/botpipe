@@ -4,10 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-try:
-    from autoloop_v3.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -16,7 +13,7 @@ FindingSource = Literal["pentest", "bug_bounty", "scanner", "internal_review", "
 Severity = Literal["critical", "high", "medium", "low", "unknown"]
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     """Invocation contract for ``security_finding_to_verified_remediation``."""
 
     finding_title: str
@@ -43,4 +40,4 @@ class Parameters(BaseModel):
     _normalize_repeatable_strings = deduped_string_list_fields("evidence_paths", "deployment_constraints")
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

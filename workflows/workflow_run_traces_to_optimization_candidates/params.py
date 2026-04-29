@@ -6,13 +6,10 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-try:
-    from autoloop_v3.stdlib import SelectedWorkflowTaskFramingParameters, positive_int_fields
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import SelectedWorkflowTaskFramingParameters, positive_int_fields
+from stdlib import SelectedWorkflowTaskFramingParameters, positive_int_fields
 
 
-class Parameters(SelectedWorkflowTaskFramingParameters):
+class Params(SelectedWorkflowTaskFramingParameters):
     """Invocation contract for ``workflow_run_traces_to_optimization_candidates``."""
 
     run_refs: list[str] = Field(default_factory=list)
@@ -94,4 +91,4 @@ class Parameters(SelectedWorkflowTaskFramingParameters):
     )
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

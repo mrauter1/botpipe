@@ -95,14 +95,14 @@ def test_workflow_and_eval_to_refined_workflow_package_compiles_with_explicit_co
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["refinement_request_framed"]) == [
+    assert list(compiled.route("frame_refinement_request", "refinement_request_framed").required_writes) == [
         "frame_refinement_request.refinement_request_brief",
         "frame_refinement_request.refinement_acceptance_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     design_step = compiled.steps["design_refinement_plan"]
-    assert list(design_step.route_required_outputs["refinement_plan_designed"]) == [
+    assert list(compiled.route("design_refinement_plan", "refinement_plan_designed").required_writes) == [
         "design_refinement_plan.refinement_strategy",
         "design_refinement_plan.workflow_change_plan",
         "design_refinement_plan.regression_guardrails",
@@ -110,7 +110,7 @@ def test_workflow_and_eval_to_refined_workflow_package_compiles_with_explicit_co
     assert design_step.expected_output_schema is not None
 
     implement_step = compiled.steps["implement_refined_workflow"]
-    assert list(implement_step.route_required_outputs["workflow_refinement_applied"]) == [
+    assert list(compiled.route("implement_refined_workflow", "workflow_refinement_applied").required_writes) == [
         "implement_refined_workflow.candidate_workflow_surface",
         "implement_refined_workflow.refinement_build_report",
         "implement_refined_workflow.candidate_diff_summary",
@@ -124,7 +124,7 @@ def test_workflow_and_eval_to_refined_workflow_package_compiles_with_explicit_co
     }
 
     evaluate_step = compiled.steps["evaluate_refined_workflow"]
-    assert list(evaluate_step.route_required_outputs["workflow_refinement_evaluated"]) == [
+    assert list(compiled.route("evaluate_refined_workflow", "workflow_refinement_evaluated").required_writes) == [
         "evaluate_refined_workflow.refinement_verification_report",
         "evaluate_refined_workflow.evaluation_delta_report",
         "evaluate_refined_workflow.promotion_record",
@@ -569,7 +569,7 @@ def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candid
     candidate_manifest = json.loads((run.workflow_dir / "candidate_workflow_manifest.json").read_text(encoding="utf-8"))
     refinement_receipt = json.loads((run.workflow_dir / "workflow_refinement_receipt.json").read_text(encoding="utf-8"))
 
-    assert run.result.terminal == "SUCCESS"
+    assert run.result.terminal == "FINISH"
     assert (run.workflow_dir / "selected_workflow_capability.json").exists()
     assert (run.workflow_dir / "selected_workflow_authoring_surface.json").exists()
     assert (run.workflow_dir / "baseline_workflow_surface").exists()
@@ -679,7 +679,7 @@ def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candid
         "evaluate_refined_workflow",
         "evaluate_refined_workflow",
     ]
-    assert list(run.provider.calls[1].route_required_outputs["refinement_request_framed"]) == [
+    assert list(run.provider.calls[1].route_required_writes["refinement_request_framed"]) == [
         "frame_refinement_request.refinement_request_brief",
         "frame_refinement_request.refinement_acceptance_criteria",
     ]
@@ -691,7 +691,7 @@ def test_workflow_and_eval_to_refined_workflow_package_runs_and_publishes_candid
         "blocked",
         "failed",
     )
-    assert list(run.provider.calls[7].route_required_outputs["workflow_refinement_evaluated"]) == [
+    assert list(run.provider.calls[7].route_required_writes["workflow_refinement_evaluated"]) == [
         "evaluate_refined_workflow.refinement_verification_report",
         "evaluate_refined_workflow.evaluation_delta_report",
         "evaluate_refined_workflow.promotion_record",

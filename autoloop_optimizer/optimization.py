@@ -10,56 +10,30 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Callable
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.schema_registry import (
-        WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA,
-        WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA,
-        WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA,
-        WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA,
-        WORKFLOW_OPTIMIZATION_SOURCE_MANIFEST_SCHEMA,
-        WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA,
-        WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA,
-        WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
-        WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
-    )
-    from ..core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
-    from ..runtime.loader import resolve_workflow_reference
-    from ..runtime.workspace import list_run_records
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.core.schema_registry import (
-        WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA,
-        WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA,
-        WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA,
-        WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA,
-        WORKFLOW_OPTIMIZATION_SOURCE_MANIFEST_SCHEMA,
-        WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA,
-        WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA,
-        WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
-        WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
-    )
-    from autoloop_v3.core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
-    from autoloop_v3.runtime.loader import resolve_workflow_reference
-    from autoloop_v3.runtime.workspace import list_run_records
+from ..core.schema_registry import (
+    WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA,
+    WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA,
+    WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA,
+    WORKFLOW_OPTIMIZATION_SCOPE_SCHEMA,
+    WORKFLOW_OPTIMIZATION_SOURCE_MANIFEST_SCHEMA,
+    WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA,
+    WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA,
+    WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
+    WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
+)
+from ..core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
+from ..runtime.loader import resolve_workflow_reference
+from ..runtime.workspace import list_run_records
 
 from ._selected_workflow import capture_selected_workflow, inspect_selected_workflow
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..stdlib.lifecycle import write_workflow_json
-    from ..stdlib.validation import (
-        require_non_empty_string,
-        require_positive_int,
-        require_string_list,
-        validate_selected_workflow_authoring_surface_snapshot,
-        validate_selected_workflow_decomposition_surface_snapshot,
-    )
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.stdlib.lifecycle import write_workflow_json
-    from autoloop_v3.stdlib.validation import (
-        require_non_empty_string,
-        require_positive_int,
-        require_string_list,
-        validate_selected_workflow_authoring_surface_snapshot,
-        validate_selected_workflow_decomposition_surface_snapshot,
-    )
+from ..stdlib.lifecycle import write_workflow_json
+from ..stdlib.validation import (
+    require_non_empty_string,
+    require_positive_int,
+    require_string_list,
+    validate_selected_workflow_authoring_surface_snapshot,
+    validate_selected_workflow_decomposition_surface_snapshot,
+)
 from .adaptation import write_selected_workflow_capability_snapshot
 from .decomposition import write_selected_workflow_decomposition_surface
 from .refinement import write_selected_workflow_authoring_surface
@@ -624,7 +598,7 @@ def compute_static_step_centrality(
         if not isinstance(routes, Mapping):
             continue
         nonterminal_targets = [
-            target for target in routes.values() if isinstance(target, str) and target not in {"SUCCESS", "PAUSE", "FAIL"}
+            target for target in routes.values() if isinstance(target, str) and target not in {"FINISH", "PAUSE", "FAIL"}
         ]
         counts[str(source)] += float(len(nonterminal_targets))
         for target in nonterminal_targets:

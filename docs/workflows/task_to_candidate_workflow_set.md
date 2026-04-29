@@ -27,7 +27,7 @@ autoloop run task_to_candidate_workflow_set <task-id> \
   -wf evidence_expectations "Need a strategy-ready candidate package."
 ```
 
-Parameters:
+Params:
 
 - `task_title` required
 - `sponsor_role` optional

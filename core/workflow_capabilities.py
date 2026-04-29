@@ -16,7 +16,6 @@ from typing import Annotated, Any, Union, get_args, get_origin
 from pydantic import BaseModel
 
 from .compiler import CompiledWorkflow, compile_workflow
-from .routes import RouteInfo
 from .validation import is_workflow_class
 from .workflow_catalog import AuthoringShape, WorkflowCatalogEntry, discover_workflow_catalog
 
@@ -56,6 +55,17 @@ class WorkflowArtifactCapability:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkflowRouteCapability:
+    """Normalized compiled-route capability summary."""
+
+    target: str
+    summary: str | None
+    required_writes: tuple[str, ...]
+    handoff: str | None
+    on_taken: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class WorkflowStepCapability:
     """Normalized compiled-step capability summary."""
 
@@ -64,12 +74,11 @@ class WorkflowStepCapability:
     session_name: str | None
     reads: tuple[str, ...]
     requires: tuple[str, ...]
-    produces: tuple[str, ...]
+    writes: tuple[str, ...]
     log_artifacts: tuple[str, ...]
     available_routes: tuple[str, ...]
     expected_output_schema: dict[str, Any] | None
-    route_infos: dict[str, RouteInfo]
-    route_required_outputs: dict[str, tuple[str, ...]]
+    routes: dict[str, WorkflowRouteCapability]
     producer_prompt: str | None
     verifier_prompt: str | None
 
@@ -315,20 +324,18 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
                 "log_artifacts": list(step.log_artifacts),
                 "name": step.name,
                 "producer_prompt": step.producer_prompt,
-                "produces": list(step.produces),
+                "writes": list(step.writes),
                 "reads": list(step.reads),
                 "requires": list(step.requires),
-                "route_infos": {
+                "routes": {
                     route_name: {
-                        "summary": info.summary,
-                        "required_outputs": list(info.required_outputs),
-                        "handoff": info.handoff,
+                        "target": route.target,
+                        "summary": route.summary,
+                        "required_writes": list(route.required_writes),
+                        "handoff": route.handoff,
+                        "on_taken": route.on_taken,
                     }
-                    for route_name, info in step.route_infos.items()
-                },
-                "route_required_outputs": {
-                    route_name: list(required_outputs)
-                    for route_name, required_outputs in step.route_required_outputs.items()
+                    for route_name, route in step.routes.items()
                 },
                 "session_name": step.session_name,
                 "typed_output_schema": step.expected_output_schema,
@@ -612,10 +619,10 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
             for name, artifact in compiled.artifact_items(authoritative=True)
         ),
         transitions={
-            step_name: {tag: _legacy_capability_target(route.target) for tag, route in routes.items()}
+            step_name: {tag: route.target for tag, route in routes.items()}
             for step_name, routes in compiled.routes.items()
         },
-        global_transitions={tag: _legacy_capability_target(route.target) for tag, route in compiled.global_routes.items()},
+        global_transitions={tag: route.target for tag, route in compiled.global_routes.items()},
         steps=tuple(
             _compiled_step_capability(
                 step,
@@ -656,29 +663,17 @@ def _compiled_artifact_capability(name: str, artifact) -> WorkflowArtifactCapabi
     )
 
 
-def _legacy_capability_target(target: str) -> str:
-    return "SUCCESS" if target == "FINISH" else target
-
-
-def _legacy_capability_step_kind(kind: str) -> str:
-    if kind == "produce_verify":
-        return "pair"
-    if kind == "step":
-        return "llm"
-    if kind == "python":
-        return "system"
-    return kind
-
-
-def _compiled_route_infos(step_routes: Mapping[str, Any]) -> dict[str, RouteInfo]:
-    route_infos: dict[str, RouteInfo] = {}
+def _compiled_routes(step_routes: Mapping[str, Any]) -> dict[str, WorkflowRouteCapability]:
+    routes: dict[str, WorkflowRouteCapability] = {}
     for route_name, route in step_routes.items():
-        route_infos[route_name] = RouteInfo(
+        routes[route_name] = WorkflowRouteCapability(
+            target=route.target,
             summary=route.summary,
-            required_outputs=tuple(route.required_writes),
+            required_writes=tuple(route.required_writes),
             handoff=route.handoff,
+            on_taken=getattr(route.on_taken, "__name__", None),
         )
-    return route_infos
+    return routes
 
 
 def _compiled_step_capability(
@@ -687,19 +682,18 @@ def _compiled_step_capability(
     default_session_name: str,
     step_routes: Mapping[str, Any],
 ) -> WorkflowStepCapability:
-    route_infos = _compiled_route_infos(step_routes)
+    routes = _compiled_routes(step_routes)
     return WorkflowStepCapability(
         name=step.name,
-        kind=_legacy_capability_step_kind(step.kind),
+        kind=step.kind,
         session_name=None if step.session_name == default_session_name else step.session_name,
         reads=step.reads,
         requires=step.requires,
-        produces=step.writes,
+        writes=step.writes,
         log_artifacts=step.log_artifacts,
         available_routes=step.available_routes,
         expected_output_schema=step.expected_output_schema,
-        route_infos=route_infos,
-        route_required_outputs={route_name: info.required_outputs for route_name, info in route_infos.items()},
+        routes=routes,
         producer_prompt=_prompt_path(step.producer_prompt),
         verifier_prompt=_prompt_path(step.verifier_prompt),
     )
@@ -739,20 +733,18 @@ def _compiled_step_payload(
         "name": step.name,
         "producer_prompt": step.producer_prompt,
         "producer_prompt_repo_relative": _prompt_repo_relative(repo_root, package_dir, step.producer_prompt),
-        "produces": list(step.produces),
+        "writes": list(step.writes),
         "reads": list(step.reads),
         "requires": list(step.requires),
-        "route_infos": {
+        "routes": {
             route_name: {
-                "summary": info.summary,
-                "required_outputs": list(info.required_outputs),
-                "handoff": info.handoff,
+                "target": route.target,
+                "summary": route.summary,
+                "required_writes": list(route.required_writes),
+                "handoff": route.handoff,
+                "on_taken": route.on_taken,
             }
-            for route_name, info in step.route_infos.items()
-        },
-        "route_required_outputs": {
-            route_name: list(required_outputs)
-            for route_name, required_outputs in step.route_required_outputs.items()
+            for route_name, route in step.routes.items()
         },
         "route_targets": dict(route_targets),
         "session_name": step.session_name,
@@ -863,16 +855,18 @@ def _validate_package_exports(
             f"workflow package {entry.package_name!r} must include {workflow_cls.__name__!r} in __all__"
         )
 
-    parameters_cls = getattr(package_module, "Parameters", None)
+    parameters_cls = getattr(package_module, "Params", None)
     if parameters_cls is None:
+        if getattr(package_module, "Parameters", None) is not None:
+            raise WorkflowCapabilityInspectionError("Use Params, not Parameters.")
         return None
     if not isinstance(parameters_cls, type):
         raise WorkflowCapabilityInspectionError(
-            f"workflow package {entry.package_name!r} exports a non-type Parameters symbol"
+            f"workflow package {entry.package_name!r} exports a non-type Params symbol"
         )
-    if "Parameters" not in package_all:
+    if "Params" not in package_all:
         raise WorkflowCapabilityInspectionError(
-            f"workflow package {entry.package_name!r} must include 'Parameters' in __all__ when it is exported"
+            f"workflow package {entry.package_name!r} must include 'Params' in __all__ when it is exported"
         )
     return parameters_cls
 

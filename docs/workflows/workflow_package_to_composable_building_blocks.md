@@ -31,7 +31,7 @@ autoloop run workflow_package_to_composable_building_blocks <task-id> \
   -wf max_candidate_building_blocks 2
 ```
 
-Parameters:
+Params:
 
 - `selected_workflow` required
 - `task_title` required

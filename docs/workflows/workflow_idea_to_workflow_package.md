@@ -26,7 +26,7 @@ autoloop run workflow_idea_to_workflow_package <task-id> \
   -wf target_test_command "pytest -q"
 ```
 
-Parameters:
+Params:
 
 - `package_name` required
 - `package_title` optional

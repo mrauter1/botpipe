@@ -227,7 +227,10 @@ def write_static_step_graph_payload(run_dir: Path, payload: dict[str, Any] | Map
 
 def _write_json_file(path: Path, payload: Mapping[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(dict(payload), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(dict(payload), indent=2, ensure_ascii=False, default=_json_value) + "\n",
+        encoding="utf-8",
+    )
     return path
 
 
@@ -246,7 +249,7 @@ def _prompt_path(prompt: str | Prompt | None) -> str | None:
 
 
 def _prompt_references(step: Any) -> tuple[str, ...]:
-    return tuple(getattr(step.step, "simple_prompt_references", ()))
+    return tuple(_json_value(reference) for reference in getattr(step.step, "simple_prompt_references", ()))
 
 
 def _topology_route_payload(*, step_name: str, route_tag: str, route: CompiledRoute | None) -> dict[str, Any]:
@@ -278,6 +281,20 @@ def _callable_name(value: object | None) -> str | None:
     if value is None:
         return None
     return getattr(value, "__name__", type(value).__name__)
+
+
+def _json_value(value: object) -> object:
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    if isinstance(value, Path):
+        return str(value)
+    qualified_name = getattr(value, "qualified_name", None)
+    if isinstance(qualified_name, str) and qualified_name:
+        return qualified_name
+    name = getattr(value, "name", None)
+    if isinstance(name, str) and name:
+        return name
+    return repr(value)
 
 
 def _route_table_text(compiled: CompiledWorkflow) -> str:

@@ -10,57 +10,30 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib import (
-        derive_candidate_surface_manifest,
-        materialize_baseline_surface,
-        normalize_candidate_surface_overlay_result,
-        normalize_candidate_surface_boundary,
-        normalize_optional_string,
-        read_json_object,
-        require_mapping,
-        require_non_empty_string,
-        require_positive_int,
-        require_string_list,
-        validate_selected_workflow_artifact_alignment,
-        validate_selected_workflow_capability_and_authoring_snapshots,
-        validate_authoritative_surface_sources_unchanged,
-        validate_baseline_surface_manifest,
-        validate_candidate_surface_manifest,
-        validate_candidate_surface_overlay,
-        write_selected_workflow_authoring_surface,
-        write_selected_workflow_capability_snapshot,
-    )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags
-    from autoloop_v3.stdlib.lifecycle import (
-        open_workflow_sessions,
-        write_invocation_contract,
-        write_publication_receipt,
-        write_workflow_json,
-    )
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import (
-        derive_candidate_surface_manifest,
-        materialize_baseline_surface,
-        normalize_candidate_surface_overlay_result,
-        normalize_candidate_surface_boundary,
-        normalize_optional_string,
-        read_json_object,
-        require_mapping,
-        require_non_empty_string,
-        require_positive_int,
-        require_string_list,
-        validate_selected_workflow_artifact_alignment,
-        validate_selected_workflow_capability_and_authoring_snapshots,
-        validate_authoritative_surface_sources_unchanged,
-        validate_baseline_surface_manifest,
-        validate_candidate_surface_manifest,
-        validate_candidate_surface_overlay,
-        write_selected_workflow_authoring_surface,
-        write_selected_workflow_capability_snapshot,
-    )
-    from stdlib.control import event_on_outcome_tags
-    from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
+from autoloop_optimizer import (
+    derive_candidate_surface_manifest,
+    materialize_baseline_surface,
+    normalize_candidate_surface_boundary,
+    normalize_candidate_surface_overlay_result,
+    validate_authoritative_surface_sources_unchanged,
+    validate_baseline_surface_manifest,
+    validate_candidate_surface_manifest,
+    validate_candidate_surface_overlay,
+    write_selected_workflow_authoring_surface,
+    write_selected_workflow_capability_snapshot,
+)
+from stdlib import (
+    normalize_optional_string,
+    read_json_object,
+    require_mapping,
+    require_non_empty_string,
+    require_positive_int,
+    require_string_list,
+    validate_selected_workflow_artifact_alignment,
+    validate_selected_workflow_capability_and_authoring_snapshots,
+)
+from stdlib.control import event_on_outcome_tags
+from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
 from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact

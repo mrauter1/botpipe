@@ -21,10 +21,8 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from autoloop_v3.stdlib import (
-    write_selected_workflow_capability_snapshot,
-    write_selected_workflow_run_history_snapshot,
-)
+from autoloop_v3.autoloop_optimizer.adaptation import write_selected_workflow_capability_snapshot
+from autoloop_v3.autoloop_optimizer.diagnostics import write_selected_workflow_run_history_snapshot
 from core.primitives import Outcome
 
 
@@ -87,14 +85,14 @@ def test_workflow_run_history_to_failure_modes_package_compiles_with_explicit_co
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["diagnostic_scope_framed"]) == [
+    assert list(compiled.route("frame_diagnostic_scope", "diagnostic_scope_framed").required_writes) == [
         "frame_diagnostic_scope.diagnostic_scope_brief",
         "frame_diagnostic_scope.run_history_scope",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["map_failure_modes"]
-    assert list(analysis_step.route_required_outputs["failure_modes_mapped"]) == [
+    assert list(compiled.route("map_failure_modes", "failure_modes_mapped").required_writes) == [
         "map_failure_modes.failure_mode_map",
         "map_failure_modes.failure_mode_manifest",
         "map_failure_modes.recurring_weak_points",
@@ -102,7 +100,7 @@ def test_workflow_run_history_to_failure_modes_package_compiles_with_explicit_co
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_improvement_pressure"]
-    assert list(package_step.route_required_outputs["improvement_pressure_packaged"]) == [
+    assert list(compiled.route("package_improvement_pressure", "improvement_pressure_packaged").required_writes) == [
         "package_improvement_pressure.improvement_opportunities",
         "package_improvement_pressure.improvement_opportunities_summary",
         "package_improvement_pressure.diagnostic_next_actions",
@@ -578,7 +576,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
     improvement_summary = json.loads((workflow_dir / "improvement_opportunities.json").read_text(encoding="utf-8"))
     diagnostic_receipt = json.loads((workflow_dir / "failure_mode_diagnostic_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "selected_workflow_capability.json").exists()
     assert (workflow_dir / "selected_workflow_run_history.json").exists()
     assert (workflow_dir / "diagnostic_scope_brief.md").exists()
@@ -759,7 +757,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                         {
                             "run_id": "child-investigation-1",
                             "status": "SUCCESS",
-                            "terminal": "SUCCESS",
+                            "terminal": "FINISH",
                             "workflow_name": "investigation_request_to_evidence_pack",
                         }
                     ],
@@ -1182,7 +1180,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
         "package_improvement_pressure",
         "package_improvement_pressure",
     ]
-    assert list(provider.calls[1].route_required_outputs["diagnostic_scope_framed"]) == [
+    assert list(provider.calls[1].route_required_writes["diagnostic_scope_framed"]) == [
         "frame_diagnostic_scope.diagnostic_scope_brief",
         "frame_diagnostic_scope.run_history_scope",
     ]
@@ -1194,7 +1192,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
         "blocked",
         "failed",
     )
-    assert list(provider.calls[5].route_required_outputs["improvement_pressure_packaged"]) == [
+    assert list(provider.calls[5].route_required_writes["improvement_pressure_packaged"]) == [
         "package_improvement_pressure.improvement_opportunities",
         "package_improvement_pressure.improvement_opportunities_summary",
         "package_improvement_pressure.diagnostic_next_actions",
@@ -2003,7 +2001,7 @@ def _seed_release_run_history(root: Path, *, include_matching_failures: bool = T
                     "workflow_name": "investigation_request_to_evidence_pack",
                     "run_id": "child-investigation-1",
                     "status": "SUCCESS",
-                    "terminal": "SUCCESS",
+                    "terminal": "FINISH",
                 }
             ],
             workflow_params={"release_name": "2026.06", "deployment_environment": "production"},
@@ -2049,7 +2047,7 @@ def _seed_release_run_history(root: Path, *, include_matching_failures: bool = T
             {"event_type": "run_finished", "seq": 2, "status": "success"},
         ],
         workflow_params={"release_name": "2026.08", "deployment_environment": "production"},
-        terminal="SUCCESS",
+        terminal="FINISH",
     )
     _write_run_history_record(
         root,

@@ -27,7 +27,7 @@ autoloop run release_candidate_to_go_no_go <task-id> \
   -wf evidence_paths docs/releases/2026.04.md
 ```
 
-Parameters:
+Params:
 
 - `release_name` required
 - `target_date` optional
@@ -98,7 +98,7 @@ Turn a release candidate into a durable go/no-go package that captures scope, ev
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing, evidence assembly, assessment, and package assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `route_required_outputs` only.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `required_writes` only.
 - Publish a deterministic decision receipt only after the final package exists.
 
 ### Provider-owned cognitive responsibilities

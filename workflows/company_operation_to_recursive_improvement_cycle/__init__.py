@@ -1,6 +1,6 @@
 """Company-level recursive improvement workflow package."""
 
-from .params import Parameters
+from .params import Params
 from .workflow import CompanyOperationToRecursiveImprovementCycle
 
-__all__ = ["CompanyOperationToRecursiveImprovementCycle", "Parameters"]
+__all__ = ["CompanyOperationToRecursiveImprovementCycle", "Params"]

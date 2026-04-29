@@ -6,12 +6,8 @@ import json
 
 from pydantic import BaseModel, Field
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.extensions import SessionPaths
-    from autoloop_v3.stdlib.control import event_on_outcome_tags
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from extensions import SessionPaths
-    from stdlib.control import event_on_outcome_tags
+from extensions import SessionPaths
+from stdlib.control import event_on_outcome_tags
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact

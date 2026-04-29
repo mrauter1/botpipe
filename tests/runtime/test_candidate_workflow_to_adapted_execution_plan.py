@@ -22,7 +22,7 @@ from autoloop_v3.runtime.loader import (
     resolve_workflow_reference,
 )
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from autoloop_v3.stdlib import write_selected_workflow_capability_snapshot
+from autoloop_v3.autoloop_optimizer.adaptation import write_selected_workflow_capability_snapshot
 from core.primitives import Outcome
 
 

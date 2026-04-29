@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-try:
-    from autoloop_v3.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
 
 from pydantic import BaseModel, Field
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     """Invocation contract for ``release_candidate_to_go_no_go``."""
 
     release_name: str
@@ -24,4 +21,4 @@ class Parameters(BaseModel):
     _normalize_evidence_paths = deduped_string_list_fields("evidence_paths")
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

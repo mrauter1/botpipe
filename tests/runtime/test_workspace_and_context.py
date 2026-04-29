@@ -61,7 +61,7 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     task_meta = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
     first_run_meta = json.loads((first_run_dir / "run.json").read_text(encoding="utf-8"))
 
-    assert first_result.terminal == "SUCCESS"
+    assert first_result.terminal == "FINISH"
     assert (task_dir / "messages.jsonl").exists()
     assert not (first_run_dir / "messages.jsonl").exists()
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "First message\n"
@@ -86,7 +86,7 @@ def test_run_creates_task_workflow_run_layout_and_immutable_request_snapshots(tm
     messages = [json.loads(line) for line in (task_dir / "messages.jsonl").read_text(encoding="utf-8").splitlines() if line]
     workflow_meta = json.loads((workflow_dir / "workflow.json").read_text(encoding="utf-8"))
 
-    assert second_result.terminal == "SUCCESS"
+    assert second_result.terminal == "FINISH"
     assert len(run_dirs) == 2
     assert [entry["message"] for entry in messages] == ["First message", "Second message"]
     assert all("intent_mode" not in entry for entry in messages)
@@ -140,7 +140,7 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert payload["workflow_name"] == "context_demo"
     assert Path(payload["workflow_folder"]) == workflow_dir
     assert Path(payload["package_folder"]) == tmp_path / "workflows" / "context_demo"
@@ -166,7 +166,7 @@ def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_pa
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     topology = run_meta["topology"]
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert isinstance(topology["source_hash"], str)
     assert isinstance(topology["topology_hash"], str)
     assert topology["entry_step"] == "start"
@@ -278,7 +278,7 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
 
     assert paused.terminal == "PAUSE"
     assert paused_meta["workflow_params"] == {"mode": "strict"}
-    assert resumed.terminal == "SUCCESS"
+    assert resumed.terminal == "FINISH"
     assert resumed_context["workflow_params"] == {"mode": "strict"}
     assert resumed_context["answer"] == "42"
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
@@ -348,7 +348,7 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
     assert paused.terminal == "PAUSE"
-    assert resumed.terminal == "SUCCESS"
+    assert resumed.terminal == "FINISH"
     assert resumed_context["workflow_params"] == {"mode": "strict"}
     assert resumed_context["answer"] == "42"
     assert resumed_meta["workflow_params"] == {"mode": "strict"}
@@ -398,7 +398,7 @@ def test_context_exposes_typed_params_on_new_runs(tmp_path: Path) -> None:
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
     reviewers: list[str] = []
 """.strip(),
@@ -451,7 +451,7 @@ def test_new_runs_persist_normalized_workflow_params_snapshot(tmp_path: Path) ->
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     retries: int = 2
     mode: str = "strict"
 """.strip(),
@@ -504,7 +504,7 @@ def test_resume_restores_typed_params_from_persisted_run_metadata(tmp_path: Path
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip(),
     )
@@ -569,7 +569,7 @@ class Parameters(BaseModel):
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
     assert paused.terminal == "PAUSE"
-    assert resumed.terminal == "SUCCESS"
+    assert resumed.terminal == "FINISH"
     assert payload["typed_mode"] == "strict"
     assert payload["typed_params"] == {"mode": "strict"}
     assert payload["workflow_params"] == {"mode": "strict"}
@@ -586,7 +586,7 @@ def test_new_runs_validate_workflow_params_before_persisting_run_metadata(tmp_pa
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip(),
     )
@@ -964,7 +964,7 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
         if line
     ]
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert parent_payload["child_workflow"] == "child_success"
     assert parent_payload["child_status"] == "success"
     assert parent_payload["child_last_event"] == "done"
@@ -984,7 +984,7 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
         {
             "workflow_name": "child_success",
             "run_id": child_run_dir.name,
-            "terminal": "SUCCESS",
+            "terminal": "FINISH",
             "status": "success",
             "last_event": {"tag": "done", "reason": "", "question": None},
             "output_metadata": {"summary": "child complete"},
@@ -1061,7 +1061,7 @@ def test_composition_helpers_keep_child_invocation_explicit_and_adopt_selected_a
         if line
     ]
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert parent_payload["child_workflow"] == "child_success"
     assert parent_payload["child_status"] == "success"
     assert parent_payload["child_last_event"] == "done"
@@ -1143,7 +1143,7 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
     ]
 
     assert paused_parent.terminal == "PAUSE"
-    assert resumed_parent.terminal == "SUCCESS"
+    assert resumed_parent.terminal == "FINISH"
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "Parent request\n"
     assert [entry["message"] for entry in task_messages] == ["Parent request"]
     assert parent_payload["parent_answer"] == "Proceed parent"
@@ -1229,7 +1229,7 @@ def test_context_invoke_workflow_supports_typed_child_input_and_output(tmp_path:
     ]
     child_meta = json.loads((child_run_dir / "run.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert parent_payload["child_workflow"] == "child_typed"
     assert parent_payload["child_status"] == "success"
     assert parent_payload["child_output"] == {"summary": "alpha:strict:2", "ready": True}
@@ -1282,7 +1282,7 @@ def test_context_invoke_workflow_records_typed_child_output_validation_failures(
     ]
     child_meta = json.loads((child_run_dir / "run.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert parent_payload["child_workflow"] == "child_typed_invalid"
     assert parent_payload["child_status"] == "success"
     assert parent_payload["child_output"] is None
@@ -1470,8 +1470,8 @@ def _write_pause_resume_workflow_package(
     init_lines = [f"from .workflow import {class_name}"]
     exports = [class_name]
     if export_parameters:
-        init_lines.append("from .params import Parameters")
-        exports.append("Parameters")
+        init_lines.append("from .params import Params")
+        exports.append("Params")
     init_lines.append(f"__all__ = {exports!r}")
     (package_dir / "__init__.py").write_text("\n".join(init_lines) + "\n", encoding="utf-8")
     (package_dir / "workflow.toml").write_text(f'name = "{workflow_name}"\n', encoding="utf-8")
@@ -1483,7 +1483,7 @@ def _write_pause_resume_workflow_package(
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip()
         (package_dir / "params.py").write_text(source + "\n", encoding="utf-8")
@@ -1533,7 +1533,7 @@ def _write_child_success_workflow_package(root: Path) -> None:
     package_dir.mkdir(parents=True, exist_ok=True)
     (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
     (package_dir / "__init__.py").write_text(
-        "from .workflow import ChildWorkflow\nfrom .params import Parameters\n__all__ = ['ChildWorkflow', 'Parameters']\n",
+        "from .workflow import ChildWorkflow\nfrom .params import Params\n__all__ = ['ChildWorkflow', 'Params']\n",
         encoding="utf-8",
     )
     (package_dir / "workflow.toml").write_text('name = "child_success"\n', encoding="utf-8")
@@ -1545,7 +1545,7 @@ def _write_child_success_workflow_package(root: Path) -> None:
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip()
         + "\n",
@@ -1718,7 +1718,7 @@ def _write_child_pause_workflow_package(root: Path) -> None:
     package_dir.mkdir(parents=True, exist_ok=True)
     (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
     (package_dir / "__init__.py").write_text(
-        "from .workflow import ChildPauseWorkflow\nfrom .params import Parameters\n__all__ = ['ChildPauseWorkflow', 'Parameters']\n",
+        "from .workflow import ChildPauseWorkflow\nfrom .params import Params\n__all__ = ['ChildPauseWorkflow', 'Params']\n",
         encoding="utf-8",
     )
     (package_dir / "workflow.toml").write_text('name = "child_pause"\n', encoding="utf-8")
@@ -1730,7 +1730,7 @@ def _write_child_pause_workflow_package(root: Path) -> None:
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip()
         + "\n",
@@ -1870,7 +1870,7 @@ def _write_child_typed_workflow_package(root: Path, *, package_name: str, invali
     package_dir.mkdir(parents=True, exist_ok=True)
     (root / "workflows" / "__init__.py").write_text("__all__ = []\n", encoding="utf-8")
     (package_dir / "__init__.py").write_text(
-        "from .workflow import ChildTypedWorkflow\nfrom .params import Parameters\n__all__ = ['ChildTypedWorkflow', 'Parameters']\n",
+        "from .workflow import ChildTypedWorkflow\nfrom .params import Params\n__all__ = ['ChildTypedWorkflow', 'Params']\n",
         encoding="utf-8",
     )
     (package_dir / "workflow.toml").write_text(f'name = "{package_name}"\n', encoding="utf-8")
@@ -1881,7 +1881,7 @@ def _write_child_typed_workflow_package(root: Path, *, package_name: str, invali
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip()
         + "\n",

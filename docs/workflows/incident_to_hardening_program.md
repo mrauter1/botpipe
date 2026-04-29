@@ -28,7 +28,7 @@ autoloop run incident_to_hardening_program <task-id> \
   -wf evidence_paths incidents/2026-04-22-payments.md
 ```
 
-Parameters:
+Params:
 
 - `incident_title` required
 - `incident_window` optional
@@ -100,7 +100,7 @@ Turn a concrete incident into a durable hardening program and response package t
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing, evidence assembly, analysis, and package assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `route_required_outputs` only.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `required_writes` only.
 - Publish a deterministic incident receipt only after the final package exists.
 
 ### Provider-owned cognitive responsibilities

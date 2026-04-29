@@ -2,21 +2,14 @@
 
 from __future__ import annotations
 
-try:
-    from autoloop_v3.stdlib import (
-        SelectedWorkflowTaskFramingParameters,
-        optional_text_fields,
-        required_text_fields,
-    )
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import (
+from stdlib import (
         SelectedWorkflowTaskFramingParameters,
         optional_text_fields,
         required_text_fields,
     )
 
 
-class Parameters(SelectedWorkflowTaskFramingParameters):
+class Params(SelectedWorkflowTaskFramingParameters):
     """Invocation contract for ``workflow_and_eval_to_refined_workflow_package``."""
 
     evaluation_summary_path: str
@@ -34,4 +27,4 @@ class Parameters(SelectedWorkflowTaskFramingParameters):
     _normalize_optional_paths = optional_text_fields("failure_modes_path", "refinement_evidence_path")
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

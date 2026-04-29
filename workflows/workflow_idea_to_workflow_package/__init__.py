@@ -1,6 +1,6 @@
 """Workflow-builder package."""
 
-from .params import Parameters
+from .params import Params
 from .workflow import WorkflowIdeaToWorkflowPackage
 
-__all__ = ["Parameters", "WorkflowIdeaToWorkflowPackage"]
+__all__ = ["Params", "WorkflowIdeaToWorkflowPackage"]

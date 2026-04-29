@@ -2,14 +2,7 @@
 
 from __future__ import annotations
 
-try:
-    from autoloop_v3.stdlib import (
-        SelectedWorkflowTaskFramingParameters,
-        deduped_string_list_fields,
-        required_text_fields,
-    )
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import (
+from stdlib import (
         SelectedWorkflowTaskFramingParameters,
         deduped_string_list_fields,
         required_text_fields,
@@ -18,7 +11,7 @@ except ImportError:  # pragma: no cover - direct repo execution fallback
 from pydantic import Field
 
 
-class Parameters(SelectedWorkflowTaskFramingParameters):
+class Params(SelectedWorkflowTaskFramingParameters):
     """Invocation contract for ``workflow_package_to_composable_building_blocks``."""
 
     evidence_paths: list[str] = Field(default_factory=list)
@@ -32,4 +25,4 @@ class Parameters(SelectedWorkflowTaskFramingParameters):
     _normalize_evidence_paths = deduped_string_list_fields("evidence_paths")
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

@@ -77,7 +77,7 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
         "package",
         "publish_optimization_packet",
     )
-    pair_steps = tuple(name for name, step in compiled.steps.items() if step.kind == "pair")
+    pair_steps = tuple(name for name, step in compiled.steps.items() if step.kind == "produce_verify")
     assert pair_steps == (
         "frame",
         "rank_targets",
@@ -114,7 +114,7 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["no_eligible_trace_evidence"]) == [
+    assert list(compiled.route("frame", "no_eligible_trace_evidence").required_writes) == [
         "capture_frame_context.selected_workflow_capability",
         "capture_frame_context.selected_workflow_authoring_surface",
         "capture_frame_context.selected_workflow_decomposition_surface",
@@ -125,7 +125,7 @@ def test_workflow_describe_lists_parameters_and_pairs(monkeypatch) -> None:
         "capture_frame_context.workflow_failure_scenario_seeds",
     ]
     package_step = compiled.steps["package"]
-    assert list(package_step.route_required_outputs["optimization_packet_ready"]) == [
+    assert list(compiled.route("package", "optimization_packet_ready").required_writes) == [
         "package.workflow_optimization_scorecard",
         "package.workflow_optimization_packet",
     ]
@@ -140,7 +140,7 @@ def test_pairs_subset_must_be_ordered_prefix(monkeypatch) -> None:
     resolved = resolve_workflow_reference(REPO_ROOT, workflow_pkg.WorkflowRunTracesToOptimizationCandidates)
     compiled = compile_workflow(resolved.workflow_cls)
 
-    pair_steps = tuple(name for name, step in compiled.steps.items() if step.kind == "pair")
+    pair_steps = tuple(name for name, step in compiled.steps.items() if step.kind == "produce_verify")
     allowed_prefixes = {pair_steps[:index] for index in range(1, len(pair_steps) + 1)}
 
     assert ("frame",) in allowed_prefixes
@@ -875,7 +875,7 @@ def test_optimize_producer_writes_candidate_artifact(tmp_path: Path) -> None:
 
     payload = json.loads((workflow_dir / "producer_prompt_optimization_candidates.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert "optimize_producer" in [call.step_name for call in provider.calls]
     assert payload["schema"] == "autoloop.workflow_optimization.producer_candidates/v1"
     assert payload["candidates"][0]["candidate_id"] == "producer-assessment-001"
@@ -961,7 +961,7 @@ def test_optimize_verifier_rubric_writes_merged_acceptance_candidates(tmp_path: 
 
     payload = json.loads((workflow_dir / "verifier_rubric_optimization_candidates.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert "optimize_verifier_rubric" in [call.step_name for call in provider.calls]
     assert payload["schema"] == "autoloop.workflow_optimization.verifier_rubric_candidates/v1"
     assert payload["candidates"][0]["candidate_id"] == "verifier-rubric-assessment-001"
@@ -973,7 +973,7 @@ def test_optimize_tokens_writes_token_candidates(tmp_path: Path) -> None:
 
     payload = json.loads((workflow_dir / "token_optimization_candidates.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert "optimize_tokens" in [call.step_name for call in provider.calls]
     assert payload["schema"] == "autoloop.workflow_optimization.token_candidates/v1"
     assert payload["candidates"][0]["candidate_id"] == "token-assessment-001"
@@ -985,7 +985,7 @@ def test_adversarial_cases_writes_candidate_cases_when_enabled(tmp_path: Path) -
 
     payload = json.loads((workflow_dir / "adversarial_case_candidates.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert "adversarial_cases" in [call.step_name for call in provider.calls]
     assert payload["schema"] == "autoloop.workflow_optimization.adversarial_case_candidates/v1"
     assert payload["cases"][0]["case_id"] == "adversarial-missing-rollback-owner"
@@ -1052,7 +1052,7 @@ def test_frame_no_eligible_runs_publishes_noop_packet(tmp_path: Path) -> None:
     )
 
     workflow_dir = tmp_path / ".autoloop" / "tasks" / "optimizer-task" / "wf_workflow_run_traces_to_optimization_candidates"
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "workflow_optimization_scope.json").exists()
     assert (workflow_dir / "workflow_optimization_trace_corpus.json").exists()
     assert (workflow_dir / "excluded_run_report.json").exists()
@@ -1169,7 +1169,7 @@ def test_full_run_skips_disabled_optional_passes_without_provider_calls(tmp_path
 
     observed_step_calls = [call.step_name for call in provider.calls]
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert "frame" in observed_step_calls
     assert "rank_targets" in observed_step_calls
     assert "mine_failures" in observed_step_calls
@@ -1255,7 +1255,7 @@ def test_insufficient_evidence_short_circuit_does_not_publish_failure_scenarios(
     workflow_dir = tmp_path / ".autoloop" / "tasks" / "optimizer-task" / "wf_workflow_run_traces_to_optimization_candidates"
     evidence = json.loads((workflow_dir / "workflow_refinement_evidence.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "workflow_failure_scenario_seeds.json").exists()
     assert not (workflow_dir / "workflow_failure_scenarios.json").exists()
     assert all(entry["kind"] != "workflow_failure_scenarios" for entry in evidence["evidence_entries"])
@@ -1268,7 +1268,7 @@ def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_pat
     _clear_workflow_modules()
 
     workflow_pkg = importlib.import_module("workflows.workflow_run_traces_to_optimization_candidates")
-    typed_params = workflow_pkg.Parameters(
+    typed_params = workflow_pkg.Params(
         selected_workflow="does_not_exist",
         task_title="Release workflow optimization",
         run_statuses=["failed", "paused", "blocked"],
@@ -1353,7 +1353,7 @@ def test_workflow_never_mutates_selected_workflow_source(tmp_path: Path) -> None
     result, provider, workflow_dir = _run_enabled_candidate_workflow(tmp_path, install_repo=False)
     after_snapshot = _snapshot_tree(selected_workflow_dir)
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert "workflow_level" in [call.step_name for call in provider.calls]
     assert (workflow_dir / "selected_workflow_source_manifest.json").exists()
     assert before_snapshot == after_snapshot
@@ -1435,7 +1435,7 @@ def test_optimization_depth_standard_is_recorded_and_no_reruns_execute(tmp_path:
         (tmp_path / ".autoloop" / "tasks" / "release-good" / "wf_release_candidate_to_go_no_go" / "runs").iterdir()
     )
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert "package" in [call.step_name for call in provider.calls]
     assert scope["optimization_depth"] == "standard"
     assert scorecard["optimization_depth"] == "standard"
@@ -1526,7 +1526,7 @@ def test_optimization_depth_ablation_records_planning_mode_without_executing_abl
     scope = json.loads((workflow_dir / "workflow_optimization_scope.json").read_text(encoding="utf-8"))
     scorecard = json.loads((workflow_dir / "workflow_optimization_scorecard.json").read_text(encoding="utf-8"))
     packet = (workflow_dir / "workflow_optimization_packet.md").read_text(encoding="utf-8")
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert scope["optimization_depth"] == "ablation"
     assert scorecard["optimization_depth"] == "ablation"
     assert scorecard["ablation_executed"] is False
@@ -1700,7 +1700,7 @@ def _bootstrap_context(
     importlib.invalidate_caches()
     _clear_workflow_modules()
     workflow_pkg = importlib.import_module("workflows.workflow_run_traces_to_optimization_candidates")
-    typed_params = workflow_pkg.Parameters(
+    typed_params = workflow_pkg.Params(
         selected_workflow="release_candidate_to_go_no_go",
         task_title="Release workflow optimization",
         run_statuses=["failed", "paused", "blocked"],

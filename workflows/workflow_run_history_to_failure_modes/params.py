@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-try:
-    from autoloop_v3.stdlib import SelectedWorkflowTaskFramingParameters, positive_int_fields
-except ImportError:  # pragma: no cover - direct repo execution fallback
-    from stdlib import SelectedWorkflowTaskFramingParameters, positive_int_fields
+from stdlib import SelectedWorkflowTaskFramingParameters, positive_int_fields
 
 from pydantic import Field, field_validator
 
 
-class Parameters(SelectedWorkflowTaskFramingParameters):
+class Params(SelectedWorkflowTaskFramingParameters):
     """Invocation contract for ``workflow_run_history_to_failure_modes``."""
 
     statuses: list[str] = Field(default_factory=list)
@@ -29,4 +26,4 @@ class Parameters(SelectedWorkflowTaskFramingParameters):
     _validate_max_runs = positive_int_fields("max_runs", error_message="max_runs must be a positive integer")
 
 
-__all__ = ["Parameters"]
+__all__ = ["Params"]

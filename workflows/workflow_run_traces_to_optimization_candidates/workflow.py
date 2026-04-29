@@ -8,66 +8,35 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from autoloop_v3.stdlib import (
-        open_workflow_sessions,
-        read_json_object,
-        read_required_text,
-        require_existing_artifact_paths,
-        require_non_empty_string,
-        validate_no_hidden_execution_signal,
-        validate_selected_workflow_authoring_surface_snapshot,
-        validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_decomposition_surface_snapshot,
-        write_invocation_contract,
-        write_publication_receipt,
-        write_workflow_json,
-    )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags
-    from autoloop_v3.stdlib.optimization import (
-        OptimizationArtifactSpec,
-        EXCLUDED_RUN_REPORT_SCHEMA,
-        FAILURE_SCENARIOS_SCHEMA,
-        capture_optimization_frame_context,
-        collect_optimization_publication_surface,
-        finalize_optional_optimization_artifact,
-        read_optimization_artifact_payload,
-        resolve_selected_workflow_name,
-        validate_optimization_scorecard_publication,
-        validate_optimization_selected_workflow_field,
-        validate_selected_workflow_source_unchanged,
-        write_optimization_refinement_evidence,
-    )
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from stdlib import (
-        open_workflow_sessions,
-        read_json_object,
-        read_required_text,
-        require_existing_artifact_paths,
-        require_non_empty_string,
-        validate_no_hidden_execution_signal,
-        validate_selected_workflow_authoring_surface_snapshot,
-        validate_selected_workflow_capability_snapshot,
-        validate_selected_workflow_decomposition_surface_snapshot,
-        write_invocation_contract,
-        write_publication_receipt,
-        write_workflow_json,
-    )
-    from stdlib.control import event_on_outcome_tags
-    from stdlib.optimization import (
-        OptimizationArtifactSpec,
-        EXCLUDED_RUN_REPORT_SCHEMA,
-        FAILURE_SCENARIOS_SCHEMA,
-        capture_optimization_frame_context,
-        collect_optimization_publication_surface,
-        finalize_optional_optimization_artifact,
-        read_optimization_artifact_payload,
-        resolve_selected_workflow_name,
-        validate_optimization_scorecard_publication,
-        validate_optimization_selected_workflow_field,
-        validate_selected_workflow_source_unchanged,
-        write_optimization_refinement_evidence,
-    )
+from autoloop_optimizer import (
+    EXCLUDED_RUN_REPORT_SCHEMA,
+    FAILURE_SCENARIOS_SCHEMA,
+    OptimizationArtifactSpec,
+    capture_optimization_frame_context,
+    collect_optimization_publication_surface,
+    finalize_optional_optimization_artifact,
+    read_optimization_artifact_payload,
+    resolve_selected_workflow_name,
+    validate_optimization_scorecard_publication,
+    validate_optimization_selected_workflow_field,
+    validate_selected_workflow_source_unchanged,
+    write_optimization_refinement_evidence,
+)
+from stdlib import (
+    open_workflow_sessions,
+    read_json_object,
+    read_required_text,
+    require_existing_artifact_paths,
+    require_non_empty_string,
+    validate_no_hidden_execution_signal,
+    validate_selected_workflow_authoring_surface_snapshot,
+    validate_selected_workflow_capability_snapshot,
+    validate_selected_workflow_decomposition_surface_snapshot,
+    write_invocation_contract,
+    write_publication_receipt,
+    write_workflow_json,
+)
+from stdlib.control import event_on_outcome_tags
 
 from autoloop import Event, FINISH, Outcome, Prompt, Route, Session, Workflow, produce_verify_step, python_step
 from core import Artifact

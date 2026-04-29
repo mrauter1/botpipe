@@ -94,7 +94,7 @@ class ReleaseReview(Workflow):
         ),
     )
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
 
     workflow_dir = tmp_path / ".autoloop" / "tasks" / "single-file-task" / "wf_release_review"
     run_dir = next((workflow_dir / "runs").iterdir())
@@ -132,7 +132,7 @@ def test_flow_package_directory_reference_supports_relative_specs_and_named_infe
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip()
         + "\n",
@@ -146,7 +146,7 @@ from pydantic import BaseModel
 
 from core import Artifact, LLMStep, SUCCESS, Workflow
 
-from .specs import Parameters
+from .specs import Params
 
 
 class ReleaseReview(Workflow):
@@ -173,7 +173,7 @@ class ReleaseReview(Workflow):
     assert resolved_by_name.reference.source_path == package_dir / "flow.py"
     assert resolved_by_name.reference.authoring_shape == "flow_package"
     assert resolved_by_directory.parameters_cls is not None
-    assert resolved_by_directory.parameters_cls.__name__ == "Parameters"
+    assert resolved_by_directory.parameters_cls.__name__ == "Params"
 
     provider = ScriptedLLMProvider(
         llm_turns=[
@@ -205,7 +205,7 @@ class ReleaseReview(Workflow):
         ),
     )
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     workflow_dir = tmp_path / ".autoloop" / "tasks" / "flow-package-task" / "wf_release_review"
     run_dir = next((workflow_dir / "runs").iterdir())
     context_payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
@@ -286,7 +286,7 @@ class SimpleExample(Workflow):
     assert inspected.workflow_path == workflow_path
     assert inspected.entry_step_name == "a"
     assert inspected.transitions["a"] == {
-        "done": "SUCCESS",
+        "done": "FINISH",
         "question": "PAUSE",
         "blocked": "PAUSE",
         "failed": "FAIL",
@@ -309,14 +309,14 @@ def test_module_and_class_references_run_through_the_same_resolver_path(tmp_path
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip()
         + "\n",
         encoding="utf-8",
     )
     package_dir.joinpath("__init__.py").write_text(
-        "from .flow import ModuleReviewWorkflow\nfrom .specs import Parameters\n__all__ = ['ModuleReviewWorkflow', 'Parameters']\n",
+        "from .flow import ModuleReviewWorkflow\nfrom .specs import Params\n__all__ = ['ModuleReviewWorkflow', 'Params']\n",
         encoding="utf-8",
     )
     package_dir.joinpath("flow.py").write_text(
@@ -363,7 +363,7 @@ class ModuleReviewWorkflow(Workflow):
         ),
     )
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     workflow_dir = tmp_path / ".autoloop" / "tasks" / "module-task" / "wf_module_review"
     run_dir = next((workflow_dir / "runs").iterdir())
     assert (run_dir / "module.json").read_text(encoding="utf-8") == "module_review"
@@ -502,7 +502,7 @@ from core.primitives import Event
 
 
 class ClassParamsWorkflow(Workflow):
-    class Parameters(BaseModel):
+    class Params(BaseModel):
         mode: str = "class"
 
     class State(BaseModel):
@@ -532,7 +532,7 @@ from core import SUCCESS, SystemStep, Workflow
 from core.primitives import Event
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "module"
 
 
@@ -561,14 +561,14 @@ class ModuleParamsWorkflow(Workflow):
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "package"
 """.strip()
         + "\n",
         encoding="utf-8",
     )
     package_params_dir.joinpath("__init__.py").write_text(
-        "from .flow import PackageParamsWorkflow\nfrom .specs import Parameters\n__all__ = ['PackageParamsWorkflow', 'Parameters']\n",
+        "from .flow import PackageParamsWorkflow\nfrom .specs import Params\n__all__ = ['PackageParamsWorkflow', 'Params']\n",
         encoding="utf-8",
     )
     package_params_dir.joinpath("flow.py").write_text(
@@ -606,7 +606,7 @@ class PackageParamsWorkflow(Workflow):
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "legacy"
 """.strip()
         + "\n",
@@ -675,7 +675,7 @@ class NoParamsWorkflow(Workflow):
     no_params = resolve_workflow_reference(tmp_path, "workflows/no_params.py")
 
     assert class_params.parameters_cls is not None
-    assert class_params.parameters_cls.__qualname__.endswith("ClassParamsWorkflow.Parameters")
+    assert class_params.parameters_cls.__qualname__.endswith("ClassParamsWorkflow.Params")
     assert module_params.parameters_cls is not None
     assert module_params.parameters_cls.__module__.startswith("_autoloop_dynamic_")
     assert package_params.parameters_cls is not None
@@ -693,7 +693,7 @@ def test_explicit_package_paths_prefer_package_exported_parameters_before_legacy
     package_dir = workflows_root / "package_path_params"
     package_dir.mkdir(parents=True, exist_ok=True)
     package_dir.joinpath("__init__.py").write_text(
-        "from .workflow import PackagePathParamsWorkflow\nfrom .specs import Parameters\n__all__ = ['PackagePathParamsWorkflow', 'Parameters']\n",
+        "from .workflow import PackagePathParamsWorkflow\nfrom .specs import Params\n__all__ = ['PackagePathParamsWorkflow', 'Params']\n",
         encoding="utf-8",
     )
     package_dir.joinpath("specs.py").write_text(
@@ -701,7 +701,7 @@ def test_explicit_package_paths_prefer_package_exported_parameters_before_legacy
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "package"
 """.strip()
         + "\n",
@@ -712,7 +712,7 @@ class Parameters(BaseModel):
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "legacy"
 """.strip()
         + "\n",
@@ -793,7 +793,7 @@ class ReleaseReview(Workflow):
             runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
         ),
     )
-    assert first_result.terminal == "SUCCESS"
+    assert first_result.terminal == "FINISH"
 
     with pytest.raises(WorkflowExecutionError, match="already associated with a different origin"):
         run_workflow_package(

@@ -28,7 +28,7 @@ autoloop run candidate_workflow_to_adapted_execution_plan <task-id> \
   -wf evidence_expectations "Need a validated run plan and concrete next action."
 ```
 
-Parameters:
+Params:
 
 - `selected_workflow` required
 - `task_title` required

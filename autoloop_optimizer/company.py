@@ -6,19 +6,10 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..runtime.loader import resolve_workflow_reference
-    from ..runtime.workspace import list_task_operation_summaries
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.runtime.loader import resolve_workflow_reference
-    from autoloop_v3.runtime.workspace import list_task_operation_summaries
-
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..stdlib.lifecycle import write_workflow_json
-    from ..stdlib.validation import require_non_empty_string
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.stdlib.lifecycle import write_workflow_json
-    from autoloop_v3.stdlib.validation import require_non_empty_string
+from ..runtime.loader import resolve_workflow_reference
+from ..runtime.workspace import list_task_operation_summaries
+from ..stdlib.lifecycle import write_workflow_json
+from ..stdlib.validation import require_non_empty_string
 
 
 def write_company_operation_snapshot(

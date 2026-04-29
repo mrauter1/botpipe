@@ -27,7 +27,7 @@ autoloop run task_to_workflow_strategy <task-id> \
   -wf evidence_expectations "Need a durable remediation and closure package."
 ```
 
-Parameters:
+Params:
 
 - `task_title` required
 - `sponsor_role` optional

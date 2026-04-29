@@ -31,7 +31,7 @@ autoloop run workflow_run_history_to_failure_modes <task-id> \
   -wf constraints "Keep runtime control narrow and stop at diagnostic publication."
 ```
 
-Parameters:
+Params:
 
 - `selected_workflow` required
 - `task_title` required

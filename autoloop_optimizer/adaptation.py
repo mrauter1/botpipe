@@ -6,12 +6,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.workflow_capabilities import selected_workflow_capability_payload
-    from ..runtime.loader import coerce_workflow_parameter_mapping
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from autoloop_v3.core.workflow_capabilities import selected_workflow_capability_payload
-    from autoloop_v3.runtime.loader import coerce_workflow_parameter_mapping
+from ..core.workflow_capabilities import selected_workflow_capability_payload
+from ..runtime.loader import coerce_workflow_parameter_mapping
 
 from ._selected_workflow import (
     capture_selected_workflow,

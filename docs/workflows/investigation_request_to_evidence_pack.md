@@ -27,7 +27,7 @@ autoloop run investigation_request_to_evidence_pack <task-id> \
   -wf source_constraints "Use repository artifacts and named pentest evidence only."
 ```
 
-Parameters:
+Params:
 
 - `investigation_title` required
 - `investigation_kind` required: `release_readiness`, `incident_response`, `security_remediation`, `delivery_recovery`, `customer_escalation`, or `general`
@@ -124,7 +124,7 @@ Turn an investigation request into a durable evidence pack that another workflow
 
 - Bootstrap the authoritative invocation contract from workflow parameters and the run request.
 - Hold framing and evidence-pack assembly as separate work items.
-- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `route_required_outputs` only.
+- Keep runtime control data narrow: `expected_output_schema`, `available_routes`, step-local `Route.to(...)` metadata, and `required_writes` only.
 - Publish a deterministic evidence-pack receipt only after the terminal artifacts exist.
 
 ### Provider-owned cognitive responsibilities
