@@ -1063,3 +1063,69 @@ Open issues / next step
 
 - I did not run the full repo test suite; broader consumer suites that still assert legacy inspection/provider fields should be migrated in a later phase rather than folded into this runtime-contract pass.
 - The repo root is in a heavily dirty/untracked state outside this phase scope, so I kept changes localized and did not absorb unrelated worktree noise.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+I’m reviewing the runtime/provider/persistence changes against the phase contract now. I’ll first inspect the acceptance criteria file and the changed contract surfaces, then I’ll update the review artifacts with any blocking or non-blocking findings.
+
+I’ve got the reviewer artifacts loaded. Next I’m checking the actual runtime writers and readers for any remaining legacy emissions or unsafe compatibility behavior, especially `run.json`, topology artifacts, provider request objects, and session/checkpoint normalization.
+
+The core runtime writers are mostly in line with the phase contract. I’m checking two adjacent risk surfaces now: whether `run.json`/child-run metadata still leak legacy terminal naming, and whether the new session normalization can accidentally rewrite non-legacy explicit keys or scope payloads.
+
+I found one concrete persistence-risk candidate and I’m verifying whether it’s a real bug or just a narrow migration helper: the filesystem session-key reader currently rewrites any persisted key value equal to `"default"` to `"global"` without checking the key domain. I’m validating whether that can corrupt explicit key/scope or work-item session identities before I write it up.
+
+I found a second, stronger persistence issue while tracing the legacy-session path: the snapshot normalizer fixes the `SessionKey` payload but leaves the `active_keys_by_slot` dictionary indexed under the old slot name. That means a resumed legacy `default` session can still be invisible under the canonical `global` lookup even after normalization. I’m confirming the exact restore path now.
+
+I have two candidate findings tied to the same migration seam. I’m running tiny repro snippets against the live code to confirm the exact bad state after normalization, so the feedback can point to a concrete failure mode instead of a hypothetical one.
+
+I’ve confirmed both migration bugs with direct repro snippets. I’m recording them now as blocking findings because they undermine the exact legacy-resume behavior this phase promised to preserve.
+
+Scope considered
+
+- Phase-local runtime/provider/persistence cleanup only.
+- Reviewed the changed runtime contract surfaces, persistence readers/writers, topology/static-graph emitters, git-tracking runtime ownership, and the focused regression tests listed in the implementation notes.
+
+What I analyzed
+
+- Runtime/session normalization paths in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py), [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py), and the resume call site in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py).
+- Canonical contract emitters in [core/providers/models.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/models.py), [core/providers/rendered.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendered.py), [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py), [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py), [runtime/tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/tracing.py), [runtime/git_tracking.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/git_tracking.py), and [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py).
+- The reviewer artifacts in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/feedback.md), and [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/implementation_notes.md).
+
+What I reviewed
+
+- Verified the focused pytest set reported by the implementer as context, then independently reviewed the code paths against AC-1/2/3.
+- Confirmed two concrete resume/persistence failures with live repro snippets:
+  - `normalize_session_snapshot(...)` leaves a legacy active slot keyed as `"default"` and keeps the run key value as `"global"` instead of rebinding to `run_id`.
+  - `_session_key_from_payload(...)` rewrites non-run `explicit_key` / `explicit_scope` values equal to `"default"` into `"global"`.
+
+Key findings / decisions
+
+- Added two `blocking` findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/feedback.md):
+  - `IMP-001`: incomplete legacy default-session normalization in the checkpoint snapshot restore path.
+  - `IMP-002`: over-broad `"default" -> "global"` value rewriting in the filesystem session-key reader corrupts non-run identities.
+- Left the criteria checkboxes unchecked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/criteria.md) because the blocking persistence regressions mean correctness, safety, compatibility, and validation are not yet satisfied.
+
+Open issues / next step
+
+- Fix the normalization seam centrally:
+  - canonicalize slot names before rekeying `active_keys_by_slot`
+  - rebind legacy run self-keys to `run_id` after canonicalization
+  - restrict `"default" -> "global"` value migration to the legacy run-slot case only
+- Add regression tests for:
+  - checkpoint payloads with `active_keys_by_slot["default"]`
+  - explicit key/scope payloads whose value is literally `"default"`
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
