@@ -821,3 +821,53 @@ Open issues / next step
 
 - Full pytest execution is still pending because this environment is missing the runtime/test dependencies.
 - The next test phase should cover the later provider/runtime payload rename work once that phase lands.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddb4b-6028-7802-9a75-652b8666c65c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+Auditing the phase-local test additions against the compiler/state changes now. I’m checking the new coverage claims, the actual tests added, and whether any material regression surfaces remain untested before I update the audit artifacts.
+
+I found one material coverage hole in the phase-local suite: the new assertions don’t exercise the separate `step_item_state` prompt-validation path or the `control_routes=False` branch for `python_step` / `workflow_step`. A regression there would still satisfy the current tests, so I’m recording that as blocking.
+
+Scope considered
+
+- Phase-local audit of the `compiler-validation-normalization` test additions only.
+- The new coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), plus the phase strategy and feedback artifacts.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- The corresponding implementation branches in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) for prompt placeholder rejection and control-route injection.
+- The producer artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/feedback.md).
+
+What I reviewed
+
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/criteria.md) to keep the phase incomplete.
+- I appended one blocking audit finding, `TST-001`, to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/feedback.md).
+
+Key findings / decisions
+
+- `TST-001` blocking: the suite does not yet cover two changed AC-3 branches that are implemented separately:
+  - `{step_name.item_state...}` prompt-placeholder rejection
+  - `control_routes=False` on `python_step` / `workflow_step`
+- That means a regression in either branch would pass the current tests even though those behaviors are explicitly part of this phase’s compiler/validation contract.
+- I did not raise anything around provider payload legacy keys because the phase contract explicitly keeps provider payload rewrites out of scope.
+
+Open issues / next step
+
+- Add compile-time assertions for a `step_name.item_state` placeholder failure and for `python_step(..., control_routes=False)` plus `workflow_step(..., control_routes=False)` route tables with no injected `"failed"` route.
+- After that, this phase’s focused test suite should be in shape for a complete verdict.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
