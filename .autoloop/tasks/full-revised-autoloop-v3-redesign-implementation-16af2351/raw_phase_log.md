@@ -2323,3 +2323,55 @@ Validation performed:
 Open issues / next step
 
 The new and updated phase-local regression tests pass. One unrelated preexisting failure still exists elsewhere in the broader `tests/unit/test_simple_surface.py` file around feedforward `callsite=` handling; I did not widen scope to normalize that older issue because it belongs to the earlier feedforward-operation work, not this migration-cleanup test slice.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m checking the audit artifacts and the exact unit-test delta that was added for the migration shim coverage, then I’ll decide whether the phase needs more tests or can be closed cleanly.
+
+I’m verifying the targeted test slice directly now. If it matches the strategy and the added assertions actually protect the migration shim, I’ll close the phase without inventing extra churn.
+
+The targeted audit slice is clean. I’m updating the audit artifacts to reflect that the added tests are appropriate, deterministic, and aligned with the phase-scoped migration risk.
+
+Scope considered
+
+Active verifier scope for the `workflow-migration-and-cleanup` test phase only. I reviewed the new phase-local unit-test coverage, the test strategy and feedback artifacts, and the shared decisions that defined the migration-compatibility shim behavior.
+
+What I analyzed
+
+I checked the exact test delta in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/workflow-migration-and-cleanup/test_strategy.md), and the phase-scoped rationale for targeting shared simple-surface lowering rather than adding more package-level workflow tests. I also verified the targeted validation commands directly.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/workflow-migration-and-cleanup/criteria.md) so all audit boxes are checked. I appended an audit result section to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/workflow-migration-and-cleanup/feedback.md) noting that there are no findings in this cycle.
+
+Key findings / decisions
+
+No blocking findings remain.
+
+The added and updated tests are appropriate for the changed behavior:
+- they directly cover the central migration shim in shared simple-surface lowering,
+- they would catch the specific regressions that surfaced during workflow migration,
+- and they avoid flaky setup by using local class compilation and deterministic assertions.
+
+Validation confirmed:
+- `python3 -m py_compile tests/unit/test_simple_surface.py`
+- `./.venv/bin/pytest tests/unit/test_simple_surface.py::test_simple_system_step_lowers_to_core_system_handler_without_on_step_method tests/unit/test_simple_surface.py::test_python_step_entry_alias_preserves_bootstrap_order_and_installs_compat_handler`
+
+Open issues / next step
+
+No test-auditor-side open issue remains for this phase. The phase test slice is ready to be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

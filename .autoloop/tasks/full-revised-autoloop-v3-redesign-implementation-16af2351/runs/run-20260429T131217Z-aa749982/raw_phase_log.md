@@ -2268,3 +2268,110 @@ No verifier-side open issue remains for this phase. The phase is ready to be mar
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m checking the active test strategy and the current test coverage around the migration shims, then I’ll add targeted regression tests for the central behaviors that stabilized the final producer pass.
+
+I’m adding focused regression tests around the two central framework fixes that made the migration safe: simple-step alias/ordering behavior and the compatibility-facing inspection/runtime seams that still need to speak legacy `SUCCESS` where the public migration uses `FINISH`.
+
+I’m adding one focused simple-surface regression test at the shared lowering boundary rather than another large workflow package case. The bug that surfaced was central discovery/ordering logic, so the durable guard should live there too.
+
+The focused regression test passed cleanly. I’m running the neighboring simple-surface unit file once so the new guard is validated in the same context as the existing public-surface coverage, then I’ll write the phase test strategy and feedback summary.
+
+One existing simple-surface expectation is now stale because the producer intentionally added central `on_<step>` alias installation. I’m updating that test to assert the new preserved-compat behavior instead of the pre-migration absence check.
+
+I’ve got the phase-local regression tests in place. I’m writing the coverage map and feedback summary now, including the deliberate decision to keep validation targeted because a broader unit file still contains an unrelated preexisting feedforward failure outside this phase scope.
+
+Scope considered
+
+The active `workflow-migration-and-cleanup` test phase only. I stayed on the shared migration-compatibility behavior that the final producer pass introduced, plus the phase-local `test_strategy.md` and `feedback.md` artifacts.
+
+What I analyzed
+
+I checked the active test artifacts and the shared decisions, then reviewed the changed compatibility seams in `autoloop.simple` / `core.validation` that kept migrated workflows stable: explicit `entry = bootstrap` ordering and restored callable `on_<step>` aliases for `python_step(...)`. I also checked the existing simple-surface tests to see which expectations had become stale after the producer’s central shim changes.
+
+What I changed
+
+I updated [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) in two places:
+- Added `test_python_step_entry_alias_preserves_bootstrap_order_and_installs_compat_handler` to pin the central regression that previously surfaced only through migrated workflow packages.
+- Updated `test_simple_system_step_lowers_to_core_system_handler_without_on_step_method` so it now asserts the preserved-compat `on_run` alias instead of the pre-migration absence check.
+
+I also updated the phase artifacts:
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/workflow-migration-and-cleanup/test_strategy.md) with an explicit behavior-to-test coverage map, invariants, edge cases, failure paths, validation, and known gaps.
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/workflow-migration-and-cleanup/feedback.md) with a concise summary of the added/refined tests.
+
+Key findings / decisions
+
+The right place to pin this phase’s final regressions is the shared simple-surface unit layer, not another large workflow-package runtime case. The producer fix was centralized in lowering/discovery behavior, so the test should fail directly when that shared logic regresses.
+
+Validation performed:
+- `python3 -m py_compile tests/unit/test_simple_surface.py`
+- `./.venv/bin/pytest tests/unit/test_simple_surface.py::test_simple_system_step_lowers_to_core_system_handler_without_on_step_method tests/unit/test_simple_surface.py::test_python_step_entry_alias_preserves_bootstrap_order_and_installs_compat_handler`
+
+Open issues / next step
+
+The new and updated phase-local regression tests pass. One unrelated preexisting failure still exists elsewhere in the broader `tests/unit/test_simple_surface.py` file around feedforward `callsite=` handling; I did not widen scope to normalize that older issue because it belongs to the earlier feedforward-operation work, not this migration-cleanup test slice.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m checking the audit artifacts and the exact unit-test delta that was added for the migration shim coverage, then I’ll decide whether the phase needs more tests or can be closed cleanly.
+
+I’m verifying the targeted test slice directly now. If it matches the strategy and the added assertions actually protect the migration shim, I’ll close the phase without inventing extra churn.
+
+The targeted audit slice is clean. I’m updating the audit artifacts to reflect that the added tests are appropriate, deterministic, and aligned with the phase-scoped migration risk.
+
+Scope considered
+
+Active verifier scope for the `workflow-migration-and-cleanup` test phase only. I reviewed the new phase-local unit-test coverage, the test strategy and feedback artifacts, and the shared decisions that defined the migration-compatibility shim behavior.
+
+What I analyzed
+
+I checked the exact test delta in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/workflow-migration-and-cleanup/test_strategy.md), and the phase-scoped rationale for targeting shared simple-surface lowering rather than adding more package-level workflow tests. I also verified the targeted validation commands directly.
+
+What I reviewed
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/workflow-migration-and-cleanup/criteria.md) so all audit boxes are checked. I appended an audit result section to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/workflow-migration-and-cleanup/feedback.md) noting that there are no findings in this cycle.
+
+Key findings / decisions
+
+No blocking findings remain.
+
+The added and updated tests are appropriate for the changed behavior:
+- they directly cover the central migration shim in shared simple-surface lowering,
+- they would catch the specific regressions that surfaced during workflow migration,
+- and they avoid flaky setup by using local class compilation and deterministic assertions.
+
+Validation confirmed:
+- `python3 -m py_compile tests/unit/test_simple_surface.py`
+- `./.venv/bin/pytest tests/unit/test_simple_surface.py::test_simple_system_step_lowers_to_core_system_handler_without_on_step_method tests/unit/test_simple_surface.py::test_python_step_entry_alias_preserves_bootstrap_order_and_installs_compat_handler`
+
+Open issues / next step
+
+No test-auditor-side open issue remains for this phase. The phase test slice is ready to be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
