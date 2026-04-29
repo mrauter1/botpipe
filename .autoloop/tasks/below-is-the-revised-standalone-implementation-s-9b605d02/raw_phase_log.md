@@ -242,3 +242,73 @@ Open issues / next step
 - I updated the repo-authored simple workflows, but I did not run the full suite; I ran:
   - `.venv/bin/pytest tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py tests/unit/test_primitives_and_stores.py -q`
   - `.venv/bin/pytest tests/runtime/test_workflow_reference_resolution.py::test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection tests/contract/test_engine_contracts.py::test_produce_verify_step_sends_split_phase_contracts_without_implicitly_requiring_producer_writes -q`
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+I’m reviewing the `public-surface-cleanup` implementation against the phase contract and the recorded decisions. I’ll inspect the changed files, verify the focused tests and contracts they affect, then update the phase criteria and feedback with any blocking regressions or scope violations.
+
+I’m reviewing the implemented public-surface cleanup against the phase scope first, then I’ll mark criteria and record any blocking gaps in the phase feedback artifacts.
+
+I have the phase scope and implementation decisions. Next I’m checking the actual public surface and the simple authoring validator for places where legacy names still leak or the new `Params`/`state=Model` rules are only partially enforced.
+
+The simple validator is where most regressions would hide. I’m checking whether the new `Params`/step-state model actually survives compile and run paths, not just signature tests.
+
+I found one likely regression surface outside the signature tests: package/runtime parameter resolution. I’m checking whether a simple workflow that switched from `Parameters` to `Params` still exposes parameters to the runtime and workflow discovery paths.
+
+The obvious public API checks look good at the root package. I’m now checking the simple module itself for residual banned symbols that are still importable, because the phase objective called out the simple authoring surface, not just `autoloop.__all__`.
+
+I’ve confirmed the root package cleanup. I’m checking the migrated repo workflows next, because this phase also changed live authoring declarations and they need to compile under the canonical names instead of just passing import tests.
+
+I want one end-to-end safety check beyond unit tests: compile the repo’s workflow packages after the API rename, because that’s where import-level cleanup can still hide broken declarations.
+
+The end-to-end compile check surfaced a material regression: multiple repo workflows no longer import removed aliases, but they still instantiate `produce_verify_step(..., writes=...)`, which now hard-fails before compilation. I’m tracing that to exact files so I can document it precisely in feedback.
+
+I have a concrete blocking regression now. I’m collecting the minimal evidence I need for the feedback entry and then I’ll update the verifier artifacts.
+
+I’ve got the main blocking regression. I’m checking whether the touched authoring docs also drifted from the same canonical `Params` decision so I can separate that as a lower-priority follow-up instead of mixing it with the runtime breakage.
+
+I’ve finished the review. I’m updating the phase artifacts now: the criteria stays failed because the workflow surface change is incomplete, and I’m recording the compile-time regression plus the lower-priority docs drift separately.
+
+Scope considered
+
+- Phase-scoped public-surface cleanup only: `autoloop/__init__.py`, `autoloop/simple.py`, simple-surface validation/lowering in `core/descriptors.py` and `core/validation.py`, the touched tests/docs, and the repo-authored workflows migrated to `produce_verify_step(...)`.
+- I did not review out-of-phase runtime/schema/optimizer cleanup except where it directly affected the renamed public surface.
+
+What I analyzed
+
+- The canonical root export surface and removed-import behavior.
+- The simple authoring signatures and validation path for `produce_verify_step`, `Params`, and step `state=BaseModel`.
+- The repo workflow packages after the migration, using a compile sweep through workflow discovery.
+- The touched authoring docs/tests for drift against the recorded canonical naming decisions.
+
+What I reviewed
+
+- Root exports are trimmed correctly and the removed root aliases do fail to import.
+- The simple declaration layer does reject legacy keywords like `out=`, `outputs=`, `do=`, `review=`, and `review_writes=`.
+- The implementation is not phase-complete because the repo workflow migration stopped halfway: many workflow packages still call `produce_verify_step(..., writes=[...])`, which now raises immediately during module import/compilation.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/public-surface-cleanup/criteria.md) and appended findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/public-surface-cleanup/feedback.md).
+
+Key findings / decisions
+
+- `IMP-001` blocking: workflow discovery/compilation is broken for 16 repo workflow packages because `produce_verify_step` no longer accepts `writes=`, but many migrated workflows still use it. Representative refs: [workflows/autoloop_v1/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/workflow.py:46), [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:103), [workflows/incident_to_hardening_program/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/incident_to_hardening_program/workflow.py:127). Repro used: a `.venv/bin/python` sweep that resolved and compiled each `workflows/*` package under `PYTHONPATH=/home/rauter/autoloop_v3_bkp`.
+- `IMP-002` non-blocking: the touched authoring docs/tests still describe the removed `Parameters` / `Workflow.Parameters` surface and stale compatibility vocabulary, e.g. [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:75) and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py:90).
+
+Open issues / next step
+
+- The next implement pass should finish the repo workflow migration by replacing every `produce_verify_step(..., writes=...)` with explicit `producer_writes=` / `verifier_writes=` according to intended phase ownership, then rerun the workflow compile sweep.
+- After the compile break is fixed, the doc/test vocabulary drift can be cleaned up as a follow-up without widening this phase further.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
