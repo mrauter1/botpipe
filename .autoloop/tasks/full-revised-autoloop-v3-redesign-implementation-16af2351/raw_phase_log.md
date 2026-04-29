@@ -376,3 +376,54 @@ Key findings / decisions
 Open issues / next step
 - No known blocking issues remain from the reviewer feedback I was asked to address.
 - The next step is verifier re-review against the updated phase artifacts and targeted regression surface.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m re-reviewing the two addressed findings plus the adjacent phase-1 surfaces they touched. I’ll verify the `Prompt.ref(...)` semantics fix, confirm the docs no longer publish legacy primary examples, then update the phase criteria and feedback accordingly.
+
+There’s still one more public legacy example lower in `docs/authoring.md` around line 440. I’m checking whether it’s framed as compatibility-only or if it still violates the “canonical public guidance” requirement before I close the review.
+
+The code-path fix for `Prompt.ref(...)` is solid and the targeted tests are green. The remaining gap is narrower now: `docs/authoring.md` still has a couple of legacy public examples (`Prompt("...")` and a `PairStep` worklist snippet) that keep AC-5 from being complete.
+
+Scope considered
+- Phase `canonical-surface-and-topology-lowering` only.
+- I re-reviewed the addressed reviewer findings plus adjacent phase-1 validation and public-doc surfaces.
+- I did not expand into unrelated dirty files outside this phase scope.
+
+What I analyzed
+- The current phase feedback and criteria artifacts.
+- The `Prompt.ref(...)` compile-time path in `core/validation.py`.
+- The revised examples in `docs/authoring.md`.
+- The new regression coverage in `tests/unit/test_simple_surface.py`.
+- The targeted validation run reported by the implementer and re-run here.
+
+What I reviewed
+- `IMP-001`: registry-prompt compile/runtime semantics drift.
+- `IMP-002`: migration of public docs/examples to the canonical phase-1 surface.
+- Adjacent AC-5 doc/example surfaces to ensure no remaining legacy primary examples were left behind.
+- Targeted tests: `70` passed.
+
+Key findings / decisions
+- `IMP-001` is resolved. The compile-time prompt analysis now preserves `Prompt.ref(...)` registry semantics, and the new regression test covers the collision case.
+- I found one remaining blocking doc gap and appended it as `IMP-003` in the phase feedback.
+- `docs/authoring.md` still contains legacy public examples at the prompt-resolution snippet (`Prompt("prompts/ask.md")`) and the worklist/scoped-step snippet (`PairStep(...)`). Because those are still primary public examples rather than compatibility-only material, AC-5 is not complete yet.
+- I left the criteria unchecked because a blocking finding remains.
+
+Open issues / next step
+- Rewrite the remaining legacy examples in `docs/authoring.md` to `Prompt.file(...)` and `step(...)` / `do_review_step(...)` with `scope=...`, or move them into a clearly labeled compatibility-only section.
+- After that, re-run the same targeted doc/simple-surface test slice and re-review for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
