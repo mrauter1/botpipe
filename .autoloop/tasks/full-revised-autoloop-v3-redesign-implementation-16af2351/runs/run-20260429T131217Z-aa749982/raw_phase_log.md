@@ -1942,3 +1942,142 @@ Finish the remaining six workflow declaration migrations, complete the second-pa
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m taking the remaining reviewer blockers as the scope for this turn: finish the six legacy workflow declaration migrations, assess how far the `RouteInfo` cleanup can be pushed safely, and then clean the remaining compatibility-first docs that are still teaching the old surface.
+
+I’ve confirmed the remaining legacy declaration set and the scale of the `route_infos` dependency. Next I’m sampling the migrated pattern and the old route-contract modules so I can do the rest mechanically instead of inventing a new abstraction mid-phase.
+
+I have the pattern now: the declaration migration is mechanical, but the `RouteInfo` cleanup needs each step’s actual route targets folded back into its contract map. I’m inspecting the runtime decorators once so I don’t guess wrong on a repo-wide conversion.
+
+The route-metadata decorator API is compatible with the second-pass cleanup, so I don’t need a runtime refactor here. I’m now extracting the remaining workflows’ transition shapes and handler names so I can convert them directly to canonical declarations.
+
+The biggest remaining cleanup is not runtime behavior anymore, it’s mechanical first-party migration. I’m enumerating the contract modules now so I can convert the route metadata surface comprehensively instead of leaving hidden `RouteInfo` pockets behind.
+
+I’ve split the remaining work into two mechanical passes for this turn: first finish the six legacy workflow declarations, then replace `RouteInfo` with canonical `Route.to(...)` in the same workflows’ contract surfaces and the docs that still explain route metadata the old way.
+
+I’m starting the code edits with the narrower half of the remaining workflow set: `company_operation_to_recursive_improvement_cycle`, `security_finding_to_verified_remediation`, and `task_to_workflow_strategy`, plus their route-contract modules. The goal here is zero behavior drift: only declaration surface and route metadata shape change.
+
+The first edit batch hit context drift in the workflow files, so I’m switching to smaller file-by-file patches. That keeps the migration mechanical and reduces the chance of stepping on the existing producer changes.
+
+The first migration batch is in: three remaining legacy workflows are now on `python_step(...)` / `do_review_step(...)`, and their contract modules now express route metadata on `Route.to(...)`. I’m validating those three before touching the more complex refinement/decomposition/optimization set.
+
+The remaining declaration migration is `workflow_run_traces_to_optimization_candidates`, which is the most complex because it mixes paired agentic passes with deterministic routing hops. I’m converting that one last in small slices so the optional-pass routing stays intact.
+
+The last legacy workflow declaration is converted. I’m running a targeted sanity pass now for the refinement/decomposition/optimization batch before I decide whether to spend the remainder on the broader `RouteInfo` cleanup or the docs set.
+
+The codebase is now down to the second-pass route-metadata cleanup and the docs set. I’m switching to the docs while the remaining `RouteInfo` pockets are already much smaller, because the remaining documentation drift is broad but mostly textual.
+
+I’ve confirmed the docs drift is mostly repeated phrasing rather than deep content differences. I’m cleaning `docs/authoring.md` by hand first, then I’ll do the repetitive workflow-doc wording in one bulk pass so the canonical surface is the only path being actively taught.
+
+The public docs are now mostly canonical, but `RouteInfo` still exists in a subset of first-party workflow packages. I’m checking whether there’s time to convert one more route-contract cluster cleanly, otherwise I’ll close this turn with the remaining code surface explicitly documented in the phase notes.
+
+I’ve reached the point where the remaining work is one narrower class of issue: earlier-migrated workflow packages still on `RouteInfo`/`route_infos`. I’m updating the shared notes and decision ledger so the next turn doesn’t have to rediscover which acceptance criteria moved and which one is still blocked.
+
+The phase is now clearly split: bundled workflow declaration migration is complete, while the remaining blocker is the older route-contract bundles that still depend on `RouteInfo`. I’m doing one final repo-wide scan so the closeout and notes reflect that boundary precisely.
+
+Scope considered
+
+The active `workflow-migration-and-cleanup` phase only. I stayed on bundled workflow migration, workflow-local route-contract cleanup where it was directly tied to the migrated workflows, workflow docs wording, and the phase-local notes/decision ledger.
+
+What I analyzed
+
+I used the verifier findings as the scope boundary, then rechecked the remaining bundled workflows for `PairStep` / `SystemStep` / global `transitions` usage, the remaining `RouteInfo` / `route_infos` pockets across workflow packages, and the docs that still taught the compatibility surface. I also checked the current simple-surface lowering so the migration kept existing handlers, sessions, artifacts, and publication logic intact.
+
+What I changed
+
+All remaining bundled workflow classes now use canonical step declarations instead of legacy `PairStep` / `SystemStep` plus global `transitions`:
+[company_operation_to_recursive_improvement_cycle/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/workflow.py),
+[security_finding_to_verified_remediation/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py),
+[task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py),
+[workflow_and_eval_to_refined_workflow_package/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/workflow.py),
+[workflow_package_to_composable_building_blocks/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py),
+and [workflow_run_traces_to_optimization_candidates/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py).
+
+For the same six packages, I also moved their route metadata bundles onto canonical `Route.to(...)` declarations:
+[company_operation_to_recursive_improvement_cycle/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/company_operation_to_recursive_improvement_cycle/contracts.py),
+[security_finding_to_verified_remediation/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/contracts.py),
+[task_to_workflow_strategy/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/contracts.py),
+[workflow_and_eval_to_refined_workflow_package/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_and_eval_to_refined_workflow_package/contracts.py),
+[workflow_package_to_composable_building_blocks/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/contracts.py),
+and [workflow_run_traces_to_optimization_candidates/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/contracts.py).
+
+I also cleaned the authoring guidance and workflow docs so they stop teaching `route_infos`, `RouteInfo`, `PairStep`, and `SystemStep` as the primary path, including [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and the touched `docs/workflows/*.md` package guides. I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/implementation_notes.md) and appended turn-specific decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+Key findings / decisions
+
+The declaration migration is now complete across bundled workflows: repo-wide search no longer finds `PairStep`, `SystemStep`, `SUCCESS`, or package-local `transitions` in workflow packages. I kept the existing `on_<step>` handlers and publication validators in place, so the migration remains authoring-surface only.
+
+The remaining blocker is narrower now: several earlier-migrated packages still use `RouteInfo` / `route_infos`, including `investigation_request_to_evidence_pack`, `task_to_candidate_workflow_set`, `incident_to_hardening_program`, `release_candidate_to_go_no_go`, `workflow_idea_to_workflow_package`, `workflow_to_eval_suite`, `workflow_run_history_to_failure_modes`, and `workflow_portfolio_to_operating_system`.
+
+Validation performed:
+- `python3 -m py_compile` on all newly migrated workflow and contract files for this turn
+- repo-wide `rg` checks confirming no bundled workflow files still use legacy step declarations or global transition tables
+- docs scan confirming the workflow docs no longer teach `route_infos` / `RouteInfo` as the normal authoring path
+
+Open issues / next step
+
+The next slice should finish the second-pass route-metadata cleanup for the earlier-migrated packages listed above, switching their contract modules to `Route.to(...)` and their workflow declarations from `route_infos=` to `routes=`. After that, the strictness/docs/contract/runtime/workflow integration suites still need to run to close AC-3; I did not run them here.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m treating this as a delta review against the prior findings: the legacy step-surface blocker is resolved, and the remaining blockers are now the older `RouteInfo` pockets plus the unrun acceptance suites.
+
+I’m reviewing the cycle-3 migration delta against the phase acceptance criteria, then I’ll update the phase artifacts with only the remaining blocking gaps.
+
+I’ve narrowed the remaining code blocker to first-party `RouteInfo` usage. I’m checking the packaging split and validation coverage now so the verdict matches all three acceptance criteria, not just the workflow migration slice.
+
+The package split looks intact at a glance. I’m checking whether `stdlib` now only holds thin compatibility shims or whether optimizer logic still materially lives there, because that changes the AC-2 judgment.
+
+The feedback file already has the current blocking findings. I’m adding one short resolution note so the artifact clearly distinguishes the stale early blockers from the two blockers that are still active now.
+
+Scope considered
+
+Active verifier scope for `workflow-migration-and-cleanup` only. I reviewed the producer’s cycle-3 migration batch, the phase artifacts, and the remaining compatibility dependencies that still matter to the phase acceptance criteria.
+
+What I analyzed
+
+I checked the bundled workflow tree for any remaining `PairStep`, `SystemStep`, `SUCCESS`, and package-local `transitions` usage, then rechecked the repo for remaining first-party `RouteInfo` / `route_infos` dependencies. I also reviewed the doc surface and the producer’s implementation notes to verify whether AC-1, AC-2, and AC-3 are actually met.
+
+What I reviewed
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/feedback.md) to clarify that the earlier broad blockers are now superseded and that the active blocker set is narrowed to `IMP-007` and `IMP-008`. [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/criteria.md) remains fully unchecked, which is still accurate because AC-3 is not yet satisfied.
+
+Key findings / decisions
+
+- The legacy bundled-workflow declaration blocker is resolved. Repo-wide checks no longer find `PairStep`, `SystemStep`, `SUCCESS`, or package-local `transitions` in `workflows/*/{workflow.py,contracts.py}`.
+- The workflow docs blocker is resolved materially. The remaining mentions in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:16), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:420), and [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md:24) are compatibility notes, not primary authoring guidance.
+- `IMP-007` remains blocking: eight earlier-migrated first-party workflow packages still import `core.RouteInfo` and pass `route_infos=...`, so the compatibility-era route metadata surface is still a live first-party dependency.
+- `IMP-008` remains blocking: the required strictness/docs/contract/runtime/workflow integration suites were not run after the broad migration, so AC-3 is still unmet even though the declaration migration itself looks mechanically complete.
+- AC-2 does not present a new blocker in this review. The optimizer logic appears to live in `autoloop_optimizer/`, while the `stdlib/*` modules I spot-checked are thin compatibility shims.
+
+Open issues / next step
+
+Finish the second-pass `RouteInfo` cleanup for the remaining eight workflow packages and their contract modules, then run the required strictness/docs/contract/runtime/workflow integration suites in a valid environment. If those suites pass without depending on removable compatibility surfaces, the phase can be re-reviewed for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
