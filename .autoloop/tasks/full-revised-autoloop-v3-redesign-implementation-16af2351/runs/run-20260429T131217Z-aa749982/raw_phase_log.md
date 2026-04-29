@@ -858,3 +858,170 @@ No open issues in this phase’s test scope. The audit artifacts were updated in
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+I’m working within the active `hook-state-session-and-topology-metadata` phase. First I’m reading the phase artifacts, shared decisions, and the existing workflow/compiler/runtime code paths that were changed by the prior phases so I can scope the implementation against the current contracts before editing.
+
+The active phase feedback file is effectively empty, so I’m treating the phase contract and shared decisions as the governing spec. Next I’m reading the current compiler, engine, context, and public-surface modules to find the narrowest extension points for hooks, state descriptors, session persistence, prompt namespaces, and resume guards.
+
+I’ve confirmed the current runtime still centers on `before`/`after` hooks, legacy after-hook route override support, and checkpoint-only resume without any topology hash guard. I’m drilling into the step execution and checkpoint serialization paths now, because that’s where this phase’s contract actually lands or regresses.
+
+I’ve found the main deltas cleanly: there is no descriptor-backed workflow state or params surface yet, route hooks only exist as metadata and are never executed, after hooks still support route redirection, and topology artifacts don’t include hashes or resume validation. I’m reading the tracing and run-metadata writers now so I can wire the new compile metadata through one path instead of scattering it across runtime code.
+
+Plan for this phase:
+
+1. Add descriptor-backed public surfaces.
+   `StateVar` and `Param` will synthesize effective workflow state and params models without removing existing `State` and `Parameters` compatibility paths.
+
+2. Extend declarations, compilation, and runtime metadata.
+   I’m wiring `on_route`, route `on_taken`, review lifecycle hooks, default/global session metadata, and topology/source hashes through the existing lowering path rather than adding a second execution model.
+
+3. Rework hook execution around the requested contract.
+   Hooks will execute in the specified order, emit observable hook events, mutate state/session/artifacts through context, and no longer redirect routes through after-hook return values.
+
+4. Persist the new runtime state safely.
+   Step/item/step-item state plus deterministic global-session changes will be checkpointed and restored, then resume will reject topology-hash mismatches.
+
+5. Expand prompt-ref validation and topology artifacts, then add phase-targeted tests.
+   I’ll cover the new placeholder namespaces, reserved pseudo-fields, hook order/failure behavior, session reset persistence, and resume mismatch handling.
+
+I’ve got enough context to start editing. I’m first adding the reusable descriptor and model-synthesis layer so the workflow/compiler/runtime changes all share one implementation for `StateVar`, `Param`, and step-state defaults instead of duplicating that logic in multiple modules.
+
+I’m editing the core step/session declarations next. This is where I need to add the new hook slots and global-session semantics without changing the compiled FSM shape underneath.
+
+I’m in the compiler/validation layer now. I need this slice to do three things together: synthesize effective models from descriptors, validate the new prompt namespaces against those models, and carry the extra hook/session metadata forward without changing execution yet.
+
+I’m editing the runtime `Context` surface now. This is the most coupled part of the phase because the hook/session/state changes all become user-visible here, and I need to keep the existing handler APIs working while adding the new surfaces.
+
+I’ve finished the declaration/model layer and I’m moving into persistence and execution. The next edits extend checkpoint payloads and the engine loop together, because step/item state and route hooks only make sense if they survive pause/resume exactly.
+
+I’ve finished the descriptor and declaration layer and I’m closing the runtime gap now. The next pass is `core/engine.py`, then run metadata and resume guards, then targeted tests and phase notes.
+
+I’ve confirmed the incomplete area: the engine already has the new call sites wired in, but the route-phase hooks and checkpoint wiring still need to be finished coherently. I’m reading the remaining helper section now so I can patch the engine in one pass instead of layering partial fixes.
+
+The runtime context surface is already in place, which is helpful; the remaining work is mostly enforcing the new semantics consistently. I’m checking the existing hook and resume tests now so I can update the minimum necessary cases rather than churn unrelated coverage.
+
+I’m patching the engine now. This pass removes the remaining legacy hook-override behavior, makes route hooks actually run, persists the new state stores in checkpoints, and wires hook events into the runtime sink.
+
+The engine patch is in, but I spotted one default-initialization edge case for step state that I want to tighten before I run tests. After that I’ll patch the runtime metadata layer and resume guard together.
+
+I’ve isolated the one bad branch in step-state defaulting. I’m correcting that and loosening after-hook arity so the new ctx-only style works consistently instead of being blocked by legacy validation rules.
+
+I’m splitting topology handling into two parts: a pre-run resume guard, and metadata persistence after topology artifacts are written. That avoids the bad case where a resumed run would overwrite its old hash before the mismatch check happens.
+
+The runtime now has a path to persist topology metadata and emit hook events. I’m expanding the topology artifacts next so the stored metadata and the on-disk topology files line up instead of telling two different stories.
+
+I found an important regression surface: there are already legacy hook tests in the contract suite that assume route overrides. I’m reviewing those next so I can update the behavior intentionally instead of letting the suite fail in a noisy way.
+
+I’m replacing the legacy hook-override tests with the new contract tests now. That keeps the suite aligned with the deliberate behavior break instead of carrying two incompatible hook models at once.
+
+The contract suite is aligned with the new hook semantics now. I’m adding targeted public-surface tests for `StateVar`/`Param` next so the new descriptor path is covered without depending only on runtime integration.
+
+I’ve reached the validation pass. I’m running the focused suites that cover the changed surfaces first: contract hooks, simple-surface descriptors, static topology artifacts, and runtime resume metadata.
+
+The repo doesn’t have a plain `pytest` entrypoint in PATH here. I’m switching to the project interpreter path (`python3 -m pytest`) and, if needed, the local venv runner, so I can still get real test results instead of stopping at compile-only validation.
+
+The unit and runtime metadata suites are moving cleanly. I still need the hook contract slice from `tests/contract/test_engine_contracts.py`, because that’s where the intentional route-override removal will show if anything is still inconsistent.
+
+The new tests exposed three simple-surface expectation drifts: one state default assertion, one legacy strict-validation expectation, and one helper signature snapshot. I’m fixing those expectations first, then I’ll read the remaining contract failures from the hook runtime slice.
+
+I’ve adjusted the remaining expectation drift around default-session activation. I’m rerunning the focused failures first, then the full contract file again to make sure there isn’t a second-order break hiding behind those updates.
+
+The broad rerun is almost clean. There’s one remaining unit-level helper-signature drift, and the combined runtime/contract pass is still running; I’m pulling both outputs now so I can finish the last adjustment instead of guessing.
+
+The code and focused tests are clean now. I’m doing the phase bookkeeping next: recording the non-obvious implementation decisions and updating the phase notes with the exact scope, files, invariants, and validation that landed.
+
+I’m recording the two non-obvious choices from this phase: the exact hook compatibility break, and where the resume topology guard lives relative to metadata writes. Then I’ll close the phase notes with the files, invariants, and validation.
+
+Scope considered
+
+Active phase `hook-state-session-and-topology-metadata` only. I stayed on the hook/state/session/topology surface and ignored unrelated dirty files in the worktree.
+
+What I analyzed
+
+`core/validation.py`, `core/compiler.py`, `core/context.py`, `core/engine.py`, checkpoint/session stores, `runtime/runner.py`, `runtime/static_graph.py`, `runtime/workspace.py`, and the existing hook/resume/static-graph tests. I also checked the phase artifacts, plan, and decisions ledger before editing.
+
+What I changed
+
+Added descriptor-backed `StateVar`/`Param` support and threaded the merged workflow state/parameter models through validation, compilation, loader resolution, and the public exports.
+
+Extended the simple/public declarations and compiled step metadata for `on_route`, route `on_taken`, pair-step lifecycle hooks, step-local state declarations, and `Session(open=...)`.
+
+Expanded `Context` with `artifacts`, `values`, `route`, `outcome`, `meta`, `step_state`, `item_state`, `step_item_state`, plus IO and global-session helpers. Checkpoints now persist step/item/step-item state stores.
+
+Finished the engine hook contract: hooks execute in order, emit observable hook events, mutate state/artifacts/session through the new context, and no longer redirect routes. `on_route` and route `on_taken` now run before final required-write validation.
+
+Added topology/source hash support to compiled workflows and topology artifacts, persisted topology metadata into `run.json`, and made resume fail clearly when the saved topology hash differs.
+
+Key findings / decisions
+
+Hook-based route overrides were intentionally retired in this phase. `after*` hooks can update state only; post-route policy now belongs in `on_route` or route `on_taken`.
+
+Resume mismatch guarding has to run before a resumed segment rewrites topology metadata. I enforced that in both the filesystem runner and direct `Engine.resume(...)` path.
+
+Targeted validation passed:
+`./.venv/bin/python -m pytest tests/unit/test_simple_surface.py -q`
+`./.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py tests/runtime/test_workspace_and_context.py tests/contract/test_engine_contracts.py -q`
+
+Open issues / next step
+
+No open blockers in this phase scope. I did not run the full repository test suite; the next phase should build on this with the feedforward `llm()` / `classify()` work and then do a broader regression pass.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+I’m reviewing the active phase against the implemented code and the acceptance criteria first. I’ll verify the touched runtime/compiler paths, then update the phase criteria and feedback artifacts with any concrete findings.
+
+I found one material correctness bug in the hook lifecycle and I’m verifying whether there’s a second issue worth escalating. The first one is in the route-hook sequencing: state-dependent artifact paths are not refreshed between `on_route` and `on_taken`, which can make the second hook write to stale locations and then fail final validation.
+
+Reviewing the phase artifacts and the implementation diff now. I’ve isolated one concrete engine regression in the new hook lifecycle and I’m updating the verifier artifacts with that finding.
+
+I’ve confirmed the phase criteria file is still blank and the feedback file is empty. I’m appending the blocking finding now and leaving the criteria unchecked because the hook lifecycle is not behaviorally safe yet.
+
+The feedback artifact now has the blocking engine finding. I’m not adding approvals to `criteria.md`; with that regression present, the phase cannot be marked correct or behaviorally safe.
+
+Scope considered
+
+Phase-local verifier scope for `hook-state-session-and-topology-metadata`. I reviewed the implementation diff and phase artifacts needed to assess hook/state/session/topology behavior, and only updated the active verifier artifacts under `.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/`.
+
+What I analyzed
+
+`core/engine.py` hook finalization flow, `core/context.py` session helpers, `core/validation.py` prompt namespace validation, the active `implementation_notes.md`, and the phase criteria/feedback artifacts. I also checked the decisions ledger for conflicting prior direction and found none that changed the reviewer conclusion.
+
+What I reviewed
+
+The main regression is in `core/engine.py:_finalize_step_result`: route hooks share a single precomputed artifact binding, so `on_route` state changes that alter artifact paths are not reflected before `on_taken` runs. I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/feedback.md) with a blocking finding and left [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/criteria.md) unchecked because the phase is not yet behaviorally safe.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The new hook contract allows `on_route` to mutate state, but the engine does not re-resolve and rebind artifacts before the route-level `on_taken` hook. That can direct healing/writes to stale paths and then fail final required-write validation against the newly derived path. The minimal fix is to refresh artifact resolution after each successful route hook inside `_finalize_step_result`.
+
+Open issues / next step
+
+Implement the `IMP-001` fix in the engine, then rerun the targeted hook/state/session tests and re-review the phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
