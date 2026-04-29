@@ -35,3 +35,5 @@ Persist successful operation replays in a run-local `operation_replay.json` ledg
 Checkpoint recorded `ctx.values` as JSON-safe payloads so resumes after later pauses can read earlier feedforward step results without rerunning the completed value nodes.
 <autoloop-decisions-header version="1" block_seq="13" owner="implementer" phase_id="feedforward-operations" pair="implement" turn_seq="2" run_id="run-20260429T131217Z-aa749982" ts="2026-04-29T15:37:04.916607+00:00" />
 Treat bare string prompts passed to feedforward operations as canonical inline prompts at the shared `core.operations` boundary, so standalone calls and helper-function calls inside `python_step` match the public `llm("...")` / `classify("...")` contract without diverging from `.step(...)` semantics.
+<autoloop-decisions-header version="1" block_seq="14" owner="test_author" phase_id="feedforward-operations" pair="test" turn_seq="1" run_id="run-20260429T131217Z-aa749982" ts="2026-04-29T15:42:08.198184+00:00" />
+Use explicit `callsite=` values in standalone replay tests so fingerprint and replay-key assertions stay deterministic even if surrounding source lines or helper stack frames change.

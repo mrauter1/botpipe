@@ -464,6 +464,46 @@ def test_standalone_operations_treat_plain_strings_as_inline_prompts_for_rendere
     assert "Classify risk." in transport.turns[1].prompt_text
 
 
+def test_standalone_operations_replay_and_fail_loudly_on_fingerprint_mismatch(tmp_path: Path) -> None:
+    class Summary(BaseModel):
+        title: str
+
+    run_folder = tmp_path / "run"
+    run_folder.mkdir()
+
+    first_provider = ScriptedLLMProvider(operation_turns=('{"title":"Release summary"}',))
+    first_result = llm(
+        "Generate a summary.",
+        returns=Summary,
+        provider=first_provider,
+        run_folder=run_folder,
+        callsite="tests:standalone-summary",
+    )
+
+    replay_provider = ScriptedLLMProvider()
+    replay_result = llm(
+        "Generate a summary.",
+        returns=Summary,
+        provider=replay_provider,
+        run_folder=run_folder,
+        callsite="tests:standalone-summary",
+    )
+
+    assert first_result.title == "Release summary"
+    assert replay_result.title == "Release summary"
+    assert [call.kind for call in first_provider.calls] == ["operation"]
+    assert replay_provider.calls == []
+
+    with pytest.raises(ProviderExecutionError, match="operation replay fingerprint mismatch"):
+        llm(
+            "Generate a different summary.",
+            returns=Summary,
+            provider=ScriptedLLMProvider(),
+            run_folder=run_folder,
+            callsite="tests:standalone-summary",
+        )
+
+
 def test_standalone_operations_retry_on_parse_and_choice_failures() -> None:
     class Summary(BaseModel):
         title: str
