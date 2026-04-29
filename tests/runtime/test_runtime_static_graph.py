@@ -118,8 +118,12 @@ def test_topology_artifacts_are_written_additively_with_canonical_finish_surface
     assert (tmp_path / "session_contracts.json").exists()
     assert (tmp_path / "compile_report.md").exists()
     assert topology["entry_step"] == "assessment"
+    assert topology["source_hash"] == compiled.source_hash
+    assert topology["topology_hash"] == compiled.topology_hash
     assert topology["terminals"]["FINISH"] == "FINISH"
     assert topology["steps"][1]["routes"][0]["target"] == "FINISH"
+    assert topology["steps"][0]["hooks"]["before"] is None
+    assert topology["steps"][0]["state_fields"] == []
 
 
 def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None:
@@ -132,3 +136,5 @@ def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None
     assert assessment["writes"] == ["assessment.note"]
     assert assessment["routes"][0]["required_writes"] == []
     assert finish["routes"][0]["target"] == "FINISH"
+    assert payload["source_hash"] == compiled.source_hash
+    assert payload["topology_hash"] == compiled.topology_hash

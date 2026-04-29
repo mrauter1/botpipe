@@ -88,6 +88,8 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
     return {
         "schema": TOPOLOGY_SCHEMA,
         "workflow_name": compiled.workflow_name,
+        "source_hash": compiled.source_hash,
+        "topology_hash": compiled.topology_hash,
         "entry_step": compiled.entry_step_name,
         "terminals": {"FINISH": FINISH, "PAUSE": PAUSE, "FAIL": FAIL},
         "steps": [
@@ -106,7 +108,17 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                 "log_artifacts": list(step.log_artifacts),
                 "prompt_references": list(_prompt_references(step)),
                 "available_routes": list(step.available_routes),
+                "hooks": {
+                    "before": _callable_name(step.before_hook),
+                    "after": _callable_name(step.after_hook),
+                    "on_route": _callable_name(step.on_route_hook),
+                    "before_do": _callable_name(step.before_do_hook),
+                    "after_do": _callable_name(step.after_do_hook),
+                    "before_review": _callable_name(step.before_review_hook),
+                    "after_review": _callable_name(step.after_review_hook),
+                },
                 "review_session_name": step.review_session_name,
+                "state_fields": list(step.step_state_fields),
                 "routes": [
                     _topology_route_payload(
                         step_name=step.name,
@@ -137,6 +149,8 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
             run_dir / ARTIFACT_CONTRACTS_FILENAME,
             {
                 "workflow_name": compiled.workflow_name,
+                "source_hash": compiled.source_hash,
+                "topology_hash": compiled.topology_hash,
                 "artifacts": [
                     {
                         "qualified_name": name,
@@ -153,6 +167,8 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
             run_dir / PROMPT_REFS_FILENAME,
             {
                 "workflow_name": compiled.workflow_name,
+                "source_hash": compiled.source_hash,
+                "topology_hash": compiled.topology_hash,
                 "steps": {step.name: list(_prompt_references(step)) for step in compiled.steps.values()},
             },
         ),
@@ -160,19 +176,30 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
             run_dir / STATE_CONTRACTS_FILENAME,
             {
                 "workflow_name": compiled.workflow_name,
+                "source_hash": compiled.source_hash,
+                "topology_hash": compiled.topology_hash,
                 "state_model": compiled.state_cls.__name__,
                 "fields": sorted(getattr(compiled.state_cls, "model_fields", {}).keys()),
+                "step_state_fields": {
+                    step.name: list(step.step_state_fields)
+                    for step in compiled.steps.values()
+                    if step.step_state_fields
+                },
             },
         ),
         SESSION_CONTRACTS_FILENAME: _write_json_file(
             run_dir / SESSION_CONTRACTS_FILENAME,
             {
                 "workflow_name": compiled.workflow_name,
+                "source_hash": compiled.source_hash,
+                "topology_hash": compiled.topology_hash,
                 "default_session": compiled.default_session_name,
+                "default_session_open": compiled.default_session_open,
                 "sessions": [
                     {
                         "name": name,
                         "continuity": session.continuity.kind,
+                        "open": session.open,
                     }
                     for name, session in compiled.sessions.items()
                 ],
@@ -275,6 +302,8 @@ def _compile_report_text(compiled: CompiledWorkflow) -> str:
             "",
             f"- workflow: `{compiled.workflow_name}`",
             f"- entry: `{compiled.entry_step_name}`",
+            f"- source hash: `{compiled.source_hash}`",
+            f"- topology hash: `{compiled.topology_hash}`",
             f"- steps: `{len(compiled.steps)}`",
             f"- routes: `{sum(len(routes) for routes in compiled.routes.values())}`",
             f"- artifacts: `{len(compiled.artifacts_by_qualified_name)}`",

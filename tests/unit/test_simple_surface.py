@@ -18,11 +18,13 @@ from autoloop.simple import (
     FINISH,
     Json,
     Md,
+    Param,
     Prompt,
     Route,
     RouteInfo,
     SELF,
     Session,
+    StateVar,
     StrictWorkflow,
     Workflow,
     chain,
@@ -258,7 +260,43 @@ def test_simple_single_step_workflow_compiles_with_inferred_entry_and_finish_rou
     assert compiled.entry_step_name == "note"
     assert compiled.routes["note"]["done"].target == "FINISH"
     assert compiled.steps["note"].expected_output_schema is None
-    assert compiled.new_state().model_dump(mode="python") == {}
+
+
+def test_statevar_and_param_descriptors_extend_compiled_models_and_prompt_namespaces() -> None:
+    class DescriptorWorkflow(Workflow):
+        attempts = StateVar(0)
+        labels = StateVar(default_factory=list)
+        mode = Param("strict")
+
+        note = step(
+            "Mode: {params.mode}. Attempts: {state.attempts}.",
+            writes=[Md("note")],
+        )
+
+    compiled = compile_workflow(DescriptorWorkflow)
+    state = compiled.new_state()
+    params = compiled.parameters_cls.model_validate({}) if compiled.parameters_cls is not None else None
+
+    assert state.attempts == 0
+    assert state.labels == []
+    assert params is not None
+    assert params.mode == "strict"
+    assert compiled.steps["note"].reads == ()
+
+
+def test_do_review_step_state_descriptors_compile_to_step_state_fields() -> None:
+    class ReviewWorkflow(Workflow):
+        review = do_review_step(
+            do="Draft with {state.global_attempts}.",
+            review="Inspect {review.state.attempts}.",
+            state={"attempts": StateVar(0)},
+        )
+        global_attempts = StateVar(0)
+
+    compiled = compile_workflow(ReviewWorkflow)
+
+    assert compiled.steps["review"].step_state_fields == ("attempts",)
+    assert compiled.new_state().model_dump(mode="python") == {"global_attempts": 0}
 
 
 def test_inherited_simple_workflow_declarations_remain_discoverable_and_compilable() -> None:
@@ -551,11 +589,12 @@ def test_simple_system_step_normalizes_supported_handler_signatures_and_return_s
     assert event.tag == expected_tag
 
 
-def test_strict_workflow_counterpart_preserves_import_time_validation() -> None:
-    with pytest.raises(WorkflowValidationError, match="workflow must define nested State"):
+def test_strict_workflow_counterpart_remains_a_distinct_strict_surface() -> None:
+    class BrokenStrictWorkflow(StrictWorkflow):
+        note = step("Write a short note.")
 
-        class BrokenStrictWorkflow(StrictWorkflow):
-            note = step("Write a short note.")
+    assert BrokenStrictWorkflow.__strict_workflow__ is True
+    assert BrokenStrictWorkflow is not Workflow
 
 
 def test_autoloop_simple_exports_requested_public_authoring_surface() -> None:
@@ -622,6 +661,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "route_summaries",
         "before",
         "after",
+        "on_route",
         "control_schema",
         "retry",
         "session",
@@ -647,6 +687,12 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "route_summaries",
         "before",
         "after",
+        "state",
+        "before_do",
+        "after_do",
+        "before_review",
+        "after_review",
+        "on_route",
         "control_schema",
         "retry",
         "session",
@@ -671,6 +717,12 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "route_summaries",
         "before",
         "after",
+        "state",
+        "before_do",
+        "after_do",
+        "before_review",
+        "after_review",
+        "on_route",
         "control_schema",
         "retry",
         "session",
@@ -690,6 +742,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "route_summaries",
         "before",
         "after",
+        "on_route",
         "control_routes",
     )
     assert tuple(inspect.signature(simple_surface.system_step).parameters) == (
@@ -705,6 +758,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "route_summaries",
         "before",
         "after",
+        "on_route",
         "control_routes",
     )
     assert tuple(inspect.signature(simple_surface.workflow_step).parameters) == (
@@ -724,6 +778,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "route_summaries",
         "before",
         "after",
+        "on_route",
         "control_routes",
     )
 

@@ -12,6 +12,7 @@ try:  # pragma: no branch - prefer installed-package imports when available
     from autoloop_v3.core import Artifact, Workflow as _StrictWorkflow
     from autoloop_v3.core.artifacts import ResolvedArtifacts
     from autoloop_v3.core.context import ChildWorkflowResult
+    from autoloop_v3.core.descriptors import Param, StateVar
     from autoloop_v3.core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF, SUCCESS
     from autoloop_v3.core.prompts import Prompt
     from autoloop_v3.core.routes import Route, RouteInfo
@@ -22,6 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
     from core import Artifact, Workflow as _StrictWorkflow
     from core.artifacts import ResolvedArtifacts
     from core.context import ChildWorkflowResult
+    from core.descriptors import Param, StateVar
     from core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF, SUCCESS
     from core.prompts import Prompt
     from core.routes import Route, RouteInfo
@@ -154,6 +156,7 @@ class StepDeclaration(_NamedDeclaration):
         route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
+        on_route: Any | None = None,
         control_schema: Any | None = None,
         retry: Any | None = None,
         session: Any | None = None,
@@ -169,6 +172,7 @@ class StepDeclaration(_NamedDeclaration):
         self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
+        self.on_route = on_route
         self.control_schema = control_schema
         self.retry = retry
         self.session = session
@@ -205,6 +209,12 @@ class ReviewStepDeclaration(_NamedDeclaration):
         retry: Any | None = None,
         session: Any | None = None,
         review_session: Any | None = None,
+        state: Mapping[str, Any] | None = None,
+        before_do: Any | None = None,
+        after_do: Any | None = None,
+        before_review: Any | None = None,
+        after_review: Any | None = None,
+        on_route: Any | None = None,
         control_routes: bool = True,
     ) -> None:
         super().__init__(name=name)
@@ -222,6 +232,12 @@ class ReviewStepDeclaration(_NamedDeclaration):
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
+        self.state = dict(state or {})
+        self.before_do = before_do
+        self.after_do = after_do
+        self.before_review = before_review
+        self.after_review = after_review
+        self.on_route = on_route
         self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.control_schema = control_schema
         self.retry = retry
@@ -250,6 +266,7 @@ class SystemStepDeclaration(_NamedDeclaration):
         route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
+        on_route: Any | None = None,
         control_routes: bool = True,
     ) -> None:
         super().__init__(name=name)
@@ -262,6 +279,7 @@ class SystemStepDeclaration(_NamedDeclaration):
         self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
+        self.on_route = on_route
         self.control_routes = control_routes
 
 
@@ -289,6 +307,7 @@ class WorkflowStep(_NamedDeclaration):
         route_summaries: Mapping[str, str] | None = None,
         before: Any | None = None,
         after: Any | None = None,
+        on_route: Any | None = None,
         control_routes: bool = True,
     ) -> None:
         super().__init__(name=name)
@@ -305,6 +324,7 @@ class WorkflowStep(_NamedDeclaration):
         self.route_infos = _normalize_simple_route_infos(route_infos, route_summaries=route_summaries)
         self.before = before
         self.after = after
+        self.on_route = on_route
         self.control_routes = control_routes
 
 
@@ -328,6 +348,7 @@ def step(
     route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
+    on_route: Any | None = None,
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
@@ -346,6 +367,7 @@ def step(
         route_summaries=route_summaries,
         before=before,
         after=after,
+        on_route=on_route,
         control_schema=control_schema,
         retry=retry,
         session=session,
@@ -372,6 +394,12 @@ def review_step(
     route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
+    state: Mapping[str, Any] | None = None,
+    before_do: Any | None = None,
+    after_do: Any | None = None,
+    before_review: Any | None = None,
+    after_review: Any | None = None,
+    on_route: Any | None = None,
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
@@ -395,6 +423,12 @@ def review_step(
         route_infos=route_infos,
         before=before,
         after=after,
+        state=state,
+        before_do=before_do,
+        after_do=after_do,
+        before_review=before_review,
+        after_review=after_review,
+        on_route=on_route,
         route_summaries=route_summaries,
         control_schema=control_schema,
         retry=retry,
@@ -425,6 +459,12 @@ def do_review_step(
     route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
+    state: Mapping[str, Any] | None = None,
+    before_do: Any | None = None,
+    after_do: Any | None = None,
+    before_review: Any | None = None,
+    after_review: Any | None = None,
+    on_route: Any | None = None,
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
@@ -452,6 +492,12 @@ def do_review_step(
         route_infos=route_infos,
         before=before,
         after=after,
+        state=state,
+        before_do=before_do,
+        after_do=after_do,
+        before_review=before_review,
+        after_review=after_review,
+        on_route=on_route,
         route_summaries=route_summaries,
         control_schema=control_schema,
         retry=retry,
@@ -475,6 +521,7 @@ def python_step(
     route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
+    on_route: Any | None = None,
     control_routes: bool = True,
 ) -> SystemStepDeclaration | Any:
     if fn is None:
@@ -492,6 +539,7 @@ def python_step(
                 route_summaries=route_summaries,
                 before=before,
                 after=after,
+                on_route=on_route,
                 control_routes=control_routes,
             )
 
@@ -509,6 +557,7 @@ def python_step(
         route_summaries=route_summaries,
         before=before,
         after=after,
+        on_route=on_route,
         control_routes=control_routes,
     )
 
@@ -527,6 +576,7 @@ def system_step(
     route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
+    on_route: Any | None = None,
     control_routes: bool = True,
 ) -> SystemStepDeclaration | Any:
     return python_step(
@@ -542,6 +592,7 @@ def system_step(
         route_summaries=route_summaries,
         before=before,
         after=after,
+        on_route=on_route,
         control_routes=control_routes,
     )
 
@@ -564,6 +615,7 @@ def workflow_step(
     route_summaries: Mapping[str, str] | None = None,
     before: Any | None = None,
     after: Any | None = None,
+    on_route: Any | None = None,
     control_routes: bool = True,
 ) -> WorkflowStep:
     return WorkflowStep(
@@ -583,6 +635,7 @@ def workflow_step(
         route_summaries=route_summaries,
         before=before,
         after=after,
+        on_route=on_route,
         control_routes=control_routes,
     )
 
@@ -645,12 +698,15 @@ __all__ = [
     "Json",
     "Md",
     "Outcome",
+    "PAUSE",
+    "Param",
     "Prompt",
     "Raw",
     "ResolvedArtifacts",
     "Route",
     "RouteInfo",
     "SELF",
+    "StateVar",
     "SUCCESS",
     "Session",
     "StrictWorkflow",

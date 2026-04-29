@@ -9,6 +9,7 @@ import pytest
 
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from autoloop_v3.core.errors import WorkflowExecutionError
 from autoloop_v3.runtime.loader import WorkflowParameterError
 from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop_v3.runtime.workspace import (
@@ -150,6 +151,66 @@ def test_runtime_context_and_prompt_resolution_use_workflow_scope_and_package_ro
     assert (workflow_dir / "workflow-note.txt").read_text(encoding="utf-8") == "workflow-scoped\n"
     assert run_meta["workflow_params"] == {"mode": "strict"}
     assert run_meta["workflow_folder"] == ".autoloop/tasks/context-task/wf_context_demo"
+
+
+def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_path: Path) -> None:
+    _write_system_workflow_package(tmp_path, "topology_demo", "TopologyWorkflow")
+
+    result = run_workflow_package(
+        "topology_demo",
+        provider=ScriptedLLMProvider(),
+        options=_runner_options(tmp_path, task_id="task-topology", message="Record topology metadata"),
+    )
+
+    run_dir = next((tmp_path / ".autoloop" / "tasks" / "task-topology" / "wf_topology_demo" / "runs").iterdir())
+    run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    topology = run_meta["topology"]
+
+    assert result.terminal == "SUCCESS"
+    assert isinstance(topology["source_hash"], str)
+    assert isinstance(topology["topology_hash"], str)
+    assert topology["entry_step"] == "start"
+    assert topology["artifacts"]["topology"] == "topology.json"
+    assert topology["artifacts"]["prompt_refs"] == "prompt_refs.json"
+    assert (run_dir / topology["artifacts"]["topology"]).exists()
+
+
+def test_resume_fails_when_saved_topology_hash_differs(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "resume_topology_demo", "ResumeTopologyWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Answered", tag="answered", payload={"answer": "42"}),
+        ]
+    )
+
+    paused = run_workflow_package(
+        "resume_topology_demo",
+        provider=provider,
+        options=_runner_options(tmp_path, task_id="task-topology-resume", message="Pause first"),
+    )
+
+    run_dir = next(
+        (tmp_path / ".autoloop" / "tasks" / "task-topology-resume" / "wf_resume_topology_demo" / "runs").iterdir()
+    )
+    run_meta_file = run_dir / "run.json"
+    run_meta = json.loads(run_meta_file.read_text(encoding="utf-8"))
+    run_meta["topology"]["topology_hash"] = "mismatched-topology"
+    run_meta_file.write_text(json.dumps(run_meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    assert paused.terminal == "PAUSE"
+    with pytest.raises(WorkflowExecutionError, match="different compiled topology"):
+        run_workflow_package(
+            "resume_topology_demo",
+            provider=provider,
+            options=_runner_options(
+                tmp_path,
+                task_id="task-topology-resume",
+                run_id=run_dir.name,
+                resume=True,
+                answer="42",
+            ),
+        )
 
 
 def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path: Path) -> None:
