@@ -43,3 +43,50 @@ Updated the planning artifacts at [plan.md](</home/rauter/autoloop_v3_bkp/autolo
 The sequencing is: canonical public/simple surface cleanup, compiler/validation/topology canonicalization, engine/provider/persistence cleanup with narrow persisted-run migration only, repo-wide consumer migration plus `autoloop_optimizer` separation, then strictness/regression verification. The repo analysis that drove this plan covered the main legacy hotspots in `autoloop/__init__.py`, `autoloop/simple.py`, `core/primitives.py`, `core/routes.py`, `core/steps.py`, `core/compiler.py`, `core/validation.py`, `runtime/static_graph.py`, `runtime/loader.py`, `stdlib`, and the contract/runtime/unit tests.
 
 No product code was changed and no test suite was run on this planning turn.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb24-0179-73f1-af1b-5f91100396f1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019ddb24-0179-73f1-af1b-5f91100396f1
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb24-0179-73f1-af1b-5f91100396f1
+---
+I’m verifying the plan artifacts against the full cleanup spec and the repo analysis, with emphasis on intent fidelity and whether the phases actually cover the breaking contract changes the user explicitly asked for.
+
+I found material coverage gaps rather than formatting issues. I’m appending blocking findings now; the criteria can’t pass because the current plan still leaves explicit parts of the spec unplanned.
+
+The narrative findings are in place. I’m doing one last machine check on `phase_plan.yaml` parseability so the final verdict is based on both content and file validity.
+
+Scope considered
+
+Run-local planning artifacts, the authoritative request snapshot, the raw phase log for clarifications, and the shared decisions ledger. I stayed within plan-verification scope and did not touch repository source code.
+
+What I analyzed
+
+The full cleanup spec against the generated [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/plan/plan.md>) and [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/plan/phase_plan.yaml>), plus the planner’s stated decisions in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt>). I also machine-checked that `phase_plan.yaml` parses and that runtime-owned metadata keys are intact.
+
+What I reviewed
+
+`phase_plan.yaml` is parseable YAML and its top-level metadata is correct. The plan has sensible broad sequencing, but it does not yet fully cover the requested implementation contract. I appended the verification findings to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/plan/feedback.md>). The criteria file remains fully unchecked because blocking gaps remain.
+
+Key findings / decisions
+
+`PLAN-001` blocking: the plan omits explicit coverage for schema registry centralization and runtime-owned git-tracking cleanup, both of which are directly required by the spec.
+
+`PLAN-002` blocking: the plan does not spell out the required default-route and control-route semantics for `step`, `produce_verify_step`, `python_step`, `workflow_step`, and operation nodes, which is a material behavioral-safety gap.
+
+`PLAN-003` blocking: the revised Pydantic state migration is only partially planned; item state, step-item state, checkpoint/prompt behavior, and the “no half-working API” rule are not covered or explicitly deferred.
+
+Open issues / next step
+
+The planner needs to revise `plan.md` and `phase_plan.yaml` to add explicit scope, acceptance criteria, and validation for the three blocking areas above. After that, rerun plan verification and only mark criteria complete if those gaps are closed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
