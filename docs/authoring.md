@@ -248,7 +248,7 @@ Prompt-style rules:
 Relative prompts and bundled assets resolve from the executable workflow container, never from the current working directory.
 
 ```python
-Prompt("prompts/ask.md")
+Prompt.file("prompts/ask.md")
 Artifact("{run_folder}/request.md")
 Artifact("{workflow_folder}/notes.md")
 Artifact("{package_folder}/assets/template.txt")
@@ -425,7 +425,9 @@ Use `Route.to(...)`, `Route.complete(...)`, `Route.pause(...)`, and `Route.fail(
 
 ## Worklists And Scoped Steps
 
-`Worklist` and `WorkItem` let workflows scope a step to the current selected item without introducing hidden looping:
+`Worklist` and `WorkItem` let workflows scope a step to the current selected item without introducing hidden looping.
+
+The greenfield public authoring surface stays focused on the simpler static-step path in this phase. Scoped worklist examples remain an advanced compatibility seam until a canonical simple-surface `scope=` declaration is documented.
 
 ```python
 gates = Worklist.from_artifact(

@@ -65,6 +65,7 @@
 - Class namespace declaration order now determines default entry and default next-step lowering for the simple surface.
 - Simple prompt placeholders fail early for unknown or ambiguous artifact references when prompt text is available at compile time.
 - `Prompt.ref(...)` compile-time placeholder analysis now preserves registry semantics instead of opportunistically reading same-named local prompt files.
+- Remaining legacy worklist/scoped-step examples in the public authoring doc are now explicitly compatibility-fenced instead of presented as greenfield canonical guidance.
 - Runtime tracing writes additive canonical topology artifacts beside the legacy static graph payload.
 
 ## Known Non-Changes
@@ -78,6 +79,7 @@
 - New runs receive `topology.json`, `topology.mmd`, `route_table.md`, `artifact_contracts.json`, `prompt_refs.json`, `state_contracts.json`, `session_contracts.json`, and `compile_report.md`.
 - Public workflow scaffolds and docs now steer new code toward the canonical surface instead of legacy `chain` plus `system_step`.
 - Registry-backed prompt declarations no longer pick up compile-time inferred reads from colliding workflow-local files unless prompt text is explicitly available on the prompt object.
+- The public authoring doc now uses `Prompt.file(...)` in its prompt-resolution example and labels scoped `PairStep` worklist usage as an advanced compatibility seam rather than greenfield simple-surface guidance.
 
 ## Validation Performed
 
@@ -86,6 +88,7 @@
 - `./.venv/bin/python -m pytest -q tests/runtime/test_package_cli.py`
 - `python3 -m py_compile core/validation.py`
 - `./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py tests/test_architecture_baseline_docs.py tests/runtime/test_package_cli.py`
+- `./.venv/bin/python -m pytest -q tests/test_architecture_baseline_docs.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_package_cli.py`
 
 ## Deduplication / Centralization
 
