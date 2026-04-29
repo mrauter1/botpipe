@@ -53,16 +53,16 @@ class Route:
     target: object | None = None
     effects: tuple[Effect, ...] = ()
     summary: str | None = None
-    required_outputs: tuple[str, ...] | None = None
+    required_writes: tuple[str, ...] | None = None
     handoff: str | None = None
     on_taken: object | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "summary", _normalize_optional_text(self.summary, field_name="summary"))
-        if self.required_outputs is None:
-            object.__setattr__(self, "required_outputs", None)
+        if self.required_writes is None:
+            object.__setattr__(self, "required_writes", None)
         else:
-            object.__setattr__(self, "required_outputs", _normalize_required_outputs(self.required_outputs))
+            object.__setattr__(self, "required_writes", _normalize_required_outputs(self.required_writes))
         object.__setattr__(self, "handoff", _normalize_optional_text(self.handoff, field_name="handoff"))
 
     @staticmethod
@@ -81,7 +81,7 @@ class Route:
             target=target,
             effects=tuple(effects),
             summary=summary,
-            required_outputs=(
+            required_writes=(
                 _normalize_required_outputs(required_writes)
                 if required_writes is not None
                 else (_normalize_required_outputs(required_outputs) if required_outputs is not None else None)
@@ -91,7 +91,7 @@ class Route:
         )
 
     @staticmethod
-    def complete(
+    def finish(
         *effects: Effect,
         summary: str | None = None,
         required_outputs: Iterable[str] | None = None,
@@ -100,7 +100,7 @@ class Route:
         on_taken: object | None = None,
     ) -> "Route":
         return Route.to(
-            SUCCESS,
+            FINISH,
             *effects,
             summary=summary,
             required_outputs=required_outputs,
@@ -148,8 +148,8 @@ class Route:
         )
 
     @property
-    def required_writes(self) -> tuple[str, ...] | None:
-        return self.required_outputs
+    def required_outputs(self) -> tuple[str, ...] | None:
+        return self.required_writes
 
 
 def normalize_route_spec(destination: object) -> Route:
@@ -158,14 +158,17 @@ def normalize_route_spec(destination: object) -> Route:
     if isinstance(destination, Route):
         return destination
     if destination == SUCCESS:
-        return Route.complete()
+        return Route.finish()
     if destination == FINISH:
-        return Route.to(FINISH)
+        return Route.finish()
     if destination == PAUSE:
         return Route.pause()
     if destination == FAIL:
         return Route.fail()
     return Route.to(destination)
+
+
+Route.complete = Route.finish
 
 
 __all__ = ["Route", "RouteInfo"]

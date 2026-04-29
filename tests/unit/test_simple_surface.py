@@ -180,11 +180,17 @@ def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_
     assert compiled.entry_step_name == "prepare"
     assert compiled.parameters_cls is ParamsModel
     assert compiled.state_cls is WorkflowState
+    assert compiled.default_session_name == "global"
+    assert compiled.steps["prepare"].kind == "step"
+    assert compiled.steps["review"].kind == "produce_verify"
     assert compiled.routes["prepare"]["done"].target == "review"
     assert compiled.routes["review"]["accepted"].target == "FINISH"
     assert compiled.routes["review"]["needs_rework"].target == "review"
+    assert compiled.steps["prepare"].writes == ("prepare.brief",)
     assert compiled.steps["review"].producer_prompt is not None
     assert compiled.steps["review"].verifier_prompt is not None
+    assert compiled.steps["review"].producer_writes == ("review.draft",)
+    assert compiled.steps["review"].verifier_writes == ("review.decision",)
     assert compiled.steps["review"].step_state_fields == ("attempts", "history")
 
 
@@ -212,3 +218,15 @@ def test_produce_verify_step_requires_pydantic_step_state_model() -> None:
         match="simple step 'review' state must be declared with a pydantic.BaseModel subclass",
     ):
         compile_workflow(BadWorkflow)
+
+
+def test_simple_workflow_rejects_class_level_transitions_and_flow() -> None:
+    class TransitionWorkflow(simple.Workflow):
+        start = simple.step(prompt="Start.")
+        transitions = {"start": {"done": "finish"}}
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="step-local routes and optional entry, not transitions or flow",
+    ):
+        compile_workflow(TransitionWorkflow)

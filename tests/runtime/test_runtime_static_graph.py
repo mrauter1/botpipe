@@ -75,14 +75,18 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     finish = next(step for step in payload["steps"] if step["name"] == "finish")
 
     assert payload["workflow_name"] == "static_graph_demo"
-    assert assessment["kind"] == "pair"
+    assert assessment["kind"] == "produce_verify"
+    assert assessment["prompt"] is None
     assert assessment["producer_prompt"] == "prompts/assessment_producer.md"
     assert assessment["verifier_prompt"] == "prompts/assessment_verifier.md"
     assert assessment["reads"] == []
     assert assessment["requires"] == ["request"]
-    assert assessment["produces"] == ["assessment.note"]
+    assert assessment["producer_writes"] == ["assessment.note"]
+    assert assessment["writes"] == ["assessment.note"]
     assert assessment["log_artifacts"] == ["transcript"]
     assert "assessment_ready" in assessment["available_routes"]
+    assert finish["kind"] == "python"
+    assert finish["prompt"] is None
     assert finish["producer_prompt"] is None
     assert finish["verifier_prompt"] is None
 
@@ -94,12 +98,11 @@ def test_static_step_graph_includes_route_infos_and_schema_presence(tmp_path: Pa
     payload = json.loads((tmp_path / "static_step_graph.json").read_text(encoding="utf-8"))
     assessment = next(step for step in payload["steps"] if step["name"] == "assessment")
 
-    assert assessment["route_infos"]["assessment_ready"]["summary"] == "assessment completed"
-    assert assessment["route_required_outputs"]["assessment_ready"] == []
-    assert assessment["route_infos"]["assessment_ready"]["summary"] == "assessment completed"
+    assert assessment["routes"]["assessment_ready"]["summary"] == "assessment completed"
+    assert assessment["routes"]["assessment_ready"]["required_writes"] == []
     assert assessment["has_expected_output_schema"] is True
     assert payload["transitions"]["steps"]["assessment"]["assessment_ready"] == "finish"
-    assert payload["transitions"]["steps"]["finish"]["done"] == "SUCCESS"
+    assert payload["transitions"]["steps"]["finish"]["done"] == "FINISH"
     assert payload["transitions"]["global"] == {}
 
 
@@ -123,6 +126,7 @@ def test_topology_artifacts_are_written_additively_with_canonical_finish_surface
     assert topology["terminals"]["FINISH"] == "FINISH"
     assert topology["steps"][1]["routes"][0]["target"] == "FINISH"
     assert topology["steps"][0]["hooks"]["before"] is None
+    assert topology["steps"][0]["state_model"] is None
     assert topology["steps"][0]["state_fields"] == []
 
 

@@ -523,3 +523,69 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb4b-6028-7802-9a75-652b8666c65c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+I’m implementing the compiler-validation-normalization phase. First I’m reading the phase artifacts and the relevant compiler/runtime modules to see which canonicalization work is already done and where the remaining legacy contracts still live.
+
+The repo is in the middle of a package-layout transition, so I’m limiting scope to the new root-level modules and using the older tree only as reference. Next I’m tracing compiler, primitive, step, and validation definitions for the remaining legacy route/state/session behavior.
+
+The current root package still has legacy internals underneath `core`, and the new `__init__.py` is effectively empty. I’m mapping the actual package entrypoints and the simple-authoring layer next so the compiler work lands on the active import path rather than a dead branch.
+
+I’ve confirmed the public `autoloop` surface is already narrowed, but the lowering pipeline still translates simple declarations into legacy `PairStep`/`LLMStep`/`SystemStep` structures with `route_infos`, `produces`, and descriptor-backed state. I’m drilling into the lowering and validation sections now because that’s where this phase’s acceptance criteria actually live.
+
+I’ve narrowed the change set. I’m keeping the old low-level step classes as internal scaffolding for now, but I’m switching the compiled surface, simple-workflow validation, default-route derivation, and session naming to the canonical model so the public authoring path stops lowering into legacy metadata.
+
+I’ve finished the analysis pass. I’m editing the session, validation, compiler, engine, and static-graph modules now so the canonical simple workflow surface compiles to canonical metadata and route/session contracts instead of the legacy vocabulary.
+
+The core edits are in place. I’m running the focused simple-surface and static-graph tests now to catch the obvious drift before I update notes and any remaining phase-local assertions.
+
+`pytest` is not on the shell path in this environment. I’m switching to `python -m pytest` and, if that also fails, I’ll at least run import-level smoke checks against the touched modules.
+
+The environment is missing `pytest` and even `pydantic`, so I can’t execute semantic tests here. I’m doing syntax-only validation on the touched files and then I’ll update the phase notes with the exact scope, assumptions, and verification gap.
+
+Scope considered
+
+- Phase-local compiler/validation normalization on the active repo-root packages: `autoloop`, `core`, `runtime`.
+- Adjacent regression surfaces needed for this phase: simple authoring lowering, compiled metadata, engine routing/session use, and static graph/topology emission.
+- I did not absorb the deleted legacy mirror under `autoloop_v3/...` into scope beyond using it as migration context.
+
+What I analyzed
+
+- The active phase artifacts, plan, and decisions ledger.
+- `autoloop/simple.py`, `core/routes.py`, `core/sessions.py`, `core/validation.py`, `core/compiler.py`, `core/engine.py`, and `runtime/static_graph.py`.
+- Existing phase-relevant tests, especially `tests/unit/test_simple_surface.py` and `tests/runtime/test_runtime_static_graph.py`.
+
+What I changed
+
+- Set the canonical default session slot to `global` and made simple `Workflow` default `Params = EmptyParams`.
+- Tightened simple-workflow validation so class-level `transitions` and `flow` now fail; topology is derived from declaration order, explicit `entry`, and step-local `routes`.
+- Canonicalized simple-route/default-route behavior so compiled simple steps surface `step`, `produce_verify`, `python`, and `operation` kinds.
+- Renamed compiled step/route metadata to canonical fields such as `writes`, `producer_*`, `verifier_*`, `python_handler`, and `required_writes`.
+- Normalized `SUCCESS` destinations to `FINISH` in compiled routes/topology and updated engine terminal handling accordingly.
+- Updated static graph/topology payload generation to emit canonical prompt/write/session/state fields.
+- Updated phase-local tests to assert the canonical simple/compiled/static-graph surface.
+
+Key findings / decisions
+
+- The repo is mid-migration: the active root-level package tree is currently untracked in git status, while the old tracked mirror is deleted. I implemented this phase against the active root-level tree and recorded that in `decisions.txt`.
+- I kept low-level `LLMStep`/`PairStep`/`SystemStep` classes as internal scaffolding for now, but moved the compiled/simple surface to canonical names.
+- Validation performed was syntax-only: `python3 -m py_compile` passed for all touched code and test files.
+- I could not run pytest or import-level runtime checks here because the environment is missing `pytest`, `pydantic`, and related dependencies.
+
+Open issues / next step
+
+- Provider request payloads still carry legacy keys like `route_infos` and `route_required_outputs`; that remains for the later engine/provider phase.
+- Low-level/core public cleanup is still incomplete; legacy internal class names remain in the root `core` package.
+- Once dependencies are available, the next step is to run the focused simple-surface/static-graph tests and then continue the provider/runtime payload migration.

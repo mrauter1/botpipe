@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 ContinuityKind = Literal["run", "task", "work_item", "fresh", "key"]
 SessionKeyDomain = Literal["run", "task", "work_item", "fresh", "explicit_scope", "explicit_key"]
-DEFAULT_SESSION_NAME = "default"
+DEFAULT_SESSION_NAME = "global"
 
 
 @dataclass(frozen=True, slots=True)

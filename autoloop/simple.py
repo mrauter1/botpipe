@@ -52,6 +52,7 @@ class Workflow:
     __workflow_abstract__ = True
     __strict_workflow__ = False
     extensions: tuple[object, ...] = ()
+    Params = EmptyParams
     State = EmptyState
 
 
