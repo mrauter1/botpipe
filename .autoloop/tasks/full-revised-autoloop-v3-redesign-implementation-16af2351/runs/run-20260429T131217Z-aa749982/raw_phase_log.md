@@ -1211,3 +1211,155 @@ No open phase-local test-audit issues. This test phase is complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+I’m implementing the `feedforward-operations` phase: first I’m reading the phase artifacts and the current code paths for step compilation, providers, replay, and `python_step` so I can fit `llm()` / `classify()` into the existing FSM without widening scope.
+
+The phase notes and prior decisions are loaded. The session file path in the run preamble does not exist on disk, so I’m proceeding from the authoritative request, plan, and prior phase decisions unless I find a relocated session artifact.
+
+I’ve confirmed there isn’t a feedforward phase session artifact yet. Next I’m mapping the existing `llm` step path, provider contracts, and replay/persistence surfaces so the new value operations can reuse those pieces instead of inventing a parallel runtime.
+
+The existing `LLMStep` path is strictly outcome-based. I’m now checking where compiled step kinds, prompt/value references, and runtime context can hold a replayable value node without disturbing route resolution for ordinary LLM steps.
+
+The replay surface doesn’t exist yet; there’s only run metadata and tracing. I’m going to add a narrow operation ledger under the existing runtime context and run folder rather than thread this through unrelated workspace or provider abstractions.
+
+The current runtime doesn’t have a persisted value namespace, so I’m checking checkpoint and context storage now. The cleanest fit looks like a small per-run value store carried alongside step state, then exposed as `ctx.values` for `python_step` and later prompts.
+
+I’ve got the likely shape: a small operation runtime with a persisted run-folder ledger, plus `.step(...)` lowering to deterministic value nodes that behave like `python_step`-style internal handlers. I’m reading the simple-declaration discovery now so I can slot that in without breaking the existing compiler path.
+
+I have enough context to start editing. The change will stay localized to the public surface, provider protocol/rendering, engine/context persistence, and targeted tests; I’m checking the worktree first so I don’t trample unrelated edits.
+
+I’m adding a dedicated operation executor module first so the provider contract, replay ledger, and ambient runtime binding all live in one place. After that I’ll wire the public API and the engine into it.
+
+The executor module is in. I’m wiring the provider boundary next so value operations use a distinct raw-text contract instead of the route/outcome path that powers normal agentic steps.
+
+I’m extending the public surface now. `llm` and `classify` will be first-class callables, and `.step(...)` will lower into an internal deterministic handler instead of pretending to be a route-producing LLM step.
+
+I’ve finished the code path through the engine and public surface. I’m adding focused tests now for explicit standalone calls, compiled value-step nodes, replay hits, mismatch failures, and resume restoring `ctx.values`.
+
+I’ve got the first pass wired through code and tests. I’m running a focused slice first to catch API or replay-contract mistakes before I touch notes or decisions.
+
+`pytest` isn’t on PATH here, so I’m running the same targeted suite through `python -m pytest` instead.
+
+The environment doesn’t have `pytest` installed, so I can’t run the suite directly. I’m switching to syntax checks plus a small inline runtime probe to exercise the new public path and catch integration errors.
+
+The code parses cleanly, but I can’t execute runtime probes here because the environment is missing both `pytest` and `pydantic`. I’m doing a final pass over the touched files now, then I’ll update the phase notes and decision ledger with the non-obvious replay and lowering choices.
+
+The main gaps now are retry coverage for operations and the phase bookkeeping files. I’m adding one focused retry test so the new path isn’t only covered on the happy path.
+
+I’ve updated the ledger and phase notes. I’m doing one last targeted diff review on only the files I touched so the final summary reflects the actual blast radius, not the unrelated dirty worktree around it.
+
+I’ve finished the core feedforward implementation and I’m doing a final regression pass over the touched surfaces before closing the phase. I’m checking the diff shape and the updated phase notes so the handoff stays aligned with the phase contract.
+
+The implementation notes and decision ledger are in the expected shape. I’m checking the working tree one more time because `git diff --stat` only reports tracked edits and I added a new runtime module in this phase.
+
+I’m reading the new operation runtime and the simple-surface lowering now. This is the last pass to catch contract mistakes before I close with the phase summary.
+
+Scope considered
+
+- Active phase `feedforward-operations` only, plus adjacent provider, engine, checkpoint, and simple-surface lowering code needed to satisfy replay/resume behavior.
+- Authoritative phase artifacts: `plan.md`, phase `feedback.md`, phase `implementation_notes.md`, and `decisions.txt`.
+- I did not pull unrelated dirty files into scope.
+
+What I analyzed
+
+- The simple authoring surface in `autoloop/simple.py`, especially how prior phases lower declarations into the existing compiled FSM.
+- Runtime execution and resume/checkpoint flow in `core/engine.py`, `core/context.py`, `core/validation.py`, and checkpoint storage.
+- Provider interfaces and rendered/fake providers to add a value-returning operation path without disturbing route-oriented step execution.
+- Existing test surfaces for simple authoring, provider boundaries, and engine contracts.
+
+What I changed
+
+- Added feedforward runtime support in `core/operations.py` for standalone `llm()` / `classify()`, retry, deterministic fingerprints, replay, and typed value parsing.
+- Exposed public `llm` and `classify` APIs, plus `llm.step(...)` / `classify.step(...)`, in `autoloop/simple.py` and `autoloop/__init__.py`.
+- Lowered `.step(...)` feedforward declarations through generated system handlers with `control_routes=False`, so they behave as value nodes and do not create implicit classifier routing.
+- Added a provider operation contract with `OperationRequest` / `OperationResponse` and `LLMProvider.run_operation(...)`, then implemented it in rendered and fake providers.
+- Persisted replay results in run-local `operation_replay.json` and checkpointed `ctx.values` so completed value nodes survive resume.
+- Added targeted tests for standalone calls, retry paths, compiled value nodes, replay across reruns, replay fingerprint mismatch, and resume value restoration.
+- Updated the phase implementation notes and appended this turn’s non-obvious decisions under the current `feedforward-operations` block in `decisions.txt`.
+
+Key findings / decisions
+
+- The safest way to add feedforward nodes in this phase was to lower them into the existing FSM as generated system-step handlers rather than add a second execution path.
+- Replay drift is treated as a loud failure on an existing replay slot instead of silently recomputing, matching the phase requirement.
+- `ctx.values` needed to be persisted through checkpoint/load to make replayed or previously computed operation values available after resume.
+- Validation here was limited to `python3 -m py_compile`; this environment does not have `pytest` or `pydantic`, so I could not execute the added tests.
+
+Open issues / next step
+
+- Install the missing test dependencies and run:
+  - `python3 -m pytest tests/unit/test_simple_surface.py tests/unit/test_provider_boundary_core.py tests/contract/test_engine_contracts.py`
+- After that, run the broader engine/provider regression slice if the repo normally does one.
+- The active phase session JSON path from the run preamble was not present in this workspace; it did not block implementation, but it is still absent.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+I’m reviewing the feedforward-operations implementation against the phase criteria and the touched runtime/provider surfaces. I’ll inspect the phase artifacts first, then audit the code paths that affect replay, retry, resume, and `.step(...)` lowering.
+
+The tracked diff is empty because most of the core changes are currently untracked in this workspace, so I’m reviewing the file contents directly. I’m checking the new operation runtime first, then the compiler/runtime plumbing around value persistence and prompt references.
+
+I found one suspicious contract edge and I’m tracing it through the provider path before I decide whether it’s blocking. The check is whether direct `llm("...")` and `classify("...")` actually treat plain strings as inline prompts, as the requested API requires.
+
+I’ve confirmed the plain-string prompt path is wrong for direct feedforward calls. I’m checking one more adjacent surface around checkpoint persistence to see whether there’s a second blocking regression or just that single contract miss.
+
+I have one confirmed blocking bug already. I’m checking the runtime prompt interpolation path now, because if recorded `.value` references aren’t resolved at execution time that would be a second blocker for `llm.step(...)`/`classify.step(...)`.
+
+I’ve finished the code audit. There is one blocking contract miss in the direct feedforward API, and it also affects helper usage inside `python_step`. I’m updating the phase review artifacts now.
+
+Scope considered
+
+- Active phase `feedforward-operations` only.
+- Request-relevant runtime and regression surfaces: `autoloop/simple.py`, `core/operations.py`, `core/engine.py`, provider models/rendering, checkpoint persistence, and the new tests.
+- Phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I analyzed
+
+- How standalone `llm()` / `classify()` calls normalize prompts and enter the new value-returning provider path.
+- How `.step(...)` declarations lower into the existing compiled FSM and how recorded values are checkpointed and replayed.
+- Whether replay and resume logic preserved prior engine invariants without widening the phase scope.
+- The added tests to see which runtime paths were actually covered.
+
+What I reviewed
+
+- The new feedforward runtime in `core/operations.py`.
+- The direct and step-declared public API surface in `autoloop/simple.py` and `autoloop/__init__.py`.
+- Provider boundary changes in `core/providers/{models,protocols,rendered,rendering,fake,turns}.py`.
+- Checkpoint persistence changes in `core/stores/protocols.py`, `runtime/stores/filesystem.py`, and engine wiring in `core/engine.py`.
+- The phase review artifacts: `feedback.md` updated with one blocking finding; `criteria.md` remains unchecked because the phase is not yet review-complete.
+
+Key findings / decisions
+
+- Blocking: `IMP-001` in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/feedforward-operations/feedback.md). Direct `llm("...")` / `classify("...")` calls treat bare strings as registry refs instead of inline prompts, so the rendered provider path fails with `prompt ... did not resolve to text`. This breaks the canonical standalone API required by AC-1 and the helper-function path inside `python_step`.
+- The minimal fix is to centralize feedforward prompt normalization so bare strings become `Prompt.inline(...)` at the shared operation boundary, then add a rendered-provider regression test for direct/helper string prompts.
+
+Open issues / next step
+
+- Fix `IMP-001` in the implementation and rerun review for this phase.
+- After the fix, add or update a regression test that exercises direct `llm("...")` / `classify("...")` through `RenderedLLMProvider`, not only the fake provider path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
