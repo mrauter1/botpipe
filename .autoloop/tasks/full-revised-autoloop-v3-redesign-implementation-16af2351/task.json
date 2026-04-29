@@ -16,13 +16,13 @@
       "workflow-migration-and-cleanup"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "do-review-step-and-route-required-writes"
+    "current_phase_index": 2,
+    "current_phase_id": "hook-state-session-and-topology-metadata"
   },
   "phase_status": {
     "canonical-surface-and-topology-lowering": "completed",
-    "do-review-step-and-route-required-writes": "in_progress",
-    "hook-state-session-and-topology-metadata": "planned",
+    "do-review-step-and-route-required-writes": "completed",
+    "hook-state-session-and-topology-metadata": "in_progress",
     "feedforward-operations": "planned",
     "workflow-migration-and-cleanup": "planned"
   },
@@ -45,6 +45,19 @@
       "run_id": "run-20260429T131217Z-aa749982",
       "status": "in_progress",
       "ts": "2026-04-29T14:04:18.314447+00:00"
+    },
+    {
+      "phase_id": "do-review-step-and-route-required-writes",
+      "run_id": "run-20260429T131217Z-aa749982",
+      "status": "completed",
+      "ts": "2026-04-29T14:29:43.746957+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "hook-state-session-and-topology-metadata",
+      "run_id": "run-20260429T131217Z-aa749982",
+      "status": "in_progress",
+      "ts": "2026-04-29T14:29:43.751335+00:00"
     }
   ]
 }
