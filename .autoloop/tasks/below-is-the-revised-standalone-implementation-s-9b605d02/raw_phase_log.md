@@ -1184,3 +1184,58 @@ Open issues / next step
 
 - No new blockers found in the touched scope after the fix.
 - The next step is the verifier rerun against the updated feedback items and criteria.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+I’m rechecking the two reviewer-reported persistence defects against the updated code and the new compatibility tests now. I’ll verify the normalization behavior directly, then I’ll update the review artifacts to reflect whether the phase now meets all acceptance criteria.
+
+The normalization behavior now matches the intended migration. I’m running the focused review suite one more time from the verifier side so I can update the criteria confidently instead of relying only on the implementer’s report.
+
+The verifier-side suite is still clean. I’m waiting for the final result, then I’ll clear the criteria, leave the existing feedback history as-is, and close this review round as complete if nothing else surfaces.
+
+I’ve finished the verifier-side test run and rechecked the previously blocking paths. The phase now looks clean in scope, so I’m marking the criteria complete and closing the review without adding new findings.
+
+Scope considered
+
+- Phase-local runtime/provider/persistence cleanup only.
+- Re-reviewed the two previously blocking legacy session-normalization paths plus the focused runtime/provider regression surfaces listed in the implementation notes.
+
+What I analyzed
+
+- The updated normalization code in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py) and [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py).
+- The added compatibility coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+- The reviewer artifacts in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/feedback.md), and [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/implementation_notes.md).
+
+What I reviewed
+
+- Direct repro of the previously failing legacy `default` active-slot normalization now yields canonical `{"global": SessionKey("global", "run", "run-1")}`.
+- The filesystem checkpoint/session reader now preserves literal `"default"` values for non-run `explicit_key` / `explicit_scope` identities.
+- Verifier-side validation command:
+  - `.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py tests/unit/test_provider_boundary_core.py -q`
+  - Result: `89 passed`
+
+Key findings / decisions
+
+- No new findings.
+- The previously recorded blocking issues `IMP-001` and `IMP-002` no longer reproduce in the updated code path.
+- I marked all criteria complete in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/criteria.md).
+
+Open issues / next step
+
+- No blocking issues remain in this phase scope.
+- The current feedback file remains as historical review context from the previous cycle; this cycle did not add new findings.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
