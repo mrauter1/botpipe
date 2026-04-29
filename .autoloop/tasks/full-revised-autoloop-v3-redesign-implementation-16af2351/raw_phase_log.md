@@ -2030,3 +2030,54 @@ Validation performed:
 Open issues / next step
 
 The next slice should finish the second-pass route-metadata cleanup for the earlier-migrated packages listed above, switching their contract modules to `Route.to(...)` and their workflow declarations from `route_infos=` to `routes=`. After that, the strictness/docs/contract/runtime/workflow integration suites still need to run to close AC-3; I did not run them here.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m treating this as a delta review against the prior findings: the legacy step-surface blocker is resolved, and the remaining blockers are now the older `RouteInfo` pockets plus the unrun acceptance suites.
+
+I’m reviewing the cycle-3 migration delta against the phase acceptance criteria, then I’ll update the phase artifacts with only the remaining blocking gaps.
+
+I’ve narrowed the remaining code blocker to first-party `RouteInfo` usage. I’m checking the packaging split and validation coverage now so the verdict matches all three acceptance criteria, not just the workflow migration slice.
+
+The package split looks intact at a glance. I’m checking whether `stdlib` now only holds thin compatibility shims or whether optimizer logic still materially lives there, because that changes the AC-2 judgment.
+
+The feedback file already has the current blocking findings. I’m adding one short resolution note so the artifact clearly distinguishes the stale early blockers from the two blockers that are still active now.
+
+Scope considered
+
+Active verifier scope for `workflow-migration-and-cleanup` only. I reviewed the producer’s cycle-3 migration batch, the phase artifacts, and the remaining compatibility dependencies that still matter to the phase acceptance criteria.
+
+What I analyzed
+
+I checked the bundled workflow tree for any remaining `PairStep`, `SystemStep`, `SUCCESS`, and package-local `transitions` usage, then rechecked the repo for remaining first-party `RouteInfo` / `route_infos` dependencies. I also reviewed the doc surface and the producer’s implementation notes to verify whether AC-1, AC-2, and AC-3 are actually met.
+
+What I reviewed
+
+I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/feedback.md) to clarify that the earlier broad blockers are now superseded and that the active blocker set is narrowed to `IMP-007` and `IMP-008`. [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/criteria.md) remains fully unchecked, which is still accurate because AC-3 is not yet satisfied.
+
+Key findings / decisions
+
+- The legacy bundled-workflow declaration blocker is resolved. Repo-wide checks no longer find `PairStep`, `SystemStep`, `SUCCESS`, or package-local `transitions` in `workflows/*/{workflow.py,contracts.py}`.
+- The workflow docs blocker is resolved materially. The remaining mentions in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:16), [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:420), and [docs/architecture.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/architecture.md:24) are compatibility notes, not primary authoring guidance.
+- `IMP-007` remains blocking: eight earlier-migrated first-party workflow packages still import `core.RouteInfo` and pass `route_infos=...`, so the compatibility-era route metadata surface is still a live first-party dependency.
+- `IMP-008` remains blocking: the required strictness/docs/contract/runtime/workflow integration suites were not run after the broad migration, so AC-3 is still unmet even though the declaration migration itself looks mechanically complete.
+- AC-2 does not present a new blocker in this review. The optimizer logic appears to live in `autoloop_optimizer/`, while the `stdlib/*` modules I spot-checked are thin compatibility shims.
+
+Open issues / next step
+
+Finish the second-pass `RouteInfo` cleanup for the remaining eight workflow packages and their contract modules, then run the required strictness/docs/contract/runtime/workflow integration suites in a valid environment. If those suites pass without depending on removable compatibility surfaces, the phase can be re-reviewed for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
