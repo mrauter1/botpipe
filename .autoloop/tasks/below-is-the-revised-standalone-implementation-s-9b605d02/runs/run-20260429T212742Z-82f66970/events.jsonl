@@ -23,3 +23,7 @@
 {"ts": "2026-04-29T22:09:18.039608+00:00", "run_id": "run-20260429T212742Z-82f66970", "seq": 23, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-cleanup"}
 {"ts": "2026-04-29T22:10:42.631912+00:00", "run_id": "run-20260429T212742Z-82f66970", "seq": 24, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "public-surface-cleanup"}
 {"ts": "2026-04-29T22:10:42.680994+00:00", "run_id": "run-20260429T212742Z-82f66970", "seq": 25, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "public-surface-cleanup"}
+{"ts": "2026-04-29T22:10:42.758064+00:00", "run_id": "run-20260429T212742Z-82f66970", "seq": 26, "event_type": "phase_completed", "pair": "test", "phase_id": "public-surface-cleanup", "phase_mode": "single"}
+{"ts": "2026-04-29T22:10:42.760557+00:00", "run_id": "run-20260429T212742Z-82f66970", "seq": 27, "event_type": "phase_started", "phase_id": "compiler-validation-normalization", "phase_mode": "single"}
+{"ts": "2026-04-29T22:10:42.761506+00:00", "run_id": "run-20260429T212742Z-82f66970", "seq": 28, "event_type": "pair_started", "pair": "implement", "phase_id": "compiler-validation-normalization"}
+{"ts": "2026-04-29T22:10:42.761597+00:00", "run_id": "run-20260429T212742Z-82f66970", "seq": 29, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "compiler-validation-normalization"}
