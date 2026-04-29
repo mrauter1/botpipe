@@ -978,3 +978,50 @@ Targeted validation passed:
 Open issues / next step
 
 No open blockers in this phase scope. I did not run the full repository test suite; the next phase should build on this with the feedforward `llm()` / `classify()` work and then do a broader regression pass.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+I’m reviewing the active phase against the implemented code and the acceptance criteria first. I’ll verify the touched runtime/compiler paths, then update the phase criteria and feedback artifacts with any concrete findings.
+
+I found one material correctness bug in the hook lifecycle and I’m verifying whether there’s a second issue worth escalating. The first one is in the route-hook sequencing: state-dependent artifact paths are not refreshed between `on_route` and `on_taken`, which can make the second hook write to stale locations and then fail final validation.
+
+Reviewing the phase artifacts and the implementation diff now. I’ve isolated one concrete engine regression in the new hook lifecycle and I’m updating the verifier artifacts with that finding.
+
+I’ve confirmed the phase criteria file is still blank and the feedback file is empty. I’m appending the blocking finding now and leaving the criteria unchecked because the hook lifecycle is not behaviorally safe yet.
+
+The feedback artifact now has the blocking engine finding. I’m not adding approvals to `criteria.md`; with that regression present, the phase cannot be marked correct or behaviorally safe.
+
+Scope considered
+
+Phase-local verifier scope for `hook-state-session-and-topology-metadata`. I reviewed the implementation diff and phase artifacts needed to assess hook/state/session/topology behavior, and only updated the active verifier artifacts under `.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/`.
+
+What I analyzed
+
+`core/engine.py` hook finalization flow, `core/context.py` session helpers, `core/validation.py` prompt namespace validation, the active `implementation_notes.md`, and the phase criteria/feedback artifacts. I also checked the decisions ledger for conflicting prior direction and found none that changed the reviewer conclusion.
+
+What I reviewed
+
+The main regression is in `core/engine.py:_finalize_step_result`: route hooks share a single precomputed artifact binding, so `on_route` state changes that alter artifact paths are not reflected before `on_taken` runs. I updated [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/feedback.md) with a blocking finding and left [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/criteria.md) unchecked because the phase is not yet behaviorally safe.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The new hook contract allows `on_route` to mutate state, but the engine does not re-resolve and rebind artifacts before the route-level `on_taken` hook. That can direct healing/writes to stale paths and then fail final required-write validation against the newly derived path. The minimal fix is to refresh artifact resolution after each successful route hook inside `_finalize_step_result`.
+
+Open issues / next step
+
+Implement the `IMP-001` fix in the engine, then rerun the targeted hook/state/session tests and re-review the phase artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
