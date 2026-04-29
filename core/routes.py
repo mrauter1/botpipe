@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from .effects import Effect
-from .primitives import FAIL, FINISH, PAUSE, SUCCESS
+from .primitives import FAIL, FINISH, PAUSE
 
 
 def _normalize_optional_text(value: str | None, *, field_name: str) -> str | None:
@@ -20,21 +20,21 @@ def _normalize_optional_text(value: str | None, *, field_name: str) -> str | Non
     return normalized
 
 
-def _normalize_required_outputs(value: Iterable[str]) -> tuple[str, ...]:
+def _normalize_required_writes(value: Iterable[str]) -> tuple[str, ...]:
     normalized: list[str] = []
     for item in value:
         if not isinstance(item, str):
-            raise TypeError("required_outputs entries must be strings")
+            raise TypeError("required_writes entries must be strings")
         stripped = item.strip()
         if not stripped:
-            raise ValueError("required_outputs entries must be non-empty strings")
+            raise ValueError("required_writes entries must be non-empty strings")
         normalized.append(stripped)
     return tuple(normalized)
 
 
 @dataclass(frozen=True, slots=True)
 class RouteInfo:
-    """Optional route metadata for rendering and inspection."""
+    """Legacy internal route metadata shim."""
 
     summary: str | None = None
     required_outputs: tuple[str, ...] = ()
@@ -42,7 +42,7 @@ class RouteInfo:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "summary", _normalize_optional_text(self.summary, field_name="summary"))
-        object.__setattr__(self, "required_outputs", _normalize_required_outputs(self.required_outputs))
+        object.__setattr__(self, "required_outputs", _normalize_required_writes(self.required_outputs))
         object.__setattr__(self, "handoff", _normalize_optional_text(self.handoff, field_name="handoff"))
 
 
@@ -62,7 +62,7 @@ class Route:
         if self.required_writes is None:
             object.__setattr__(self, "required_writes", None)
         else:
-            object.__setattr__(self, "required_writes", _normalize_required_outputs(self.required_writes))
+            object.__setattr__(self, "required_writes", _normalize_required_writes(self.required_writes))
         object.__setattr__(self, "handoff", _normalize_optional_text(self.handoff, field_name="handoff"))
 
     @staticmethod
@@ -70,22 +70,15 @@ class Route:
         target: object,
         *effects: Effect,
         summary: str | None = None,
-        required_outputs: Iterable[str] | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
     ) -> "Route":
-        if required_writes is not None and required_outputs:
-            raise ValueError("Route.to() received both required_outputs and required_writes")
         return Route(
             target=target,
             effects=tuple(effects),
             summary=summary,
-            required_writes=(
-                _normalize_required_outputs(required_writes)
-                if required_writes is not None
-                else (_normalize_required_outputs(required_outputs) if required_outputs is not None else None)
-            ),
+            required_writes=(_normalize_required_writes(required_writes) if required_writes is not None else None),
             handoff=handoff,
             on_taken=on_taken,
         )
@@ -94,7 +87,6 @@ class Route:
     def finish(
         *effects: Effect,
         summary: str | None = None,
-        required_outputs: Iterable[str] | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
@@ -103,7 +95,6 @@ class Route:
             FINISH,
             *effects,
             summary=summary,
-            required_outputs=required_outputs,
             required_writes=required_writes,
             handoff=handoff,
             on_taken=on_taken,
@@ -113,7 +104,6 @@ class Route:
     def pause(
         *effects: Effect,
         summary: str | None = None,
-        required_outputs: Iterable[str] | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
@@ -122,7 +112,6 @@ class Route:
             PAUSE,
             *effects,
             summary=summary,
-            required_outputs=required_outputs,
             required_writes=required_writes,
             handoff=handoff,
             on_taken=on_taken,
@@ -132,7 +121,6 @@ class Route:
     def fail(
         *effects: Effect,
         summary: str | None = None,
-        required_outputs: Iterable[str] | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
@@ -141,15 +129,10 @@ class Route:
             FAIL,
             *effects,
             summary=summary,
-            required_outputs=required_outputs,
             required_writes=required_writes,
             handoff=handoff,
             on_taken=on_taken,
         )
-
-    @property
-    def required_outputs(self) -> tuple[str, ...] | None:
-        return self.required_writes
 
 
 def normalize_route_spec(destination: object) -> Route:
@@ -157,8 +140,6 @@ def normalize_route_spec(destination: object) -> Route:
 
     if isinstance(destination, Route):
         return destination
-    if destination == SUCCESS:
-        return Route.finish()
     if destination == FINISH:
         return Route.finish()
     if destination == PAUSE:
@@ -168,7 +149,4 @@ def normalize_route_spec(destination: object) -> Route:
     return Route.to(destination)
 
 
-Route.complete = Route.finish
-
-
-__all__ = ["Route", "RouteInfo"]
+__all__ = ["Route"]

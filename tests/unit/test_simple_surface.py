@@ -71,6 +71,7 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
 def test_removed_simple_aliases_are_absent() -> None:
     for symbol in ("StrictWorkflow", "chain", "review_step", "do_review_step", "system_step", "StateVar", "Param"):
         assert not hasattr(simple, symbol)
+    assert not hasattr(simple.Route, "complete")
 
 
 def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> None:
@@ -142,6 +143,9 @@ def test_legacy_simple_keyword_arguments_fail_fast() -> None:
             verifier_prompt="verify",
             review_writes=[simple.Md("report")],
         )
+
+    with pytest.raises(TypeError):
+        simple.Route.to(simple.FINISH, required_outputs=("note",))
 
 
 def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_step() -> None:
@@ -230,3 +234,14 @@ def test_simple_workflow_rejects_class_level_transitions_and_flow() -> None:
         match="step-local routes and optional entry, not transitions or flow",
     ):
         compile_workflow(TransitionWorkflow)
+
+
+def test_simple_workflow_rejects_item_state_prompt_placeholders() -> None:
+    class ItemStateWorkflow(simple.Workflow):
+        start = simple.step(prompt=simple.Prompt.inline("Inspect {item.state.status}."))
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="item.state, which is not part of the canonical simple-workflow surface",
+    ):
+        compile_workflow(ItemStateWorkflow)

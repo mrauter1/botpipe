@@ -645,3 +645,67 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb4b-6028-7802-9a75-652b8666c65c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+Addressing the reviewer’s two blocking points now. I’m checking the route metadata path and the runtime state storage/checkpoint path together, because the fix needs to stay scoped while not breaking existing core workflows.
+
+The step-state fix is going through the engine and validation now. I’m checking the low-level `Step` scaffolding so I can swap simple-step state over to real `BaseModel` instances without destabilizing the internal strict workflow path.
+
+I found a lower-risk way to resolve the state issue in-phase: make simple step state genuinely model-backed in the engine, and suppress item-state / step-item-state until a real model declaration path exists. That avoids widening half-built public state APIs while keeping the current worklist runtime intact.
+
+I’m editing the route and state code now. The route change is keeping legacy support out of the active simple authoring path, and the state change is converting simple step state to real model instances while keeping strict internal steps on the old dict path for this phase.
+
+I’ve finished the core code edits and am tightening the phase-local tests around the exact regressions the reviewer found: removed route aliases and suppressed item-state prompt references.
+
+The risky part is done. I’m running a consistency sweep now for leftover references to removed route aliases and for any engine/checkpoint code that still assumes simple step state is always a raw dict.
+
+I’ve got the functional changes in place. I’m doing one last regression pass on checkpoint serialization and the edited notes/decision artifacts before I close the turn.
+
+I’m updating the run artifacts now so the next turn has the right migration constraints recorded. The key distinction is that step state is now model-backed at runtime for the simple surface, while item-scoped state is explicitly suppressed instead of left half-public.
+
+The remaining work is validation and cleanup only. I’m re-running the syntax pass after the last edits and checking that the implementation notes match what actually changed.
+
+Scope considered
+
+- Phase-local `compiler-validation-normalization` work only.
+- Reviewer findings `IMP-001` and `IMP-002`, plus the request-relevant compiler, validation, context, engine, and simple-surface tests they touched.
+
+What I analyzed
+
+- `core/routes.py`, `core/validation.py`, `core/compiler.py`, `core/context.py`, `core/engine.py`.
+- The active phase feedback, plan, implementation notes, and run decisions ledger.
+- The phase-local simple/static-graph tests to tighten coverage around removed route aliases and suppressed item-state placeholders.
+
+What I changed
+
+- Canonicalized the active route helper surface in [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py): `Route.to(...)` now accepts only `required_writes`, `Route.complete` is gone, `SUCCESS` is no longer special-cased there, and `RouteInfo` is no longer exported from that module.
+- Removed simple-lowering dependence on `route_infos` construction in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), made `normalize_step_route_metadata()` return canonical `Route` metadata, and renamed route-required-artifact normalization to `required_writes`.
+- Switched simple step state from descriptor-derived dict defaults to real runtime Pydantic model instances across [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), with checkpoint serialization back to dict payloads for persistence.
+- Suppressed incomplete item-state public access in [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py) and made simple prompt placeholders using `item.state` / `step_name.item_state` fail validation.
+- Added phase-local coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) for removed `Route.complete`, removed `required_outputs=`, and rejected item-state placeholders.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/compiler-validation-normalization/implementation_notes.md) and appended the new migration constraints under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt).
+
+Key findings / decisions
+
+- `RouteInfo` still exists as an internal compatibility shim for out-of-phase low-level/provider consumers, but the active simple route helper and compiler normalization path no longer depend on it.
+- Simple step state is now model-backed at runtime; strict internal steps without `state_model` still use the legacy dict-backed `state_fields` path for this phase.
+- Item-state and step-item-state remain deferred rather than partially public; the context accessors now raise unless a model-backed implementation exists.
+- Validation performed: `python3 -m py_compile autoloop/simple.py core/routes.py core/validation.py core/compiler.py core/context.py core/engine.py runtime/static_graph.py tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py`.
+
+Open issues / next step
+
+- Provider payload keys such as `route_infos` and `route_required_outputs` are still legacy and remain for the later provider/runtime phase.
+- Low-level `core` consumers and broader repo tests that still use `RouteInfo`, `Route.complete`, or `required_outputs` need follow-up migration in later phases.
+- I could not run pytest or import-time runtime tests here because the environment is missing `pytest` and runtime dependencies like `pydantic`.
