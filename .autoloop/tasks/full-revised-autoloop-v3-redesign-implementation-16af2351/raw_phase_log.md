@@ -1761,3 +1761,50 @@ I could not run the full test suites here because the environment is missing run
 Open issues / next step
 
 This is partial phase progress, not a full phase close. Remaining work is to migrate the rest of the bundled workflows, clean the remaining compatibility-era docs/examples/tests, and then decide which top-level compatibility exports can actually be removed once the full tree no longer depends on them.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m reviewing only the active phase artifacts plus the touched workflow/stdlib/docs packaging changes. First I’m checking the changed source against the phase acceptance criteria and then I’ll record concrete findings into the reviewer-owned artifacts.
+
+I’m reviewing the implementation against the active phase contract now. First I’m confirming the remaining legacy workflow/doc surfaces and then I’ll update the phase criteria and feedback with concrete blockers if they hold.
+
+The remaining gap is larger than the four migrated workflows. I’m writing findings against the untouched legacy workflow packages and the docs/examples that still teach the compatibility surface, because those directly block the phase acceptance criteria.
+
+I’ve recorded the blockers in the phase feedback artifact. I’m doing one quick pass over the review artifacts now so the final status matches the findings cleanly.
+
+Scope considered
+
+Active verifier scope for `workflow-migration-and-cleanup` only. I reviewed the implementation against the phase contract, the active artifacts, and the changed workflow/doc migration surfaces without touching repository code.
+
+What I analyzed
+
+I checked the active phase artifacts, the implementation notes, and the current tree for remaining uses of legacy authoring surfaces across `workflows/` and `docs/`. I also inspected the reviewer artifacts to confirm the criteria state and record the findings.
+
+What I reviewed
+
+I appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/feedback.md). The criteria file remains fully unchecked because the phase acceptance criteria are not yet met.
+
+Key findings / decisions
+
+- `IMP-001` blocking: bundled workflow migration is incomplete. Many first-party workflows still use `PairStep`, `SystemStep`, `SUCCESS`, and global `transitions`, including [workflows/autoloop_v1/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/workflow.py:16), [workflows/candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py:40), and [workflows/workflow_run_traces_to_optimization_candidates/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py:73). That leaves AC-1 unmet.
+- `IMP-002` blocking: docs still teach compatibility-era constructs as live authoring inputs, including [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:159) and [docs/workflows/release_candidate_to_go_no_go.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/release_candidate_to_go_no_go.md:80). That conflicts with the phase requirement to retire legacy documentation emphasis and keep the canonical surface authoritative.
+- `IMP-003` blocking: even partially migrated workflows still depend on `route_infos` / `RouteInfo`, for example [workflows/investigation_request_to_evidence_pack/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/investigation_request_to_evidence_pack/workflow.py:126) and [workflows/workflow_portfolio_to_operating_system/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/contracts.py:14). That means the first-party workflow set still relies on a compatibility-era public surface, which blocks the cleanup target behind AC-3.
+
+Open issues / next step
+
+Finish migrating the remaining bundled workflows, migrate or internalize the `RouteInfo`/`route_infos` contract pattern, and rewrite the remaining docs/examples so they no longer present legacy surfaces as normal authoring practice. After that, rerun the strictness/docs/contract/runtime/workflow integration suites and then revisit which compatibility exports can actually be removed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
