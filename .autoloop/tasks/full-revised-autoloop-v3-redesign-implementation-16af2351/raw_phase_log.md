@@ -1303,3 +1303,63 @@ Open issues / next step
   - `python3 -m pytest tests/unit/test_simple_surface.py tests/unit/test_provider_boundary_core.py tests/contract/test_engine_contracts.py`
 - After that, run the broader engine/provider regression slice if the repo normally does one.
 - The active phase session JSON path from the run preamble was not present in this workspace; it did not block implementation, but it is still absent.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+I’m reviewing the feedforward-operations implementation against the phase criteria and the touched runtime/provider surfaces. I’ll inspect the phase artifacts first, then audit the code paths that affect replay, retry, resume, and `.step(...)` lowering.
+
+The tracked diff is empty because most of the core changes are currently untracked in this workspace, so I’m reviewing the file contents directly. I’m checking the new operation runtime first, then the compiler/runtime plumbing around value persistence and prompt references.
+
+I found one suspicious contract edge and I’m tracing it through the provider path before I decide whether it’s blocking. The check is whether direct `llm("...")` and `classify("...")` actually treat plain strings as inline prompts, as the requested API requires.
+
+I’ve confirmed the plain-string prompt path is wrong for direct feedforward calls. I’m checking one more adjacent surface around checkpoint persistence to see whether there’s a second blocking regression or just that single contract miss.
+
+I have one confirmed blocking bug already. I’m checking the runtime prompt interpolation path now, because if recorded `.value` references aren’t resolved at execution time that would be a second blocker for `llm.step(...)`/`classify.step(...)`.
+
+I’ve finished the code audit. There is one blocking contract miss in the direct feedforward API, and it also affects helper usage inside `python_step`. I’m updating the phase review artifacts now.
+
+Scope considered
+
+- Active phase `feedforward-operations` only.
+- Request-relevant runtime and regression surfaces: `autoloop/simple.py`, `core/operations.py`, `core/engine.py`, provider models/rendering, checkpoint persistence, and the new tests.
+- Phase artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+
+What I analyzed
+
+- How standalone `llm()` / `classify()` calls normalize prompts and enter the new value-returning provider path.
+- How `.step(...)` declarations lower into the existing compiled FSM and how recorded values are checkpointed and replayed.
+- Whether replay and resume logic preserved prior engine invariants without widening the phase scope.
+- The added tests to see which runtime paths were actually covered.
+
+What I reviewed
+
+- The new feedforward runtime in `core/operations.py`.
+- The direct and step-declared public API surface in `autoloop/simple.py` and `autoloop/__init__.py`.
+- Provider boundary changes in `core/providers/{models,protocols,rendered,rendering,fake,turns}.py`.
+- Checkpoint persistence changes in `core/stores/protocols.py`, `runtime/stores/filesystem.py`, and engine wiring in `core/engine.py`.
+- The phase review artifacts: `feedback.md` updated with one blocking finding; `criteria.md` remains unchecked because the phase is not yet review-complete.
+
+Key findings / decisions
+
+- Blocking: `IMP-001` in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/feedforward-operations/feedback.md). Direct `llm("...")` / `classify("...")` calls treat bare strings as registry refs instead of inline prompts, so the rendered provider path fails with `prompt ... did not resolve to text`. This breaks the canonical standalone API required by AC-1 and the helper-function path inside `python_step`.
+- The minimal fix is to centralize feedforward prompt normalization so bare strings become `Prompt.inline(...)` at the shared operation boundary, then add a rendered-provider regression test for direct/helper string prompts.
+
+Open issues / next step
+
+- Fix `IMP-001` in the implementation and rerun review for this phase.
+- After the fix, add or update a regression test that exercises direct `llm("...")` / `classify("...")` through `RenderedLLMProvider`, not only the fake provider path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
