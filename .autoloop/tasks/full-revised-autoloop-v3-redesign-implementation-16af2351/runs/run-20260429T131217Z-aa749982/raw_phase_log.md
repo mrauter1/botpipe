@@ -1676,3 +1676,135 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m treating this as the migration-and-cleanup phase: I’ll inspect the active phase artifacts, current compatibility surfaces, and bundled workflows/docs to identify what still depends on legacy APIs before editing.
+
+I’ve confirmed this phase is largely cleanup and migration: there are still legacy exports, bundled workflows on strict-core primitives, and optimizer-specific helpers under `stdlib`. I’m drilling into those surfaces now to decide the smallest safe set of code and packaging changes.
+
+The remaining legacy surface is broader than just exports: several bundled workflows still use `core.PairStep`/`SystemStep`, route-contract modules still expose `RouteInfo`, and optimizer-oriented workflows depend on `stdlib` helpers that likely need extraction rather than deletion. I’m checking the package boundaries and import graph before patching so I don’t break runtime imports or doc tests.
+
+I’ve narrowed the work to three coupled areas: migrate bundled workflows onto `autoloop`/`autoloop.simple`, extract optimizer-specific stdlib into a sibling package while preserving imports, and then trim the remaining public compatibility exports that the migrated tree no longer needs. I’m reading the simple-surface constructors now to make sure the workflow rewrites stay mechanical and don’t accidentally drop behavior like schemas, sessions, or route metadata.
+
+I’ve got a workable migration path now. The safest version is: rewrite bundled `workflow.py` files to `python_step`/`do_review_step` with step-local `routes`, keep existing route-metadata bundles and state handlers where they still fit, then extract optimizer-focused stdlib modules into a sibling package with thin compatibility shims so runtime imports stay stable during the cleanup.
+
+I’m starting the actual migration edits with one representative workflow so I can verify the pattern against the compiler before I fan it out. The rewrite keeps the existing artifact set and state handlers, but replaces `SystemStep`/`PairStep` plus global `transitions` with `python_step`/`do_review_step`, `Prompt.file(...)`, and step-local `routes`.
+
+The first edit missed because this workflow’s middle section isn’t shaped exactly like the others. I’m reopening the concrete block and patching against the real file contents rather than the assumed pattern.
+
+The migration pattern is working mechanically in the first workflow. I’m compile-checking that one before I fan the same conversion across the rest, because the main risks are prompt normalization and custom accepted-route tags on `do_review_step`.
+
+I’ve started the workflow-source migration and I’m also separating the optimizer-heavy helper modules now. That second part is lower-risk: move the implementation bodies into a sibling `autoloop_optimizer` package, then leave `stdlib` as thin compatibility shims so existing imports don’t break during the same turn.
+
+I’ve got four bundled workflows moved onto the canonical step surface and the optimizer/application helpers physically split into `autoloop_optimizer` with compatibility shims left behind in `stdlib`. I’m checking the diff surface now so I can document exactly what changed and decide whether there’s a low-risk extra cleanup worth landing in this turn.
+
+I generated some `__pycache__` noise while syntax-checking. I’m removing those generated artifacts now so the patch only leaves source changes relevant to the phase.
+
+The repo tracks some compiled `pyc` artifacts, so deleting them outright would leave unrelated file removals. I’m regenerating only the touched stdlib cache files so the diff stays as source edits plus matching generated caches, not accidental deletions.
+
+Scope considered
+
+Active phase `workflow-migration-and-cleanup`, focused on bundled workflow authoring migration, optimizer/helper package separation, and public-guidance cleanup. I kept scope off unrelated dirty files.
+
+What I analyzed
+
+I reviewed the phase artifacts, plan, and decisions, then checked the current dependency graph around `autoloop.simple`, bundled `workflows/*/workflow.py`, `stdlib/*`, docs, and strictness/doc tests. I confirmed the lowest-risk migration path was to keep workflow-local publication/state logic intact while moving step declarations onto `python_step(...)` / `do_review_step(...)`, and to split optimizer/application helpers into a sibling package with compatibility shims.
+
+What I changed
+
+I migrated four bundled workflows to the canonical step surface:
+- `workflows/investigation_request_to_evidence_pack/workflow.py`
+- `workflows/incident_to_hardening_program/workflow.py`
+- `workflows/task_to_candidate_workflow_set/workflow.py`
+- `workflows/workflow_portfolio_to_operating_system/workflow.py`
+
+Those files now use `python_step(...)`, `do_review_step(...)`, `Prompt.file(...)`, `FINISH`, and step-local `routes` instead of `SystemStep` / `PairStep` plus global `transitions`.
+
+I moved optimizer/application helper implementations into a new sibling package:
+- `autoloop_optimizer/`
+
+and turned these `stdlib` modules into thin compatibility shims:
+- `_selected_workflow.py`
+- `adaptation.py`
+- `candidate_surfaces.py`
+- `company.py`
+- `decomposition.py`
+- `diagnostics.py`
+- `evaluation.py`
+- `optimization.py`
+- `portfolio.py`
+- `refinement.py`
+
+I also updated `pyproject.toml` to include `autoloop_optimizer*` and softened the docs wording in `docs/authoring.md` and `docs/architecture.md` so canonical `autoloop.simple` / `autoloop` usage stays primary.
+
+Key findings / decisions
+
+I kept per-workflow publication validators and receipt writers in their existing Python handlers; only the authoring surface changed. I also left `route_infos` / `RouteInfo` as compatibility inputs for now, because removing them safely requires finishing the remaining workflow/doc/test migration in one follow-up slice.
+
+Validation performed:
+- `python3 -m py_compile` on the changed workflow files, new `autoloop_optimizer` package, and the `stdlib` shims
+
+I could not run the full test suites here because the environment is missing runtime dependencies such as `pydantic`.
+
+Open issues / next step
+
+This is partial phase progress, not a full phase close. Remaining work is to migrate the rest of the bundled workflows, clean the remaining compatibility-era docs/examples/tests, and then decide which top-level compatibility exports can actually be removed once the full tree no longer depends on them.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd9ec-8002-7aa0-8cc9-00661febdeb2
+---
+I’m reviewing only the active phase artifacts plus the touched workflow/stdlib/docs packaging changes. First I’m checking the changed source against the phase acceptance criteria and then I’ll record concrete findings into the reviewer-owned artifacts.
+
+I’m reviewing the implementation against the active phase contract now. First I’m confirming the remaining legacy workflow/doc surfaces and then I’ll update the phase criteria and feedback with concrete blockers if they hold.
+
+The remaining gap is larger than the four migrated workflows. I’m writing findings against the untouched legacy workflow packages and the docs/examples that still teach the compatibility surface, because those directly block the phase acceptance criteria.
+
+I’ve recorded the blockers in the phase feedback artifact. I’m doing one quick pass over the review artifacts now so the final status matches the findings cleanly.
+
+Scope considered
+
+Active verifier scope for `workflow-migration-and-cleanup` only. I reviewed the implementation against the phase contract, the active artifacts, and the changed workflow/doc migration surfaces without touching repository code.
+
+What I analyzed
+
+I checked the active phase artifacts, the implementation notes, and the current tree for remaining uses of legacy authoring surfaces across `workflows/` and `docs/`. I also inspected the reviewer artifacts to confirm the criteria state and record the findings.
+
+What I reviewed
+
+I appended blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/workflow-migration-and-cleanup/feedback.md). The criteria file remains fully unchecked because the phase acceptance criteria are not yet met.
+
+Key findings / decisions
+
+- `IMP-001` blocking: bundled workflow migration is incomplete. Many first-party workflows still use `PairStep`, `SystemStep`, `SUCCESS`, and global `transitions`, including [workflows/autoloop_v1/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/workflow.py:16), [workflows/candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py:40), and [workflows/workflow_run_traces_to_optimization_candidates/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/workflow.py:73). That leaves AC-1 unmet.
+- `IMP-002` blocking: docs still teach compatibility-era constructs as live authoring inputs, including [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:159) and [docs/workflows/release_candidate_to_go_no_go.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/workflows/release_candidate_to_go_no_go.md:80). That conflicts with the phase requirement to retire legacy documentation emphasis and keep the canonical surface authoritative.
+- `IMP-003` blocking: even partially migrated workflows still depend on `route_infos` / `RouteInfo`, for example [workflows/investigation_request_to_evidence_pack/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/investigation_request_to_evidence_pack/workflow.py:126) and [workflows/workflow_portfolio_to_operating_system/contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_portfolio_to_operating_system/contracts.py:14). That means the first-party workflow set still relies on a compatibility-era public surface, which blocks the cleanup target behind AC-3.
+
+Open issues / next step
+
+Finish migrating the remaining bundled workflows, migrate or internalize the `RouteInfo`/`route_infos` contract pattern, and rewrite the remaining docs/examples so they no longer present legacy surfaces as normal authoring practice. After that, rerun the strictness/docs/contract/runtime/workflow integration suites and then revisit which compatibility exports can actually be removed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
