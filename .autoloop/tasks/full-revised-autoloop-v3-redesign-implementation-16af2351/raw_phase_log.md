@@ -691,3 +691,58 @@ I’ve finished the code and test work. I’m doing one last cleanup pass on gen
 - Validation run:
   - `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_static_graph.py -q`
   - `./.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py tests/runtime/test_compatibility_runtime.py -q`
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+---
+I’m reviewing the phase diff against the active scope and acceptance criteria first, then I’ll write findings and mark the verifier artifacts accordingly. I’m focusing on the changed pair-step lowering/runtime paths and their adjacent compatibility surfaces.
+
+The repo’s VCS state is unusual here, so I’m reading the live source directly rather than relying on `git diff`. I’m checking the simple declaration surface, pair-step compiler/runtime path, and a couple of compatibility/regression hotspots by file.
+
+I’ve narrowed the remaining review to the compiled-step and runtime execution path so I can verify the pair-step contract split and required-write enforcement end to end before I mark criteria.
+
+I’ve confirmed the compiler carries the new phase-specific fields. I’m opening the pair-step execution helpers next because that’s where any hidden regression or contract mismatch would show up.
+
+The runtime path looks structurally consistent so far. I’m checking the phase artifacts now and then I’ll decide whether there’s any blocker significant enough to keep the phase open.
+
+I haven’t found a material correctness gap in the code path yet. I’m running the phase-focused tests directly now so the review can be based on fresh validation rather than only the producer notes.
+
+The test run is still active. While it finishes, the current review status is that the phase implementation appears internally consistent and the main remaining check is empirical regression coverage.
+
+I’ve completed the test-backed review. There are no blocking findings for this phase, so I’m updating the verifier artifacts to reflect a complete pass with explicit validation notes.
+
+Scope considered
+
+Active phase only: `do-review-step-and-route-required-writes`, covering the simple declaration surface, lowering/validation, compiled metadata, pair-step runtime execution, provider-facing contracts, static graph payloads, and the phase-owned verifier artifacts.
+
+What I analyzed
+
+I reviewed the authoritative phase artifacts, the shared decisions ledger, and the request/acceptance criteria. In code, I traced the implementation through [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), and [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py), plus the targeted test coverage added in the touched test files.
+
+What I reviewed
+
+I checked that `do_review_step` preserves `review_step` compatibility while adding separate do/review prompts, writes, requires, and review session metadata; that route-level `required_writes` normalize across the combined pair-step artifact inventory; that explicit `required_writes=[]` suppresses artifact-level defaults only when intentionally specified; and that producer/verifier contracts are split without breaking the existing compiled FSM model. I also ran the phase-focused regression suite directly:
+`./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_static_graph.py tests/unit/test_provider_boundary_core.py tests/runtime/test_compatibility_runtime.py -q`
+Result: `257 passed`.
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The implementation satisfies the active phase contract and acceptance criteria, and the verifier artifacts were updated accordingly in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/do-review-step-and-route-required-writes/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/do-review-step-and-route-required-writes/feedback.md).
+
+Open issues / next step
+
+No open issues for this phase. The phase can proceed as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
