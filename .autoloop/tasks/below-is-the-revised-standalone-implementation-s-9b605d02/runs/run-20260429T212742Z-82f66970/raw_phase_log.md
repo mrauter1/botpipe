@@ -312,3 +312,109 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+I’ve isolated the fix surface: the workflow migration is incomplete, not the simple API itself. I’m inspecting the current notes and then I’ll patch the repo workflows so the canonical `produce_verify_step` signature is actually usable end to end.
+
+I’ve got a clean fix plan: bulk-rewrite only the `produce_verify_step(...)` call sites that still pass `writes=`, then recompile every workflow package to verify the migration is complete before touching notes.
+
+The bulk rewrite is in. I’m spot-checking representative workflows and then rerunning the compile sweep to make sure there are no leftover `writes=` call sites on `produce_verify_step`.
+
+The workflow sweep is clean now. I’m doing a focused regression pass on the public-surface tests the phase already targeted, then I’ll update the notes with the reviewer finding and the validation I ran.
+
+I’m recording the one non-obvious migration choice for later turns, then I’ll refresh the implementation notes to match what actually shipped and what I validated in this pass.
+
+Scope considered
+
+- The reviewer-raised blocking regression in the phase-scoped public-surface cleanup: repo workflow packages still using `produce_verify_step(..., writes=...)`.
+- The phase notes and decision ledger, plus the targeted public-surface tests and workflow discovery/compile path needed to verify the fix.
+- I left the reviewer’s non-blocking doc-vocabulary drift unchanged in this pass.
+
+What I analyzed
+
+- The reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/public-surface-cleanup/feedback.md), especially `IMP-001`.
+- Representative failing workflow declarations in [workflows/autoloop_v1/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/workflow.py:46), [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py:103), and [workflows/incident_to_hardening_program/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/incident_to_hardening_program/workflow.py:127).
+- The current simple lowering path to preserve behavior without reintroducing the banned `writes` alias.
+
+What I changed
+
+- Rewrote the remaining repo workflow `produce_verify_step(...)` call sites from `writes=` to `producer_writes=` across `workflows/*/workflow.py`.
+- Kept the fix behavior-preserving by using `producer_writes=` consistently, which matches the old shared-write surface more closely under the current `PairStep` compilation path.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/public-surface-cleanup/implementation_notes.md) and appended the non-obvious migration choice to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt).
+
+Key findings / decisions
+
+- The blocking failure was not in `autoloop.simple` itself anymore; it was the incomplete repo-consumer migration.
+- I chose `producer_writes=` rather than `verifier_writes=` for these legacy `writes=` call sites because the pre-cleanup pair surface exposed one shared write set, and the current engine still makes producer artifacts readable to the verifier without adding a compatibility alias back.
+- Validation passed:
+  - `.venv/bin/pytest tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workflow_reference_resolution.py::test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection tests/contract/test_engine_contracts.py::test_produce_verify_step_sends_split_phase_contracts_without_implicitly_requiring_producer_writes -q`
+  - A full workflow compile sweep via `resolve_workflow_reference(...)` + `compile_workflow(...)` across every `workflows/*` package, which now finishes with `FAILURES 0`.
+
+Open issues / next step
+
+- The reviewer’s non-blocking doc drift remains: the touched authoring docs still describe some deeper legacy vocabulary (`Parameters`, `route_infos`, `route_required_outputs`).
+- The next verifier pass should clear `IMP-001`; `IMP-002` may still remain as a non-blocking follow-up.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb2d-5cdb-7442-a643-f0d02e00838f
+---
+I’m re-reviewing the blocking workflow-migration fix first, then I’ll update the phase artifacts to reflect whether the phase is now complete or if any issues remain.
+
+The remaining question is whether any material regression is left after the workflow migration. I’m verifying the compile sweep and the targeted public-surface tests directly before I change the review status.
+
+The code path is clean now. I’m updating the review artifacts to mark the blocking issue resolved and keep the docs drift as a follow-up only.
+
+Scope considered
+
+- The phase-scoped public-surface cleanup, with emphasis on the reviewer-reported workflow migration regression and the touched public authoring docs/tests.
+- I reviewed the canonical root exports, simple declaration behavior, the repo workflow packages that use `produce_verify_step(...)`, and the phase notes/decision ledger.
+
+What I analyzed
+
+- The prior blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/public-surface-cleanup/feedback.md).
+- The follow-up migration choice recorded in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt).
+- The remaining doc drift in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md:75).
+
+What I reviewed
+
+- The targeted test subset passed:
+  - `.venv/bin/pytest tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py tests/unit/test_primitives_and_stores.py tests/runtime/test_workflow_reference_resolution.py::test_simple_declaration_workflow_is_discoverable_by_path_module_name_and_capability_inspection tests/contract/test_engine_contracts.py::test_produce_verify_step_sends_split_phase_contracts_without_implicitly_requiring_producer_writes -q`
+- An independent compile sweep across every `workflows/*` package now succeeds with no discovery/compilation failures.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/public-surface-cleanup/criteria.md) to checked status and appended the re-review outcome to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/public-surface-cleanup/feedback.md).
+
+Key findings / decisions
+
+- `IMP-001` is resolved. The remaining repo workflow call sites no longer use the banned `produce_verify_step(..., writes=...)` form, so the phase’s canonical simple-surface rename is operationally intact.
+- No new blocking findings were found in this re-review.
+- `IMP-002` remains as a non-blocking follow-up: the touched authoring docs/tests still describe `Parameters` / `Workflow.Parameters` and deeper legacy contract vocabulary.
+
+Open issues / next step
+
+- The phase is complete from a blocking-review standpoint.
+- The next cleanup phase can absorb the remaining doc/test vocabulary drift if desired, but it does not block acceptance of this public-surface pass.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
