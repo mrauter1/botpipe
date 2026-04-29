@@ -34,7 +34,9 @@ phases:
     in_scope:
       - "Rename compiled kinds and fields to canonical names such as `step`, `produce_verify`, `python`, `operation`, `writes`, and `required_writes`."
       - "Derive topology from declaration order, explicit `entry`, and step-local `routes` instead of public `flow` or `transitions`."
+      - "Encode canonical injected default routes and control-route behavior for plain steps, produce/verify steps, python/workflow steps, and operation nodes."
       - "Replace descriptor-backed `StateVar` and `Param` handling with Pydantic `State` and `Params` models."
+      - "Migrate step state, item state, and step-item state contracts to explicit Pydantic models or suppress incomplete public surfaces."
       - "Adopt `global_session` / `global` as the canonical default-session surface."
     out_of_scope:
       - "Provider payload rewrites."
@@ -46,6 +48,8 @@ phases:
         text: "Compiled workflow metadata no longer exposes legacy names such as `produces`, `required_outputs`, `RouteInfo`, or `SUCCESS`."
       - id: "AC-2"
         text: "Validation rejects `Parameters`, descriptor state declarations, and public topology authoring via `flow`, `transitions`, or `chain`."
+      - id: "AC-3"
+        text: "Injected default-route semantics, `control_routes=False`, and item/step-item state contracts are explicit, testable, and no longer rely on legacy descriptor behavior."
     deliverables:
       - "Updated compiler, validation, route, primitive, and step models."
       - "Canonical topology/state/session contract generation inputs."
@@ -61,6 +65,8 @@ phases:
     in_scope:
       - "Update engine routing, child workflow terminal mapping, hook lifecycle, and artifact validation to use canonical terminals and write semantics."
       - "Split operation execution from route-bearing harness turns and emit canonical provider turn kinds."
+      - "Centralize schema IDs in `core/schema_registry.py` and migrate runtime/tracing/static-graph/git-tracking plus optimizer payload writers onto imported constants."
+      - "Make runtime config the sole public git-tracking control surface and remove workflow-declared git-tracking from canonical authoring."
       - "Rewrite static graph, topology artifacts, trace/run metadata, and checkpoint payloads to canonical fields only."
       - "Add minimal reader-side normalization for legacy persisted terminal/session naming needed for resume."
     out_of_scope:
@@ -72,6 +78,8 @@ phases:
         text: "Run results, topology artifacts, and provider payloads emit `FINISH`, canonical kinds, and `writes`/`required_writes` only."
       - id: "AC-2"
         text: "Old persisted run payloads that still contain legacy terminal or default-session naming can be normalized internally when resume support is required."
+      - id: "AC-3"
+        text: "Schema IDs are sourced from one registry module and runtime git tracking is the only canonical public control surface, with legacy workflow declarations removed or explicitly ignored/deprecated."
     deliverables:
       - "Updated engine, runtime artifact writers, provider boundary contracts, and persistence readers/writers."
       - "Checkpoint/resume and provider-boundary regression coverage."
@@ -86,7 +94,7 @@ phases:
     status: "planned"
     in_scope:
       - "Update docs, workflow packages, fixtures, and tests to canonical names only."
-      - "Migrate capability inspection and stdlib/optimizer helpers from legacy output/route terminology to canonical terminology."
+      - "Migrate capability inspection, runtime git-tracking/tests, worklist item-state/tests, and stdlib/optimizer helpers from legacy terminology to canonical terminology."
       - "Remove duplicated optimizer/application helpers from `stdlib` in favor of `autoloop_optimizer`."
       - "Remove obsolete package alias/fallback behavior when no longer needed for active runtime packaging."
     out_of_scope:

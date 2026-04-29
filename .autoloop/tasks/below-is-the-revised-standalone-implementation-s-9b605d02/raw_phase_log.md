@@ -90,3 +90,28 @@ The planner needs to revise `plan.md` and `phase_plan.yaml` to add explicit scop
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019ddb24-0179-73f1-af1b-5f91100396f1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019ddb24-0179-73f1-af1b-5f91100396f1
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb24-0179-73f1-af1b-5f91100396f1
+---
+I’m revising the planning artifacts against the verifier’s blocking findings. First I’m checking the current feedback and the latest decisions header so I can patch only the missing scope and keep the append-only history correct.
+
+The verifier gaps are specific enough that I don’t need to reopen the whole repo, but I do want a tighter read on the remaining dependency surfaces: schema IDs, workflow-declared git tracking, and item-state/worklist behavior. That will let me patch the plan with concrete phase scope instead of generic promises.
+
+The remaining work is scoped now. I’m patching `plan.md` and `phase_plan.yaml` to explicitly cover schema registry, runtime-owned git tracking, default-route/control-route invariants, and item/step-item state handling, then I’ll append a short feedback note and turn-local decisions entry.
+
+The missing coverage is patched. I’m doing a quick consistency read now to make sure the new plan language, the machine-readable phases, and the append-only history all say the same thing.
+
+Revised [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/plan/plan.md>) and [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/plan/phase_plan.yaml>) to close the verifier gaps. The plan now explicitly covers `core/schema_registry.py`, runtime-owned git tracking, canonical default-route and control-route behavior across all step kinds, and the requirement that item-state and step-item-state either ship as full Pydantic/checkpoint-integrated surfaces or stay out of the public API.
+
+I also appended the change note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/plan/feedback.md>) and recorded the non-obvious constraints for this turn under the latest header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt>). No repository source code or verifier-owned criteria file was changed.
