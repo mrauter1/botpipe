@@ -1239,3 +1239,112 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+I’m focusing the test pass on the persistence normalization seam that changed late in the implementation cycle. First I’m checking the existing runtime and store tests around legacy session payloads so I can fill any remaining gap without widening the scope.
+
+I’m reviewing the current persistence normalization tests and the active phase artifacts first, then I’ll add only the smallest missing regression coverage and update the test strategy notes.
+
+I’ve confirmed the phase artifacts are still mostly blank. I’m checking the normalization helpers now to see whether one more edge-case test is warranted before I write the strategy and feedback notes.
+
+The remaining gap is a narrow one around legacy `active_scopes` using the old `default` slot name. I’m checking whether that path is normalized during resume, and if so I’ll cover it directly instead of broadening test scope.
+
+I found one small gap worth covering: legacy `active_scopes` using the old `default` slot name without any `active_keys_by_slot`. I’m adding a direct regression test for that seam, then I’ll update the phase test strategy and feedback artifacts.
+
+The repo shell doesn’t expose `python` directly here, so I’m rerunning the focused phase suite with the project virtualenv interpreter to keep validation aligned with the implementation turn.
+
+Scope considered
+
+- Phase-local test coverage for `engine-provider-persistence` only.
+- I kept scope on the changed runtime/provider/persistence contract, with one additional regression test for the remaining legacy session-normalization seam.
+
+What I analyzed
+
+- Existing compatibility coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+- The normalization logic in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py) and checkpoint/session loading in [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py).
+- The active test-phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/engine-provider-persistence/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/engine-provider-persistence/feedback.md), and the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt).
+
+What I changed
+
+- Added `test_normalize_session_snapshot_rekeys_legacy_default_active_scope_without_active_keys` in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py) to cover `active_scopes={"default": None}` canonicalizing to `{"global": None}` when no active keys exist.
+- Filled in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/engine-provider-persistence/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge cases, and known gaps.
+- Appended a concise test-addition summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/engine-provider-persistence/feedback.md).
+- Added one run-local note under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt).
+
+Key findings / decisions
+
+- The existing tests already covered the two verifier-found regressions plus the focused canonical provider/static-graph/tracing/git-tracking contract checks.
+- The only material test gap I found was the `active_scopes`-only legacy `default` slot path, which is normalized separately from active-key rebinding and from preserving literal `"default"` values on non-run session identities.
+- Validation passed with:
+  - `.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py tests/unit/test_provider_boundary_core.py -q`
+  - `90 passed in 1.48s`
+
+Open issues / next step
+
+- No blocker in this phase-local test scope after the added regression coverage.
+- Known gap remains intentional: this test turn did not expand into full-repo or out-of-phase consumer migration coverage.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+I’m auditing the added phase coverage against the runtime contract and the recent persistence fixes first, then I’ll update the audit artifacts with either findings or a clean pass.
+
+The coverage map and the new compatibility test line up with the persistence changes. I’m running the focused phase suite once from the auditor side before I mark criteria complete.
+
+I’ve finished the audit pass. There are no blocking test gaps in the changed phase scope, so I’m updating the audit artifacts to reflect a clean verification and the auditor-run validation result.
+
+Scope considered
+
+- Phase-local test audit for `engine-provider-persistence` only.
+- I limited review to the changed persistence compatibility tests, the focused runtime/provider regression suite, and the active test strategy and audit artifacts.
+
+What I analyzed
+
+- The phase strategy in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/engine-provider-persistence/test_strategy.md).
+- The added coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py), especially the legacy `active_scopes={"default": None}` normalization case and the existing non-run literal-`default` preservation checks.
+- The run-local decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/decisions.txt), with attention to the narrow persisted-reader migration rule.
+
+What I reviewed
+
+- Coverage quality against AC-1/2/3 and the recent reviewer-found persistence regressions.
+- Reliability of the focused suite: all tests are deterministic file-backed or pure normalization checks with no timing/network dependence.
+- Auditor-run validation:
+  - `.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py tests/unit/test_provider_boundary_core.py -q`
+  - Result: `90 passed in 1.49s`
+
+Key findings / decisions
+
+- No findings.
+- The added compatibility test closes the remaining material gap around legacy `active_scopes` default-slot normalization without broadening scope into out-of-phase consumers.
+- I marked all audit criteria complete in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/engine-provider-persistence/criteria.md) and recorded a clean audit result in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/engine-provider-persistence/feedback.md).
+
+Open issues / next step
+
+- No blocking issues remain in this phase-local test audit scope.
+- The only intentional gap is unchanged from the strategy: no full-repo rerun or out-of-phase capability/optimizer migration coverage in this test phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
