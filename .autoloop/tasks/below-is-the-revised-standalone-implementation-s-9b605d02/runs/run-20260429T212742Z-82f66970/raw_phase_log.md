@@ -871,3 +871,102 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddb4b-6028-7802-9a75-652b8666c65c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+Addressing the auditor’s remaining AC-3 gaps now. I’m extending the focused simple-surface suite to cover the separate `step_item_state` prompt-validation branch and the `control_routes=False` branch for `python_step` and `workflow_step`.
+
+I’m adding the two missing AC-3 assertions directly into the same focused suite so the coverage stays localized and deterministic. After that I’ll update the strategy and feedback artifacts to reflect the additional branches.
+
+The added assertions touch the separate validation and route-injection branches the auditor flagged. I’m running a quick syntax check now, then I’ll update the phase artifacts with the new coverage scope.
+
+The added tests compiled cleanly. I’m updating the strategy and feedback artifacts to make the new AC-3 branch coverage explicit for the next audit pass.
+
+Scope considered
+
+- Phase-local follow-up test work for `compiler-validation-normalization`.
+- The auditor’s blocking gap `TST-001` in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), plus the matching strategy and feedback artifacts.
+
+What I analyzed
+
+- The current phase feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/feedback.md)
+- The focused test file [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- The separate implementation branches in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) for `step_name.item_state` placeholder rejection and `python` / `workflow` control-route injection
+
+What I changed
+
+- Extended [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) to:
+  - reject `{review.item_state.attempts}` on the simple surface
+  - assert `control_routes=False` removes injected control routes for `python_step` and `workflow_step`, in addition to the existing `step` and `produce_verify_step` coverage
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/test_strategy.md) so the AC-3 coverage map now explicitly names those additional branches.
+- Appended a cycle-2 summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/feedback.md).
+
+Key findings / decisions
+
+- I kept the additions in the existing focused simple-surface suite instead of creating a new test file, because the auditor’s gap was branch coverage inside that same phase-local contract.
+- Validation completed here was syntax-only: `python3 -m py_compile tests/unit/test_simple_surface.py`.
+- I did not touch provider-payload expectations because that remains explicitly out of scope for this phase.
+
+Open issues / next step
+
+- Full pytest execution is still pending because the environment is missing the runtime/test dependencies.
+- The next audit pass should be able to re-evaluate `TST-001` directly from the expanded AC-3 coverage in `tests/unit/test_simple_surface.py`.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddb4b-6028-7802-9a75-652b8666c65c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+Re-checking the expanded AC-3 coverage now. I’m confirming the new tests close the previously missing branches and then I’ll update the audit artifacts if the phase-local suite now looks complete.
+
+The previously missing branches are now covered directly in the focused suite, and I don’t see another material phase-local gap. I’m marking the audit complete and recording that `TST-001` is resolved for this phase.
+
+Scope considered
+
+- Phase-local audit of the `compiler-validation-normalization` test suite only.
+- The expanded coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), plus the phase strategy and feedback artifacts.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- The updated coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/test_strategy.md)
+- The prior blocking finding and follow-up note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/feedback.md)
+
+What I reviewed
+
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/criteria.md) to mark the audit complete.
+- I appended a cycle-2 audit resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/feedback.md).
+
+Key findings / decisions
+
+- No new blocking findings.
+- The previous gap `TST-001` is now covered: the focused suite asserts both `{review.item_state.attempts}` rejection and `control_routes=False` behavior for `python_step` and `workflow_step`.
+- The remaining limitation is environmental, not logical: validation here is still syntax-only because pytest/runtime dependencies are unavailable.
+
+Open issues / next step
+
+- No phase-local blocking gaps remain in the targeted compiler/validation test surface.
+- The next turn can move on; full pytest execution should happen later in an environment with the missing dependencies.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
