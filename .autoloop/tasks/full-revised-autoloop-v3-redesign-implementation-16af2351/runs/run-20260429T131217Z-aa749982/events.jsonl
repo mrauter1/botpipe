@@ -68,3 +68,6 @@
 {"ts": "2026-04-29T15:42:08.110728+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 68, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "feedforward-operations", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-29T15:42:08.112918+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 69, "event_type": "pair_started", "pair": "test", "phase_id": "feedforward-operations"}
 {"ts": "2026-04-29T15:42:08.113176+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 70, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "feedforward-operations"}
+{"ts": "2026-04-29T15:44:05.383453+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 71, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "feedforward-operations"}
+{"ts": "2026-04-29T15:45:12.480984+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 72, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "feedforward-operations"}
+{"ts": "2026-04-29T15:45:14.585248+00:00", "run_id": "run-20260429T131217Z-aa749982", "seq": 73, "event_type": "cycle_started", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "feedforward-operations"}
