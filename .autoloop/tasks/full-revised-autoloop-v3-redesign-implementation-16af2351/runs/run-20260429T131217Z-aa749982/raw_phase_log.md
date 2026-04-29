@@ -1025,3 +1025,101 @@ Implement the `IMP-001` fix in the engine, then rerun the targeted hook/state/se
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+The reviewer surfaced a concrete engine bug in the new route-hook lifecycle. I’m tracing that path and the adjacent context/artifact resolution code first, then I’ll patch the smallest safe fix and update the phase notes.
+
+I’ve confirmed the failure mode in `_finalize_step_result`. Next I’m checking the hook helper and existing contract tests so the fix stays centralized and I can add one regression test for state-derived artifact paths across `on_route` and `on_taken`.
+
+I have the minimal safe fix: re-resolve and rebind artifacts after `on_route` and again after `on_taken`, so each route hook sees the current state-derived artifact surface. I’m patching that path and adding a regression test that fails on the old behavior.
+
+The code path is patched. I’m running the focused contract tests around route hooks and artifact validation now, then I’ll fold the reviewer-driven change into the phase notes and decision ledger.
+
+The new regression test is close but I targeted the wrong artifact root. I’m locating the actual resolved path that the workflow uses for this artifact and then I’ll lock the test to that path before rerunning.
+
+The hook fix itself is working; the failed assertion was just using the wrong expected directory. I’m correcting the regression test to match the artifact template’s actual `{workflow_folder}` resolution and rerunning the focused suite.
+
+The focused regression tests are green. I’m doing one broader pass over the full engine contract suite now because the change sits on a central execution path and I want to catch any ordering or validation regressions before I close the loop.
+
+I’ve validated the fix across the full engine contract suite. I’m updating the phase notes and the shared decision block now so later turns preserve the refreshed artifact-binding rule between route hooks.
+
+Scope considered
+
+Phase-local work for `hook-state-session-and-topology-metadata`, limited to the reviewer-reported route-hook artifact-binding regression and its adjacent engine/test/note surfaces.
+
+What I analyzed
+
+I traced `core/engine.py:_finalize_step_result` and `Engine._run_route_hook`, checked the active [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/feedback.md), and reviewed the existing hook/required-write contract coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+
+What I changed
+
+I patched [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py) so `_finalize_step_result` re-resolves and rebinds artifacts immediately after `on_route` and again after route-level `on_taken`. That keeps `ctx.artifacts` aligned with any state-derived path changes before the next hook or final required-write validation runs.
+
+I added a regression test in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) that mutates state in `on_route`, writes the required artifact in `on_taken`, and asserts the write lands at the refreshed path instead of the stale one. I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/implementation_notes.md) and appended the non-obvious rule to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+Key findings / decisions
+
+The bug was real: the old code passed one precomputed `finalized_artifacts` binding through both route hooks, so `on_taken` could observe stale paths after `on_route` mutated state. The fix stays localized in `_finalize_step_result` rather than adding a new abstraction.
+
+Validation passed:
+`python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`
+`./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q`
+`./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k "route_hook or on_route_hook_runs_before_required_output_validation or after_hook_state_mutation_re_resolves_artifact_paths_before_final_output_validation"`
+`./.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py -q`
+
+Open issues / next step
+
+No open blocker remains from `IMP-001`. The phase is ready for verifier rerun.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd9a5-5520-7ce1-8fe5-3ca6bc6a6a63
+---
+Re-reviewing the phase after the producer fix. I’m checking the updated route-hook engine path, the new regression test, and the phase artifacts, then I’ll either clear the phase or record any remaining issue.
+
+The producer’s fix addresses the original failure mode and the new regression test covers it directly. I’m marking the criteria complete and annotating the feedback artifact so the original blocking finding is clearly recorded as resolved rather than still open.
+
+Scope considered
+
+Phase-local verifier scope for `hook-state-session-and-topology-metadata`. I re-reviewed the producer’s cycle-2 fix for the route-hook artifact-binding bug and the phase artifacts only.
+
+What I analyzed
+
+I checked the updated route-hook finalization path in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:1070), the new regression coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:3999), the updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/implementation_notes.md), and the shared decision appended for this turn in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+What I reviewed
+
+The original `IMP-001` failure mode is fixed: `_finalize_step_result` now refreshes `ctx.artifacts` after `on_route` before `on_taken` runs, and again before final required-write validation. The added test exercises the exact state-derived artifact-path scenario that previously broke and now passes. The phase notes and decisions are consistent with the implementation and no new regressions were apparent in the changed path.
+
+Key findings / decisions
+
+No remaining blocking or non-blocking findings in this verifier pass. I marked all criteria complete in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/criteria.md) and recorded the resolution status in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/hook-state-session-and-topology-metadata/feedback.md).
+
+Open issues / next step
+
+No open phase-local issues. This phase is verified complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
