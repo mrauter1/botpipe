@@ -1463,3 +1463,76 @@ Open issues / next step
 The remaining work is to finish migrating the still-failing runtime/unit consumer tests and the remaining helper expectations to the canonical contract, then rerun the focused suites. Current validation status:
 - `tests/runtime/test_workflow_builder_package.py::test_workflow_builder_package_compiles_with_explicit_control_contracts` passes
 - the broader focused runtime suite still fails heavily, so this phase is only partially implemented at this point
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m reviewing the active phase artifacts and validating the implementation against the phase acceptance criteria first. Then I’ll record the blocking regressions already visible from the focused runtime validation into the reviewer feedback artifact.
+
+Reviewing the phase artifacts and the changed consumer-facing contract first, then I’ll verify the remaining failure surface with targeted reads and test evidence before updating the review artifacts.
+
+I’ve got the phase notes and decisions. Next I’m checking the representative failing runtime paths against the changed code so the review findings tie to concrete symbols and failure modes rather than just the aggregate test count.
+
+The broad suite still contains both legacy-surface tests and newer canonical assertions. I’m narrowing to a representative current failure in the migrated runtime tests, because that gives a stronger blocker than citing the aggregate failure count alone.
+
+The representative failure is concrete: the migrated runtime test expects typed route metadata, but the request capture is receiving plain dicts. I’m checking where the engine builds provider route payloads, because that determines whether this is a fake-provider regression or a broader runtime contract leak.
+
+One material issue is already visible without rerunning more tests: capability inspection still carries the old shape as an adapter. I’m checking the exact fields it emits, because the active phase explicitly required migrating capability inspection itself to the canonical terminology.
+
+I also need to check acceptance criterion AC-1 directly, not just infer it from test failures. I’m grepping the active consumer surfaces for banned names to see whether the migration itself is still incomplete in docs, workflows, and active tests.
+
+The migration gap is broader than one failing assertion. Active tests and even generated contract strings still mention banned names, so I’m checking the stdlib/optimizer boundary next to see whether AC-2 was actually completed or only partially redirected.
+
+I have enough to draft the blockers, but I want exact file/line anchors for each one so the feedback is actionable and stable. Then I’ll update the criteria and feedback artifacts only.
+
+I’ve got enough blockers for the code paths. One last pass through the docs gives me a clean anchor for the consumer-facing part of AC-1, then I’ll write the review artifacts and stop.
+
+I have the review set: four blockers covering incomplete consumer migration, a concrete provider contract regression, legacy capability inspection shape, and unfinished stdlib/optimizer separation. I’m writing those findings into the phase artifacts now.
+
+The review artifacts are updated. I’m doing one quick readback to make sure the findings and reviewer status are recorded cleanly, then I’ll close with the verifier summary and loop-control result.
+
+Scope considered
+
+The active consumer-migration phase only: changed consumer-facing runtime/tests/docs/workflow-package surfaces, capability inspection, and stdlib versus `autoloop_optimizer` separation. I did not review unrelated dirty repo state outside what was needed to assess regression risk.
+
+What I analyzed
+
+I read the phase criteria, feedback stub, implementation notes, and run decisions first. Then I checked the changed runtime/provider boundary, capability-inspection shape, stdlib exports, representative active workflow imports, and the migrated runtime tests that the implementer already flagged as still failing.
+
+What I reviewed
+
+I reproduced the current representative runtime failure with:
+`./.venv/bin/python -m pytest tests/runtime/test_workflow_builder_package.py::test_workflow_builder_package_runs_and_generates_a_compilable_package --maxfail=1 -q`
+
+I also verified the concrete code paths behind it:
+- `core/engine.py::_routes_for_step`
+- `core/providers/fake.py::ProviderCall`
+- `core/workflow_capabilities.py`
+- `stdlib/__init__.py`
+- active runtime tests and docs still containing banned consumer names
+
+Key findings / decisions
+
+I recorded four blocking findings in the phase feedback artifact and left all criteria boxes unchecked.
+- `IMP-001`: active docs/tests/generated fixtures still use banned names, so AC-1 is not met.
+- `IMP-002`: provider route metadata is emitted as plain dicts instead of the typed `ProviderRoute` contract, causing a concrete runtime regression.
+- `IMP-003`: capability inspection still exposes legacy `transitions` / `global_transitions`, which contradicts the phase scope.
+- `IMP-004`: `stdlib` still exports application-specific optimizer helpers/models, so AC-2 is not complete.
+
+Open issues / next step
+
+The phase should go back to implementation. The next pass needs to finish the active consumer migration, unify the provider route payload shape, move capability inspection to canonical route metadata, and complete the stdlib/optimizer split before this phase can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
