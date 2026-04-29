@@ -179,3 +179,12 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=canonical-surface-and-topology-lowering,do-review-step-and-route-required-writes,hook-state-session-and-topology-metadata,feedforward-operations,workflow-migration-and-cleanup
+explicit=True
+current_phase_index=0
