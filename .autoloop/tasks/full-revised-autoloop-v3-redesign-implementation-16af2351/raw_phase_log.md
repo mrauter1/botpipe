@@ -1363,3 +1363,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+I’m fixing the reviewer’s blocking feedforward prompt bug and keeping the blast radius to the shared operation boundary plus targeted tests. First I’m checking the active feedback and the current decisions header, then I’ll patch the operation runtime and notes.
+
+The current decisions file already has a new `feedforward-operations` header for this turn, so I can record this fix there if needed. I’m patching the shared operation prompt resolver and adding a rendered-provider regression test so the reviewer’s scenario is covered directly.
+
+I’m adding one direct rendered-provider regression test and one ambient helper-path regression test, so the fix is covered both outside workflows and inside `python_step`. That keeps the change aligned with the reviewer’s failure scenario instead of only fixing the implementation silently.
+
+I’ve narrowed the implementation to the shared prompt-normalization seam in `core/operations.py`. After that I’m adding the two regression tests and updating the phase notes and decision ledger for this turn.
+
+I’ve applied the code fix and the two regression tests. I’m running a final syntax pass on the touched files, then I’ll update the implementation notes with the reviewer-fix specifics and the limited validation status.
+
+The syntax pass is clean. I’m updating the phase notes now to record the reviewer-driven fix, the additional rendered-provider coverage, and the fact that execution validation is still blocked by missing test dependencies.
+
+Scope considered
+
+- Reviewer finding `IMP-001` only, plus the shared feedforward operation boundary and the minimal regression surfaces needed to prove the fix.
+- Touched runtime code: [core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/operations.py), direct public API coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and helper-path coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Phase artifacts updated: [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/feedforward-operations/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+What I analyzed
+
+- The reviewer’s failure path from direct `llm("...")` / `classify("...")` into `_resolve_prompt()` and then `RenderedLLMProvider`.
+- The ambient helper path inside `python_step`, which reuses the same operation runtime and therefore had the same prompt-normalization bug.
+- Existing rendered-provider test scaffolding so the regression coverage could stay local and phase-scoped.
+
+What I changed
+
+- Fixed the shared operation prompt resolver in [core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/operations.py) by normalizing bare string feedforward prompts to `Prompt.inline(...)` before any registry or file resolution logic runs.
+- Added a direct rendered-provider regression test in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) to verify standalone `llm("...")` and `classify("...")` calls render and execute as inline prompts.
+- Added a helper-path regression test in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) to verify `llm("...")` and `classify("...")` inside `python_step` work through `RenderedLLMProvider`.
+- Updated the phase notes and appended the non-obvious normalization decision under the current turn’s header in `decisions.txt`.
+
+Key findings / decisions
+
+- The correct fix point was the shared `core.operations` boundary, not the public `autoloop.simple` wrappers, so direct calls and workflow-bound helper calls now share identical prompt semantics.
+- I did not broaden the change into unrelated prompt-registry behavior or provider architecture; the bug was isolated to how feedforward operations treated raw strings.
+
+Open issues / next step
+
+- Syntax validation passed with `python3 -m py_compile core/operations.py tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py`.
+- Full test execution is still not possible in this environment because `pytest` and `pydantic` are missing.
+- The next step is verifier review of `IMP-001` against the new rendered-provider regression coverage.

@@ -376,17 +376,24 @@ def _record_context_value(ctx: Context, *, step_name: str, value: Any) -> None:
 
 
 def _resolve_prompt(prompt: Prompt | str, *, runtime: OperationRuntime) -> ResolvedPrompt:
+    prompt = _normalize_operation_prompt(prompt)
     registry = runtime.prompt_registry
     if registry is not None:
         return registry.resolve(prompt)
+    if prompt.source == "inline":
+        return ResolvedPrompt(path=prompt.path, text=prompt.text, source="inline")
+    search_roots: tuple[Path, ...] = ()
+    if runtime.context is not None:
+        search_roots = (runtime.context.package_folder, runtime.context.workflow_folder)
+    return resolve_prompt_reference(prompt.path, source=prompt.source, search_roots=search_roots)
+
+
+def _normalize_operation_prompt(prompt: Prompt | str) -> Prompt:
     if isinstance(prompt, Prompt):
-        if prompt.source == "inline":
-            return ResolvedPrompt(path=prompt.path, text=prompt.text, source="inline")
-        search_roots: tuple[Path, ...] = ()
-        if runtime.context is not None:
-            search_roots = (runtime.context.package_folder, runtime.context.workflow_folder)
-        return resolve_prompt_reference(prompt.path, source=prompt.source, search_roots=search_roots)
-    return ResolvedPrompt(path=prompt, text=None, source="registry")
+        return prompt
+    if not isinstance(prompt, str):
+        raise TypeError("operation prompt must be a Prompt or string")
+    return Prompt.inline(prompt)
 
 
 def _resolve_session(runtime: OperationRuntime) -> SessionBinding | None:

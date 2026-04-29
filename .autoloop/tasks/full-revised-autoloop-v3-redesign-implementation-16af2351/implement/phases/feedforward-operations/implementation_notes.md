@@ -30,7 +30,7 @@
 ## Symbols touched
 
 - Public API: `llm`, `classify`, `llm.step`, `classify.step`
-- New runtime module: `OperationRuntime`, `OperationStepSpec`, `llm_call`, `classify_call`
+- New runtime module: `OperationRuntime`, `OperationStepSpec`, `llm_call`, `classify_call`, `_normalize_operation_prompt(...)`
 - Provider boundary: `OperationRequest`, `OperationResponse`, `LLMProvider.run_operation(...)`
 - Persistence: `CheckpointPayload.values`, run-local `operation_replay.json`
 
@@ -41,6 +41,7 @@
 - Retry and replay: implemented retry feedback, deterministic replay lookup, and fingerprint mismatch failure.
 - `python_step` / helper usage: implemented ambient operation runtime binding from `Engine`.
 - Tests: added coverage for standalone calls, retry, provider rendering, replay reruns, mismatch failure, and resume value restoration.
+- Reviewer follow-up `IMP-001`: normalized bare string feedforward prompts at the shared operation boundary and added rendered-provider regression coverage for direct calls and helper calls inside `python_step`.
 
 ## Assumptions
 
@@ -57,6 +58,7 @@
 
 - Feedforward operations now use a value-returning provider path and can replay from persisted successful results.
 - Completed feedforward step values survive pause/resume through checkpointed `ctx.values`.
+- Bare string prompts passed to `llm(...)` / `classify(...)` now resolve as inline prompts on the rendered provider path, matching the public shorthand used by standalone and helper-function call sites.
 
 ## Known non-changes
 
@@ -71,10 +73,12 @@
 
 ## Validation performed
 
-- `python3 -m py_compile` on all touched source and test files.
+- `python3 -m py_compile` on all touched source and test files in cycle 1.
+- `python3 -m py_compile core/operations.py tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py` after the reviewer follow-up fix in cycle 2.
 - Direct test execution was not possible here because the environment lacks `pytest` and `pydantic`.
 
 ## Deduplication / centralization
 
 - Centralized feedforward execution, retry, replay, and ambient runtime binding in `core/operations.py`.
+- Centralized bare-string prompt normalization in `core/operations.py` so direct calls and workflow-bound helper calls share the same inline-prompt semantics as `.step(...)`.
 - Reused existing system-step lowering instead of adding a second compiled engine path for value nodes.

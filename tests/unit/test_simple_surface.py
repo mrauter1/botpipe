@@ -46,11 +46,25 @@ from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.errors import WorkflowValidationError
 from autoloop_v3.core.prompts import PromptRegistry
 from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.core.providers.rendered import RenderedLLMProvider
+from autoloop_v3.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from autoloop_v3.runtime.prompts import FilesystemPromptRegistry
 from autoloop_v3.core.steps import SystemStep, WorkflowStep
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+class _RenderedOperationTransport:
+    def __init__(self, *raw_texts: str) -> None:
+        self._raw_texts = list(raw_texts)
+        self.turns: list[RenderedProviderTurn] = []
+
+    def run_turn(self, turn: RenderedProviderTurn) -> ProviderTurnResult:
+        self.turns.append(turn)
+        if not self._raw_texts:
+            raise AssertionError("unexpected extra rendered provider turn")
+        return ProviderTurnResult(raw_text=self._raw_texts.pop(0), session=None)
 
 
 class _SystemWorkflowState(BaseModel):
@@ -431,6 +445,23 @@ def test_standalone_llm_and_classify_use_operation_provider_path() -> None:
     assert [call.kind for call in provider.calls] == ["operation", "operation"]
     assert provider.calls[0].operation_kind == "llm"
     assert provider.calls[1].operation_kind == "classify"
+
+
+def test_standalone_operations_treat_plain_strings_as_inline_prompts_for_rendered_provider() -> None:
+    class Summary(BaseModel):
+        title: str
+
+    transport = _RenderedOperationTransport('{"title":"Rendered summary"}', "medium")
+    provider = RenderedLLMProvider(transport)
+
+    summary = llm("Generate a summary.", returns=Summary, provider=provider)
+    risk = classify("Classify risk.", choices=["low", "medium", "high"], provider=provider)
+
+    assert summary.title == "Rendered summary"
+    assert risk == "medium"
+    assert [turn.turn_kind for turn in transport.turns] == ["operation", "operation"]
+    assert "Generate a summary." in transport.turns[0].prompt_text
+    assert "Classify risk." in transport.turns[1].prompt_text
 
 
 def test_standalone_operations_retry_on_parse_and_choice_failures() -> None:
