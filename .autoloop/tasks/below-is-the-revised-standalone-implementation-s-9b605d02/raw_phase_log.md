@@ -158,3 +158,12 @@ No plan-level blockers remain. The next step is implementation against the appro
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=public-surface-cleanup,compiler-validation-normalization,engine-provider-persistence,consumer-migration-and-package-cleanup,verification-and-strictness
+explicit=True
+current_phase_index=0
