@@ -809,3 +809,52 @@ No open issues in this phase’s test scope. Phase-specific hook lifecycle cover
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd98e-0e61-7192-8d25-ace4c5fef7ae
+---
+I’m auditing the new test coverage against the phase acceptance criteria and the runtime behaviors it’s meant to pin down, starting with the added contract tests and the updated phase artifacts.
+
+I’m checking the new failure-path assertions in full before I mark criteria. The key question is whether the tests would actually catch the regression, not just execute the happy path.
+
+The new assertions are meaningful: the strict path proves the verifier is skipped, and the session test proves the override is actually persisted. I’m running the phase-relevant test slice now to confirm the coverage holds together.
+
+The phase-relevant slice is still running. So far it’s clean, and I haven’t found a coverage gap that rises to a blocking audit finding.
+
+The targeted test slice passed. I’m updating the audit artifacts now to mark the phase complete and record that there are no blocking or non-blocking coverage findings.
+
+Scope considered
+
+Active test phase only: `do-review-step-and-route-required-writes`, focused on the new contract/runtime coverage for `do_review_step`, `review_requires`, `review_session`, and route-specific `required_writes`, plus the phase-owned audit artifacts.
+
+What I analyzed
+
+I reviewed the added tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), the existing adjacent coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/do-review-step-and-route-required-writes/test_strategy.md), and the shared decisions for this phase.
+
+What I reviewed
+
+I checked that the new tests cover the material runtime gaps left after implementation: separate verifier session-slot behavior when `review_session` is declared, and the strict failure path where declared `review_requires` should stop before verifier execution. I also verified that the broader phase slice still passes:
+`./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py -q`
+Result: `204 passed in 1.27s`.
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings. The added tests materially improve regression protection for AC-1 and AC-2, the preserved explicit-empty-override invariant remains covered, and the strategy/feedback artifacts now accurately describe the behavior-to-test map and validation outcome.
+
+Open issues / next step
+
+No open issues in this phase’s test scope. The audit artifacts were updated in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/do-review-step-and-route-required-writes/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/do-review-step-and-route-required-writes/feedback.md).
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
