@@ -472,3 +472,49 @@ Key findings / decisions
 Open issues / next step
 - No known implement-side issues remain from the active reviewer feedback.
 - The next step is verifier re-review of the updated phase artifacts and doc surface.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m doing the final phase re-review now. I’ll verify the last doc change against the reviewer note, confirm the phase criteria are fully met, then update the phase artifacts to a complete state if nothing else is outstanding.
+
+The remaining doc example is now clearly compatibility-fenced, which matches the phase decision and no longer contradicts the canonical greenfield guidance. I’m marking the phase complete and appending a final review note so the feedback ledger reflects that the earlier blockers are resolved, not still active.
+
+Scope considered
+- Phase `canonical-surface-and-topology-lowering` only.
+- I re-reviewed the latest doc changes, the phase decisions, and the acceptance-criteria surface affected by the earlier blockers.
+- I did not expand into unrelated dirty files outside this phase scope.
+
+What I analyzed
+- The current phase feedback and criteria artifacts.
+- The updated public examples in `docs/authoring.md`, especially the prompt-resolution snippet and the scoped worklist snippet.
+- The shared decisions ledger to confirm the compatibility-fenced worklist example is consistent with the documented phase boundary.
+- The targeted validation status already recorded for this cycle.
+
+What I reviewed
+- `IMP-001`: already resolved in cycle 2 and still consistent.
+- `IMP-002` / `IMP-003`: now resolved by canonicalizing the prompt example and explicitly fencing the scoped `PairStep(...)` snippet as compatibility guidance.
+- AC-1 through AC-5 against the current implementation and public guidance surface.
+
+Key findings / decisions
+- No blocking findings remain.
+- The remaining legacy scoped worklist example is now clearly labeled as compatibility guidance, which is consistent with the phase decision that the canonical simple surface does not yet document `scope=`.
+- I marked all criteria as complete and appended a final review note to the phase feedback reflecting that the earlier blockers are resolved.
+
+Open issues / next step
+- No open blocking issues remain for this phase.
+- The phase is ready to be treated as complete and handed off to the next planned slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

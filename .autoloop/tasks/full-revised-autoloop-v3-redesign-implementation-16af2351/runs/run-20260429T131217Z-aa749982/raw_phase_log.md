@@ -427,3 +427,94 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m narrowing this to the last reviewer complaint: the remaining legacy examples in `docs/authoring.md`. Before editing, I’m checking whether the simple surface already exposes `scope=`; if it doesn’t, I’ll rewrite the worklist example to the nearest canonical phase-1 surface without inventing out-of-scope API.
+
+The worklist example can’t be truthfully rewritten onto the simple surface today because `autoloop.simple` still doesn’t expose `scope=` in this phase. I’m fixing the prompt example to `Prompt.file(...)` and explicitly fencing the scoped `PairStep` snippet as an advanced compatibility example instead of leaving it as unqualified public guidance.
+
+I’ve made the remaining doc changes. I’m running the doc-facing checks and a quick search over `docs/authoring.md` so I can verify the legacy examples are either canonicalized or explicitly compatibility-fenced, not accidentally still presented as greenfield guidance.
+
+The remaining doc fix is intentionally narrow: I’m recording that the worklist/scoped-step snippet stays compatibility-fenced because `autoloop.simple` still doesn’t expose a canonical `scope=` declaration in this phase. That keeps the guidance honest without inventing new API surface.
+
+Scope considered
+- Phase `canonical-surface-and-topology-lowering` only.
+- I addressed the remaining reviewer finding in `docs/authoring.md`.
+- I did not broaden scope beyond the doc surface and the related phase tests.
+
+What I analyzed
+- The reviewer’s remaining blocking note in the phase feedback.
+- The residual legacy examples in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), especially the prompt-resolution snippet and the worklist/scoped-step snippet.
+- Whether the canonical simple surface already exposes a documented `scope=` declaration in this phase.
+
+What I changed
+- I changed the prompt-resolution example in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) from `Prompt("prompts/ask.md")` to `Prompt.file("prompts/ask.md")`.
+- I explicitly fenced the scoped `PairStep(...)` worklist example in the same doc as advanced compatibility guidance instead of leaving it presented as greenfield canonical surface usage.
+- I updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/implement/phases/canonical-surface-and-topology-lowering/implementation_notes.md) and appended the corresponding constraint under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+Key findings / decisions
+- I did not invent a new simple-surface `scope=` API, because that would be an out-of-phase behavior change.
+- The worklist/scoped-step snippet now stays honest: it remains documented, but clearly as compatibility guidance for the stricter surface rather than canonical phase-1 simple authoring.
+- Validation passed again after the doc fix: `70` targeted tests passed.
+
+Open issues / next step
+- No known implement-side issues remain from the active reviewer feedback.
+- The next step is verifier re-review of the updated phase artifacts and doc surface.
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m doing the final phase re-review now. I’ll verify the last doc change against the reviewer note, confirm the phase criteria are fully met, then update the phase artifacts to a complete state if nothing else is outstanding.
+
+The remaining doc example is now clearly compatibility-fenced, which matches the phase decision and no longer contradicts the canonical greenfield guidance. I’m marking the phase complete and appending a final review note so the feedback ledger reflects that the earlier blockers are resolved, not still active.
+
+Scope considered
+- Phase `canonical-surface-and-topology-lowering` only.
+- I re-reviewed the latest doc changes, the phase decisions, and the acceptance-criteria surface affected by the earlier blockers.
+- I did not expand into unrelated dirty files outside this phase scope.
+
+What I analyzed
+- The current phase feedback and criteria artifacts.
+- The updated public examples in `docs/authoring.md`, especially the prompt-resolution snippet and the scoped worklist snippet.
+- The shared decisions ledger to confirm the compatibility-fenced worklist example is consistent with the documented phase boundary.
+- The targeted validation status already recorded for this cycle.
+
+What I reviewed
+- `IMP-001`: already resolved in cycle 2 and still consistent.
+- `IMP-002` / `IMP-003`: now resolved by canonicalizing the prompt example and explicitly fencing the scoped `PairStep(...)` snippet as compatibility guidance.
+- AC-1 through AC-5 against the current implementation and public guidance surface.
+
+Key findings / decisions
+- No blocking findings remain.
+- The remaining legacy scoped worklist example is now clearly labeled as compatibility guidance, which is consistent with the phase decision that the canonical simple surface does not yet document `scope=`.
+- I marked all criteria as complete and appended a final review note to the phase feedback reflecting that the earlier blockers are resolved.
+
+Open issues / next step
+- No open blocking issues remain for this phase.
+- The phase is ready to be treated as complete and handed off to the next planned slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
