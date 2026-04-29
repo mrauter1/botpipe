@@ -5,23 +5,35 @@ phases:
 - phase_id: canonical-surface-and-topology-lowering
   title: Canonical surface and topology lowering
   objective: Make the new public authoring surface compile through the existing FSM
-    by centering step-local routes, canonical terminals, canonical writes, and deterministic
-    declaration ordering.
+    by centering python_step, step-local routes, canonical prompts and references,
+    canonical terminals and writes, deterministic declaration ordering, and immediate
+    canonical public guidance.
   status: planned
   in_scope:
   - Add public FINISH and SELF while preserving SUCCESS compatibility.
+  - Add the canonical python_step decorator surface, keep system_step as a deprecated
+    alias, and normalize the requested Python-step return contract.
   - Make step-local routes the canonical public topology source for step, python_step,
     and workflow_step.
   - Add writes as the public artifact output surface with deprecated out and outputs
     aliases.
+  - Add Prompt.inline, Prompt.file, and Prompt.ref as the canonical prompt declaration
+    forms.
+  - Add phase-1 prompt reference compilation for step or self artifacts, step values,
+    params fields, inferred reads, and unknown or ambiguous placeholder failures when
+    prompt text is available.
   - Resolve string step targets, direct step refs, terminals, SELF, and Route.to targets
     through one normalization path.
   - Replace module-counter-driven declaration ordering with class namespace ordering
     for compiled entry and default next-step behavior.
   - Emit richer topology artifacts additively beside the existing static graph payload.
+  - Move public docs, examples, and templates to the canonical API in this phase so
+    new authoring guidance stops reinforcing the legacy surface.
   out_of_scope:
   - Splitting do and review provider contracts.
   - Adding StateVar, Param, or hook context semantics.
+  - Adding state, item, or runtime-meta prompt namespaces that depend on the new phase-3
+    context surface.
   - Adding feedforward llm or classify operations.
   - Removing global transitions fallback.
   dependencies: []
@@ -30,26 +42,39 @@ phases:
     text: Plain step defaults use done as the route tag and FINISH as the terminal
       target without breaking SUCCESS compatibility.
   - id: AC-2
+    text: python_step is the canonical public Python-step surface, system_step remains
+      a compatibility alias, and Python-step return normalization matches the requested
+      None/string/Event contract.
+  - id: AC-3
     text: String forward references, direct step references, SELF, explicit entry,
       and first-declared entry all compile deterministically.
-  - id: AC-3
-    text: Canonical topology artifacts and inspect/static-graph outputs are emitted
-      additively without regressing existing consumers.
+  - id: AC-4
+    text: Prompt.inline, Prompt.file, Prompt.ref, inferred artifact reads, and unknown
+      or ambiguous placeholder validation behave according to the new authoring contract
+      for artifact, value, and params references.
+  - id: AC-5
+    text: Canonical topology artifacts and canonical public docs/examples/templates
+      are emitted or updated additively without regressing existing consumers.
   deliverables:
-  - Updated public exports and simple authoring declarations for FINISH, SELF, and
-    writes.
-  - Compiler and validation changes for step-local route lowering and declaration-order-based
-    topology.
-  - Targeted tests covering terminal aliasing, step-local routes, entry selection,
-    and artifact naming.
+  - Updated public exports and simple authoring declarations for FINISH, SELF, python_step,
+    Prompt helpers, and writes.
+  - Compiler and validation changes for Python-step lowering, prompt reference compilation,
+    step-local route lowering, and declaration-order-based topology.
+  - Targeted tests covering terminal aliasing, Python-step return normalization, prompt
+    reference behavior, step-local routes, entry selection, artifact naming, and early
+    docs/example migration.
   risks:
   - Terminal rename drift across run results, CLI inspect output, and static graph
     payloads.
   - Ordering changes could silently alter existing topology if not covered by resume
     and compatibility tests.
+  - Prompt-reference support could remain partially implemented if phase-1 scope is
+    treated as topology-only work.
   rollback:
   - Revert canonical surface additions while keeping the prior lowering path intact.
   - Disable new topology artifact emission if it destabilizes inspect or runtime outputs.
+  - Keep public docs/examples/templates on the new canonical surface even if some
+    compatibility internals need to remain longer.
 - phase_id: do-review-step-and-route-required-writes
   title: Do review step and route required writes
   objective: Introduce do_review_step as the canonical paired step with separate do
@@ -95,8 +120,8 @@ phases:
 - phase_id: hook-state-session-and-topology-metadata
   title: Hook state session and topology metadata
   objective: Add the requested hook contract, public state and param surfaces, global
-    session helpers, and resume-safe topology metadata without destabilizing checkpoint
-    behavior.
+    session helpers, extended prompt namespaces, and resume-safe topology metadata
+    without destabilizing checkpoint behavior.
   status: planned
   in_scope:
   - Add StateVar and Param descriptors alongside existing State and Parameters compatibility
@@ -105,8 +130,11 @@ phases:
     variants.
   - Expand context with state, step_state, item_state, step_item_state, values, artifacts,
     params, meta, route, and outcome surfaces.
-  - Add global session reset and set helpers and persist deterministic session state
-    across checkpoints and resumes.
+  - Add workflow-level global session semantics, review_session handling, and global
+    session reset/set helpers, then persist deterministic session state across checkpoints
+    and resumes.
+  - Extend prompt reference compilation into the requested state, item, step-state,
+    step-item-state, run, workflow, and reserved pseudo-field namespaces.
   - Emit hook events, topology hash, source hash, prompt refs, state contracts, session
     contracts, and compile reports.
   - Fail resume when the saved topology differs from the current compiled topology.
@@ -124,13 +152,20 @@ phases:
     text: StateVar and Param support immutable defaults, factories, checkpoint persistence,
       and prompt or context access.
   - id: AC-3
+    text: Global session defaults, review session overrides, and session reset or
+      set behavior persist deterministically across checkpoints and resumes.
+  - id: AC-4
+    text: Prompt references for state, item, step-state, step-item-state, run, workflow,
+      and reserved pseudo-fields compile or fail according to the requested contract.
+  - id: AC-5
     text: Runs record topology metadata and resume fails clearly when topology hashes
       do not match.
   deliverables:
-  - Context and engine support for the new hook and state surfaces.
-  - Expanded topology and compile artifact generation with hash persistence.
-  - Tests for hook order, hook failure checkpointing, state persistence, session reset
-    or set behavior, and resume mismatch handling.
+  - Context and engine support for the new hook, state, and session surfaces.
+  - Expanded topology and compile artifact generation with hash persistence and prompt-reference/session
+    contracts.
+  - Tests for hook order, hook failure checkpointing, state persistence, global session
+    behavior, extended prompt namespaces, and resume mismatch handling.
   risks:
   - Removing hook-based route redirection could break compatibility tests or bundled
     workflows that still rely on AfterHookResult route overrides.
@@ -183,12 +218,14 @@ phases:
   - Disable replay reuse and keep retry-only behavior if fingerprinting proves unsafe.
 - phase_id: workflow-migration-and-cleanup
   title: Workflow migration and cleanup
-  objective: Move bundled workflows, docs, stdlib packaging, and compatibility surfaces
-    onto the final canonical model once the lower-level behavior is stable.
+  objective: Move bundled workflows, stdlib packaging, remaining compatibility-era
+    docs/examples, and compatibility surfaces onto the final canonical model once
+    the lower-level behavior is stable.
   status: planned
   in_scope:
-  - Update built-in workflows, examples, prompts, docs, and inspect expectations to
-    the canonical API.
+  - Finish migrating bundled workflows, prompts, inspect expectations, and remaining
+    compatibility-era docs/examples that were not part of the phase-1 canonical public-guidance
+    switch.
   - Move optimizer and application-specific stdlib material out of framework core
     into autoloop_optimizer or an equivalent sibling package layout.
   - Demote or remove deprecated public surfaces once migrated workflows and tests
@@ -202,8 +239,9 @@ phases:
   - feedforward-operations
   acceptance_criteria:
   - id: AC-1
-    text: Bundled workflows and docs use the canonical API and stop introducing new
-      examples on deprecated surfaces.
+    text: Bundled workflows and remaining compatibility-era docs/examples use the
+      canonical API, while phase-1 public guidance remains authoritative throughout
+      the migration.
   - id: AC-2
     text: Optimizer-specific stdlib logic is no longer housed in the framework core
       package.
@@ -211,7 +249,8 @@ phases:
     text: Strictness, docs, contract, runtime, and workflow integration suites pass
       without depending on removed public compatibility surfaces.
   deliverables:
-  - Migrated workflows, docs, and prompts.
+  - Migrated bundled workflows, prompts, inspect expectations, and remaining compatibility-era
+    docs/examples.
   - Separated optimizer-specific package layout.
   - Final compatibility cleanup patches and regression-test updates.
   risks:
@@ -220,7 +259,7 @@ phases:
   - Removing compatibility exports too early can strand runtime workflows or inspect
     tooling.
   rollback:
-  - Restore compatibility exports and import bridges while keeping migrated docs on
-    the canonical surface.
+  - Restore compatibility exports and import bridges while keeping phase-1 canonical
+    public guidance intact.
   - Stage stdlib extraction behind temporary bridges if the sibling package move is
     not mechanically complete.
