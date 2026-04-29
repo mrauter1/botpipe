@@ -13,7 +13,25 @@ import pytest
 from pydantic import BaseModel
 
 from autoloop import Checkpoint, ChildWorkflowResult, Event, Outcome, ResolvedArtifacts
-from autoloop.simple import AfterHookResult, Json, Md, Prompt, Route, RouteInfo, StrictWorkflow, Workflow, chain, review_step, step, system_step, workflow_step
+from autoloop.simple import (
+    AfterHookResult,
+    FINISH,
+    Json,
+    Md,
+    Prompt,
+    Route,
+    RouteInfo,
+    SELF,
+    StrictWorkflow,
+    Workflow,
+    chain,
+    do_review_step,
+    python_step,
+    review_step,
+    step,
+    system_step,
+    workflow_step,
+)
 from autoloop.simple import Checkpoint as SimpleCheckpoint
 from autoloop.simple import ChildWorkflowResult as SimpleChildWorkflowResult
 from autoloop.simple import Event as SimpleEvent
@@ -117,6 +135,16 @@ def test_prompt_inline_and_file_primitives_preserve_origin_metadata(tmp_path: Pa
     assert file_resolved.path == str(prompt_path)
 
 
+def test_prompt_ref_preserves_registry_origin_metadata() -> None:
+    prompt = Prompt.ref("review")
+    resolved = PromptRegistry({"review": "Registry prompt.\n"}).resolve(prompt)
+
+    assert prompt.source == "registry"
+    assert prompt.path == "review"
+    assert resolved.source == "registry"
+    assert resolved.text == "Registry prompt.\n"
+
+
 def test_route_primitives_accept_optional_metadata_without_changing_target_or_effects() -> None:
     route = Route.complete(
         summary="Step completed cleanly.",
@@ -188,14 +216,14 @@ def test_simple_workflow_base_does_not_trigger_strict_class_definition_validatio
     assert LightweightWorkflow.__strict_workflow__ is False
 
 
-def test_simple_single_step_workflow_compiles_with_inferred_entry_and_success_route() -> None:
+def test_simple_single_step_workflow_compiles_with_inferred_entry_and_finish_route() -> None:
     class LightweightWorkflow(Workflow):
-        note = step("Write a short note.", out=Md("note"))
+        note = step("Write a short note.", writes=[Md("note")])
 
     compiled = compile_workflow(LightweightWorkflow)
 
     assert compiled.entry_step_name == "note"
-    assert compiled.routes["note"]["done"].target == "SUCCESS"
+    assert compiled.routes["note"]["done"].target == "FINISH"
     assert compiled.steps["note"].expected_output_schema is None
     assert compiled.new_state().model_dump(mode="python") == {}
 
@@ -234,14 +262,14 @@ def test_simple_chain_and_review_step_lower_into_existing_compiled_workflow_mode
 
     assert compiled.entry_step_name == "analysis"
     assert compiled.routes["analysis"]["done"].target == "email"
-    assert compiled.routes["email"]["accepted"].target == "SUCCESS"
+    assert compiled.routes["email"]["accepted"].target == "FINISH"
     assert compiled.routes["email"]["needs_rework"].target == "email"
     assert compiled.steps["analysis"].expected_output_schema is None
     assert compiled.steps["email"].reads == ("analysis.analysis",)
     assert compiled.steps["email"].requires == ()
 
 
-def test_simple_placeholder_inference_is_conservative_about_bare_name_ambiguity() -> None:
+def test_simple_placeholder_inference_rejects_bare_name_ambiguity() -> None:
     class Analysis(BaseModel):
         summary: str
 
@@ -253,10 +281,8 @@ def test_simple_placeholder_inference_is_conservative_about_bare_name_ambiguity(
         publish = step("Publish a short summary of {analysis}.")
         flow = chain(analysis, publish)
 
-    compiled = compile_workflow(AmbiguousPromptWorkflow)
-
-    assert compiled.steps["publish"].reads == ()
-    assert compiled.steps["publish"].requires == ()
+    with pytest.raises(WorkflowValidationError, match="is ambiguous"):
+        compile_workflow(AmbiguousPromptWorkflow)
 
 
 def test_simple_file_prompt_infers_reads_from_unambiguous_placeholders(tmp_path: Path) -> None:
@@ -277,6 +303,97 @@ def test_simple_file_prompt_infers_reads_from_unambiguous_placeholders(tmp_path:
     assert compiled.steps["publish"].requires == ()
 
 
+def test_simple_prompt_references_support_self_step_value_and_params_namespaces() -> None:
+    class AnalysisWorkflow(Workflow):
+        class Parameters(BaseModel):
+            mode: str = "strict"
+
+        draft = step(
+            "Write {self.report} using {params.mode} and reflect on {draft.value}.",
+            writes=[Md("report")],
+        )
+
+    compiled = compile_workflow(AnalysisWorkflow)
+
+    assert compiled.steps["draft"].reads == ()
+
+
+def test_simple_prompt_references_reject_unknown_placeholders() -> None:
+    class UnknownPlaceholderWorkflow(Workflow):
+        note = step("Write {missing_artifact}.")
+
+    with pytest.raises(WorkflowValidationError, match="is unknown"):
+        compile_workflow(UnknownPlaceholderWorkflow)
+
+
+def test_simple_entry_defaults_to_first_declared_step_without_flow() -> None:
+    class OrderedWorkflow(Workflow):
+        first = step("First.")
+        second = step("Second.")
+
+    compiled = compile_workflow(OrderedWorkflow)
+
+    assert compiled.entry_step_name == "first"
+    assert compiled.routes["first"]["done"].target == "second"
+    assert compiled.routes["second"]["done"].target == "FINISH"
+
+
+def test_simple_routes_support_string_forward_refs_and_self() -> None:
+    class RoutedWorkflow(Workflow):
+        prepare = step(
+            "Prepare.",
+            routes={
+                "retry": SELF,
+                "next": "publish",
+                "finish": FINISH,
+            },
+        )
+        publish = step("Publish.")
+
+    compiled = compile_workflow(RoutedWorkflow)
+
+    assert compiled.routes["prepare"]["retry"].target == "prepare"
+    assert compiled.routes["prepare"]["next"].target == "publish"
+    assert compiled.routes["prepare"]["finish"].target == "FINISH"
+
+
+def test_python_step_decorator_lowers_to_core_system_handler() -> None:
+    class PythonWorkflow(Workflow):
+        State = _SystemWorkflowState
+
+        @python_step(writes=[Md("note")])
+        def run(ctx):
+            return "done"
+
+    compiled = compile_workflow(PythonWorkflow)
+
+    assert isinstance(compiled.steps["run"].step, SystemStep)
+
+
+def test_do_review_step_accepts_canonical_prompt_names() -> None:
+    class ReviewWorkflow(Workflow):
+        assess = do_review_step(
+            do=Prompt.inline("Assess."),
+            review=Prompt.inline("Review."),
+            writes=[Md("report")],
+        )
+
+    compiled = compile_workflow(ReviewWorkflow)
+
+    assert compiled.entry_step_name == "assess"
+    assert compiled.routes["assess"]["accepted"].target == "FINISH"
+    assert compiled.routes["assess"]["needs_rework"].target == "assess"
+
+
+def test_control_routes_can_be_disabled_for_simple_steps() -> None:
+    class MinimalWorkflow(Workflow):
+        note = step("Write a note.", control_routes=False)
+
+    compiled = compile_workflow(MinimalWorkflow)
+
+    assert tuple(compiled.steps["note"].available_routes) == ("done",)
+
+
 def test_simple_workflow_step_compiles_as_core_workflow_step_without_generated_handler() -> None:
     class ChildWorkflow(Workflow):
         note = step("Write the note.")
@@ -292,7 +409,7 @@ def test_simple_workflow_step_compiles_as_core_workflow_step_without_generated_h
     compiled = compile_workflow(ParentWorkflow)
 
     assert compiled.entry_step_name == "launch"
-    assert compiled.routes["launch"]["done"].target == "SUCCESS"
+    assert compiled.routes["launch"]["done"].target == "FINISH"
     assert compiled.routes["launch"]["question"].target == "PAUSE"
     assert compiled.routes["launch"]["failed"].target == "FAIL"
     assert compiled.routes["launch"]["blocked"].target == "PAUSE"
@@ -326,7 +443,7 @@ def test_simple_system_step_lowers_to_core_system_handler_without_on_step_method
 
     class SystemWorkflow(Workflow):
         State = _SystemWorkflowState
-        run = system_step(handler, out=Md("note"))
+        run = python_step(handler, writes=[Md("note")])
         flow = chain(run)
 
     compiled = compile_workflow(SystemWorkflow)
@@ -384,7 +501,9 @@ def test_autoloop_simple_exports_requested_public_authoring_surface() -> None:
         "AfterHookResult",
         "Checkpoint",
         "ChildWorkflowResult",
+        "Continuity",
         "Event",
+        "FINISH",
         "Json",
         "Md",
         "Outcome",
@@ -393,11 +512,16 @@ def test_autoloop_simple_exports_requested_public_authoring_surface() -> None:
         "ResolvedArtifacts",
         "Route",
         "RouteInfo",
+        "SELF",
+        "SUCCESS",
+        "Session",
         "StrictWorkflow",
         "Text",
         "Workflow",
         "WorkflowStep",
         "chain",
+        "do_review_step",
+        "python_step",
         "review_step",
         "step",
         "system_step",
@@ -426,6 +550,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "name",
         "reads",
         "requires",
+        "writes",
         "out",
         "outputs",
         "routes",
@@ -436,13 +561,17 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "control_schema",
         "retry",
         "session",
+        "control_routes",
     )
-    assert tuple(inspect.signature(simple_surface.review_step).parameters) == (
+    assert tuple(inspect.signature(simple_surface.do_review_step).parameters) == (
+        "do",
+        "review",
         "producer",
         "verifier",
         "name",
         "reads",
         "requires",
+        "writes",
         "out",
         "outputs",
         "accepted",
@@ -454,12 +583,34 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "control_schema",
         "retry",
         "session",
+        "control_routes",
     )
-    assert tuple(inspect.signature(simple_surface.system_step).parameters) == (
+    assert tuple(inspect.signature(simple_surface.review_step).parameters) == (
+        "producer",
+        "verifier",
+        "name",
+        "reads",
+        "requires",
+        "writes",
+        "out",
+        "outputs",
+        "accepted",
+        "rework",
+        "route_infos",
+        "route_summaries",
+        "before",
+        "after",
+        "control_schema",
+        "retry",
+        "session",
+        "control_routes",
+    )
+    assert tuple(inspect.signature(simple_surface.python_step).parameters) == (
         "fn",
         "name",
         "reads",
         "requires",
+        "writes",
         "out",
         "outputs",
         "routes",
@@ -467,6 +618,22 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "route_summaries",
         "before",
         "after",
+        "control_routes",
+    )
+    assert tuple(inspect.signature(simple_surface.system_step).parameters) == (
+        "fn",
+        "name",
+        "reads",
+        "requires",
+        "writes",
+        "out",
+        "outputs",
+        "routes",
+        "route_infos",
+        "route_summaries",
+        "before",
+        "after",
+        "control_routes",
     )
     assert tuple(inspect.signature(simple_surface.workflow_step).parameters) == (
         "workflow",
@@ -477,6 +644,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "input",
         "reads",
         "requires",
+        "writes",
         "out",
         "outputs",
         "routes",
@@ -484,6 +652,7 @@ def test_autoloop_simple_helper_signatures_are_explicit() -> None:
         "route_summaries",
         "before",
         "after",
+        "control_routes",
     )
 
 

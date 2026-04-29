@@ -6,7 +6,13 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from autoloop_v3.core.compiler import compile_workflow
-from autoloop_v3.runtime.static_graph import write_static_step_graph, workflow_static_step_graph_payload
+from autoloop_v3.runtime.static_graph import (
+    TOPOLOGY_FILENAME,
+    write_static_step_graph,
+    write_topology_artifacts,
+    workflow_static_step_graph_payload,
+    workflow_topology_payload,
+)
 from core import Artifact, PairStep, RouteInfo, SUCCESS, SystemStep, Workflow
 from core.primitives import Event, Outcome
 
@@ -95,3 +101,34 @@ def test_static_step_graph_includes_route_infos_and_schema_presence(tmp_path: Pa
     assert payload["transitions"]["steps"]["assessment"]["assessment_ready"] == "finish"
     assert payload["transitions"]["steps"]["finish"]["done"] == "SUCCESS"
     assert payload["transitions"]["global"] == {}
+
+
+def test_topology_artifacts_are_written_additively_with_canonical_finish_surface(tmp_path: Path) -> None:
+    compiled = compile_workflow(_StaticGraphWorkflow)
+
+    outputs = write_topology_artifacts(tmp_path, compiled)
+    topology = json.loads((tmp_path / TOPOLOGY_FILENAME).read_text(encoding="utf-8"))
+
+    assert TOPOLOGY_FILENAME in outputs
+    assert (tmp_path / "topology.mmd").exists()
+    assert (tmp_path / "route_table.md").exists()
+    assert (tmp_path / "artifact_contracts.json").exists()
+    assert (tmp_path / "prompt_refs.json").exists()
+    assert (tmp_path / "state_contracts.json").exists()
+    assert (tmp_path / "session_contracts.json").exists()
+    assert (tmp_path / "compile_report.md").exists()
+    assert topology["entry_step"] == "assessment"
+    assert topology["terminals"]["FINISH"] == "FINISH"
+    assert topology["steps"][1]["routes"][0]["target"] == "FINISH"
+
+
+def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None:
+    compiled = compile_workflow(_StaticGraphWorkflow)
+
+    payload = workflow_topology_payload(compiled)
+    assessment = next(step for step in payload["steps"] if step["name"] == "assessment")
+    finish = next(step for step in payload["steps"] if step["name"] == "finish")
+
+    assert assessment["writes"] == ["assessment.note"]
+    assert assessment["routes"][0]["required_writes"] == []
+    assert finish["routes"][0]["target"] == "FINISH"

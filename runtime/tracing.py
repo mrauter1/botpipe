@@ -10,11 +10,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+from ..core.compiler import CompiledWorkflow
 from ..core.extensions import StepFinish, StepStart, TerminalFinish
 from ..core.providers.models import StepProviderUsage
 from ..core.primitives import Event, Outcome
 from .config import TracingRuntimeConfig
-from .static_graph import STATIC_GRAPH_FILENAME, write_static_step_graph_payload
+from .static_graph import STATIC_GRAPH_FILENAME, write_static_step_graph_payload, write_topology_artifacts
 from .workspace import append_run_warning, update_run_tracing
 
 
@@ -37,6 +38,7 @@ class RuntimeTraceWriter:
         run_id: str,
         config: TracingRuntimeConfig,
         static_step_graph: Mapping[str, Any],
+        compiled_workflow: CompiledWorkflow | None = None,
     ) -> None:
         self._run_dir = run_dir.resolve()
         self._workflow_name = workflow_name
@@ -44,6 +46,7 @@ class RuntimeTraceWriter:
         self._run_id = run_id
         self._config = config
         self._static_step_graph = dict(static_step_graph)
+        self._compiled_workflow = compiled_workflow
         self._trace_path = _resolve_trace_path(self._run_dir, config.path)
         self._run_guarded(self._initialize)
 
@@ -189,6 +192,8 @@ class RuntimeTraceWriter:
             self._trace_path.touch(exist_ok=True)
             self._raw_dir.mkdir(parents=True, exist_ok=True)
         write_static_step_graph_payload(self._run_dir, self._static_step_graph)
+        if self._compiled_workflow is not None:
+            write_topology_artifacts(self._run_dir, self._compiled_workflow)
         self._update_metadata()
 
     def _base_payload(self, *, event_type: str, **fields: object) -> dict[str, object]:

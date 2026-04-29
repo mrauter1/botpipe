@@ -7,22 +7,26 @@
 Use:
 
 ```python
-from autoloop.simple import Workflow, StrictWorkflow, Prompt, Route, RouteInfo
-from autoloop.simple import Json, Md, Text, Raw, step, review_step, workflow_step, system_step, chain
+from autoloop.simple import Workflow, Prompt, Route, FINISH
+from autoloop.simple import Json, Md, Text, Raw, step, do_review_step, workflow_step, python_step
 ```
 
 Use `from autoloop.simple import ...` or `from autoloop import ...` in public workflow code and examples.
 `core/*` remains the internal kernel surface for strict runtime code and tests; it is not the public authoring API.
+Compatibility aliases remain available during migration: `StrictWorkflow`, `review_step`, `system_step`, `outputs`, `out`, `SUCCESS`, and `chain`.
 
 Greenfield authoring defaults:
 
 - `State` is optional on `autoloop.simple.Workflow`.
 - prompt files are optional; inline prompts are first-class.
+- `Prompt.inline(...)`, `Prompt.file(...)`, and `Prompt.ref(...)` are the canonical prompt forms.
 - `reads` are optional context and do not fail when missing.
 - `requires` are hard input preconditions.
+- `writes` is the canonical output surface; `out` and `outputs` remain compatibility aliases.
 - artifact schemas validate files and stay distinct from provider `control_schema`.
-- `system_step(fn)` does not require an `on_<step>` handler.
+- `python_step(fn)` does not require an `on_<step>` handler.
 - `workflow_step(...)` lowers to a real `WorkflowStep`.
+- step-local `routes={...}` are the canonical public topology surface.
 - there is no `autoloop eject` or workflow source-expansion command.
 
 ## Workflow Shapes

@@ -16,10 +16,12 @@ Public workflow code imports from `autoloop.simple` or `autoloop`.
 
 `autoloop.simple` is the active public authoring surface:
 
-- `Workflow`, `StrictWorkflow`
-- `step`, `review_step`, `workflow_step`, `system_step`, `chain`
+- `Workflow`
+- `step`, `do_review_step`, `workflow_step`, `python_step`
 - `Json`, `Md`, `Text`, `Raw`
-- `Prompt`, `Route`, `RouteInfo`, `AfterHookResult`
+- `Prompt`, `Route`, `FINISH`, `SELF`
+
+Compatibility aliases remain available during migration, including `StrictWorkflow`, `review_step`, `system_step`, `SUCCESS`, `out`, `outputs`, and `chain`.
 
 `core/*` remains the internal kernel for strict runtime code and tests. It is not a second public authoring API.
 

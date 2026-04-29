@@ -188,3 +188,91 @@ phase_mode=single
 phase_ids=canonical-surface-and-topology-lowering,do-review-step-and-route-required-writes,hook-state-session-and-topology-metadata,feedforward-operations,workflow-migration-and-cleanup
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m treating this as a phase-1 implementation pass on the public authoring surface and compiler lowering. First I’m reading the phase artifacts and the existing workflow/compiler code to identify the smallest safe set of changes that satisfy the acceptance criteria.
+
+The phase notes are still empty, so I’m relying on the plan and the code itself. Next I’m tracing the current public API, workflow declaration layer, and compiler path to see where canonical aliases and topology lowering already exist versus where they need to be added.
+
+I’ve confirmed the repo already has a “simple surface” and route lowering path, which is the right place to land phase 1. Now I’m reading the declaration, validation, prompt, and static graph implementations together so the changes stay compatible with the current runtime contracts.
+
+The compiler already infers some prompt reads and already lowers step-local routes, but it’s still using legacy names, always injects control routes, and doesn’t validate the new placeholder contract. I’m narrowing the work now to the public surface, lowering path, prompt-reference validation, and additive topology artifacts.
+
+I have the main shape now. The lowest-risk implementation is to extend the existing `autoloop.simple -> validation -> compiler -> static_graph/tracing` path rather than inventing a second compiler surface. I’m checking tracing and run-artifact write paths next so topology outputs land additively without breaking existing consumers.
+
+I’ve reached the implementation boundary. The main edits will be: public aliases/constants and prompt helpers in `autoloop`/`core`, deterministic entry and route-target resolution in `core.validation`, Python-step return and `writes` lowering in `autoloop.simple`, and additive topology files in `runtime.static_graph`/`runtime.tracing`, followed by focused tests and doc updates.
+
+I’m starting the code edits at the public surface and route primitives first, because the compiler and docs changes depend on those names existing. After that I’ll wire the lowering and topology artifacts through validation and runtime tracing.
+
+The first patch partially missed `core/__init__.py` because the export block doesn’t match my assumption. I’m reopening the exact file contents and patching the public primitives/export files with precise context.
+
+The public primitive names are in place. I’m patching `autoloop.simple` now so the canonical authoring API is actually usable: `writes`, `python_step`, `do_review_step`, `FINISH`, `SELF`, and the decorator-style Python-step form.
+
+I found a compatibility hazard: making `Route.complete()` canonicalize directly to `FINISH` would fan out into a large number of strict-core tests and compiled-route expectations. I’m keeping legacy `Route.complete()/SUCCESS` behavior intact and restricting `FINISH` to the new simple-surface defaults and explicit `FINISH` targets, which preserves the migration path without broad regressions.
+
+I’m threading the new names into the compiled metadata now. That lets topology files expose canonical `writes`/`FINISH` surfaces without changing the existing engine behavior or legacy static graph payloads.
+
+The topology writer needs the compiled workflow, not the already-rendered legacy graph payload. I’m correcting that wiring now so tracing can emit both legacy and canonical files cleanly.
+
+I spotted one more topology issue before running tests: step-level route payloads were only reading explicit per-step routes, which would have dropped inherited global control routes from `topology.json`. I’m fixing that before validation.
+
+I’ve got the phase scope and the current delta. Next I’m fixing the topology artifact gap, then I’ll run targeted compile/tests against the canonical-surface changes before updating the phase notes and decisions ledger.
+
+The topology payload path already has the global-route fallback wired in. I’m moving straight to validation now so the remaining work is whatever the test surface exposes, not guesswork.
+
+The environment doesn’t expose `python` or `pytest` on PATH. I’m checking the project’s actual interpreter/test entrypoint instead of assuming the shell aliases exist.
+
+There’s a `python3`, but no installed `pytest`. I’m looking for the project’s local virtualenv or alternate runner so I can still validate the phase without hand-waving.
+
+The package CLI surface is green, which reduces the risk that the scaffold migration broke existing expectations. I’m waiting on the canonical-surface suite to finish and will patch only if it exposes an actual contract miss.
+
+The prompt-validation miss is concrete: simple inline string prompts weren’t being treated as prompt text during compile-time placeholder analysis. I’m patching that and then adding the missing working-tree note the doc contract expects.
+
+I’m editing two places now: compile-time prompt text resolution for simple inline prompts, and the missing `cleanup.md` note that the documentation contract treats as part of the active authoring surface.
+
+The canonical-surface suite is now green. I’m doing the phase bookkeeping next: concise implementation notes and any non-obvious decisions that future turns would otherwise miss.
+
+I’m recording the phase intent and the compatibility boundaries now. The main thing worth preserving for later turns is that the canonical surface is exposed in compile artifacts and docs, while runtime success semantics still accept the legacy `SUCCESS` path to avoid a premature engine break.
+
+**Scope considered**
+- Phase `canonical-surface-and-topology-lowering` only.
+- I kept the work inside the canonical public surface, topology lowering, prompt-reference validation, additive topology artifacts, and public docs/templates.
+- I ignored unrelated dirty/deleted files already present elsewhere in the worktree.
+
+**What I analyzed**
+- The simple-surface lowering path in `autoloop/simple.py` and `core/validation.py`.
+- Compiler/runtime compatibility points in `core/compiler.py`, `core/engine.py`, `runtime/tracing.py`, and `runtime/static_graph.py`.
+- Public guidance surfaces in `docs/authoring.md`, `docs/architecture.md`, `runtime/cli.py`, and the repo-root working-tree note contract.
+- The targeted regression tests covering simple-surface behavior, runtime topology artifacts, docs, and CLI scaffolding.
+
+**What I changed**
+- Landed the canonical phase-1 surface: `FINISH`, `SELF`, `python_step`, `do_review_step`, `Prompt.ref`, and `writes`, while preserving `SUCCESS`, `system_step`, `review_step`, `out`, and `outputs` compatibility.
+- Lowered step-local routes through the existing FSM path with deterministic class-namespace ordering, first-declared default entry, explicit entry support, string/direct/`SELF` target resolution, and `done -> next/FINISH` defaults.
+- Added prompt placeholder validation and inferred reads for compile-time-available prompt text, including `{self.artifact}`, `{step.artifact}`, `{step.value}`, and `{params.field}`.
+- Added additive canonical topology artifacts via `runtime/static_graph.py` and runtime tracing, without removing the legacy static graph output.
+- Updated public docs and scaffolds to point new authoring toward the canonical surface.
+- Added `cleanup.md` because the docs/test contract treats it as an active public guidance file.
+- Updated tests to cover the new surface and fixed the one new test that needed to call `compile_workflow(...)` explicitly for compile-time placeholder failure.
+
+**Key findings / decisions**
+- Runtime success handling still needs compatibility, so execution accepts both `SUCCESS` and `FINISH`; only topology/docs were canonicalized to `FINISH` in this phase.
+- The simple authoring surface does not validate on class definition alone; compile-time prompt failures occur when the workflow is compiled, which is the correct enforcement boundary here.
+- The topology artifact path now stays additive, which avoids breaking existing static-graph consumers during migration.
+- I recorded the non-obvious compatibility decisions in the phase `implementation_notes.md` and the current-turn block in `decisions.txt`.
+
+**Open issues / next step**
+- No blocking issues remain for this phase.
+- Out-of-scope items are still deferred: `review_writes`, phase-specific do/review provider contracts, `StateVar`/`Param`, hook-context semantics, and feedforward `llm()` / `classify()`.
+- Validation completed: syntax compile passed, `49` targeted canonical-surface tests passed, and `20` package CLI tests passed.
