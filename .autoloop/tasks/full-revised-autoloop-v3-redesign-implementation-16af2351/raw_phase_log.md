@@ -1573,3 +1573,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019dd9cd-cafc-7a62-973a-8308519e1df5
+---
+I’m closing the remaining standalone-classify replay gap the auditor flagged, without widening scope beyond the existing standalone replay test and the phase-owned test artifacts. First I’m checking the current feedback and the latest test-author decision header, then I’ll patch the standalone test and update the strategy notes.
+
+I’m extending the existing standalone replay test rather than adding another helper, so the classify-specific fingerprint path is covered at the same deterministic seam. After that I’ll tighten the strategy text to call out that the mismatch case now exercises changed `choices`, not just changed prompts.
+
+The classify-specific replay path is patched. I’m doing a final syntax check on the touched test file and a quick read of the updated strategy/feedback so the auditor gets an exact trail from the new test to the acceptance criteria.
+
+Scope considered
+
+- Auditor finding `TST-001` only.
+- The existing standalone replay test in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) plus the phase-owned artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/feedforward-operations/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/feedforward-operations/feedback.md).
+- The latest test-author decision block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+What I analyzed
+
+- The classify-specific replay fingerprint risk called out by the auditor.
+- The existing standalone replay test structure and whether it could be extended without adding new helpers or unstable callsite dependencies.
+- The strategy wording to make sure the classify mismatch case is reflected explicitly, not only implied.
+
+What I changed
+
+- Extended [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) so `test_standalone_operations_replay_and_fail_loudly_on_fingerprint_mismatch` now covers:
+  - standalone `llm(...)` replay hit and mismatch on changed prompt
+  - standalone `classify(...)` replay hit and mismatch on changed declared `choices`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/feedforward-operations/test_strategy.md) to state the classify mismatch failure path explicitly.
+- Appended a concise follow-up entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/feedforward-operations/feedback.md).
+- Recorded the classify-specific `choices_hash` test intent under the current turn’s header in `decisions.txt`.
+
+Key findings / decisions
+
+- The narrowest correct fix was to extend the existing deterministic standalone replay test rather than add a second overlapping test.
+- The classify mismatch case changes only the declared `choices` for the same `callsite=`, so it directly proves that classify fingerprints depend on `choices_hash` rather than on a broader incidental input change.
+- `python3 -m py_compile tests/unit/test_simple_surface.py` passed.
+
+Open issues / next step
+
+- Full pytest execution is still blocked here because `pytest` and `pydantic` are not installed in this workspace.
+- The next step is re-audit of `TST-001` now that standalone classify replay drift is covered.

@@ -32,7 +32,8 @@
 - Typed-value parse retry for standalone `llm(...)`.
 - Invalid choice retry for standalone `classify(...)`.
 - Standalone replay hit avoids a second provider call.
-- Standalone replay mismatch raises `ProviderExecutionError` on fingerprint drift.
+- Standalone `llm(...)` replay mismatch raises `ProviderExecutionError` on changed prompt content.
+- Standalone `classify(...)` replay mismatch raises `ProviderExecutionError` on changed declared `choices`.
 
 ## Stabilization
 

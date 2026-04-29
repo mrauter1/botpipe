@@ -503,6 +503,38 @@ def test_standalone_operations_replay_and_fail_loudly_on_fingerprint_mismatch(tm
             callsite="tests:standalone-summary",
         )
 
+    first_classify_provider = ScriptedLLMProvider(operation_turns=("medium",))
+    first_risk = classify(
+        "Classify risk.",
+        choices=["low", "medium", "high"],
+        provider=first_classify_provider,
+        run_folder=run_folder,
+        callsite="tests:standalone-classify",
+    )
+
+    replay_classify_provider = ScriptedLLMProvider()
+    replay_risk = classify(
+        "Classify risk.",
+        choices=["low", "medium", "high"],
+        provider=replay_classify_provider,
+        run_folder=run_folder,
+        callsite="tests:standalone-classify",
+    )
+
+    assert first_risk == "medium"
+    assert replay_risk == "medium"
+    assert [call.kind for call in first_classify_provider.calls] == ["operation"]
+    assert replay_classify_provider.calls == []
+
+    with pytest.raises(ProviderExecutionError, match="operation replay fingerprint mismatch"):
+        classify(
+            "Classify risk.",
+            choices=["low", "high"],
+            provider=ScriptedLLMProvider(),
+            run_folder=run_folder,
+            callsite="tests:standalone-classify",
+        )
+
 
 def test_standalone_operations_retry_on_parse_and_choice_failures() -> None:
     class Summary(BaseModel):
