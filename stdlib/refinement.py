@@ -1,33 +1,3 @@
-"""Small authoring helpers for selected-workflow refinement surfaces."""
+"""Compatibility shim for refinement helpers."""
 
-from __future__ import annotations
-
-from pathlib import Path
-from typing import Any
-
-try:  # pragma: no branch - supports both package and direct repo-root imports
-    from ..core.workflow_capabilities import selected_workflow_authoring_surface_payload
-except ImportError:  # pragma: no cover - direct repo-root import fallback
-    from core.workflow_capabilities import selected_workflow_authoring_surface_payload
-
-from ._selected_workflow import inspect_selected_workflow, write_selected_workflow_artifact
-
-
-def write_selected_workflow_authoring_surface(
-    ctx,
-    workflow: str | type[Any],
-    relative_path: str | Path = "selected_workflow_authoring_surface.json",
-) -> Path:
-    """Write one selected workflow's editable authoring surface under ``ctx.workflow_folder``."""
-
-    inspection = inspect_selected_workflow(ctx, workflow)
-    return write_selected_workflow_artifact(
-        ctx,
-        capture=inspection.capture,
-        relative_path=relative_path,
-        artifact_name="selected_workflow_authoring_surface",
-        artifact_payload=selected_workflow_authoring_surface_payload(inspection.capability),
-    ).path
-
-
-__all__ = ["write_selected_workflow_authoring_surface"]
+from autoloop_optimizer.refinement import *  # noqa: F401,F403

@@ -12,12 +12,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_string_list,
         write_workflow_capability_snapshot,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
-    from autoloop_v3.stdlib.lifecycle import (
-        open_workflow_sessions,
-        write_invocation_contract,
-        write_publication_receipt,
-    )
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
+    from autoloop_v3.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
         normalize_unique_strings,
@@ -26,11 +22,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_string_list,
         write_workflow_capability_snapshot,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
@@ -94,122 +90,13 @@ class TaskToCandidateWorkflowSet(Workflow):
     candidate_next_action = Artifact("{workflow_folder}/candidate_next_action.md")
     candidate_workflow_set_receipt = Artifact("{workflow_folder}/candidate_workflow_set_receipt.json")
 
-    bootstrap = SystemStep(
+    @python_step(
         name="bootstrap",
         requires=[request],
-        produces={"invocation_contract": invocation_contract},
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_workflow_capabilities"},
     )
-    capture_workflow_capabilities = SystemStep(
-        name="capture_workflow_capabilities",
-        requires=[request, invocation_contract],
-        produces={"workflow_capability_snapshot": workflow_capability_snapshot},
-    )
-    frame_candidate_request = PairStep(
-        name="frame_candidate_request",
-        session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            workflow_capability_snapshot,
-            framework_architecture_doc,
-            framework_authoring_doc,
-            workflow_instructions,
-        ],
-        produces={
-            "candidate_request_brief": candidate_request_brief,
-            "candidate_selection_criteria": candidate_selection_criteria,
-        },
-        expected_output_schema=CandidateRequestFramingPayload,
-        route_infos=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
-    )
-    analyze_candidate_workflows = PairStep(
-        name="analyze_candidate_workflows",
-        session=analysis_session,
-        producer="prompts/analyze_producer.md",
-        verifier="prompts/analyze_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            workflow_capability_snapshot,
-            candidate_request_brief,
-            candidate_selection_criteria,
-        ],
-        produces={
-            "workflow_candidate_matrix": workflow_candidate_matrix,
-            "workflow_gap_analysis": workflow_gap_analysis,
-            "candidate_route_posture": candidate_route_posture,
-        },
-        expected_output_schema=CandidateWorkflowAnalysisPayload,
-        route_infos=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
-    )
-    package_candidate_workflow_set = PairStep(
-        name="package_candidate_workflow_set",
-        session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            workflow_capability_snapshot,
-            candidate_set_checklist,
-            candidate_request_brief,
-            candidate_selection_criteria,
-            workflow_candidate_matrix,
-            workflow_gap_analysis,
-            candidate_route_posture,
-        ],
-        produces={
-            "candidate_workflow_set": candidate_workflow_set,
-            "candidate_workflow_set_summary": candidate_workflow_set_summary,
-            "candidate_next_action": candidate_next_action,
-        },
-        expected_output_schema=CandidateWorkflowSetPayload,
-        route_infos=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
-    )
-    publish_candidate_workflow_set = SystemStep(
-        name="publish_candidate_workflow_set",
-        requires=[
-            workflow_capability_snapshot,
-            workflow_candidate_matrix,
-            workflow_gap_analysis,
-            candidate_route_posture,
-            candidate_workflow_set,
-            candidate_workflow_set_summary,
-            candidate_next_action,
-        ],
-        produces={"candidate_workflow_set_receipt": candidate_workflow_set_receipt},
-    )
-
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_workflow_capabilities},
-            capture_workflow_capabilities: {"workflow_capabilities_captured": frame_candidate_request},
-            frame_candidate_request: {
-                "candidate_request_framed": analyze_candidate_workflows,
-                "needs_rework": frame_candidate_request,
-                "needs_replan": frame_candidate_request,
-            },
-            analyze_candidate_workflows: {
-                "candidate_workflows_analyzed": package_candidate_workflow_set,
-                "needs_rework": analyze_candidate_workflows,
-                "needs_replan": frame_candidate_request,
-            },
-            package_candidate_workflow_set: {
-                "candidate_workflow_set_ready": publish_candidate_workflow_set,
-                "needs_rework": package_candidate_workflow_set,
-                "needs_replan": analyze_candidate_workflows,
-            },
-            publish_candidate_workflow_set: {"candidate_workflow_set_published": SUCCESS},
-        },
-    )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -239,8 +126,13 @@ class TaskToCandidateWorkflowSet(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_workflow_capabilities(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_workflow_capabilities",
+        requires=[request, invocation_contract],
+        writes=[workflow_capability_snapshot],
+        routes={"workflow_capabilities_captured": "frame_candidate_request"},
+    )
+    def capture_workflow_capabilities(state: State, ctx):
         snapshot_path = write_workflow_capability_snapshot(ctx)
         if not snapshot_path.exists():
             raise FileNotFoundError(f"workflow capability snapshot was not written at {snapshot_path}")
@@ -249,6 +141,65 @@ class TaskToCandidateWorkflowSet(Workflow):
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_capability_snapshot.json must define a positive workflow_count")
         return state, Event("workflow_capabilities_captured")
+
+    frame_candidate_request = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
+        session=frame_session,
+        requires=[
+            request,
+            invocation_contract,
+            workflow_capability_snapshot,
+            framework_architecture_doc,
+            framework_authoring_doc,
+            workflow_instructions,
+        ],
+        writes=[candidate_request_brief, candidate_selection_criteria],
+        accepted="candidate_request_framed",
+        routes={"needs_replan": "frame_candidate_request"},
+        control_schema=CandidateRequestFramingPayload,
+        route_infos=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
+    )
+
+    analyze_candidate_workflows = do_review_step(
+        do=Prompt.file("prompts/analyze_producer.md"),
+        review=Prompt.file("prompts/analyze_verifier.md"),
+        session=analysis_session,
+        requires=[
+            request,
+            invocation_contract,
+            workflow_capability_snapshot,
+            candidate_request_brief,
+            candidate_selection_criteria,
+        ],
+        writes=[workflow_candidate_matrix, workflow_gap_analysis, candidate_route_posture],
+        accepted="candidate_workflows_analyzed",
+        routes={"needs_replan": "frame_candidate_request"},
+        control_schema=CandidateWorkflowAnalysisPayload,
+        route_infos=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
+    )
+
+    package_candidate_workflow_set = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
+        session=package_session,
+        requires=[
+            request,
+            invocation_contract,
+            workflow_capability_snapshot,
+            candidate_set_checklist,
+            candidate_request_brief,
+            candidate_selection_criteria,
+            workflow_candidate_matrix,
+            workflow_gap_analysis,
+            candidate_route_posture,
+        ],
+        writes=[candidate_workflow_set, candidate_workflow_set_summary, candidate_next_action],
+        accepted="candidate_workflow_set_ready",
+        routes={"needs_replan": "analyze_candidate_workflows"},
+        control_schema=CandidateWorkflowSetPayload,
+        route_infos=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
+    )
 
     @staticmethod
     def on_frame_candidate_request(state: State, outcome: Outcome, artifacts):
@@ -288,8 +239,21 @@ class TaskToCandidateWorkflowSet(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_candidate_workflow_set(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_candidate_workflow_set",
+        requires=[
+            workflow_capability_snapshot,
+            workflow_candidate_matrix,
+            workflow_gap_analysis,
+            candidate_route_posture,
+            candidate_workflow_set,
+            candidate_workflow_set_summary,
+            candidate_next_action,
+        ],
+        writes=[candidate_workflow_set_receipt],
+        routes={"candidate_workflow_set_published": FINISH},
+    )
+    def publish_candidate_workflow_set(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "workflow_capability_snapshot": workflow_folder / "workflow_capability_snapshot.json",

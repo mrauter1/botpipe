@@ -13,7 +13,7 @@ from autoloop.simple import Json, Md, Text, Raw, step, do_review_step, workflow_
 
 Use `from autoloop.simple import ...` or `from autoloop import ...` in public workflow code and examples.
 `core/*` remains the internal kernel surface for strict runtime code and tests; it is not the public authoring API.
-Compatibility aliases remain available during migration: `StrictWorkflow`, `review_step`, `system_step`, `outputs`, `out`, `SUCCESS`, and `chain`.
+Compatibility aliases still exist for migrated code, but new workflow code should stay on the canonical surface instead of `StrictWorkflow`, `review_step`, `system_step`, `outputs`, `out`, `SUCCESS`, or `chain`.
 
 Greenfield authoring defaults:
 

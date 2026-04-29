@@ -11,12 +11,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_non_negative_int,
         require_string_list,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
-    from autoloop_v3.stdlib.lifecycle import (
-        open_workflow_sessions,
-        write_invocation_contract,
-        write_publication_receipt,
-    )
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
+    from autoloop_v3.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
         read_json_object,
@@ -24,11 +20,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         require_non_negative_int,
         require_string_list,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
@@ -74,93 +70,13 @@ class InvestigationRequestToEvidencePack(Workflow):
     evidence_pack_summary = Artifact("{workflow_folder}/evidence_pack_summary.json")
     evidence_pack_receipt = Artifact("{workflow_folder}/evidence_pack_receipt.json")
 
-    bootstrap = SystemStep(
+    @python_step(
         name="bootstrap",
         requires=[request],
-        produces={"invocation_contract": invocation_contract},
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "frame_investigation"},
     )
-    frame_investigation = PairStep(
-        name="frame_investigation",
-        session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            framework_architecture_doc,
-            framework_authoring_doc,
-            workflow_instructions,
-        ],
-        produces={
-            "investigation_scope_brief": investigation_scope_brief,
-            "investigation_objectives": investigation_objectives,
-            "evidence_intake_register": evidence_intake_register,
-        },
-        expected_output_schema=InvestigationFramingPayload,
-        route_infos=FRAME_INVESTIGATION_ROUTE_CONTRACTS,
-    )
-    assemble_evidence_pack = PairStep(
-        name="assemble_evidence_pack",
-        session=evidence_session,
-        producer="prompts/evidence_producer.md",
-        verifier="prompts/evidence_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            investigation_scope_brief,
-            investigation_objectives,
-            evidence_intake_register,
-            evidence_pack_checklist,
-        ],
-        produces={
-            "evidence_source_inventory": evidence_source_inventory,
-            "evidence_coverage_matrix": evidence_coverage_matrix,
-            "evidence_findings": evidence_findings,
-            "evidence_gap_register": evidence_gap_register,
-            "evidence_pack": evidence_pack,
-            "evidence_pack_summary": evidence_pack_summary,
-        },
-        expected_output_schema=InvestigationEvidencePackPayload,
-        route_infos=ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
-    )
-    publish_evidence_pack = SystemStep(
-        name="publish_evidence_pack",
-        requires=[
-            investigation_scope_brief,
-            investigation_objectives,
-            evidence_intake_register,
-            evidence_source_inventory,
-            evidence_coverage_matrix,
-            evidence_findings,
-            evidence_gap_register,
-            evidence_pack,
-            evidence_pack_summary,
-        ],
-        produces={"evidence_pack_receipt": evidence_pack_receipt},
-    )
-
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": frame_investigation},
-            frame_investigation: {
-                "investigation_framed": assemble_evidence_pack,
-                "needs_rework": frame_investigation,
-                "needs_replan": frame_investigation,
-            },
-            assemble_evidence_pack: {
-                "evidence_pack_ready": publish_evidence_pack,
-                "needs_rework": assemble_evidence_pack,
-                "needs_replan": frame_investigation,
-            },
-            publish_evidence_pack: {"evidence_pack_published": SUCCESS},
-        },
-    )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -188,6 +104,54 @@ class InvestigationRequestToEvidencePack(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
+    frame_investigation = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
+        session=frame_session,
+        requires=[
+            request,
+            invocation_contract,
+            framework_architecture_doc,
+            framework_authoring_doc,
+            workflow_instructions,
+        ],
+        writes=[
+            investigation_scope_brief,
+            investigation_objectives,
+            evidence_intake_register,
+        ],
+        accepted="investigation_framed",
+        routes={"needs_replan": "frame_investigation"},
+        control_schema=InvestigationFramingPayload,
+        route_infos=FRAME_INVESTIGATION_ROUTE_CONTRACTS,
+    )
+
+    assemble_evidence_pack = do_review_step(
+        do=Prompt.file("prompts/evidence_producer.md"),
+        review=Prompt.file("prompts/evidence_verifier.md"),
+        session=evidence_session,
+        requires=[
+            request,
+            invocation_contract,
+            investigation_scope_brief,
+            investigation_objectives,
+            evidence_intake_register,
+            evidence_pack_checklist,
+        ],
+        writes=[
+            evidence_source_inventory,
+            evidence_coverage_matrix,
+            evidence_findings,
+            evidence_gap_register,
+            evidence_pack,
+            evidence_pack_summary,
+        ],
+        accepted="evidence_pack_ready",
+        routes={"needs_replan": "frame_investigation"},
+        control_schema=InvestigationEvidencePackPayload,
+        route_infos=ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
+    )
+
     @staticmethod
     def on_frame_investigation(state: State, outcome: Outcome, artifacts):
         del artifacts
@@ -206,8 +170,23 @@ class InvestigationRequestToEvidencePack(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_evidence_pack(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_evidence_pack",
+        requires=[
+            investigation_scope_brief,
+            investigation_objectives,
+            evidence_intake_register,
+            evidence_source_inventory,
+            evidence_coverage_matrix,
+            evidence_findings,
+            evidence_gap_register,
+            evidence_pack,
+            evidence_pack_summary,
+        ],
+        writes=[evidence_pack_receipt],
+        routes={"evidence_pack_published": FINISH},
+    )
+    def publish_evidence_pack(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = {
             "investigation_scope_brief": workflow_folder / "investigation_scope_brief.md",

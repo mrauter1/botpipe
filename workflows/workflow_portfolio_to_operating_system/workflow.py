@@ -30,12 +30,8 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
-    from autoloop_v3.stdlib.lifecycle import (
-        open_workflow_sessions,
-        write_invocation_contract,
-        write_publication_receipt,
-    )
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
+    from autoloop_v3.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
         extract_workflow_names_from_capability_snapshot,
@@ -58,11 +54,11 @@ except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallba
         write_workflow_capability_snapshot,
         write_workflow_portfolio_health_snapshot,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
@@ -145,129 +141,13 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
     portfolio_next_actions = Artifact("{workflow_folder}/portfolio_next_actions.md")
     portfolio_operating_system_receipt = Artifact("{workflow_folder}/portfolio_operating_system_receipt.json")
 
-    bootstrap = SystemStep(
+    @python_step(
         name="bootstrap",
         requires=[request],
-        produces={"invocation_contract": invocation_contract},
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "capture_portfolio_context"},
     )
-    capture_portfolio_context = SystemStep(
-        name="capture_portfolio_context",
-        requires=[request, invocation_contract],
-        produces={
-            "workflow_capability_snapshot": workflow_capability_snapshot,
-            "workflow_portfolio_health_snapshot": workflow_portfolio_health_snapshot,
-        },
-    )
-    frame_portfolio_governance = PairStep(
-        name="frame_portfolio_governance",
-        session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            workflow_capability_snapshot,
-            workflow_portfolio_health_snapshot,
-            framework_architecture_doc,
-            framework_authoring_doc,
-            workflow_instructions,
-        ],
-        produces={
-            "portfolio_governance_brief": portfolio_governance_brief,
-            "portfolio_decision_criteria": portfolio_decision_criteria,
-        },
-        expected_output_schema=PortfolioGovernanceFramingPayload,
-        route_infos=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
-    )
-    analyze_portfolio_operating_model = PairStep(
-        name="analyze_portfolio_operating_model",
-        session=analysis_session,
-        producer="prompts/analyze_producer.md",
-        verifier="prompts/analyze_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            workflow_capability_snapshot,
-            workflow_portfolio_health_snapshot,
-            portfolio_governance_brief,
-            portfolio_decision_criteria,
-        ],
-        produces={
-            "workflow_lifecycle_matrix": workflow_lifecycle_matrix,
-            "portfolio_gap_analysis": portfolio_gap_analysis,
-            "portfolio_change_candidates": portfolio_change_candidates,
-        },
-        expected_output_schema=PortfolioOperatingModelPayload,
-        route_infos=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
-    )
-    package_portfolio_operating_system = PairStep(
-        name="package_portfolio_operating_system",
-        session=package_session,
-        producer="prompts/package_producer.md",
-        verifier="prompts/package_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            workflow_capability_snapshot,
-            workflow_portfolio_health_snapshot,
-            portfolio_operating_system_checklist,
-            portfolio_governance_brief,
-            portfolio_decision_criteria,
-            workflow_lifecycle_matrix,
-            portfolio_gap_analysis,
-            portfolio_change_candidates,
-        ],
-        produces={
-            "workflow_portfolio_operating_system": workflow_portfolio_operating_system,
-            "portfolio_operating_summary": portfolio_operating_summary,
-            "portfolio_next_actions": portfolio_next_actions,
-        },
-        expected_output_schema=PortfolioOperatingSystemPayload,
-        route_infos=PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
-    )
-    publish_portfolio_operating_system = SystemStep(
-        name="publish_portfolio_operating_system",
-        requires=[
-            workflow_capability_snapshot,
-            workflow_portfolio_health_snapshot,
-            workflow_lifecycle_matrix,
-            portfolio_gap_analysis,
-            portfolio_change_candidates,
-            workflow_portfolio_operating_system,
-            portfolio_operating_summary,
-            portfolio_next_actions,
-        ],
-        produces={"portfolio_operating_system_receipt": portfolio_operating_system_receipt},
-    )
-
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": capture_portfolio_context},
-            capture_portfolio_context: {"portfolio_context_captured": frame_portfolio_governance},
-            frame_portfolio_governance: {
-                "portfolio_governance_framed": analyze_portfolio_operating_model,
-                "needs_rework": frame_portfolio_governance,
-                "needs_replan": frame_portfolio_governance,
-            },
-            analyze_portfolio_operating_model: {
-                "portfolio_operating_model_analyzed": package_portfolio_operating_system,
-                "needs_rework": analyze_portfolio_operating_model,
-                "needs_replan": frame_portfolio_governance,
-            },
-            package_portfolio_operating_system: {
-                "portfolio_operating_system_ready": publish_portfolio_operating_system,
-                "needs_rework": package_portfolio_operating_system,
-                "needs_replan": analyze_portfolio_operating_model,
-            },
-            publish_portfolio_operating_system: {"portfolio_operating_system_published": SUCCESS},
-        },
-    )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -304,8 +184,13 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_capture_portfolio_context(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="capture_portfolio_context",
+        requires=[request, invocation_contract],
+        writes=[workflow_capability_snapshot, workflow_portfolio_health_snapshot],
+        routes={"portfolio_context_captured": "frame_portfolio_governance"},
+    )
+    def capture_portfolio_context(state: State, ctx):
         capability_path = write_workflow_capability_snapshot(ctx)
         health_path = write_workflow_portfolio_health_snapshot(
             ctx,
@@ -354,6 +239,72 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             state.model_copy(update={"focus_workflows": scoped_workflow_names}),
             Event("portfolio_context_captured"),
         )
+
+    frame_portfolio_governance = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
+        session=frame_session,
+        requires=[
+            request,
+            invocation_contract,
+            workflow_capability_snapshot,
+            workflow_portfolio_health_snapshot,
+            framework_architecture_doc,
+            framework_authoring_doc,
+            workflow_instructions,
+        ],
+        writes=[portfolio_governance_brief, portfolio_decision_criteria],
+        accepted="portfolio_governance_framed",
+        routes={"needs_replan": "frame_portfolio_governance"},
+        control_schema=PortfolioGovernanceFramingPayload,
+        route_infos=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
+    )
+
+    analyze_portfolio_operating_model = do_review_step(
+        do=Prompt.file("prompts/analyze_producer.md"),
+        review=Prompt.file("prompts/analyze_verifier.md"),
+        session=analysis_session,
+        requires=[
+            request,
+            invocation_contract,
+            workflow_capability_snapshot,
+            workflow_portfolio_health_snapshot,
+            portfolio_governance_brief,
+            portfolio_decision_criteria,
+        ],
+        writes=[workflow_lifecycle_matrix, portfolio_gap_analysis, portfolio_change_candidates],
+        accepted="portfolio_operating_model_analyzed",
+        routes={"needs_replan": "frame_portfolio_governance"},
+        control_schema=PortfolioOperatingModelPayload,
+        route_infos=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
+    )
+
+    package_portfolio_operating_system = do_review_step(
+        do=Prompt.file("prompts/package_producer.md"),
+        review=Prompt.file("prompts/package_verifier.md"),
+        session=package_session,
+        requires=[
+            request,
+            invocation_contract,
+            workflow_capability_snapshot,
+            workflow_portfolio_health_snapshot,
+            portfolio_operating_system_checklist,
+            portfolio_governance_brief,
+            portfolio_decision_criteria,
+            workflow_lifecycle_matrix,
+            portfolio_gap_analysis,
+            portfolio_change_candidates,
+        ],
+        writes=[
+            workflow_portfolio_operating_system,
+            portfolio_operating_summary,
+            portfolio_next_actions,
+        ],
+        accepted="portfolio_operating_system_ready",
+        routes={"needs_replan": "analyze_portfolio_operating_model"},
+        control_schema=PortfolioOperatingSystemPayload,
+        route_infos=PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
+    )
 
     @staticmethod
     def on_frame_portfolio_governance(state: State, outcome: Outcome, artifacts):
@@ -438,8 +389,22 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_portfolio_operating_system(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_portfolio_operating_system",
+        requires=[
+            workflow_capability_snapshot,
+            workflow_portfolio_health_snapshot,
+            workflow_lifecycle_matrix,
+            portfolio_gap_analysis,
+            portfolio_change_candidates,
+            workflow_portfolio_operating_system,
+            portfolio_operating_summary,
+            portfolio_next_actions,
+        ],
+        writes=[portfolio_operating_system_receipt],
+        routes={"portfolio_operating_system_published": FINISH},
+    )
+    def publish_portfolio_operating_system(state: State, ctx):
         workflow_folder = ctx.workflow_folder
         required_paths = require_existing_artifact_paths(
             {

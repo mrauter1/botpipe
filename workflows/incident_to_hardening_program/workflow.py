@@ -10,23 +10,19 @@ try:  # pragma: no branch - supports both package and direct repo-root imports
         require_non_empty_string,
         require_non_negative_int,
     )
-    from autoloop_v3.stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
-    from autoloop_v3.stdlib.lifecycle import (
-        open_workflow_sessions,
-        write_invocation_contract,
-        write_publication_receipt,
-    )
+    from autoloop_v3.stdlib.control import event_on_outcome_tags
+    from autoloop_v3.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from stdlib import (
         read_json_object,
         require_non_empty_string,
         require_non_negative_int,
     )
-    from stdlib.control import event_on_outcome_tags, global_routes, merge_transitions, pause_on_outcome_tags
+    from stdlib.control import event_on_outcome_tags
     from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
-from core import Artifact, FAIL, PairStep, Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
+from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, do_review_step, python_step
+from core import Artifact
 
 from .contracts import (
     ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
@@ -90,148 +86,13 @@ class IncidentToHardeningProgram(Workflow):
     incident_resolution_package = Artifact("{workflow_folder}/incident_resolution_package.md")
     incident_receipt = Artifact("{workflow_folder}/incident_receipt.json")
 
-    bootstrap = SystemStep(
+    @python_step(
         name="bootstrap",
         requires=[request],
-        produces={"invocation_contract": invocation_contract},
+        writes=[invocation_contract],
+        routes={"inputs_prepared": "frame_incident"},
     )
-    frame_incident = PairStep(
-        name="frame_incident",
-        session=frame_session,
-        producer="prompts/frame_producer.md",
-        verifier="prompts/frame_verifier.md",
-        requires=[
-            request,
-            invocation_contract,
-            framework_architecture_doc,
-            framework_authoring_doc,
-            workflow_instructions,
-        ],
-        produces={
-            "incident_scope_brief": incident_scope_brief,
-            "response_objectives": response_objectives,
-            "evidence_intake_register": evidence_intake_register,
-        },
-        expected_output_schema=IncidentFramingPayload,
-        route_infos=FRAME_INCIDENT_ROUTE_CONTRACTS,
-    )
-    assemble_evidence_pack = PairStep(
-        name="assemble_evidence_pack",
-        session=evidence_session,
-        producer="prompts/evidence_producer.md",
-        verifier="prompts/evidence_verifier.md",
-        requires=[
-            incident_scope_brief,
-            response_objectives,
-            evidence_intake_register,
-        ],
-        produces={
-            "incident_timeline": incident_timeline,
-            "affected_surface": affected_surface,
-            "blast_radius": blast_radius,
-            "observability_gaps": observability_gaps,
-            "evidence_gap_register": evidence_gap_register,
-        },
-        expected_output_schema=IncidentEvidencePayload,
-        route_infos=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
-    )
-    rank_cause_hypotheses = PairStep(
-        name="rank_cause_hypotheses",
-        session=analysis_session,
-        producer="prompts/analysis_producer.md",
-        verifier="prompts/analysis_verifier.md",
-        requires=[
-            incident_scope_brief,
-            response_objectives,
-            incident_timeline,
-            affected_surface,
-            blast_radius,
-            observability_gaps,
-            evidence_gap_register,
-        ],
-        produces={
-            "cause_hypothesis_ranking": cause_hypothesis_ranking,
-            "immediate_mitigation_plan": immediate_mitigation_plan,
-            "validation_plan": validation_plan,
-            "incident_summary": incident_summary,
-        },
-        expected_output_schema=IncidentHypothesisPayload,
-        route_infos=RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS,
-    )
-    prepare_hardening_program = PairStep(
-        name="prepare_hardening_program",
-        session=program_session,
-        producer="prompts/program_producer.md",
-        verifier="prompts/program_verifier.md",
-        requires=[
-            incident_package_checklist,
-            incident_scope_brief,
-            response_objectives,
-            incident_timeline,
-            affected_surface,
-            blast_radius,
-            observability_gaps,
-            evidence_gap_register,
-            cause_hypothesis_ranking,
-            immediate_mitigation_plan,
-            validation_plan,
-            incident_summary,
-        ],
-        produces={
-            "hardening_program": hardening_program,
-            "hardening_backlog": hardening_backlog,
-            "follow_up_owners": follow_up_owners,
-            "stakeholder_communications_draft": stakeholder_communications_draft,
-            "incident_resolution_package": incident_resolution_package,
-        },
-        expected_output_schema=IncidentHardeningProgramPayload,
-        route_infos=PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS,
-    )
-    publish_incident_package = SystemStep(
-        name="publish_incident_package",
-        requires=[
-            incident_summary,
-            hardening_program,
-            hardening_backlog,
-            follow_up_owners,
-            stakeholder_communications_draft,
-            incident_resolution_package,
-        ],
-        produces={"incident_receipt": incident_receipt},
-    )
-
-    entry = bootstrap
-
-    transitions = merge_transitions(
-        global_routes(pause_on_outcome_tags("question", "blocked"), failed=FAIL),
-        {
-            bootstrap: {"inputs_prepared": frame_incident},
-            frame_incident: {
-                "incident_framed": assemble_evidence_pack,
-                "needs_rework": frame_incident,
-                "needs_replan": frame_incident,
-            },
-            assemble_evidence_pack: {
-                "evidence_pack_ready": rank_cause_hypotheses,
-                "needs_rework": assemble_evidence_pack,
-                "needs_replan": frame_incident,
-            },
-            rank_cause_hypotheses: {
-                "hypotheses_ranked": prepare_hardening_program,
-                "needs_rework": rank_cause_hypotheses,
-                "needs_replan": frame_incident,
-            },
-            prepare_hardening_program: {
-                "hardening_program_ready": publish_incident_package,
-                "needs_rework": prepare_hardening_program,
-                "needs_replan": rank_cause_hypotheses,
-            },
-            publish_incident_package: {"incident_package_published": SUCCESS},
-        },
-    )
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx) -> tuple[State, Event]:
+    def bootstrap(state: State, ctx):
         params = ctx.params
         next_state = state.model_copy(
             update={
@@ -262,6 +123,106 @@ class IncidentToHardeningProgram(Workflow):
             },
         )
         return next_state, Event("inputs_prepared")
+
+    frame_incident = do_review_step(
+        do=Prompt.file("prompts/frame_producer.md"),
+        review=Prompt.file("prompts/frame_verifier.md"),
+        session=frame_session,
+        requires=[
+            request,
+            invocation_contract,
+            framework_architecture_doc,
+            framework_authoring_doc,
+            workflow_instructions,
+        ],
+        writes=[
+            incident_scope_brief,
+            response_objectives,
+            evidence_intake_register,
+        ],
+        accepted="incident_framed",
+        routes={"needs_replan": "frame_incident"},
+        control_schema=IncidentFramingPayload,
+        route_infos=FRAME_INCIDENT_ROUTE_CONTRACTS,
+    )
+
+    assemble_evidence_pack = do_review_step(
+        do=Prompt.file("prompts/evidence_producer.md"),
+        review=Prompt.file("prompts/evidence_verifier.md"),
+        session=evidence_session,
+        requires=[
+            incident_scope_brief,
+            response_objectives,
+            evidence_intake_register,
+        ],
+        writes=[
+            incident_timeline,
+            affected_surface,
+            blast_radius,
+            observability_gaps,
+            evidence_gap_register,
+        ],
+        accepted="evidence_pack_ready",
+        routes={"needs_replan": "frame_incident"},
+        control_schema=IncidentEvidencePayload,
+        route_infos=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
+    )
+
+    rank_cause_hypotheses = do_review_step(
+        do=Prompt.file("prompts/analysis_producer.md"),
+        review=Prompt.file("prompts/analysis_verifier.md"),
+        session=analysis_session,
+        requires=[
+            incident_scope_brief,
+            response_objectives,
+            incident_timeline,
+            affected_surface,
+            blast_radius,
+            observability_gaps,
+            evidence_gap_register,
+        ],
+        writes=[
+            cause_hypothesis_ranking,
+            immediate_mitigation_plan,
+            validation_plan,
+            incident_summary,
+        ],
+        accepted="hypotheses_ranked",
+        routes={"needs_replan": "frame_incident"},
+        control_schema=IncidentHypothesisPayload,
+        route_infos=RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS,
+    )
+
+    prepare_hardening_program = do_review_step(
+        do=Prompt.file("prompts/program_producer.md"),
+        review=Prompt.file("prompts/program_verifier.md"),
+        session=program_session,
+        requires=[
+            incident_package_checklist,
+            incident_scope_brief,
+            response_objectives,
+            incident_timeline,
+            affected_surface,
+            blast_radius,
+            observability_gaps,
+            evidence_gap_register,
+            cause_hypothesis_ranking,
+            immediate_mitigation_plan,
+            validation_plan,
+            incident_summary,
+        ],
+        writes=[
+            hardening_program,
+            hardening_backlog,
+            follow_up_owners,
+            stakeholder_communications_draft,
+            incident_resolution_package,
+        ],
+        accepted="hardening_program_ready",
+        routes={"needs_replan": "rank_cause_hypotheses"},
+        control_schema=IncidentHardeningProgramPayload,
+        route_infos=PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS,
+    )
 
     @staticmethod
     def on_frame_incident(state: State, outcome: Outcome, artifacts):
@@ -299,8 +260,20 @@ class IncidentToHardeningProgram(Workflow):
             }
         )
 
-    @staticmethod
-    def on_publish_incident_package(state: State, ctx) -> tuple[State, Event]:
+    @python_step(
+        name="publish_incident_package",
+        requires=[
+            incident_summary,
+            hardening_program,
+            hardening_backlog,
+            follow_up_owners,
+            stakeholder_communications_draft,
+            incident_resolution_package,
+        ],
+        writes=[incident_receipt],
+        routes={"incident_package_published": FINISH},
+    )
+    def publish_incident_package(state: State, ctx):
         summary_path = ctx.workflow_folder / "incident_summary.json"
         hardening_program_path = ctx.workflow_folder / "hardening_program.md"
         hardening_backlog_path = ctx.workflow_folder / "hardening_backlog.md"
