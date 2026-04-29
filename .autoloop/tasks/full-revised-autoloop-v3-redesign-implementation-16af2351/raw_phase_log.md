@@ -518,3 +518,52 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+
+
+---
+run_id=run-20260429T131217Z-aa749982 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019dd96b-ed33-7fc1-bf53-68e85e291a8d
+---
+I’m treating this as a regression-hardening pass for the completed phase. First I’m checking the existing test strategy and feedback artifacts, then I’ll add narrowly targeted coverage for the remaining high-risk regressions on the docs and canonical-surface guidance.
+
+I found a narrow gap in the current test layer: the docs baseline tests don’t lock the last review fix, so a future edit could quietly reintroduce `Prompt("...")` or remove the compatibility fence while still passing. I’m adding one focused doc regression test rather than broadening the suite.
+
+The new coverage is in place. I’m running the docs baseline test file plus the existing phase-targeted slice so the strategy and feedback I record are grounded in a clean pass, not just static inspection.
+
+The targeted slice is green. I’m recording the coverage map now, with one explicit note that the doc tests pin the last compatibility-fence decision so the public examples can’t drift back to mixed guidance without a test failure.
+
+Scope considered
+- Phase `canonical-surface-and-topology-lowering` only.
+- I focused on the remaining regression risk around canonical public docs/examples and the already-changed simple-surface behavior.
+- I did not broaden into unrelated test churn.
+
+What I analyzed
+- The current phase tests in `tests/test_architecture_baseline_docs.py`, `tests/unit/test_simple_surface.py`, `tests/runtime/test_runtime_static_graph.py`, and `tests/runtime/test_package_cli.py`.
+- The final implementation decision that keeps scoped worklist guidance compatibility-fenced because simple-surface `scope=` is not yet documented in this phase.
+- The active test artifacts: `test_strategy.md`, `feedback.md`, and the current turn header in `decisions.txt`.
+
+What I changed
+- I added a focused docs regression test in [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py) that:
+  - requires `Prompt.file("prompts/ask.md")` in the public authoring doc,
+  - forbids the legacy `Prompt("...")` example,
+  - requires the scoped `PairStep(...)` worklist example to remain explicitly compatibility-fenced.
+- I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/canonical-surface-and-topology-lowering/test_strategy.md) with a concise behavior-to-test coverage map for AC-1 through AC-5, preserved invariants, edge cases, failure paths, and known gaps.
+- I appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/test/phases/canonical-surface-and-topology-lowering/feedback.md).
+- I appended the non-obvious docs-boundary test decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/full-revised-autoloop-v3-redesign-implementation-16af2351/decisions.txt).
+
+Key findings / decisions
+- The highest-value remaining regression was on documentation drift, not runtime behavior.
+- I kept the new coverage narrow and deterministic: it locks the final doc-state that the verifier required without normalizing any out-of-scope API like simple-surface `scope=`.
+- Targeted validation passed: `71` tests passed across the phase doc/simple-surface/topology/package-CLI slice.
+
+Open issues / next step
+- No test-author blocker remains for this phase.
+- The next step is test-phase verification/audit against the updated strategy and feedback artifacts.
