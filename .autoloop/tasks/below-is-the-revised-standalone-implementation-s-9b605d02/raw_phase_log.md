@@ -762,3 +762,62 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddb4b-6028-7802-9a75-652b8666c65c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb4b-6028-7802-9a75-652b8666c65c
+---
+Covering the phase-local regression surface for compiler and runtime normalization next. I’m checking the existing strategy artifact and the current tests around simple workflows, engine state, and topology output before I add coverage.
+
+I have enough context to add tests. The biggest remaining regression risk is runtime-only: proving simple step state stays model-backed after the compiler pass, and that suppressed item-state surfaces actually fail fast. I’m checking the smallest stable test seam for those behaviors now.
+
+The minimal stable seam is a focused unit test against `Engine._ensure_step_state_store()` plus `Context` accessors, rather than a full workflow run. That keeps coverage deterministic and phase-local.
+
+There’s another notable gap in the current tests: the phase contract explicitly calls out default-route injection and `control_routes=False`, but the focused simple-surface suite only checked signatures. I’m inspecting the lowering logic and likely adding compile-time assertions for those route tables too.
+
+I’m editing the focused simple-surface suite now to cover the remaining phase risks: injected route tables, `control_routes=False`, model-backed runtime step state, and fast-fail suppression of incomplete item-state access.
+
+The new tests are in place. I’m doing a quick syntax and import-surface check on the updated test module before I update the phase artifacts.
+
+The focused unit suite compiled cleanly. I’m documenting the coverage map and phase-local test additions now so the next verifier can see exactly which acceptance criteria are pinned by tests.
+
+Scope considered
+
+- Phase-local test coverage for `compiler-validation-normalization`.
+- Focused on the changed simple-surface/compiler/runtime behavior: canonical route metadata, default-route injection, `control_routes=False`, model-backed step state, and suppression of incomplete item-state surfaces.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), and [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py)
+- The phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/feedback.md)
+
+What I changed
+
+- Added focused tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) for:
+  - default-route injection across `step`, `produce_verify_step`, `python_step`, `workflow_step`, and operation nodes
+  - `control_routes=False` on custom semantic routes
+  - runtime Pydantic step-state serialization and rehydration via `Engine`
+  - fast-fail suppression of `ctx.item_state` and `ctx.step_item_state`
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/test_strategy.md) with a behavior-to-coverage map tied to AC-1/2/3.
+- Appended a concise coverage summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/compiler-validation-normalization/feedback.md).
+
+Key findings / decisions
+
+- The highest-value missing regression coverage was runtime-only, so I pinned it at the unit seam around `Engine._ensure_step_state_store()` and `Context` instead of depending on a full workflow run.
+- I did not broaden coverage into provider payload legacy keys because that is explicitly out of scope for this phase.
+- Validation completed here was syntax-only: `python3 -m py_compile tests/unit/test_simple_surface.py`.
+
+Open issues / next step
+
+- Full pytest execution is still pending because this environment is missing the runtime/test dependencies.
+- The next test phase should cover the later provider/runtime payload rename work once that phase lands.

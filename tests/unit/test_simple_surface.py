@@ -8,7 +8,11 @@ from pydantic import BaseModel, Field
 import autoloop
 import autoloop.simple as simple
 from autoloop_v3.core.compiler import compile_workflow
-from autoloop_v3.core.errors import WorkflowValidationError
+from autoloop_v3.core.context import Context
+from autoloop_v3.core.engine import Engine
+from autoloop_v3.core.errors import WorkflowExecutionError, WorkflowValidationError
+from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from autoloop_v3.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 def _import_from(module_name: str, symbol: str) -> object:
@@ -198,6 +202,61 @@ def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_
     assert compiled.steps["review"].step_state_fields == ("attempts", "history")
 
 
+def test_simple_workflow_injects_canonical_default_routes_by_step_kind() -> None:
+    class ChildWorkflow(simple.Workflow):
+        finish = simple.step(prompt="Finish child.")
+
+    class RouteMatrixWorkflow(simple.Workflow):
+        start = simple.step(prompt="Start.")
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify.",
+        )
+
+        @simple.python_step()
+        def decide(ctx):
+            return None
+
+        child = simple.workflow_step(ChildWorkflow)
+        verdict = simple.classify.step(prompt="Classify.", choices=["ship", "rework"])
+
+    compiled = compile_workflow(RouteMatrixWorkflow)
+
+    assert set(compiled.routes["start"]) == {"done", "question", "blocked", "failed"}
+    assert compiled.routes["start"]["done"].target == "review"
+    assert set(compiled.routes["review"]) == {"accepted", "needs_rework", "question", "blocked", "failed"}
+    assert compiled.routes["review"]["accepted"].target == "decide"
+    assert compiled.routes["review"]["needs_rework"].target == "review"
+    assert set(compiled.routes["decide"]) == {"done", "failed"}
+    assert compiled.routes["decide"]["done"].target == "child"
+    assert set(compiled.routes["child"]) == {"done", "failed"}
+    assert compiled.routes["child"]["done"].target == "verdict"
+    assert set(compiled.routes["verdict"]) == {"done"}
+    assert compiled.routes["verdict"]["done"].target == "FINISH"
+
+
+def test_simple_workflow_respects_control_routes_false_and_custom_semantic_routes() -> None:
+    class CustomRoutesWorkflow(simple.Workflow):
+        start = simple.step(
+            prompt="Start.",
+            routes={"ready": "review"},
+            control_routes=False,
+        )
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify.",
+            routes={"approved": simple.FINISH},
+            control_routes=False,
+        )
+
+    compiled = compile_workflow(CustomRoutesWorkflow)
+
+    assert set(compiled.routes["start"]) == {"ready"}
+    assert compiled.routes["start"]["ready"].target == "review"
+    assert set(compiled.routes["review"]) == {"approved"}
+    assert compiled.routes["review"]["approved"].target == "FINISH"
+
+
 def test_simple_workflow_rejects_parameters_namespace_instead_of_params() -> None:
     class BadWorkflow(simple.Workflow):
         class Parameters(BaseModel):
@@ -245,3 +304,82 @@ def test_simple_workflow_rejects_item_state_prompt_placeholders() -> None:
         match="item.state, which is not part of the canonical simple-workflow surface",
     ):
         compile_workflow(ItemStateWorkflow)
+
+
+def test_simple_runtime_step_state_uses_pydantic_models_and_serializes_for_checkpoints() -> None:
+    class ReviewState(BaseModel):
+        attempts: int = 0
+        history: list[str] = Field(default_factory=list)
+
+    class RuntimeStateWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify.",
+            state=ReviewState,
+        )
+
+    compiled = compile_workflow(RuntimeStateWorkflow)
+    engine = Engine(
+        compiled,
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    )
+    step = compiled.steps["review"]
+    step_states: dict[str, BaseModel | dict[str, object]] = {}
+
+    store = engine._ensure_step_state_store(step_states, step)
+
+    assert isinstance(store, ReviewState)
+    assert step_states["review"] is store
+
+    store.attempts += 1
+    store.history.append("accepted")
+
+    serialized = engine._serialize_step_states(step_states)
+
+    assert serialized == {"review": {"attempts": 1, "history": ["accepted"]}}
+
+    restored_states: dict[str, BaseModel | dict[str, object]] = {"review": serialized["review"]}
+    restored = engine._ensure_step_state_store(restored_states, step)
+
+    assert isinstance(restored, ReviewState)
+    assert restored.attempts == 1
+    assert restored.history == ["accepted"]
+    assert restored_states["review"] is restored
+
+
+def test_simple_context_suppresses_unmodeled_item_state_surfaces(tmp_path) -> None:
+    class WorkflowState(BaseModel):
+        approved: bool = False
+
+    class ReviewState(BaseModel):
+        attempts: int = 0
+
+    ctx = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="simple-demo",
+        task_folder=tmp_path,
+        workflow_folder=tmp_path,
+        run_folder=tmp_path,
+        package_folder=tmp_path,
+        state=WorkflowState(),
+        session_store=InMemorySessionStore(),
+        step_state_store=ReviewState(),
+    )
+
+    assert isinstance(ctx.step_state, ReviewState)
+    assert ctx.step_state.attempts == 0
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="item_state is not part of the canonical public surface",
+    ):
+        _ = ctx.item_state
+
+    with pytest.raises(
+        WorkflowExecutionError,
+        match="step_item_state is not part of the canonical public surface",
+    ):
+        _ = ctx.step_item_state
