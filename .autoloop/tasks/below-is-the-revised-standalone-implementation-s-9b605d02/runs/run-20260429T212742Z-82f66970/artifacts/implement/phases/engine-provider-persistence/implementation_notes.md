@@ -12,11 +12,12 @@
 - Runtime/provider/persistence: `core/primitives.py`, `core/sessions.py`, `core/stores/protocols.py`, `core/compiler.py`, `core/engine.py`, `core/operations.py`, `core/providers/models.py`, `core/providers/rendered.py`, `core/providers/rendering.py`, `core/providers/fake.py`, `core/providers/turns.py`, `runtime/runner.py`, `runtime/static_graph.py`, `runtime/tracing.py`, `runtime/git_tracking.py`, `runtime/stores/filesystem.py`
 - Schema registry / payload writers: `core/schema_registry.py`, `autoloop_optimizer/optimization.py`
 - Compatibility adapter: `core/workflow_capabilities.py`
-- Regression tests: `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/runtime/test_runtime_tracing.py`, `tests/runtime/test_runtime_git_tracking.py`
+- Regression tests: `tests/unit/test_provider_boundary_core.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/runtime/test_runtime_tracing.py`, `tests/runtime/test_runtime_git_tracking.py`, `tests/runtime/test_compatibility_runtime.py`
 
 ## Symbols touched
 
 - `normalize_terminal`, `canonical_session_slot_name`
+- `normalize_persisted_session_key`, `normalize_session_snapshot`
 - `ProviderRoute`, `ProviderTurnContext`, `ProducerRequest`, `VerifierRequest`
 - `workflow_topology_payload`, `RuntimeTraceWriter`, `RuntimeGitTracker`
 - `normalize_session_snapshot`, filesystem session binding readers
@@ -33,10 +34,13 @@
 - Provider turn contracts now use canonical field names and emit `turn_kind="step"` for single-turn harness steps.
 - Static topology payload now emits `entry` and `terminals` as canonical fields.
 - Persisted legacy `"SUCCESS"` terminals and `"default"` session-slot names are normalized on read for resume/session hydration.
+- Legacy `active_keys_by_slot["default"]` checkpoints now rekey to canonical `"global"` and rebind the run-domain key to the current `run_id`.
+- Literal `"default"` values on non-run explicit key/scope session identities are preserved during checkpoint/session hydration.
 
 ## Preserved invariants
 
 - Legacy normalization remains reader-side only for persisted run/session payloads.
+- Legacy session migration only canonicalizes slot names plus run-domain self-keys; it does not rewrite arbitrary non-run key values.
 - Existing workflow-capability inspection consumers keep their legacy-shaped DTOs via `core.workflow_capabilities`; canonical runtime/provider payload cleanup did not force the optimizer/CLI inspection migration in this phase.
 - Runtime git-tracking behavior remains runtime-config owned.
 
@@ -47,10 +51,11 @@
 
 ## Validation performed
 
-- `.venv/bin/python -m pytest tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py tests/runtime/test_compatibility_runtime.py -q`
-- Result: `87 passed`
+- `.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py tests/unit/test_provider_boundary_core.py -q`
+- Result: `89 passed`
 
 ## Assumptions and centralization
 
 - `core/schema_registry.py` is the single source for runtime/static-graph/git-tracking/optimizer schema ids introduced in this phase.
 - Capability inspection remains a deliberate legacy adapter on top of canonical compiled metadata until the later consumer-migration phase.
+- Session-key migration is now centralized between checkpoint normalization and filesystem payload readers to keep legacy `default` handling domain-aware.

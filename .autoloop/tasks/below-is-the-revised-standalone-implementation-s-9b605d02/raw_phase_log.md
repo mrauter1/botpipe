@@ -1129,3 +1129,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb70-a5cd-7e31-b1e3-90e003ba6e1e
+---
+I’m addressing the reviewer’s two resume-normalization findings now. First I’m tracing the legacy `default` slot path through checkpoint/session hydration so I can fix the normalization once, centrally, and add regression tests for both the active-slot rekey case and the explicit-key corruption case.
+
+I’ve found the best place for the regression coverage: the existing compatibility runtime tests already own the legacy checkpoint/session scenarios. I’m adding one test for legacy `active_keys_by_slot["default"]` rekeying to canonical `global`, and one for preserving literal `"default"` values in non-run explicit keys.
+
+I’ve isolated the change set to two runtime readers and two compatibility tests. The fix will be centralized in the session-key normalization path first, then the filesystem loader will call into that instead of doing its own broader `"default"` rewrite.
+
+I’ve patched the central normalization helper and added the two missing compatibility regressions. I’m running the targeted runtime suite again now, with emphasis on the legacy resume/session cases that the reviewer flagged.
+
+The patched suite is running cleanly so far. I’m waiting for completion, then I’ll update the phase notes and decision ledger with the normalization boundary that changed.
+
+I’ve got the fixes validated. I’m updating the notes now to record the narrower migration rule precisely: legacy slot-name normalization is preserved, but literal `"default"` values on non-run keys are no longer rewritten.
+
+Scope considered
+
+- Phase-local fix for the reviewer’s two blocking persistence findings only.
+- I limited changes to the legacy session normalization seam in `core` and `runtime` plus matching compatibility regression tests.
+
+What I analyzed
+
+- The reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/engine-provider-persistence/feedback.md).
+- Resume/session hydration paths in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py), [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py), and the resume call site in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py).
+- Existing compatibility coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py).
+
+What I changed
+
+- Centralized persisted session-key normalization in [core/stores/protocols.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/stores/protocols.py) so legacy slot names canonicalize first, run-domain self-keys rebind to the active `run_id`, and `active_keys_by_slot` / `active_scopes` rekey to canonical slot names.
+- Switched [runtime/stores/filesystem.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/stores/filesystem.py) to reuse that domain-aware normalization instead of rewriting every persisted `"default"` value to `"global"`.
+- Added two regression tests in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py):
+  - legacy `active_keys_by_slot["default"]` rekeys to canonical `global`
+  - literal `"default"` values on non-run explicit key/scope session identities are preserved
+
+Key findings / decisions
+
+- The reviewer’s `IMP-001` and `IMP-002` were both valid; the bug was that legacy default-session migration was split across two helpers with different rules.
+- I kept the migration narrow: slot-name normalization still supports legacy `default -> global`, but non-run explicit key/scope/work-item values named `"default"` are no longer mutated.
+- Validation: `.venv/bin/python -m pytest tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_runtime_git_tracking.py tests/unit/test_provider_boundary_core.py -q` and it passed with `89 passed`.
+
+Open issues / next step
+
+- No new blockers found in the touched scope after the fix.
+- The next step is the verifier rerun against the updated feedback items and criteria.
