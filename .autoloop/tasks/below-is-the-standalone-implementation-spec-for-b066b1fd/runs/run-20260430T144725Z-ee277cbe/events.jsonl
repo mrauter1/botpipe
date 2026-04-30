@@ -65,3 +65,6 @@
 {"ts": "2026-04-30T16:43:55.775065+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 65, "event_type": "phase_finished", "pair": "implement", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "scoped-item-state"}
 {"ts": "2026-04-30T16:45:31.488429+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 66, "event_type": "phase_finished", "pair": "implement", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "scoped-item-state"}
 {"ts": "2026-04-30T16:45:31.542269+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 67, "event_type": "pair_completed", "pair": "implement", "cycle": 2, "attempt": 1, "phase_id": "scoped-item-state"}
+{"ts": "2026-04-30T16:45:31.638017+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 68, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "scoped-item-state", "reason": "awaiting enabled test pair completion"}
+{"ts": "2026-04-30T16:45:31.640296+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 69, "event_type": "pair_started", "pair": "test", "phase_id": "scoped-item-state"}
+{"ts": "2026-04-30T16:45:31.640474+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 70, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "scoped-item-state"}
