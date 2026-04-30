@@ -3292,3 +3292,55 @@ Open issues / next step
 - Validation performed: `python3 -m py_compile tests/unit/test_validation.py tests/unit/test_simple_surface.py`.
 - Not run: `pytest`, and direct runtime import probes, due missing `pytest` and `pydantic` in this environment.
 - Next step is auditor review of the updated tests and artifacts, or running the targeted unit suites in an environment with the project test dependencies installed.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddc24-f2a2-7982-b340-9454a80a966f
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+Auditing the new route/runtime regression tests now. I’m checking whether the added coverage actually protects the changed behavior, and whether the test strategy/feedback artifacts match the real validation limits in this environment.
+
+I have the test artifacts and decisions. I’m reading the actual added tests now to check whether they meaningfully fail on the target regressions, and whether any material route/runtime behavior is still uncovered.
+
+I don’t see a material coverage hole in the changed behavior. I’m updating the audit artifacts to reflect that the added unit regressions are sufficient, while noting the environment limitation as context rather than a defect.
+
+Scope considered
+
+- Phase-local audit of the added route/runtime canonicalization tests and the related test artifacts.
+- Changed behaviors around rejecting live `SUCCESS` authoring and narrowing `autoloop_v3.core._compat`, plus preserved strictness and persisted session/checkpoint compatibility coverage.
+
+What I analyzed
+
+- The added tests in `tests/unit/test_validation.py` and `tests/unit/test_simple_surface.py`.
+- Existing adjacent coverage in `tests/strictness/test_no_compat.py`, `tests/runtime/test_compatibility_runtime.py`, and relevant stdlib/runtime suites.
+- The active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/route-runtime-canonicalization/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/route-runtime-canonicalization/feedback.md), and `decisions.txt`.
+
+What I reviewed
+
+- `test_validation_rejects_legacy_success_terminal_string` correctly pins the removed live `SUCCESS` path at validation time, which is the right failure boundary for this change.
+- `test_core_compat_surface_excludes_removed_route_runtime_helpers` meaningfully protects the narrowed `_compat` surface by checking both attribute absence and import failure.
+- Existing strictness coverage already scans for banned legacy names on the active tree, and the rewritten runtime compatibility suite already preserves only the intended persisted session/checkpoint legacy seam.
+- No test expectation encodes an unconfirmed regression or broader compatibility loss than the approved cleanup.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Criteria were updated to fully checked, and the feedback artifact now records that the audit found the added coverage sufficient.
+
+Open issues / next step
+
+- The test artifacts correctly note that this environment lacks `pytest` and `pydantic`, so executable validation could not be completed here; that is an environment constraint, not a coverage defect in the authored tests.
+- No further test-audit action is needed for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
