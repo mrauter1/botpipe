@@ -12,9 +12,11 @@
 - `core/engine.py`
 - `core/context.py`
 - `core/extensions.py`
+- `core/validation.py`
 - `runtime/tracing.py`
 - `tests/contract/test_engine_contracts.py`
 - `tests/runtime/test_runtime_tracing.py`
+- `tests/unit/test_validation.py`
 
 ## Symbols touched
 
@@ -26,6 +28,8 @@
 - `Context.event`
 - `StepFinish`
 - `HookRouteRedirect`
+- `_validate_step_hooks`
+- `_validate_static_after_hook_redirect_policy`
 - `RuntimeTraceWriter._write_step_finished`
 
 ## Checklist mapping
@@ -34,6 +38,7 @@
 - Milestone 2 / chained route-finalization with cap: implemented with restart-on-redirect loop and `max_hook_redirects = 16`.
 - Milestone 2 / hook redirect observability: added `hook_route_redirected` sink events plus `candidate_route`, `final_route`, and redirect-chain trace payloads.
 - Milestone 2 / update redirect rejection tests: replaced old rejection assertions with reroute, invalid-route, chain, final-route-validation, and cycle coverage.
+- Reviewer follow-up / producer-phase validation parity: static `after_do` hook overrides are now rejected at validation time so compiler behavior matches the runtime rule that rerouting starts only after a candidate event exists.
 
 ## Assumptions
 
@@ -64,6 +69,7 @@
 
 ## Validation performed
 
+- `.venv/bin/python -m pytest tests/unit/test_validation.py`
 - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py`
 - `.venv/bin/python -m pytest tests/runtime/test_runtime_tracing.py`
 
