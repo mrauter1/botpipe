@@ -1399,3 +1399,55 @@ Open issues / next step
 - Validation run: `python3 -m py_compile autoloop/simple.py core/step_state.py core/worklists.py core/steps.py core/compiler.py core/context.py core/engine.py core/validation.py tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py`
 - I still could not run `pytest` here because this shell is missing `pytest` and runtime deps like `pydantic`.
 - Next step is verifier re-review of the scoped item-state phase.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf30-328a-7573-add4-10cdd846340b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+I’m re-checking the narrow reviewer follow-up surface and the phase artifacts after the producer’s fix, then I’ll update the review record to reflect the current state.
+
+I don’t see a remaining correctness or safety issue in the reviewer-scoped diff. I’m marking the previous finding resolved in the review artifact and closing out the criteria.
+
+Scope considered
+
+- Re-review of the scoped item-state phase after the producer’s targeted fix.
+- I limited the audit to the affected simple authoring surface, the updated scoped item-state tests, and the phase-local implementation/review artifacts.
+
+What I analyzed
+
+- The fixed public API path in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py).
+- The updated scoped prompt-step coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py).
+- The phase notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/scoped-item-state/implementation_notes.md).
+
+What I reviewed
+
+- `step(...)` now accepts `item_state` and stores it on `StepDeclaration`, which closes the prior public-surface gap.
+- The tests now cover:
+  - scoped prompt-step `item_state` placeholder support,
+  - prompt-step built-in per-item runtime fields,
+  - produce/verify-specific per-item built-ins,
+  - unscoped rejection for both `step(...)` and `produce_verify_step(...)`.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/scoped-item-state/criteria.md) to all checked and appended the resolution note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/scoped-item-state/feedback.md).
+
+Key findings / decisions
+
+- No remaining blocking or non-blocking findings in phase scope.
+- The prior `IMP-001` finding is resolved by the `step(..., item_state=...)` API addition and matching regression coverage.
+
+Open issues / next step
+
+- No review issues remain for this phase.
+- Runtime test execution is still environment-limited in this shell, but the scoped implementation now matches the accepted contract and the reviewer-owned criteria are complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
