@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 
 import pytest
 from pydantic import BaseModel, Field
@@ -8,6 +9,11 @@ from pydantic import BaseModel, Field
 import autoloop
 import autoloop.simple as simple
 import autoloop_v3.core as strict_core
+import autoloop_v3.core.steps as strict_steps
+import autoloop_v3.core.validation as strict_validation
+import core
+import core.steps as core_steps
+import core.validation as core_validation
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.engine import Engine
@@ -116,6 +122,47 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
 
     for symbol in ("Artifact", "Context", "FAIL", "FINISH", "GLOBAL", "PAUSE", "Prompt", "Route", "Workflow"):
         assert _import_from("autoloop_v3.core", symbol) is getattr(strict_core, symbol)
+
+
+def test_autoloop_v3_core_bridge_preserves_shared_module_identity() -> None:
+    assert strict_core is core
+    assert strict_validation is core_validation
+    assert strict_steps is core_steps
+    assert strict_core.Workflow is core.Workflow
+    assert strict_steps.Step is core_steps.Step
+
+
+def test_core_compat_usage_stays_quarantined_to_explicit_compatibility_files() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    allowed = {
+        "tests/runtime/test_compatibility_runtime.py",
+        "tests/fixtures/toy_runtime_workflow.py",
+    }
+    compat_tokens = ("core" "._compat", "autoloop_v3.core" "._compat")
+    candidates = (
+        "autoloop",
+        "core",
+        "stdlib",
+        "runtime",
+        "workflows",
+        "tests/unit",
+        "tests/contract",
+    )
+    matches: list[str] = []
+
+    for relative_root in candidates:
+        root = repo_root / relative_root
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("*.py")):
+            rel = path.relative_to(repo_root).as_posix()
+            if rel in allowed:
+                continue
+            text = path.read_text(encoding="utf-8")
+            if any(token in text for token in compat_tokens):
+                matches.append(rel)
+
+    assert matches == []
 
 
 def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> None:

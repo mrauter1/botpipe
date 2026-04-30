@@ -2886,3 +2886,56 @@ No remaining phase-local review findings. The broader semantic migration of lega
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddc0e-4191-79a0-9706-c405a993eba8
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+I’m treating this as phase-local test hardening for the surface-pruning slice. First I’m reading the test-phase artifacts and the current surface tests so I can add only the missing regression coverage around the explicit bridge and compatibility boundary.
+
+I’ve got enough context to add focused regression coverage instead of broad churn. I’m adding one test for the bridged module-identity invariant and one test to enforce that `_compat` stays confined to explicit compatibility coverage, then I’ll update the phase test artifacts.
+
+I’m editing the surface regression suite now. The additions are narrow: one bridge-identity test and one quarantine-boundary test that would fail if `_compat` leaks back into active maintained files.
+
+The new regression tests are in. I’m running the focused surface suite now to verify the bridge-identity and `_compat` quarantine checks behave deterministically before I wrap up the test-phase artifacts.
+
+The first pass exposed two test issues, not product issues: I over-asserted `_compat` bridge identity, and the quarantine test matched its own source because I used the literal token in the test file. I’m tightening those tests now and rerunning the suite.
+
+Scope considered
+
+Phase-local test coverage for the canonical-surface-pruning slice: the surface regression suite, the compatibility-runtime fixture boundary, and the required test-phase artifacts.
+
+What I analyzed
+
+I read the phase test artifacts and run decisions, then reviewed the current surface tests and compatibility-runtime coverage. I focused on the two invariants that changed most recently: shared `core` / `autoloop_v3.core` module identity and `_compat` confinement to explicit compatibility coverage.
+
+What I changed
+
+I added two focused regression tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1):
+
+- a bridge-identity test that asserts `core`, `autoloop_v3.core`, and key submodules share module/class identity
+- a quarantine test that scans maintained active roots and fails if `_compat` imports leak outside the explicit compatibility files
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/canonical-surface-pruning/test_strategy.md) with the behavior-to-coverage map and appended a concise note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/canonical-surface-pruning/feedback.md).
+
+Key findings / decisions
+
+The useful regression to pin here is not `_compat` submodule identity itself; it is the shared identity of the canonical `core` bridge and its validation/steps submodules. I tightened the tests accordingly.
+
+The `_compat` quarantine test uses dynamically assembled token strings so it does not self-match its own source while still catching real leakage.
+
+Open issues / next step
+
+Validation passed:
+`./.venv/bin/pytest tests/unit/test_simple_surface.py -q`
+
+The broader semantic migration of legacy-heavy active suites remains later-phase work and is intentionally recorded as a known gap in the phase test strategy.
