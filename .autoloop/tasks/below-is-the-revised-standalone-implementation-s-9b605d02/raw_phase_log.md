@@ -3186,3 +3186,57 @@ Open issues / next step
 - Validation completed: banned-token `rg` scan across active code/tests, no remaining `SUCCESS`/`RouteInfo`/`route_infos`/`required_outputs` outside `core/_compat.py` and the strictness test itself; `python3 -m py_compile` passed on the touched source and test files.
 - Not run: `pytest`, because `pytest` is not installed in this environment.
 - Next step is verifier rerun against the updated phase artifacts and source tree.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc24-f2a2-7982-b340-9454a80a966f
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+Re-reviewing the updated route/runtime cleanup now. I’m checking that the live compiler path is fully canonical, that the remaining compatibility seam is limited to persisted session/checkpoint readers, and that the review artifacts reflect the resolved blocker accurately.
+
+The active compiler and validator are clean on recheck. I’m verifying that the only remaining compatibility logic is in persisted session/checkpoint readers and that the compatibility suite no longer depends on `_compat`.
+
+The residual blocker is resolved on re-review. I’m marking the criteria complete and appending a short recheck note so the artifact trail shows that `IMP-001` was verified closed in this cycle.
+
+Scope considered
+
+- Phase-local re-review of the `route-runtime-canonicalization` implementation after `IMP-001`.
+- Active compiler/validation/runtime/static-graph/stdlib surfaces plus the rewritten compatibility runtime coverage and implementation notes.
+
+What I analyzed
+
+- Updated source paths in `core/compiler.py`, `core/validation.py`, and `core/_compat.py`.
+- Compatibility boundary evidence in `runtime/stores/filesystem.py`, `core/sessions.py`, and `core/stores/protocols.py`.
+- Rewritten tests and fixtures in `tests/runtime/test_compatibility_runtime.py` and `tests/fixtures/toy_runtime_workflow.py`.
+- Updated `implementation_notes.md`, `criteria.md`, `feedback.md`, and `decisions.txt`.
+
+What I reviewed
+
+- Active compiler/validation no longer import or consult `_compat`, and canonical route compilation now treats only canonical terminals as valid live destinations.
+- `core._compat` is reduced to quarantined low-level aliases and no longer exposes `SUCCESS`, `RouteInfo`, `route_infos`, or live step-wrapper authoring.
+- Remaining legacy handling is limited to persisted session/checkpoint normalization paths rather than in-memory workflow compilation.
+- Rewritten compatibility tests no longer depend on `_compat` or legacy route/terminal names for ordinary runtime/discovery behavior.
+- Repo scans found no remaining `SUCCESS`/`RouteInfo`/`route_infos`/`required_outputs`/`route_required_outputs` in active code or tests outside `core/_compat.py` and the strictness test.
+
+Key findings / decisions
+
+- `IMP-001` is resolved.
+- No new blocking or non-blocking findings were identified in this re-review.
+- Criteria were updated to fully checked, and `feedback.md` now records the cycle-2 resolution note.
+
+Open issues / next step
+
+- Full `pytest` execution still was not available in this environment, so the review remains based on source inspection, targeted scans, and the implementer’s successful `py_compile` pass.
+- No further code-review action is needed for this phase unless a later run provides runtime test failures.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
