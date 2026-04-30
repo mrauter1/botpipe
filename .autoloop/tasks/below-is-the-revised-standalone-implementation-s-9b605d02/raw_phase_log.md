@@ -4492,3 +4492,50 @@ No open review issues for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+---
+I’m reviewing the active test artifacts and the changed strictness behavior to decide whether the existing suite already covers the cleanup or whether one more focused regression test is warranted.
+
+The existing strictness coverage is almost sufficient, but it never explicitly proves that `tests/contract/test_engine_contracts.py` stays inside the maintained scan surface. I’m adding that assertion, then I’ll rerun the targeted suite and update the test artifacts.
+
+I’ve added the missing scope assertion for the contract suite. Next I’m rerunning the targeted tests so the new guard is verified in the same phase coverage set, not just by inspection.
+
+The suite is progressing cleanly through validation, contract, and compatibility runtime coverage again. I’m waiting for the remaining runtime/provider/strictness cases before I write the test strategy and feedback updates.
+
+The added assertion passed in the full targeted suite. I’m recording the explicit coverage map now, including why the contract suite needed a direct scope assertion in the strictness guard.
+
+Scope considered
+
+Phase-local test work for `migrate-tests-and-lock-strictness`, limited to the maintained strictness guard, the explicitly named maintained suites in AC-1, and the required test artifacts for this phase.
+
+What I analyzed
+
+I reviewed [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:18), the active [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/decisions.txt:1), and the phase test artifacts. I also checked the request-named maintained suites for leftover `produces` vocabulary and verified the current strictness scope assertions.
+
+What I changed
+
+I refined [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:93) to assert that `tests/contract/test_engine_contracts.py` remains inside the maintained-tree scan surface, closing a small coverage gap in AC-1. I updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/test/phases/migrate-tests-and-lock-strictness/test_strategy.md:1), appended the test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/test/phases/migrate-tests-and-lock-strictness/feedback.md:1), and recorded the non-obvious test decision in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/decisions.txt:15).
+
+Key findings / decisions
+
+The phase did not need new fixture-level exclusions; the important regression risk was a scan-scope omission for a request-named maintained suite. After the added assertion, `.venv/bin/python -m pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_provider_backends.py tests/strictness/test_no_compat.py` passed with `259 passed`.
+
+Open issues / next step
+
+No open test issues in this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
