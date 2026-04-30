@@ -1746,3 +1746,57 @@ Focused validation passed:
 - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults`
 
 No blocker remains in this phase. I did not run the full repository test suite.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+I’m reviewing the `effective-required-writes` slice only. First I’m reading the active review artifacts and the exact changed implementation paths so I can audit the behavior against the phase contract before I touch `criteria.md` or `feedback.md`.
+
+The diff output is empty because this checkout’s git index treats several active runtime files as untracked, so I’m reviewing the live file contents directly. I’m focusing on the helper, runtime call sites, and the rendered/static outputs where drift would show up first.
+
+I found one place where the new semantics may still drift: the top-level `global_routes` payload in `topology.json` has no step context, so I’m checking whether it now claims an empty effective set even when the same global route inherits required artifacts in per-step views.
+
+I’ve isolated a concrete blocking drift: `topology.json`’s top-level `global_routes` now report empty effective writes even when the per-step view of the same inherited global route correctly requires artifacts. I’m recording that in the review artifacts and marking this phase `INCOMPLETE`.
+
+Scope considered
+
+Phase-local review of `effective-required-writes` only. I limited edits to the active review artifacts in the phase directory.
+
+What I analyzed
+
+I reviewed the live implementation in `core/route_required_writes.py`, `core/engine.py`, `core/providers/models.py`, `core/providers/rendering.py`, `runtime/static_graph.py`, and `core/compiler.py`, plus the targeted regression tests added for this phase and the active implementation notes/decisions.
+
+What I reviewed
+
+I checked the three acceptance areas:
+- shared helper centralization for explicit vs effective required writes
+- runtime validation and provider contract assembly using the helper
+- topology/static outputs exposing explicit and effective required writes consistently
+
+I also verified behavior with a direct runtime snippet for a workflow that has a required artifact and an inherited `GLOBAL` route.
+
+Key findings / decisions
+
+I recorded one blocking finding in `feedback.md` as `IMP-001`.
+
+The defect is that `workflow_topology_payload(...)[\"global_routes\"]` now reports `effective_required_writes=[]` for inherited global routes because the shared helper is called with `step_name=\"GLOBAL\"` and therefore has no step context. The same route is reported correctly in the per-step route view, so `topology.json` contradicts itself and misses AC-2.
+
+I updated `criteria.md` accordingly. This review is not complete.
+
+Open issues / next step
+
+Fix `global_routes` so topology output does not emit a false concrete effective set when the route inherits required artifacts without step context, then add regression coverage for that inherited-`GLOBAL` case and rerun the focused phase tests.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
