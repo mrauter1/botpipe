@@ -26,6 +26,8 @@
 - `tests/unit/test_simple_surface.py`
 - `tests/unit/test_stdlib_and_extensions.py`
 - `tests/runtime/test_provider_backends.py`
+- `tests/runtime/test_compatibility_runtime.py`
+- `tests/fixtures/toy_runtime_workflow.py`
 - `tests/contract/test_engine_contracts.py`
 - `tests/contract/test_canonical_runtime_contracts.py`
 - `tests/strictness/test_no_compat.py`
@@ -35,10 +37,11 @@
 
 - `Route.to`, `Route.finish`, `Route.pause`, `Route.fail`
 - `Step.route_metadata`
-- `core._compat.RouteInfo`, `core._compat.LLMStep`, `core._compat.PairStep`, `core._compat.SystemStep`, `core._compat.WorkflowStep`
+- `core._compat.__all__`
 - `normalize_step_route_metadata`, `_valid_route_destinations`
 - `_compile_route`
 - `require_child_workflow_result`
+- `tests/runtime/test_compatibility_runtime.py::_write_workflow_package`
 
 ## Checklist mapping
 
@@ -49,29 +52,31 @@
 
 ## Assumptions
 
-- Legacy in-memory authoring remains allowed only through `core._compat` wrappers and the explicit compatibility suite.
+- Persisted session/checkpoint readers remain the only legitimate legacy compatibility seam in this checkout.
 - `pytest` is not available in this environment, so source validation had to stop at static compilation and text scans.
 
 ## Preserved invariants
 
 - `core` and `autoloop_v3.core` still share module identity through the explicit bridge.
-- Compatibility-only fixtures continue importing legacy names from `core._compat`.
-- Active provider/runtime payloads continue exposing canonical `routes` and `route_required_writes`.
+- Persisted session/checkpoint payload readers continue normalizing legacy on-disk session key shapes.
+- Active provider/runtime payloads continue exposing canonical `routes` and `required_writes`.
 
 ## Intended behavior changes
 
 - Active route helpers reject positional effect DSL and require `effects=` or canonical `handoff=...`.
-- Active `core.steps` no longer store/read legacy `route_infos`; legacy route metadata is normalized only by `core._compat`.
+- Active compiler and validation no longer accept `SUCCESS` or legacy compat markers from `core._compat`.
+- `core._compat` no longer exposes live step wrappers, `SUCCESS`, or `RouteInfo`.
 - Active stdlib no longer exposes `pair_step(...)` or `required_outputs=...`.
 
 ## Known non-changes
 
-- Compatibility-only files were not migrated off `SUCCESS` / `RouteInfo`; they remain the quarantine boundary.
 - Internal strict step class names (`LLMStep`, `PairStep`, `SystemStep`, `WorkflowStep`) still exist as implementation types.
+- The `core` to `autoloop_v3.core` bridge remains unchanged in this phase.
 
 ## Expected side effects
 
 - Active tests and strictness now reference `route_metadata`, `routes`, and `required_writes`.
+- Runtime discovery/inspection fixtures that only needed ordinary in-memory workflows now compile through canonical `core.steps` imports and `FINISH`.
 - Any caller still using `stdlib.pair_step` or `require_child_workflow_result(..., required_outputs=...)` will fail immediately and must migrate.
 
 ## Validation performed
@@ -82,4 +87,4 @@
 
 ## Deduplication / centralization
 
-- Centralized legacy route metadata and terminal handling in `core._compat` instead of leaving it spread across `core.routes`, `core.steps`, `core.compiler`, and `core.validation`.
+- Removed the residual `core._compat` dependency from active compiler/validation instead of keeping a split legacy path in both the quarantine module and live route compilation.

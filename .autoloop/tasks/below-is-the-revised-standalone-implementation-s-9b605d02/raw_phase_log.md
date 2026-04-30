@@ -3116,3 +3116,73 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddc24-f2a2-7982-b340-9454a80a966f
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+Addressing the reviewer’s blocker now. I’m tracing the remaining legacy path from `core._compat` into validation/compiler and checking which persisted-run or checkpoint readers actually need a compatibility seam before I remove the live authoring support.
+
+The repo scan shows no persisted runtime reader that actually needs `SUCCESS` or `RouteInfo`; the remaining support is test-only live authoring compatibility. I’m narrowing the change set to remove that path cleanly and trim the compatibility suite back to real persisted payload coverage.
+
+I found the remaining legacy usage is almost entirely in the compatibility runtime suite and its fixture generator, not in persisted payload readers. I’m converting those helper workflows to canonical authoring where they’re really testing loader/runtime behavior, and I’ll drop the active compiler hooks afterward.
+
+Plan:
+1. Remove the active compiler and validation branches that honor `SUCCESS` or legacy compat markers.
+2. Shrink `core._compat` so it no longer offers live step-wrapper authoring or route metadata aliases.
+3. Rewrite the compatibility runtime tests and fixture workflows that were using `_compat` for ordinary in-memory execution, keeping only real persisted session/checkpoint compatibility coverage.
+4. Re-run targeted text scans and static compilation, then update `implementation_notes.md` and the current turn block in `decisions.txt`.
+
+Before I edit, I’m reconciling the stale runtime capability assertions in the compatibility suite with the current capability model. Several of those tests weren’t just using legacy names; they were also asserting fields that no longer exist.
+
+I’m removing the live compatibility hooks from the active core path first. After that I’ll rewrite the affected runtime tests and fixture workflows to the canonical step/route contract so the suite still covers the intended behavior without reopening the legacy surface.
+
+The first patch only partially matched because the surrounding imports shifted. I’m reopening the exact file headers and patching against the current contents rather than forcing it.
+
+The active core path is now clean. I’m updating the runtime compatibility fixture and embedded workflow sources next so they use canonical step imports and `FINISH`, while keeping the persisted payload compatibility cases intact.
+
+The suite rewrite is in place. I’m doing a cleanup pass for any residual `_compat` imports, `SUCCESS`, or stale capability-field assertions before updating the phase notes and decision ledger.
+
+The focused compile pass succeeded. I’m now validating the broader banned-token surface and then I’ll update the implementation notes to reflect the narrower compatibility boundary that remains after this change.
+
+I’ve finished the code changes. I’m updating the run ledger and implementation notes now so the next verifier turn sees the narrowed compatibility boundary and the exact tests that were migrated off live legacy authoring.
+
+The code and artifact updates are done. I’m running one last full-surface scan, including the rewritten compatibility suite, to confirm the reviewer’s blocker is actually gone before I close the turn.
+
+Scope considered
+
+- Active route/runtime/compiler cleanup for the `route-runtime-canonicalization` phase.
+- Reviewer finding `IMP-001` plus the adjacent runtime discovery and compatibility fixtures that were still exercising live legacy authoring.
+
+What I analyzed
+
+- The reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/implement/phases/route-runtime-canonicalization/feedback.md).
+- Active legacy handling in [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), and [core/_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/_compat.py).
+- Runtime compatibility coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py) and [tests/fixtures/toy_runtime_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/fixtures/toy_runtime_workflow.py).
+
+What I changed
+
+- Removed the active compiler/validation dependency on `_compat`: `_compile_route` no longer rewrites legacy terminals, and `_valid_route_destinations` is back to canonical `{FINISH, PAUSE, FAIL}` only.
+- Shrunk `core._compat` to the remaining quarantined descriptor/hook aliases; it no longer exports live step wrappers, `SUCCESS`, or `RouteInfo`.
+- Rewrote the runtime compatibility fixture and in-memory workflow test sources to use canonical step imports plus `FINISH`, and updated stale capability assertions from removed fields like `produces`, `route_required_outputs`, and `global_transitions` to the current `writes`, `routes`, and `global_routes` surface.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/implement/phases/route-runtime-canonicalization/implementation_notes.md) and appended the non-obvious boundary decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/decisions.txt).
+
+Key findings / decisions
+
+- There is no real persisted-run/session/checkpoint reader in this checkout that needs `SUCCESS`, `RouteInfo`, or `route_infos`; the remaining support was only test-side live authoring compatibility.
+- The compatibility runtime suite now keeps only persisted session/checkpoint normalization coverage as the legacy boundary; ordinary in-memory workflow construction is canonical again.
+
+Open issues / next step
+
+- Validation completed: banned-token `rg` scan across active code/tests, no remaining `SUCCESS`/`RouteInfo`/`route_infos`/`required_outputs` outside `core/_compat.py` and the strictness test itself; `python3 -m py_compile` passed on the touched source and test files.
+- Not run: `pytest`, because `pytest` is not installed in this environment.
+- Next step is verifier rerun against the updated phase artifacts and source tree.
