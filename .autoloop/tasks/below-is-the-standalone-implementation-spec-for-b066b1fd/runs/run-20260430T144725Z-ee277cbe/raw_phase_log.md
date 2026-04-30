@@ -857,3 +857,93 @@ No open issues for this phase. The next step is to move on to the next planned i
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+I’m mapping the current test surface for `hook-rerouting` before adding anything new. I’m checking whether rollback safety is explicitly covered already, because that’s the part most likely to be under-tested even after the contract and trace updates.
+
+I found one real remaining coverage gap: rollback safety is implemented but not asserted directly. I’m adding one contract test for chained route-hook rollback into checkpoint state, plus one unit test for the new `after_do` handoff-only validation branch so the static policy helper is actually exercised.
+
+The new coverage is behaving as expected. I’m running the full request-relevant suites now so the test artifact can point to whole-file validation instead of just the new focused cases.
+
+I’ve got full-file green results. I’m updating the test-phase artifacts now with the actual coverage map, the added rollback/handoff cases, and one non-obvious decision about how rollback safety is asserted deterministically.
+
+Scope considered
+
+Phase-local `hook-rerouting` test work only. I stayed on the request-relevant regression surface: hook rerouting contracts, trace payloads, producer-phase validation parity, and rollback safety for route-finalization failures.
+
+What I analyzed
+
+I reviewed the current rerouting tests in `tests/contract/test_engine_contracts.py`, the trace payload tests in `tests/runtime/test_runtime_tracing.py`, and the static validation coverage in `tests/unit/test_validation.py`. I also checked the run decisions ledger to keep test expectations aligned with the explicit rule that rerouting starts only after a candidate `Event` exists.
+
+What I changed
+
+I added two tests:
+`tests/contract/test_engine_contracts.py::test_route_hook_failure_rolls_back_chained_state_before_checkpoint`
+`tests/unit/test_validation.py::test_validation_rejects_static_after_do_handoff_override_before_candidate_event`
+
+I also updated `test_strategy.md` with a behavior-to-test coverage map and appended a concise summary entry to the test-phase `feedback.md`.
+
+Key findings / decisions
+
+The main coverage gap was rollback safety: rerouting/chaining and trace visibility were already covered, but there was no direct assertion that a failing chained route hook restores pre-finalization state into the checkpoint. I covered that deterministically through checkpointed workflow state rather than fragile filesystem/session inspection. I also extended producer-phase validation parity coverage to include handoff-only `AfterStepResult(...)` overrides, not just route-tag overrides.
+
+Validation performed:
+`.venv/bin/python -m pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_tracing.py`
+
+Open issues / next step
+
+No open test issues in reviewed scope. The next step is the test-phase verifier/auditor pass against the updated strategy, feedback, and repository tests.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+I’m auditing the hook-rerouting test slice now: first the added tests and test strategy against the phase contract, then the executed suites to decide whether any coverage or flake risks remain material.
+
+The request-relevant suites are green and the strategy now matches the actual regression surface. I don’t see a material coverage or flake gap left in scope, so I’m marking the audit complete and recording a concise no-findings note.
+
+Scope considered
+
+Phase-local `hook-rerouting` test audit only. I reviewed the added and updated tests, the phase test strategy and feedback artifacts, and the request-relevant suites tied to rerouting behavior, rollback safety, trace visibility, and producer-phase validation parity.
+
+What I analyzed
+
+I compared the test strategy coverage map against the actual tests in `tests/contract/test_engine_contracts.py`, `tests/unit/test_validation.py`, and `tests/runtime/test_runtime_tracing.py`. I also reran the exercised suites:
+`.venv/bin/python -m pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_tracing.py`
+
+What I reviewed
+
+The coverage now spans the core happy paths, redirected final-route enforcement, redirect-cycle failure, deterministic rollback-to-checkpoint behavior after a chained hook failure, trace payload visibility, and the producer-phase validation parity edge cases for both route-tag and handoff-only overrides. The setup is stable and in-memory, with no timing or ordering dependence.
+
+Key findings / decisions
+
+No blocking or non-blocking findings in reviewed scope. The strategy artifact matches the actual regression surface, and the tests do not encode any unconfirmed behavior break.
+
+Open issues / next step
+
+No open issues for this phase. The test audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
