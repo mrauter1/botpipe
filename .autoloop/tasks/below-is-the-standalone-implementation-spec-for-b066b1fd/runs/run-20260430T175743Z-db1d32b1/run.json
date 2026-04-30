@@ -13,11 +13,11 @@
       "refresh-simple-signature-coverage"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "refresh-simple-signature-coverage"
+    "current_phase_index": 1,
+    "current_phase_id": null
   },
   "phase_status": {
-    "refresh-simple-signature-coverage": "in_progress"
+    "refresh-simple-signature-coverage": "completed"
   },
   "phase_history": [
     {
@@ -25,6 +25,13 @@
       "run_id": "run-20260430T175743Z-db1d32b1",
       "status": "in_progress",
       "ts": "2026-04-30T18:01:25.618954+00:00"
+    },
+    {
+      "phase_id": "refresh-simple-signature-coverage",
+      "run_id": "run-20260430T175743Z-db1d32b1",
+      "status": "completed",
+      "ts": "2026-04-30T18:05:37.688698+00:00",
+      "pair": "test"
     }
   ]
 }

@@ -17,3 +17,6 @@
 {"ts": "2026-04-30T18:04:50.141342+00:00", "run_id": "run-20260430T175743Z-db1d32b1", "seq": 17, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "refresh-simple-signature-coverage"}
 {"ts": "2026-04-30T18:05:37.561307+00:00", "run_id": "run-20260430T175743Z-db1d32b1", "seq": 18, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "refresh-simple-signature-coverage"}
 {"ts": "2026-04-30T18:05:37.609530+00:00", "run_id": "run-20260430T175743Z-db1d32b1", "seq": 19, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "refresh-simple-signature-coverage"}
+{"ts": "2026-04-30T18:05:37.689485+00:00", "run_id": "run-20260430T175743Z-db1d32b1", "seq": 20, "event_type": "phase_completed", "pair": "test", "phase_id": "refresh-simple-signature-coverage", "phase_mode": "single"}
+{"ts": "2026-04-30T18:05:37.693835+00:00", "run_id": "run-20260430T175743Z-db1d32b1", "seq": 21, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-04-30T18:05:37.694182+00:00", "run_id": "run-20260430T175743Z-db1d32b1", "seq": 22, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
