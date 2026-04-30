@@ -331,7 +331,7 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
                     route_name: {
                         "target": route.target,
                         "summary": route.summary,
-                        "required_writes": list(route.required_writes),
+                        "required_writes": list(route.required_writes or ()),
                         "handoff": route.handoff,
                         "on_taken": route.on_taken,
                     }
@@ -669,7 +669,7 @@ def _compiled_routes(step_routes: Mapping[str, Any]) -> dict[str, WorkflowRouteC
         routes[route_name] = WorkflowRouteCapability(
             target=route.target,
             summary=route.summary,
-            required_writes=tuple(route.required_writes),
+            required_writes=tuple(route.required_writes or ()),
             handoff=route.handoff,
             on_taken=getattr(route.on_taken, "__name__", None),
         )
@@ -740,7 +740,7 @@ def _compiled_step_payload(
             route_name: {
                 "target": route.target,
                 "summary": route.summary,
-                "required_writes": list(route.required_writes),
+                "required_writes": list(route.required_writes or ()),
                 "handoff": route.handoff,
                 "on_taken": route.on_taken,
             }

@@ -272,7 +272,7 @@ def _topology_route_payload(*, step_name: str, route_tag: str, route: CompiledRo
         "tag": route_tag,
         "target": route.target,
         "summary": route.summary,
-        "required_writes": list(route.required_writes),
+        "required_writes": list(route.required_writes or ()),
         "handoff": route.handoff,
         "on_taken": _callable_name(route.on_taken),
         "source_step": step_name,
@@ -305,7 +305,7 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
         for route_tag, route in routes.items():
             lines.append(
                 f"| {step_name} | {route_tag} | {route.target} | "
-                f"{', '.join(route.required_writes) if route.required_writes else '-'} |"
+                f"{', '.join(route.required_writes or ()) if route.required_writes else '-'} |"
             )
     return "\n".join(lines)
 

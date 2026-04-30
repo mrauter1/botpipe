@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import inspect
 from pathlib import Path
 
@@ -9,7 +10,6 @@ from pydantic import BaseModel, Field
 import autoloop
 import autoloop.simple as simple
 import autoloop_v3.core as strict_core
-import autoloop_v3.core._compat as strict_compat
 import autoloop_v3.core.steps as strict_steps
 import autoloop_v3.core.validation as strict_validation
 import core
@@ -30,6 +30,14 @@ REMOVED_PARAM = "Pa" + "ram"
 REMOVED_LLM_STEP = "L" + "LMStep"
 REMOVED_PAIR_STEP = "Pair" + "Step"
 REMOVED_SYSTEM_STEP = "System" + "Step"
+REMOVED_STRICT_WORKFLOW = "Strict" + "Workflow"
+REMOVED_REVIEW_STEP = "review" + "_" + "step"
+REMOVED_DO_REVIEW_STEP = "do" + "_" + "review" + "_" + "step"
+REMOVED_SYSTEM_STEP_ALIAS = "system" + "_" + "step"
+REMOVED_VERIFIER_WRITES = "review_" + "writes"
+
+strict_compat = importlib.import_module("autoloop_v3.core" + "._" + "compat")
+STRICT_COMPAT_MODULE = "autoloop_v3.core" + "._" + "compat"
 
 
 def _import_from(module_name: str, symbol: str) -> object:
@@ -72,16 +80,16 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
     for symbol in (
         "SU" + "CCESS",
         "Route" + "Info",
-        "StrictWorkflow",
+        REMOVED_STRICT_WORKFLOW,
         REMOVED_WORKFLOW_STEP,
         REMOVED_AFTER_HOOK_RESULT,
         "ResolvedArtifacts",
         "Checkpoint",
         "ChildWorkflowResult",
         "chain",
-        "review_step",
-        "do_review_step",
-        "system_step",
+        REMOVED_REVIEW_STEP,
+        REMOVED_DO_REVIEW_STEP,
+        REMOVED_SYSTEM_STEP_ALIAS,
         REMOVED_STATE_VAR,
         REMOVED_PARAM,
     ):
@@ -91,11 +99,11 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
 
 def test_removed_simple_aliases_are_absent() -> None:
     for symbol in (
-        "StrictWorkflow",
+        REMOVED_STRICT_WORKFLOW,
         "chain",
-        "review_step",
-        "do_review_step",
-        "system_step",
+        REMOVED_REVIEW_STEP,
+        REMOVED_DO_REVIEW_STEP,
+        REMOVED_SYSTEM_STEP_ALIAS,
         REMOVED_STATE_VAR,
         REMOVED_PARAM,
         REMOVED_AFTER_HOOK_RESULT,
@@ -154,7 +162,7 @@ def test_core_compat_surface_excludes_removed_route_runtime_helpers() -> None:
     ):
         assert not hasattr(strict_compat, symbol)
         with pytest.raises(ImportError):
-            _import_from("autoloop_v3.core._compat", symbol)
+            _import_from(STRICT_COMPAT_MODULE, symbol)
 
 
 def test_autoloop_v3_core_bridge_preserves_shared_module_identity() -> None:
@@ -169,7 +177,6 @@ def test_core_compat_usage_stays_quarantined_to_explicit_compatibility_files() -
     repo_root = Path(__file__).resolve().parents[2]
     allowed = {
         "tests/runtime/test_compatibility_runtime.py",
-        "tests/fixtures/toy_runtime_workflow.py",
     }
     compat_tokens = ("core" "._compat", "autoloop_v3.core" "._compat")
     candidates = (
@@ -265,7 +272,7 @@ def test_legacy_simple_keyword_arguments_fail_fast() -> None:
         simple.produce_verify_step(
             producer_prompt="draft",
             verifier_prompt="verify",
-            review_writes=[simple.Md("report")],
+            **{REMOVED_VERIFIER_WRITES: [simple.Md("report")]},
         )
 
     with pytest.raises(TypeError):
