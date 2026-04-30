@@ -1451,3 +1451,107 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddf30-328a-7573-add4-10cdd846340b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+I’m reviewing the scoped item-state test surface and the current phase artifacts first, then I’ll add the smallest test expansion that materially improves regression coverage for the accepted behavior.
+
+I’ve identified the remaining regression gap: the core runtime path is covered, and the simple surface is compile-validated, but there isn’t a real simple-workflow runtime check that `step(..., item_state=...)` survives checkpoint/resume. I’m adding that path rather than duplicating more compile-only assertions.
+
+I’m following the existing simple-surface runtime patterns rather than inventing a new harness, so the added test stays deterministic and only exercises the newly exposed authoring path.
+
+I’m adding one end-to-end simple-workflow resume test for the repaired `step(..., item_state=...)` path, then I’ll document the coverage map and the exact gap it closes in the test artifacts.
+
+The new runtime regression is in place. I’m doing a syntax pass and then I’ll check the final test artifact contents for a clean handoff.
+
+Scope considered
+
+- Phase-local test work for scoped item-state only.
+- I focused on the repaired simple `step(..., item_state=...)` path, existing scoped-state regressions, and the required test-phase artifacts.
+
+What I analyzed
+
+- Existing scoped-state coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- The run decisions for scoped item-state, especially the shared lowering path for simple `step(...)`.
+- The empty phase artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/feedback.md).
+
+What I changed
+
+- Added [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) `test_simple_scoped_item_state_and_step_item_state_restore_on_resume`, which runs a simple scoped `step(..., item_state=...)` workflow through `Engine.run(...)` and `Engine.resume(...)` and asserts restored `item_state`, `step_item_state.visits`, `last_route`, and custom per-item state.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/test_strategy.md) with an explicit AC-to-test coverage map, preserved invariants, edge cases, and known gaps.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/feedback.md).
+- Appended the simple-step runtime coverage decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt).
+
+Key findings / decisions
+
+- The material regression gap was runtime coverage for the repaired simple public authoring path; compile-time field assertions and the core runtime contract test were already present.
+- I kept the added regression deterministic by using a one-item worklist, scripted provider outcomes, and a pause/resume checkpoint cycle instead of filesystem- or ordering-sensitive assertions.
+
+Open issues / next step
+
+- Validation run: `python3 -m py_compile tests/unit/test_simple_surface.py`
+- I could not run `pytest` in this shell because `pytest` and runtime deps such as `pydantic` are unavailable here.
+- Next step is test-phase verification/audit of the added regression and artifact coverage map.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddf30-328a-7573-add4-10cdd846340b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+I’m checking the changed scoped-state tests against the phase acceptance criteria and failure-path expectations before I write the audit result.
+
+I found one material coverage gap in the prompt-validation failure paths. I’m recording it as blocking and updating the audit criteria to match the current regression surface.
+
+Scope considered
+
+- Test-phase audit for the scoped item-state slice only.
+- I focused on the added simple-surface runtime regression, the existing prompt-validation tests, and the phase-local strategy/feedback artifacts.
+
+What I analyzed
+
+- Scoped-state tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- The coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/test_strategy.md).
+- The scoped item-state decisions ledger for expected test intent.
+
+What I reviewed
+
+- The new runtime regression for simple `step(..., item_state=...)` pause/resume is deterministic and valuable.
+- The suite covers:
+  - `item.state.*` success and unknown-field rejection,
+  - `step.item_state.*` success on both prompt-style and produce/verify steps,
+  - unscoped `item_state=...` rejection,
+  - core runtime checkpoint/resume behavior.
+- The suite does not yet cover the failure path for an unknown `{step_name.item_state.*}` prompt field.
+
+Key findings / decisions
+
+- `TST-001` is blocking: AC-2 requires field validation for both `item.state.*` and `step.item_state.*`, but there is no negative test for an unknown scoped `step.item_state` field. A regression allowing a typo like `{review.item_state.attemps}` would not be caught.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/criteria.md) and appended the finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/feedback.md).
+
+Open issues / next step
+
+- Add a compile-time rejection test for an unknown scoped `step.item_state` field, mirroring the existing `{item.state.missing}` negative coverage.
+- Re-run the test audit after that failure-path coverage is added.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
