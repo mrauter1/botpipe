@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 import autoloop
 import autoloop.simple as simple
+import autoloop_v3.core as strict_core
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.core.context import Context
 from autoloop_v3.core.engine import Engine
@@ -73,9 +74,48 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
 
 
 def test_removed_simple_aliases_are_absent() -> None:
-    for symbol in ("StrictWorkflow", "chain", "review_step", "do_review_step", "system_step", "StateVar", "Param"):
+    for symbol in (
+        "StrictWorkflow",
+        "chain",
+        "review_step",
+        "do_review_step",
+        "system_step",
+        "StateVar",
+        "Param",
+        "AfterHookResult",
+        "Checkpoint",
+        "ChildWorkflowResult",
+        "ResolvedArtifacts",
+        "WorkflowStep",
+    ):
         assert not hasattr(simple, symbol)
     assert not hasattr(simple.Route, "complete")
+
+
+def test_removed_simple_symbols_fail_to_import() -> None:
+    for symbol in ("AfterHookResult", "Checkpoint", "ChildWorkflowResult", "ResolvedArtifacts", "WorkflowStep"):
+        with pytest.raises(ImportError):
+            _import_from("autoloop.simple", symbol)
+
+
+def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
+    for symbol in (
+        "AfterHookResult",
+        "LLMStep",
+        "PairStep",
+        "Param",
+        "RouteInfo",
+        "StateVar",
+        "SUCCESS",
+        "SystemStep",
+        "WorkflowStep",
+    ):
+        assert not hasattr(strict_core, symbol)
+        with pytest.raises(ImportError):
+            _import_from("autoloop_v3.core", symbol)
+
+    for symbol in ("Artifact", "Context", "FAIL", "FINISH", "GLOBAL", "PAUSE", "Prompt", "Route", "Workflow"):
+        assert _import_from("autoloop_v3.core", symbol) is getattr(strict_core, symbol)
 
 
 def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> None:

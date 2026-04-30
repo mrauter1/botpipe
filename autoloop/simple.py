@@ -10,26 +10,20 @@ from pydantic import BaseModel
 
 try:  # pragma: no branch - prefer installed-package imports when available
     from autoloop_v3.core import Artifact
-    from autoloop_v3.core.artifacts import ResolvedArtifacts
-    from autoloop_v3.core.context import ChildWorkflowResult
     from autoloop_v3.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-    from autoloop_v3.core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF
+    from autoloop_v3.core.primitives import Event, FAIL, FINISH, Outcome, PAUSE, SELF
     from autoloop_v3.core.prompts import Prompt
     from autoloop_v3.core.routes import Route
     from autoloop_v3.core.sessions import Continuity
-    from autoloop_v3.core.steps import AfterHookResult
     from autoloop_v3.core.steps import Session
     from autoloop_v3.core.worklists import Worklist
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from core import Artifact
-    from core.artifacts import ResolvedArtifacts
-    from core.context import ChildWorkflowResult
     from core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-    from core.primitives import Checkpoint, Event, FAIL, FINISH, Outcome, PAUSE, SELF
+    from core.primitives import Event, FAIL, FINISH, Outcome, PAUSE, SELF
     from core.prompts import Prompt
     from core.routes import Route
     from core.sessions import Continuity
-    from core.steps import AfterHookResult
     from core.steps import Session
     from core.worklists import Worklist
 
@@ -280,7 +274,7 @@ class PythonStepDeclaration(_NamedDeclaration):
         self.control_routes = control_routes
 
 
-class WorkflowStep(_NamedDeclaration):
+class _WorkflowStepDeclaration(_NamedDeclaration):
     """Child-workflow invocation step declaration."""
 
     kind = "workflow"
@@ -506,8 +500,8 @@ def workflow_step(
     after: Any | None = None,
     on_route: Any | None = None,
     control_routes: bool = True,
-) -> WorkflowStep:
-    return WorkflowStep(
+) -> _WorkflowStepDeclaration:
+    return _WorkflowStepDeclaration(
         workflow,
         name=name,
         message=message,
@@ -648,9 +642,6 @@ classify = _ClassifyOperationSurface()
 
 
 __all__ = [
-    "AfterHookResult",
-    "Checkpoint",
-    "ChildWorkflowResult",
     "Continuity",
     "Event",
     "FAIL",
@@ -661,14 +652,12 @@ __all__ = [
     "PAUSE",
     "Prompt",
     "Raw",
-    "ResolvedArtifacts",
     "Route",
     "SELF",
     "Session",
     "Text",
     "Workflow",
     "Worklist",
-    "WorkflowStep",
     "classify",
     "llm",
     "produce_verify_step",
