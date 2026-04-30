@@ -2300,3 +2300,44 @@ Validation command rerun:
 `./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py tests/unit/test_simple_surface.py tests/unit/test_provider_boundary_core.py tests/contract/test_canonical_runtime_contracts.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_integration_parity.py tests/runtime/test_provider_backends.py`
 
 Result: `112 passed, 14 warnings`. The warnings are the same pre-existing Pydantic `schema` field-name warnings from `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+---
+I’m auditing the phase-owned test additions and the validation run output before I update the audit artifacts.
+
+The added test is scoped correctly and uses the same deterministic harness as the rest of the parity suite. I don’t see a coverage or flake issue in the phase-owned additions.
+
+Scope considered
+
+Phase-local test-audit artifacts and the changed verification-gate tests only: the added copied-package parity case, the updated test strategy, and the targeted validation run for strictness, contract, runtime, topology, provider, and resume coverage.
+
+What I analyzed
+
+I reviewed the phase contract, the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/verification-and-strictness/test_strategy.md), the changed parity test in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py), and the existing canonical-gate suites around strictness, provider contracts, and session artifacts.
+
+What I reviewed
+
+I checked that the new test targets the actual regression seam introduced by the implementation change: copied workflow execution with the repo root removed from `sys.path`, while still asserting canonical session artifact creation. I also checked that the suite remains deterministic and scoped, and that the recorded validation result stays green.
+
+Key findings / decisions
+
+No blocking or non-blocking findings in scoped audit. The added parity test materially improves regression protection for the repo-root import-fallback change, and it does so without normalizing any unconfirmed behavior change or dragging the out-of-phase compatibility suites into this gate.
+
+Open issues / next step
+
+The targeted gate remained green after the addition: `112 passed, 14 warnings`. The warnings are the same pre-existing Pydantic `schema` field-name warnings already documented elsewhere in the run artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
