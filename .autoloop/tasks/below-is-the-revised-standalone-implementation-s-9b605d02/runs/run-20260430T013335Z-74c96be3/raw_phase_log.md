@@ -1130,3 +1130,92 @@ Criteria remain unchecked because the active unit verification slice does not pa
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+I’m fixing the reviewer’s remaining blocker by restoring the public compiled-route shape while keeping the explicit-empty `required_writes=[]` runtime behavior. First I’m reopening the current compiler and engine route paths so I can move that sentinel behind a private/internal field instead of leaking `None` through active metadata.
+
+I’ve narrowed the fix to a small compiler/engine change: keep `CompiledRoute.required_writes` as the stable tuple surface, and track “was this route-level contract declared at all?” with a private flag used only by runtime enforcement. I’m applying that now, then I’ll rerun both verification slices.
+
+The reviewer’s blocker is fixed and both verification slices are green again. I’m updating the run artifacts now so they reflect the final route-required-writes design: public compiled routes stay tuple-shaped, and the runtime keeps the explicit-empty sentinel private.
+
+Scope considered
+
+Active strictness-and-suite-migration scope: the reviewer’s `IMP-003` blocker in compiled-route behavior, the affected `core` compiler/runtime paths, the named active unit/contract suites, the explicit compatibility runtime suite, and the phase bookkeeping artifacts.
+
+What I analyzed
+
+I reopened the current `CompiledRoute` path in [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), the runtime enforcement branch in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), the normalized route metadata in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), and the reviewer feedback in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/implement/phases/strictness-and-suite-migration/feedback.md). The regression was that `CompiledRoute.required_writes` had become `None` on unspecified routes, which changed the public compiled-route shape and broke the active validation suite.
+
+What I changed
+
+I restored the public compiled-route surface to stable tuples in [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py) and moved the “was a route-level contract explicitly declared?” distinction into the private `_required_writes_explicit` flag on `CompiledRoute`. In [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), runtime required-output enforcement now keys off that private flag instead of treating `None` on the public field as the signal. I left the normalized `Route` metadata flow in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py) intact, since the explicitness distinction is now consumed at compile/runtime time rather than leaked through active compiled metadata.
+
+I also updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/implement/phases/strictness-and-suite-migration/implementation_notes.md) and appended a superseding clarification to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/decisions.txt) so later turns do not drift back to exposing `None` on the public compiled route object.
+
+Key findings / decisions
+
+The fix keeps the user-visible compiled-route contract unchanged while preserving the explicit-empty `required_writes=[]` runtime behavior that motivated the prior turn. Public `CompiledRoute.required_writes` is again always tuple-shaped; only private runtime/compiler metadata tracks whether the route contract was explicitly declared.
+
+Validation passed:
+- `pytest tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_validation.py -q` -> `112 passed`
+- `pytest tests/contract/test_canonical_runtime_contracts.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py -q` -> `128 passed`
+- `python3 -m py_compile core/compiler.py core/engine.py core/steps.py core/validation.py core/workflow_capabilities.py runtime/cli.py runtime/static_graph.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/strictness/test_no_compat.py` -> success
+
+Open issues / next step
+
+No open implementation issues remain from this phase on my side. The reviewer should now be able to clear `IMP-003` and mark the phase complete.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+I’m validating the producer’s final fix for the compiled-route regression and then I’ll close out the review artifacts. First I’m reopening the current feedback/notes and rerunning the two recorded pytest slices so the completion decision is based on direct evidence.
+
+The rerun is clean: both verification slices pass exactly as recorded in the notes, and the current compiler/engine shape matches the decisions ledger. I’m updating the criteria to complete and normalizing the feedback artifact so it reflects that there are no active findings left in this phase.
+
+Scope considered
+
+Active phase review scope: strictness scan coverage, compiled-route/runtime behavior, the named active validation and engine-contract suites, the explicit compatibility runtime suite, and the phase review artifacts.
+
+What I analyzed
+
+I rechecked the updated implementation notes and decisions ledger, then reran the producer’s two recorded pytest slices directly:
+- `pytest tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_validation.py -q`
+- `pytest tests/contract/test_canonical_runtime_contracts.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py -q`
+
+What I reviewed
+
+The strictness/unit slice passed with `112 passed`, and the canonical-contract plus compatibility slice passed with `128 passed`. The compiled-route fix now preserves the public tuple-shaped `required_writes` surface while keeping the explicit-empty sentinel private to runtime enforcement, which matches the updated decisions and removes the prior regression.
+
+Key findings / decisions
+
+No active findings remain. I updated the phase criteria to checked/complete and normalized the feedback artifact to show `IMP-001`, `IMP-002`, and `IMP-003` as resolved.
+
+Open issues / next step
+
+No open issues from this review. The phase is ready to complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
