@@ -769,3 +769,91 @@ Align validation and runtime for producer-phase pair hooks. The minimal fix is t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+I’m addressing the reviewer’s phase-local finding only: aligning producer-phase pair-hook validation with the runtime rule that rerouting starts only after a candidate event exists. First I’m checking the exact validation path and any existing tests around `after_do` / producer-phase hooks so the fix stays minimal and consistent.
+
+I’ve confirmed the smallest correct fix is in validation, not the engine: reject static producer-phase after-hook overrides up front so the compiler matches the runtime rule instead of expanding producer semantics mid-phase. I’m patching that and adding a focused validation test.
+
+The validation change is in; I’m fixing the test imports and then running the smallest relevant suite first so I can verify the reviewer’s exact scenario is closed without touching unrelated runtime behavior.
+
+The targeted fix is behaving correctly. I’m running the full validation file and the tracing file now, because that’s the smallest wider regression surface that exercises both the compiler rule and the existing rerouting payload behavior.
+
+I’ve closed the reviewer finding in validation. I’m updating the phase notes now so the artifact matches the actual slice: one validation rule change, one new unit test, and the rerouting suites rerun cleanly.
+
+Scope considered
+
+Phase-local `hook-rerouting` only. I addressed the reviewer’s `IMP-001` finding by aligning producer-phase pair-hook validation with the existing runtime rule, and I updated only the request-relevant validation/test surfaces plus the phase implementation notes.
+
+What I analyzed
+
+I re-read the reviewer feedback, the producer-phase hook path in `core/engine.py`, the static hook validation path in `core/validation.py`, and the relevant validation tests around static after-hook route inference. I checked that the runtime behavior was already correct and that the gap was specifically compile-time acceptance of `after_do` redirects.
+
+What I changed
+
+I changed `core/validation.py` so `ProduceVerifyStep.after_do` is no longer validated as a redirect-capable hook. Static producer-phase hook overrides are now rejected up front with a clear validation error before a workflow can compile into a runtime failure. I added a focused unit test in `tests/unit/test_validation.py` for that case, and I updated the phase `implementation_notes.md` to reflect the extra validation slice.
+
+Key findings / decisions
+
+The minimal safe fix was in validation, not the engine: producer-phase rerouting remains disallowed because no candidate event exists yet, so the compiler now enforces that same rule instead of implying otherwise. Validation run:
+`.venv/bin/python -m pytest tests/unit/test_validation.py`
+`.venv/bin/python -m pytest tests/contract/test_engine_contracts.py`
+`.venv/bin/python -m pytest tests/runtime/test_runtime_tracing.py`
+
+Open issues / next step
+
+No known open implementation issues in this phase. The next step is a reviewer rerun so `IMP-001` can be cleared and the reviewer-owned criteria can be updated.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+I’m re-reviewing the same phase after the follow-up fix, with focus on whether the compiler/runtime contract split for producer-phase pair hooks is actually closed and whether the acceptance criteria are now satisfied end-to-end.
+
+The follow-up closes the only blocking issue I had. I’m marking the criteria complete and adding a resolution note to the feedback artifact so the old blocking entry doesn’t leave the phase looking unresolved on later turns.
+
+Scope considered
+
+Phase-local `hook-rerouting` only. I re-reviewed the follow-up validation change, the earlier engine/tracing changes it was meant to align with, the updated implementation notes, and the reviewer-owned criteria/feedback artifacts.
+
+What I analyzed
+
+I checked the revised producer-phase hook validation in `core/validation.py`, the runtime producer-phase rule in `core/engine.py`, the new unit test covering `after_do`, and reran the request-relevant regression surface:
+`.venv/bin/python -m pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_tracing.py`
+
+What I reviewed
+
+The previous blocking finding is resolved. The compiler now rejects static producer-phase `after_do` redirects up front, which matches the existing runtime rule that rerouting begins only after a candidate event exists. I updated the reviewer-owned artifacts accordingly: all criteria boxes are now checked, and the feedback file includes a cycle-2 resolution note for `IMP-001`.
+
+Key findings / decisions
+
+No remaining findings in reviewed scope. The phase now satisfies both acceptance criteria: rerouting/chaining remains covered by the earlier contract/runtime tests, and the producer-phase validation gap that previously left a compiler/runtime contract split is closed.
+
+Open issues / next step
+
+No open issues for this phase. The next step is to move on to the next planned implementation phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

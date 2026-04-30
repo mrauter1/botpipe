@@ -815,3 +815,45 @@ The minimal safe fix was in validation, not the engine: producer-phase rerouting
 Open issues / next step
 
 No known open implementation issues in this phase. The next step is a reviewer rerun so `IMP-001` can be cleared and the reviewer-owned criteria can be updated.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+I’m re-reviewing the same phase after the follow-up fix, with focus on whether the compiler/runtime contract split for producer-phase pair hooks is actually closed and whether the acceptance criteria are now satisfied end-to-end.
+
+The follow-up closes the only blocking issue I had. I’m marking the criteria complete and adding a resolution note to the feedback artifact so the old blocking entry doesn’t leave the phase looking unresolved on later turns.
+
+Scope considered
+
+Phase-local `hook-rerouting` only. I re-reviewed the follow-up validation change, the earlier engine/tracing changes it was meant to align with, the updated implementation notes, and the reviewer-owned criteria/feedback artifacts.
+
+What I analyzed
+
+I checked the revised producer-phase hook validation in `core/validation.py`, the runtime producer-phase rule in `core/engine.py`, the new unit test covering `after_do`, and reran the request-relevant regression surface:
+`.venv/bin/python -m pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_tracing.py`
+
+What I reviewed
+
+The previous blocking finding is resolved. The compiler now rejects static producer-phase `after_do` redirects up front, which matches the existing runtime rule that rerouting begins only after a candidate event exists. I updated the reviewer-owned artifacts accordingly: all criteria boxes are now checked, and the feedback file includes a cycle-2 resolution note for `IMP-001`.
+
+Key findings / decisions
+
+No remaining findings in reviewed scope. The phase now satisfies both acceptance criteria: rerouting/chaining remains covered by the earlier contract/runtime tests, and the producer-phase validation gap that previously left a compiler/runtime contract split is closed.
+
+Open issues / next step
+
+No open issues for this phase. The next step is to move on to the next planned implementation phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
