@@ -61,3 +61,6 @@
 {"ts": "2026-04-30T03:21:54.842687+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 61, "event_type": "phase_completed", "pair": "test", "phase_id": "strictness-and-suite-migration", "phase_mode": "single"}
 {"ts": "2026-04-30T03:21:54.846901+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 62, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-04-30T03:21:54.847141+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 63, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-04-30T03:26:54.569866+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 64, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-04-30T03:28:12.605083+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 65, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-04-30T03:28:12.651347+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 66, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}

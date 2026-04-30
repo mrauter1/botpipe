@@ -1308,3 +1308,112 @@ No open issues from this audit. The test phase is ready to complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc68-4a16-78a0-9404-6987f1bb6c7c
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019ddc68-4a16-78a0-9404-6987f1bb6c7c
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc68-4a16-78a0-9404-6987f1bb6c7c
+---
+I’m auditing the completed run against the original request, clarifications, artifacts, and the final code/test surface. I’ll first read the authoritative run files and inspect the current implementation for any remaining legacy public-surface or strictness gaps.
+
+The run ledger shows three implementation slices and some explicit decisions that materially narrow what counts as allowed compatibility. I’m checking the final source tree and strictness/test surface now to see whether the code actually matches those decisions, not just the phase notes.
+
+I’ve already hit one likely gap: the final tree still carries the old `core` alias shim and active `core` internals still use `produces`, which the request explicitly targeted for removal from active code paths. I’m reading the implementation and test artifacts now to separate confirmed intended exceptions from unfinished cleanup.
+
+The artifact claims say the final strictness and canonical suites passed, but that does not answer whether they enforce the requested cleanup boundary. I’m running a small verification slice now to confirm the current code still passes while leaving `produces` and the alias shim in place, which matters for judging this as a real audit gap rather than a stale note.
+
+The local environment confirms one of the run’s own caveats: bare `python3` cannot import `core` here because `pydantic` is missing outside the project venv. The strictness test is running under `./.venv`; once it finishes I’ll use that result together with the source scan to show whether the enforcement is still too narrow.
+
+I have enough to write the audit artifacts. The key distinction is clear now: the public surface cleanup mostly landed, but the active low-level `produces` contract and the redundant `core` alias shim were left behind, and the strictness suite currently passes because it does not ban that remaining vocabulary.
+
+I’m writing the audit outputs now. They’ll record the cleanup that did land, the remaining `produces` and alias-shim gaps, and a narrow next-run request instead of rerunning the whole task.
+
+The audit files are written. I’m doing one quick readback for correctness, then I’ll return the required run summary and loop-control block.
+
+Scope considered
+
+Run-local audit against the original request, the raw-log clarification chain, the decisions ledger, the phase artifacts, and the final repository state. I limited code inspection to request-relevant public-surface, core, runtime, stdlib, strictness, and test files.
+
+What I analyzed
+
+I read the authoritative run files and the implementation/test artifacts, then checked the final source tree directly. I also reran `./.venv/bin/pytest tests/strictness/test_no_compat.py -q`, which still passes (`8 passed`), and compared that result against the remaining active legacy vocabulary in `core` and active suites.
+
+What I changed
+
+Wrote the audit outputs:
+- [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/gap_report.md>)
+- [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/revised_request.md>)
+- [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/audit_result.json>)
+
+Key findings / decisions
+
+`autoloop.simple` is trimmed to the intended canonical public surface, and active top-level `core` exports no longer expose the removed public legacy names.
+
+Material gaps remain in the active low-level contract cleanup. Active `core` code still depends on `produces` in [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py:105), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py:220), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py:325), and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py:2354). Active non-migration suites still author workflows with `produces`, including [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:236) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:259).
+
+Strictness is still too narrow for the request. [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:167) bans `SUCCESS`, `RouteInfo`, and `required_outputs`, but not `produces`, so the suite passes while the active tree still contains that legacy vocabulary.
+
+The dual package alias shim also remains active in [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:32) even though an explicit bridge already exists in [autoloop_v3/core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_v3/core/__init__.py:1). I treated that as unresolved because the request asked to remove the shim if it was no longer strictly required, and no later clarification justified keeping both.
+
+Open issues / next step
+
+`audit_result.json` records `material_gaps_found: true`. The follow-up request is narrow: finish the active `produces` migration, migrate the remaining active suites or quarantine true compatibility-only coverage, tighten strictness to ban `produces`, and remove the redundant `core` alias shim unless one explicit bridge path is still demonstrably required.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc68-4a16-78a0-9404-6987f1bb6c7c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019ddc68-4a16-78a0-9404-6987f1bb6c7c
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc68-4a16-78a0-9404-6987f1bb6c7c
+---
+I’m verifying the audit artifacts against the request, decisions, and final code/test state. First I’m reading the current audit criteria and feedback files, then I’ll spot-check the cited code paths to decide whether the audit missed or misclassified anything.
+
+The audit holds up against the source and the request: the cited `produces` and alias-shim gaps are real, and the follow-up request is narrowly scoped to those unresolved items. I’m marking the audit criteria complete and appending a verifier note that there are no blocking audit-quality findings.
+
+I’ve updated the verifier artifacts. I’m doing a quick readback of `criteria.md` and `feedback.md` so the final status and note match the audit result cleanly.
+
+Scope considered
+
+Run-local verification of the audit artifacts against the immutable request, raw-log authority chain, decisions ledger, phase artifacts, and the final repository state. I limited repo inspection to the request-relevant public-surface, `core`, runtime, stdlib, strictness, and active test files cited by the audit.
+
+What I analyzed
+
+I checked whether the audit’s claimed unresolved gaps are real in the final tree and whether any requested behavior was missed or misclassified. I also verified that the follow-up request is actionable and that `audit_result.json` matches the report.
+
+What I reviewed
+
+I reviewed [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/gap_report.md>), [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/revised_request.md>), [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/audit_result.json>), [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/criteria.md>), [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/feedback.md>), and [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/decisions.txt>). I also spot-checked the cited code paths and reran `./.venv/bin/pytest tests/strictness/test_no_compat.py -q`.
+
+Key findings / decisions
+
+The audit is sound. Its two central unresolved-gap claims are supported by the final codebase: active `core` and active suites still use the `produces` contract, and the dynamic alias shim remains in `core/__init__.py` alongside the explicit `autoloop_v3.core` bridge.
+
+The revised request is appropriately narrow and directly actionable for a next implementation run. `audit_result.json` is valid and consistent with the report’s conclusion that material gaps remain.
+
+I updated [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/criteria.md>) to check all boxes and appended one non-blocking verifier note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/audit/feedback.md>).
+
+Open issues / next step
+
+No blocking audit-quality findings remain. The audit pair can complete; the recorded follow-up implementation request should drive the next run.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
