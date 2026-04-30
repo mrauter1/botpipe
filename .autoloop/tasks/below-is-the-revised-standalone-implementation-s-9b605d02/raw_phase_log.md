@@ -2457,3 +2457,57 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc05-1eea-7962-8c54-cccee68366f7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019ddc05-1eea-7962-8c54-cccee68366f7
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc05-1eea-7962-8c54-cccee68366f7
+---
+I’m treating this as a planning pass for the canonical-surface cleanup. First I’ll read the authoritative run artifacts and inspect the current `autoloop.simple`, `core`, strictness tests, and legacy-name usage so the plan is grounded in the actual code.
+
+The run log has no later clarifications, so the initial snapshot is still authoritative. I’m moving to code-level inventory now to map where the legacy names are still active versus already isolated.
+
+The first pass confirms the cleanup is broader than a few re-exports: legacy symbols are still embedded in step classes, route metadata, validation, compiler, and several active tests. I’m checking the package layout and the strictness/compatibility boundaries next so the plan can separate canonical work from the remaining migration readers cleanly.
+
+`autoloop` itself is already close to canonical; the remaining surface debt is concentrated under `core` plus a few active tests and payload checks. I’m tracing the stdlib/runtime/static-graph touchpoints now so the plan can tell implementation exactly where the compatibility line belongs.
+
+The package split is a bit uneven here: some active tests point at `autoloop_v3.*`, while the maintained implementation being scanned lives under repo-root `core`, `autoloop`, and top-level runtime modules. I’m locating the actual runtime/static-graph files now so the plan names the right ownership boundaries.
+
+I’ve confirmed the active runtime static-graph payloads are already using canonical route fields; the main remaining leakage there is test coverage and helper APIs, not the payload writer itself. I’m checking the stdlib export surface and the package import shims before drafting the phase boundaries.
+
+Two useful constraints are now clear: the maintained stdlib still has a live `pair_step` helper built on low-level `PairStep`, and the repo already distinguishes “active consumer” tests from compatibility-focused ones. I’m tracing the persisted-run compatibility readers now, because those are the only places the request allows legacy fields to survive.
+
+The persisted-run compatibility seam is narrower than it first looked: terminal normalization is already isolated to checkpoint/run-history paths, while route metadata leakage is still in active step/validation/compiler code. I’m reading the remaining route/static-graph helpers around target normalization so the plan can be explicit about what stays as migration-only behavior versus what gets removed from active authoring.
+
+One more structural point emerged: there is no maintained source tree under `autoloop_v3/` in this workspace, only cached bytecode and tests that import that package name. I’m checking packaging metadata next, because that determines whether the `core` ↔ `autoloop_v3.core` alias is still real runtime glue or just leftover convenience.
+
+Packaging confirms the repo only installs the top-level packages it physically contains; there is no declared `autoloop_v3.core` package directory. I’m verifying the actual import behavior in this checkout now, because that determines whether removing the alias shim is safe or whether tests rely on it for namespace-package resolution.
+
+`python` isn’t on PATH in this environment, so I’m repeating the import check with `python3`. That matters because the alias-shim decision should be based on actual import resolution, not on guesswork from the source tree alone.
+
+The import check answers one risk directly: `autoloop_v3.core` does not currently exist as a real importable package in this checkout; the alias only works after `core` is imported in an environment with dependencies installed. I’m pulling in the authoring docs and any existing canonical-surface language now so the plan aligns with the documented contract, not just the current implementation.
+
+I have enough context to write the implementation plan now. Before editing artifacts, I’m checking the current feedback file and then I’ll replace `plan.md`, update the `phases:` payload in `phase_plan.yaml`, and append the cross-turn decisions that are easy to lose later.
+
+I’m writing the plan artifacts now. The plan will treat canonical cleanup as three ordered slices: surface pruning, internal route/runtime migration, then strictness/test quarantine and verification, with legacy support confined to explicit persisted-run compatibility code.
+
+The artifacts are written. I’m doing a quick verification pass on the generated markdown/YAML and the decision block so the handoff is internally consistent and doesn’t drift from the request.
+
+Updated the run-local planning artifacts:
+
+- [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/plan.md>)
+- [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/phase_plan.yaml>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/feedback.md>)
+- [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/decisions.txt>)
+
+The plan is split into three ordered phases: public/top-level surface pruning, internal route/runtime canonicalization, and strictness plus active-suite migration. It also records the two main compatibility constraints that implementation must preserve: legacy terminal normalization should survive only in explicit persisted-run readers, and the `core` ↔ `autoloop_v3.core` bridge cannot be removed blindly because this checkout has no real `autoloop_v3.core` source package.
+
+I did not run tests; this was a planning-only turn.
