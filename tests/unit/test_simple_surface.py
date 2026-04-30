@@ -649,6 +649,84 @@ def test_runtime_built_in_step_state_updates_and_checkpoints_for_simple_steps(tm
     }
 
 
+def test_runtime_step_state_restores_built_ins_and_custom_fields_on_resume(tmp_path) -> None:
+    class ReviewState(BaseModel):
+        attempts: int = 0
+
+    def record_attempt(ctx, outcome):
+        ctx.step_state.attempts += 1
+
+    class ResumeWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify.",
+            state=ReviewState,
+            after_verifier=record_attempt,
+            routes={"needs_replan": simple.PAUSE},
+            control_routes=False,
+        )
+
+    task_folder = tmp_path / "task"
+    run_folder = tmp_path / "run"
+    task_folder.mkdir()
+    run_folder.mkdir()
+
+    checkpoint_store = InMemoryCheckpointStore()
+    engine = Engine(
+        compile_workflow(ResumeWorkflow),
+        provider=ScriptedLLMProvider(
+            producer_turns=["draft-1\n", "draft-2\n"],
+            verifier_turns=[
+                simple.Outcome(raw_output="replan-1\n", tag="needs_replan", reason="needs replanning"),
+                simple.Outcome(raw_output="replan-2\n", tag="needs_replan", reason="needs more replanning"),
+            ],
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=checkpoint_store,
+    )
+
+    first = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+    second = engine.resume(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert first.terminal == simple.PAUSE
+    assert first.checkpoint is not None
+    assert first.checkpoint.step_states == {
+        "review": {
+            "visits": 1,
+            "last_route": "needs_replan",
+            "last_reason": "needs replanning",
+            "rework_count": 0,
+            "replan_count": 1,
+            "attempts": 1,
+        }
+    }
+
+    assert second.terminal == simple.PAUSE
+    assert second.checkpoint is not None
+    assert second.checkpoint.step_states == {
+        "review": {
+            "visits": 2,
+            "last_route": "needs_replan",
+            "last_reason": "needs more replanning",
+            "rework_count": 0,
+            "replan_count": 2,
+            "attempts": 2,
+        }
+    }
+
+
 def test_runtime_built_in_step_state_is_available_on_core_steps(tmp_path) -> None:
     class WorkflowState(BaseModel):
         seen_visits: int = 0
