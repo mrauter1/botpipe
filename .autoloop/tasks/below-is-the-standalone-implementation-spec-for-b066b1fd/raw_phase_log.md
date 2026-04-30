@@ -2239,3 +2239,54 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf60-61fd-7d31-a517-d143131a22c8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddf60-61fd-7d31-a517-d143131a22c8
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf60-61fd-7d31-a517-d143131a22c8
+---
+I’m auditing the current history/telemetry test surface and the phase-local test artifacts. I’ll identify any remaining coverage gap around the scoped hook-event instrumentation, then update the repository tests and the test-phase artifacts together.
+
+The current suite already covers scoped `hook_failed` attribution well. The remaining hole is direct regression coverage for scoped `hook_route_redirected` payload identity, which is part of the same instrumentation surface and worth pinning explicitly in the test phase.
+
+I’m adding one more contract-level regression to pin scoped `hook_route_redirected` identity, then I’ll update the test-phase strategy/feedback artifacts with an explicit coverage map.
+
+The new test is in. I’m validating just the scoped hook instrumentation slice first, then I’ll write the test-phase artifact updates against the actual green surface.
+
+The scoped hook instrumentation slice is green. I’m recording the coverage map and the non-obvious test decision now, then I’ll close with the exact phase summary.
+
+Scope considered
+- Phase-local `history-telemetry` test work only: scoped hook-event instrumentation, `ctx.history` attribution, and the test-phase artifacts.
+- I did not modify auditor-owned `criteria.md` or unrelated repository areas.
+
+What I analyzed
+- Existing phase-local runtime/history coverage in [tests/runtime/test_history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_history.py), [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- The active implementation notes, reviewer outcome, and the current `history-telemetry` decisions block.
+- The phase-local test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/history-telemetry/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/history-telemetry/feedback.md).
+
+What I changed
+- Added a new contract regression in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py) for scoped `hook_route_redirected` events carrying `visit`, `step_execution_id`, `scope`, and `item_id`.
+- Kept the already-added scoped `hook_failed` emitter test and `ctx.history` scoped failure attribution test as the paired derivation boundary checks.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/history-telemetry/test_strategy.md) with an explicit behavior-to-test coverage map, invariants, edge cases, flake controls, and known gaps.
+- Appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/history-telemetry/feedback.md).
+- Appended the non-obvious coverage decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt) under this turn’s header.
+
+Key findings / decisions
+- The meaningful remaining test gap was direct scoped coverage for `hook_route_redirected` identity payloads; the prior suite already covered scoped `hook_failed` emission and scoped `ctx.history` failure attribution.
+- Coverage now pins the fix at both boundaries: runtime emission via `hook_event_sink` and history derivation via `ctx.history.failures(..., item_id=...)`.
+- Validation passed:
+  - `python3 -m py_compile tests/contract/test_engine_contracts.py`
+  - `source .venv/bin/activate && pytest -q tests/contract/test_engine_contracts.py -k "scoped_hook_failure or scoped_hook_redirect or hook_events_are_observable"`
+  - `source .venv/bin/activate && pytest -q tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py` with `122 passed in 0.73s`
+
+Open issues / next step
+- No open test-phase blockers in scope.
+- Next step is auditor review of the updated `history-telemetry` test artifacts and repository test surface.
