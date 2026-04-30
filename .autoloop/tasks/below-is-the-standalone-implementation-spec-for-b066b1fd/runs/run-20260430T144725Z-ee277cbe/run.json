@@ -18,8 +18,8 @@
       "history-telemetry"
     ],
     "explicit": true,
-    "current_phase_index": 5,
-    "current_phase_id": "history-telemetry"
+    "current_phase_index": 6,
+    "current_phase_id": null
   },
   "phase_status": {
     "compatibility-bridge-removal": "completed",
@@ -27,7 +27,7 @@
     "state-surfaces": "completed",
     "scoped-item-state": "completed",
     "effective-required-writes": "completed",
-    "history-telemetry": "in_progress"
+    "history-telemetry": "completed"
   },
   "phase_history": [
     {
@@ -100,6 +100,13 @@
       "run_id": "run-20260430T144725Z-ee277cbe",
       "status": "in_progress",
       "ts": "2026-04-30T17:12:08.351373+00:00"
+    },
+    {
+      "phase_id": "history-telemetry",
+      "run_id": "run-20260430T144725Z-ee277cbe",
+      "status": "completed",
+      "ts": "2026-04-30T17:51:08.698662+00:00",
+      "pair": "test"
     }
   ]
 }
