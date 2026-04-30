@@ -2732,3 +2732,60 @@ Validation recorded in the phase artifact passed for the changed surface:
 Open issues / next step
 
 The broader legacy-heavy suites are still red on later-phase work, not this surface slice. The remaining failures are concentrated in `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, and `tests/runtime/test_compatibility_runtime.py`, where expectations still depend on `SUCCESS`, `RouteInfo`, `Route.complete`, and older compiled-step contract fields. I recorded that explicitly in the phase implementation notes and did not chase those out-of-phase migrations here.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc0e-4191-79a0-9706-c405a993eba8
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+I’m reviewing the phase-local export-surface changes against the acceptance criteria and checking for regressions at the compatibility boundary. First I’m reading the active review artifacts and the relevant diffs/tests so I can update the criteria and feedback precisely.
+
+I found one likely regression point in the explicit compatibility boundary: the compatibility suite still generates workflow modules that import removed names from top-level `core`. I’m reproducing that directly and checking whether any other phase-local surface gaps remain before I write findings.
+
+I confirmed the compatibility regression directly: `from core import SUCCESS` now fails, and the compatibility suite still writes temporary workflow modules with that exact import pattern, which breaks package resolution through the new boundary. I’m checking whether there’s a second independent review finding or whether the rest of the phase is sound.
+
+The compatibility fixture strings were actually updated. The remaining failure is subtler: the loader can import those generated modules, but it no longer recognizes their `core.Workflow` subclasses as workflow classes after the alias swap. I’m tracing that identity check now.
+
+The generated workflow class itself is valid. The failure path is now pointing at the runtime loader’s module import/cache behavior, not the compatibility fixture source. I’m reading that importer path to see whether the explicit `autoloop_v3.core` bridge changed cache invalidation semantics for discovered workflow modules.
+
+I found the deeper cause of the alias regression: the explicit bridge only aliases the top-level package, so `core.*` and `autoloop_v3.core.*` submodules are now duplicated instead of shared. That splits class identity across `Step`, `WorkflowMeta`, and validation helpers, which is exactly the sort of compatibility break this phase was supposed to avoid.
+
+I have two blocking findings. One is a real runtime regression from the alias replacement itself; the other is a direct contradiction of the run decisions in the way active suites were rewired onto `_compat`. I’m collecting exact line references now and then I’ll write the review artifacts.
+
+I’ve finished the review. I’m writing two blocking findings: one for the alias-bridge regression and one for the decision conflict where active suites were rewired onto the compatibility surface instead of being quarantined or migrated.
+
+The review artifacts are updated. I’m doing one last readback of the feedback and criteria so the final status is consistent before I close with the loop-control block.
+
+Scope considered
+
+Phase-local review of the canonical-surface-pruning implementation: `autoloop.simple`, top-level `core`, the new `autoloop_v3.core` bridge, touched helpers/tests, and the active review artifacts.
+
+What I analyzed
+
+I read the phase criteria, feedback scaffold, implementation notes, and run decisions. I inspected the changed files, reproduced the new bridge behavior in Python, and ran focused verification on the compatibility loader path.
+
+What I reviewed
+
+I updated the review feedback artifact with two prioritized blocking findings. I left all criteria boxes unchecked because the current diff does not satisfy the phase acceptance criteria without regressions.
+
+Key findings / decisions
+
+The new `autoloop_v3.core` bridge is not behaviorally equivalent to the old alias shim: it duplicates `core.*` and `autoloop_v3.core.*` submodules, which splits class identity and breaks workflow discovery on the `autoloop_v3.core` path.
+
+The implementation also contradicts the run decisions by rewiring active suites onto `_compat` instead of confining legacy names to explicit compatibility coverage.
+
+Open issues / next step
+
+Fix the bridge so `autoloop_v3.core.*` and `core.*` share module identity, then remove `_compat` usage from active suites and quarantine or migrate those tests before re-running the phase verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
