@@ -142,3 +142,12 @@ No open verification issues remain for the planning artifacts. The plan gate is 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=compatibility-bridge-removal,hook-rerouting,state-surfaces,scoped-item-state,effective-required-writes,history-telemetry
+explicit=True
+current_phase_index=0
