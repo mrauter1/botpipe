@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260430T032812Z-1b762d28" ts="2026-04-30T03:28:13.203592+00:00" />
+Treat direct core step constructor support for produces/review_produces as removed active authoring surface; keep legacy translation only in persisted session/checkpoint/run compatibility readers.
+Do not exclude whole maintained suites from strictness to preserve compatibility tests; quarantine any necessary live legacy workflow declarations into explicit compatibility or migration fixture files and exclude only those exact fixtures.
+Remove core.__init__ dynamic alias mirroring unless a concrete maintained import path proves the explicit autoloop_v3.core -> core bridge insufficient.
