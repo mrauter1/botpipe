@@ -1959,3 +1959,61 @@ No in-phase blocker remains from the active consumer surfaces. The remaining leg
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=4 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=4 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m verifying the final consumer-facing surface against the phase criteria and checking whether any blocking active-scope legacy names remain before I update the review artifacts.
+
+The broad grep now only shows compatibility/internal/provider coverage plus negative docs/examples. I’m checking the final test completion and then I’ll update the review artifacts based on whether any active consumer-surface blocker still remains.
+
+I’ve confirmed the reviewer-listed active consumer surfaces are clean and the touched validation slice passes. I’m updating the review artifacts to mark the remaining legacy-name hits as out-of-scope compatibility/internal coverage rather than an active phase blocker.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` phase only. I reviewed the producer’s cycle-4 consumer-test migrations, the updated implementation notes, and the remaining legacy-name footprint across active runtime/unit/docs/workflow-package surfaces relevant to this phase.
+
+What I analyzed
+
+I checked the active review artifacts first, then reran the broad banned-name grep across `tests/runtime`, `tests/unit`, `docs`, and `workflows` to see whether any remaining hits were still in active consumer surfaces or had been reduced to compatibility/internal/provider coverage. I also reran the producer’s touched validation slice to confirm the migrated runtime fixtures still execute correctly.
+
+What I reviewed
+
+The previously blocking active runtime consumer files are now clean:
+- `tests/runtime/test_optional_extensions.py`
+- `tests/runtime/test_workspace_and_context.py`
+- `tests/runtime/test_runtime_static_graph.py`
+- `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+- `tests/runtime/test_runtime_git_tracking.py`
+- `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py`
+- `tests/runtime/test_workflow_run_history_to_failure_modes.py`
+
+The remaining grep hits are confined to compatibility/internal/provider coverage and negative guidance/assertions, not active consumer fixtures for this phase. The touched validation slice also passes:
+- `./.venv/bin/python -m pytest tests/runtime/test_optional_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+  - `35 passed`
+
+Key findings / decisions
+
+No blocking findings remain for this phase. I updated:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/feedback.md)
+
+`IMP-001` is now recorded as non-blocking/resolved for audit continuity.
+
+Open issues / next step
+
+The phase is complete from a reviewer standpoint. Remaining legacy-name usage is outside this phase’s active consumer-migration acceptance scope and belongs to compatibility/internal/provider coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

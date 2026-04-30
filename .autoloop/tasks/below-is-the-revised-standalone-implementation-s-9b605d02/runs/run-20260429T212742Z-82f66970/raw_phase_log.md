@@ -1868,3 +1868,152 @@ This phase should return to implementation. The next pass needs to migrate the r
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=4 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=4 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m taking the next cluster the reviewer surfaced: active runtime consumer tests that still generate strict `core` workflows or assert `SUCCESS` terminals. First I’m reading those remaining files in context so I can migrate the shared pattern consistently instead of doing piecemeal replacements.
+
+I’ve identified the high-leverage part of the next patch: `test_workspace_and_context` mostly routes through a handful of local workflow-package writer helpers, so I can migrate those helper sources once and clear most of that file’s remaining legacy surface in one pass. I’m checking the child-workflow helper API before I touch the one remaining `required_outputs` call.
+
+I’m clearing the low-risk tail first: direct `SUCCESS` terminal/status fixtures in git-tracking and workflow-history tests. Those are straightforward canonical renames and will shrink the remaining grep surface before I tackle the larger generated-workflow helpers.
+
+I’m patching the remaining single embedded building-block workflow next. It’s isolated and doesn’t depend on the old strict API beyond a deterministic bootstrap step, so it’s a safe move to canonical `python_step`.
+
+The static-graph test needs a slightly different treatment than the others because it also exercises artifact/metadata rendering. I’m checking the low-level `Artifact` helper API so I can keep the request artifact and typed-schema assertions while still moving off `PairStep`/`SystemStep`.
+
+The static-graph test is a contained fixture, so I’m converting that one fully rather than leaving another active legacy example behind. I’ll keep the typed control-schema and request artifact semantics, but I’m dropping the old `log_artifacts`-specific strict fixture field because the canonical simple surface doesn’t model it directly.
+
+I’m picking up the remaining consumer-test migration blockers and validating the current legacy-name footprint before editing the next batch of active runtime tests.
+
+I’ve narrowed the remaining blocker to a handful of active runtime tests. Next I’m migrating the highest-volume fixtures in `workspace_and_context` and `optional_extensions`, then I’ll rerun a focused slice.
+
+I have the remaining fixture sources in view. I’m converting them in place to the canonical simple surface rather than adding compatibility wrappers, so the active consumer coverage actually exercises the target API.
+
+I’ve got the migration shape. I’m applying it directly in the generated workflow-source fixtures so these tests stop teaching the old contract back into the runtime.
+
+I’m editing the next batch now: `optional_extensions` first for the repeated single-step fixtures, then `workspace_and_context` for the generated workflow-package helpers.
+
+The big batch patch didn’t land cleanly because several generated-source blocks drifted independently. I’m patching those helpers one by one to keep the diff surgical and avoid collateral edits.
+
+The highest-volume fixtures are migrated. I’m running the remaining grep now to see which active files still leak legacy consumer names before I spend time on another edit pass.
+
+The legacy-name footprint is down to internal/compat coverage plus one active static-graph assertion file. I’m removing that last active test-level `transitions` dependency so the remaining hits are genuinely internal or compatibility-only.
+
+I’ve finished this pass of edits. Now I’m running the touched test slice to catch any runtime regressions before I update the phase notes.
+
+The migration shape is compiling, but the touched test slice is failing immediately. I’m reading the first failures now and fixing them before broadening the sweep again.
+
+The first failures are mechanical: a few indented import lines inside triple-quoted fixture sources, plus one metadata assertion still using the old `entry_step` field. I’m fixing those directly, then rerunning the same slice.
+
+One failure remains in the touched slice. I’m pulling the exact traceback and fixing that last regression before updating the notes.
+
+The remaining failure is just a raw-trace filename expectation tied to the old `llm` step kind. I’m confirming the new emitted filename and updating the assertion to the canonical one.
+
+The last touched regression was just a renamed raw-output file. I’m rerunning the touched slice now, then I’ll do one broader grep and focused validation pass for the reviewer’s remaining phase files.
+
+The reviewer’s previously named files are now clean on the banned-name grep. I’m just waiting on the touched pytest slice to finish so I can write the updated implementation notes with exact validation results.
+
+The touched validations are green. I’m doing one last repo slice review of the remaining grep hits so I can separate true consumer-surface leftovers from internal compatibility/provider coverage before I close this producer turn.
+
+The remaining grep hits are now either docs with negative guidance or internal/compat/provider tests, not the active consumer fixtures the phase was supposed to clean up. I’m updating the phase notes to reflect that boundary and the new passing validation slice.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` phase only. I focused on the reviewer’s remaining consumer-surface blocker in active runtime tests and generated workflow-package fixtures, plus the adjacent runtime assertions they fed.
+
+What I analyzed
+
+I rechecked the reviewer’s named files first, then traced the remaining legacy-name hits in the generated workflow-source helpers inside [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py), the package fixture sources in [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py), and the last active static-graph assertion dependency in [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py). I also checked the remaining grep hits repo-wide to separate active consumer surfaces from internal/provider/compat coverage.
+
+What I changed
+
+I migrated the generated workflow-package fixtures in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) from strict `core` authoring to canonical `autoloop` authoring. That included replacing `SystemStep`/`LLMStep`/`SUCCESS`/class-level `transitions` with `python_step(...)`, `step(...)`, `Prompt.file(...)`, `Raw(...)`, and `FINISH`/`PAUSE`, and changing `require_child_workflow_result(..., required_outputs=...)` to `required_artifacts=...`.
+
+I did the same for the package sources and runtime assertions in [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py), including terminal assertions, git-tracking finish commit text, and the raw trace filename change from the old `llm` role to the canonical `step` role. I also removed the last active static-graph test dependency on the legacy `transitions` payload field in [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py), and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/implementation_notes.md) with the new files, scope boundary, and validation results.
+
+Key findings / decisions
+
+The remaining broad grep hits are now confined to compatibility, provider-boundary, tracing, optimizer-helper, and negative strictness coverage such as `tests/runtime/test_compatibility_runtime.py`, `tests/runtime/test_provider_backends.py`, `tests/runtime/test_runtime_tracing.py`, `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, `tests/unit/test_validation.py`, and `tests/unit/test_simple_surface.py`. The reviewer-listed active consumer files are clean.
+
+Validation passed for the touched slice:
+- `./.venv/bin/python -m pytest tests/runtime/test_optional_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+  - `35 passed`
+- banned-name grep across the reviewer-listed active runtime files
+  - no matches
+
+Open issues / next step
+
+No in-phase blocker remains from the active consumer surfaces. The remaining legacy-name usage is in compatibility/internal/provider coverage outside this phase’s consumer-migration acceptance target, so this is ready for verifier review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=4 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=4 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m verifying the final consumer-facing surface against the phase criteria and checking whether any blocking active-scope legacy names remain before I update the review artifacts.
+
+The broad grep now only shows compatibility/internal/provider coverage plus negative docs/examples. I’m checking the final test completion and then I’ll update the review artifacts based on whether any active consumer-surface blocker still remains.
+
+I’ve confirmed the reviewer-listed active consumer surfaces are clean and the touched validation slice passes. I’m updating the review artifacts to mark the remaining legacy-name hits as out-of-scope compatibility/internal coverage rather than an active phase blocker.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` phase only. I reviewed the producer’s cycle-4 consumer-test migrations, the updated implementation notes, and the remaining legacy-name footprint across active runtime/unit/docs/workflow-package surfaces relevant to this phase.
+
+What I analyzed
+
+I checked the active review artifacts first, then reran the broad banned-name grep across `tests/runtime`, `tests/unit`, `docs`, and `workflows` to see whether any remaining hits were still in active consumer surfaces or had been reduced to compatibility/internal/provider coverage. I also reran the producer’s touched validation slice to confirm the migrated runtime fixtures still execute correctly.
+
+What I reviewed
+
+The previously blocking active runtime consumer files are now clean:
+- `tests/runtime/test_optional_extensions.py`
+- `tests/runtime/test_workspace_and_context.py`
+- `tests/runtime/test_runtime_static_graph.py`
+- `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+- `tests/runtime/test_runtime_git_tracking.py`
+- `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py`
+- `tests/runtime/test_workflow_run_history_to_failure_modes.py`
+
+The remaining grep hits are confined to compatibility/internal/provider coverage and negative guidance/assertions, not active consumer fixtures for this phase. The touched validation slice also passes:
+- `./.venv/bin/python -m pytest tests/runtime/test_optional_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+  - `35 passed`
+
+Key findings / decisions
+
+No blocking findings remain for this phase. I updated:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/feedback.md)
+
+`IMP-001` is now recorded as non-blocking/resolved for audit continuity.
+
+Open issues / next step
+
+The phase is complete from a reviewer standpoint. Remaining legacy-name usage is outside this phase’s active consumer-migration acceptance scope and belongs to compatibility/internal/provider coverage.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
