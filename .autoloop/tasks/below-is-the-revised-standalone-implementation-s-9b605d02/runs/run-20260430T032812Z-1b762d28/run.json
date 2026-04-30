@@ -14,12 +14,12 @@
       "migrate-tests-and-lock-strictness"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "canonicalize-core-produces-surface"
+    "current_phase_index": 1,
+    "current_phase_id": "migrate-tests-and-lock-strictness"
   },
   "phase_status": {
-    "canonicalize-core-produces-surface": "in_progress",
-    "migrate-tests-and-lock-strictness": "planned"
+    "canonicalize-core-produces-surface": "completed",
+    "migrate-tests-and-lock-strictness": "in_progress"
   },
   "phase_history": [
     {
@@ -27,6 +27,19 @@
       "run_id": "run-20260430T032812Z-1b762d28",
       "status": "in_progress",
       "ts": "2026-04-30T03:37:14.216891+00:00"
+    },
+    {
+      "phase_id": "canonicalize-core-produces-surface",
+      "run_id": "run-20260430T032812Z-1b762d28",
+      "status": "completed",
+      "ts": "2026-04-30T03:59:32.211638+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "migrate-tests-and-lock-strictness",
+      "run_id": "run-20260430T032812Z-1b762d28",
+      "status": "in_progress",
+      "ts": "2026-04-30T03:59:32.215720+00:00"
     }
   ]
 }
