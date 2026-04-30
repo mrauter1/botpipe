@@ -285,7 +285,7 @@ class SimpleExample(Workflow):
     assert resolved_by_name.reference.workflow_name == "simple_example"
     assert inspected.workflow_path == workflow_path
     assert inspected.entry_step_name == "a"
-    assert inspected.transitions["a"] == {
+    assert inspected.routes["a"] == {
         "done": "FINISH",
         "question": "PAUSE",
         "blocked": "PAUSE",

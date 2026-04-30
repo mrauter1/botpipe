@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from stdlib import (
-        SelectedWorkflowTaskFramingParameters,
-        deduped_string_list_fields,
-        required_text_fields,
-    )
+from autoloop_v3.autoloop_optimizer import SelectedWorkflowTaskFramingParameters
+from stdlib import deduped_string_list_fields, required_text_fields
 
 from pydantic import Field
 

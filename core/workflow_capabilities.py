@@ -118,8 +118,8 @@ class WorkflowCapabilityEntry:
     parameters: tuple[WorkflowParameterField, ...]
     sessions: tuple[str, ...]
     artifacts: tuple[WorkflowArtifactCapability, ...]
-    transitions: dict[str, dict[str, str]]
-    global_transitions: dict[str, str]
+    routes: dict[str, dict[str, str]]
+    global_routes: dict[str, str]
     steps: tuple[WorkflowStepCapability, ...]
 
 
@@ -288,7 +288,7 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
         "doc_paths": [str(path) for path in entry.doc_paths],
         "entry_step_name": entry.entry_step_name,
         "flow_path": None if entry.flow_path is None else str(entry.flow_path),
-        "global_transitions": dict(entry.global_transitions),
+        "global_routes": dict(entry.global_routes),
         "workflow_py_path": None if entry.workflow_py_path is None else str(entry.workflow_py_path),
         "manifest_path": None if entry.manifest_path is None else str(entry.manifest_path),
         "package_dir": str(entry.package_dir),
@@ -345,9 +345,9 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
         ],
         "test_paths": [str(path) for path in entry.test_paths],
         "title": entry.title,
-        "transitions": {
-            "global": dict(entry.global_transitions),
-            "steps": {step_name: dict(routes) for step_name, routes in entry.transitions.items()},
+        "routes": {
+            "global": dict(entry.global_routes),
+            "steps": {step_name: dict(routes) for step_name, routes in entry.routes.items()},
         },
         "workflow_class": entry.workflow_class,
         "workflow_module": entry.workflow_module,
@@ -484,7 +484,7 @@ def selected_workflow_decomposition_surface_payload(
         "selected_workflow_compiled_surface": {
             "artifacts": [_artifact_capability_payload(artifact) for artifact in entry.artifacts],
             "entry_step_name": entry.entry_step_name,
-            "global_routes": dict(entry.global_transitions),
+            "global_routes": dict(entry.global_routes),
             "parameters": [_parameter_field_payload(field) for field in entry.parameters],
             "parameters_supported": entry.parameters_supported,
             "sessions": list(entry.sessions),
@@ -495,7 +495,7 @@ def selected_workflow_decomposition_surface_payload(
                     repo_root_path,
                     entry.package_dir,
                     step=step,
-                    route_targets=entry.transitions.get(step.name, {}),
+                    route_targets=entry.routes.get(step.name, {}),
                 )
                 for step in entry.steps
             ],
@@ -618,11 +618,11 @@ def _capability_entry_from_resolved(resolved, compiled: CompiledWorkflow, catalo
             _compiled_artifact_capability(name, artifact)
             for name, artifact in compiled.artifact_items(authoritative=True)
         ),
-        transitions={
+        routes={
             step_name: {tag: route.target for tag, route in routes.items()}
             for step_name, routes in compiled.routes.items()
         },
-        global_transitions={tag: route.target for tag, route in compiled.global_routes.items()},
+        global_routes={tag: route.target for tag, route in compiled.global_routes.items()},
         steps=tuple(
             _compiled_step_capability(
                 step,

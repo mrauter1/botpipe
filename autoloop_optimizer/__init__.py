@@ -49,6 +49,14 @@ from .optimization import (
     write_optimization_refinement_evidence,
     write_selected_workflow_source_manifest,
 )
+from .parameters import (
+    PortfolioReviewParameters,
+    SelectedWorkflowTaskFramingParameters,
+    SelectedWorkflowTaskFramingWithEvidenceParameters,
+    TaskContextParameters,
+    TaskFramingParameters,
+    TaskFramingWithEvidenceParameters,
+)
 from .portfolio import (
     write_workflow_capability_snapshot,
     write_workflow_portfolio_health_snapshot,
@@ -62,9 +70,15 @@ __all__ = [
     "OptimizationArtifactSpec",
     "OptimizationFrameCapture",
     "OptimizationPublicationSurface",
+    "PortfolioReviewParameters",
     "SelectedWorkflowArtifactWrite",
     "SelectedWorkflowCapture",
     "SelectedWorkflowInspection",
+    "SelectedWorkflowTaskFramingParameters",
+    "SelectedWorkflowTaskFramingWithEvidenceParameters",
+    "TaskContextParameters",
+    "TaskFramingParameters",
+    "TaskFramingWithEvidenceParameters",
     "build_step_trace_metrics",
     "capture_optimization_frame_context",
     "capture_selected_workflow",

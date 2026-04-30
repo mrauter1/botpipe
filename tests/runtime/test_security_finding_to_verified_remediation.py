@@ -467,7 +467,7 @@ def test_security_remediation_package_runs_and_emits_terminal_receipt(tmp_path: 
         if line
     ]
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "finding_scope_brief.md").exists()
     assert (workflow_dir / "security_evidence_pack.md").exists()
     assert (workflow_dir / "security_evidence_pack_summary.json").exists()

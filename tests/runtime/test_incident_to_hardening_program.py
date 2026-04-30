@@ -104,18 +104,18 @@ def test_incident_hardening_package_compiles_with_explicit_control_contracts(mon
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["incident_framed"]) == [
+    assert list(compiled.route("frame_incident", "incident_framed").required_writes) == [
         "frame_incident.incident_scope_brief",
         "frame_incident.response_objectives",
         "frame_incident.evidence_intake_register",
     ]
-    assert frame_step.route_infos["incident_framed"].handoff == (
+    assert compiled.route("frame_incident", "incident_framed").handoff == (
         "Locks the incident framing so evidence assembly can proceed against a fixed scope and objective set."
     )
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["rank_cause_hypotheses"]
-    assert list(analysis_step.route_required_outputs["hypotheses_ranked"]) == [
+    assert list(compiled.route("rank_cause_hypotheses", "hypotheses_ranked").required_writes) == [
         "rank_cause_hypotheses.cause_hypothesis_ranking",
         "rank_cause_hypotheses.immediate_mitigation_plan",
         "rank_cause_hypotheses.validation_plan",
@@ -124,7 +124,7 @@ def test_incident_hardening_package_compiles_with_explicit_control_contracts(mon
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["prepare_hardening_program"]
-    assert list(package_step.route_required_outputs["hardening_program_ready"]) == [
+    assert list(compiled.route("prepare_hardening_program", "hardening_program_ready").required_writes) == [
         "prepare_hardening_program.hardening_program",
         "prepare_hardening_program.hardening_backlog",
         "prepare_hardening_program.follow_up_owners",
@@ -755,7 +755,7 @@ def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Pa
     incident_summary = json.loads((workflow_dir / "incident_summary.json").read_text(encoding="utf-8"))
     incident_receipt = json.loads((workflow_dir / "incident_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "incident_scope_brief.md").exists()
     assert (workflow_dir / "response_objectives.md").exists()
     assert (workflow_dir / "incident_timeline.md").exists()
@@ -833,14 +833,14 @@ def test_incident_hardening_package_runs_and_emits_terminal_receipt(tmp_path: Pa
         "blocked",
         "failed",
     )
-    assert list(provider.calls[7].route_required_outputs["hardening_program_ready"]) == [
+    assert list(provider.calls[7].route_required_writes["hardening_program_ready"]) == [
         "prepare_hardening_program.hardening_program",
         "prepare_hardening_program.hardening_backlog",
         "prepare_hardening_program.follow_up_owners",
         "prepare_hardening_program.stakeholder_communications_draft",
         "prepare_hardening_program.incident_resolution_package",
     ]
-    assert provider.calls[7].route_infos["hardening_program_ready"].handoff == (
+    assert provider.calls[7].routes["hardening_program_ready"].handoff == (
         "Advances the incident workflow to deterministic publication of the terminal receipt."
     )
     assert (run_dir / "run.json").exists()

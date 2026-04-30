@@ -155,14 +155,14 @@ def effective_parameters_model(workflow_cls: type[Any]) -> type[BaseModel] | Non
         if not isinstance(base_model, type) or not issubclass(base_model, BaseModel):
             return None
         return base_model
-    base_model = getattr(workflow_cls, "Parameters", None)
+    base_model = getattr(workflow_cls, "Params", None)
     if base_model is not None and (not isinstance(base_model, type) or not issubclass(base_model, BaseModel)):
         return None
     descriptor_fields = collect_descriptor_fields(workflow_cls, descriptor_type=Param)
     if base_model is None and not descriptor_fields:
         return None
     model = build_descriptor_model(
-        f"{workflow_cls.__name__}Parameters",
+        f"{workflow_cls.__name__}Params",
         descriptor_fields=descriptor_fields,
         base_model=base_model,
         module_name=workflow_cls.__module__,

@@ -145,15 +145,15 @@ Runtime behavior:
 - `available_routes` is derived mechanically from the declared step-local routes plus reserved routes
 - step-local `Route.to(...)` metadata carries optional per-route summary, handoff, and selected-route output metadata for legal routes only
 - `required_writes` is the normalized selected-route output obligation map derived from explicit `Route(...)` metadata or inferred empty tuples
-- route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific required outputs
-- mapping-style global `transitions` declarations remain a compatibility fallback; greenfield workflow authoring should prefer step-local `routes={...}`
+- route metadata is authored on `Route(...)` when the workflow needs to override inferred summaries or declare route-specific `required_writes`
+- author workflows with step-local `routes={...}`; `transitions` is not part of the canonical authoring surface
 - `retry_policy` controls provider-attributable retries and defaults to `ProviderRetryPolicy(max_attempts=3)` on provider-backed steps
 - the rendered Runtime Step Contract can also include resolved-target route handoff text and retry feedback when the engine supplies them
 
 Authoring rules:
 
 - keep provider-facing operational guidance in the prompt templates, not in runtime-only metadata
-- reserve runtime-injected control data for the shared Runtime Step Contract: readable inputs, required inputs, writable artifacts, available routes, route summaries and route-required outputs, explicit expected output payload requirements, optional route handoff, and optional retry feedback
+- reserve runtime-injected control data for the shared Runtime Step Contract: readable inputs, required inputs, writable artifacts, available routes, route summaries and route `required_writes`, explicit expected output payload requirements, optional route handoff, and optional retry feedback
 - continue using `Outcome.tag` as the route carrier
 - use `needs_rework` when the current work-item boundary still holds and `needs_replan` when the boundary changed materially
 - do not declare provider control schemas on `python_step(...)`; Python steps pick routes by returning `Event(...)`
@@ -596,10 +596,10 @@ Parameter-model helper boundary:
 
 ## Optional Portfolio Snapshot Helpers
 
-`stdlib/portfolio.py` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.
+`autoloop_optimizer.portfolio` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.
 
 ```python
-from autoloop_v3.stdlib import (
+from autoloop_v3.autoloop_optimizer import (
     write_workflow_portfolio_health_snapshot,
     write_workflow_portfolio_snapshot,
 )
@@ -629,10 +629,10 @@ Portfolio health snapshot boundary:
 
 ## Optional Company Operation Snapshot Helpers
 
-`stdlib/company.py` provides a narrow authoring-only seam for workflows that need one bounded snapshot of repo-local company operation history.
+`autoloop_optimizer.company` provides a narrow authoring-only seam for workflows that need one bounded snapshot of repo-local company operation history.
 
 ```python
-from autoloop_v3.stdlib import write_company_operation_snapshot
+from autoloop_v3.autoloop_optimizer import write_company_operation_snapshot
 
 write_company_operation_snapshot(
     ctx,
@@ -662,27 +662,27 @@ Company operation snapshot boundary:
 
 The selected-workflow snapshot helpers form one converged authoring seam across:
 
-- `stdlib/adaptation.py`
-- `stdlib/refinement.py`
-- `stdlib/decomposition.py`
+- `autoloop_optimizer.adaptation`
+- `autoloop_optimizer.refinement`
+- `autoloop_optimizer.decomposition`
 
 Family boundary:
 
-- the private `stdlib/_selected_workflow.py` seam owns canonical selected-workflow resolution, `selected_workflow_name` capture, and shared envelope writing so later selected-workflow consumers can shorten capture steps without widening the public stdlib or root `workflow` surface
+- the private `autoloop_optimizer._selected_workflow.py` seam owns canonical selected-workflow resolution, `selected_workflow_name` capture, and shared envelope writing so later selected-workflow consumers can shorten capture steps without widening the public stdlib or root `workflow` surface
 - `core/workflow_capabilities.py` owns the authoritative payload builders for the compiled capability, editable authoring-surface, and decomposition-surface views
-- the stdlib helper modules stay thin artifact writers over those builders and keep the emitted artifacts explicit under `ctx.workflow_folder`
+- the optimizer helper modules stay thin artifact writers over those builders and keep the emitted artifacts explicit under `ctx.workflow_folder`
 - `stdlib/validation.py` owns the generic snapshot identity and alignment checks, including capability, authoring-surface, decomposition-surface, and cross-artifact selected-workflow-name validation
-- adjacent selected-workflow helpers such as `stdlib/diagnostics.py` and `stdlib/optimization.py` may reuse that private capture seam while keeping their workflow-local publication artifacts and policy separate from this public snapshot-helper family
+- adjacent selected-workflow helpers such as `autoloop_optimizer.diagnostics.py` and `autoloop_optimizer.optimization.py` may reuse that private capture seam while keeping their workflow-local publication artifacts and policy separate from this public snapshot-helper family
 - workflows still own domain-specific publication policy, evidence policy, state-drift handling, and receipt shaping
 - the family intentionally keeps `selected_workflow_capability.json`, `selected_workflow_authoring_surface.json`, and `selected_workflow_decomposition_surface.json` as three distinct artifact contracts instead of collapsing compiled and editable surfaces into one payload
 - the family does not add CLI flags, widen the root `workflow` authoring surface, or introduce runtime-owned adaptation, refinement, or decomposition behavior
 
 ## Optional Selected-Workflow Adaptation Helpers
 
-`stdlib/adaptation.py` provides a small authoring seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
+`autoloop_optimizer.adaptation` provides a small authoring seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
 
 ```python
-from autoloop_v3.stdlib import (
+from autoloop_v3.autoloop_optimizer import (
     write_selected_workflow_capability_snapshot,
     write_validated_workflow_parameters,
 )
@@ -708,10 +708,10 @@ Adaptation helper boundary:
 
 ## Optional Refinement Surface Helpers
 
-`stdlib/refinement.py` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's editable authoring surface.
+`autoloop_optimizer.refinement` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's editable authoring surface.
 
 ```python
-from autoloop_v3.stdlib import write_selected_workflow_authoring_surface
+from autoloop_v3.autoloop_optimizer import write_selected_workflow_authoring_surface
 
 write_selected_workflow_authoring_surface(ctx, "release_candidate_to_go_no_go")
 ```
@@ -731,10 +731,10 @@ Refinement helper boundary:
 
 ## Optional Decomposition Surface Helpers
 
-`stdlib/decomposition.py` provides a narrow authoring-only seam for workflows that need one read-only artifact combining a selected workflow's identity, editable authoring surface, and compiled step/route topology.
+`autoloop_optimizer.decomposition` provides a narrow authoring-only seam for workflows that need one read-only artifact combining a selected workflow's identity, editable authoring surface, and compiled step/route topology.
 
 ```python
-from autoloop_v3.stdlib import write_selected_workflow_decomposition_surface
+from autoloop_v3.autoloop_optimizer import write_selected_workflow_decomposition_surface
 
 write_selected_workflow_decomposition_surface(ctx, "release_candidate_to_go_no_go")
 ```
@@ -747,7 +747,7 @@ Decomposition helper boundary:
 - it writes the authoritative selected-workflow decomposition payload built in `core/workflow_capabilities.py`, so authoring-surface and compiled-surface fields stay synchronized across decomposition consumers
 - it combines selected workflow identity, editable authoring surface paths, repo-root-relative path metadata, and compiled step/route topology in one artifact
 - it captures the selected workflow's primary source file (`flow.py`, `workflow.py`, or a single-file workflow), optional `__init__.py`, optional `workflow.toml`, optional `specs.py`, optional support files such as `params.py` and `contracts.py`, prompt files, asset files, linked workflow doc paths, and inferred test paths when present
-- compiled step summaries include session names, readable/required/writable/log artifacts, available routes, route infos, route-required outputs, local route targets, and package-relative plus repo-relative prompt paths
+- compiled step summaries include session names, readable/required/writable/log artifacts, available routes, route summaries, route `required_writes`, local route targets, and package-relative plus repo-relative prompt paths
 - it writes the canonical result to `selected_workflow_decomposition_surface.json` by default
 - it does not mutate, auto-decompose, auto-run, auto-adapt, auto-refine, or auto-promote the selected workflow
 - it does not add CLI flags, new `workflow.toml` fields, runtime-owned decomposition automation, or hidden downstream routing
@@ -756,10 +756,10 @@ Decomposition helper boundary:
 
 ## Optional Candidate-Surface Publication Helpers
 
-`stdlib/candidate_surfaces.py` provides a narrow authoring-only seam for workflows that need the repeated mechanical parts of candidate-only publication for one selected workflow surface.
+`autoloop_optimizer.candidate_surfaces` provides a narrow authoring-only seam for workflows that need the repeated mechanical parts of candidate-only publication for one selected workflow surface.
 
 ```python
-from autoloop_v3.stdlib import (
+from autoloop_v3.autoloop_optimizer import (
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
     normalize_candidate_surface_overlay_result,
@@ -788,10 +788,10 @@ Candidate-surface helper boundary:
 
 ## Optional Diagnostic Snapshot Helpers
 
-`stdlib/diagnostics.py` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's historical run evidence.
+`autoloop_optimizer.diagnostics` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's historical run evidence.
 
 ```python
-from autoloop_v3.stdlib import write_selected_workflow_run_history_snapshot
+from autoloop_v3.autoloop_optimizer import write_selected_workflow_run_history_snapshot
 
 write_selected_workflow_run_history_snapshot(
     ctx,
@@ -815,10 +815,10 @@ Diagnostic helper boundary:
 
 ## Optional Evaluation Manifest Helpers
 
-`stdlib/evaluation.py` provides a narrow authoring-only seam for workflows that need to validate and canonicalize one workflow-local evaluation case manifest against one selected workflow.
+`autoloop_optimizer.evaluation` provides a narrow authoring-only seam for workflows that need to validate and canonicalize one workflow-local evaluation case manifest against one selected workflow.
 
 ```python
-from autoloop_v3.stdlib import write_validated_eval_case_manifest
+from autoloop_v3.autoloop_optimizer import write_validated_eval_case_manifest
 
 write_validated_eval_case_manifest(
     ctx,
@@ -851,10 +851,10 @@ Evaluation helper boundary:
 
 ## Optional Optimization Helpers
 
-`stdlib/optimization.py` provides deterministic authoring-only helpers for workflows that need to ingest runtime observability and publish candidate-only optimization evidence.
+`autoloop_optimizer.optimization` provides deterministic authoring-only helpers for workflows that need to ingest runtime observability and publish candidate-only optimization evidence.
 
 ```python
-from autoloop_v3.stdlib import (
+from autoloop_v3.autoloop_optimizer import (
     build_step_trace_metrics,
     list_selected_workflow_runs,
     normalize_trace_corpus,
@@ -879,10 +879,10 @@ Optimization helper boundary:
 
 ## Optional Workflow Capability Snapshot Helpers
 
-`stdlib/portfolio.py` also provides an opt-in helper for portfolio workflows that need richer importing inspection of workflow parameters and compiled step contracts while keeping the lightweight catalog seam unchanged.
+`autoloop_optimizer.portfolio` also provides an opt-in helper for portfolio workflows that need richer importing inspection of workflow parameters and compiled step contracts while keeping the lightweight catalog seam unchanged.
 
 ```python
-from autoloop_v3.stdlib import write_workflow_capability_snapshot
+from autoloop_v3.autoloop_optimizer import write_workflow_capability_snapshot
 
 write_workflow_capability_snapshot(ctx)
 ```
@@ -891,7 +891,7 @@ Capability snapshot boundary:
 
 - the helper writes `workflow_capability_snapshot.json` under `ctx.workflow_folder` by default
 - it uses the separate capability-inspection seam to capture catalog metadata plus normalized workflow parameters and compiled step summaries
-- compiled step summaries include the declared artifact surface, available routes, route infos, route-required outputs, prompt paths, and whether a typed output schema exists
+- compiled step summaries include the declared artifact surface, available routes, route summaries, route `required_writes`, prompt paths, and whether a typed output schema exists
 - it does not add new `workflow.toml` fields and does not change the lightweight non-importing catalog discovery contract
 - it reuses only the existing narrow runtime-injected control metadata: readable inputs, required inputs, writable artifacts, `available_routes`, step-local route metadata, `required_writes`, and an explicit `expected_output_schema` when present
 - it does not auto-rank, auto-select, auto-adapt, or auto-run workflows

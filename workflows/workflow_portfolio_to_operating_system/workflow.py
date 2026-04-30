@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from autoloop_optimizer import write_workflow_capability_snapshot, write_workflow_portfolio_health_snapshot
+from autoloop_v3.autoloop_optimizer import write_workflow_capability_snapshot, write_workflow_portfolio_health_snapshot
 from stdlib import (
     extract_workflow_names_from_capability_snapshot,
     extract_workflow_names_from_portfolio_health,

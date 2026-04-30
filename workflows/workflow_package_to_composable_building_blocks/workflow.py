@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from autoloop_optimizer import (
+from autoloop_v3.autoloop_optimizer import (
     capture_selected_workflow,
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
@@ -37,7 +37,7 @@ from stdlib import (
 from stdlib.control import event_on_outcome_tags
 from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
-from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
+from autoloop import Event, FINISH, Outcome, PAUSE, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -283,7 +283,10 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             baseline_parent_manifest,
             decomposition_evidence_manifest,
         ],
-        routes={"decomposition_context_captured": "frame_decomposition_request"},
+        routes={
+            "decomposition_context_captured": "frame_decomposition_request",
+            "blocked": PAUSE,
+        },
     )
     def capture_decomposition_context(state: State, ctx):
         capture = capture_selected_workflow(ctx, state.selected_workflow_reference)

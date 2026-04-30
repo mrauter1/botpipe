@@ -109,14 +109,14 @@ def test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["company_operation_framed"]) == [
+    assert list(compiled.route("frame_company_operation", "company_operation_framed").required_writes) == [
         "frame_company_operation.company_operation_brief",
         "frame_company_operation.recursive_improvement_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["analyze_recursive_improvement_pressures"]
-    assert list(analysis_step.route_required_outputs["recursive_improvement_pressures_analyzed"]) == [
+    assert list(compiled.route("analyze_recursive_improvement_pressures", "recursive_improvement_pressures_analyzed").required_writes) == [
         "analyze_recursive_improvement_pressures.company_pressure_map",
         "analyze_recursive_improvement_pressures.recursive_improvement_priority_matrix",
         "analyze_recursive_improvement_pressures.recursive_improvement_candidates",
@@ -131,7 +131,7 @@ def test_company_operation_to_recursive_improvement_cycle_compiles_with_explicit
     }
 
     package_step = compiled.steps["package_recursive_improvement_cycle"]
-    assert list(package_step.route_required_outputs["recursive_improvement_cycle_ready"]) == [
+    assert list(compiled.route("package_recursive_improvement_cycle", "recursive_improvement_cycle_ready").required_writes) == [
         "package_recursive_improvement_cycle.recursive_improvement_cycle",
         "package_recursive_improvement_cycle.recursive_improvement_summary",
         "package_recursive_improvement_cycle.recursive_improvement_next_actions",
@@ -689,7 +689,7 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
     cycle_summary = json.loads((workflow_dir / "recursive_improvement_summary.json").read_text(encoding="utf-8"))
     cycle_receipt = json.loads((workflow_dir / "recursive_improvement_cycle_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "workflow_capability_snapshot.json").exists()
     assert (workflow_dir / "workflow_portfolio_health_snapshot.json").exists()
     assert (workflow_dir / "company_operation_snapshot.json").exists()
@@ -866,7 +866,7 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
         "blocked",
         "failed",
     )
-    assert list(provider.calls[5].route_required_outputs["recursive_improvement_cycle_ready"]) == [
+    assert list(provider.calls[5].route_required_writes["recursive_improvement_cycle_ready"]) == [
         "package_recursive_improvement_cycle.recursive_improvement_cycle",
         "package_recursive_improvement_cycle.recursive_improvement_summary",
         "package_recursive_improvement_cycle.recursive_improvement_next_actions",

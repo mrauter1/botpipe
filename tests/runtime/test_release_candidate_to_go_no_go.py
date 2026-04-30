@@ -104,18 +104,18 @@ def test_release_go_no_go_package_compiles_with_explicit_control_contracts(monke
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["release_framed"]) == [
+    assert list(compiled.route("frame_release", "release_framed").required_writes) == [
         "frame_release.release_scope_brief",
         "frame_release.decision_criteria",
         "frame_release.evidence_intake_register",
     ]
-    assert frame_step.route_infos["release_framed"].handoff == (
+    assert compiled.route("frame_release", "release_framed").handoff == (
         "Locks the release framing so evidence assembly can proceed against a fixed gate."
     )
     assert frame_step.expected_output_schema is not None
 
     assessment_step = compiled.steps["assess_go_no_go"]
-    assert list(assessment_step.route_required_outputs["assessment_ready"]) == [
+    assert list(compiled.route("assess_go_no_go", "assessment_ready").required_writes) == [
         "assess_go_no_go.go_no_go_assessment",
         "assess_go_no_go.risk_register",
         "assess_go_no_go.decision_summary",
@@ -123,7 +123,7 @@ def test_release_go_no_go_package_compiles_with_explicit_control_contracts(monke
     assert assessment_step.expected_output_schema is not None
 
     package_step = compiled.steps["prepare_decision_package"]
-    assert list(package_step.route_required_outputs["decision_package_ready"]) == [
+    assert list(compiled.route("prepare_decision_package", "decision_package_ready").required_writes) == [
         "prepare_decision_package.release_decision_package",
         "prepare_decision_package.release_communications_draft",
     ]
@@ -680,7 +680,7 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
     decision_summary = json.loads((workflow_dir / "decision_summary.json").read_text(encoding="utf-8"))
     decision_receipt = json.loads((workflow_dir / "decision_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "release_scope_brief.md").exists()
     assert (workflow_dir / "decision_criteria.md").exists()
     assert (workflow_dir / "release_inventory.md").exists()
@@ -746,11 +746,11 @@ def test_release_go_no_go_package_runs_and_emits_terminal_receipt(tmp_path: Path
         "blocked",
         "failed",
     )
-    assert list(provider.calls[7].route_required_outputs["decision_package_ready"]) == [
+    assert list(provider.calls[7].route_required_writes["decision_package_ready"]) == [
         "prepare_decision_package.release_decision_package",
         "prepare_decision_package.release_communications_draft",
     ]
-    assert provider.calls[7].route_infos["decision_package_ready"].handoff == (
+    assert provider.calls[7].routes["decision_package_ready"].handoff == (
         "Advances the release workflow to deterministic publication of the terminal receipt."
     )
     assert (run_dir / "run.json").exists()

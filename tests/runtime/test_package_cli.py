@@ -127,8 +127,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import GLOBAL, SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -137,15 +136,8 @@ class {class_name}(Workflow):
     class State(BaseModel):
         ready: bool = False
 
-    bootstrap = SystemStep(name="bootstrap")
-    entry = bootstrap
-    transitions = {{
-        GLOBAL: {{}},
-        bootstrap: {{"ready": SUCCESS}},
-    }}
-
-    @staticmethod
-    def on_bootstrap(state: State, ctx):
+    @python_step(name="bootstrap", routes={{"ready": FINISH}})
+    def bootstrap(state: State, ctx):
         return state.model_copy(update={{"ready": True}}), Event("ready")
 """.strip()
     (package_dir / "workflow.py").write_text(workflow_source + "\n", encoding="utf-8")
@@ -155,7 +147,7 @@ class {class_name}(Workflow):
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
 """.strip()
         (package_dir / "params.py").write_text(source + "\n", encoding="utf-8")
@@ -163,8 +155,8 @@ class Parameters(BaseModel):
     init_lines = [f"from .workflow import {class_name}"]
     exports = [class_name]
     if export_parameters:
-        init_lines.append("from .params import Parameters")
-        exports.append("Parameters")
+        init_lines.append("from .params import Params")
+        exports.append("Params")
     init_lines.append(f"__all__ = {exports!r}")
     (package_dir / "__init__.py").write_text("\n".join(init_lines) + "\n", encoding="utf-8")
     return package_dir
@@ -178,8 +170,7 @@ import json
 
 from pydantic import BaseModel
 
-from core import GLOBAL, PAUSE, SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Event, FINISH, PAUSE, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -188,18 +179,8 @@ class {class_name}(Workflow):
     class State(BaseModel):
         answered: bool = False
 
-    ask = SystemStep(name="ask")
-    entry = ask
-    transitions = {{
-        GLOBAL: {{}},
-        ask: {{
-            "question": PAUSE,
-            "answered": SUCCESS,
-        }},
-    }}
-
-    @staticmethod
-    def on_ask(state: State, ctx):
+    @python_step(name="ask", routes={{"question": PAUSE, "answered": FINISH}})
+    def ask(state: State, ctx):
         payload = {{
             "answer": ctx.answer,
             "workflow_name": ctx.workflow_name,
@@ -251,7 +232,7 @@ def test_cli_workflows_show_reports_parameters_and_aliases(
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
     reviewers: list[str] = []
 """.strip(),
@@ -272,13 +253,12 @@ class Parameters(BaseModel):
     assert payload["workflow_class"] == "ReviewWorkflow"
     assert payload["state_model"].endswith("ReviewWorkflow.State")
     assert REMOVED_WORKFLOW_PY_FIELD not in payload
-    assert payload["transitions"] == {
+    assert payload["global_routes"] == {}
+    assert payload["routes"] == {
         "global": {},
         "steps": {
             "bootstrap": {
-                "ready": "SUCCESS",
-                "question": "PAUSE",
-                "blocked": "PAUSE",
+                "ready": "FINISH",
                 "failed": "FAIL",
             }
         },
@@ -299,7 +279,7 @@ def test_cli_workflows_show_uses_spec_paths_for_specs_and_contracts_support_file
         workflow_name="review",
         class_name="ReviewWorkflow",
     )
-    (package_dir / "specs.py").write_text("class Parameters:\n    pass\n", encoding="utf-8")
+    (package_dir / "specs.py").write_text("class Params:\n    pass\n", encoding="utf-8")
     (package_dir / "contracts.py").write_text("# support schema\n", encoding="utf-8")
 
     exit_code = cli.main(["workflows", "show", "review", "--root", str(tmp_path)])
@@ -430,7 +410,7 @@ class ReviewMode(str, Enum):
     strict = "strict"
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     output_dir: Path = Path("reports")
     requested_at: datetime = datetime.fromisoformat("{requested_at.isoformat()}")
     mode: ReviewMode = ReviewMode.strict
@@ -452,7 +432,7 @@ class Parameters(BaseModel):
         },
         {"default": "strict", "name": "mode", "repeated": False, "required": False, "type": "ReviewMode"},
     ]
-    assert show_payload["parameters_model"].endswith("Parameters")
+    assert show_payload["parameters_model"].endswith("Params")
 
     run_exit = cli.main(
         [
@@ -648,7 +628,7 @@ def test_cli_run_resume_answer_and_diagnostics_follow_package_contract(
 from pydantic import BaseModel
 
 
-class Parameters(BaseModel):
+class Params(BaseModel):
     mode: str = "strict"
     reviewers: list[str] = []
 """.strip(),
@@ -854,7 +834,7 @@ def test_cli_rejects_invalid_or_unsupported_workflow_params(
     captured = capsys.readouterr()
 
     assert exit_code == cli.EXIT_USAGE_ERROR
-    assert "does not declare Parameters" in captured.err
+    assert "does not declare Params" in captured.err
 
     _write_workflow_package(
         tmp_path,

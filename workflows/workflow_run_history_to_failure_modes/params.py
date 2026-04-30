@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from stdlib import SelectedWorkflowTaskFramingParameters, positive_int_fields
+from autoloop_v3.autoloop_optimizer import SelectedWorkflowTaskFramingParameters
+from stdlib import positive_int_fields
 
 from pydantic import Field, field_validator
 

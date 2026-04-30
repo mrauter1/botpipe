@@ -109,21 +109,21 @@ def test_candidate_workflow_to_adapted_execution_plan_package_compiles_with_expl
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["adaptation_request_framed"]) == [
+    assert list(compiled.route("frame_adaptation_request", "adaptation_request_framed").required_writes) == [
         "frame_adaptation_request.adaptation_request_brief",
         "frame_adaptation_request.adaptation_success_criteria",
     ]
     assert frame_step.expected_output_schema is not None
 
     analysis_step = compiled.steps["analyze_adaptation_surface"]
-    assert list(analysis_step.route_required_outputs["adaptation_surface_analyzed"]) == [
+    assert list(compiled.route("analyze_adaptation_surface", "adaptation_surface_analyzed").required_writes) == [
         "analyze_adaptation_surface.workflow_fit_assessment",
         "analyze_adaptation_surface.step_adaptation_matrix",
     ]
     assert analysis_step.expected_output_schema is not None
 
     package_step = compiled.steps["package_adapted_execution_plan"]
-    assert list(package_step.route_required_outputs["adapted_execution_plan_ready"]) == [
+    assert list(compiled.route("package_adapted_execution_plan", "adapted_execution_plan_ready").required_writes) == [
         "package_adapted_execution_plan.adapted_execution_plan",
         "package_adapted_execution_plan.proposed_workflow_parameters",
         "package_adapted_execution_plan.adapted_execution_summary",
@@ -691,7 +691,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
     validated_parameters = json.loads((workflow_dir / "validated_workflow_parameters.json").read_text(encoding="utf-8"))
     adapted_receipt = json.loads((workflow_dir / "adapted_execution_plan_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "selected_workflow_capability.json").exists()
     assert (workflow_dir / "adaptation_request_brief.md").exists()
     assert (workflow_dir / "adaptation_success_criteria.md").exists()
@@ -825,7 +825,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
         "package_adapted_execution_plan",
         "package_adapted_execution_plan",
     ]
-    assert list(provider.calls[1].route_required_outputs["adaptation_request_framed"]) == [
+    assert list(provider.calls[1].route_required_writes["adaptation_request_framed"]) == [
         "frame_adaptation_request.adaptation_request_brief",
         "frame_adaptation_request.adaptation_success_criteria",
     ]
@@ -837,7 +837,7 @@ def test_candidate_workflow_to_adapted_execution_plan_package_runs_and_publishes
         "blocked",
         "failed",
     )
-    assert list(provider.calls[5].route_required_outputs["adapted_execution_plan_ready"]) == [
+    assert list(provider.calls[5].route_required_writes["adapted_execution_plan_ready"]) == [
         "package_adapted_execution_plan.adapted_execution_plan",
         "package_adapted_execution_plan.proposed_workflow_parameters",
         "package_adapted_execution_plan.adapted_execution_summary",
