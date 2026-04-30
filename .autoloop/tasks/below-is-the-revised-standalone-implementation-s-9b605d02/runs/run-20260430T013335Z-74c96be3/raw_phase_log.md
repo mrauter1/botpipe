@@ -340,3 +340,100 @@ Fix the bridge so `autoloop_v3.core.*` and `core.*` share module identity, then 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddc0e-4191-79a0-9706-c405a993eba8
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+The reviewer’s alias finding is the real bug, so I’m fixing that first by restoring shared module identity between `core.*` and `autoloop_v3.core.*`. I’m also backing out the out-of-phase `_compat` rewiring in active suites so the compatibility boundary stays limited to explicit compatibility coverage.
+
+The bridge fix is in place. I’m validating the module-identity behavior directly and re-running the exact regression the reviewer cited, plus the phase surface tests, before I touch the notes.
+
+The full revert for those active suites isn’t viable because it would immediately break their imports after the surface pruning. I’m switching them to explicit legacy-bearing submodules instead of `_compat`, which keeps this phase focused on top-level surface pruning without broadening the active compatibility boundary.
+
+The reviewer findings are addressed in code: module identity is shared again, and `_compat` is back to compatibility-only coverage. I’m updating the phase notes to reflect that narrowed boundary and the extra validation, then I’ll close out with the phase summary.
+
+Scope considered
+
+Phase-local fixes for the reviewer’s two blockers: the `autoloop_v3.core` bridge, the compatibility boundary around `core._compat`, and the touched surface/compatibility tests and notes.
+
+What I analyzed
+
+I traced the reviewer’s runtime regression through `autoloop_v3.core.validation` versus `core.validation` and confirmed the bridge had split `core.*` and `autoloop_v3.core.*` into duplicate module graphs. I also checked where `_compat` was being used outside explicit compatibility coverage and re-read the run decisions before changing the test imports again.
+
+What I changed
+
+I restored shared module identity by reintroducing the `core`/`autoloop_v3.core` aliasing path in [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py:1) and simplified [autoloop_v3/core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_v3/core/__init__.py:1) so the explicit bridge resolves to the canonical `core` module instead of creating a parallel package tree.
+
+I removed `_compat` from the active suites I had touched and switched them to explicit legacy-bearing submodules instead: [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py:1) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:1). I kept `_compat` limited to explicit compatibility coverage in [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py:1) and [tests/fixtures/toy_runtime_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/fixtures/toy_runtime_workflow.py:1). I also updated the phase implementation notes and appended the new turn decisions.
+
+Key findings / decisions
+
+The explicit bridge can stay, but it must preserve shared `core.*` / `autoloop_v3.core.*` identities; otherwise workflow discovery and validation break on `Step` / `WorkflowMeta` identity checks.
+
+`core._compat` is now back to compatibility-only usage. Active suites touched in this phase are only decoupled from removed top-level `core` exports; their later semantic migration off legacy names remains deferred.
+
+Open issues / next step
+
+Phase-local verification now passes for the cited regression and surface checks:
+`./.venv/bin/pytest tests/runtime/test_compatibility_runtime.py::test_resolve_workflow_reference_preserves_same_root_workflow_class_identity -q`
+`./.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py::test_public_authoring_surfaces_export_requested_runtime_primitives -q`
+`./.venv/bin/pytest tests/unit/test_validation.py --collect-only -q`
+`./.venv/bin/pytest tests/contract/test_engine_contracts.py --collect-only -q`
+
+The broader semantic migration of active legacy-heavy suites is still later-phase work, not part of this surface-pruning slice.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc0e-4191-79a0-9706-c405a993eba8
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+I’m reviewing the second implementation pass against the two blocker findings and the phase acceptance criteria. First I’m re-reading the updated feedback, notes, and the bridge/import changes, then I’ll rerun the cited checks before updating the review artifacts.
+
+The reviewer blockers look addressed from the notes, but I’m verifying the actual surfaces and the bridge behavior directly before I mark criteria complete. I’m checking the import surfaces, the shared-module identity, and the cited regression test.
+
+The surface checks passed and the bridge now preserves shared module identity. I’m updating the review artifacts to mark the phase complete and recording that the prior blockers were resolved in this pass.
+
+Scope considered
+
+Phase-local re-review of the canonical-surface-pruning slice: `autoloop.simple`, top-level `core`, the `autoloop_v3.core` bridge, touched tests/helpers, and the active review artifacts.
+
+What I analyzed
+
+I re-read the updated implementation notes, prior blocker findings, and run decisions. I inspected the bridge/import changes, verified the `core` and `autoloop_v3.core` module identities directly, checked that removed public symbols stay absent from `autoloop.simple` and top-level `core`, and confirmed `_compat` is no longer used in active suites outside explicit compatibility coverage.
+
+What I reviewed
+
+I updated the review artifacts to mark all criteria complete and appended a cycle-2 resolution note to the feedback artifact. I also reran the relevant checks:
+`./.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_primitives_and_stores.py::test_public_authoring_surfaces_export_requested_runtime_primitives tests/runtime/test_compatibility_runtime.py::test_resolve_workflow_reference_preserves_same_root_workflow_class_identity -q`
+
+Key findings / decisions
+
+The prior bridge regression is fixed: `autoloop_v3.core` now shares module identity with `core`, including submodules, so workflow discovery and validation no longer split on `Step` / `WorkflowMeta` identity.
+
+The prior compatibility-boundary issue is also fixed for this phase: active suites touched here now use explicit legacy-bearing submodules rather than `_compat`, and `_compat` remains confined to explicit compatibility coverage.
+
+Open issues / next step
+
+No remaining phase-local review findings. The broader semantic migration of legacy-heavy active suites is still later-phase work, but it is no longer a blocker for this public/top-level surface-pruning slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
