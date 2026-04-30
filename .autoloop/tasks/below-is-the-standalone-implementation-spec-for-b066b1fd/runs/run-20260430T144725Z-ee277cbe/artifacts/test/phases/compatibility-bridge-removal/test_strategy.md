@@ -29,7 +29,7 @@
 ## Edge And Failure Paths
 
 - Failure-path coverage is static and deterministic: forbidden import scans fail on exact import statements rather than raw token mentions.
-- Strictness self-file is excluded from the maintained-source scan so the intentional failed-import assertion does not create a false positive.
+- The maintained-source scan now walks the full `tests/` tree, including top-level files like `tests/conftest.py`, while still excluding `tests/strictness/test_no_compat.py` so the intentional failed-import assertion does not create a false positive.
 
 ## Known Gaps
 
