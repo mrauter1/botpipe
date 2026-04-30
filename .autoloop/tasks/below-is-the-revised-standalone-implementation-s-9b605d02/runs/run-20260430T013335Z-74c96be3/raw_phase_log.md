@@ -437,3 +437,103 @@ No remaining phase-local review findings. The broader semantic migration of lega
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddc0e-4191-79a0-9706-c405a993eba8
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+I’m treating this as phase-local test hardening for the surface-pruning slice. First I’m reading the test-phase artifacts and the current surface tests so I can add only the missing regression coverage around the explicit bridge and compatibility boundary.
+
+I’ve got enough context to add focused regression coverage instead of broad churn. I’m adding one test for the bridged module-identity invariant and one test to enforce that `_compat` stays confined to explicit compatibility coverage, then I’ll update the phase test artifacts.
+
+I’m editing the surface regression suite now. The additions are narrow: one bridge-identity test and one quarantine-boundary test that would fail if `_compat` leaks back into active maintained files.
+
+The new regression tests are in. I’m running the focused surface suite now to verify the bridge-identity and `_compat` quarantine checks behave deterministically before I wrap up the test-phase artifacts.
+
+The first pass exposed two test issues, not product issues: I over-asserted `_compat` bridge identity, and the quarantine test matched its own source because I used the literal token in the test file. I’m tightening those tests now and rerunning the suite.
+
+Scope considered
+
+Phase-local test coverage for the canonical-surface-pruning slice: the surface regression suite, the compatibility-runtime fixture boundary, and the required test-phase artifacts.
+
+What I analyzed
+
+I read the phase test artifacts and run decisions, then reviewed the current surface tests and compatibility-runtime coverage. I focused on the two invariants that changed most recently: shared `core` / `autoloop_v3.core` module identity and `_compat` confinement to explicit compatibility coverage.
+
+What I changed
+
+I added two focused regression tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1):
+
+- a bridge-identity test that asserts `core`, `autoloop_v3.core`, and key submodules share module/class identity
+- a quarantine test that scans maintained active roots and fails if `_compat` imports leak outside the explicit compatibility files
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/canonical-surface-pruning/test_strategy.md) with the behavior-to-coverage map and appended a concise note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/canonical-surface-pruning/feedback.md).
+
+Key findings / decisions
+
+The useful regression to pin here is not `_compat` submodule identity itself; it is the shared identity of the canonical `core` bridge and its validation/steps submodules. I tightened the tests accordingly.
+
+The `_compat` quarantine test uses dynamically assembled token strings so it does not self-match its own source while still catching real leakage.
+
+Open issues / next step
+
+Validation passed:
+`./.venv/bin/pytest tests/unit/test_simple_surface.py -q`
+
+The broader semantic migration of legacy-heavy active suites remains later-phase work and is intentionally recorded as a known gap in the phase test strategy.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddc0e-4191-79a0-9706-c405a993eba8
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc0e-4191-79a0-9706-c405a993eba8
+---
+I’m auditing the phase-local test additions against the surface-pruning contract. First I’m reading the updated strategy and feedback, then I’ll inspect the new tests and rerun the focused suite they claim to cover before I update the audit artifacts.
+
+Reviewing the phase test artifacts against the actual regression tests now. I’m re-running the focused surface suite and then I’ll update the audit criteria and feedback based on that result.
+
+The focused suite passed, so I’m checking the audit artifacts against the strategy and run decisions now. I’m looking for any gap between the claimed coverage map and what the tests actually enforce before I mark the phase complete.
+
+The tests line up with the strategy and the run-local decisions: the bridge identity and `_compat` quarantine are both enforced, and the suite is deterministic. I’m updating the audit artifacts now with a no-findings completion result.
+
+The audit artifacts are updated. I’m doing one quick readback to ensure the criteria are fully checked and the feedback note is consistent with a `COMPLETE` result.
+
+Scope considered
+
+Phase-local audit of the canonical-surface-pruning test additions: the updated surface regression suite, the phase test strategy, and the audit artifacts for this phase only.
+
+What I analyzed
+
+I reviewed the run decisions, the phase test strategy, and the new assertions in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:1). I also re-ran `./.venv/bin/pytest tests/unit/test_simple_surface.py -q`, which passed with `19 passed`.
+
+What I reviewed
+
+The added tests cover the phase-critical invariants: removed public-surface imports, legacy keyword failure paths, shared `core` / `autoloop_v3.core` module identity, and `_compat` quarantine outside explicit compatibility fixtures. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/canonical-surface-pruning/criteria.md) to mark all audit criteria complete and appended the no-findings audit result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/canonical-surface-pruning/feedback.md).
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings. The tests are deterministic, align with the phase scope, and enforce the run-local bridge and compatibility-boundary decisions without normalizing an unconfirmed regression.
+
+Open issues / next step
+
+No phase-local audit issues remain. Later-phase semantic migration of broader legacy-heavy suites is still out of scope for this test audit slice.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
