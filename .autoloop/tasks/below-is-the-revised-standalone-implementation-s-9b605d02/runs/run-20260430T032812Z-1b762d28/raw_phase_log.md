@@ -518,3 +518,110 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+---
+I’m starting with the phase artifacts and a repo scan for remaining active `produces` usage so I can separate maintained code/tests from persisted-compatibility readers before editing.
+
+The active tree scan shows the remaining banned vocabulary is now concentrated in strictness patterns plus maintained tests/fixtures; next I’m reading those targets and the current alias bridge before patching.
+
+I have enough context to patch. The edits are focused on maintained tests plus the strictness exclusions, and I’ll re-scan before running the targeted suite so compatibility coverage stays limited to persisted-reader inputs.
+
+The first focused scan found no live `produces` patterns outside the strictness test itself, so I’m doing one broader pass to confirm whether the remaining work is just tightening exclusions and documenting the compatibility boundary.
+
+I’m tightening the strictness file rather than broadening scope: there are no remaining live constructor aliases in maintained tests, but the scan still has a leftover blanket exclusion that should be removed.
+
+I’m editing the strictness guard now. The change is small but important: remove the leftover blanket carve-out for `core/_compat.py` and make the compatibility-fixture exclusion surface explicit and currently empty.
+
+The code change is in place. I’m re-scanning the maintained targets and then running the full targeted verification set from the phase contract, not just the strictness file, to catch any alias or import regressions.
+
+The maintained-tree scan is clean outside the strictness test. Verification hit an environment issue instead of a test failure: `pytest` is not on `PATH`, so I’m checking the repo’s Python entrypoint and rerunning through that.
+
+The repo has a local virtualenv. I’m rerunning the targeted suite with `.venv/bin/python -m pytest`, which is the actual test entrypoint available in this workspace.
+
+The targeted suite is running clean so far through validation, engine contracts, and into compatibility runtime. I’m waiting on the remaining runtime/static-graph/provider/strictness cases before I write the phase notes.
+
+Verification passed across the full canonical target set: `259 passed`. I’m updating the phase notes and decisions ledger now with the narrowed strictness boundary and the verification result, then I’ll close out with a concise scope summary.
+
+I’m only recording one implementation decision for this phase: the repo scan showed the authoring/runtime cleanup had already landed, so the remaining substantive fix was to remove the unnecessary strictness carve-out and keep the compatibility exclusion list empty by default.
+
+Scope considered
+
+Phase-local scope for `migrate-tests-and-lock-strictness`: maintained tests/fixtures, strictness enforcement, and acceptance verification for the remaining `produces` cleanup. I also re-checked the alias-shim acceptance point and confirmed `core/__init__.py` was already free of the redundant dynamic mirroring, so no phase edit was needed there.
+
+What I analyzed
+
+I scanned maintained code and tests for active `produces` vocabulary outside the strictness test, reviewed [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:18), and re-checked the targeted suites called out in the phase contract. The maintained authoring/runtime tests named in scope were already canonicalized; the only remaining substantive issue was that strictness still had a leftover carve-out for `core/_compat.py`.
+
+What I changed
+
+I tightened [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:48) so the scan now:
+- excludes only the strictness file itself by default,
+- keeps persisted-compatibility fixture exclusions explicit and currently empty,
+- asserts `core/_compat.py` is part of the maintained scan surface.
+
+I also updated the phase notes at [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/implement/phases/migrate-tests-and-lock-strictness/implementation_notes.md:1) and appended the non-obvious decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/decisions.txt:13).
+
+Key findings / decisions
+
+The maintained-tree scan is clean for banned active patterns outside the strictness test. The scoped validation/contract/runtime/provider/strictness suite passed with `.venv/bin/python -m pytest ...`: `259 passed in 2.52s`.
+
+Open issues / next step
+
+No open implementation issues in this phase. The remaining next step is whatever downstream loop orchestration wants to do with the now-passing phase artifacts.
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc8a-bbfb-77e1-b8e6-2aafe49107b4
+---
+I’m reviewing the phase artifacts and the strictness change against the acceptance criteria, then I’ll update the reviewer-owned criteria and feedback files only.
+
+I’ve confirmed the intended strictness narrowing in the changed file. I’m re-running the maintained-tree scan and the targeted pytest set independently so the review does not rely only on the implementation notes.
+
+The independent scan is clean outside the strictness file, and the targeted suite is nearly complete. I’m waiting on the last runtime/provider/strictness cases before I update the reviewer artifacts.
+
+The review came back clean: no blocking or non-blocking issues surfaced from the independent scan or the targeted verification run. I’m marking the criteria complete and recording the no-findings review result in the feedback artifact.
+
+Scope considered
+
+Phase-local review of `migrate-tests-and-lock-strictness`, focused on the changed strictness guard, the maintained-tree banned-vocabulary surface, the authoritative implementation notes, and the required targeted verification suite.
+
+What I analyzed
+
+I reviewed [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py:18), the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/implement/phases/migrate-tests-and-lock-strictness/implementation_notes.md:1), and the run [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/decisions.txt:1). I also independently re-ran the maintained-tree `produces` scan and the full targeted pytest set from the phase contract.
+
+What I reviewed
+
+I checked that the strictness exclusions are now narrow and explicit, that `core/_compat.py` is back inside the maintained scan surface, and that no active maintained tests or fixtures still author workflows with `produces`, `review_produces`, or `do_produces`. I updated the reviewer-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/implement/phases/migrate-tests-and-lock-strictness/criteria.md:1) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/implement/phases/migrate-tests-and-lock-strictness/feedback.md:1).
+
+Key findings / decisions
+
+No blocking or non-blocking findings. The maintained-tree banned-vocabulary scan was clean outside the strictness file itself, and `.venv/bin/python -m pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_provider_backends.py tests/strictness/test_no_compat.py` passed with `259 passed`.
+
+Open issues / next step
+
+No open review issues for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
