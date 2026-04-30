@@ -895,3 +895,103 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+I’m implementing the strictness-and-suite-migration phase. First I’m reading the phase artifacts and the current canonical/legacy surfaces to identify the remaining active suites and strictness checks that still reference the old vocabulary.
+
+The remaining surface is concentrated in active tests and the strictness gate. I’m narrowing that to the specific suites and strictness file before editing so I can keep the blast radius limited to this phase.
+
+I’ve confirmed the strictness gate already scans the right directories, but the active suites still carry the old low-level vocabulary directly. Next I’m checking whether those suites are better migrated in place or split into explicit compatibility coverage.
+
+I’m checking how far the canonical simple API can replace the old step classes directly. If it can express most of the same workflows, I can migrate the active suites without weakening coverage or hiding the legacy tokens behind aliases.
+
+The strictness test currently includes `core/` and `runtime/`, which means I also need to verify whether the maintained implementation itself still embeds the banned tokens. If those names are still in active modules, just updating the tests won’t be enough.
+
+The strictness gate would still fail on active implementation, not just on tests. I’m switching from test-only cleanup to the remaining internal canonicalization: the legacy step class names are still hard-coded through `core/steps.py`, `core/compiler.py`, `core/validation.py`, and `core/engine.py`.
+
+I’m editing the internal step/descriptors layer now. The change is a structural rename: move the active implementation and active suites onto canonical/internal class names, then tighten the strictness gate to ban the removed legacy names everywhere except explicit compatibility fixtures.
+
+The bulk rename landed cleanly in the implementation files and the two large suites. I’m doing the follow-up pass now: remove the leftover compatibility exports, then fix the strictness tests and the surface/documentation assertions that still mention the removed names as literals.
+
+I’m finishing the manual cleanup now: emptying the internal compat module, updating the surface assertions to reference removed names without reintroducing them into the scan, and removing the last banned literals from docs and tests.
+
+The source scan is clean now outside the explicit strictness fixture itself. I’m doing a syntax-only verification next, since this environment still lacks `pydantic` and `pytest`, and then I’ll record the phase notes and decisions.
+
+I’ve reached the end-state for this phase in the current environment. The last step is bookkeeping: recording the non-obvious decisions and the exact validation constraints so later turns don’t silently drift back toward the removed names.
+
+Scope considered
+
+Active strictness-and-suite-migration scope: `core/`, `docs/`, active contract/unit/runtime suites, explicit compatibility fixtures, and the phase bookkeeping files.
+
+What I analyzed
+
+I checked the phase artifacts and scanned the maintained tree for the banned legacy names. That showed the remaining failures were not just in tests: `core/steps.py`, `core/compiler.py`, `core/validation.py`, `core/engine.py`, and `core/descriptors.py` still embedded `LLMStep`/`PairStep`/`SystemStep`/`WorkflowStep`/`AfterHookResult`/`Param`/`StateVar`, and the active suites and docs still mentioned them too.
+
+What I changed
+
+I renamed the active internal low-level layer onto non-legacy internal names across implementation and maintained suites: `PromptStep`, `ProduceVerifyStep`, `PythonStep`, `ChildWorkflowStep`, `AfterStepResult`, `ParameterField`, and `StateField`. I also emptied [core/_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/_compat.py), updated [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) to ban the removed step/descriptors names across the maintained tree, migrated [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py), and [tests/fixtures/toy_runtime_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/fixtures/toy_runtime_workflow.py), and removed the last doc/test literals in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md), [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+
+Key findings / decisions
+
+No current persisted-run/session/checkpoint reader in this checkout needs live low-level authoring aliases, so `core._compat` was reduced to an empty explicit compat module instead of keeping renamed aliases there. I kept the `core`/`autoloop_v3.core` bridge in place, because that was already documented as required for shared module identity.
+
+Open issues / next step
+
+Syntax verification passed with `python3 -m py_compile`, and the maintained-tree grep only leaves banned names inside the strictness fixture itself. I could not run `pytest` or import the runtime normally because this environment does not have `pydantic` or `pytest` installed.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+I’m reviewing the implementation against the phase contract and the run decisions. First I’m reading the phase criteria and then checking the changed implementation for regressions against the canonical-surface and strictness requirements.
+
+The remaining question is whether the strictness boundary is still slightly too broad. I’m checking the excluded fixture paths now to see if any are no longer compatibility-only and should have been brought back under the active scan.
+
+I found two material gaps: the strictness exclusion set is still broader than the phase contract allows, and the required canonical/compat regression suites were not actually run. I’m recording those now in the reviewer artifact and leaving the phase incomplete.
+
+Scope considered
+
+Active phase review scope: strictness scan changes, renamed internal `core` step/descriptors layer, active contract/unit/runtime suites, compatibility exclusions, and the phase validation artifacts.
+
+What I analyzed
+
+I read the phase criteria, feedback, implementation notes, and the run decisions, then scanned the maintained tree for banned legacy tokens and checked the current exclusion set in `tests/strictness/test_no_compat.py`. I also inspected the renamed fixture and the recorded validation evidence.
+
+What I reviewed
+
+The implementation successfully removes the banned legacy names from the maintained source/test tree outside the strictness fixture itself, and the active suites were migrated to `FINISH`/`required_writes`. The two remaining problems are that `tests/fixtures/toy_runtime_workflow.py` is still excluded even though it is no longer an explicit compatibility-only fixture, and the required canonical/compat regression suites were not actually run.
+
+Key findings / decisions
+
+I recorded two blocking findings in the phase feedback artifact:
+- `IMP-001`: the strictness exclusion set is still broader than AC-1 allows because it still excludes `tests/fixtures/toy_runtime_workflow.py`.
+- `IMP-002`: AC-3 remains unmet because only `py_compile` was run; no canonical verification suite or targeted compatibility regression suite was executed.
+
+Open issues / next step
+
+Criteria remain unchecked because the phase is not ready to complete. The next step is to tighten the strictness exclusions to only the explicit compatibility boundary and then run the required verification suites in an environment with `pydantic` and `pytest` available.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
