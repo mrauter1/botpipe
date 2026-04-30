@@ -104,7 +104,7 @@ def test_security_remediation_package_compiles_with_explicit_control_contracts(m
         "blocked",
         "failed",
     )
-    assert list(assess_step.route_required_outputs["finding_assessed"]) == [
+    assert list(compiled.routes["assess_security_finding"]["finding_assessed"].required_writes) == [
         "assess_security_finding.exploit_summary",
         "assess_security_finding.affected_surface",
         "assess_security_finding.root_cause_analysis",
@@ -114,7 +114,7 @@ def test_security_remediation_package_compiles_with_explicit_control_contracts(m
     assert assess_step.expected_output_schema is not None
 
     remediation_step = compiled.steps["plan_verified_remediation"]
-    assert list(remediation_step.route_required_outputs["remediation_planned"]) == [
+    assert list(compiled.routes["plan_verified_remediation"]["remediation_planned"].required_writes) == [
         "plan_verified_remediation.selected_remediation_plan",
         "plan_verified_remediation.verification_plan",
         "plan_verified_remediation.rollout_plan",
@@ -124,7 +124,7 @@ def test_security_remediation_package_compiles_with_explicit_control_contracts(m
     assert remediation_step.expected_output_schema is not None
 
     closure_step = compiled.steps["prepare_closure_package"]
-    assert list(closure_step.route_required_outputs["closure_package_ready"]) == [
+    assert list(compiled.routes["prepare_closure_package"]["closure_package_ready"].required_writes) == [
         "prepare_closure_package.security_remediation_package",
         "prepare_closure_package.stakeholder_communication_draft",
         "prepare_closure_package.closure_evidence_requirements",
@@ -559,14 +559,14 @@ def test_security_remediation_package_runs_and_emits_terminal_receipt(tmp_path: 
         "prepare_closure_package",
         "prepare_closure_package",
     ]
-    assert list(provider.calls[5].route_required_outputs["finding_assessed"]) == [
+    assert list(provider.calls[5].route_required_writes["finding_assessed"]) == [
         "assess_security_finding.exploit_summary",
         "assess_security_finding.affected_surface",
         "assess_security_finding.root_cause_analysis",
         "assess_security_finding.remediation_options",
         "assess_security_finding.assessment_summary",
     ]
-    assert list(provider.calls[9].route_required_outputs["closure_package_ready"]) == [
+    assert list(provider.calls[9].route_required_writes["closure_package_ready"]) == [
         "prepare_closure_package.security_remediation_package",
         "prepare_closure_package.stakeholder_communication_draft",
         "prepare_closure_package.closure_evidence_requirements",
@@ -762,7 +762,7 @@ def test_security_remediation_compose_step_blocks_not_ready_child_and_keeps_depl
     child_result = ChildWorkflowResult(
         workflow_name="investigation_request_to_evidence_pack",
         run_id="child-run-1",
-        terminal="SUCCESS",
+        terminal="FINISH",
         status="success",
         last_event=Event("evidence_pack_published"),
         output_metadata={},

@@ -27,6 +27,9 @@
 - `workflows/*/__init__.py`
 - selected `workflows/*/workflow.py`
 - selected `tests/runtime/*.py`
+- `tests/runtime/test_workflow_reference_resolution.py`
+- `tests/runtime/test_investigation_request_to_evidence_pack.py`
+- `tests/runtime/test_security_finding_to_verified_remediation.py`
 - `tests/unit/test_stdlib_and_extensions.py`
 - `docs/authoring.md`
 - `docs/architecture.md`
@@ -43,13 +46,15 @@
 - provider artifact lookup normalization for raw artifact references
 - CLI package execution reference preservation
 - `capture_decomposition_context` blocked-route contract
+- simple-workflow fixture `Params` opt-in/opt-out for loader fallback resolution
+- canonical runtime assertions via `compiled.routes[*]` and provider `route_required_writes`
 
 ## Checklist Mapping
 
 - Public/test/doc consumer rename to `Params`, `writes`, `required_writes`: advanced; updated runtime/package/unit consumer assertions and authoring docs in this phase slice
 - Workflow package import/fallback cleanup: advanced; package CLI/runtime flows now preserve package `Params` across execution
 - Optimizer-vs-stdlib separation: advanced; shared parameter bundles moved to `autoloop_optimizer.parameters`, stdlib re-exports removed, consumer docs/tests/workflows retargeted
-- Reduced stdlib surface and consumer migration to `autoloop_optimizer`: advanced; remaining legacy compatibility tests outside this slice still need follow-up cleanup
+- Reduced stdlib surface and consumer migration to `autoloop_optimizer`: advanced; additional active runtime/unit consumer files still need follow-up cleanup before AC-1 can close
 
 ## Preserved Invariants
 
@@ -65,10 +70,13 @@
 - Workflow-package/docs/test consumers are being migrated off optimizer helpers re-exported from `stdlib`.
 - CLI `run` keeps manifest-package `Params` available during execution by passing the original workflow reference through the runner.
 - `workflow_package_to_composable_building_blocks.capture_decomposition_context` can legally route `blocked -> PAUSE`.
+- Active temp workflow fixtures in the touched runtime/unit slice now author with canonical `autoloop` imports plus `step(...)`, `produce_verify_step(...)`, and `python_step(...)` instead of strict `core` aliases.
+- Active runtime workflow-package assertions in the touched slice now read route metadata from `compiled.routes[...]` and provider `route_required_writes`.
 
 ## Known Non-Changes
 
 - Low-level compatibility/internal tests still contain substantial legacy terminology and were not fully migrated in this turn.
+- Additional active runtime/unit files still contain banned consumer names outside the touched slice, notably `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_optional_extensions.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/runtime/test_workflow_package_to_composable_building_blocks.py`, `tests/runtime/test_runtime_git_tracking.py`, and selected success-status fixtures in other workflow-package runtime tests.
 - Internal strict-step scaffolding (`LLMStep`, `PairStep`, `SystemStep`, `RouteInfo`) was not removed in this phase.
 - Capability snapshot step payloads still use the existing `has_expected_output_schema` / `typed_output_schema` JSON field names for out-of-phase consumers.
 
@@ -82,9 +90,16 @@
   - 10 passed, 85 deselected
 - `./.venv/bin/python -m pytest tests/runtime/test_workflow_builder_package.py tests/runtime/test_task_to_candidate_workflow_set.py tests/runtime/test_task_to_workflow_strategy.py tests/runtime/test_workflow_to_eval_suite.py tests/runtime/test_workflow_portfolio_to_operating_system.py tests/runtime/test_workflow_run_history_to_failure_modes.py tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_workflow_and_eval_to_refined_workflow_package.py tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_package_cli.py -q`
   - 294 passed; warnings only from existing Pydantic `schema` field-name collisions in optimization workflow contracts
+- `./.venv/bin/python -m pytest tests/runtime/test_workflow_reference_resolution.py -q`
+  - 11 passed
+- `./.venv/bin/python -m pytest tests/unit/test_stdlib_and_extensions.py -k 'control_helpers_merge_routes_and_build_outcome_passthrough or prompt_bundle_and_pair_step_compile_to_plain_prompt_and_step_objects or adaptation_helpers_accept_single_file_workflow_references or portfolio_helpers_keep_catalog_snapshot_lightweight_and_capability_snapshot_rich or core_selected_workflow_payload_builders_preserve_authoring_and_decomposition_contract_shapes' -q`
+  - 5 passed, 90 deselected
+- `./.venv/bin/python -m pytest tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py -k 'compiles_with_explicit_control_contracts or helper_seam or published_outputs_include_invocation_contract_and_receipt' -q`
+  - 3 passed, 32 deselected
 
 ## Deduplication / Centralization
 
 - Optimizer/application helpers were moved toward `autoloop_optimizer` as the single canonical home.
 - Topology/static-graph JSON object normalization was centralized in compiler/static-graph helpers instead of repeated callsite workarounds.
 - Package-level `Params` handling now centralizes on the original workflow reference path instead of duplicating class-only parameter discovery during CLI execution.
+- Temp simple-workflow fixtures now centralize loader intent by explicitly setting `Params` to the imported model or to `None`, instead of relying on inherited `EmptyParams`.

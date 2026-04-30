@@ -102,12 +102,12 @@ def test_investigation_evidence_pack_package_compiles_with_explicit_control_cont
         "blocked",
         "failed",
     )
-    assert list(frame_step.route_required_outputs["investigation_framed"]) == [
+    assert list(compiled.routes["frame_investigation"]["investigation_framed"].required_writes) == [
         "frame_investigation.investigation_scope_brief",
         "frame_investigation.investigation_objectives",
         "frame_investigation.evidence_intake_register",
     ]
-    assert frame_step.route_infos["investigation_framed"].handoff == (
+    assert compiled.routes["frame_investigation"]["investigation_framed"].handoff == (
         "Locks the investigation framing so evidence assembly can proceed against a fixed boundary."
     )
     assert frame_step.expected_output_schema is not None
@@ -121,7 +121,7 @@ def test_investigation_evidence_pack_package_compiles_with_explicit_control_cont
         "blocked",
         "failed",
     )
-    assert list(evidence_step.route_required_outputs["evidence_pack_ready"]) == [
+    assert list(compiled.routes["assemble_evidence_pack"]["evidence_pack_ready"].required_writes) == [
         "assemble_evidence_pack.evidence_source_inventory",
         "assemble_evidence_pack.evidence_coverage_matrix",
         "assemble_evidence_pack.evidence_findings",
@@ -413,7 +413,7 @@ def test_investigation_evidence_pack_package_runs_and_emits_terminal_receipt(tmp
     evidence_pack_summary = json.loads((workflow_dir / "evidence_pack_summary.json").read_text(encoding="utf-8"))
     evidence_pack_receipt = json.loads((workflow_dir / "evidence_pack_receipt.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert (workflow_dir / "investigation_scope_brief.md").exists()
     assert (workflow_dir / "investigation_objectives.md").exists()
     assert (workflow_dir / "evidence_source_inventory.md").exists()
@@ -532,7 +532,7 @@ def test_investigation_evidence_pack_package_can_be_composed_through_helper_seam
         if line
     ]
 
-    assert result.terminal == "SUCCESS"
+    assert result.terminal == "FINISH"
     assert parent_payload["child_workflow"] == "investigation_request_to_evidence_pack"
     assert parent_payload["child_status"] == "success"
     assert parent_payload["child_last_event"] == "evidence_pack_published"
@@ -1086,8 +1086,7 @@ import json
 from pydantic import BaseModel
 
 from autoloop_v3.stdlib import adopt_child_artifacts, run_child_workflow
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class ParentInvestigationComposer(Workflow):
@@ -1096,12 +1095,8 @@ class ParentInvestigationComposer(Workflow):
     class State(BaseModel):
         finished: bool = False
 
-    launch = SystemStep(name="launch")
-    entry = launch
-    transitions = {launch: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_launch(state: State, ctx):
+    @python_step(name="launch")
+    def launch(ctx):
         child = run_child_workflow(
             ctx,
             "investigation_request_to_evidence_pack",
@@ -1143,7 +1138,7 @@ class ParentInvestigationComposer(Workflow):
             json.dumps(payload, indent=2, sort_keys=True) + "\\n",
             encoding="utf-8",
         )
-        return state.model_copy(update={"finished": True}), Event("done")
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",

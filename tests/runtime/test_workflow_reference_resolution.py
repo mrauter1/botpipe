@@ -45,21 +45,17 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import Artifact, LLMStep, SUCCESS, Workflow
+from autoloop import Prompt, Raw, Workflow, step
 
 
 class ReleaseReview(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    context_dump = Artifact("{run_folder}/context.json")
-    ask = LLMStep(name="ask", producer="prompts/ask.md", produces={"context_dump": context_dump})
-    entry = ask
-    transitions = {ask: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_ask(state: State, outcome, artifacts):
-        return state.model_copy(update={"note": outcome.payload.get("note", "")})
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        writes=[Raw("context_dump", path="{run_folder}/context.json")],
+    )
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -144,25 +140,22 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import Artifact, LLMStep, SUCCESS, Workflow
+from autoloop import Prompt, Raw, Workflow, step
 
 from .specs import Params
 
 
 class ReleaseReview(Workflow):
     name = "release_review"
+    Params = Params
 
     class State(BaseModel):
         mode: str = ""
 
-    context_dump = Artifact("{run_folder}/context.json")
-    ask = LLMStep(name="ask", producer="prompts/ask.md", produces={"context_dump": context_dump})
-    entry = ask
-    transitions = {ask: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_ask(state: State, outcome, artifacts):
-        return state.model_copy(update={"mode": outcome.payload.get("mode", "")})
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        writes=[Raw("context_dump", path="{run_folder}/context.json")],
+    )
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -224,25 +217,15 @@ def test_bare_workflow_names_are_not_shadowed_by_unrelated_repo_paths(tmp_path: 
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class DemoWorkflow(Workflow):
     name = "demo"
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -323,26 +306,18 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
+from .specs import Params
 
 
 class ModuleReviewWorkflow(Workflow):
     name = "module_review"
+    Params = Params
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
+    @python_step(name="start")
+    def start(ctx):
         (ctx.run_folder / "module.json").write_text(ctx.workflow_name, encoding="utf-8")
-        return state.model_copy(update={"done": True}), Event("done")
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -376,36 +351,19 @@ def test_file_reference_requires_class_name_when_multiple_workflows_exist(tmp_pa
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class AlphaWorkflow(Workflow):
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 
 
 class BetaWorkflow(Workflow):
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -429,25 +387,15 @@ def test_named_references_fail_when_inferred_candidates_conflict(tmp_path: Path)
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class PackageReleaseReview(Workflow):
     name = "release_review"
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -456,25 +404,15 @@ class PackageReleaseReview(Workflow):
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class FileReleaseReview(Workflow):
     name = "release_review"
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -497,24 +435,16 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class ClassParamsWorkflow(Workflow):
     class Params(BaseModel):
         mode: str = "class"
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -528,8 +458,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class Params(BaseModel):
@@ -538,17 +467,11 @@ class Params(BaseModel):
 
 class ModuleParamsWorkflow(Workflow):
     name = "module_params"
+    Params = Params
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -575,25 +498,18 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
+from autoloop import Workflow, python_step
 
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from .specs import Params
 
 
 class PackageParamsWorkflow(Workflow):
     name = "package_params"
+    Params = Params
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -616,25 +532,16 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class LegacyParamsWorkflow(Workflow):
     name = "legacy_params"
+    Params = None
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -644,25 +551,16 @@ class LegacyParamsWorkflow(Workflow):
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class NoParamsWorkflow(Workflow):
     name = "no_params"
+    Params = None
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -722,25 +620,18 @@ class Params(BaseModel):
         """
 from __future__ import annotations
 
-from pydantic import BaseModel
+from autoloop import Workflow, python_step
 
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from .specs import Params
 
 
 class PackagePathParamsWorkflow(Workflow):
     name = "package_path_params"
+    Params = Params
 
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -749,7 +640,8 @@ class PackagePathParamsWorkflow(Workflow):
     resolved = resolve_workflow_reference(tmp_path, "workflows/package_path_params")
 
     assert resolved.parameters_cls is not None
-    assert resolved.parameters_cls.__module__ == "workflows.package_path_params.specs"
+    assert resolved.parameters_cls.__name__ == "Params"
+    assert resolved.parameters_cls.model_fields["mode"].default == "package"
 
 
 def test_workflow_origin_collisions_fail_before_run_history_is_merged(tmp_path: Path) -> None:
@@ -761,23 +653,13 @@ def test_workflow_origin_collisions_fail_before_run_history_is_merged(tmp_path: 
             """
 from __future__ import annotations
 
-from pydantic import BaseModel
-
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Workflow, python_step
 
 
 class ReleaseReview(Workflow):
-    class State(BaseModel):
-        done: bool = False
-
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {start: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
-        return state.model_copy(update={"done": True}), Event("done")
+    @python_step(name="start")
+    def start(ctx):
+        return None
 """.strip()
             + "\n",
             encoding="utf-8",
