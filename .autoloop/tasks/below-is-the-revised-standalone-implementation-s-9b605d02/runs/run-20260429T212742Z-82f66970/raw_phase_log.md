@@ -2341,3 +2341,110 @@ The targeted gate remained green after the addition: `112 passed, 14 warnings`. 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+---
+I’m auditing the completed run against the authoritative request, raw log, decisions, and final code/tests first, then I’ll write the run-local audit artifacts only under the `artifacts/audit` directory.
+
+I’ve got the request, ledger, and decisions. Next I’m pulling the implemented phase outputs, current audit artifacts, and the final repo diff/tests so the gap report is grounded in what actually shipped rather than the phase plan alone.
+
+The worktree is heavily mid-migration, so I’m grounding the audit in the active repo-root package and concrete grep/test evidence now. I’m checking the exported API, legacy-name leakage, and the current test/docs surfaces that the spec explicitly called out.
+
+The evidence is pointing to a partial cleanup rather than a complete one. I’m reading the rest of the run ledger now to see which gaps were already acknowledged or intentionally deferred, so I can separate justified differences from unresolved misses cleanly.
+
+I’ve got enough of the run ledger. I’m validating the final repo state directly now against the strongest unresolved parts of the request: internal legacy-name removal, docs/tests migration breadth, and whether compatibility shims were actually confined to old-run readers.
+
+The direct repo check matches the main concern: the canonical gate passes, but large internal and test surfaces still retain the exact legacy names the request said to remove. I’m waiting for the verification suite to finish, then I’ll write the audit artifacts around that mismatch.
+
+I’m collecting the exact file/line evidence for the audit report now. The key distinction is that the public `autoloop` root looks canonical, but the active `autoloop.simple`, `core`, and large non-migration test surfaces still preserve the removed contract.
+
+I’m pulling one last piece of evidence from the decisions ledger: the run explicitly narrowed the verification gate to the canonical public/runtime surface. That explains the shipped scope, but it also shows why the remaining internal/test legacy surfaces were never actually closed.
+
+One last citation: the docs explicitly declare `autoloop.simple` as the active public authoring surface. That matters because extra exports there are still user-facing, not just internal.
+
+I’ve finished the audit assessment. I’m writing the gap report, revised next-run request, and machine result now, limited to the run-local `artifacts/audit` directory.
+
+The audit artifacts are written. I’m doing a quick readback now to confirm the report, follow-up request, and JSON result are internally consistent and accurately reflect the material-gap verdict.
+
+Scope considered
+
+The immutable request, raw phase log, decisions ledger, run-local artifacts, final repo state, and the targeted canonical verification suite. I compared the requested cleanup against the shipped code, docs, strictness checks, and tests, with emphasis on whether legacy names were actually removed or only scoped out of the acceptance gate.
+
+What I analyzed
+
+I verified that the canonical public `autoloop` root surface landed and reran the targeted verification lane, which still passes with `112 passed, 14 warnings`. I also checked the final repo for residual legacy surfaces and found material leftovers in the active `autoloop.simple` surface, `core/*`, `stdlib/*`, and large non-migration test suites, plus a strictness scan that intentionally excludes `core/`, `runtime/`, and `tests/`.
+
+What I changed
+
+I wrote the audit artifacts:
+- [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/gap_report.md)
+- [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/revised_request.md)
+- [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/audit_result.json)
+
+Key findings / decisions
+
+Material gaps remain. The biggest ones are:
+- `autoloop.simple` is documented as the active public authoring surface but still re-exports non-canonical symbols such as `AfterHookResult`, `Checkpoint`, `ChildWorkflowResult`, `ResolvedArtifacts`, and `WorkflowStep`.
+- Active `core` modules still retain and re-export removed legacy names and low-level scaffolding such as `SUCCESS`, `RouteInfo`, `Param`, `StateVar`, `LLMStep`, `PairStep`, `SystemStep`, `produces`, and `route_infos`.
+- Strictness/test migration is incomplete because the main no-compat scan excludes `core/`, `runtime/`, and all `tests/`, while active non-migration suites still encode removed names.
+- Narrow persisted-run migration for legacy terminals/session slots is justified, but the run’s later decision to scope acceptance to the canonical public/runtime lane does not fully satisfy the original internal-cleanup request.
+
+Open issues / next step
+
+The follow-up request is to finish the cleanup rather than rerun the entire task: trim `autoloop.simple` to the intended canonical exports, remove or quarantine remaining legacy `core`/`stdlib` surfaces into explicit compatibility modules, migrate remaining active tests/strictness to canonical names, and keep legacy handling only in private persisted-run readers.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+---
+I’m verifying the audit artifacts against the request, decisions, and final repo state now. First I’m reading the current audit files and rechecking the specific evidence the audit cites so I can mark criteria accurately and append only real findings.
+
+I’ve finished the verification pass. The audit artifacts are accurate enough to complete: the material-gap classification is defensible, the revised request is actionable, and the JSON result matches the report. I’m updating the criteria and appending one non-blocking audit note now.
+
+Scope considered
+
+The immutable request, authoritative raw log, decisions ledger, the producer’s audit artifacts, and the final repo/test state needed to verify the audit’s classifications. I stayed within the run-local audit directory for edits.
+
+What I analyzed
+
+I reviewed [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/gap_report.md), [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/revised_request.md), [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/audit_result.json), and the cited code/test surfaces. I also rechecked the canonical verification suite outcome and the specific legacy-name evidence the audit relies on.
+
+What I reviewed
+
+I confirmed the audit’s main claim is accurate: canonical root exports and emitted payloads landed, but active `autoloop.simple`, `core`, `stdlib`, and non-migration test surfaces still retain material legacy contract elements beyond private persisted-run readers. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/criteria.md) to fully checked status and appended one non-blocking verifier note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/feedback.md).
+
+Key findings / decisions
+
+No blocking audit-quality issues. The gap report is evidence-backed, the material-gap classification is correct, the follow-up request is actionable, and `audit_result.json` accurately reports `material_gaps_found: true`. The only note I recorded is non-blocking: the audit correctly treated the narrowed canonical verification gate as an implementation-scope decision, not a user-approved relaxation of the original cleanup request.
+
+Open issues / next step
+
+No verifier-side changes remain. The audit pair is complete and ready for the loop to proceed on the recorded follow-up request.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

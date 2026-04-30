@@ -2407,3 +2407,44 @@ The follow-up request is to finish the cleanup rather than rerun the entire task
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddbff-b21a-79b0-b809-d4bc4a6990d1
+---
+I’m verifying the audit artifacts against the request, decisions, and final repo state now. First I’m reading the current audit files and rechecking the specific evidence the audit cites so I can mark criteria accurately and append only real findings.
+
+I’ve finished the verification pass. The audit artifacts are accurate enough to complete: the material-gap classification is defensible, the revised request is actionable, and the JSON result matches the report. I’m updating the criteria and appending one non-blocking audit note now.
+
+Scope considered
+
+The immutable request, authoritative raw log, decisions ledger, the producer’s audit artifacts, and the final repo/test state needed to verify the audit’s classifications. I stayed within the run-local audit directory for edits.
+
+What I analyzed
+
+I reviewed [gap_report.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/gap_report.md), [revised_request.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/revised_request.md), [audit_result.json](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/audit_result.json), and the cited code/test surfaces. I also rechecked the canonical verification suite outcome and the specific legacy-name evidence the audit relies on.
+
+What I reviewed
+
+I confirmed the audit’s main claim is accurate: canonical root exports and emitted payloads landed, but active `autoloop.simple`, `core`, `stdlib`, and non-migration test surfaces still retain material legacy contract elements beyond private persisted-run readers. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/criteria.md) to fully checked status and appended one non-blocking verifier note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/audit/feedback.md).
+
+Key findings / decisions
+
+No blocking audit-quality issues. The gap report is evidence-backed, the material-gap classification is correct, the follow-up request is actionable, and `audit_result.json` accurately reports `material_gaps_found: true`. The only note I recorded is non-blocking: the audit correctly treated the narrowed canonical verification gate as an implementation-scope decision, not a user-approved relaxation of the original cleanup request.
+
+Open issues / next step
+
+No verifier-side changes remain. The audit pair is complete and ready for the loop to proceed on the recorded follow-up request.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
