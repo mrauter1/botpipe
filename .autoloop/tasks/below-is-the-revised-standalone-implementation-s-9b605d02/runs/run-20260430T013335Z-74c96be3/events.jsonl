@@ -39,3 +39,7 @@
 {"ts": "2026-04-30T02:43:00.364784+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 39, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-runtime-canonicalization"}
 {"ts": "2026-04-30T02:44:25.337574+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 40, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "route-runtime-canonicalization"}
 {"ts": "2026-04-30T02:44:25.392345+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 41, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "route-runtime-canonicalization"}
+{"ts": "2026-04-30T02:44:25.489784+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 42, "event_type": "phase_completed", "pair": "test", "phase_id": "route-runtime-canonicalization", "phase_mode": "single"}
+{"ts": "2026-04-30T02:44:25.492611+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 43, "event_type": "phase_started", "phase_id": "strictness-and-suite-migration", "phase_mode": "single"}
+{"ts": "2026-04-30T02:44:25.495020+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 44, "event_type": "pair_started", "pair": "implement", "phase_id": "strictness-and-suite-migration"}
+{"ts": "2026-04-30T02:44:25.495180+00:00", "run_id": "run-20260430T013335Z-74c96be3", "seq": 45, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "strictness-and-suite-migration"}
