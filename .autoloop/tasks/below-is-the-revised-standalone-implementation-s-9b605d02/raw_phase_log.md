@@ -4128,3 +4128,59 @@ Open issues / next step
 
 - No blocking issues remain for this phase.
 - If you want, the next sensible follow-up is a broader repo sweep for legacy vocabulary in non-maintained docs or archived compatibility surfaces, but the requested maintained/core surface is clean.
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+I’m reviewing the implemented core/test surfaces against the phase acceptance criteria first, then I’ll update the criteria and feedback artifacts with any remaining gaps.
+
+I’ve confirmed the implementation notes are acknowledging a repo-root bridge in addition to the nested `autoloop_v3/core` bridge. I’m inspecting those bridge files and the affected import path directly now, because that’s the most likely place the implementation drifted from the accepted “single explicit bridge” requirement.
+
+I found one material drift from the accepted plan: the implementation removed the dynamic shim, but it replaced it with two explicit bridge layers and two duplicated submodule alias tables instead of reducing compatibility to one explicit path. I’m marking the criteria accordingly and appending the blocking finding now.
+
+Scope considered
+
+- Request-relevant maintained core/runtime surfaces, with emphasis on the package-bridge changes in `core/__init__.py`, `autoloop_v3/core/__init__.py`, `__init__.py`, and the adjacent import-path adjustment in `core/workflow_capabilities.py`.
+- Maintained test migrations and strictness hardening in `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, `tests/runtime/test_compatibility_runtime.py`, `tests/fixtures/toy_runtime_workflow.py`, and `tests/strictness/test_no_compat.py`.
+- Active review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and the run-local `decisions.txt`.
+
+What I analyzed
+
+- Whether active core code paths still depend on `produces` / `review_produces` / `do_produces`.
+- Whether the alias-shim cleanup actually reduced compatibility to one explicit `autoloop_v3.core -> core` bridge as required by the accepted plan and decisions.
+- Whether the added bridge/import-path work introduced regression risk or avoidable technical debt.
+- The implementer’s reported verification coverage and the resulting architectural state.
+
+What I reviewed
+
+- Canonical write-vocabulary migration in `core/steps.py`, `core/compiler.py`, `core/validation.py`, and `core/engine.py`.
+- Strictness scope/exclusions and compatibility-suite authoring cleanup.
+- The explicit bridge implementation in both [__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/__init__.py) and [autoloop_v3/core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_v3/core/__init__.py).
+- Review artifacts were updated:
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/implement/phases/canonicalize-core-produces-surface/criteria.md)
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/implement/phases/canonicalize-core-produces-surface/feedback.md)
+
+Key findings / decisions
+
+- One blocking finding was recorded: `IMP-001`.
+- The active `produces` vocabulary cleanup itself looks complete on the maintained core/test surfaces reviewed.
+- The remaining issue is architectural/intent fidelity: the implementation replaced the removed dynamic alias shim with two explicit bridge layers and duplicated submodule alias tables, which conflicts with the accepted “single explicit bridge” direction.
+
+Open issues / next step
+
+- Address `IMP-001` by centralizing the `autoloop_v3.core -> core` compatibility bridge in one authoritative location and removing the duplicate alias table/bridge layer.
+- After that consolidation, rerun the same targeted pytest set to confirm the single-bridge path still preserves module/class identity.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
