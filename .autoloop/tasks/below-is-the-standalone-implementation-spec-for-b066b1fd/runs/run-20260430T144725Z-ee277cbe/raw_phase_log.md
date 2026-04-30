@@ -660,3 +660,112 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+I’m implementing the `hook-rerouting` phase only: first I’m reading the phase artifacts and the runtime paths that currently handle step hooks, route finalization, and related tests.
+
+I have the phase contract and prior decisions. Next I’m tracing the exact hook execution path and the current tests that encode redirect rejection so I can change behavior without drifting into later state/telemetry phases.
+
+The current engine already validates some static hook overrides, but runtime still rejects all redirects. I’m checking that validator path next so the runtime change stays aligned with compile-time guarantees instead of creating a split contract.
+
+I’ve confirmed the main gap: compile-time validation already anticipates route-tag redirects, but runtime rejects them and only rolls back workflow state plus sessions. I’m now wiring the redirect loop and rollback around the real persisted step/item stores so hook failures don’t leak partial mutations.
+
+Plan for this phase:
+1. Update `core/engine.py` to normalize hook redirect results, run chained route finalization with a 16-hop cap, and roll back workflow/session plus step/item stores on hook failure.
+2. Extend emitted observability payloads so redirect hops are visible through hook events and the final `step_finished` trace.
+3. Replace the old rejection tests with redirect/chain/cycle coverage and run the focused contract/runtime/unit tests for this slice.
+
+I’ve got the concrete edit set. I’m patching the engine plus the small context/trace types it depends on, then I’ll switch the old rejection tests over to redirect-chain coverage.
+
+The core rerouting logic is in place. I’m fixing a couple of event-context details now, then I’ll move to the focused test updates that exercise chained redirects, invalid hook routes, and redirect-cycle failure.
+
+I’ve switched the old contract expectations over to the new semantics and added chain/cycle/final-route validation coverage. I’m running a focused test slice now to catch any mismatched tuple wiring or payload formatting before I touch the implementation notes.
+
+The repo doesn’t have `python` on PATH here, so I’m switching the validation commands to `python3` and using those results to finish the cleanup.
+
+The focused rerouting tests are green. I’m running the full contract file plus the full runtime tracing file once more, because those are the main regression surfaces touched by the engine and trace payload changes.
+
+I’ve finished the code and regression pass for this phase. I’m updating the run artifacts now so later turns inherit the non-obvious constraints from this slice instead of silently broadening hook behavior.
+
+Scope considered
+
+Phase-local `hook-rerouting` only. I limited edits to the engine hook/finalization path, context/trace payload surfaces needed by that path, and the contract/runtime tests that define redirect behavior. I did not take on StateVar, item state, effective required writes, or history work from later phases.
+
+What I analyzed
+
+I traced the current hook flow in `core/engine.py`, the static hook-route validation in `core/validation.py`, the runtime trace writer in `runtime/tracing.py`, and the existing contract tests that still encoded redirect rejection. I also checked the phase artifacts and decisions ledger to keep producer/verifier semantics aligned with the approved plan.
+
+What I changed
+
+`core/engine.py` now accepts hook returns of `str`, `Event`, and structured `AfterStepResult` overrides once a candidate route exists, runs chained `on_route`/`on_taken` finalization with a `max_hook_redirects = 16` cap, and emits `hook_route_redirected` events for each tag change. It also snapshots and restores workflow/session plus step/item/step-item stores around route finalization so failed chains do not leak state.
+
+`core/context.py`, `core/extensions.py`, and `runtime/tracing.py` were extended so route hooks can see `ctx.event`, and `step_finished` traces now carry `candidate_route`, `final_route`, and the full redirect chain while preserving the legacy net override summary. The contract tests now cover after-hook rerouting, invalid dynamic hook routes, chained on-route/on-taken redirects, final-route artifact validation, and redirect cycles; runtime trace tests cover the new payload.
+
+Key findings / decisions
+
+Hook rerouting is enabled only after a candidate `Event` exists. Producer-phase `after_producer` hooks still cannot short-circuit verifier execution.
+
+Same-tag `Event` overrides are treated as hook-owned final events for validation attribution, but only actual tag changes create redirect records and count toward the 16-hop cap.
+
+Validation performed:
+`.venv/bin/python -m pytest tests/contract/test_engine_contracts.py`
+`.venv/bin/python -m pytest tests/runtime/test_runtime_tracing.py`
+
+Open issues / next step
+
+No blocking issues in this phase. The next step is the state-surfaces phase: built-in step runtime state, reserved field validation, and `StateVar` sugar.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+I’m reviewing only the `hook-rerouting` phase changes against the phase contract and the actual diffs first, then I’ll update the criteria and feedback artifacts with any blocking or non-blocking findings.
+
+I’ve got the intended scope and the producer’s stated assumptions. I’m reading the exact engine and trace diffs now for regression risks, especially around hook rollback, event attribution, and anything that silently broadens behavior beyond the phase contract.
+
+I found one material contract split between validation and runtime. I’m recording that as blocking in the phase feedback rather than broadening into later-state work, because it directly affects this phase’s hook authoring contract.
+
+Scope considered
+
+Phase-local `hook-rerouting` only. I reviewed the engine hook/finalization changes, the new context/trace surface needed for that flow, the updated contract/runtime tests, and the phase artifacts. I did not expand into later state/history phases except where needed to judge regression risk.
+
+What I analyzed
+
+I compared the implemented hook execution path in `core/engine.py` against the existing hook validation in `core/validation.py`, checked the new `Context.event` and trace payload additions, read the producer notes and decisions ledger, and verified the updated tests matched the active phase contract.
+
+What I reviewed
+
+I updated the phase feedback artifact with one blocking finding. I left the criteria checkboxes unchecked because the current implementation does not yet meet the phase acceptance bar safely due to a compiler/runtime contract split in pair-step producer hooks.
+
+Key findings / decisions
+
+`IMP-001` is blocking: producer-phase pair hooks (`after_do` / `after_producer`) still validate as though route redirects are legal, but runtime rejects those redirects once execution reaches `_run_after_hook()` without a candidate event. That means a workflow can compile cleanly and then hard-fail at runtime for behavior the phase’s own hook validation appeared to allow.
+
+Open issues / next step
+
+Align validation and runtime for producer-phase pair hooks. The minimal fix is to reject redirect-like `after_do` / `after_producer` returns during validation if producer-phase hooks are meant to stay state-only; otherwise implement explicit short-circuit semantics and add tests for that path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
