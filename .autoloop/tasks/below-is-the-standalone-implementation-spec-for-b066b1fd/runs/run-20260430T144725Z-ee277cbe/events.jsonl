@@ -103,3 +103,6 @@
 {"ts": "2026-04-30T17:47:44.850138+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 103, "event_type": "phase_deferred", "pair": "implement", "phase_mode": "single", "phase_id": "history-telemetry", "reason": "awaiting enabled test pair completion"}
 {"ts": "2026-04-30T17:47:44.852939+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 104, "event_type": "pair_started", "pair": "test", "phase_id": "history-telemetry"}
 {"ts": "2026-04-30T17:47:44.853198+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 105, "event_type": "cycle_started", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "history-telemetry"}
+{"ts": "2026-04-30T17:50:00.987916+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 106, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "history-telemetry"}
+{"ts": "2026-04-30T17:51:08.571315+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 107, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "history-telemetry"}
+{"ts": "2026-04-30T17:51:08.620157+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 108, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "history-telemetry"}

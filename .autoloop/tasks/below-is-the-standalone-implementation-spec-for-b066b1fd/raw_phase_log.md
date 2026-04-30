@@ -2290,3 +2290,52 @@ Key findings / decisions
 Open issues / next step
 - No open test-phase blockers in scope.
 - Next step is auditor review of the updated `history-telemetry` test artifacts and repository test surface.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf60-61fd-7d31-a517-d143131a22c8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddf60-61fd-7d31-a517-d143131a22c8
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf60-61fd-7d31-a517-d143131a22c8
+---
+I’m auditing the phase-local history/telemetry test surface with focus on the new scoped hook instrumentation coverage and the updated strategy artifact, then I’ll mark the audit artifacts accordingly.
+
+The remaining question is whether the new coverage is sufficient without directly pinning scoped `hook_started` / `hook_finished` identity. I’m doing a final practical check on the green surface before deciding whether that’s a real gap or just low-value duplication.
+
+The coverage is coherent and green. I’m marking the audit artifacts complete and appending a short no-findings audit note so the record is explicit.
+
+Scope considered
+- Phase-local `history-telemetry` test audit only: the updated runtime/history regression tests plus the active `test_strategy.md` and `feedback.md`.
+- I did not inspect or approve unrelated repository changes outside the relevant test surface.
+
+What I analyzed
+- The new scoped hook instrumentation tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- The scoped history derivation tests in [tests/runtime/test_history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_history.py).
+- The phase-local strategy artifact [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/history-telemetry/test_strategy.md).
+- The run-local history-telemetry decisions in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt).
+
+What I reviewed
+- Direct regression protection for scoped `hook_failed` and scoped `hook_route_redirected` payload identity through `hook_event_sink`.
+- Regression protection for `ctx.history.failures(step=..., item_id=...)` so scoped hook failures stay attached to the correct `StepInstanceKey`.
+- Events-only fallback coverage, trace-based scoped telemetry coverage, and the reliability characteristics documented in the strategy.
+- Validation rerun: `source .venv/bin/activate && pytest -q tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py` passed with `122 passed in 0.73s`.
+
+Key findings / decisions
+- I found no blocking or non-blocking audit findings in phase-local scope.
+- The added tests cover the changed behavior at both relevant boundaries: runtime event emission and history derivation.
+- The strategy artifact accurately maps behaviors, invariants, edge cases, and flake controls.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/history-telemetry/criteria.md) to fully checked and appended an explicit no-findings audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/history-telemetry/feedback.md).
+
+Open issues / next step
+- No open issues in this phase-local audit.
+- The history-telemetry test phase is ready to move forward.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
