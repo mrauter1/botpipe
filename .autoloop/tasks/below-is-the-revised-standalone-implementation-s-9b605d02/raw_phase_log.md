@@ -1817,3 +1817,54 @@ The phase is still not complete. A broader consumer grep still finds active lega
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m reviewing the producer’s third pass against the active phase only. First I’m checking the current review artifacts and then I’ll validate whether the remaining banned-name footprint still blocks AC-1 after the latest test-fixture migrations.
+
+I’ve confirmed the producer cleared the original example files. The blocker is still real, but it has moved to the next cluster of active consumer tests, so I’m updating the review artifact to point at the current remaining scope instead of stale line references.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` phase only. I reviewed the producer’s third-pass consumer-test migrations, the updated implementation notes and decisions, and then broadened the check across active `tests/runtime`, `tests/unit`, `docs`, and `workflows` for the remaining banned-name footprint.
+
+What I analyzed
+
+I compared the producer’s claimed progress against the current repo state, especially the runtime/unit files they touched: `test_workflow_reference_resolution`, `test_stdlib_and_extensions`, `test_security_finding_to_verified_remediation`, and `test_investigation_request_to_evidence_pack`. I also checked the broader active consumer grep to see whether AC-1 was actually closed or only shifted to other files.
+
+What I reviewed
+
+The producer did resolve the previous example failures. The touched files no longer contain the old strict authoring names that blocked the last review, and the implementation notes now accurately call out the `EmptyParams` inheritance edge case plus the remaining migration gap.
+
+I updated the review artifact to keep only one blocking finding, but moved its references to the current remaining active files. I left the criteria unchecked because AC-1 is still not met.
+
+Key findings / decisions
+
+`IMP-001` remains blocking. The current remaining active consumer surface still includes banned names in non-migration fixtures, notably:
+- `tests/runtime/test_workspace_and_context.py`
+- `tests/runtime/test_optional_extensions.py`
+- `tests/runtime/test_runtime_static_graph.py`
+- `tests/runtime/test_workflow_package_to_composable_building_blocks.py`
+- `tests/runtime/test_runtime_git_tracking.py`
+- representative success-status fixtures in `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py` and `tests/runtime/test_workflow_run_history_to_failure_modes.py`
+
+The original example files cited in the last review are no longer the blocker; the blocker has moved to the broader active consumer suite.
+
+Open issues / next step
+
+This phase should return to implementation. The next pass needs to migrate the remaining active runtime/unit consumer tests listed above to canonical `FINISH`, `step`/`produce_verify_step`/`python_step`, `Route`, `required_writes`, and step-local `routes`, or explicitly quarantine true legacy coverage into migration-only fixtures.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
