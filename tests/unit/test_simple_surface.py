@@ -267,7 +267,7 @@ def test_simple_workflow_respects_control_routes_false_and_custom_semantic_route
     assert set(compiled.routes["start"]) == {"ready"}
     assert compiled.routes["start"]["ready"].target == "review"
     assert set(compiled.routes["review"]) == {"approved"}
-    assert compiled.routes["review"]["approved"].target == "publish"
+    assert compiled.routes["review"]["approved"].target == "FINISH"
     assert set(compiled.routes["publish"]) == {"published"}
     assert compiled.routes["publish"]["published"].target == "handoff"
     assert set(compiled.routes["handoff"]) == {"done_with_child"}

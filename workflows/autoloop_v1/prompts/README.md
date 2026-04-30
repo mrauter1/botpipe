@@ -18,7 +18,7 @@ Keep the common runtime contract wording aligned with the active workflow prompt
 
 ## Route Surface
 
-- route metadata supplies route summaries and any route-specific required outputs.
+- route metadata supplies route summaries and any route-specific required writes.
 - Reserved routes remain available for `question`, `blocked`, and `failed`.
 
 ## Verifier Payloads

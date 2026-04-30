@@ -284,7 +284,7 @@ New runs are message-first:
 
 The runtime persists resumability through an opaque `session_id` plus optional `provider_metadata`. Workflow code should treat session continuity as opaque runtime state and use the `Session` / context APIs rather than depending on persisted payload details.
 
-Every workflow also has an implicit default session slot named `default`. Provider-backed `step(...)` and `produce_verify_step(...)` declarations use that slot automatically when no explicit `session=` is declared.
+Every workflow also has an implicit default session slot named `global`. Provider-backed `step(...)` and `produce_verify_step(...)` declarations use that slot automatically when no explicit `session=` is declared.
 
 `Continuity` defines the default reuse policy for a session slot:
 

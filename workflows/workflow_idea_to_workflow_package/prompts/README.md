@@ -5,7 +5,7 @@
 - This README keeps the family-wide prompt contract in one place so individual prompt files can stay step-local.
 - Prompt files still own the step role, purpose, current work-item boundary, exact artifact read/write set, and any evidence or route guidance that changes the local decision.
 - Keep provider-facing operational guidance in prompt files, but keep repeated family-wide reminders here.
-- The runtime injects a compact human-readable step contract with required inputs, writable artifacts, route-specific required outputs, expected output payload requirements, available routes, route metadata, optional route handoff, and optional retry feedback.
+- The runtime injects a compact human-readable step contract with required inputs, writable artifacts, route-specific required writes, expected output payload requirements, available routes, route metadata, optional route handoff, and optional retry feedback.
 - Provider raw output is runtime telemetry. It is persisted for logs, traces, extension events, debugging, and replay, but it is not rendered into provider prompts.
 - Provider prose is control metadata unless it is written into a declared artifact.
 - Verifier prompts return one JSON object through the selected route and step payload; they do not mutate artifacts unless the step contract says otherwise.

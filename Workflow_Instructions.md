@@ -69,8 +69,8 @@ Core boundary
    - writable artifacts
    - expected_output_schema
    - available_routes
-   - route_infos
-   - route_required_outputs
+   - route summaries
+   - route_required_writes
 
    The runtime may also validate returned outcomes, reject invalid routes, and enforce reserved-route behavior.
    Everything else that is provider-facing operational guidance belongs in the prompt template authored by the workflow/profile.
@@ -278,8 +278,8 @@ Instead, the runtime should only inject or enforce:
  - writable artifacts
 - expected_output_schema
 - available_routes
-- route_infos
-- route_required_outputs
+ - route summaries
+- route_required_writes
 
 Everything else provider-facing belongs in the prompt template itself.
 
@@ -344,8 +344,8 @@ The runtime may inject these machine-readable fields into the rendered step prom
  - writable artifacts
 - expected_output_schema
 - available_routes
-- route_infos
-- route_required_outputs
+- route summaries
+- route_required_writes
 
 The runtime may also:
 - validate returned output against expected_output_schema

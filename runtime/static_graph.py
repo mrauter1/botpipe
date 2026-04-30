@@ -6,10 +6,16 @@ import json
 from pathlib import Path
 from typing import Any, Mapping
 
-from ..core.compiler import CompiledRoute, CompiledWorkflow
-from ..core.primitives import FAIL, FINISH, PAUSE
-from ..core.prompts import Prompt
-from ..core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
+try:  # pragma: no branch - prefer installed-package imports when available
+    from autoloop_v3.core.compiler import CompiledRoute, CompiledWorkflow
+    from autoloop_v3.core.primitives import FAIL, FINISH, PAUSE
+    from autoloop_v3.core.prompts import Prompt
+    from autoloop_v3.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
+except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
+    from core.compiler import CompiledRoute, CompiledWorkflow
+    from core.primitives import FAIL, FINISH, PAUSE
+    from core.prompts import Prompt
+    from core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
 
 
 STATIC_GRAPH_SCHEMA = WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
