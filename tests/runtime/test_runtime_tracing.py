@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
+from core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
 from core.providers.models import StepProviderUsage, TokenUsage
 from core.primitives import Event, Outcome
 from runtime.config import TracingRuntimeConfig
@@ -207,14 +207,34 @@ def test_runtime_trace_records_hook_route_override_metadata(tmp_path: Path) -> N
         producer_raw_output=event.producer_raw_output,
         verifier_raw_output=event.verifier_raw_output,
         provider_usage=event.provider_usage,
+        candidate_route="ready",
+        final_route="question",
         hook_route_override_from="ready",
         hook_route_override_to="question",
+        hook_route_redirects=(
+            HookRouteRedirect(
+                hook="reroute_to_question",
+                phase="on_route",
+                from_route="ready",
+                to_route="question",
+            ),
+        ),
     )
 
     writer.step_finished(sequence=1, event=event, commit_before_step="abc123")
 
     record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert record["candidate_route"] == "ready"
+    assert record["final_route"] == "question"
     assert record["hook_route_override"] == {"from": "ready", "to": "question"}
+    assert record["hook_route_redirects"] == [
+        {
+            "hook": "reroute_to_question",
+            "phase": "on_route",
+            "from_route": "ready",
+            "to_route": "question",
+        }
+    ]
 
 
 def test_runtime_trace_records_provider_usage_when_available(tmp_path: Path) -> None:
