@@ -1852,3 +1852,50 @@ Focused validation is green:
 - `.venv/bin/python -m pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/contract/test_canonical_runtime_contracts.py tests/runtime/test_runtime_static_graph.py tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults`
 
 No open code issue remains in this phase from the reviewer feedback. The next step is re-review.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+I’m re-reviewing only the `effective-required-writes` slice and the fix for `IMP-001`. First I’m checking the updated helper/topology behavior and the new regression coverage before I touch the review artifacts.
+
+The reviewer fix holds up under the focused regression set. I’m marking the criteria complete and appending a short re-review disposition to the phase feedback so the artifact trail shows `IMP-001` was resolved in cycle 2.
+
+Scope considered
+
+Phase-local re-review of `effective-required-writes` only, focused on the `IMP-001` fix and the surrounding required-write contract surfaces.
+
+What I analyzed
+
+I re-read the updated shared helper in `core/route_required_writes.py`, the topology serializers in `core/compiler.py` and `runtime/static_graph.py`, the new inherited-`GLOBAL` regression in `tests/runtime/test_runtime_static_graph.py`, and the implementation notes / decisions relevant to this phase.
+
+What I reviewed
+
+I verified that:
+- inherited artifact-level required writes still resolve concretely on step-local route projections
+- top-level `global_routes` no longer claim a false empty effective set when no step context exists
+- provider/runtime behavior from the earlier phase slice still passes the focused regression set
+
+I reran:
+- `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py tests/contract/test_canonical_runtime_contracts.py tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults`
+
+Key findings / decisions
+
+`IMP-001` is resolved. The implementation now emits `effective_required_writes: null` for inherited top-level `global_routes` without step context, while preserving concrete effective sets on step-local route projections. The focused suite passed and I found no remaining blocking or non-blocking issues in this phase.
+
+Open issues / next step
+
+No open issues remain for `effective-required-writes`. I updated `criteria.md` to complete and appended the re-review disposition to `feedback.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

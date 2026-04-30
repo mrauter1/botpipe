@@ -1800,3 +1800,102 @@ Fix `global_routes` so topology output does not emit a false concrete effective 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+I’m addressing the reviewer’s `IMP-001` only. First I’m re-reading the feedback and the two global-route serialization sites so I can fix the inconsistent `topology.json` view without widening this phase.
+
+I’ve narrowed the fix: keep concrete effective sets only when a step context exists, and emit `null` for inherited top-level `global_routes`. I’m patching the shared payload helper and the topology callers now, then I’ll add a regression for an inherited `GLOBAL` route.
+
+The fix is in. I’ve added a topology regression for inherited `GLOBAL` routes and I’m rerunning the focused phase suite plus the engine-contract spot checks to make sure the `null` global payload doesn’t disturb runtime behavior.
+
+I’ve got a green focused suite after the reviewer fix. I’m updating the phase notes now to capture the one non-obvious constraint: top-level `global_routes` cannot truthfully claim a concrete effective set without step context, so they now serialize `null` instead of a false empty list.
+
+Scope considered
+
+Phase-local `effective-required-writes` only. I addressed reviewer finding `IMP-001` in the shared required-write payload helper plus the topology/static-graph serialization paths, without widening into hook or telemetry work.
+
+What I analyzed
+
+I re-read the reviewer feedback, then traced the inconsistent `global_routes` path through [core/route_required_writes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/route_required_writes.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), and [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py). I also verified the failure mode with a concrete compiled workflow that had a required artifact plus an inherited `GLOBAL` `failed` route.
+
+What I changed
+
+I changed `route_required_write_payload(...)` so context-free routes can emit `effective_required_writes=None` instead of a false empty list when there is no step context and no explicit override. Then I updated the top-level `global_routes` callers in compiler topology hashing and runtime topology payload generation to pass `step_name=None`, while keeping per-step route projections unchanged and concrete.
+
+I added a regression in [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py) that proves:
+- step-local inherited `failed` routes still resolve to the required artifact
+- top-level `global_routes.failed.explicit_required_writes` stays `None`
+- top-level `global_routes.failed.effective_required_writes` is now `None`
+
+I also updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/effective-required-writes/implementation_notes.md) and appended the non-obvious serialization decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt).
+
+Key findings / decisions
+
+The right fix was not to invent a synthetic effective set for top-level `global_routes`. Those entries do not have enough context to know inherited required artifacts, so `null` is the only truthful payload there. The authoritative concrete effective set remains on each step-local route projection, where the current step is known.
+
+Open issues / next step
+
+Focused validation is green:
+
+- `.venv/bin/python -m pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/contract/test_canonical_runtime_contracts.py tests/runtime/test_runtime_static_graph.py tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults`
+
+No open code issue remains in this phase from the reviewer feedback. The next step is re-review.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+I’m re-reviewing only the `effective-required-writes` slice and the fix for `IMP-001`. First I’m checking the updated helper/topology behavior and the new regression coverage before I touch the review artifacts.
+
+The reviewer fix holds up under the focused regression set. I’m marking the criteria complete and appending a short re-review disposition to the phase feedback so the artifact trail shows `IMP-001` was resolved in cycle 2.
+
+Scope considered
+
+Phase-local re-review of `effective-required-writes` only, focused on the `IMP-001` fix and the surrounding required-write contract surfaces.
+
+What I analyzed
+
+I re-read the updated shared helper in `core/route_required_writes.py`, the topology serializers in `core/compiler.py` and `runtime/static_graph.py`, the new inherited-`GLOBAL` regression in `tests/runtime/test_runtime_static_graph.py`, and the implementation notes / decisions relevant to this phase.
+
+What I reviewed
+
+I verified that:
+- inherited artifact-level required writes still resolve concretely on step-local route projections
+- top-level `global_routes` no longer claim a false empty effective set when no step context exists
+- provider/runtime behavior from the earlier phase slice still passes the focused regression set
+
+I reran:
+- `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py tests/contract/test_canonical_runtime_contracts.py tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults`
+
+Key findings / decisions
+
+`IMP-001` is resolved. The implementation now emits `effective_required_writes: null` for inherited top-level `global_routes` without step context, while preserving concrete effective sets on step-local route projections. The focused suite passed and I found no remaining blocking or non-blocking issues in this phase.
+
+Open issues / next step
+
+No open issues remain for `effective-required-writes`. I updated `criteria.md` to complete and appended the re-review disposition to `feedback.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
