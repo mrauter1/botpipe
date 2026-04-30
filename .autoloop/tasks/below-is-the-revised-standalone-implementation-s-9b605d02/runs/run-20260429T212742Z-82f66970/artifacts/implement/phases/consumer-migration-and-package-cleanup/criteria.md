@@ -15,4 +15,4 @@ Check these boxes (`- [x]`) only when true.
 - [ ] **Technical Debt / Simplicity**: Changes avoid unnecessary indirection, duplicated logic, scattered ownership, over-engineering, and unrelated refactors.
 - [ ] **Maintainability / Validation**: Diffs are cohesive, follow repository conventions, and are supported by appropriate validation, documentation, or notes where needed.
 
-Reviewer status: INCOMPLETE due to blocking findings IMP-001 through IMP-004 in `feedback.md`.
+Reviewer status: INCOMPLETE due to blocking finding IMP-001 in `feedback.md`.

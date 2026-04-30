@@ -1660,3 +1660,48 @@ This phase is still not complete. The active repo still has legacy compatibility
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m reviewing the producer’s second pass against the phase scope and the remaining acceptance gap. I’ll verify the changed consumer-facing surfaces first, then update the phase criteria and feedback with any remaining blocking gaps.
+
+I’ve got the prior reviewer state. Now I’m verifying which of those findings are actually resolved in the current diff and which ones still block the phase, with a quick pass over the provider-route contract, capability payloads, stdlib exports, and the remaining banned-name footprint.
+
+The earlier provider-route, capability-payload, and stdlib-export blockers are resolved in the current diff. What still blocks the phase is narrower: AC-1 is still not met because active consumer tests keep using banned public names in non-quarantined fixtures. I’m updating the review artifacts to reflect that exact remaining gap.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` phase only. I reviewed the producer’s second-pass source changes indirectly through the changed consumer-facing runtime, package CLI, capability inspection, optimizer-vs-stdlib surfaces, and the active review artifacts.
+
+What I analyzed
+
+I checked the updated implementation notes and decisions first, then verified the previously blocking areas: provider route typing, capability inspection naming, stdlib export pruning, package-level `Params` handling through CLI execution, and the remaining banned-name footprint in active docs/tests/workflow-package consumers.
+
+What I reviewed
+
+I confirmed that the earlier provider-route, capability-payload, and stdlib-export blockers are resolved in the current diff. I also validated the producer’s reported test slice by checking the current code paths and the remaining legacy-name search hits in active consumer tests. The review artifacts were updated to reflect the current state:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/feedback.md)
+
+Key findings / decisions
+
+Only one blocking finding remains: AC-1 is still unmet because active consumer tests still use banned public names in non-quarantined fixtures. The remaining blocking examples are documented as `IMP-001` in `feedback.md`, with concrete references in `tests/runtime/test_workflow_reference_resolution.py`, `tests/runtime/test_security_finding_to_verified_remediation.py`, and `tests/unit/test_stdlib_and_extensions.py`.
+
+Open issues / next step
+
+This phase should return to implementation. The next pass needs to finish migrating those active tests to the canonical contract, or explicitly isolate true legacy-compat coverage into migration-only fixtures, before the phase can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
