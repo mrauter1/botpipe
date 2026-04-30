@@ -1132,3 +1132,65 @@ Open issues / next step
 
 - No open test issues inside this phase.
 - `item_state`, `step_item_state`, and derived history/telemetry remain intentionally uncovered here because they are deferred to later phases.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf1b-d457-7770-b54c-65f08231f93b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddf1b-d457-7770-b54c-65f08231f93b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf1b-d457-7770-b54c-65f08231f93b
+---
+Reviewing the state-surfaces test phase now. I’m checking the new coverage against the phase contract, then I’ll update the audit artifacts with any gaps or mark the criteria complete if the tests are sufficient.
+
+I’ve confirmed the stated strategy and decisions. Now I’m checking the concrete tests to make sure the claimed coverage exists and that nothing in the expectations silently narrows behavior beyond the phase scope.
+
+The concrete cases line up with the strategy so far. I’m running the scoped test set once to confirm the added resume-path coverage and the surrounding strictness/static-graph cases are stable in practice.
+
+The scoped suite passed cleanly. I’m updating the audit artifacts now: criteria will be marked complete, and feedback will record that there were no blocking gaps after checking both the claimed coverage map and the live test run.
+
+Scope considered
+
+- Active `state-surfaces` test audit phase only.
+- Reviewed the tests added or relied on for built-in step runtime state, public `StateVar` sugar, reserved-name validation, and checkpoint/resume persistence.
+
+What I analyzed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py)
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py)
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/state-surfaces/test_strategy.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt)
+
+What I reviewed
+
+- Compile-time coverage for merged built-in plus custom step state models.
+- Failure-path coverage for ambiguous `StateVar(None)`, mutable literal defaults, invalid mapping entries, and reserved-name collisions.
+- Runtime and checkpoint coverage for `visits`, `last_route`, `last_reason`, `rework_count`, and `replan_count`.
+- Actual `Engine.resume(...)` restoration of merged built-in/custom state.
+- Determinism and flake resistance via in-memory stores and scripted provider turns.
+- Alignment with the scoped decision that simple custom step state remains on `produce_verify_step(..., state=...)`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No additional non-blocking gaps.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/state-surfaces/criteria.md) to fully checked.
+- Appended a no-findings audit entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/state-surfaces/feedback.md).
+- Re-ran the scoped regression suite:
+  `.venv/bin/pytest tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py tests/strictness/test_no_compat.py tests/contract/test_engine_contracts.py -q`
+  Result: `138 passed in 2.67s`
+
+Open issues / next step
+
+- No open issues within this phase.
+- `item_state`, `step_item_state`, and derived history/telemetry remain correctly deferred to later phases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
