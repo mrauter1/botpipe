@@ -3532,3 +3532,50 @@ Validation passed:
 Open issues / next step
 
 No open implementation issues from this phase. The phase artifacts are updated for the verifier turn.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+I’m reviewing the producer changes against the phase acceptance criteria and the recorded validation evidence. First I’m reopening the phase artifacts and spot-checking the touched implementation paths and verification commands before I update criteria and feedback.
+
+The artifact notes are internally consistent with the claimed fixes, and the touched files line up with the decisions ledger. I’m rerunning the recorded pytest slices directly as reviewer validation before I mark criteria, so the review isn’t based only on producer notes.
+
+The rerun surfaced one real regression in the latest route-required-writes change: the producer made `CompiledRoute.required_writes` optional on the public compiled route object, and that leaks a new `None` shape into the active validation surface. I’m recording that as a blocking finding and leaving criteria unchecked because the named active unit suite no longer passes.
+
+I found one active blocking regression, and the two prior-cycle findings are now resolved. I’m normalizing the feedback artifact so it reflects the current review state rather than carrying forward stale blockers from cycle 1.
+
+Scope considered
+
+Active phase review scope: strictness scan coverage, compiled-route/runtime changes, active validation and engine-contract suites, the explicit compatibility runtime suite, and the phase artifacts.
+
+What I analyzed
+
+I reviewed the updated implementation notes and decisions ledger, inspected the touched `core` and test files, and reran the producer’s recorded verification commands:
+- `pytest tests/strictness/test_no_compat.py tests/unit/test_simple_surface.py tests/unit/test_validation.py -q`
+- `pytest tests/contract/test_canonical_runtime_contracts.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py -q`
+
+What I reviewed
+
+The contract and compatibility slice passed on rerun, and the earlier reviewer findings about strictness scope and missing verification are resolved. The remaining problem is in the active compiled-route surface: the latest `required_writes` sentinel change leaks `None` into `CompiledRoute.required_writes` for unspecified routes, which breaks the named active validation suite and changes observable compiled metadata shape.
+
+Key findings / decisions
+
+I recorded one active blocking finding, `IMP-003`, in the phase feedback artifact. It points to the public `CompiledRoute.required_writes` regression across `core/compiler.py`, `core/validation.py`, and `core/engine.py`, with concrete failing references in `tests/unit/test_validation.py`.
+
+Open issues / next step
+
+Criteria remain unchecked because the active unit verification slice does not pass. The next step is to keep the public compiled-route `required_writes` surface stable as tuples and move the explicit-empty override sentinel behind a private/internal path used only by runtime enforcement, then rerun the failing unit slice and refresh the implementation notes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
