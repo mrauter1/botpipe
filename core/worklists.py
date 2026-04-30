@@ -5,9 +5,12 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+import inspect
 from typing import TYPE_CHECKING, Any, Generic, Literal, Protocol, TypeVar
 
-from .errors import WorkflowExecutionError
+from pydantic import BaseModel
+
+from .errors import WorkflowExecutionError, WorkflowValidationError
 
 if TYPE_CHECKING:
     from .artifacts import Artifact
@@ -111,10 +114,13 @@ class Worklist(Generic[T]):
     name: str
     source: WorklistSource[T]
     selector: Selector = Selector()
+    item_state_model: type[BaseModel] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("worklist name must be a non-empty string")
+        if self.item_state_model is not None:
+            _validate_worklist_item_state_model(self.item_state_model, worklist_name=self.name)
 
     @classmethod
     def from_items(
@@ -126,6 +132,7 @@ class Worklist(Generic[T]):
         title: Callable[[T], str] | str = "title",
         status: Callable[[T], str | None] | str | None = None,
         selector: Selector = Selector(),
+        item_state: type[BaseModel] | None = None,
     ) -> "Worklist[T]":
         source = _StaticWorklistSource(
             items=tuple(items),
@@ -133,7 +140,27 @@ class Worklist(Generic[T]):
             title=title,
             status=status,
         )
-        return cls(name=name, source=source, selector=selector)
+        return cls(name=name, source=source, selector=selector, item_state_model=item_state)
+
+    @classmethod
+    def from_param(
+        cls,
+        name: str,
+        param_name: str | None = None,
+        *,
+        item_id: Callable[[Any], str] | str = "id",
+        title: Callable[[Any], str] | str = "title",
+        status: Callable[[Any], str | None] | str | None = None,
+        selector: Selector = Selector(),
+        item_state: type[BaseModel] | None = None,
+    ) -> "Worklist[Any]":
+        source = _ParameterWorklistSource(
+            param_name=param_name or name,
+            item_id=item_id,
+            title=title,
+            status=status,
+        )
+        return cls(name=name, source=source, selector=selector, item_state_model=item_state)
 
     @classmethod
     def from_artifact(
@@ -146,6 +173,7 @@ class Worklist(Generic[T]):
         title: str,
         status: str | None = None,
         selector: Selector = Selector(),
+        item_state: type[BaseModel] | None = None,
     ) -> "Worklist[Mapping[str, object]]":
         source = _ArtifactWorklistSource(
             artifact=artifact,
@@ -154,7 +182,7 @@ class Worklist(Generic[T]):
             title=title,
             status=status,
         )
-        return cls(name=name, source=source, selector=selector)
+        return cls(name=name, source=source, selector=selector, item_state_model=item_state)
 
     @property
     def mutable(self) -> bool:
@@ -307,6 +335,37 @@ class _StaticWorklistSource(Generic[T]):
         return None
 
     def validate(self, ctx: "Context", items: Sequence[WorkItem[T]]) -> str | None:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class _ParameterWorklistSource:
+    param_name: str
+    item_id: Callable[[Any], str] | str
+    title: Callable[[Any], str] | str
+    status: Callable[[Any], str | None] | str | None
+    mutable: bool = False
+    artifact_backed: bool = False
+
+    def load(self, ctx: "Context") -> Sequence[WorkItem[Any]]:
+        raw_items = ctx.workflow_params.get(self.param_name)
+        if raw_items is None:
+            raise WorkflowExecutionError(
+                f"worklist source parameter {self.param_name!r} is missing from workflow_params"
+            )
+        if not isinstance(raw_items, Sequence) or isinstance(raw_items, (str, bytes, bytearray)):
+            raise WorkflowExecutionError(
+                f"worklist source parameter {self.param_name!r} must be a sequence of items"
+            )
+        return tuple(
+            _build_work_item(item, item_id=self.item_id, title=self.title, status=self.status)
+            for item in raw_items
+        )
+
+    def save(self, ctx: "Context", items: Sequence[WorkItem[Any]]) -> None:
+        return None
+
+    def validate(self, ctx: "Context", items: Sequence[WorkItem[Any]]) -> str | None:
         return None
 
 
@@ -514,6 +573,23 @@ def _mapping_dir_key(payload: Mapping[str, object], *, item_id: str) -> str:
     if isinstance(dir_key, str) and dir_key.strip():
         return dir_key.strip()
     return _default_dir_key(item_id)
+
+
+def _validate_worklist_item_state_model(
+    raw_state: type[BaseModel],
+    *,
+    worklist_name: str,
+) -> None:
+    if not inspect.isclass(raw_state) or not issubclass(raw_state, BaseModel):
+        raise WorkflowValidationError(
+            f"worklist {worklist_name!r} item_state must inherit from pydantic.BaseModel"
+        )
+    try:
+        raw_state()
+    except Exception as exc:
+        raise WorkflowValidationError(
+            f"worklist {worklist_name!r} item_state model {raw_state.__name__} must be instantiable with no arguments"
+        ) from exc
 
 
 __all__ = [

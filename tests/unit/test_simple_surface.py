@@ -515,29 +515,86 @@ def test_simple_workflow_rejects_class_level_transitions_and_flow() -> None:
         compile_workflow(TransitionWorkflow)
 
 
-def test_simple_workflow_rejects_item_state_prompt_placeholders() -> None:
+def test_simple_workflow_accepts_scoped_item_state_prompt_placeholders() -> None:
+    class ItemState(BaseModel):
+        status: str = "pending"
+
     class ItemStateWorkflow(simple.Workflow):
-        start = simple.step(prompt=simple.Prompt.inline("Inspect {item.state.status}."))
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+            item_state=ItemState,
+        )
+        start = simple.step(
+            prompt=simple.Prompt.inline("Inspect {item.state.status}."),
+            scope=gates,
+        )
 
-    with pytest.raises(
-        WorkflowValidationError,
-        match="item.state, which is not part of the canonical simple-workflow surface",
-    ):
-        compile_workflow(ItemStateWorkflow)
+    compiled = compile_workflow(ItemStateWorkflow)
+
+    assert compiled.worklists["gate"].item_state_model is ItemState
 
 
-def test_simple_workflow_rejects_step_item_state_prompt_placeholders() -> None:
-    class StepItemStateWorkflow(simple.Workflow):
-        review = simple.produce_verify_step(
-            producer_prompt="Draft.",
-            verifier_prompt=simple.Prompt.inline("Inspect {review.item_state.attempts}."),
+def test_simple_workflow_rejects_unknown_scoped_item_state_prompt_fields() -> None:
+    class ItemState(BaseModel):
+        status: str = "pending"
+
+    class BadItemStateWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+            item_state=ItemState,
+        )
+        start = simple.step(
+            prompt=simple.Prompt.inline("Inspect {item.state.missing}."),
+            scope=gates,
         )
 
     with pytest.raises(
         WorkflowValidationError,
-        match="step item_state, which is not part of the canonical simple-workflow surface",
+        match="unknown item state field 'missing' on worklist 'gate'",
     ):
-        compile_workflow(StepItemStateWorkflow)
+        compile_workflow(BadItemStateWorkflow)
+
+
+def test_simple_workflow_accepts_scoped_step_item_state_prompt_placeholders() -> None:
+    class StepItemStateWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+        )
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt=simple.Prompt.inline("Inspect {review.item_state.attempts} and {review.item_state.visits}."),
+            scope=gates,
+            item_state={"attempts": simple.StateVar(0)},
+        )
+
+    compiled = compile_workflow(StepItemStateWorkflow)
+
+    assert set(compiled.steps["review"].step_item_state_fields) == {
+        "visits",
+        "last_route",
+        "last_reason",
+        "rework_count",
+        "replan_count",
+        "attempts",
+    }
+
+
+def test_simple_workflow_rejects_item_state_without_scope() -> None:
+    class UnscopedItemStateWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify.",
+            item_state={"attempts": simple.StateVar(0)},
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="item_state requires scope=... on the same step",
+    ):
+        compile_workflow(UnscopedItemStateWorkflow)
 
 
 def test_simple_runtime_step_state_uses_pydantic_models_and_serializes_for_checkpoints() -> None:
@@ -819,3 +876,31 @@ def test_simple_context_suppresses_unmodeled_item_state_surfaces(tmp_path) -> No
         match="step_item_state is not part of the canonical public surface",
     ):
         _ = ctx.step_item_state
+
+
+def test_simple_context_exposes_modeled_item_state_surfaces(tmp_path) -> None:
+    class WorkflowState(BaseModel):
+        approved: bool = False
+
+    class ItemState(BaseModel):
+        status: str = "pending"
+
+    class StepItemState(BaseModel):
+        attempts: int = 0
+
+    ctx = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="simple-demo",
+        task_folder=tmp_path,
+        workflow_folder=tmp_path,
+        run_folder=tmp_path,
+        package_folder=tmp_path,
+        state=WorkflowState(),
+        session_store=InMemorySessionStore(),
+        item_state_store=ItemState(status="active"),
+        step_item_state_store=StepItemState(attempts=2),
+    )
+
+    assert ctx.item_state.status == "active"
+    assert ctx.step_item_state.attempts == 2

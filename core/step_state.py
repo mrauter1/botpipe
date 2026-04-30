@@ -108,12 +108,53 @@ def build_step_state_model(
     step_kind: str,
     module_name: str,
 ) -> type[BaseModel]:
+    return _build_model_backed_state(
+        raw_state,
+        step_name=step_name,
+        step_kind=step_kind,
+        module_name=module_name,
+        state_label="state",
+        model_name_suffix="StepState",
+    )
+
+
+def build_step_item_state_model(
+    raw_state: object,
+    *,
+    step_name: str,
+    step_kind: str,
+    module_name: str,
+) -> type[BaseModel]:
+    return _build_model_backed_state(
+        raw_state,
+        step_name=step_name,
+        step_kind=step_kind,
+        module_name=module_name,
+        state_label="item_state",
+        model_name_suffix="StepItemState",
+    )
+
+
+def _build_model_backed_state(
+    raw_state: object,
+    *,
+    step_name: str,
+    step_kind: str,
+    module_name: str,
+    state_label: str,
+    model_name_suffix: str,
+) -> type[BaseModel]:
     built_in_model = built_in_step_state_model(step_kind)
     if raw_state is None:
         return built_in_model
     if inspect.isclass(raw_state) and issubclass(raw_state, BaseModel):
-        _validate_custom_state_model(raw_state, step_name=step_name, step_kind=step_kind)
-        model_name = _generated_step_state_model_name(step_name)
+        _validate_custom_state_model(
+            raw_state,
+            step_name=step_name,
+            step_kind=step_kind,
+            state_label=state_label,
+        )
+        model_name = _generated_step_state_model_name(step_name, suffix=model_name_suffix)
         combined_model = type(model_name, (built_in_model, raw_state), {"__module__": module_name})
         combined_model.model_rebuild(force=True)
         return combined_model
@@ -124,9 +165,11 @@ def build_step_state_model(
             step_kind=step_kind,
             module_name=module_name,
             built_in_model=built_in_model,
+            state_label=state_label,
+            model_name_suffix=model_name_suffix,
         )
     raise WorkflowValidationError(
-        f"simple step {step_name!r} state must be declared with a pydantic.BaseModel subclass "
+        f"simple step {step_name!r} {state_label} must be declared with a pydantic.BaseModel subclass "
         "or a mapping of StateVar declarations"
     )
 
@@ -136,12 +179,13 @@ def _validate_custom_state_model(
     *,
     step_name: str,
     step_kind: str,
+    state_label: str,
 ) -> None:
     try:
         raw_state()
     except Exception as exc:
         raise WorkflowValidationError(
-            f"simple step {step_name!r} state model {raw_state.__name__} must be instantiable with no arguments"
+            f"simple step {step_name!r} {state_label} model {raw_state.__name__} must be instantiable with no arguments"
         ) from exc
     for field_name in raw_state.model_fields:
         _validate_reserved_step_state_field_name(step_name=step_name, step_kind=step_kind, field_name=field_name)
@@ -154,20 +198,27 @@ def _build_statevar_step_state_model(
     step_kind: str,
     module_name: str,
     built_in_model: type[BaseModel],
+    state_label: str,
+    model_name_suffix: str,
 ) -> type[BaseModel]:
     field_definitions: dict[str, tuple[Any, Any]] = {}
     for raw_name, raw_value in raw_state.items():
         if not isinstance(raw_name, str) or not raw_name.strip():
             raise WorkflowValidationError(
-                f"simple step {step_name!r} state field names must be non-empty strings"
+                f"simple step {step_name!r} {state_label} field names must be non-empty strings"
             )
         field_name = raw_name.strip()
         _validate_reserved_step_state_field_name(step_name=step_name, step_kind=step_kind, field_name=field_name)
         if not isinstance(raw_value, StateVar):
             raise WorkflowValidationError(
-                f"simple step {step_name!r} state field {field_name!r} must be declared with StateVar(...)"
+                f"simple step {step_name!r} {state_label} field {field_name!r} must be declared with StateVar(...)"
             )
-        annotation = _statevar_annotation(raw_value, step_name=step_name, field_name=field_name)
+        annotation = _statevar_annotation(
+            raw_value,
+            step_name=step_name,
+            field_name=field_name,
+            state_label=state_label,
+        )
         if raw_value.default_factory is not None:
             field_definitions[field_name] = (annotation, Field(default_factory=raw_value.default_factory))
             continue
@@ -175,7 +226,7 @@ def _build_statevar_step_state_model(
     if not field_definitions:
         return built_in_model
     return create_model(
-        _generated_step_state_model_name(step_name),
+        _generated_step_state_model_name(step_name, suffix=model_name_suffix),
         __base__=built_in_model,
         __module__=module_name,
         **field_definitions,
@@ -187,19 +238,20 @@ def _statevar_annotation(
     *,
     step_name: str,
     field_name: str,
+    state_label: str,
 ) -> Any:
     if state_var.annotation is not Any:
         return state_var.annotation
     if state_var.default_factory is not None:
         raise WorkflowValidationError(
-            f"simple step {step_name!r} state field {field_name!r} must declare an explicit type when using default_factory"
+            f"simple step {step_name!r} {state_label} field {field_name!r} must declare an explicit type when using default_factory"
         )
     default = state_var.default
     if isinstance(default, bool):
         return bool
     if default is None:
         raise WorkflowValidationError(
-            f"simple step {step_name!r} state field {field_name!r} uses StateVar(None), which is ambiguous; "
+            f"simple step {step_name!r} {state_label} field {field_name!r} uses StateVar(None), which is ambiguous; "
             "provide an explicit type"
         )
     return type(default)
@@ -219,10 +271,10 @@ def _validate_reserved_step_state_field_name(
     )
 
 
-def _generated_step_state_model_name(step_name: str) -> str:
+def _generated_step_state_model_name(step_name: str, *, suffix: str) -> str:
     parts = [part for part in re.split(r"[^0-9A-Za-z]+", step_name) if part]
     stem = "".join(part[:1].upper() + part[1:] for part in parts) or "Generated"
-    return f"{stem}StepState"
+    return f"{stem}{suffix}"
 
 
 def _is_produce_verify_kind(step_kind: str) -> bool:
@@ -235,6 +287,7 @@ __all__ = [
     "ProduceVerifyRuntimeState",
     "StateVar",
     "StepRuntimeState",
+    "build_step_item_state_model",
     "build_step_state_model",
     "built_in_step_state_model",
     "reserved_step_state_field_names",

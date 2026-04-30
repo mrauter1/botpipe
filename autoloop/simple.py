@@ -144,6 +144,7 @@ class StepDeclaration(_NamedDeclaration):
         reads: Sequence[ArtifactInput] = (),
         requires: Sequence[ArtifactInput] = (),
         writes: Sequence[Artifact | ArtifactSpec] = (),
+        scope: Worklist | str | None = None,
         routes: RouteMapping | None = None,
         before: Any | None = None,
         after: Any | None = None,
@@ -159,6 +160,7 @@ class StepDeclaration(_NamedDeclaration):
         self.requires = tuple(requires)
         self.outputs = _normalize_writes(writes)
         self.writes = self.outputs
+        self.scope = scope
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
@@ -187,8 +189,10 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         verifier_requires: Sequence[ArtifactInput] = (),
         producer_writes: Sequence[Artifact | ArtifactSpec] = (),
         verifier_writes: Sequence[Artifact | ArtifactSpec] = (),
+        scope: Worklist | str | None = None,
         routes: RouteMapping | None = None,
-        state: type[BaseModel] | None = None,
+        state: type[BaseModel] | Mapping[str, StateVar] | None = None,
+        item_state: type[BaseModel] | Mapping[str, StateVar] | None = None,
         before_producer: Any | None = None,
         after_producer: Any | None = None,
         before_verifier: Any | None = None,
@@ -211,8 +215,10 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         self.writes = self.outputs
         self.review_outputs = _normalize_writes(verifier_writes)
         self.verifier_writes = self.review_outputs
+        self.scope = scope
         self.routes = dict(routes or {})
         self.state = state
+        self.item_state = item_state
         self.before_producer = before_producer
         self.after_producer = after_producer
         self.before_verifier = before_verifier
@@ -357,6 +363,7 @@ def step(
     reads: Sequence[ArtifactInput] = (),
     requires: Sequence[ArtifactInput] = (),
     writes: Sequence[Artifact | ArtifactSpec] = (),
+    scope: Worklist | str | None = None,
     routes: RouteMapping | None = None,
     before: Any | None = None,
     after: Any | None = None,
@@ -372,6 +379,7 @@ def step(
         reads=reads,
         requires=requires,
         writes=writes,
+        scope=scope,
         routes=routes,
         before=before,
         after=after,
@@ -394,8 +402,10 @@ def produce_verify_step(
     verifier_requires: Sequence[ArtifactInput] = (),
     producer_writes: Sequence[Artifact | ArtifactSpec] = (),
     verifier_writes: Sequence[Artifact | ArtifactSpec] = (),
+    scope: Worklist | str | None = None,
     routes: RouteMapping | None = None,
-    state: type[BaseModel] | None = None,
+    state: type[BaseModel] | Mapping[str, StateVar] | None = None,
+    item_state: type[BaseModel] | Mapping[str, StateVar] | None = None,
     before_producer: Any | None = None,
     after_producer: Any | None = None,
     before_verifier: Any | None = None,
@@ -417,8 +427,10 @@ def produce_verify_step(
         verifier_requires=verifier_requires,
         producer_writes=producer_writes,
         verifier_writes=verifier_writes,
+        scope=scope,
         routes=routes,
         state=state,
+        item_state=item_state,
         before_producer=before_producer,
         after_producer=after_producer,
         before_verifier=before_verifier,
