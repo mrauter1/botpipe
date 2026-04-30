@@ -4042,3 +4042,89 @@ phase_mode=single
 phase_ids=canonicalize-core-produces-surface,migrate-tests-and-lock-strictness
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+I’m working from the phase artifacts and the maintained `core`/test surfaces first, then I’ll patch the remaining live `produces` usage, tighten the strictness scan, and run the targeted verification suite.
+
+I have the phase plan and the existing decision ledger. Next I’m locating the remaining maintained `produces` surfaces and checking whether the current tree already has partial cleanup that I need to complete safely.
+
+The current `core` tree is still using the legacy constructor and runtime fields directly, and `core/__init__.py` still has the dynamic alias shim. I’m reading the affected implementations and the strictness test now so I can switch the maintained surface in one coherent pass instead of doing piecemeal renames.
+
+I’ve confirmed the strictness scan is still excluding the whole compatibility runtime suite, which is broader than the requested boundary. I’m doing one more targeted search through maintained authoring call sites so I can remove the constructor aliases without leaving a hidden live caller behind.
+
+There are maintained imports from both `core.*` and `autoloop_v3.core.*`, but that alone doesn’t justify the dynamic submodule mirroring. I’m checking the simple-surface tests that exercise the bridge so I can remove only the redundant alias path and leave the explicit package bridge intact.
+
+I’ve got enough context to patch coherently now. The main work is straightforward but it spans constructor signatures, validation internals, test authoring, and the strictness scan, so I’m switching to edits next and then I’ll run the targeted suite from the phase plan.
+
+I’m patching the core runtime and validation surfaces first, then I’ll flip the maintained tests and narrow the compatibility-suite exclusion so the strictness scan can catch any remaining live vocabulary.
+
+I’m editing `core/steps.py` first to remove the live constructor aliases and switch the in-memory step state to canonical `writes` / `producer_writes` / `verifier_writes`. After that I’ll update compiler, validation, and engine to consume only those canonical attrs.
+
+The canonical step attrs are in place now. I’m rewriting validation’s remaining seeds, lowering, inventory, and verifier checks to the same vocabulary so the compiler and runtime aren’t carrying dual names internally anymore.
+
+The remaining usage is now isolated to maintained tests plus the compatibility runtime suite. I’m switching those declarations to `writes`/`producer_writes`/`verifier_writes` and then I’ll harden the strictness scan against the legacy tokens.
+
+I’m patching the maintained test suites now. The only nontrivial part is the compatibility runtime file because it embeds small workflow source strings that also need to stop authoring `PromptStep(..., produces=...)`.
+
+I’ve finished the active test-surface migration. Next I’m tightening `tests/strictness/test_no_compat.py` so it scans the compatibility runtime suite too and explicitly bans `produces`, `review_produces`, and `do_produces` from the maintained tree.
+
+I’ve removed the redundant alias shim. Before I start the full pytest set, I’m doing a quick import smoke check because the only likely fallout is the old submodule-identity assumption under `autoloop_v3.core.*`.
+
+The import smoke check exposed the real risk I expected: without some bridge for submodules, mixed `core.*` and `autoloop_v3.core.*` imports would diverge into different class identities. I’m moving that compatibility mechanism into the explicit `autoloop_v3.core` bridge so we still remove the implicit mirroring from `core/__init__.py` without breaking mixed-import callers.
+
+The explicit bridge is in place now. I’m using the repo’s virtualenv for a quick import smoke check first, then I’ll run the phase’s targeted pytest set against the updated core and maintained suites.
+
+The targeted suite is running cleanly so far through validation and into the contract tests. I’m waiting on the rest of the regression set now, then I’ll update the phase notes and decision ledger with the final compatibility-bridge decision.
+
+The failures split into two buckets: a couple of pair-step tests still need `producer_writes`, and a broader workflow-discovery regression means the explicit bridge is still disturbing class/module identity in the compatibility-runtime package loading path. I’m reproducing that second issue with small smoke scripts so I can fix the bridge instead of papering over the symptoms.
+
+I found the real import shape under the test harness: `autoloop_v3.core` resolves through the repo-root package name, not the dormant `autoloop_v3/core/__init__.py` bridge. I’m moving the explicit core bridge to the package root so the dual-name compatibility stays explicit and deterministic without reintroducing the old dynamic mirroring in `core/__init__.py`.
+
+The bridge regression is fixed now. I’ve validated the failing workflow-discovery path directly; next I’m rerunning the full phase verification set to make sure the remaining contract and compatibility cases are all clean together.
+
+I’ve got a clean verification run. I’m updating the phase notes and the decision ledger now with the one non-obvious bridge decision: the explicit compatibility alias had to live at the repo-root `autoloop_v3` package entrypoint because that’s the import path the test harness actually exercises.
+
+The source changes are done, but the test/import pass touched tracked `__pycache__` artifacts. I’m restoring those generated binaries so the result stays limited to the intended source and artifact files.
+
+Scope considered
+
+- Maintained core runtime/authoring surfaces: `core/steps.py`, `core/compiler.py`, `core/validation.py`, `core/engine.py`, `core/__init__.py`, and the import-bridge path that actually backs `autoloop_v3.core`.
+- Maintained active suites: `tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, `tests/runtime/test_compatibility_runtime.py`, `tests/fixtures/toy_runtime_workflow.py`, and `tests/strictness/test_no_compat.py`.
+
+What I analyzed
+
+- Remaining live `produces` / `review_produces` / `do_produces` usage across maintained code and tests.
+- The dual-package import path to confirm whether removing `core/__init__.py` mirroring would break `core.*` vs `autoloop_v3.core.*` identity.
+- The workflow capability/runtime loader path after bridge changes, including the top-level `core` import context.
+
+What I changed
+
+- Canonicalized maintained core step state to `writes`, `producer_writes`, and `verifier_writes` in [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/steps.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), and [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py).
+- Removed the dynamic alias mirroring from [core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/__init__.py).
+- Kept one explicit compatibility bridge by wiring `autoloop_v3.core.*` to canonical `core.*` modules at the repo-root [__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/__init__.py) and the nested [autoloop_v3/core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_v3/core/__init__.py).
+- Updated [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py) to import runtime-loader types through explicit top-level runtime paths, avoiding broken parent-relative imports once `core` stays canonical.
+- Migrated the maintained tests and fixture authoring surface to canonical write vocabulary in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [tests/runtime/test_compatibility_runtime.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_compatibility_runtime.py), and [tests/fixtures/toy_runtime_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/fixtures/toy_runtime_workflow.py).
+- Tightened [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) to scan the compatibility runtime suite and fail on active `produces=` / `.produces` / `review_produces` / `do_produces` patterns.
+
+Key findings / decisions
+
+- The old `core/__init__.py` alias shim was removable, but only after moving the explicit `autoloop_v3.core -> core` bridge to the actual package root used by the test harness.
+- Without that explicit root bridge, `autoloop_v3.core.*` and `core.*` loaded as distinct modules/classes and broke workflow discovery and `Step`/`Workflow` identity checks.
+- The targeted verification suite passed: `259 passed` with `.venv/bin/pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_provider_backends.py tests/strictness/test_no_compat.py`.
+
+Open issues / next step
+
+- No blocking issues remain for this phase.
+- If you want, the next sensible follow-up is a broader repo sweep for legacy vocabulary in non-maintained docs or archived compatibility surfaces, but the requested maintained/core surface is clean.

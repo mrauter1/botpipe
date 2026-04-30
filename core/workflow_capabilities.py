@@ -513,7 +513,10 @@ def selected_workflow_decomposition_surface_payload(
 
 def _inspect_catalog_entry(root_path: Path, entry: WorkflowCatalogEntry) -> WorkflowCapabilityEntry:
     if entry.manifest_path is not None and entry.workflow_module is not None and entry.package_module is not None:
-        from ..runtime.loader import ResolvedWorkflow, WorkflowReference
+        try:
+            from runtime.loader import ResolvedWorkflow, WorkflowReference
+        except ImportError:  # pragma: no cover - compatibility import path
+            from autoloop_v3.runtime.loader import ResolvedWorkflow, WorkflowReference
 
         loaded = load_workflow_package_contract(root_path, entry)
         reference = WorkflowReference(
@@ -646,7 +649,10 @@ def _catalog_entry_for_reference(root_path: Path, reference) -> WorkflowCatalogE
 
 
 def _resolve_reference(root_path: Path, reference: str | type[Any]):
-    from ..runtime.loader import WorkflowDiscoveryError, WorkflowManifestError, resolve_workflow_reference
+    try:
+        from runtime.loader import WorkflowDiscoveryError, WorkflowManifestError, resolve_workflow_reference
+    except ImportError:  # pragma: no cover - compatibility import path
+        from autoloop_v3.runtime.loader import WorkflowDiscoveryError, WorkflowManifestError, resolve_workflow_reference
 
     try:
         return resolve_workflow_reference(root_path, reference)
