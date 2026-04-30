@@ -3240,3 +3240,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddc24-f2a2-7982-b340-9454a80a966f
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+Authoring targeted regression tests for the canonical route/runtime cleanup now. I’m checking which existing suites already cover the persisted session/checkpoint compatibility seam, then I’ll add focused tests for the removed live `SUCCESS`/`_compat` authoring path and update the phase test artifacts.
+
+There’s already broad strictness and runtime payload coverage, so I’m adding narrow behavioral tests rather than duplicating that surface. The gap now is an explicit regression test that live workflow validation rejects `SUCCESS`, and a surface test that `_compat` no longer advertises the removed route/terminal helpers.
+
+I’m making two focused additions: one unit test to pin rejection of live `SUCCESS` destinations, and one surface test to pin that `core._compat` no longer exports the removed route/runtime helpers. After that I’ll document the coverage map in the phase artifact.
+
+The repo test additions are in. I’m validating them with a quick compile pass and then I’ll write the behavior-to-test map plus the test-phase feedback entry so the auditor sees exactly what was covered.
+
+The environment can compile the new tests but cannot import the runtime stack because `pydantic` is missing here, so I’m recording that constraint explicitly in the test artifact and decision ledger rather than pretending the runtime checks ran.
+
+Scope considered
+
+- Route/runtime canonicalization regressions in active validation and compatibility-surface tests.
+- Phase-local test artifacts for coverage mapping and auditor feedback.
+
+What I analyzed
+
+- Existing coverage in `tests/unit/test_validation.py`, `tests/unit/test_simple_surface.py`, `tests/strictness/test_no_compat.py`, and `tests/runtime/test_compatibility_runtime.py`.
+- The latest run decisions, especially the narrowed compatibility boundary: no live `SUCCESS`/`RouteInfo` authoring, persisted session/checkpoint normalization only.
+- Current test-phase artifacts at [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/route-runtime-canonicalization/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/route-runtime-canonicalization/feedback.md).
+
+What I changed
+
+- Added `tests/unit/test_validation.py::test_validation_rejects_legacy_success_terminal_string` to pin that active workflows using `"SUCCESS"` in `transitions` now fail validation.
+- Added `tests/unit/test_simple_surface.py::test_core_compat_surface_excludes_removed_route_runtime_helpers` to pin that `autoloop_v3.core._compat` no longer re-exports `SUCCESS`, `RouteInfo`, or legacy step wrappers.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/route-runtime-canonicalization/test_strategy.md) with a behavior-to-coverage map, edge cases, failure paths, and environment gaps.
+- Appended the test-phase summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/route-runtime-canonicalization/feedback.md), and recorded the non-obvious test decisions under the current turn header in `decisions.txt`.
+
+Key findings / decisions
+
+- Broad strictness and persisted checkpoint/session compatibility coverage already existed; the missing direct regressions were the removed live `SUCCESS` path and the narrowed `_compat` surface.
+- The environment cannot execute runtime imports here because `pydantic` is missing, and `pytest` is also unavailable, so executable validation had to stop at static compilation.
+
+Open issues / next step
+
+- Validation performed: `python3 -m py_compile tests/unit/test_validation.py tests/unit/test_simple_surface.py`.
+- Not run: `pytest`, and direct runtime import probes, due missing `pytest` and `pydantic` in this environment.
+- Next step is auditor review of the updated tests and artifacts, or running the targeted unit suites in an environment with the project test dependencies installed.

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 import autoloop
 import autoloop.simple as simple
 import autoloop_v3.core as strict_core
+import autoloop_v3.core._compat as strict_compat
 import autoloop_v3.core.steps as strict_steps
 import autoloop_v3.core.validation as strict_validation
 import core
@@ -122,6 +123,13 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
 
     for symbol in ("Artifact", "Context", "FAIL", "FINISH", "GLOBAL", "PAUSE", "Prompt", "Route", "Workflow"):
         assert _import_from("autoloop_v3.core", symbol) is getattr(strict_core, symbol)
+
+
+def test_core_compat_surface_excludes_removed_route_runtime_helpers() -> None:
+    for symbol in ("SU" + "CCESS", "Route" + "Info", "LLMStep", "PairStep", "SystemStep", "WorkflowStep"):
+        assert not hasattr(strict_compat, symbol)
+        with pytest.raises(ImportError):
+            _import_from("autoloop_v3.core._compat", symbol)
 
 
 def test_autoloop_v3_core_bridge_preserves_shared_module_identity() -> None:

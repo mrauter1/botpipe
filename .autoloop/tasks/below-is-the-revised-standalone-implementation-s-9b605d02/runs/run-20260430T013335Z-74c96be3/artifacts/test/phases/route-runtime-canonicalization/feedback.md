@@ -6,3 +6,5 @@
 - Phase Directory Key: route-runtime-canonicalization
 - Phase Title: Canonicalize Route And Runtime Internals
 - Scope: phase-local authoritative verifier artifact
+
+- Added focused unit regressions in `tests/unit/test_validation.py` and `tests/unit/test_simple_surface.py` to pin the removed live `SUCCESS` authoring path and the narrowed `autoloop_v3.core._compat` surface; retained broad coverage references in `test_strategy.md` for strictness and persisted session/checkpoint compatibility.
