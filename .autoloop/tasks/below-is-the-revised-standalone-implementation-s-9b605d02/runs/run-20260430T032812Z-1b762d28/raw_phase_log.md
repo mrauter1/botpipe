@@ -417,3 +417,104 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+I’m checking the existing test-strategy artifact and the current bridge-sensitive tests first. If the current suite already covers the core rename path, I’ll add only the narrow regression assertion that would have caught the module-identity/workflow-capabilities break from the bridge refactor.
+
+I’m tightening the existing bridge-identity test instead of adding a new file. The narrow regression I want to catch is `autoloop_v3.core.workflow_capabilities` drifting away from `core.workflow_capabilities`, because that’s exactly what broke runtime discovery on the previous pass.
+
+The test change is in place. I’m running the bridge-sensitive slice now to verify the new assertion and to make sure the runtime compatibility/discovery path still passes with it.
+
+I’ve verified the added bridge assertion. I’m updating the test-phase artifacts now with a behavior-to-coverage map and a short summary of the regression guard that was added.
+
+Scope considered
+
+- The cycle-2 bridge-centralization surface in `core/_compat.py`, `__init__.py`, and `autoloop_v3/core/__init__.py`.
+- Bridge-sensitive tests already present in `tests/unit/test_simple_surface.py` and `tests/runtime/test_compatibility_runtime.py`.
+- Test-phase artifacts in the active phase directory: `test_strategy.md` and `feedback.md`.
+
+What I analyzed
+
+- Which existing tests already cover the canonical `produces` cleanup versus what was still missing for the bridge regression.
+- The exact failure mode from the prior implement pass: `autoloop_v3.core.workflow_capabilities` drifting away from `core.workflow_capabilities`.
+- The narrowest deterministic assertion that would catch that regression without adding unrelated test churn.
+
+What I changed
+
+- Extended [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) so `test_autoloop_v3_core_bridge_preserves_shared_module_identity` now also asserts `autoloop_v3.core.workflow_capabilities is core.workflow_capabilities`.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/test/phases/canonicalize-core-produces-surface/test_strategy.md) with an explicit behavior-to-coverage map, preserved invariants, failure paths, and known gaps.
+- Appended a concise validation summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/test/phases/canonicalize-core-produces-surface/feedback.md).
+
+Key findings / decisions
+
+- The added assertion is the direct regression guard for the bridge bug that previously broke workflow discovery through `workflow_capabilities`.
+- Validation passed: `.venv/bin/pytest tests/unit/test_simple_surface.py tests/runtime/test_compatibility_runtime.py` with `57 passed`.
+- I did not add broader new fixtures because the remaining changed risk surface in this test turn was module identity, not persisted payload translation.
+
+Open issues / next step
+
+- No known open issues in the phase-local test scope.
+- The next step is the test-phase verifier pass against the updated artifacts and the new bridge-identity assertion.
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+I’m auditing the added bridge-regression assertion and the updated test strategy against the phase scope first, then I’ll mark the test criteria and append any remaining coverage gaps if I find them.
+
+I don’t see a remaining coverage or reliability gap in the added test work. I’m marking the audit criteria complete and appending a short “no new findings” note to the feedback artifact.
+
+Scope considered
+
+- The test-phase additions for the bridge-centralization fix, centered on `tests/unit/test_simple_surface.py` and the already-running compatibility-runtime suite.
+- The active test artifacts: `test_strategy.md`, `feedback.md`, and `criteria.md`.
+- The authoritative decisions governing the preserved compatibility/runtime behavior and the ban on reintroducing active `produces` authoring.
+
+What I analyzed
+
+- Whether the new assertion actually covers the specific regression that broke workflow discovery when `autoloop_v3.core.workflow_capabilities` diverged from `core.workflow_capabilities`.
+- Whether the strategy artifact maps the changed behavior, preserved invariants, edge case, and failure mode clearly enough.
+- Whether the added tests are deterministic and avoid encoding any unconfirmed compatibility narrowing or behavior break.
+
+What I reviewed
+
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), especially `test_autoloop_v3_core_bridge_preserves_shared_module_identity`.
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/test/phases/canonicalize-core-produces-surface/test_strategy.md).
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/test/phases/canonicalize-core-produces-surface/feedback.md).
+- The reported validation slice: `.venv/bin/pytest tests/unit/test_simple_surface.py tests/runtime/test_compatibility_runtime.py` with `57 passed`.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings were identified.
+- The new assertion is targeted at the actual bridge regression and complements the existing compatibility-runtime coverage instead of duplicating it.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/test/phases/canonicalize-core-produces-surface/criteria.md) to fully checked and appended a no-findings note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/test/phases/canonicalize-core-produces-surface/feedback.md).
+
+Open issues / next step
+
+- No open issues remain in this test-audit scope.
+- The test phase is ready to conclude as `COMPLETE`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added a bridge-identity regression assertion in `tests/unit/test_simple_surface.py` so `autoloop_v3.core.workflow_capabilities` must stay identical to `core.workflow_capabilities`; validated with `.venv/bin/pytest tests/unit/test_simple_surface.py tests/runtime/test_compatibility_runtime.py` (`57 passed`).
+- No new audit findings in this pass. The added assertion, existing compatibility-runtime coverage, and the documented strategy together cover the bridge regression, preserved module-identity invariant, and the relevant import-topology failure mode.
