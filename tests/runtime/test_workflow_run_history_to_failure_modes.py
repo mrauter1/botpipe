@@ -756,7 +756,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     "children": [
                         {
                             "run_id": "child-investigation-1",
-                            "status": "SUCCESS",
+                            "status": "success",
                             "terminal": "FINISH",
                             "workflow_name": "investigation_request_to_evidence_pack",
                         }
@@ -2000,7 +2000,7 @@ def _seed_release_run_history(root: Path, *, include_matching_failures: bool = T
                 {
                     "workflow_name": "investigation_request_to_evidence_pack",
                     "run_id": "child-investigation-1",
-                    "status": "SUCCESS",
+                    "status": "success",
                     "terminal": "FINISH",
                 }
             ],

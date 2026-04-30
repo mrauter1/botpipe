@@ -30,6 +30,9 @@
 - `tests/runtime/test_workflow_reference_resolution.py`
 - `tests/runtime/test_investigation_request_to_evidence_pack.py`
 - `tests/runtime/test_security_finding_to_verified_remediation.py`
+- `tests/runtime/test_optional_extensions.py`
+- `tests/runtime/test_runtime_static_graph.py`
+- `tests/runtime/test_workspace_and_context.py`
 - `tests/unit/test_stdlib_and_extensions.py`
 - `docs/authoring.md`
 - `docs/architecture.md`
@@ -48,13 +51,15 @@
 - `capture_decomposition_context` blocked-route contract
 - simple-workflow fixture `Params` opt-in/opt-out for loader fallback resolution
 - canonical runtime assertions via `compiled.routes[*]` and provider `route_required_writes`
+- canonical generated workflow-package fixtures for runtime observability, workspace/context, and child-workflow invocation tests
+- canonical runtime raw-trace filename expectations for `step` nodes
 
 ## Checklist Mapping
 
 - Public/test/doc consumer rename to `Params`, `writes`, `required_writes`: advanced; updated runtime/package/unit consumer assertions and authoring docs in this phase slice
 - Workflow package import/fallback cleanup: advanced; package CLI/runtime flows now preserve package `Params` across execution
 - Optimizer-vs-stdlib separation: advanced; shared parameter bundles moved to `autoloop_optimizer.parameters`, stdlib re-exports removed, consumer docs/tests/workflows retargeted
-- Reduced stdlib surface and consumer migration to `autoloop_optimizer`: advanced; additional active runtime/unit consumer files still need follow-up cleanup before AC-1 can close
+- Reduced stdlib surface and consumer migration to `autoloop_optimizer`: advanced; reviewer-listed active runtime consumer fixtures are now migrated, with remaining legacy hits limited to compatibility/provider/internal validation coverage
 
 ## Preserved Invariants
 
@@ -72,11 +77,12 @@
 - `workflow_package_to_composable_building_blocks.capture_decomposition_context` can legally route `blocked -> PAUSE`.
 - Active temp workflow fixtures in the touched runtime/unit slice now author with canonical `autoloop` imports plus `step(...)`, `produce_verify_step(...)`, and `python_step(...)` instead of strict `core` aliases.
 - Active runtime workflow-package assertions in the touched slice now read route metadata from `compiled.routes[...]` and provider `route_required_writes`.
+- Active runtime workflow-package generator helpers in the touched slice now author with canonical `autoloop` imports plus `step(...)` / `python_step(...)`, `Prompt.file(...)`, `Raw(...)`, and `FINISH`/`PAUSE`.
 
 ## Known Non-Changes
 
-- Low-level compatibility/internal tests still contain substantial legacy terminology and were not fully migrated in this turn.
-- Additional active runtime/unit files still contain banned consumer names outside the touched slice, notably `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_optional_extensions.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/runtime/test_workflow_package_to_composable_building_blocks.py`, `tests/runtime/test_runtime_git_tracking.py`, and selected success-status fixtures in other workflow-package runtime tests.
+- Low-level compatibility/internal tests still contain substantial legacy terminology and were not fully migrated in this phase, notably `tests/runtime/test_compatibility_runtime.py`, `tests/runtime/test_provider_backends.py`, `tests/runtime/test_runtime_tracing.py`, `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, `tests/unit/test_validation.py`, `tests/unit/test_simple_surface.py`, and selected internal helper assertions in `tests/unit/test_stdlib_and_extensions.py` / `tests/unit/test_optimization_helpers.py`.
+- Reviewer-listed active runtime consumer files `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_optional_extensions.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/runtime/test_workflow_package_to_composable_building_blocks.py`, `tests/runtime/test_runtime_git_tracking.py`, `tests/runtime/test_company_operation_to_recursive_improvement_cycle.py`, and `tests/runtime/test_workflow_run_history_to_failure_modes.py` no longer contain the banned consumer names targeted by this phase.
 - Internal strict-step scaffolding (`LLMStep`, `PairStep`, `SystemStep`, `RouteInfo`) was not removed in this phase.
 - Capability snapshot step payloads still use the existing `has_expected_output_schema` / `typed_output_schema` JSON field names for out-of-phase consumers.
 
@@ -96,6 +102,10 @@
   - 5 passed, 90 deselected
 - `./.venv/bin/python -m pytest tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_investigation_request_to_evidence_pack.py -k 'compiles_with_explicit_control_contracts or helper_seam or published_outputs_include_invocation_contract_and_receipt' -q`
   - 3 passed, 32 deselected
+- `./.venv/bin/python -m pytest tests/runtime/test_optional_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+  - 35 passed
+- `rg -n "\\bSUCCESS\\b|\\bSystemStep\\b|\\bLLMStep\\b|\\bPairStep\\b|\\bRouteInfo\\b|required_outputs|route_infos|route_required_outputs|\\btransitions\\b|\\bglobal_transitions\\b" tests/runtime/test_optional_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_workflow_package_to_composable_building_blocks.py tests/runtime/test_runtime_git_tracking.py tests/runtime/test_company_operation_to_recursive_improvement_cycle.py tests/runtime/test_workflow_run_history_to_failure_modes.py`
+  - no matches
 
 ## Deduplication / Centralization
 
@@ -103,3 +113,4 @@
 - Topology/static-graph JSON object normalization was centralized in compiler/static-graph helpers instead of repeated callsite workarounds.
 - Package-level `Params` handling now centralizes on the original workflow reference path instead of duplicating class-only parameter discovery during CLI execution.
 - Temp simple-workflow fixtures now centralize loader intent by explicitly setting `Params` to the imported model or to `None`, instead of relying on inherited `EmptyParams`.
+- Runtime workflow-package fixtures now consistently use the canonical simple surface directly in generated source strings instead of teaching legacy strict `core` aliases back into loader/runtime coverage.

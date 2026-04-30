@@ -169,7 +169,7 @@ def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_pa
     assert result.terminal == "FINISH"
     assert isinstance(topology["source_hash"], str)
     assert isinstance(topology["topology_hash"], str)
-    assert topology["entry_step"] == "start"
+    assert topology["entry"] == "start"
     assert topology["artifacts"]["topology"] == "topology.json"
     assert topology["artifacts"]["prompt_refs"] == "prompt_refs.json"
     assert (run_dir / topology["artifacts"]["topology"]).exists()
@@ -1387,9 +1387,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
-from core.primitives import Event
+from autoloop import Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -1398,12 +1396,8 @@ class {class_name}(Workflow):
     class State(BaseModel):
         done: bool = False
 
-    start = SystemStep(name="start")
-    entry = start
-    transitions = {{start: {{"done": SUCCESS}}}}
-
-    @staticmethod
-    def on_start(state: State, ctx):
+    @python_step(name="start", routes={{"done": FINISH}})
+    def start(state: State, ctx):
         return state.model_copy(update={{"done": True}}), Event("done")
 """.strip()
         + "\n",
@@ -1427,7 +1421,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import Artifact, LLMStep, SUCCESS, Workflow
+from autoloop import Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -1436,19 +1430,12 @@ class {class_name}(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    context_dump = Artifact("{{run_folder}}/context.json")
-    workflow_dump = Artifact("{{workflow_folder}}/workflow-note.txt")
-    ask = LLMStep(
-        name="ask",
-        producer="prompts/ask.md",
-        produces={{"context_dump": context_dump, "workflow_dump": workflow_dump}},
+    context_dump = Raw("context_dump", path="{{run_folder}}/context.json")
+    workflow_dump = Raw("workflow_dump", path="{{workflow_folder}}/workflow-note.txt")
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        writes=[context_dump, workflow_dump],
     )
-    entry = ask
-    transitions = {{ask: {{"done": SUCCESS}}}}
-
-    @staticmethod
-    def on_ask(state: State, outcome, artifacts):
-        return state.model_copy(update={{"note": artifacts.workflow_dump.read_text().strip()}})
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -1493,8 +1480,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import Artifact, LLMStep, SUCCESS, Workflow
-from core.primitives import Event, Outcome
+from autoloop import FINISH, PAUSE, Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -1503,24 +1489,12 @@ class {class_name}(Workflow):
     class State(BaseModel):
         answer: str | None = None
 
-    context_dump = Artifact("{{run_folder}}/context.json")
-    ask = LLMStep(
-        name="ask",
-        producer="prompts/ask.md",
-        produces={{"context_dump": context_dump}},
+    context_dump = Raw("context_dump", path="{{run_folder}}/context.json")
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        writes=[context_dump],
+        routes={{"answered": FINISH, "question": PAUSE}},
     )
-    entry = ask
-    transitions = {{ask: {{"answered": SUCCESS, "question": "PAUSE"}}}}
-
-    @staticmethod
-    def on_ask(state: State, outcome: Outcome, artifacts):
-        return state.model_copy(update={{"answer": outcome.payload.get("answer")}})
-
-    @staticmethod
-    def on_outcome(state: State, outcome: Outcome):
-        if outcome.tag == "question":
-            return Event("question", question=outcome.question)
-        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -1557,7 +1531,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import Artifact, LLMStep, Session, SUCCESS, Workflow
+from autoloop import Prompt, Raw, Session, Workflow, step
 
 
 class ChildWorkflow(Workflow):
@@ -1567,17 +1541,11 @@ class ChildWorkflow(Workflow):
         note: str = ""
 
     main = Session()
-    child_dump = Artifact("{run_folder}/child.json")
-    ask = LLMStep(name="ask", producer="prompts/ask.md", session=main, produces={"child_dump": child_dump})
-    entry = ask
-    transitions = {ask: {"done": SUCCESS}}
+    child_dump = Raw("child_dump", path="{run_folder}/child.json")
+    ask = step(prompt=Prompt.file("prompts/ask.md"), session=main, writes=[child_dump])
 
     def on_start(self, ctx):
         ctx.open_session(self.main)
-
-    @staticmethod
-    def on_ask(state: State, outcome, artifacts):
-        return state.model_copy(update={"note": outcome.payload.get("summary", "")})
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -1600,8 +1568,7 @@ import json
 
 from pydantic import BaseModel
 
-from core import Session, SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Event, FINISH, Session, Workflow, python_step
 from workflows.child_success import ChildWorkflow
 
 
@@ -1612,15 +1579,10 @@ class ParentClassWorkflow(Workflow):
         finished: bool = False
 
     main = Session()
-    launch = SystemStep(name="launch")
-    entry = launch
-    transitions = {launch: {"done": SUCCESS}}
 
-    def on_start(self, ctx):
-        ctx.open_session(self.main)
-
-    @staticmethod
-    def on_launch(state: State, ctx):
+    @python_step(name="launch", routes={"done": FINISH})
+    def launch(state: State, ctx):
+        ctx.open_session("main")
         result = ctx.invoke_workflow(ChildWorkflow, message="Run child from class", parameters={"mode": "strict"})
         payload = {
             "child_workflow": result.workflow_name,
@@ -1660,9 +1622,8 @@ import json
 
 from pydantic import BaseModel
 
+from autoloop import Event, FINISH, Workflow, python_step
 from autoloop_v3.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
 
 
 class ParentCompositionHelperWorkflow(Workflow):
@@ -1671,12 +1632,8 @@ class ParentCompositionHelperWorkflow(Workflow):
     class State(BaseModel):
         finished: bool = False
 
-    launch = SystemStep(name="launch")
-    entry = launch
-    transitions = {launch: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_launch(state: State, ctx):
+    @python_step(name="launch", routes={"done": FINISH})
+    def launch(state: State, ctx):
         child = run_child_workflow(
             ctx,
             "child_success",
@@ -1687,7 +1644,7 @@ class ParentCompositionHelperWorkflow(Workflow):
             child,
             status="success",
             last_event="done",
-            required_outputs=("child_dump",),
+            required_artifacts=("child_dump",),
         )
         adopted = adopt_child_artifacts(
             ctx,
@@ -1742,8 +1699,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from core import Artifact, LLMStep, Session, Workflow
-from core.primitives import Event
+from autoloop import PAUSE, Prompt, Raw, Session, Workflow, step
 
 
 class ChildPauseWorkflow(Workflow):
@@ -1753,23 +1709,16 @@ class ChildPauseWorkflow(Workflow):
         note: str = ""
 
     main = Session()
-    child_dump = Artifact("{run_folder}/child.json")
-    ask = LLMStep(name="ask", producer="prompts/ask.md", session=main, produces={"child_dump": child_dump})
-    entry = ask
-    transitions = {ask: {"question": "PAUSE"}}
+    child_dump = Raw("child_dump", path="{run_folder}/child.json")
+    ask = step(
+        prompt=Prompt.file("prompts/ask.md"),
+        session=main,
+        writes=[child_dump],
+        routes={"question": PAUSE},
+    )
 
     def on_start(self, ctx):
         ctx.open_session(self.main)
-
-    @staticmethod
-    def on_ask(state: State, outcome, artifacts):
-        return state
-
-    @staticmethod
-    def on_outcome(state: State, outcome):
-        if outcome.tag == "question":
-            return Event("question", question=outcome.question)
-        return None
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -1792,8 +1741,7 @@ import json
 
 from pydantic import BaseModel
 
-from core import PAUSE, SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Event, FINISH, PAUSE, Workflow, python_step
 
 
 class ParentNameWorkflow(Workflow):
@@ -1802,12 +1750,8 @@ class ParentNameWorkflow(Workflow):
     class State(BaseModel):
         finished: bool = False
 
-    wait = SystemStep(name="wait")
-    entry = wait
-    transitions = {wait: {"question": PAUSE, "done": SUCCESS}}
-
-    @staticmethod
-    def on_wait(state: State, ctx):
+    @python_step(name="wait", routes={"question": PAUSE, "done": FINISH})
+    def wait(state: State, ctx):
         if ctx.answer is None:
             return state, Event("question", question="Parent question?")
         result = ctx.invoke_workflow("child_pause", message="Run child by name", parameters={"mode": "strict"})
@@ -1843,7 +1787,8 @@ def _write_child_failing_workflow_package(root: Path) -> None:
 from __future__ import annotations
 
 from pydantic import BaseModel
-from core import SUCCESS, SystemStep, Workflow
+
+from autoloop import FINISH, Workflow, python_step
 
 
 class ChildFailingWorkflow(Workflow):
@@ -1852,12 +1797,8 @@ class ChildFailingWorkflow(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    explode = SystemStep(name="explode")
-    entry = explode
-    transitions = {explode: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_explode(state: State, ctx):
+    @python_step(name="explode", routes={"done": FINISH})
+    def explode(state: State, ctx):
         raise RuntimeError("child boom")
 """.strip()
         + "\n",
@@ -1900,8 +1841,7 @@ import json
 
 from pydantic import BaseModel
 
-from core import Artifact, SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Event, FINISH, Raw, Workflow, python_step
 
 
 class ChildTypedWorkflow(Workflow):
@@ -1919,13 +1859,10 @@ class ChildTypedWorkflow(Workflow):
         summary: str
         ready: bool
 
-    child_dump = Artifact("{{run_folder}}/typed-child.json")
-    plan = SystemStep(name="plan", produces={{"child_dump": child_dump}})
-    entry = plan
-    transitions = {{plan: {{"done": SUCCESS}}}}
+    child_dump = Raw("child_dump", path="{{run_folder}}/typed-child.json")
 
-    @staticmethod
-    def on_plan(state: State, ctx):
+    @python_step(name="plan", writes=[child_dump], routes={{"done": FINISH}})
+    def plan(state: State, ctx):
         payload = {{
             "topic": ctx.input.topic,
             "urgency": ctx.input.urgency,
@@ -1962,8 +1899,7 @@ import json
 
 from pydantic import BaseModel
 
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+from autoloop import Event, FINISH, Workflow, python_step
 from workflows.{child_package_name} import ChildTypedWorkflow
 
 
@@ -1973,12 +1909,8 @@ class ParentTypedInvokerWorkflow(Workflow):
     class State(BaseModel):
         finished: bool = False
 
-    launch = SystemStep(name="launch")
-    entry = launch
-    transitions = {{launch: {{"done": SUCCESS}}}}
-
-    @staticmethod
-    def on_launch(state: State, ctx):
+    @python_step(name="launch", routes={{"done": FINISH}})
+    def launch(state: State, ctx):
         child = ctx.invoke_workflow(
             ChildTypedWorkflow,
             message="Run typed child",
@@ -2018,8 +1950,8 @@ def _write_parent_failing_invoker_workflow_package(root: Path) -> None:
 from __future__ import annotations
 
 from pydantic import BaseModel
-from core import SUCCESS, SystemStep, Workflow
-from core.primitives import Event
+
+from autoloop import Event, FINISH, Workflow, python_step
 
 
 class ParentFailingWorkflow(Workflow):
@@ -2028,12 +1960,8 @@ class ParentFailingWorkflow(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    launch = SystemStep(name="launch")
-    entry = launch
-    transitions = {launch: {"done": SUCCESS}}
-
-    @staticmethod
-    def on_launch(state: State, ctx):
+    @python_step(name="launch", routes={"done": FINISH})
+    def launch(state: State, ctx):
         ctx.invoke_workflow("child_failing", message="Run child fatal")
         return state, Event("done")
 """.strip()

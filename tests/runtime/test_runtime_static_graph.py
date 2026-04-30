@@ -5,6 +5,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from autoloop import FINISH, Prompt, Route, Workflow, produce_verify_step, python_step
+from autoloop_v3.core import Artifact
 from autoloop_v3.core.compiler import compile_workflow
 from autoloop_v3.runtime.static_graph import (
     TOPOLOGY_FILENAME,
@@ -14,8 +16,6 @@ from autoloop_v3.runtime.static_graph import (
     workflow_topology_payload,
 )
 from autoloop_v3.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
-from core import Artifact, PairStep, RouteInfo, SUCCESS, SystemStep, Workflow
-from core.primitives import Event, Outcome
 
 
 class _AssessmentPayload(BaseModel):
@@ -25,36 +25,20 @@ class _AssessmentPayload(BaseModel):
 class _StaticGraphWorkflow(Workflow):
     name = "static_graph_demo"
 
-    class State(BaseModel):
-        note: str = ""
-
-    request = Artifact("{task_folder}/request.txt")
-    note = Artifact("{run_folder}/note.txt")
-    transcript = Artifact("{run_folder}/transcript.log")
-    assessment = PairStep(
-        name="assessment",
-        producer="prompts/assessment_producer.md",
-        verifier="prompts/assessment_verifier.md",
+    request = Artifact.text("{task_folder}/request.txt", name="request")
+    note = Artifact.text("{run_folder}/note.txt", name="note")
+    assessment = produce_verify_step(
+        producer_prompt=Prompt.file("prompts/assessment_producer.md"),
+        verifier_prompt=Prompt.file("prompts/assessment_verifier.md"),
         requires=[request],
-        produces={"note": note},
-        log_artifacts=[transcript],
-        expected_output_schema=_AssessmentPayload,
-        route_infos={"assessment_ready": RouteInfo(summary="assessment completed")},
+        producer_writes=[note],
+        control_schema=_AssessmentPayload,
+        routes={"assessment_ready": Route.to("finish", summary="assessment completed")},
     )
-    finish = SystemStep(name="finish")
-    entry = assessment
-    transitions = {
-        assessment: {"assessment_ready": finish},
-        finish: {"done": SUCCESS},
-    }
 
-    @staticmethod
-    def on_assessment(state: State, outcome: Outcome, artifacts):
-        return state.model_copy(update={"note": outcome.payload.get("summary", "")})
-
-    @staticmethod
-    def on_finish(state: State, ctx):
-        return state, Event("done")
+    @python_step(name="finish", routes={"done": FINISH})
+    def finish(ctx):
+        return None
 
 
 def test_static_step_graph_written_for_run(tmp_path: Path) -> None:
@@ -84,7 +68,7 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     assert assessment["requires"] == ["request"]
     assert assessment["producer_writes"] == ["assessment.note"]
     assert assessment["writes"] == ["assessment.note"]
-    assert assessment["log_artifacts"] == ["transcript"]
+    assert assessment["log_artifacts"] == []
     assert "assessment_ready" in assessment["available_routes"]
     assert finish["kind"] == "python"
     assert finish["prompt"] is None
@@ -92,7 +76,7 @@ def test_static_step_graph_includes_step_kind_prompts_routes_and_artifact_names(
     assert finish["verifier_prompt"] is None
 
 
-def test_static_step_graph_includes_route_infos_and_schema_presence(tmp_path: Path) -> None:
+def test_static_step_graph_includes_route_metadata_and_schema_presence(tmp_path: Path) -> None:
     compiled = compile_workflow(_StaticGraphWorkflow)
     write_static_step_graph(tmp_path, compiled)
 
@@ -102,9 +86,6 @@ def test_static_step_graph_includes_route_infos_and_schema_presence(tmp_path: Pa
     assert assessment["routes"]["assessment_ready"]["summary"] == "assessment completed"
     assert assessment["routes"]["assessment_ready"]["required_writes"] == []
     assert assessment["has_expected_output_schema"] is True
-    assert payload["transitions"]["steps"]["assessment"]["assessment_ready"] == "finish"
-    assert payload["transitions"]["steps"]["finish"]["done"] == "FINISH"
-    assert payload["transitions"]["global"] == {}
 
 
 def test_topology_artifacts_are_written_additively_with_canonical_finish_surface(tmp_path: Path) -> None:

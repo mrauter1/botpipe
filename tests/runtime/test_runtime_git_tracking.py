@@ -130,7 +130,7 @@ def test_git_tracking_run_policy_commits_at_run_boundaries(tmp_path: Path) -> No
     (run_dir / "trace.jsonl").write_text("trace\n", encoding="utf-8")
     step_payload = tracker.after_step(sequence=1, step_name="ask", commit_before_step=before_step["commit_before_step"])
     (run_dir / "result.txt").write_text("done\n", encoding="utf-8")
-    finish_payload = tracker.after_run(terminal="SUCCESS")
+    finish_payload = tracker.after_run(terminal="FINISH")
 
     log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:4]
     git_tracking_lines = [
@@ -183,7 +183,7 @@ def test_git_tracking_step_policy_commits_after_each_step(tmp_path: Path) -> Non
     (run_dir / "step-1.txt").write_text("one\n", encoding="utf-8")
     after_step = tracker.after_step(sequence=1, step_name="ask", commit_before_step=before_step["commit_before_step"])
     (run_dir / "step-2.txt").write_text("two\n", encoding="utf-8")
-    tracker.after_run(terminal="SUCCESS")
+    tracker.after_run(terminal="FINISH")
 
     log_messages = _git(tmp_path, "log", "--pretty=%s").splitlines()[:5]
 

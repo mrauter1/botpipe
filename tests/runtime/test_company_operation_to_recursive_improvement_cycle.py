@@ -1696,7 +1696,7 @@ def _seed_company_operation_history(root: Path) -> dict[str, Path]:
             created_at="2026-04-23T09:00:00+00:00",
             updated_at="2026-04-23T09:05:00+00:00",
             request_text="Publish the last portfolio governance package.\n",
-            terminal="SUCCESS",
+            terminal="FINISH",
         ),
         "portfolio_paused": _write_run_summary_record(
             root,
@@ -1719,7 +1719,7 @@ def _seed_company_operation_history(root: Path) -> dict[str, Path]:
             created_at="2026-04-24T08:30:00+00:00",
             updated_at="2026-04-24T08:45:00+00:00",
             request_text="Publish the refinement candidate for the governance handoff workflow.\n",
-            terminal="SUCCESS",
+            terminal="FINISH",
         ),
         "decomposition_failed": _write_run_summary_record(
             root,
