@@ -1899,3 +1899,101 @@ No open issues remain for `effective-required-writes`. I updated `criteria.md` t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+I’m treating this as a coverage pass on the now-approved `effective-required-writes` behavior. First I’m reading the active test artifacts and the existing tests around the new helper so I can fill any edge-case gaps before updating the strategy notes.
+
+The current coverage is close, but there’s still one useful edge case: a top-level `GLOBAL` route with an explicit required-write override should stay concrete even without step context. I’m checking the authoring form for that now; if it compiles cleanly, I’ll lock it in with one small regression test.
+
+I verified the authoring form compiles: explicit `GLOBAL` route overrides are accepted and stay as explicit route tuples. I’m adding that edge-case regression now, then I’ll update the phase test strategy and feedback with the coverage map.
+
+The coverage gap is patched. I’m running the focused topology/contract subset now to verify the new explicit-`GLOBAL` case and make sure the strategy claims match the actual green tests.
+
+Scope considered
+
+Phase-local `effective-required-writes` testing only. I focused on the new shared required-write helper behavior and the topology/provider contract surfaces it affects.
+
+What I analyzed
+
+I reviewed the active coverage in `tests/runtime/test_runtime_static_graph.py`, `tests/unit/test_validation.py`, `tests/contract/test_canonical_runtime_contracts.py`, `tests/unit/test_provider_boundary_core.py`, and the relevant engine contract regressions. The remaining edge-case gap was top-level `GLOBAL` routes with an explicit required-write override.
+
+What I changed
+
+I added `test_topology_payload_keeps_explicit_global_route_required_writes_concrete()` to [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py). It locks in that a context-free `GLOBAL` route still emits concrete `required_writes`, `explicit_required_writes`, and `effective_required_writes` when the route itself explicitly overrides required writes.
+
+I updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/effective-required-writes/test_strategy.md) with an explicit behavior-to-test map for AC-1, AC-2, preserved invariants, edge cases, failure paths, stabilization, and known gaps. I also appended a concise summary to the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/effective-required-writes/feedback.md).
+
+Key findings / decisions
+
+The added edge-case test complements the existing inherited-`GLOBAL` regression: together they now distinguish the two important no-step-context behaviors cleanly.
+- inherited `GLOBAL` route: `effective_required_writes` must be `null`
+- explicit `GLOBAL` route override: `effective_required_writes` must stay concrete
+
+Focused validation passed:
+- `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py tests/contract/test_canonical_runtime_contracts.py tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation`
+
+Open issues / next step
+
+No open test issue remains in this phase. The next step is auditor review of the updated test coverage and strategy artifacts.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+I’m auditing only the `effective-required-writes` test slice. First I’m reading the active test artifacts and the added regressions so I can decide whether the new coverage actually closes the phase risks before I update `criteria.md` or `feedback.md`.
+
+The coverage holds up: the focused suite is green, the strategy matches the tests, and the changed behavior has happy-path plus edge-case protection. I’m marking the audit complete and appending a short no-findings disposition to the phase feedback.
+
+Scope considered
+
+Phase-local audit of the `effective-required-writes` test slice only, including the updated strategy artifact and the added regressions in the repository test suite.
+
+What I analyzed
+
+I reviewed the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/effective-required-writes/test_strategy.md), the phase feedback artifact, and the relevant tests in [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py), [tests/contract/test_canonical_runtime_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_canonical_runtime_contracts.py), and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py). I also reran the focused suite the test author claimed.
+
+What I reviewed
+
+I checked that the coverage now protects:
+- inherited artifact-level required writes becoming effective required writes
+- explicit empty overrides staying distinct from inherited defaults
+- provider contract exposure of explicit vs effective required writes
+- topology and route-table exposure of the same distinction
+- inherited `GLOBAL` routes with no step context
+- explicit `GLOBAL` route overrides with no step context
+- final-route validation after rerouting
+- deterministic, non-flaky execution
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings remain. The strategy matches the actual tests, and the focused suite passed:
+- `.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py tests/contract/test_canonical_runtime_contracts.py tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation`
+
+Open issues / next step
+
+No open test-audit issue remains for `effective-required-writes`. I updated the phase `criteria.md` and appended the audit disposition to `feedback.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
