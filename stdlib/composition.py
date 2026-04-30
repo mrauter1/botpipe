@@ -27,7 +27,6 @@ def require_child_workflow_result(
     status: str = "success",
     last_event: str | None = None,
     required_artifacts: Sequence[str] = (),
-    required_outputs: Sequence[str] | None = None,
 ):
     """Validate an explicit child-workflow success contract before parent-local adoption."""
 
@@ -42,13 +41,7 @@ def require_child_workflow_result(
             f"child workflow {child_result.workflow_name!r} ended with route {child_last_event!r}, "
             f"expected {last_event!r}"
         )
-    if required_outputs is not None:
-        if required_artifacts:
-            raise ValueError("require_child_workflow_result accepts only one of required_artifacts or required_outputs")
-        required_names = tuple(required_outputs)
-    else:
-        required_names = tuple(required_artifacts)
-    for artifact_name in required_names:
+    for artifact_name in tuple(required_artifacts):
         try:
             source_path = child_result.output_artifacts[artifact_name]
         except KeyError as exc:

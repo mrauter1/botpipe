@@ -33,20 +33,6 @@ def _normalize_required_writes(value: Iterable[str]) -> tuple[str, ...]:
 
 
 @dataclass(frozen=True, slots=True)
-class RouteInfo:
-    """Legacy internal route metadata shim."""
-
-    summary: str | None = None
-    required_outputs: tuple[str, ...] = ()
-    handoff: str | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "summary", _normalize_optional_text(self.summary, field_name="summary"))
-        object.__setattr__(self, "required_outputs", _normalize_required_writes(self.required_outputs))
-        object.__setattr__(self, "handoff", _normalize_optional_text(self.handoff, field_name="handoff"))
-
-
-@dataclass(frozen=True, slots=True)
 class Route:
     """Explicit route target plus optional side effects."""
 
@@ -68,7 +54,8 @@ class Route:
     @staticmethod
     def to(
         target: object,
-        *effects: Effect,
+        *,
+        effects: Iterable[Effect] = (),
         summary: str | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
@@ -85,7 +72,8 @@ class Route:
 
     @staticmethod
     def finish(
-        *effects: Effect,
+        *,
+        effects: Iterable[Effect] = (),
         summary: str | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
@@ -93,7 +81,7 @@ class Route:
     ) -> "Route":
         return Route.to(
             FINISH,
-            *effects,
+            effects=effects,
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,
@@ -102,7 +90,8 @@ class Route:
 
     @staticmethod
     def pause(
-        *effects: Effect,
+        *,
+        effects: Iterable[Effect] = (),
         summary: str | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
@@ -110,7 +99,7 @@ class Route:
     ) -> "Route":
         return Route.to(
             PAUSE,
-            *effects,
+            effects=effects,
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,
@@ -119,7 +108,8 @@ class Route:
 
     @staticmethod
     def fail(
-        *effects: Effect,
+        *,
+        effects: Iterable[Effect] = (),
         summary: str | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
@@ -127,7 +117,7 @@ class Route:
     ) -> "Route":
         return Route.to(
             FAIL,
-            *effects,
+            effects=effects,
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,

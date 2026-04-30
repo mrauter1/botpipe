@@ -2986,3 +2986,77 @@ No phase-local audit issues remain. Later-phase semantic migration of broader le
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddc24-f2a2-7982-b340-9454a80a966f
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+I’m treating this as a scoped implementation pass for route/runtime canonicalization plus the remaining public-surface and strictness cleanup. First I’m reading the phase artifacts, current code paths, and the repository state to identify which legacy names are still active versus already quarantined.
+
+The phase artifacts confirm two important constraints: compatibility support stays only behind explicit migration readers, and the `core` bridge must preserve shared module identity rather than reintroducing a second package graph. I’m now tracing the remaining live references to the banned route/runtime vocabulary across `autoloop`, `core`, `runtime`, `stdlib`, and the active tests.
+
+The first pass shows the cleanup is split across three buckets: active code still normalizing legacy terminals and route metadata, maintained helpers still exposing legacy step vocabulary, and active tests still written against the removed names. I’m drilling into the validation/static-graph/stdlib seams next, because those determine whether the runtime can be cleaned without breaking the explicit compatibility suite.
+
+I’ve got the main fault lines now. The remaining live compat behavior is concentrated in `core.validation` route normalization, `runtime.static_graph` terminal rewriting, `stdlib` helper signatures, and the active contract/unit suites that still assert `SUCCESS`/`route_infos` shapes.
+
+Plan for the implementation slice:
+1. Remove live canonicalization fallbacks from route/runtime code: stop active compiler/validation/static-graph paths from carrying `SUCCESS` and route-output legacy normalization except through explicit compat helpers.
+2. Drop maintained stdlib helpers/signatures that still expose `pair_step` or `required_outputs`.
+3. Migrate active unit/contract/strictness suites to canonical `FINISH`, `required_writes`, `routes`, and non-positional `Route.to(...)` usage, while keeping legacy assertions isolated to the explicit compatibility suite.
+4. Run the targeted canonical verification set, then record the phase decisions and implementation notes.
+
+I’ve pinned the edit strategy: remove the live `route_infos`/`required_outputs` surface from active `core` modules by switching internal route metadata to canonical `Route` objects, and keep the old shape only in `core._compat` wrappers. In the same pass I’m making `Route.to(...)` keyword-only for effects, deleting the maintained `stdlib.pair_step` helper, and then migrating the active suites onto `FINISH`, `routes`, and `route_required_writes`.
+
+The first edit landed for the core route/compat types. I hit a context mismatch while updating validation and runtime files, so I’m re-reading those sections before applying the rest of the cleanup in smaller hunks.
+
+The implementation-side changes are in place now: active `core` route metadata uses canonical `Route` objects, and the legacy shape is being funneled through `_compat` instead of `core.routes` and `step.route_infos`. I’m switching over the active unit and contract suites next so they assert the canonical provider/runtime payloads instead of the old `SUCCESS` and `route_required_outputs` surface.
+
+I’ve finished the suite migrations that were mechanically blocking the cleanup: active unit and contract coverage now use canonical route metadata and canonical terminal names, and the strictness scan has been expanded to the maintained implementation/test tree with explicit compatibility exclusions. I’m running the targeted validation set now to catch any remaining import/signature regressions before I touch the run notes and decisions log.
+
+The code now compiles across the touched modules, and the remaining blocker is environmental: this checkout doesn’t have `pytest` installed, so I can’t execute the canonical suite directly here. I’m doing final consistency checks, then I’ll record the compatibility decisions and the phase note with the exact files and invariants changed.
+
+I caught an issue from my own validation step: deleting `__pycache__` directories also removed a large set of tracked bytecode files in this checkout. I’m restoring those immediately so the diff stays scoped to the actual source and test changes only.
+
+I’ve updated the phase artifacts and restored the diff to source-only changes. One more static compile pass is worth doing because several test files changed after the first run; I’m running that with an isolated `PYTHONPYCACHEPREFIX` so it doesn’t touch the tracked bytecode tree again.
+
+Scope considered
+
+- Active route/runtime/compiler/static-graph cleanup in `core`, `runtime`, and `stdlib`.
+- Active suite migration and strictness expansion in `tests/unit`, `tests/contract`, `tests/runtime`, and `tests/strictness`.
+- Explicit compatibility boundary only in `core._compat` and the quarantined compatibility fixtures.
+
+What I analyzed
+
+- Live legacy route/terminal handling in [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py), [core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), and [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py).
+- Maintained stdlib helpers in [stdlib/composition.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/composition.py), [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py), and the removed [stdlib/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/steps.py).
+- Active tests still asserting `SUCCESS`, `route_infos`, `RouteInfo`, `required_outputs`, or `route_required_outputs`.
+
+What I changed
+
+- Moved active step route metadata to canonical `Route` objects under `step.route_metadata`, and confined legacy `route_infos` parsing to `core._compat` wrapper classes.
+- Removed active `SUCCESS` handling from `core.primitives`, active runtime helpers, and static-graph rewriting; active compiler/validation now touch legacy terminals only through the explicit `_compat` seam.
+- Made `Route.to(...)` / `finish(...)` / `pause(...)` / `fail(...)` accept effect objects only through keyword-only `effects=`.
+- Removed `stdlib.pair_step` and dropped `require_child_workflow_result(..., required_outputs=...)`.
+- Migrated active tests/strictness to canonical `FINISH`, `route_metadata`, `routes`, and `route_required_writes`, while excluding only explicit compatibility files from the strictness scan.
+- Updated the phase notes and appended the non-obvious decisions to the current run block in `decisions.txt`.
+
+Key findings / decisions
+
+- The cleanest compatibility seam was `core._compat`, not scattered conditionals in active modules.
+- Active route metadata assertions had to move from old `compiled_step.route_infos` expectations to canonical compiled/provider route objects.
+- The environment does not have `pytest` installed, so I could not execute the requested verification suite here.
+
+Open issues / next step
+
+- Validation performed: banned-token `rg` scans on the active tree and `python3 -m py_compile` on all touched source/test modules.
+- Not run: `pytest` or the canonical verification suite, because `pytest` is unavailable in this environment.
+- If you want the runtime verification completed in this turn, the next step is to provide an environment with `pytest` installed and run the canonical suite plus the explicit compatibility suite.

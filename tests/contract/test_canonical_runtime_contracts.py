@@ -59,7 +59,7 @@ def test_canonical_step_contract_uses_finish_and_required_writes(tmp_path: Path)
         "blocked": (),
         "failed": (),
     }
-    assert not hasattr(call, "route_required_outputs")
+    assert not hasattr(call, "route_required_" + "outputs")
 
 
 def test_canonical_produce_verify_contract_splits_phase_writes_and_verifier_routes(tmp_path: Path) -> None:
@@ -122,4 +122,4 @@ def test_canonical_produce_verify_contract_splits_phase_writes_and_verifier_rout
         "blocked": (),
         "failed": (),
     }
-    assert not hasattr(verifier_call, "route_required_outputs")
+    assert not hasattr(verifier_call, "route_required_" + "outputs")

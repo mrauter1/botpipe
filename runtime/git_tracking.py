@@ -9,11 +9,9 @@ from typing import Any
 
 try:  # pragma: no branch - prefer installed-package imports when available
     from autoloop_v3.extensions.git.repo import GitRepo
-    from autoloop_v3.core.primitives import normalize_terminal
     from autoloop_v3.core.schema_registry import GIT_TRACKING_SCHEMA as CANONICAL_GIT_TRACKING_SCHEMA
 except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
     from extensions.git.repo import GitRepo
-    from core.primitives import normalize_terminal
     from core.schema_registry import GIT_TRACKING_SCHEMA as CANONICAL_GIT_TRACKING_SCHEMA
 from .config import GitTrackingRuntimeConfig
 from .workspace import append_run_git_step, update_run_git_tracking
@@ -114,7 +112,7 @@ class RuntimeGitTracker:
     def after_run(self, *, terminal: str | None) -> dict[str, object]:
         if not self._active:
             return dict(self._prepared_payload)
-        result = self._operate(lambda: self._after_run_operation(terminal=normalize_terminal(terminal)))
+        result = self._operate(lambda: self._after_run_operation(terminal=terminal))
         if result is None:
             return dict(self._prepared_payload)
         return result

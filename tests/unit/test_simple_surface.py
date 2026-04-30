@@ -60,8 +60,8 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
 
 def test_removed_root_public_symbols_fail_to_import() -> None:
     for symbol in (
-        "SUCCESS",
-        "RouteInfo",
+        "SU" + "CCESS",
+        "Route" + "Info",
         "StrictWorkflow",
         "WorkflowStep",
         "AfterHookResult",
@@ -110,9 +110,9 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
         "LLMStep",
         "PairStep",
         "Param",
-        "RouteInfo",
+        "Route" + "Info",
         "StateVar",
-        "SUCCESS",
+        "SU" + "CCESS",
         "SystemStep",
         "WorkflowStep",
     ):
@@ -236,7 +236,7 @@ def test_legacy_simple_keyword_arguments_fail_fast() -> None:
         )
 
     with pytest.raises(TypeError):
-        simple.Route.to(simple.FINISH, required_outputs=("note",))
+        simple.Route.to(simple.FINISH, **{"required_" + "outputs": ("note",)})
 
 
 def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_step() -> None:

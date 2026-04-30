@@ -270,17 +270,13 @@ def _topology_route_payload(*, step_name: str, route_tag: str, route: CompiledRo
         }
     return {
         "tag": route_tag,
-        "target": _canonical_target(route.target),
+        "target": route.target,
         "summary": route.summary,
         "required_writes": list(route.required_writes),
         "handoff": route.handoff,
         "on_taken": _callable_name(route.on_taken),
         "source_step": step_name,
     }
-
-
-def _canonical_target(target: str) -> str:
-    return FINISH if target == "SUCCESS" else target
 
 
 def _callable_name(value: object | None) -> str | None:
@@ -308,7 +304,7 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
     for step_name, routes in compiled.routes.items():
         for route_tag, route in routes.items():
             lines.append(
-                f"| {step_name} | {route_tag} | {_canonical_target(route.target)} | "
+                f"| {step_name} | {route_tag} | {route.target} | "
                 f"{', '.join(route.required_writes) if route.required_writes else '-'} |"
             )
     return "\n".join(lines)
@@ -320,10 +316,10 @@ def _topology_mermaid(compiled: CompiledWorkflow) -> str:
         for route_tag, route in routes.items():
             hook = f" / {_callable_name(route.on_taken)}" if route.on_taken is not None else ""
             lines.append(
-                f"    {step_name} -- {route_tag}{hook} --> {_canonical_target(route.target)}"
+                f"    {step_name} -- {route_tag}{hook} --> {route.target}"
             )
     for route_tag, route in compiled.global_routes.items():
-        lines.append(f"    GLOBAL -- {route_tag} --> {_canonical_target(route.target)}")
+        lines.append(f"    GLOBAL -- {route_tag} --> {route.target}")
     return "\n".join(lines)
 
 
