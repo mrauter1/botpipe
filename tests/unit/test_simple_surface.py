@@ -166,9 +166,13 @@ def test_core_compat_surface_excludes_removed_route_runtime_helpers() -> None:
 
 
 def test_autoloop_v3_core_bridge_preserves_shared_module_identity() -> None:
+    import autoloop_v3.core.workflow_capabilities as strict_capabilities
+    import core.workflow_capabilities as core_capabilities
+
     assert strict_core is core
     assert strict_validation is core_validation
     assert strict_steps is core_steps
+    assert strict_capabilities is core_capabilities
     assert strict_core.Workflow is core.Workflow
     assert strict_steps.Step is core_steps.Step
 
