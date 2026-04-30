@@ -1019,3 +1019,64 @@ Open issues / next step
 
 - No open issues in this phase.
 - The next scoped phase is still `item_state` / `step_item_state`; that work was intentionally not started here.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf1b-d457-7770-b54c-65f08231f93b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf1b-d457-7770-b54c-65f08231f93b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf1b-d457-7770-b54c-65f08231f93b
+---
+I’m switching to audit mode on the implemented state-surfaces slice. I’ll verify the scoped artifacts, inspect the touched compiler/runtime/test surfaces for behavioral gaps, and then update the phase review artifacts with either findings or an explicit clean review result.
+
+I’ve completed the code audit and I’m not finding a material correctness, safety, or maintainability gap within the scoped phase. I’m marking the criteria accordingly and appending an explicit clean-review note to the feedback artifact so the phase record is unambiguous.
+
+Scope considered
+
+- Active `state-surfaces` phase only.
+- Reviewed the implemented step-state runtime/model changes, public `StateVar` surface, checkpoint wiring, topology/state-contract outputs, and scoped regression tests.
+
+What I analyzed
+
+- [core/step_state.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/step_state.py)
+- [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py)
+- [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py)
+- [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py)
+- [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py)
+- [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py)
+- [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py)
+- [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py)
+- Active phase artifacts and run-local decisions ledger.
+
+What I reviewed
+
+- Built-in step runtime fields are now model-backed and persisted through `step_states`.
+- `produce_verify_step` adds `rework_count` / `replan_count`.
+- `StateVar` sugar is public on `autoloop` / `autoloop.simple`, compiles to Pydantic-backed step state, rejects ambiguous `None`, and rejects reserved-name collisions.
+- Engine-local visit/last-route bookkeeping was retired in favor of checkpointed step-state mutation.
+- Topology/static-graph outputs now expose step state metadata consistently.
+- Validation evidence remained green:
+  - `tests/unit/test_simple_surface.py tests/runtime/test_runtime_static_graph.py tests/strictness/test_no_compat.py`
+  - `tests/contract/test_engine_contracts.py`
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/state-surfaces/criteria.md) to fully checked.
+- Appended a clean review result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/state-surfaces/feedback.md).
+
+Open issues / next step
+
+- No open issues within this phase.
+- `item_state` / `step_item_state` and derived history/telemetry remain deferred to later phases by scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
