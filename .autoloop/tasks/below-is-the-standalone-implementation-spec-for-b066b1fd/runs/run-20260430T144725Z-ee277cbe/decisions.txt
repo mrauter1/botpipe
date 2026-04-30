@@ -5,3 +5,6 @@ Hook redirects operate on declared route tags for the current step, continue thr
 Effective required writes must be computed once and reused by runtime validation, provider contracts, and topology/static graph outputs to avoid drift.
 <autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260430T144725Z-ee277cbe" ts="2026-04-30T14:55:55.502483+00:00" />
 Phase 1 includes migration of all maintained tests and fixtures that still import autoloop_v3.core before bridge deletion; only strictness coverage should keep intentional failed-import assertions.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="compatibility-bridge-removal" pair="implement" turn_seq="1" run_id="run-20260430T144725Z-ee277cbe" ts="2026-04-30T14:58:26.871101+00:00" />
+Disabled `autoloop_v3.core` by making `autoloop_v3/core/__init__.py` raise `ModuleNotFoundError`, which preserves the broader `autoloop_v3.runtime` namespace behavior while forcing the removed core bridge to fail intentionally.
+Strictness coverage for bridge removal scans maintained Python sources for actual legacy import statements (`autoloop_v3.core*` and `core._compat`) instead of raw token mentions, so docs and failure-assertion helpers do not create false positives.

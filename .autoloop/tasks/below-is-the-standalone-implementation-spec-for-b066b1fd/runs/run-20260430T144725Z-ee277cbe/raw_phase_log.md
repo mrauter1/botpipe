@@ -151,3 +151,147 @@ phase_mode=single
 phase_ids=compatibility-bridge-removal,hook-rerouting,state-surfaces,scoped-item-state,effective-required-writes,history-telemetry
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+I’m handling the compatibility-bridge-removal phase. I’ll inspect the active phase artifacts and the current import surface first, then make the smallest code and test changes needed to remove the deprecated bridge cleanly.
+
+I’ve confirmed the phase scope: this slice is only bridge removal and import canonicalization. Next I’m tracing every remaining `autoloop_v3.core` and `core._compat` dependency in production code and tests so the deletions don’t strand the regression surface.
+
+The worktree is already mid-migration: old `autoloop_v3/...` paths are deleted and new root-level `core/`, `runtime/`, `tests/` trees are untracked. I’m treating those new root-level files as the active codebase and will avoid touching unrelated dirty areas outside this phase.
+
+The bridge points are exactly where the spec said: root `__init__.py`, `autoloop/simple.py`, `autoloop_v3/core/__init__.py`, and `core/_compat.py`. I’m reading the canonical package exports and the strictness tests next so I can remove the bridge without accidentally breaking intended public imports.
+
+I’ve got the first regression hotspot: `tests/unit/test_simple_surface.py` still encodes the old bridge as a success path, so it needs to flip from identity assertions to intentional failure assertions. I’m checking the remaining package layout now, because the root package name and `autoloop_v3` namespace still overlap in a way that affects what “fail intentionally” actually means.
+
+The package story is slightly messy: there’s both a root-level bridge file and a nested `autoloop_v3/core` compat package, but the installed package set is now centered on root `core/`, `runtime/`, `autoloop/`, and `tests/`. I’m confirming the actual canonical module inventory before I rewrite imports in bulk.
+
+I’ve narrowed it to a small set of production modules plus a larger but mostly mechanical test import surface. Before I edit, I’m checking the few non-mechanical cases: `core/validation.py`, the runtime modules with fallback blocks, and the tests that assert the bridge itself rather than just importing through it.
+
+The bulk of the change is now clear: production modules only need canonical `core...` imports, while the tests split into two groups. Most are mechanical import rewrites; two strictness suites need semantic changes so they assert `autoloop_v3.core` failure and scan for forbidden imports instead of depending on the bridge.
+
+I needed to verify one import-path assumption before editing: `autoloop_v3.runtime` still has to work while `autoloop_v3.core` must stop working. I’m checking how the current package loader resolves those names so I can remove only the compatibility surface, not the wider namespace package behavior.
+
+I’m at the edit point now. The remaining analysis is just to keep the patch small: most production modules still have identical `try/except` fallback blocks, so I’m checking the first few of them together and then I’ll remove that pattern repo-wide in one pass.
+
+I’m editing three buckets now: production import canonicalization, mechanical test import rewrites, and the two strictness suites that need behavior changes. I’m keeping this phase narrow: no state, routing, or telemetry behavior changes beyond removing the deprecated import bridge surface.
+
+I found one more class of regression surface: some tests embed source code strings that still write `from autoloop_v3.core ...` into generated fixtures. Those need the same canonicalization as normal imports, otherwise the bridge would come back through generated code even after the direct imports are fixed.
+
+The first bulk test patch bounced on one file because the import order differs, not because the plan is wrong. I’m switching to smaller exact replacements so I can canonicalize the remaining test surface without widening the patch or touching unrelated assertions.
+
+I’m on the last substantive part of the phase now. The remaining changes are semantic test updates: flipping the old bridge-success assertions into bridge-failure assertions, and tightening the scan so it detects real legacy import statements without false-flagging docs or the strictness tests themselves.
+
+I’ve removed the legacy import statements. I’m doing a quick consistency pass now for follow-on breakage inside the tests themselves, like stale helper names or missing imports introduced by flipping the bridge assertions.
+
+The code and test surfaces are now canonicalized. I’m verifying the actual blast radius next: a repository scan for remaining legacy imports, then whichever targeted test command this environment can support without dragging in unrelated missing-tool issues.
+
+The environment doesn’t have `pytest` or `pydantic`, so I can’t execute the regression tests here. I can still do a syntax-level verification on the edited files, which will catch patch mistakes even though it won’t prove runtime behavior.
+
+The legacy import scan is clean outside the intentional strictness assertion. I’m updating the run artifacts now so the next phase sees exactly what changed, what I preserved, and what I couldn’t validate because this shell is missing the Python test dependencies.
+
+Scope considered
+
+- Phase-local compatibility bridge removal only: production imports, maintained tests/fixtures, bridge files, and strictness coverage.
+- I treated the root-level `core/`, `runtime/`, `extensions/`, `autoloop/`, and `tests/` trees as the active codebase and stayed out of later state/hook/telemetry work.
+
+What I analyzed
+
+- Remaining `autoloop_v3.core`, `core._compat`, and `bridge_core_package` usage across production code and maintained tests.
+- The two bridge entry points: root `__init__.py` and `autoloop_v3/core/__init__.py`.
+- Strictness tests that still encoded bridge identity as a success path.
+
+What I changed
+
+- Canonicalized touched production modules to import only from `core...` or sibling canonical packages; removed the installed-vs-repo fallback blocks from the touched files.
+- Deleted `core/_compat.py`, removed the root bridge wiring from `__init__.py`, and changed `autoloop_v3/core/__init__.py` to raise `ModuleNotFoundError`.
+- Updated maintained contract/runtime/unit tests and embedded fixture source strings off `autoloop_v3.core`.
+- Reworked strictness coverage so it now:
+  - asserts `autoloop_v3.core` import failure,
+  - scans maintained Python sources for real legacy import statements,
+  - no longer expects `core/_compat.py` to exist.
+
+Key findings / decisions
+
+- The repo is already mid-migration: the maintained source tree is the new root-level packages, while old `autoloop_v3/...` sources are largely deleted residue.
+- To satisfy “importing `autoloop_v3.core` fails” without disturbing the broader namespace layout, I disabled only `autoloop_v3.core` via an explicit `ModuleNotFoundError`.
+- `core.validation` no longer recognizes `autoloop_v3.core.Workflow`; canonical workflow bases are now `core.Workflow` and `autoloop.simple.Workflow`.
+- Validation completed with:
+  - legacy-import scan: clean for production and maintained non-strictness tests/fixtures,
+  - `python3 -m py_compile` on edited source/test files: passed.
+
+Open issues / next step
+
+- I could not run `pytest`; this shell is missing both `pytest` and `pydantic`.
+- `py_compile` refreshed tracked `__pycache__/*.pyc` files in this worktree as a side effect of syntax validation.
+- Next step is to run the targeted strictness/unit/runtime tests in an environment with the project’s Python dependencies installed.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+I’m auditing the compatibility-bridge-removal changes against the phase contract and the implementation notes first. Then I’ll verify the changed import surface and strictness behavior before I update the review artifacts.
+
+I’ve got the artifact context and the implementer’s assumptions. Now I’m validating the actual changed code and the maintained test surface directly, especially the strictness logic and any files that could still strand the regression suite on the removed bridge.
+
+One thing stands out already: the bridge-failure assertions were moved into a non-strictness unit test as well as strictness. I’m checking whether that’s just a scope/style miss or whether it leaves any real regression hole in the maintained surface.
+
+I need to verify one structural assumption the implementation notes make: whether `autoloop_v3.runtime` is still a real maintained import surface in this checkout or just leftover namespace residue. If that assumption is wrong, the changed tests may still be stranded even after the core bridge is removed.
+
+The more material issue is bigger than `autoloop_v3.core`: the maintained tests still lean on `autoloop_v3.runtime` and sibling namespaces that no longer have source files in `autoloop_v3/`. I’m collecting the exact failing surface now, because that would block the phase even if the core bridge itself is removed correctly.
+
+I have one blocking regression-surface issue and one smaller scope-drift issue. I’m writing them into the review artifacts now and leaving the criteria unchecked because the maintained tests still depend on namespace modules that are no longer present.
+
+Scope considered
+
+- Phase-local compatibility-bridge-removal scope only: removed `autoloop_v3.core` bridge paths, touched production import surfaces, maintained tests/fixtures, strictness coverage, and the active review artifacts.
+- I broadened analysis just enough to verify whether the maintained regression surface can still import after the bridge removal.
+
+What I analyzed
+
+- The changed production files: `autoloop/simple.py`, `core/validation.py`, touched `runtime/*`, touched `extensions/*`, root `__init__.py`, and `autoloop_v3/core/__init__.py`.
+- The changed maintained tests, especially `tests/strictness/test_no_compat.py`, `tests/unit/test_simple_surface.py`, `tests/runtime/test_compatibility_runtime.py`, and `tests/contract/test_engine_contracts.py`.
+- The actual filesystem shape under `autoloop_v3/` to confirm which namespace modules still exist.
+
+What I reviewed
+
+- Legacy-core import scans and the new strictness assertions.
+- Whether `autoloop_v3.core` now fails intentionally.
+- Whether the rest of the maintained regression surface still has importable dependencies after the bridge removal.
+- I updated:
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/compatibility-bridge-removal/criteria.md)
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/compatibility-bridge-removal/feedback.md)
+
+Key findings / decisions
+
+- Blocking: the maintained tests still import `autoloop_v3.runtime.*`, `autoloop_v3.extensions.*`, and `autoloop_v3.workflows.*`, but those `autoloop_v3/` directories only contain `__pycache__` files, not source modules. In this checkout, `python3` import checks already fail for `autoloop_v3.runtime.config`, `autoloop_v3.runtime.loader`, `autoloop_v3.extensions.session_paths`, and `autoloop_v3.workflows.task_to_workflow_strategy`. That leaves the maintained regression surface broken before the new bridge-removal assertions can run.
+- Non-blocking: `tests/unit/test_simple_surface.py` now duplicates explicit `autoloop_v3.core` failure coverage outside the strictness layer, which drifts from the stated plan to keep those assertions only in strictness coverage.
+
+Open issues / next step
+
+- The implementation should not be considered complete for this phase yet.
+- Next step: migrate the maintained tests/fixtures and embedded snippets off the dead `autoloop_v3.runtime` / `autoloop_v3.extensions` / `autoloop_v3.stdlib` / `autoloop_v3.workflows` paths to the canonical root packages, or intentionally restore those namespaces if they are still meant to exist.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
