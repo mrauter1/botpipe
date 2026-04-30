@@ -2191,3 +2191,51 @@ Key findings / decisions
 Open issues / next step
 - No known blockers remain in this phase-local fix.
 - Next step is verifier re-review of `history-telemetry` against `IMP-001`.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddf60-61fd-7d31-a517-d143131a22c8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf60-61fd-7d31-a517-d143131a22c8
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf60-61fd-7d31-a517-d143131a22c8
+---
+I’m re-reviewing the phase-local history/telemetry fix with focus on the scoped hook-event identity path and the new regression coverage, then I’ll update the reviewer artifacts accordingly.
+
+The engine path now looks structurally correct. I’m doing one more read on the direct hook-event regression and the phase notes, then I’ll either clear the review or record any residual gap.
+
+The scoped hook-failure path now checks out end to end, and the targeted plus phase-local suites are green. I’m marking the criteria complete and appending a short re-review resolution note to the feedback artifact.
+
+Scope considered
+- Phase-local `history-telemetry` only: the reviewer-reported scoped hook-event attribution bug, its engine-side fix, and the added regression coverage.
+- I did not widen scope beyond the relevant runtime/history paths and the active review artifacts.
+
+What I analyzed
+- Hook event emission and routing in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py).
+- Scoped history derivation in [core/history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/history.py).
+- New regression coverage in [tests/runtime/test_history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_history.py) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Updated phase notes and run-local decision entry.
+
+What I reviewed
+- The implementation now routes hook lifecycle events through the same step-identity payload path used by provider/artifact runtime events, including scoped `visit`, `step_execution_id`, `scope`, and `item_id`.
+- The new engine-level regression directly asserts the emitted scoped `hook_failed` payload.
+- The new history regression asserts `ctx.history.failures(step=..., item_id=...)` sees the scoped hook failure.
+- Validation rerun passed: `source .venv/bin/activate && pytest -q tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py` with `121 passed in 0.76s`.
+
+Key findings / decisions
+- `IMP-001` is resolved.
+- I found no remaining blocking or non-blocking findings within phase-local scope.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/history-telemetry/criteria.md) to fully checked and appended a re-review resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/history-telemetry/feedback.md).
+
+Open issues / next step
+- No open issues in this phase-local review.
+- The phase is ready to move forward.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
