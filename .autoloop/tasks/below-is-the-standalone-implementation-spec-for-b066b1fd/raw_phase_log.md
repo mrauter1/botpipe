@@ -726,3 +726,46 @@ Validation performed:
 Open issues / next step
 
 No blocking issues in this phase. The next step is the state-surfaces phase: built-in step runtime state, reserved field validation, and `StateVar` sugar.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf06-a5da-73b2-81f3-33aad452a4c1
+---
+I’m reviewing only the `hook-rerouting` phase changes against the phase contract and the actual diffs first, then I’ll update the criteria and feedback artifacts with any blocking or non-blocking findings.
+
+I’ve got the intended scope and the producer’s stated assumptions. I’m reading the exact engine and trace diffs now for regression risks, especially around hook rollback, event attribution, and anything that silently broadens behavior beyond the phase contract.
+
+I found one material contract split between validation and runtime. I’m recording that as blocking in the phase feedback rather than broadening into later-state work, because it directly affects this phase’s hook authoring contract.
+
+Scope considered
+
+Phase-local `hook-rerouting` only. I reviewed the engine hook/finalization changes, the new context/trace surface needed for that flow, the updated contract/runtime tests, and the phase artifacts. I did not expand into later state/history phases except where needed to judge regression risk.
+
+What I analyzed
+
+I compared the implemented hook execution path in `core/engine.py` against the existing hook validation in `core/validation.py`, checked the new `Context.event` and trace payload additions, read the producer notes and decisions ledger, and verified the updated tests matched the active phase contract.
+
+What I reviewed
+
+I updated the phase feedback artifact with one blocking finding. I left the criteria checkboxes unchecked because the current implementation does not yet meet the phase acceptance bar safely due to a compiler/runtime contract split in pair-step producer hooks.
+
+Key findings / decisions
+
+`IMP-001` is blocking: producer-phase pair hooks (`after_do` / `after_producer`) still validate as though route redirects are legal, but runtime rejects those redirects once execution reaches `_run_after_hook()` without a candidate event. That means a workflow can compile cleanly and then hard-fail at runtime for behavior the phase’s own hook validation appeared to allow.
+
+Open issues / next step
+
+Align validation and runtime for producer-phase pair hooks. The minimal fix is to reject redirect-like `after_do` / `after_producer` returns during validation if producer-phase hooks are meant to stay state-only; otherwise implement explicit short-circuit semantics and add tests for that path.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
