@@ -25,7 +25,7 @@ Greenfield authoring defaults:
 - `writes` is the canonical output surface.
 - artifact schemas validate files and stay distinct from provider `control_schema`.
 - `python_step(fn)` does not require an `on_<step>` handler.
-- `workflow_step(...)` lowers to a real `WorkflowStep`.
+- `workflow_step(...)` lowers to a dedicated child-workflow runtime step.
 - step-local `routes={...}` are the canonical public topology surface.
 - there is no `autoloop eject` or workflow source-expansion command.
 

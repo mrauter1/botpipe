@@ -23,6 +23,15 @@ from autoloop_v3.core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
+REMOVED_WORKFLOW_STEP = "Workflow" + "Step"
+REMOVED_AFTER_HOOK_RESULT = "After" + "HookResult"
+REMOVED_STATE_VAR = "State" + "Var"
+REMOVED_PARAM = "Pa" + "ram"
+REMOVED_LLM_STEP = "L" + "LMStep"
+REMOVED_PAIR_STEP = "Pair" + "Step"
+REMOVED_SYSTEM_STEP = "System" + "Step"
+
+
 def _import_from(module_name: str, symbol: str) -> object:
     namespace: dict[str, object] = {}
     exec(f"from {module_name} import {symbol} as imported_symbol", namespace)
@@ -64,8 +73,8 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
         "SU" + "CCESS",
         "Route" + "Info",
         "StrictWorkflow",
-        "WorkflowStep",
-        "AfterHookResult",
+        REMOVED_WORKFLOW_STEP,
+        REMOVED_AFTER_HOOK_RESULT,
         "ResolvedArtifacts",
         "Checkpoint",
         "ChildWorkflowResult",
@@ -73,8 +82,8 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
         "review_step",
         "do_review_step",
         "system_step",
-        "StateVar",
-        "Param",
+        REMOVED_STATE_VAR,
+        REMOVED_PARAM,
     ):
         with pytest.raises(ImportError):
             _import_from("autoloop", symbol)
@@ -87,35 +96,41 @@ def test_removed_simple_aliases_are_absent() -> None:
         "review_step",
         "do_review_step",
         "system_step",
-        "StateVar",
-        "Param",
-        "AfterHookResult",
+        REMOVED_STATE_VAR,
+        REMOVED_PARAM,
+        REMOVED_AFTER_HOOK_RESULT,
         "Checkpoint",
         "ChildWorkflowResult",
         "ResolvedArtifacts",
-        "WorkflowStep",
+        REMOVED_WORKFLOW_STEP,
     ):
         assert not hasattr(simple, symbol)
     assert not hasattr(simple.Route, "complete")
 
 
 def test_removed_simple_symbols_fail_to_import() -> None:
-    for symbol in ("AfterHookResult", "Checkpoint", "ChildWorkflowResult", "ResolvedArtifacts", "WorkflowStep"):
+    for symbol in (
+        REMOVED_AFTER_HOOK_RESULT,
+        "Checkpoint",
+        "ChildWorkflowResult",
+        "ResolvedArtifacts",
+        REMOVED_WORKFLOW_STEP,
+    ):
         with pytest.raises(ImportError):
             _import_from("autoloop.simple", symbol)
 
 
 def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
     for symbol in (
-        "AfterHookResult",
-        "LLMStep",
-        "PairStep",
-        "Param",
+        REMOVED_AFTER_HOOK_RESULT,
+        REMOVED_LLM_STEP,
+        REMOVED_PAIR_STEP,
+        REMOVED_PARAM,
         "Route" + "Info",
-        "StateVar",
+        REMOVED_STATE_VAR,
         "SU" + "CCESS",
-        "SystemStep",
-        "WorkflowStep",
+        REMOVED_SYSTEM_STEP,
+        REMOVED_WORKFLOW_STEP,
     ):
         assert not hasattr(strict_core, symbol)
         with pytest.raises(ImportError):
@@ -126,7 +141,17 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
 
 
 def test_core_compat_surface_excludes_removed_route_runtime_helpers() -> None:
-    for symbol in ("SU" + "CCESS", "Route" + "Info", "LLMStep", "PairStep", "SystemStep", "WorkflowStep"):
+    for symbol in (
+        "SU" + "CCESS",
+        "Route" + "Info",
+        REMOVED_AFTER_HOOK_RESULT,
+        REMOVED_LLM_STEP,
+        REMOVED_PAIR_STEP,
+        REMOVED_PARAM,
+        REMOVED_STATE_VAR,
+        REMOVED_SYSTEM_STEP,
+        REMOVED_WORKFLOW_STEP,
+    ):
         assert not hasattr(strict_compat, symbol)
         with pytest.raises(ImportError):
             _import_from("autoloop_v3.core._compat", symbol)

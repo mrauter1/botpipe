@@ -49,11 +49,11 @@ class _BaseDescriptor:
         return _TypedDescriptorFactory(cls, annotation)
 
 
-class StateVar(_BaseDescriptor):
+class StateField(_BaseDescriptor):
     """Explicit workflow or step state declaration."""
 
 
-class Param(_BaseDescriptor):
+class ParameterField(_BaseDescriptor):
     """Explicit workflow parameter declaration."""
 
 
@@ -137,7 +137,7 @@ def effective_state_model(workflow_cls: type[Any], *, fallback_model: type[BaseM
     base_model = getattr(workflow_cls, "State", None)
     if not isinstance(base_model, type) or not issubclass(base_model, BaseModel):
         base_model = fallback_model
-    descriptor_fields = collect_descriptor_fields(workflow_cls, descriptor_type=StateVar)
+    descriptor_fields = collect_descriptor_fields(workflow_cls, descriptor_type=StateField)
     model = build_descriptor_model(
         f"{workflow_cls.__name__}State",
         descriptor_fields=descriptor_fields,
@@ -158,7 +158,7 @@ def effective_parameters_model(workflow_cls: type[Any]) -> type[BaseModel] | Non
     base_model = getattr(workflow_cls, "Params", None)
     if base_model is not None and (not isinstance(base_model, type) or not issubclass(base_model, BaseModel)):
         return None
-    descriptor_fields = collect_descriptor_fields(workflow_cls, descriptor_type=Param)
+    descriptor_fields = collect_descriptor_fields(workflow_cls, descriptor_type=ParameterField)
     if base_model is None and not descriptor_fields:
         return None
     model = build_descriptor_model(
@@ -172,8 +172,8 @@ def effective_parameters_model(workflow_cls: type[Any]) -> type[BaseModel] | Non
 
 __all__ = [
     "DescriptorField",
-    "Param",
-    "StateVar",
+    "ParameterField",
+    "StateField",
     "build_descriptor_model",
     "collect_descriptor_fields",
     "effective_parameters_model",
