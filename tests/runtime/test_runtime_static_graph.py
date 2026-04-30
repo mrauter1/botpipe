@@ -200,6 +200,36 @@ def test_topology_payload_omits_unbound_effective_set_for_inherited_global_route
     assert payload["global_routes"]["failed"]["effective_required_writes"] is None
 
 
+def test_topology_payload_keeps_explicit_global_route_required_writes_concrete() -> None:
+    class ExplicitGlobalRouteWorkflow(CoreWorkflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(
+            name="ask",
+            producer="ask.md",
+            writes={"report": Artifact.md("report.md", required=True)},
+            retry_policy=ProviderRetryPolicy(max_attempts=1),
+        )
+        entry = ask
+        transitions = {
+            ask: {"done": FINISH},
+            GLOBAL: {"failed": Route.to(FAIL, required_writes=("report",))},
+        }
+
+        @staticmethod
+        def on_ask(state, outcome, artifacts):
+            return state
+
+    compiled = compile_workflow(ExplicitGlobalRouteWorkflow)
+
+    payload = workflow_topology_payload(compiled)
+
+    assert payload["global_routes"]["failed"]["required_writes"] == ["report"]
+    assert payload["global_routes"]["failed"]["explicit_required_writes"] == ["report"]
+    assert payload["global_routes"]["failed"]["effective_required_writes"] == ["report"]
+
+
 def test_static_graph_schema_uses_registry_constant() -> None:
     compiled = compile_workflow(_StaticGraphWorkflow)
 
