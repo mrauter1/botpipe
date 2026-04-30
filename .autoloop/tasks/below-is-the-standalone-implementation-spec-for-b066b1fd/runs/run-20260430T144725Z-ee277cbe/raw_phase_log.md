@@ -81,3 +81,64 @@ The producer plan should be revised to include full maintained test migration in
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+---
+I’m addressing the verifier’s blocking point by tightening phase 1 around the maintained test surface, not just strictness assertions. First I’m checking the current feedback and the latest decisions block so I only append under this turn’s runtime-created header and keep the machine-readable phases aligned with the narrative plan.
+
+The correction is narrow: phase 1 needs to own the maintained test and fixture migration in the same slice as bridge removal. I’m updating both the narrative plan and the machine-readable phase contract, then I’ll append one carry-forward decision for later turns.
+
+The correction is in place. I’m doing one verification pass to confirm the narrative plan, YAML phase 1, and decision ledger all say the same thing about migrating the maintained test surface before bridge deletion.
+
+Updated [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/plan/plan.md>) and [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/plan/phase_plan.yaml>) to resolve `PLAN-001`.
+
+Phase 1 now explicitly includes migrating all maintained tests and fixtures off `autoloop_v3.core` before bridge deletion, limits remaining `autoloop_v3.core` references to intentional strictness assertions, and tightens phase 1 acceptance criteria/deliverables around the maintained regression surface. I also appended the closure note to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/plan/feedback.md>) and added one carry-forward decision under the current turn header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt>).
+
+I verified the YAML still parses after the update.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+---
+I’m re-verifying the corrected phase 1 scope against the repo and the spec, then I’ll either clear the gate or leave a precise residual finding. I’m checking the updated narrative, phase contract, criteria, and decisions together so the closure is consistent.
+
+The remaining repo imports are now accounted for in the plan rather than ignored, which was the substantive blocker. I’m marking the gate complete and appending a closure note so the feedback log shows that `PLAN-001` was re-verified as resolved in this revision.
+
+Scope considered
+The authoritative request snapshot, raw log, decisions ledger, updated planning artifacts, and repository evidence relevant to compatibility bridge removal and regression-suite continuity.
+
+What I analyzed
+The revised `plan.md` and `phase_plan.yaml`, the verifier feedback history for `PLAN-001`, the current decisions block, YAML parseability and dependency ordering, and the maintained test surface that still imports `autoloop_v3.core` today.
+
+What I reviewed
+The updated phase 1 scope, acceptance criteria, deliverables, rollback, and compatibility notes now explicitly cover migrating maintained tests and fixtures before bridge deletion. `criteria.md` now matches the verified state, and `feedback.md` records both the original blocker and its resolution.
+
+Key findings / decisions
+No blocking findings remain. `PLAN-001` is resolved: the plan now treats maintained test/fixture migration as part of phase 1, reserves `autoloop_v3.core` references for intentional strictness assertions only, and carries that rule in both the plan narrative and the decisions ledger. The YAML is parseable and its runtime-owned metadata is intact.
+
+Open issues / next step
+No open verification issues remain for the planning artifacts. The plan gate is complete and ready for implementation work to follow this contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

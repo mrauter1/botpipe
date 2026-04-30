@@ -3,3 +3,5 @@ Canonical in-repo imports after bridge removal are core... and autoloop... only;
 Built-in step runtime fields move into persisted step/item/step-item state stores; separate engine bookkeeping for visit and last-route counters should be retired rather than mirrored.
 Hook redirects operate on declared route tags for the current step, continue through chained route hooks, and fail as runtime errors after 16 redirects or on unknown routes.
 Effective required writes must be computed once and reused by runtime validation, provider contracts, and topology/static graph outputs to avoid drift.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260430T144725Z-ee277cbe" ts="2026-04-30T14:55:55.502483+00:00" />
+Phase 1 includes migration of all maintained tests and fixtures that still import autoloop_v3.core before bridge deletion; only strictness coverage should keep intentional failed-import assertions.
