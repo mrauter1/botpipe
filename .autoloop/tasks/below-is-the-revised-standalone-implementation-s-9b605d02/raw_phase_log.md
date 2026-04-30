@@ -3668,3 +3668,47 @@ No open issues from this review. The phase is ready to complete.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc45-f76f-70e1-82e9-97e7c03d4dba
+---
+I’m treating this as a regression-proof pass over the finished strictness-and-suite-migration work. First I’m checking the existing phase test strategy and the current suite coverage so I can add only the tests that materially strengthen the new route-required-writes and strictness boundary behavior.
+
+I found a narrow gap worth pinning directly: the suite already checks public tuple-shaped `required_writes` and runtime explicit-empty behavior separately, but it doesn’t explicitly assert that those two cases share the same public shape while differing only in the internal explicitness marker. I’m adding one focused unit regression for that and then I’ll update the phase test artifacts.
+
+Scope considered
+
+Active strictness-and-suite-migration test scope: regression coverage around the final `required_writes` route-contract behavior, plus the phase test artifacts in `artifacts/test/phases/strictness-and-suite-migration/`.
+
+What I analyzed
+
+I checked the current phase test artifacts, reviewed existing coverage in [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), and looked for a remaining gap around the final compiler/engine fix. The existing suite already covered public tuple-shaped `required_writes` and the runtime explicit-empty override separately, but it did not directly pin that both cases share the same public shape while differing only in the internal explicitness marker.
+
+What I changed
+
+I added one focused regression test to [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py) that compiles a workflow with both an unspecified route and an explicit `required_writes=[]` route, then asserts:
+- both compiled routes expose `required_writes == ()` publicly
+- only the explicit-empty route sets `_required_writes_explicit`
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/strictness-and-suite-migration/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge cases, failure paths, and known gaps, and appended a concise summary entry to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/test/phases/strictness-and-suite-migration/feedback.md).
+
+Key findings / decisions
+
+The only material gap worth adding in this test turn was the direct regression pin for the public-versus-private `required_writes` distinction. The broader canonical and compatibility slices were already covered by the implementation-phase validation, so I avoided unrelated test churn.
+
+Validation run:
+- `source /tmp/autoloop-v3-verify-venv/bin/activate && pytest tests/unit/test_validation.py -q` -> `85 passed`
+
+Open issues / next step
+
+No open test-authoring issues from this turn. The added unit regression should catch a future reintroduction of `None` on the public compiled-route surface.

@@ -6,3 +6,5 @@
 - Phase Directory Key: strictness-and-suite-migration
 - Phase Title: Migrate Active Suites And Tighten Strictness
 - Scope: phase-local authoritative verifier artifact
+
+- Added a focused regression to `tests/unit/test_validation.py` that pins the final `required_writes` design: public compiled routes stay tuple-shaped for both unspecified and explicit-empty route contracts, while only the internal explicitness marker differs. Validation run: `pytest tests/unit/test_validation.py -q` -> `85 passed`.
