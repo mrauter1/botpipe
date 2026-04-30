@@ -55,3 +55,7 @@
 {"ts": "2026-04-30T16:17:23.943806+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 55, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "state-surfaces"}
 {"ts": "2026-04-30T16:19:30.289929+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 56, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "state-surfaces"}
 {"ts": "2026-04-30T16:19:30.335335+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 57, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "state-surfaces"}
+{"ts": "2026-04-30T16:19:30.423119+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 58, "event_type": "phase_completed", "pair": "test", "phase_id": "state-surfaces", "phase_mode": "single"}
+{"ts": "2026-04-30T16:19:30.425557+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 59, "event_type": "phase_started", "phase_id": "scoped-item-state", "phase_mode": "single"}
+{"ts": "2026-04-30T16:19:30.427303+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 60, "event_type": "pair_started", "pair": "implement", "phase_id": "scoped-item-state"}
+{"ts": "2026-04-30T16:19:30.427444+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 61, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "scoped-item-state"}
