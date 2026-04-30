@@ -2654,3 +2654,12 @@ The planning artifacts are now complete and internally consistent. The next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=canonical-surface-pruning,route-runtime-canonicalization,strictness-and-suite-migration
+explicit=True
+current_phase_index=0
