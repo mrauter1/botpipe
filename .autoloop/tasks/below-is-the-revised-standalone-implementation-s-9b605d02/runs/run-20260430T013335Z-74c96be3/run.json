@@ -15,12 +15,12 @@
       "strictness-and-suite-migration"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "canonical-surface-pruning"
+    "current_phase_index": 1,
+    "current_phase_id": "route-runtime-canonicalization"
   },
   "phase_status": {
-    "canonical-surface-pruning": "in_progress",
-    "route-runtime-canonicalization": "planned",
+    "canonical-surface-pruning": "completed",
+    "route-runtime-canonicalization": "in_progress",
     "strictness-and-suite-migration": "planned"
   },
   "phase_history": [
@@ -29,6 +29,19 @@
       "run_id": "run-20260430T013335Z-74c96be3",
       "status": "in_progress",
       "ts": "2026-04-30T01:43:34.431535+00:00"
+    },
+    {
+      "phase_id": "canonical-surface-pruning",
+      "run_id": "run-20260430T013335Z-74c96be3",
+      "status": "completed",
+      "ts": "2026-04-30T02:08:21.542939+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "route-runtime-canonicalization",
+      "run_id": "run-20260430T013335Z-74c96be3",
+      "status": "in_progress",
+      "ts": "2026-04-30T02:08:21.546118+00:00"
     }
   ]
 }
