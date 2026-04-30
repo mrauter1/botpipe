@@ -4033,3 +4033,12 @@ No verifier-side blockers remain. The plan is ready for implementation.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=canonicalize-core-produces-surface,migrate-tests-and-lock-strictness
+explicit=True
+current_phase_index=0
