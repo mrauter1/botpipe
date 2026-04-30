@@ -40,6 +40,7 @@
 
 ## Assumptions
 - Global fallback routes without an explicit override continue to inherit artifact-level required writes for the current step, matching the runtime formula in the phase spec.
+- Top-level `global_routes` cannot truthfully expose a concrete inherited effective set without step context, so the topology payload should expose `null` there rather than a misleading empty list.
 
 ## Preserved Invariants
 - `CompiledRoute.required_writes` remains the normalized explicit route-level tuple surface.
@@ -49,6 +50,7 @@
 ## Intended Behavior Changes
 - Provider contracts now expose effective required writes through `route_required_writes` and retain explicit route overrides separately.
 - `topology.json`, static graph route payloads, and `route_table.md` now distinguish inherited required writes from explicit empty overrides.
+- `topology.json["global_routes"][tag]["effective_required_writes"]` is now `null` for inherited globals without step context; the authoritative concrete effective set remains on each step-local route projection.
 
 ## Known Non-Changes
 - No hook-routing behavior changed.
@@ -62,6 +64,7 @@
 ## Validation Performed
 - `.venv/bin/python -m pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/contract/test_canonical_runtime_contracts.py tests/runtime/test_runtime_static_graph.py`
 - `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults`
+- Added regression coverage in `tests/runtime/test_runtime_static_graph.py` for inherited `GLOBAL` routes with required artifacts.
 
 ## Deduplication / Centralization
 - Centralized explicit/effective required-write computation in `core/route_required_writes.py` instead of keeping separate fallback logic in engine and topology serializers.

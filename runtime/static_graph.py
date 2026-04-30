@@ -134,7 +134,7 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "global_routes": {
             route_tag: _topology_route_payload(
                 compiled=compiled,
-                step_name="GLOBAL",
+                step_name=None,
                 route_tag=route_tag,
                 route=route,
             )
@@ -262,7 +262,7 @@ def _prompt_references(step: Any) -> tuple[str, ...]:
 def _topology_route_payload(
     *,
     compiled: CompiledWorkflow,
-    step_name: str,
+    step_name: str | None,
     route_tag: str,
     route: CompiledRoute | None,
 ) -> dict[str, Any]:
@@ -289,7 +289,7 @@ def _topology_route_payload(
         ),
         "handoff": route.handoff,
         "on_taken": _callable_name(route.on_taken),
-        "source_step": step_name,
+        "source_step": step_name or "GLOBAL",
     }
 
 

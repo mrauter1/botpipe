@@ -61,7 +61,7 @@ def effective_route_required_writes_map(
 def route_required_write_payload(
     compiled: Any,
     *,
-    step_name: str,
+    step_name: str | None,
     route_tag: str,
     route: Any | None,
 ) -> dict[str, object]:
@@ -71,6 +71,8 @@ def route_required_write_payload(
     effective = (
         []
         if route is None
+        else None
+        if step_name is None and explicit is None
         else list(
             effective_route_required_writes(
                 compiled,

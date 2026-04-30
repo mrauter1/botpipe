@@ -6,8 +6,10 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from autoloop import FINISH, Md, Prompt, Route, Workflow, produce_verify_step, python_step, step
-from core import Artifact
+from core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
 from core.compiler import compile_workflow
+from core.providers.retries import ProviderRetryPolicy
+from core.steps import PromptStep
 from runtime.static_graph import (
     ROUTE_TABLE_FILENAME,
     TOPOLOGY_FILENAME,
@@ -163,6 +165,39 @@ def test_topology_payload_and_route_table_preserve_explicit_vs_effective_require
 
     assert "| publish | done | FINISH | inherit | publish.report |" in route_table
     assert "| publish | skip | FINISH | none (explicit) | - |" in route_table
+
+
+def test_topology_payload_omits_unbound_effective_set_for_inherited_global_routes() -> None:
+    class GlobalRouteWorkflow(CoreWorkflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(
+            name="ask",
+            producer="ask.md",
+            writes={"report": Artifact.md("report.md", required=True)},
+            retry_policy=ProviderRetryPolicy(max_attempts=1),
+        )
+        entry = ask
+        transitions = {
+            ask: {"done": FINISH},
+            GLOBAL: {"failed": FAIL},
+        }
+
+        @staticmethod
+        def on_ask(state, outcome, artifacts):
+            return state
+
+    compiled = compile_workflow(GlobalRouteWorkflow)
+
+    payload = workflow_topology_payload(compiled)
+    ask = next(step_payload for step_payload in payload["steps"] if step_payload["name"] == "ask")
+    failed_route = next(route for route in ask["routes"] if route["tag"] == "failed")
+
+    assert failed_route["effective_required_writes"] == ["ask.report"]
+    assert payload["global_routes"]["failed"]["required_writes"] == []
+    assert payload["global_routes"]["failed"]["explicit_required_writes"] is None
+    assert payload["global_routes"]["failed"]["effective_required_writes"] is None
 
 
 def test_static_graph_schema_uses_registry_constant() -> None:
