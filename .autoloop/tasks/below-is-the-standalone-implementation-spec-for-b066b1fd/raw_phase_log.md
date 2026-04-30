@@ -2072,3 +2072,61 @@ Open issues / next step
 - No known blockers in this phase.
 - Validation run: `.venv/bin/python -m pytest -q tests/runtime/test_runtime_tracing.py tests/runtime/test_history.py tests/contract/test_engine_contracts.py` and `.venv/bin/python -m pytest -q tests/contract/test_engine_contracts.py::test_python_step_feedforward_helpers_accept_plain_string_prompts_with_rendered_provider tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_fails_loudly`.
 - I did not run the full repository suite.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf60-61fd-7d31-a517-d143131a22c8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf60-61fd-7d31-a517-d143131a22c8
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf60-61fd-7d31-a517-d143131a22c8
+---
+I’m reviewing the `history-telemetry` implementation only. I’ll read the active criteria and feedback artifacts first, then inspect the actual runtime/history changes and targeted tests to decide whether there are any blocking gaps before I update the review artifacts.
+
+I’m reviewing the phase-local history/telemetry implementation against the acceptance criteria and the request, starting with the touched runtime/history paths and the new regression tests.
+
+I’ve got the new public surface and trace wiring loaded. Next I’m checking the telemetry derivation logic and the runtime event emission paths for coverage gaps or semantic mismatches.
+
+The new tests cover the happy path and some instrumentation edges. I’m checking for gaps between those tests and the requested semantics, especially around scoped telemetry aggregation and exact attempt accounting.
+
+I’ve narrowed the remaining review to two questions: whether `ctx.history` preserves scoped semantics when trace data is missing, and whether the runtime events it depends on are emitted consistently enough to avoid silent telemetry skew.
+
+I’m at the validation pass now. I’m rerunning the phase-local regression surface and checking whether the code paths line up with the claimed behavior, not just the newly added tests.
+
+I found one concrete gap in the failure attribution path and I’m verifying it with a minimal reproduction before I write up the review artifact.
+
+I’ve confirmed the gap with a direct reproduction: a scoped `hook_failed` event currently produces an unscoped telemetry bucket, so `ctx.history.failures(..., item_id=...)` misses the failure entirely. I’m writing that up and updating the verifier artifacts now.
+
+I found a blocking attribution bug in the scoped hook-failure path. I’m recording it in the verifier artifacts and leaving the criteria unchecked because AC-2 is not fully met yet.
+
+Scope considered
+- Phase-local `history-telemetry` review only: `ctx.history`, runtime instrumentation, and the new tests/artifacts tied to this phase.
+- I excluded unrelated dirty workspace state from scope.
+
+What I analyzed
+- Runtime/event emission in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [core/operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/operations.py), [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), and [runtime/tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/tracing.py).
+- History derivation and keying logic in [core/history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/history.py) and the `Context` binding in [core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/context.py).
+- Phase notes and decisions in the active `implementation_notes.md` and `decisions.txt`.
+
+What I reviewed
+- Regression coverage in [tests/runtime/test_history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_history.py), [tests/runtime/test_runtime_tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_tracing.py), and [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- Validation rerun: `source .venv/bin/activate && pytest -q tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py` passed with `119 passed`.
+- A direct scoped-hook-failure reproduction against `HistoryReader`, which confirmed misattribution of `hook_failed` telemetry.
+
+Key findings / decisions
+- I recorded one blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/history-telemetry/feedback.md): `IMP-001`.
+- The bug is that hook lifecycle events are emitted without scoped step identity fields, so `hook_failed` on a scoped step is attributed to an unscoped telemetry bucket. That breaks AC-2 for failure derivation by scoped step instance.
+- I left all boxes unchecked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/history-telemetry/criteria.md) because the blocking issue prevents signoff.
+
+Open issues / next step
+- Fix hook event emission to include the same `visit` / `step_execution_id` / `scope` / `item_id` payload used by provider and artifact runtime events, then add regression coverage for scoped `hook_failed` attribution in `ctx.history`.
+- After that, rerun the phase-local suite and re-review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
