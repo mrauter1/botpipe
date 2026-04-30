@@ -115,7 +115,7 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                     "after_verifier": _callable_name(step.after_verifier_hook),
                 },
                 "verifier_session_name": step.verifier_session_name,
-                "state_model": None if step.step_state_model is None else step.step_state_model.__name__,
+                "state_model": step.step_state_model.__name__,
                 "state_fields": list(step.step_state_fields),
                 "routes": [
                     _topology_route_payload(
@@ -192,7 +192,6 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
                         "fields": list(step.step_state_fields),
                     }
                     for step in compiled.steps.values()
-                    if step.step_state_model is not None
                 },
             },
         ),

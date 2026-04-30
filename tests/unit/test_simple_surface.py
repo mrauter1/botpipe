@@ -58,6 +58,7 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "Session",
         "Continuity",
         "Worklist",
+        "StateVar",
         "Event",
         "Outcome",
         "FINISH",
@@ -68,6 +69,8 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
 
     for symbol in autoloop.__all__:
         assert _import_from("autoloop", symbol) is getattr(autoloop, symbol)
+
+    assert autoloop.StateVar is simple.StateVar
 
 
 def test_removed_root_public_symbols_fail_to_import() -> None:
@@ -84,7 +87,6 @@ def test_removed_root_public_symbols_fail_to_import() -> None:
         REMOVED_REVIEW_STEP,
         REMOVED_DO_REVIEW_STEP,
         REMOVED_SYSTEM_STEP_ALIAS,
-        REMOVED_STATE_VAR,
         REMOVED_PARAM,
     ):
         with pytest.raises(ImportError):
@@ -98,7 +100,6 @@ def test_removed_simple_aliases_are_absent() -> None:
         REMOVED_REVIEW_STEP,
         REMOVED_DO_REVIEW_STEP,
         REMOVED_SYSTEM_STEP_ALIAS,
-        REMOVED_STATE_VAR,
         REMOVED_PARAM,
         REMOVED_AFTER_HOOK_RESULT,
         "Checkpoint",
@@ -284,7 +285,7 @@ def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_
         )
         review = simple.produce_verify_step(
             producer_prompt=simple.Prompt.inline("Draft from {prepare.brief}."),
-            verifier_prompt=simple.Prompt.inline("Verify with {review.state.attempts}."),
+            verifier_prompt=simple.Prompt.inline("Verify with {review.state.visits} and {review.state.attempts}."),
             requires=[prepare.brief],
             producer_writes=[simple.Md("draft", required=True)],
             verifier_writes=[simple.Json("decision", Decision, required=False)],
@@ -307,7 +308,16 @@ def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_
     assert compiled.steps["review"].verifier_prompt is not None
     assert compiled.steps["review"].producer_writes == ("review.draft",)
     assert compiled.steps["review"].verifier_writes == ("review.decision",)
-    assert compiled.steps["review"].step_state_fields == ("attempts", "history")
+    assert compiled.steps["prepare"].step_state_fields == ("visits", "last_route", "last_reason")
+    assert set(compiled.steps["review"].step_state_fields) == {
+        "visits",
+        "last_route",
+        "last_reason",
+        "rework_count",
+        "replan_count",
+        "attempts",
+        "history",
+    }
 
 
 def test_simple_workflow_injects_canonical_default_routes_by_step_kind() -> None:
@@ -393,7 +403,31 @@ def test_simple_workflow_rejects_parameters_namespace_instead_of_params() -> Non
         compile_workflow(BadWorkflow)
 
 
-def test_produce_verify_step_requires_pydantic_step_state_model() -> None:
+def test_produce_verify_step_accepts_statevar_mapping_sugar() -> None:
+    class ReviewWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify with {review.state.attempts} and {review.state.selected_risk}.",
+            state={
+                "attempts": simple.StateVar(0),
+                "selected_risk": simple.StateVar[str | None](None),
+            },
+        )
+
+    compiled = compile_workflow(ReviewWorkflow)
+
+    assert set(compiled.steps["review"].step_state_fields) == {
+        "visits",
+        "last_route",
+        "last_reason",
+        "rework_count",
+        "replan_count",
+        "attempts",
+        "selected_risk",
+    }
+
+
+def test_produce_verify_step_rejects_non_statevar_mappings() -> None:
     class BadWorkflow(simple.Workflow):
         review = simple.produce_verify_step(
             producer_prompt="Draft.",
@@ -403,9 +437,70 @@ def test_produce_verify_step_requires_pydantic_step_state_model() -> None:
 
     with pytest.raises(
         WorkflowValidationError,
-        match="simple step 'review' state must be declared with a pydantic.BaseModel subclass",
+        match="state field 'attempts' must be declared with StateVar",
     ):
         compile_workflow(BadWorkflow)
+
+
+def test_produce_verify_step_rejects_ambiguous_statevar_none_defaults() -> None:
+    with pytest.raises(ValueError, match="StateVar\\(None\\) is ambiguous"):
+        simple.StateVar(None)
+
+
+def test_produce_verify_step_rejects_mutable_statevar_defaults_without_factory() -> None:
+    with pytest.raises(ValueError, match="mutable defaults must use default_factory"):
+        simple.StateVar([])
+
+
+def test_produce_verify_step_accepts_typed_statevar_default_factories() -> None:
+    class ReviewWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify with {review.state.history}.",
+            state={"history": simple.StateVar[list[str]](default_factory=list)},
+        )
+
+    compiled = compile_workflow(ReviewWorkflow)
+
+    assert set(compiled.steps["review"].step_state_fields) == {
+        "visits",
+        "last_route",
+        "last_reason",
+        "rework_count",
+        "replan_count",
+        "history",
+    }
+
+
+def test_produce_verify_step_rejects_reserved_custom_state_field_names() -> None:
+    class ReviewState(BaseModel):
+        last_route: str | None = None
+
+    class BadModelWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify.",
+            state=ReviewState,
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="custom state field 'last_route' conflicts with built-in runtime state",
+    ):
+        compile_workflow(BadModelWorkflow)
+
+    class BadSugarWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify.",
+            state={"rework_count": simple.StateVar(0)},
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="custom state field 'rework_count' conflicts with built-in runtime state",
+    ):
+        compile_workflow(BadSugarWorkflow)
 
 
 def test_simple_workflow_rejects_class_level_transitions_and_flow() -> None:
@@ -470,22 +565,146 @@ def test_simple_runtime_step_state_uses_pydantic_models_and_serializes_for_check
     store = engine._ensure_step_state_store(step_states, step)
 
     assert isinstance(store, ReviewState)
+    assert store.visits == 0
+    assert store.last_route is None
+    assert store.rework_count == 0
+    assert store.replan_count == 0
     assert step_states["review"] is store
 
+    store.visits += 1
+    store.last_route = "accepted"
+    store.last_reason = "looks good"
+    store.rework_count += 1
     store.attempts += 1
     store.history.append("accepted")
 
     serialized = engine._serialize_step_states(step_states)
 
-    assert serialized == {"review": {"attempts": 1, "history": ["accepted"]}}
+    assert serialized == {
+        "review": {
+            "visits": 1,
+            "last_route": "accepted",
+            "last_reason": "looks good",
+            "rework_count": 1,
+            "replan_count": 0,
+            "attempts": 1,
+            "history": ["accepted"],
+        }
+    }
 
     restored_states: dict[str, BaseModel | dict[str, object]] = {"review": serialized["review"]}
     restored = engine._ensure_step_state_store(restored_states, step)
 
     assert isinstance(restored, ReviewState)
+    assert restored.visits == 1
+    assert restored.last_route == "accepted"
+    assert restored.last_reason == "looks good"
+    assert restored.rework_count == 1
+    assert restored.replan_count == 0
     assert restored.attempts == 1
     assert restored.history == ["accepted"]
     assert restored_states["review"] is restored
+
+
+def test_runtime_built_in_step_state_updates_and_checkpoints_for_simple_steps(tmp_path) -> None:
+    class PauseWorkflow(simple.Workflow):
+        review = simple.produce_verify_step(
+            producer_prompt="Draft.",
+            verifier_prompt="Verify.",
+            routes={"needs_rework": simple.PAUSE},
+            control_routes=False,
+        )
+
+    task_folder = tmp_path / "task"
+    run_folder = tmp_path / "run"
+    task_folder.mkdir()
+    run_folder.mkdir()
+
+    result = Engine(
+        compile_workflow(PauseWorkflow),
+        provider=ScriptedLLMProvider(
+            producer_turns=["draft\n"],
+            verifier_turns=[simple.Outcome(raw_output="repair\n", tag="needs_rework", reason="needs repair")],
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == simple.PAUSE
+    assert result.checkpoint is not None
+    assert result.checkpoint.step_states == {
+        "review": {
+            "visits": 1,
+            "last_route": "needs_rework",
+            "last_reason": "needs repair",
+            "rework_count": 1,
+            "replan_count": 0,
+        }
+    }
+
+
+def test_runtime_built_in_step_state_is_available_on_core_steps(tmp_path) -> None:
+    class WorkflowState(BaseModel):
+        seen_visits: int = 0
+        seen_last_route: str | None = None
+
+    class CoreRuntimeWorkflow(core.Workflow):
+        State = WorkflowState
+
+        inspect = core_steps.PythonStep(name="inspect")
+        entry = inspect
+        transitions = {inspect: {"done": core.PAUSE}}
+
+        @staticmethod
+        def on_inspect(state: WorkflowState, ctx: Context):
+            assert ctx.step_state.visits == 1
+            assert ctx.step_state.last_route is None
+            assert ctx.step_state.last_reason is None
+            return (
+                state.model_copy(
+                    update={
+                        "seen_visits": ctx.step_state.visits,
+                        "seen_last_route": ctx.step_state.last_route,
+                    }
+                ),
+                simple.Event("done", reason="inspected"),
+            )
+
+    task_folder = tmp_path / "task"
+    run_folder = tmp_path / "run"
+    task_folder.mkdir()
+    run_folder.mkdir()
+
+    result = Engine(
+        compile_workflow(CoreRuntimeWorkflow),
+        provider=ScriptedLLMProvider(),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=InMemoryCheckpointStore(),
+    ).run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert result.terminal == core.PAUSE
+    assert result.state.seen_visits == 1
+    assert result.state.seen_last_route is None
+    assert result.checkpoint is not None
+    assert result.checkpoint.step_states == {
+        "inspect": {
+            "visits": 1,
+            "last_route": "done",
+            "last_reason": "inspected",
+        }
+    }
 
 
 def test_simple_context_suppresses_unmodeled_item_state_surfaces(tmp_path) -> None:

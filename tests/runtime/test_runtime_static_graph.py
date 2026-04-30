@@ -108,8 +108,14 @@ def test_topology_artifacts_are_written_additively_with_canonical_finish_surface
     assert topology["terminals"] == ["FINISH", "PAUSE", "FAIL"]
     assert topology["steps"][1]["routes"][0]["target"] == "FINISH"
     assert topology["steps"][0]["hooks"]["before"] is None
-    assert topology["steps"][0]["state_model"] is None
-    assert topology["steps"][0]["state_fields"] == []
+    assert topology["steps"][0]["state_model"] == "ProduceVerifyRuntimeState"
+    assert topology["steps"][0]["state_fields"] == [
+        "visits",
+        "last_route",
+        "last_reason",
+        "rework_count",
+        "replan_count",
+    ]
 
 
 def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None:

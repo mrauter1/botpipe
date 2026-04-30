@@ -14,6 +14,7 @@ from core.primitives import Event, FAIL, FINISH, Outcome, PAUSE, SELF
 from core.prompts import Prompt
 from core.routes import Route
 from core.sessions import Continuity
+from core.step_state import StateVar
 from core.steps import Session
 from core.worklists import Worklist
 
@@ -645,6 +646,7 @@ __all__ = [
     "Route",
     "SELF",
     "Session",
+    "StateVar",
     "Text",
     "Workflow",
     "Worklist",
