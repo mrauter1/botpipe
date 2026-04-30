@@ -557,3 +557,106 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+I’m fixing the auditor’s coverage gap directly in the strictness scan boundary. The simplest safe change is to scan the whole `tests/` tree once, rather than trying to maintain a partial list of test subdirectories that can miss top-level files like `tests/conftest.py`.
+
+The scan boundary is simplified now: the full `tests/` tree is included, which removes the risk of top-level maintained files slipping past the compatibility checks. I’m validating that change and recording it in the current test-author decision block before I wrap up.
+
+I confirmed the fixed scan boundary parses and that the only remaining `autoloop_v3.*` test reference is still the intentional strictness assertion. I’m recording the boundary simplification in the current test-author decision block, then I’m ready to hand this back for re-audit.
+
+Scope considered
+
+- Phase-local compatibility-bridge-removal test scope only, focused on the auditor’s blocking gap in strictness coverage.
+- I limited changes to the strictness test boundary plus the phase test artifacts and current-turn decision ledger.
+
+What I analyzed
+
+- The auditor finding in the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/compatibility-bridge-removal/feedback.md).
+- The maintained-source scan in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), especially `MAINTAINED_PYTHON_SCAN_ROOTS` and the self-exclusion rule.
+- The omitted top-level maintained test files under `tests/`, especially [tests/conftest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/conftest.py) and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+
+What I changed
+
+- Simplified the maintained Python scan roots in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) so the scan now covers the full `tests/` tree instead of enumerating only some test subdirectories.
+- Kept the explicit self-exclusion for `tests/strictness/test_no_compat.py`, so the intentional `autoloop_v3.core` failed-import assertion still does not poison the maintained-source scan.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/compatibility-bridge-removal/test_strategy.md) to reflect that the maintained-source scan now includes top-level `tests/*.py` files.
+- Appended a concise follow-up note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/compatibility-bridge-removal/feedback.md).
+- Added the non-obvious scan-boundary simplification under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt).
+
+Key findings / decisions
+
+- The narrowest safe fix was to scan `REPO_ROOT / "tests"` once, rather than maintaining a partial list of test subdirectories that can silently omit top-level maintained files.
+- Validation completed with:
+  - `python3 -m py_compile tests/strictness/test_no_compat.py`
+  - `rg -n "autoloop_v3\\.(core|runtime|extensions|stdlib|workflows|autoloop_optimizer)|core\\._compat" tests -S`
+- Result: the only remaining match under `tests/` is the intentional `autoloop_v3.core` failed-import assertion in the strictness file itself.
+
+Open issues / next step
+
+- I still could not run `pytest`; this shell lacks project test dependencies such as `pytest` and `pydantic`.
+- Next step is re-audit of the updated test slice.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+I’m re-auditing the strictness boundary fix and the updated test artifacts against the same compatibility-removal risks. I’ll confirm the maintained-source scan now covers the top-level `tests/` files, then I’ll close out the audit artifacts if the blocking gap is resolved.
+
+The scan boundary now includes the top-level `tests/` files, and the only remaining `autoloop_v3.*` test reference is still the intentional strictness assertion. I don’t see a remaining blocking coverage issue in this phase slice, so I’m updating the audit artifacts to reflect that re-review result.
+
+Scope considered
+
+- Phase-local compatibility-bridge-removal test scope only: the strictness scan boundary fix, the adjacent maintained test surface it claims to cover, and the active test audit artifacts.
+- I focused on the changed import-compatibility regression checks rather than unrelated runtime behavior.
+
+What I analyzed
+
+- The updated [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), especially `MAINTAINED_PYTHON_SCAN_ROOTS` and the self-exclusion logic.
+- The actual top-level maintained files under `tests/`, including [tests/conftest.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/conftest.py) and [tests/test_architecture_baseline_docs.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/test_architecture_baseline_docs.py).
+- The updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/compatibility-bridge-removal/test_strategy.md) and run-local decisions to verify the intended scan boundary.
+
+What I reviewed
+
+- Whether the new strictness coverage now protects the full maintained Python regression surface, including top-level `tests/*.py`.
+- Whether the tests still preserve the confirmed intent that only strictness coverage intentionally mentions `autoloop_v3.core`.
+- I updated:
+  - [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/compatibility-bridge-removal/criteria.md)
+  - [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/compatibility-bridge-removal/feedback.md)
+
+Key findings / decisions
+
+- No blocking findings remain in the active test phase slice.
+- The prior gap is resolved: the maintained-source scan now covers `REPO_ROOT / "tests"` as one root, so top-level maintained files are under the same forbidden-import checks as the rest of the maintained regression surface.
+- The only remaining `autoloop_v3.*` reference under `tests/` is still the intentional failed-import assertion in the strictness file itself.
+- All audit criteria are now checked.
+
+Open issues / next step
+
+- Dynamic `pytest` execution is still blocked in this shell by missing dependencies such as `pytest` and `pydantic`.
+- With that environment caveat, the test audit for this phase is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
