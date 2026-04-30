@@ -3960,3 +3960,38 @@ The plan needs to be revised so compatibility coverage uses persisted payload/so
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019ddc6e-0fa6-7e73-a83e-31aecddfbe1b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019ddc6e-0fa6-7e73-a83e-31aecddfbe1b
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc6e-0fa6-7e73-a83e-31aecddfbe1b
+---
+I’m revising the plan against the verifier’s blocking finding. First I’m checking the current feedback and the latest decisions header, then I’ll tighten the compatibility strategy so the plan no longer relies on live in-memory `produces` declarations after the constructor surface is removed.
+
+I’m applying the correction now. The revised plan will explicitly forbid live legacy step declarations anywhere in maintained coverage after the constructor surface is removed, and it will name the targeted pytest set as the canonical verification suite for this cleanup.
+
+The blocking inconsistency is removed in the plan text. I’m doing a final pass to make sure the narrative plan, phase YAML, feedback note, and new decision lines all say the same thing and don’t leave the old live-legacy-test allowance behind anywhere.
+
+I found one small consistency gap in the decision ledger: turn 2 narrows an earlier direction, so I’m making that supersession explicit so later turns don’t follow the stale allowance for live legacy compatibility fixtures.
+
+The superseding decision is now explicit, and the milestone summary matches the narrowed compatibility boundary. I’m done with the planner-side revisions.
+
+Updated the plan artifacts to resolve the verifier’s blocking issue.
+
+The key correction is that the plan no longer allows live in-memory legacy `PromptStep(..., produces=...)` or `ProduceVerifyStep(..., review_produces=...)` declarations anywhere after constructor alias removal. Compatibility coverage is now explicitly limited to persisted session/checkpoint/run reader behavior, strictness exclusions are narrowed to persisted-compatibility fixture files only, and the targeted pytest list is declared as the canonical verification suite for this cleanup.
+
+Revised files:
+- [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/plan/plan.md>)
+- [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/plan/phase_plan.yaml>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/plan/feedback.md>)
+- [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/decisions.txt>)
+
+I did not edit verifier-owned [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/plan/criteria.md>).
