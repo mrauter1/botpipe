@@ -34,7 +34,7 @@
 - Removed low-level compatibility exports from `core._compat`
 - Strictness banned-name scan expanded to cover the removed low-level class/descriptors tokens in the maintained tree
 - Canonical verifier-input/internal naming completed for `verifier_requires`
-- `CompiledRoute.required_writes` now preserves `None` versus `()` so explicit empty route overrides stay distinct from unspecified defaults
+- Public `CompiledRoute.required_writes` remains tuple-shaped while runtime-only enforcement tracks explicit route-level declarations through the private `_required_writes_explicit` flag
 - Runtime handoff scheduling now includes canonical `route.handoff`, and workflow-step output persistence uses declared child-step artifacts directly
 
 ## Checklist mapping
@@ -44,6 +44,7 @@
 - Milestone 3 / strictness: `tests/strictness/test_no_compat.py` now bans the removed low-level step/descriptors names across `autoloop/`, `core/`, `runtime/`, `stdlib/`, `workflows/`, docs, and active tests while excluding only explicit compatibility fixtures.
 - Reviewer `IMP-001`: resolved by removing the stale `tests/fixtures/toy_runtime_workflow.py` strictness exclusion and eliminating remaining banned-name literals from active suites.
 - Reviewer `IMP-002`: resolved by running the requested strictness/unit and canonical/compat verification slices under a temporary venv with `pytest`, `pydantic`, `jsonschema`, and `pyyaml` installed.
+- Reviewer `IMP-003`: resolved by restoring the public compiled-route `required_writes` tuple surface and moving the explicit-empty route sentinel behind private runtime/compiler metadata.
 
 ## Assumptions
 
@@ -55,7 +56,7 @@
 - `core.*` and `autoloop_v3.core.*` still resolve to the same module graph.
 - Canonical route/runtime payload semantics remain `FINISH` plus `required_writes`.
 - Compatibility coverage still targets persisted payload/session/checkpoint normalization rather than active public authoring aliases.
-- Unspecified route required-write behavior still falls back to artifact-level `required=True`; only explicit `required_writes=[]` suppresses that default.
+- Public compiled routes still expose tuple `required_writes`; unspecified route required-write behavior falls back to artifact-level `required=True`, and only explicit `required_writes=[]` suppresses that default.
 
 ## Intended behavior changes
 
@@ -64,6 +65,7 @@
 - Documentation now describes `workflow_step(...)` without advertising the removed low-level child-workflow class name.
 - Static route handoffs from canonical `Route.handoff` now persist through dispatch/resume the same way dynamic handoffs already did.
 - Simple-workflow contract coverage now uses step-local routes instead of deprecated class-level `transitions`.
+- Explicit empty route contracts continue to suppress artifact-level required defaults without changing the public compiled-route shape seen by active tests and tooling.
 
 ## Known non-changes
 
@@ -75,7 +77,7 @@
 
 - Any future tests or helpers that try to import the removed low-level names from active `core` modules will fail fast and be caught by strictness.
 - Compatibility runtime fixtures must author in-memory workflows with the renamed internal classes even when the serialized payload under test is historical.
-- Providers and static-graph/capability payload helpers now treat missing `required_writes` as an empty list at serialization time while preserving the internal `None` sentinel needed for runtime enforcement.
+- Providers and static-graph/capability payload helpers continue to serialize missing `required_writes` as empty lists, while runtime enforcement relies on the private explicit-route sentinel instead of exposing `None` on compiled routes.
 
 ## Validation performed
 
@@ -91,4 +93,4 @@
 ## Deduplication / centralization
 
 - Applied one shared internal rename across `core` implementation and the active suites instead of keeping alias shims or per-suite compatibility wrappers.
-- Kept the explicit-empty required-writes fix centralized in compiled-route normalization and runtime enforcement instead of scattering per-provider or per-test exceptions.
+- Kept the explicit-empty required-writes fix centralized in compiled-route normalization plus the private runtime `_required_writes_explicit` check instead of scattering per-provider or per-test exceptions.
