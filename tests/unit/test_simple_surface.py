@@ -820,6 +820,111 @@ def test_runtime_step_state_restores_built_ins_and_custom_fields_on_resume(tmp_p
     }
 
 
+def test_simple_scoped_item_state_and_step_item_state_restore_on_resume(tmp_path) -> None:
+    class ItemState(BaseModel):
+        status: str = "pending"
+        attempts: int = 0
+
+    def record_scoped_state(ctx, outcome):
+        if ctx.item_state.attempts == 0:
+            assert ctx.step_item_state.visits == 1
+            assert ctx.step_item_state.last_route is None
+            ctx.item_state.status = "checkpointed"
+        else:
+            assert ctx.item_state.status == "checkpointed"
+            assert ctx.step_item_state.visits == 2
+            assert ctx.step_item_state.last_route == "done"
+            ctx.item_state.status = "resumed"
+        ctx.item_state.attempts += 1
+        ctx.step_item_state.attempts += 1
+
+    class ResumeWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+            item_state=ItemState,
+        )
+        review = simple.step(
+            prompt="Review.",
+            scope=gates,
+            item_state={"attempts": simple.StateVar(0)},
+            after=record_scoped_state,
+            routes={"done": simple.PAUSE},
+            control_routes=False,
+        )
+
+    task_folder = tmp_path / "task"
+    run_folder = tmp_path / "run"
+    task_folder.mkdir()
+    run_folder.mkdir()
+
+    checkpoint_store = InMemoryCheckpointStore()
+    engine = Engine(
+        compile_workflow(ResumeWorkflow),
+        provider=ScriptedLLMProvider(
+            llm_turns=[
+                simple.Outcome(raw_output="ok-1\n", tag="done", reason="first pause"),
+                simple.Outcome(raw_output="ok-2\n", tag="done", reason="second pause"),
+            ]
+        ),
+        session_store=InMemorySessionStore(),
+        checkpoint_store=checkpoint_store,
+    )
+
+    first = engine.run(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+    second = engine.resume(
+        task_id="task-1",
+        run_id="run-1",
+        task_folder=task_folder,
+        run_folder=run_folder,
+        root=tmp_path,
+    )
+
+    assert first.terminal == simple.PAUSE
+    assert first.checkpoint is not None
+    assert first.checkpoint.item_states == {
+        "gate:alpha": {
+            "status": "checkpointed",
+            "attempts": 1,
+        }
+    }
+    assert first.checkpoint.step_item_states == {
+        "review": {
+            "gate:alpha": {
+                "visits": 1,
+                "last_route": "done",
+                "last_reason": "first pause",
+                "attempts": 1,
+            }
+        }
+    }
+
+    assert second.terminal == simple.PAUSE
+    assert second.checkpoint is not None
+    assert second.checkpoint.item_states == {
+        "gate:alpha": {
+            "status": "resumed",
+            "attempts": 2,
+        }
+    }
+    assert second.checkpoint.step_item_states == {
+        "review": {
+            "gate:alpha": {
+                "visits": 2,
+                "last_route": "done",
+                "last_reason": "second pause",
+                "attempts": 2,
+            }
+        }
+    }
+
+
 def test_runtime_built_in_step_state_is_available_on_core_steps(tmp_path) -> None:
     class WorkflowState(BaseModel):
         seen_visits: int = 0
