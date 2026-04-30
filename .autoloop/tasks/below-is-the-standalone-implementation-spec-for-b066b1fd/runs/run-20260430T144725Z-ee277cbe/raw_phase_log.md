@@ -8,3 +8,76 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+---
+I’m treating the pasted spec as the implementation contract unless the raw log adds clarifications. First I’m checking the existing plan artifacts and the code paths implicated by compatibility removal, hook rerouting, state surfaces, scoped state, required writes, and history so the plan matches the actual repo structure.
+
+The run artifacts are mostly empty and there are no later clarifications in the authoritative log. I’m mapping the current implementation so the plan lands on real modules, tests, and migration order instead of just restating the spec.
+
+I’ve confirmed the spec is not hypothetical: the current tree still has the root bridge, `autoloop_v3.core` bridge, fallback imports in `autoloop/simple.py`, and many production imports pinned to `autoloop_v3.core`. Next I’m checking the current state/hook/checkpoint implementation so the plan can separate mechanical import migration from behavioral runtime changes.
+
+The engine already persists `step_states`, `item_states`, and `step_item_states`, but `Context` still exposes dict-backed proxies and the engine separately tracks visit/last-route counters outside those stores. Hooks are also still explicitly forbidden from redirecting, so the behavioral plan needs to touch `core.engine`, `core.validation`, `runtime.tracing`, `runtime.static_graph`, and the strictness/contract tests together.
+
+I’ve also confirmed there is no existing `ctx.history` surface or history reader module, and `StateVar` is currently only an explicitly removed name in strictness tests. The plan needs to treat state-surface work and telemetry work as new implementation slices rather than minor extensions.
+
+I have enough context to write the plan artifacts. I’m updating the human plan, machine phase breakdown, feedback note, and carry-forward decisions so later phases inherit the same migration boundaries and intentional breaks.
+
+The plan artifacts are written. I’m doing a quick verification pass for formatting and to catch any artifact mistakes before I stop, especially around the YAML top-level metadata and the append-only decisions block.
+
+The plan itself is consistent. There was one artifact formatting issue in `phase_plan.yaml`: the runtime seed `phases: []` is still present above the authored block, so I’m replacing that single seeded line rather than leaving duplicate keys.
+
+Updated the planning artifacts in [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/plan/plan.md>), [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/plan/phase_plan.yaml>), [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/plan/feedback.md>), and [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt>).
+
+The plan now reflects the actual repo state and decomposes the work into six ordered phases: compatibility bridge removal, hook rerouting, built-in step state plus `StateVar`, scoped item and step-item state, effective required writes, and read-only history/telemetry. I also made the intentional breaks explicit: `autoloop_v3.core` becomes unsupported, hook redirects become legal route-tag redirects, and effective required writes must be centralized across runtime and topology outputs.
+
+I did not run tests because this turn was planning-only.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddedb-e8fb-72c1-8e57-52581c12b5a8
+---
+I found one material gap to verify with evidence: the plan removes `autoloop_v3.core` but only names strictness/import test updates, while a large part of the existing test suite still imports that bridge. I’m quantifying that surface and then I’ll update the verifier artifacts with whether the plan is complete or incomplete.
+
+The substantive blocker is confirmed: 35 existing test files still import `autoloop_v3.core`, so phase 1 as written would leave the test suite broken after bridge deletion. I’m validating the YAML with an available interpreter now, then I’ll mark criteria and append the finding with the minimal correction needed.
+
+I’m marking the gate as incomplete because the phase 1 plan would intentionally delete `autoloop_v3.core` while leaving 35 maintained tests still bound to that import path. The fix is small but needs to be explicit in the planning artifacts, not left as an implicit risk note.
+
+Scope considered
+Plan artifacts, authoritative request snapshot, raw log, decisions ledger, and repository areas directly relevant to compatibility removal, test coverage, and plan feasibility.
+
+What I analyzed
+The standalone spec, the generated `plan.md` and `phase_plan.yaml`, the current compatibility bridge implementation, and the maintained test surface still importing `autoloop_v3.core`. I also validated that `phase_plan.yaml` parses and that its runtime-owned metadata is intact.
+
+What I reviewed
+`plan.md` is directionally aligned with the spec and has coherent phase sequencing. `phase_plan.yaml` is parseable and structurally sound. `criteria.md` now reflects the current gate state. `feedback.md` now contains one prioritized blocking finding with evidence and correction direction.
+
+Key findings / decisions
+`PLAN-001` is blocking. The plan removes `autoloop_v3.core` in phase 1 but only explicitly covers strictness/import test updates, while 35 maintained test files still import that bridge. As written, phase 1 would break the regression suite immediately after bridge deletion. The plan needs to expand phase 1 scope, acceptance criteria, and deliverables to migrate maintained tests and fixtures to canonical imports before deleting the bridge.
+
+Open issues / next step
+The producer plan should be revised to include full maintained test migration in phase 1, not only strictness/import assertions. After that change, the verifier can re-check the criteria for completion.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

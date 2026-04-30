@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260430T144725Z-ee277cbe" ts="2026-04-30T14:47:25.270249+00:00" />
+Canonical in-repo imports after bridge removal are core... and autoloop... only; autoloop_v3.core is an intentional hard failure and strictness must enforce that break.
+Built-in step runtime fields move into persisted step/item/step-item state stores; separate engine bookkeeping for visit and last-route counters should be retired rather than mirrored.
+Hook redirects operate on declared route tags for the current step, continue through chained route hooks, and fail as runtime errors after 16 redirects or on unknown routes.
+Effective required writes must be computed once and reused by runtime validation, provider contracts, and topology/static graph outputs to avoid drift.
