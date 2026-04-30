@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig
-from autoloop_v3.core.schema_registry import GIT_TRACKING_SCHEMA
+from core.schema_registry import GIT_TRACKING_SCHEMA
 from autoloop_v3.runtime.git_tracking import RuntimeGitTracker, RuntimeGitTrackingError
 
 

@@ -8,24 +8,14 @@ from typing import Any, Mapping, Sequence
 
 from pydantic import BaseModel
 
-try:  # pragma: no branch - prefer installed-package imports when available
-    from autoloop_v3.core import Artifact
-    from autoloop_v3.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-    from autoloop_v3.core.primitives import Event, FAIL, FINISH, Outcome, PAUSE, SELF
-    from autoloop_v3.core.prompts import Prompt
-    from autoloop_v3.core.routes import Route
-    from autoloop_v3.core.sessions import Continuity
-    from autoloop_v3.core.steps import Session
-    from autoloop_v3.core.worklists import Worklist
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from core import Artifact
-    from core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-    from core.primitives import Event, FAIL, FINISH, Outcome, PAUSE, SELF
-    from core.prompts import Prompt
-    from core.routes import Route
-    from core.sessions import Continuity
-    from core.steps import Session
-    from core.worklists import Worklist
+from core import Artifact
+from core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
+from core.primitives import Event, FAIL, FINISH, Outcome, PAUSE, SELF
+from core.prompts import Prompt
+from core.routes import Route
+from core.sessions import Continuity
+from core.steps import Session
+from core.worklists import Worklist
 
 
 PromptInput = str | Path | Prompt

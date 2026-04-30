@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-try:  # pragma: no branch - prefer installed-package imports when available
-    from autoloop_v3.core.extensions import StepFinish, StepStart, TerminalFinish
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from core.extensions import StepFinish, StepStart, TerminalFinish
+from core.extensions import StepFinish, StepStart, TerminalFinish
 from .git_tracking import RuntimeGitTracker
 from .tracing import RuntimeTraceWriter
 

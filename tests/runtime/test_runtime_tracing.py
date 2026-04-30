@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from autoloop_v3.core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
-from autoloop_v3.core.providers.models import StepProviderUsage, TokenUsage
-from autoloop_v3.core.primitives import Event, Outcome
+from core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
+from core.providers.models import StepProviderUsage, TokenUsage
+from core.primitives import Event, Outcome
 from autoloop_v3.runtime.config import TracingRuntimeConfig
-from autoloop_v3.core.schema_registry import RUNTIME_TRACE_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from core.schema_registry import RUNTIME_TRACE_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 from autoloop_v3.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
 from autoloop_v3.runtime.workspace import next_observability_sequence
 

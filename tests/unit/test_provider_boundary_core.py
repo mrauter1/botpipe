@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from autoloop_v3.core.errors import ProviderExecutionError
-from autoloop_v3.core.prompts import ResolvedPrompt
-from autoloop_v3.core.providers.models import (
+from core.errors import ProviderExecutionError
+from core.prompts import ResolvedPrompt
+from core.providers.models import (
     LLMRequest,
     OperationRequest,
     OutcomeResponse,
@@ -19,13 +19,13 @@ from autoloop_v3.core.providers.models import (
     TokenUsage,
     VerifierRequest,
 )
-from autoloop_v3.core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.core.providers.parsing import parse_outcome_json
-from autoloop_v3.core.providers.rendered import RenderedLLMProvider
-from autoloop_v3.core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
-from autoloop_v3.core.providers.rendering import render_provider_turn
-from autoloop_v3.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
-from autoloop_v3.core.stores.protocols import SessionBinding
+from core.providers.fake import ScriptedLLMProvider
+from core.providers.parsing import parse_outcome_json
+from core.providers.rendered import RenderedLLMProvider
+from core.providers.rendering import ProviderPromptRenderPolicy, render_provider_turn_with_policy
+from core.providers.rendering import render_provider_turn
+from core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from core.stores.protocols import SessionBinding
 
 
 def _session_binding(session_id: str = "provider-session-1") -> SessionBinding:

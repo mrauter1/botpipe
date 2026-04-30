@@ -4,13 +4,13 @@ import subprocess
 
 import pytest
 
-from autoloop_v3.core.errors import ProviderExecutionError
-from autoloop_v3.core.prompts import ResolvedPrompt
-from autoloop_v3.core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
-from autoloop_v3.core.providers.parsing import parse_outcome_json
-from autoloop_v3.core.providers.rendered import RenderedLLMProvider
-from autoloop_v3.core.providers.turns import RenderedProviderTurn
-from autoloop_v3.core.stores.protocols import SessionBinding
+from core.errors import ProviderExecutionError
+from core.prompts import ResolvedPrompt
+from core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
+from core.providers.parsing import parse_outcome_json
+from core.providers.rendered import RenderedLLMProvider
+from core.providers.turns import RenderedProviderTurn
+from core.stores.protocols import SessionBinding
 from autoloop_v3.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,

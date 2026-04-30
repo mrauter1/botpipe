@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from autoloop_v3.core.providers.rendered import RenderedLLMProvider
-from autoloop_v3.core.providers.turns import ProviderTurnResult, RenderedProviderTurn
+from core.providers.rendered import RenderedLLMProvider
+from core.providers.turns import ProviderTurnResult, RenderedProviderTurn
 from autoloop_v3.runtime import cli
 from autoloop_v3.runtime import providers as runtime_providers
 from autoloop_v3.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider

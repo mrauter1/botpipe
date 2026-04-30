@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from autoloop_v3.core.compiler import compile_workflow
+from core.compiler import compile_workflow
 from autoloop_v3.runtime import cli
 from autoloop_v3.runtime.loader import resolve_workflow_reference
 

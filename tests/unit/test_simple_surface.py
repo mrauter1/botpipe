@@ -3,24 +3,22 @@ from __future__ import annotations
 import importlib
 import inspect
 from pathlib import Path
+import re
 
 import pytest
 from pydantic import BaseModel, Field
 
 import autoloop
 import autoloop.simple as simple
-import autoloop_v3.core as strict_core
-import autoloop_v3.core.steps as strict_steps
-import autoloop_v3.core.validation as strict_validation
 import core
 import core.steps as core_steps
 import core.validation as core_validation
-from autoloop_v3.core.compiler import compile_workflow
-from autoloop_v3.core.context import Context
-from autoloop_v3.core.engine import Engine
-from autoloop_v3.core.errors import WorkflowExecutionError, WorkflowValidationError
-from autoloop_v3.core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from core.compiler import compile_workflow
+from core.context import Context
+from core.engine import Engine
+from core.errors import WorkflowExecutionError, WorkflowValidationError
+from core.providers.fake import ScriptedLLMProvider
+from core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 REMOVED_WORKFLOW_STEP = "Workflow" + "Step"
@@ -35,9 +33,8 @@ REMOVED_REVIEW_STEP = "review" + "_" + "step"
 REMOVED_DO_REVIEW_STEP = "do" + "_" + "review" + "_" + "step"
 REMOVED_SYSTEM_STEP_ALIAS = "system" + "_" + "step"
 REMOVED_VERIFIER_WRITES = "review_" + "writes"
-
-strict_compat = importlib.import_module("autoloop_v3.core" + "._" + "compat")
-STRICT_COMPAT_MODULE = "autoloop_v3.core" + "._" + "compat"
+LEGACY_CORE_MODULE = "autoloop_v3" + ".core"
+LEGACY_COMPAT_MODULE = LEGACY_CORE_MODULE + "._" + "compat"
 
 
 def _import_from(module_name: str, symbol: str) -> object:
@@ -140,55 +137,57 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
         REMOVED_SYSTEM_STEP,
         REMOVED_WORKFLOW_STEP,
     ):
-        assert not hasattr(strict_core, symbol)
+        assert not hasattr(core, symbol)
         with pytest.raises(ImportError):
-            _import_from("autoloop_v3.core", symbol)
+            _import_from("core", symbol)
 
     for symbol in ("Artifact", "Context", "FAIL", "FINISH", "GLOBAL", "PAUSE", "Prompt", "Route", "Workflow"):
-        assert _import_from("autoloop_v3.core", symbol) is getattr(strict_core, symbol)
+        assert _import_from("core", symbol) is getattr(core, symbol)
 
 
-def test_core_compat_surface_excludes_removed_route_runtime_helpers() -> None:
-    for symbol in (
-        "SU" + "CCESS",
-        "Route" + "Info",
-        REMOVED_AFTER_HOOK_RESULT,
-        REMOVED_LLM_STEP,
-        REMOVED_PAIR_STEP,
-        REMOVED_PARAM,
-        REMOVED_STATE_VAR,
-        REMOVED_SYSTEM_STEP,
-        REMOVED_WORKFLOW_STEP,
-    ):
-        assert not hasattr(strict_compat, symbol)
-        with pytest.raises(ImportError):
-            _import_from(STRICT_COMPAT_MODULE, symbol)
+def test_legacy_core_package_imports_fail_after_bridge_removal() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(LEGACY_CORE_MODULE)
+
+    with pytest.raises(ModuleNotFoundError):
+        _import_from(LEGACY_CORE_MODULE, "Workflow")
 
 
-def test_autoloop_v3_core_bridge_preserves_shared_module_identity() -> None:
-    import autoloop_v3.core.workflow_capabilities as strict_capabilities
+def test_legacy_core_compat_package_imports_fail_after_bridge_removal() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module(LEGACY_COMPAT_MODULE)
+
+    with pytest.raises(ModuleNotFoundError):
+        _import_from(LEGACY_COMPAT_MODULE, "Workflow")
+
+
+def test_core_module_identity_remains_canonical() -> None:
     import core.workflow_capabilities as core_capabilities
 
-    assert strict_core is core
-    assert strict_validation is core_validation
-    assert strict_steps is core_steps
-    assert strict_capabilities is core_capabilities
-    assert strict_core.Workflow is core.Workflow
-    assert strict_steps.Step is core_steps.Step
+    assert core.validation is core_validation
+    assert core.steps is core_steps
+    assert core_capabilities.__name__ == "core.workflow_capabilities"
+    assert core.Workflow is _import_from("core", "Workflow")
+    assert core_steps.Step is _import_from("core.steps", "Step")
 
 
-def test_core_compat_usage_stays_quarantined_to_explicit_compatibility_files() -> None:
+def test_legacy_core_import_usage_is_absent_from_active_python_files() -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    allowed = {
-        "tests/runtime/test_compatibility_runtime.py",
-    }
-    compat_tokens = ("core" "._compat", "autoloop_v3.core" "._compat")
+    forbidden_patterns = (
+        re.compile(r"\bfrom\s+autoloop_v3\.core(?:\.|\s+import\b)"),
+        re.compile(r"\bimport\s+autoloop_v3\.core(?:\.|\b)"),
+        re.compile(r"\bfrom\s+core\._compat(?:\.|\s+import\b)"),
+        re.compile(r"\bimport\s+core\._compat(?:\.|\b)"),
+    )
     candidates = (
         "autoloop",
         "core",
+        "extensions",
         "stdlib",
         "runtime",
         "workflows",
+        "tests/fixtures",
+        "tests/runtime",
         "tests/unit",
         "tests/contract",
     )
@@ -199,12 +198,9 @@ def test_core_compat_usage_stays_quarantined_to_explicit_compatibility_files() -
         if not root.exists():
             continue
         for path in sorted(root.rglob("*.py")):
-            rel = path.relative_to(repo_root).as_posix()
-            if rel in allowed:
-                continue
             text = path.read_text(encoding="utf-8")
-            if any(token in text for token in compat_tokens):
-                matches.append(rel)
+            if any(pattern.search(text) for pattern in forbidden_patterns):
+                matches.append(path.relative_to(repo_root).as_posix())
 
     assert matches == []
 

@@ -5,10 +5,10 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from autoloop import FINISH, Md, Prompt, Route, Workflow, produce_verify_step, step
-from autoloop_v3.core.engine import Engine
-from autoloop_v3.core.primitives import Outcome
-from autoloop_v3.core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.core.stores import InMemoryCheckpointStore, InMemorySessionStore
+from core.engine import Engine
+from core.primitives import Outcome
+from core.providers.fake import ScriptedLLMProvider
+from core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 def _workspace(tmp_path: Path) -> tuple[Path, Path]:

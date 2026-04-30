@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from autoloop_v3.core.errors import WorkflowExecutionError
-from autoloop_v3.core.providers.fake import ScriptedLLMProvider
+from core.errors import WorkflowExecutionError
+from core.providers.fake import ScriptedLLMProvider
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     ResolvedWorkflow,

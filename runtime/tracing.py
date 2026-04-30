@@ -10,18 +10,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-try:  # pragma: no branch - prefer installed-package imports when available
-    from autoloop_v3.core.compiler import CompiledWorkflow
-    from autoloop_v3.core.extensions import StepFinish, StepStart, TerminalFinish
-    from autoloop_v3.core.providers.models import StepProviderUsage
-    from autoloop_v3.core.primitives import Event, Outcome
-    from autoloop_v3.core.schema_registry import RUNTIME_TRACE_SCHEMA
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from core.compiler import CompiledWorkflow
-    from core.extensions import StepFinish, StepStart, TerminalFinish
-    from core.providers.models import StepProviderUsage
-    from core.primitives import Event, Outcome
-    from core.schema_registry import RUNTIME_TRACE_SCHEMA
+from core.compiler import CompiledWorkflow
+from core.extensions import StepFinish, StepStart, TerminalFinish
+from core.providers.models import StepProviderUsage
+from core.primitives import Event, Outcome
+from core.schema_registry import RUNTIME_TRACE_SCHEMA
 from .config import TracingRuntimeConfig
 from .static_graph import STATIC_GRAPH_FILENAME, write_static_step_graph_payload, write_topology_artifacts
 from .workspace import append_run_warning, update_run_tracing

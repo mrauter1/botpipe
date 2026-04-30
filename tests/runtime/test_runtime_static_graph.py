@@ -6,8 +6,8 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from autoloop import FINISH, Prompt, Route, Workflow, produce_verify_step, python_step
-from autoloop_v3.core import Artifact
-from autoloop_v3.core.compiler import compile_workflow
+from core import Artifact
+from core.compiler import compile_workflow
 from autoloop_v3.runtime.static_graph import (
     TOPOLOGY_FILENAME,
     write_static_step_graph,
@@ -15,7 +15,7 @@ from autoloop_v3.runtime.static_graph import (
     workflow_static_step_graph_payload,
     workflow_topology_payload,
 )
-from autoloop_v3.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 
 
 class _AssessmentPayload(BaseModel):

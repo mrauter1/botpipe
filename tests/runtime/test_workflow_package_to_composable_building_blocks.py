@@ -10,10 +10,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from autoloop_v3.core.compiler import compile_workflow
-from autoloop_v3.core.context import Context
-from autoloop_v3.core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.core.stores import InMemorySessionStore
+from core.compiler import compile_workflow
+from core.context import Context
+from core.providers.fake import ScriptedLLMProvider
+from core.stores import InMemorySessionStore
 from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop_v3.runtime.loader import (
     WorkflowParameterError,
@@ -1450,7 +1450,7 @@ def _write_candidate_decomposition_surface(request) -> str:
                 "import sys",
                 "from pathlib import Path",
                 "",
-                "from autoloop_v3.core.compiler import compile_workflow",
+                "from core.compiler import compile_workflow",
                 "from autoloop_v3.runtime.loader import discover_workflow_packages, resolve_workflow_reference",
                 "",
                 "",

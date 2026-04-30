@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from autoloop_v3.core.providers.retries import build_retry_feedback
+from core.providers.retries import build_retry_feedback
 
 
 def _retry_error(

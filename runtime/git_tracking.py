@@ -7,12 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-try:  # pragma: no branch - prefer installed-package imports when available
-    from autoloop_v3.extensions.git.repo import GitRepo
-    from autoloop_v3.core.schema_registry import GIT_TRACKING_SCHEMA as CANONICAL_GIT_TRACKING_SCHEMA
-except ModuleNotFoundError:  # pragma: no cover - direct repo-root import fallback
-    from extensions.git.repo import GitRepo
-    from core.schema_registry import GIT_TRACKING_SCHEMA as CANONICAL_GIT_TRACKING_SCHEMA
+from core.schema_registry import GIT_TRACKING_SCHEMA as CANONICAL_GIT_TRACKING_SCHEMA
+from extensions.git.repo import GitRepo
 from .config import GitTrackingRuntimeConfig
 from .workspace import append_run_git_step, update_run_git_tracking
 
