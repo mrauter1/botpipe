@@ -42,3 +42,7 @@
 {"ts": "2026-04-30T15:56:28.696083+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 42, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "hook-rerouting"}
 {"ts": "2026-04-30T15:57:15.419928+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 43, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "hook-rerouting"}
 {"ts": "2026-04-30T15:57:15.471451+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 44, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "hook-rerouting"}
+{"ts": "2026-04-30T15:57:15.555891+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 45, "event_type": "phase_completed", "pair": "test", "phase_id": "hook-rerouting", "phase_mode": "single"}
+{"ts": "2026-04-30T15:57:15.558746+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 46, "event_type": "phase_started", "phase_id": "state-surfaces", "phase_mode": "single"}
+{"ts": "2026-04-30T15:57:15.560233+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 47, "event_type": "pair_started", "pair": "implement", "phase_id": "state-surfaces"}
+{"ts": "2026-04-30T15:57:15.560371+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 48, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "state-surfaces"}
