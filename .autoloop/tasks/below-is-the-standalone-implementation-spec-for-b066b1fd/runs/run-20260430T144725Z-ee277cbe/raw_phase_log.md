@@ -2339,3 +2339,132 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf84-1835-7873-b6bc-25e46ab8e0af
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019ddf84-1835-7873-b6bc-25e46ab8e0af
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf84-1835-7873-b6bc-25e46ab8e0af
+---
+I’m auditing the completed run against the authoritative request, clarifications, decisions, and resulting code/tests. I’ll read the run artifacts first, then inspect the final implementation and tests for the areas the spec makes mandatory.
+
+I’ve got the authoritative request and the run ledger. Next I’m cross-checking the phase artifacts against the final code and tests so the audit only flags gaps that are real in the shipped tree, not already justified by later decisions.
+
+I have the phase-local notes and test audits. I’m validating the live tree now: public exports, removed compatibility paths, hook rerouting, model-backed state, scoped state, effective required writes, and history instrumentation.
+
+I’ve confirmed the top-level `autoloop` export surface is close to spec. I’m checking the remaining low-level contracts now, especially where the implementation notes themselves call out scoped assumptions or intentional deviations.
+
+The code-level scan matches the phase notes so far. I’m running focused verification now to confirm the shipped behavior rather than relying only on artifact claims.
+
+I’ve verified the compatibility removals directly. I’m running the focused regression suites next, including the strictness, simple-surface, engine-contract, runtime tracing/history, and static-graph coverage that should prove the spec-critical behaviors.
+
+The focused suite is running under the project venv. I’m waiting for the result before I decide whether any remaining differences are just documented deviations or real gaps.
+
+The focused suite found a concrete regression gap: one maintained unit test still asserts the old `step(...)` signature and fails against the scoped-state implementation. I’m inspecting that test and the corresponding authoring surface to classify whether this is a code bug or stale coverage.
+
+The failing assertion is stale coverage, not a code defect: the spec-required scoped `step(..., scope=..., item_state=...)` parameters are present, and another test phase explicitly required them. I’m rerunning the same suite with that obsolete assertion excluded to check for any additional live gaps.
+
+I’ve confirmed the main unresolved issue is real and isolated: one obsolete signature test is the only failure in the focused spec-critical suite. I’m checking the tail of the authoritative log and the exact file references I’ll cite in the audit so the report is evidence-backed and final.
+
+The live gap is narrower than a broad behavior miss: it’s stale signature coverage in one maintained test, and it affects both `step` and `produce_verify_step` expectations in the same assertion block. I’m checking whether that obsolete expectation exists anywhere else before I write the follow-up request.
+
+I’ve confirmed the stale signature assertion is isolated to one test block. I’m doing one last production-surface scan for legacy imports and then I’ll write the audit artifacts with a narrow follow-up request instead of reopening the whole implementation.
+
+I have enough evidence now: spec-critical behaviors pass, the public surface matches the requested exports, legacy bridge usage is gone from production code, and the only remaining issue is obsolete signature coverage. I’m reading the current audit artifact stubs and then I’ll replace them with the final report, revised request, and machine result.
+
+I’m writing the audit artifacts now. The follow-up will stay narrow: fix the obsolete maintained signature assertions so the implemented scoped-state public surface and the regression suite agree.
+
+The audit artifacts are written. I’m validating the JSON and doing a quick content pass so the report, machine result, and follow-up request stay aligned on the same single material gap.
+
+Scope considered
+- The immutable request snapshot, authoritative raw log, decisions ledger, plan/implement/test artifacts for all six phases, the final codebase, and the maintained tests relevant to bridge removal, hook rerouting, state surfaces, scoped item state, effective required writes, and history/telemetry.
+
+What I analyzed
+- Public exports in `autoloop/__init__.py`, the simple authoring surface in `autoloop/simple.py`, the removed bridge surface in root `__init__.py`, `autoloop_v3/core/__init__.py`, and the absence of `core/_compat.py`.
+- Runtime/state/history implementations and the focused regression surface in `tests/strictness/test_no_compat.py`, `tests/unit/test_simple_surface.py`, `tests/unit/test_validation.py`, `tests/runtime/test_history.py`, `tests/runtime/test_runtime_tracing.py`, `tests/runtime/test_runtime_static_graph.py`, `tests/contract/test_engine_contracts.py`, and `tests/contract/test_canonical_runtime_contracts.py`.
+- Focused verification results:
+  - `6 passed` on representative spec-critical tests.
+  - `264 passed, 1 deselected` when excluding one obsolete signature assertion.
+  - `1 failed, 264 passed` when including the full focused suite.
+
+What I changed
+- Wrote [gap_report.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/audit/gap_report.md>).
+- Wrote [revised_request.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/audit/revised_request.md>).
+- Wrote [audit_result.json](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/audit/audit_result.json>).
+
+Key findings / decisions
+- The implementation substantially matches the request: canonical exports are present, forbidden exports are absent, production compatibility-bridge imports are removed, `autoloop_v3.core` fails intentionally, scoped item/step-item state exists, hook rerouting/history/effective-required-write behaviors are covered, and the targeted suites are green.
+- One material unresolved gap remains: `tests/unit/test_simple_surface.py::test_canonical_simple_signatures_expose_only_canonical_argument_names` still asserts the pre-scoped-state signatures and fails against the implemented public API.
+- This is not justified by later clarification. It conflicts with both the original request and the already-landed scoped-state behavior in `autoloop/simple.py`.
+
+Open issues / next step
+- The next run should update that maintained signature test to include `scope` and `item_state` on `step(...)` and `produce_verify_step(...)`, then rerun the same focused suite to bring the regression surface fully green.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf84-1835-7873-b6bc-25e46ab8e0af
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019ddf84-1835-7873-b6bc-25e46ab8e0af
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf84-1835-7873-b6bc-25e46ab8e0af
+---
+I’m verifying the audit artifacts against the request, decisions, final code, and the focused test evidence that the producer cited. I’ll confirm whether the reported gap is correctly classified and whether the revised request can drive the next run without reopening unrelated scope.
+
+I’ve verified the artifact content. Now I’m checking the cited gap directly in the code and test surface so I can decide whether the audit’s classification and next-run request are accurate.
+
+The cited failure reproduces exactly, and the live signatures match the audit’s report. I’m doing one broader confirmation pass now so I can decide whether the audit missed any additional unresolved gap beyond that stale signature assertion.
+
+I’ve confirmed the audit artifacts are internally consistent and the broader focused suite is green once the single stale signature assertion is excluded. I’m updating the audit criteria and feedback now to reflect a clean verification outcome.
+
+The audit artifacts are updated. I’m doing a quick final check that the criteria are fully checked and the feedback note matches the verification outcome before I close the phase.
+
+Scope considered
+- The immutable request snapshot, authoritative raw log, decisions ledger, the audit artifacts under `artifacts/audit`, and the specific code/tests cited by the audit.
+- Verification was limited to run-local audit quality and gap classification, not broader repo cleanup.
+
+What I analyzed
+- `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`.
+- The cited implementation and test surfaces in `autoloop/simple.py` and `tests/unit/test_simple_surface.py`.
+- Direct verification commands for the reported failing test and the broader focused suite with that one assertion excluded.
+
+What I reviewed
+- The reported unresolved gap:
+  - `tests/unit/test_simple_surface.py::test_canonical_simple_signatures_expose_only_canonical_argument_names`
+  - expected signatures in `tests/unit/test_simple_surface.py:190-227`
+  - actual signatures in `autoloop/simple.py:361-423`
+- Verification evidence:
+  - the failing test reproduces in isolation;
+  - the broader focused suite passes with `264 passed, 1 deselected` when excluding that stale assertion.
+- Audit artifact consistency:
+  - `audit_result.json` is valid and matches the report;
+  - `revised_request.md` is a direct next-run request for the single unresolved gap.
+
+Key findings / decisions
+- No blocking audit defects found.
+- The audit correctly classified one material unresolved gap: stale maintained signature coverage that conflicts with the implemented scoped-state public API.
+- The revised request is appropriately narrow and does not reopen unrelated implementation phases.
+- I updated `criteria.md` to fully checked and appended a no-defects verification note to `feedback.md`.
+
+Open issues / next step
+- No open verifier issues remain for the audit artifacts.
+- The audit phase is complete; the next run should address the single signature-test mismatch described in `revised_request.md`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
