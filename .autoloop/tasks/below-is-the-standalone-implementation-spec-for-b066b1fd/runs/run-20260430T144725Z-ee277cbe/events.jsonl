@@ -74,3 +74,7 @@
 {"ts": "2026-04-30T16:51:01.677264+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 74, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "scoped-item-state"}
 {"ts": "2026-04-30T16:51:55.719080+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 75, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "scoped-item-state"}
 {"ts": "2026-04-30T16:51:55.766694+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 76, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "scoped-item-state"}
+{"ts": "2026-04-30T16:51:55.861568+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 77, "event_type": "phase_completed", "pair": "test", "phase_id": "scoped-item-state", "phase_mode": "single"}
+{"ts": "2026-04-30T16:51:55.863975+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 78, "event_type": "phase_started", "phase_id": "effective-required-writes", "phase_mode": "single"}
+{"ts": "2026-04-30T16:51:55.866161+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 79, "event_type": "pair_started", "pair": "implement", "phase_id": "effective-required-writes"}
+{"ts": "2026-04-30T16:51:55.866260+00:00", "run_id": "run-20260430T144725Z-ee277cbe", "seq": 80, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "effective-required-writes"}
