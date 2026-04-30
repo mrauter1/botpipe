@@ -2017,3 +2017,109 @@ The phase is complete from a reviewer standpoint. Remaining legacy-name usage is
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m checking the existing test-phase artifacts and the phase-specific regression surface first, then I’ll add the smallest deterministic coverage that would catch this consumer-migration surface sliding back to legacy names.
+
+I’m adding a focused static contract test instead of more runtime duplication: one test will freeze the reviewer-listed consumer files against banned-name regressions, and a second will pin the optimizer-vs-stdlib import boundary that this phase cleaned up.
+
+I’m adding the regression guard where it fits best: the stdlib/consumer migration contract suite. It will pin the exact runtime fixtures the reviewer used, so a future reintroduction of legacy names fails fast without another broad manual grep.
+
+The regression guard is in place. I’m validating it together with the touched runtime slice so the new test proves the exact reviewer-facing surface stays canonical.
+
+The new contract test is green. I’m waiting on the runtime slice to finish, then I’ll write the test strategy and phase feedback with the exact behavior-to-coverage map.
+
+The validations are complete. I’m recording the behavior-to-test map and the concise test-addition summary in the phase artifacts now.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` test phase only. I focused on regression coverage for the reviewer-listed active consumer runtime fixtures and the canonicalized runtime slice that changed during implementation.
+
+What I analyzed
+
+I reviewed the implementation notes and reviewer outcome to identify the exact consumer files that had just been migrated away from legacy names. Then I checked existing test coverage in `tests/unit/test_stdlib_and_extensions.py` to place a static contract guard where it already owns stdlib/consumer boundary assertions.
+
+What I changed
+
+I added `test_active_consumer_runtime_fixtures_avoid_legacy_authoring_tokens` to [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py). That test freezes the reviewer-listed active runtime consumer files against reintroducing `SUCCESS`, `SystemStep`, `LLMStep`, `PairStep`, `RouteInfo`, `required_outputs`, `route_infos`, `route_required_outputs`, `transitions`, or `global_transitions`.
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/consumer-migration-and-package-cleanup/test_strategy.md) with the behavior-to-test coverage map, validation commands, stabilization notes, and known gaps. I also appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/consumer-migration-and-package-cleanup/feedback.md).
+
+Key findings / decisions
+
+The strongest regression guard for this phase is a deterministic file-content contract test scoped to the exact active consumer runtime files the reviewer used. That catches vocabulary drift without pulling compatibility/provider/internal suites into this phase’s acceptance boundary.
+
+Validation passed:
+- `./.venv/bin/python -m pytest tests/unit/test_stdlib_and_extensions.py -k 'active_consumer_runtime_fixtures_avoid_legacy_authoring_tokens or stdlib_modules_remain_pure_authoring_helpers' -q`
+  - `2 passed, 94 deselected`
+- `./.venv/bin/python -m pytest tests/runtime/test_optional_extensions.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+  - `35 passed`
+
+Open issues / next step
+
+No test-phase blocker remains for this scope. Known gaps are documented in `test_strategy.md`: compatibility/provider/internal suites that intentionally retain legacy terminology are intentionally outside this phase guard.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+Reviewing the test-phase artifacts and the added regression guard first. I’m checking whether the new coverage actually protects the changed consumer surface and whether the audit criteria can be closed without leaving a material gap.
+
+I’ve got the strategy and claimed validation. Next I’m checking the actual guard test and the targeted runtime files to confirm the coverage matches the stated acceptance boundary rather than only the narrative.
+
+The guard exists as described. I’m checking one level deeper now: whether it leaves a material gap around docs/workflow packages or failure-path coverage, since the phase acceptance mentions more than just those runtime files.
+
+I don’t see a material coverage gap in the phase scope. I’m updating the audit artifacts now: criteria to complete, and feedback with one non-blocking audit note documenting why the new guard is sufficient for this boundary.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` test-audit phase only. I audited the newly added regression guard, the targeted runtime validation slice, and the phase test strategy against the changed consumer boundary.
+
+What I analyzed
+
+I reviewed the active audit artifacts, the run decisions relevant to this phase boundary, the new guard in `tests/unit/test_stdlib_and_extensions.py`, and the claimed validation commands/results. I also checked the targeted active consumer runtime files for remaining banned-token matches inside the phase scope.
+
+What I reviewed
+
+The new static guard test is present and correctly pins the reviewer-listed active runtime consumer files against the banned legacy names. The companion runtime validation slice still passes, and the strategy artifact maps the changed behavior, preserved invariants, failure-path coverage, and flake controls clearly enough for this phase.
+
+I updated:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/consumer-migration-and-package-cleanup/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/consumer-migration-and-package-cleanup/feedback.md)
+
+Key findings / decisions
+
+No blocking audit findings remain for this phase. I recorded one non-blocking note, `TST-001`, to document that the new static guard is appropriately scoped and paired with enough runtime revalidation to protect the migrated active consumer surface without adding flake risk.
+
+Open issues / next step
+
+The test audit is complete for this phase scope.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

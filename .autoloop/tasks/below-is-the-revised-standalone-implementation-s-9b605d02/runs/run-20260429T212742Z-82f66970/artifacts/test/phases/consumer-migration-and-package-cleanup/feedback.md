@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - Added `tests/unit/test_stdlib_and_extensions.py::test_active_consumer_runtime_fixtures_avoid_legacy_authoring_tokens` to freeze the reviewer-listed active runtime consumer files against reintroducing legacy names, and revalidated the migrated runtime slice (`test_optional_extensions.py`, `test_workspace_and_context.py`, `test_runtime_static_graph.py`).
+- TST-001 (`non-blocking`): The new static guard is appropriately scoped to the reviewer-listed active consumer runtime files, and the companion runtime slice revalidation covers the material preserved behaviors for this phase without introducing flake risk.
