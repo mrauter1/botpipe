@@ -226,3 +226,63 @@ def test_context_history_falls_back_to_events_without_trace(tmp_path: Path) -> N
     assert telemetry["verify_attempts"] == 0
     assert telemetry["token_usage"]["llm"]["total_tokens"] == 6
     assert ctx.history.failures(step="implement") == ()
+
+
+def test_context_history_attributes_scoped_hook_failures_from_trace(tmp_path: Path) -> None:
+    ctx, run_folder = _context(tmp_path)
+    _write_jsonl(
+        run_folder / "trace.jsonl",
+        [
+            {
+                "event_type": "step_started",
+                "timestamp": "2026-04-30T10:20:00+00:00",
+                "step_name": "legal_review",
+                "scope": "articles",
+                "item_id": "article_17",
+                "visit": 2,
+                "step_execution_id": "legal_review:articles:article_17:2",
+            },
+            {
+                "event_type": "hook_failed",
+                "timestamp": "2026-04-30T10:20:01+00:00",
+                "step_name": "legal_review",
+                "scope": "articles",
+                "item_id": "article_17",
+                "visit": 2,
+                "step_execution_id": "legal_review:articles:article_17:2",
+                "phase": "on_route",
+                "hook_name": "cap_rework",
+                "error": "boom",
+            },
+        ],
+    )
+    _write_jsonl(run_folder / "events.jsonl", [])
+
+    telemetry = ctx.history.step_telemetry("legal_review", item_id="article_17")
+    failures = ctx.history.failures(step="legal_review", item_id="article_17")
+
+    assert telemetry["completed"] is False
+    assert telemetry["errors"] == [
+        {
+            "event_type": "hook_failed",
+            "step_name": "legal_review",
+            "scope": "articles",
+            "item_id": "article_17",
+            "phase": "on_route",
+            "hook": "cap_rework",
+            "error": "boom",
+            "timestamp": "2026-04-30T10:20:01+00:00",
+        }
+    ]
+    assert failures == (
+        {
+            "event_type": "hook_failed",
+            "step_name": "legal_review",
+            "scope": "articles",
+            "item_id": "article_17",
+            "phase": "on_route",
+            "hook": "cap_rework",
+            "error": "boom",
+            "timestamp": "2026-04-30T10:20:01+00:00",
+        },
+    )
