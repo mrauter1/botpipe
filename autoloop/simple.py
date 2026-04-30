@@ -145,6 +145,7 @@ class StepDeclaration(_NamedDeclaration):
         requires: Sequence[ArtifactInput] = (),
         writes: Sequence[Artifact | ArtifactSpec] = (),
         scope: Worklist | str | None = None,
+        item_state: type[BaseModel] | Mapping[str, StateVar] | None = None,
         routes: RouteMapping | None = None,
         before: Any | None = None,
         after: Any | None = None,
@@ -161,6 +162,7 @@ class StepDeclaration(_NamedDeclaration):
         self.outputs = _normalize_writes(writes)
         self.writes = self.outputs
         self.scope = scope
+        self.item_state = item_state
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
@@ -364,6 +366,7 @@ def step(
     requires: Sequence[ArtifactInput] = (),
     writes: Sequence[Artifact | ArtifactSpec] = (),
     scope: Worklist | str | None = None,
+    item_state: type[BaseModel] | Mapping[str, StateVar] | None = None,
     routes: RouteMapping | None = None,
     before: Any | None = None,
     after: Any | None = None,
@@ -380,6 +383,7 @@ def step(
         requires=requires,
         writes=writes,
         scope=scope,
+        item_state=item_state,
         routes=routes,
         before=before,
         after=after,

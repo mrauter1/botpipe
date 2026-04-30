@@ -563,6 +563,28 @@ def test_simple_workflow_accepts_scoped_step_item_state_prompt_placeholders() ->
             "gate",
             items=({"id": "alpha", "title": "Alpha"},),
         )
+        review = simple.step(
+            prompt=simple.Prompt.inline("Inspect {review.item_state.attempts} and {review.item_state.visits}."),
+            scope=gates,
+            item_state={"attempts": simple.StateVar(0)},
+        )
+
+    compiled = compile_workflow(StepItemStateWorkflow)
+
+    assert set(compiled.steps["review"].step_item_state_fields) == {
+        "visits",
+        "last_route",
+        "last_reason",
+        "attempts",
+    }
+
+
+def test_simple_produce_verify_workflow_step_item_state_includes_producer_verifier_builtins() -> None:
+    class StepItemStateWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+        )
         review = simple.produce_verify_step(
             producer_prompt="Draft.",
             verifier_prompt=simple.Prompt.inline("Inspect {review.item_state.attempts} and {review.item_state.visits}."),
@@ -583,6 +605,20 @@ def test_simple_workflow_accepts_scoped_step_item_state_prompt_placeholders() ->
 
 
 def test_simple_workflow_rejects_item_state_without_scope() -> None:
+    class UnscopedItemStateWorkflow(simple.Workflow):
+        review = simple.step(
+            prompt="Verify.",
+            item_state={"attempts": simple.StateVar(0)},
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="item_state requires scope=... on the same step",
+    ):
+        compile_workflow(UnscopedItemStateWorkflow)
+
+
+def test_simple_produce_verify_workflow_rejects_item_state_without_scope() -> None:
     class UnscopedItemStateWorkflow(simple.Workflow):
         review = simple.produce_verify_step(
             producer_prompt="Draft.",

@@ -1336,3 +1336,66 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddf30-328a-7573-add4-10cdd846340b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+I’m addressing the reviewer’s blocking gap by extending scoped `item_state` authoring to the simple `step(...)` surface and then tightening the regression coverage around that path.
+
+The main plumbing is already shared in validation/runtime. I’m making the public `step(...)` declaration carry `item_state` and adding coverage for both compile-time fields and the unscoped rejection on that path.
+
+I’ve got the fix surface pinned down. The code change is small: expose `item_state` on `step(...)`, then convert the regression tests so they actually exercise that public path.
+
+I’m editing the tests next so the public simple `step(...)` path, not just `produce_verify_step(...)`, is what gets validated for scoped per-item state.
+
+The implementation change is in place. I’m doing a quick syntax pass and then I’ll update the phase notes and run ledger with the narrowed change set.
+
+I found one test expectation that needs to stay aligned with the runtime model split: scoped simple `step(...)` gets the generic built-ins, while `produce_verify_step(...)` keeps the extra rework/replan counters. I’m correcting that before I finalize.
+
+I’m splitting the scoped step-item-state tests by step kind so the coverage matches the intended built-in model behavior instead of accidentally asserting producer/verifier counters on plain prompt steps.
+
+The test split is fixed. I’m rerunning the syntax pass and then I’ll update the implementation notes and decision log with the reviewer-driven follow-up.
+
+I’m writing the follow-up into the run artifacts now so the notes and decision ledger match the reviewer-driven fix, not just the first attempt.
+
+The fix is small and localized. I’m doing one last pass over the diffs and artifact notes so the handoff is coherent for the verifier.
+
+Scope considered
+
+- Reviewer follow-up for the scoped item-state phase only.
+- I kept the change set to the simple authoring surface, the matching regression tests, and the phase-local notes/decision artifacts.
+
+What I analyzed
+
+- The blocking finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/scoped-item-state/feedback.md).
+- The shared lowering path in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py), which already handled `declaration.item_state` for prompt-style simple steps.
+- The simple authoring declarations and public helpers in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py).
+- The scoped item-state regression coverage in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py).
+
+What I changed
+
+- Added `item_state` to `StepDeclaration` and to the public `step(...)` helper in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py), so scoped prompt-style simple steps now expose the same per-item state authoring surface as `produce_verify_step(...)`.
+- Updated the scoped step-item-state tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) to actually cover `simple.step(..., scope=..., item_state=...)`, and added a separate produce/verify assertion so the extra `rework_count` / `replan_count` built-ins stay covered where they belong.
+- Added an unscoped rejection test for `simple.step(..., item_state=...)`, while keeping the existing produce/verify rejection path.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/scoped-item-state/implementation_notes.md) and appended the shared-lowering decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt).
+
+Key findings / decisions
+
+- The runtime/compiler/validation work from the first pass was already sufficient; the actual gap was only that `step(...)` did not carry `item_state` into that existing path.
+- I kept one lowering/validation route for scoped prompt-style simple steps instead of creating a prompt-step-specific branch.
+
+Open issues / next step
+
+- Validation run: `python3 -m py_compile autoloop/simple.py core/step_state.py core/worklists.py core/steps.py core/compiler.py core/context.py core/engine.py core/validation.py tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py`
+- I still could not run `pytest` here because this shell is missing `pytest` and runtime deps like `pydantic`.
+- Next step is verifier re-review of the scoped item-state phase.
