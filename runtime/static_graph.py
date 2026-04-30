@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from core.compiler import CompiledRoute, CompiledWorkflow
 from core.primitives import FAIL, FINISH, PAUSE
 from core.prompts import Prompt
+from core.route_required_writes import route_required_write_payload
 from core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
 
 
@@ -51,6 +52,7 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
                 "verifier_session_name": step.verifier_session_name,
                 "routes": {
                     route_name: _topology_route_payload(
+                        compiled=compiled,
                         step_name=step.name,
                         route_tag=route_name,
                         route=compiled.routes.get(step.name, {}).get(route_name) or compiled.global_routes.get(route_name),
@@ -119,6 +121,7 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                 "state_fields": list(step.step_state_fields),
                 "routes": [
                     _topology_route_payload(
+                        compiled=compiled,
                         step_name=step.name,
                         route_tag=route_tag,
                         route=compiled.routes.get(step.name, {}).get(route_tag) or compiled.global_routes.get(route_tag),
@@ -129,7 +132,12 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
             for step in compiled.steps.values()
         ],
         "global_routes": {
-            route_tag: _topology_route_payload(step_name="GLOBAL", route_tag=route_tag, route=route)
+            route_tag: _topology_route_payload(
+                compiled=compiled,
+                step_name="GLOBAL",
+                route_tag=route_tag,
+                route=route,
+            )
             for route_tag, route in compiled.global_routes.items()
         },
     }
@@ -251,13 +259,21 @@ def _prompt_references(step: Any) -> tuple[str, ...]:
     return tuple(_json_value(reference) for reference in getattr(step.step, "simple_prompt_references", ()))
 
 
-def _topology_route_payload(*, step_name: str, route_tag: str, route: CompiledRoute | None) -> dict[str, Any]:
+def _topology_route_payload(
+    *,
+    compiled: CompiledWorkflow,
+    step_name: str,
+    route_tag: str,
+    route: CompiledRoute | None,
+) -> dict[str, Any]:
     if route is None:
         return {
             "tag": route_tag,
             "target": None,
             "summary": None,
             "required_writes": [],
+            "explicit_required_writes": None,
+            "effective_required_writes": [],
             "handoff": None,
             "on_taken": None,
         }
@@ -265,7 +281,12 @@ def _topology_route_payload(*, step_name: str, route_tag: str, route: CompiledRo
         "tag": route_tag,
         "target": route.target,
         "summary": route.summary,
-        "required_writes": list(route.required_writes or ()),
+        **route_required_write_payload(
+            compiled,
+            step_name=step_name,
+            route_tag=route_tag,
+            route=route,
+        ),
         "handoff": route.handoff,
         "on_taken": _callable_name(route.on_taken),
         "source_step": step_name,
@@ -293,12 +314,27 @@ def _json_value(value: object) -> object:
 
 
 def _route_table_text(compiled: CompiledWorkflow) -> str:
-    lines = ["# Route Table", "", "| Step | Route | Target | Required Writes |", "| --- | --- | --- | --- |"]
+    lines = [
+        "# Route Table",
+        "",
+        "| Step | Route | Target | Explicit Required Writes | Effective Required Writes |",
+        "| --- | --- | --- | --- | --- |",
+    ]
     for step_name, routes in compiled.routes.items():
         for route_tag, route in routes.items():
+            payload = route_required_write_payload(
+                compiled,
+                step_name=step_name,
+                route_tag=route_tag,
+                route=route,
+            )
+            explicit = payload["explicit_required_writes"]
+            explicit_text = "inherit" if explicit is None else ", ".join(explicit) if explicit else "none (explicit)"
+            effective = payload["effective_required_writes"]
+            effective_text = ", ".join(effective) if effective else "-"
             lines.append(
                 f"| {step_name} | {route_tag} | {route.target} | "
-                f"{', '.join(route.required_writes or ()) if route.required_writes else '-'} |"
+                f"{explicit_text} | {effective_text} |"
             )
     return "\n".join(lines)
 

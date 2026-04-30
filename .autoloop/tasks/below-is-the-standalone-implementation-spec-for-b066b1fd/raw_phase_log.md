@@ -1658,3 +1658,91 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf4d-e207-7bc3-b9e0-06ea537ce53e
+---
+I’m implementing the `effective-required-writes` phase only. First I’m reading the phase artifacts and the current required-write/runtime rendering paths so I can change one shared contract without widening scope.
+
+I’ve confirmed earlier phases already landed the state and hook work; this slice is narrower. Next I’m tracing where route required writes are computed, rendered, and validated so I can replace the remaining ad hoc paths with one helper.
+
+I found three separate surfaces still speaking slightly different required-write dialects: compilation stores explicit route writes, the engine has its own fallback helper, and topology/provider rendering still serialize only the explicit route tuple. I’m reading those exact functions now before editing.
+
+The important gap is confirmed: the engine already distinguishes explicit empty overrides from inherited defaults at validation time, but provider contracts and static/topology payloads still flatten that away. I’m reading the remaining static graph and capability serializers before patching them together.
+
+I’ve got the concrete edit plan now:
+1. Add one shared helper that computes explicit and effective required writes from compiled routes.
+2. Swap runtime validation and provider contract assembly onto that helper.
+3. Extend topology/static route payloads and `route_table.md` to expose both surfaces without losing `None` vs `[]`.
+4. Add regression coverage for inherited-vs-explicit-empty behavior across runtime contracts and topology artifacts.
+
+I’m starting the code edits now. The main implementation point is a new shared helper module plus narrow call-site swaps in the engine, provider contract assembly, and topology writers; then I’ll update the regression tests that currently encode the old flattened behavior.
+
+The first patch partially missed current file context, so I’m re-reading the exact import blocks and helper signatures before applying smaller edits. The implementation plan is unchanged; this is just patch alignment work.
+
+I’ve finished the runtime-side changes and I’m updating the tests to lock in the new semantics. The key thing the tests need to capture now is that explicit route metadata can still be empty while the effective contract inherits required artifacts.
+
+The code changes are in place. I’m doing a quick source pass for syntax and signature mistakes before running the focused test set, because the static graph helper and provider model grew a couple of new fields.
+
+The source pass looks consistent. I’m running the focused regression set for this phase now: validation semantics, provider contract rendering, canonical runtime contracts, and static graph/topology outputs.
+
+`pytest` isn’t on the shell path in this environment. I’m retrying with `python -m pytest`, which is usually how this repo is set up.
+
+The focused suite found one semantic detail worth preserving explicitly: global fallback routes like `question` and `failed` also inherit artifact-level required writes when they don’t override them. That matches the new shared helper, so I’m updating the contract assertions to encode it instead of forcing the old empty-map behavior.
+
+The phase-focused suite is green. I’m doing one extra runtime pass over the existing engine contract tests that exercise request assembly and required-write enforcement, just to make sure the new shared helper didn’t introduce drift there.
+
+The code and tests are done. I’m writing the phase artifacts now so later turns inherit the exact helper location, the explicit-vs-effective contract decision, and the validation evidence instead of rediscovering it.
+
+The implementation notes and decisions ledger are updated. I’m doing a final diff/status pass so the close-out can stay precise and phase-scoped.
+
+Scope considered
+
+Phase-local `effective-required-writes` only: runtime validation, provider contract assembly/rendering, and topology/static-graph required-write outputs. I ignored the large unrelated dirty tree outside this phase.
+
+What I analyzed
+
+I traced the three existing required-write paths in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py), [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py), and [core/providers/rendering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/providers/rendering.py). The key gap was that runtime already enforced inherited required artifacts, but provider/topology outputs still flattened to explicit route tuples only.
+
+What I changed
+
+I added a shared helper in [core/route_required_writes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/route_required_writes.py) and switched runtime validation plus provider request assembly to use it. Provider route metadata now carries `explicit_required_writes` separately, while `route_required_writes` remains the effective runtime map.
+
+I updated topology/static outputs in [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py) and topology hashing in [core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/compiler.py) so route payloads expose:
+- `required_writes`
+- `explicit_required_writes`
+- `effective_required_writes`
+
+`route_table.md` now renders explicit and effective columns, preserving `None` vs `[]`.
+
+I added regression coverage in:
+- [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py)
+- [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py)
+- [tests/contract/test_canonical_runtime_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_canonical_runtime_contracts.py)
+- [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py)
+
+Key findings / decisions
+
+Global fallback routes still inherit artifact-level required writes when they do not override them. The focused tests confirmed that behavior, so I encoded it in the canonical contract assertions instead of preserving the older empty-map expectation.
+
+I also updated the run artifacts:
+- [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/effective-required-writes/implementation_notes.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt)
+
+Open issues / next step
+
+Focused validation passed:
+- `.venv/bin/python -m pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/contract/test_canonical_runtime_contracts.py tests/runtime/test_runtime_static_graph.py`
+- `.venv/bin/python -m pytest tests/contract/test_engine_contracts.py::test_llm_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_pair_requests_include_step_control_contracts tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation tests/contract/test_engine_contracts.py::test_explicit_empty_required_writes_override_skips_artifact_level_required_defaults`
+
+No blocker remains in this phase. I did not run the full repository test suite.

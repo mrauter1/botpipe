@@ -112,9 +112,31 @@ def _route_required_writes(context: ProviderTurnContext, route: str) -> tuple[st
     return tuple(context.route_required_writes.get(route, ()))
 
 
+def _explicit_route_required_writes(context: ProviderTurnContext, route: str) -> tuple[str, ...] | None:
+    info = context.routes.get(route)
+    if isinstance(info, Mapping):
+        explicit = info.get("explicit_required_writes")
+        if explicit is None:
+            return None
+        return tuple(str(name) for name in explicit)
+    if info is None:
+        return None
+    explicit = info.explicit_required_writes
+    if explicit is None:
+        return None
+    return tuple(str(name) for name in explicit)
+
+
 def _render_route_required_writes(context: ProviderTurnContext, route: str) -> str:
     required = _route_required_writes(context, route)
     return ", ".join(required) if required else "none"
+
+
+def _render_explicit_route_required_writes(context: ProviderTurnContext, route: str) -> str:
+    explicit = _explicit_route_required_writes(context, route)
+    if explicit is None:
+        return "inherit"
+    return ", ".join(explicit) if explicit else "none (explicit)"
 
 
 def _schema_name(ref: ProviderArtifactRef) -> str:
@@ -306,13 +328,17 @@ def _render_routes(context: ProviderTurnContext) -> str:
         (
             route,
             _route_summary(context, route),
+            _render_explicit_route_required_writes(context, route),
             _render_route_required_writes(context, route),
         )
         for route in context.available_routes
     ]
     if not rows:
-        rows.append(("none", "No routes were declared.", "none"))
-    return _markdown_table(("Route", "Meaning", "Required writes for this route"), rows)
+        rows.append(("none", "No routes were declared.", "inherit", "none"))
+    return _markdown_table(
+        ("Route", "Meaning", "Explicit required writes", "Effective required writes"),
+        rows,
+    )
 
 
 def _route_summary(context: ProviderTurnContext, route: str) -> str:

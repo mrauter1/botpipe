@@ -5,10 +5,11 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from autoloop import FINISH, Prompt, Route, Workflow, produce_verify_step, python_step
+from autoloop import FINISH, Md, Prompt, Route, Workflow, produce_verify_step, python_step, step
 from core import Artifact
 from core.compiler import compile_workflow
 from runtime.static_graph import (
+    ROUTE_TABLE_FILENAME,
     TOPOLOGY_FILENAME,
     write_static_step_graph,
     write_topology_artifacts,
@@ -130,6 +131,38 @@ def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None
     assert finish["routes"][0]["target"] == "FINISH"
     assert payload["source_hash"] == compiled.source_hash
     assert payload["topology_hash"] == compiled.topology_hash
+
+
+def test_topology_payload_and_route_table_preserve_explicit_vs_effective_required_writes(tmp_path: Path) -> None:
+    class RequiredWritesWorkflow(Workflow):
+        publish = step(
+            prompt=Prompt.inline("Publish the report."),
+            writes=[Md("report", required=True)],
+            routes={
+                "done": FINISH,
+                "skip": Route.to(FINISH, required_writes=[]),
+            },
+        )
+
+    compiled = compile_workflow(RequiredWritesWorkflow)
+
+    payload = workflow_topology_payload(compiled)
+    publish = next(step_payload for step_payload in payload["steps"] if step_payload["name"] == "publish")
+    done = next(route for route in publish["routes"] if route["tag"] == "done")
+    skip = next(route for route in publish["routes"] if route["tag"] == "skip")
+
+    assert done["required_writes"] == []
+    assert done["explicit_required_writes"] is None
+    assert done["effective_required_writes"] == ["publish.report"]
+    assert skip["required_writes"] == []
+    assert skip["explicit_required_writes"] == []
+    assert skip["effective_required_writes"] == []
+
+    write_topology_artifacts(tmp_path, compiled)
+    route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
+
+    assert "| publish | done | FINISH | inherit | publish.report |" in route_table
+    assert "| publish | skip | FINISH | none (explicit) | - |" in route_table
 
 
 def test_static_graph_schema_uses_registry_constant() -> None:

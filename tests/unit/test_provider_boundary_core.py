@@ -100,8 +100,16 @@ def _turn_context(
         },
         available_routes=("done", "needs_rework"),
         routes={
-            "done": ProviderRoute(summary="Package the accepted design.", required_writes=("design_doc", "decision_record")),
-            "needs_rework": ProviderRoute(summary="Repair the current design before packaging.", required_writes=("design_doc",)),
+            "done": ProviderRoute(
+                summary="Package the accepted design.",
+                required_writes=("design_doc", "decision_record"),
+                explicit_required_writes=("design_doc", "decision_record"),
+            ),
+            "needs_rework": ProviderRoute(
+                summary="Repair the current design before packaging.",
+                required_writes=("design_doc",),
+                explicit_required_writes=("design_doc",),
+            ),
         },
         readable_artifacts=(
             _readable_ref(
@@ -163,6 +171,8 @@ def test_render_provider_turn_renders_markdown_contract_without_raw_output() -> 
     assert "### Declared artifacts this step may write" in turn.prompt_text
     assert "not an exclusive allow-list" in turn.prompt_text
     assert "### Available routes" in turn.prompt_text
+    assert "Explicit required writes" in turn.prompt_text
+    assert "Effective required writes" in turn.prompt_text
     assert "### Control response" in turn.prompt_text
     assert '"tag": "<one available route>"' in turn.prompt_text
     assert '"reason": "<short reason>"' in turn.prompt_text
