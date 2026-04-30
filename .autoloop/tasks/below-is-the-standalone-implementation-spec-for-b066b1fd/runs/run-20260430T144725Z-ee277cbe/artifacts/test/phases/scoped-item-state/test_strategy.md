@@ -18,7 +18,7 @@
 - AC-2 `{item.state.*}` prompt references resolve only against declared worklist item-state fields:
   Covered by `tests/unit/test_simple_surface.py::test_simple_workflow_accepts_scoped_item_state_prompt_placeholders` and `::test_simple_workflow_rejects_unknown_scoped_item_state_prompt_fields`.
 - AC-2 `{step_name.item_state.*}` prompt references resolve only against declared scoped step-item-state fields:
-  Covered by `tests/unit/test_simple_surface.py::test_simple_workflow_accepts_scoped_step_item_state_prompt_placeholders` and `::test_simple_produce_verify_workflow_step_item_state_includes_producer_verifier_builtins`.
+  Covered by `tests/unit/test_simple_surface.py::test_simple_workflow_accepts_scoped_step_item_state_prompt_placeholders`, `::test_simple_workflow_rejects_unknown_scoped_step_item_state_prompt_fields`, and `::test_simple_produce_verify_workflow_step_item_state_includes_producer_verifier_builtins`.
 
 ## Preserved invariants checked
 
@@ -32,6 +32,7 @@
 ## Edge cases and failure paths
 
 - Unknown worklist item-state prompt field fails validation deterministically at compile time.
+- Unknown scoped step-item-state prompt field fails validation deterministically at compile time.
 - Unscoped `item_state=...` authoring fails deterministically at compile time for both prompt-style and producer/verifier simple steps.
 - Resume path covers built-in `visits` / `last_route` restoration before the next simple-step `after` hook mutates state again.
 

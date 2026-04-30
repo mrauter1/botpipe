@@ -557,6 +557,25 @@ def test_simple_workflow_rejects_unknown_scoped_item_state_prompt_fields() -> No
         compile_workflow(BadItemStateWorkflow)
 
 
+def test_simple_workflow_rejects_unknown_scoped_step_item_state_prompt_fields() -> None:
+    class BadStepItemStateWorkflow(simple.Workflow):
+        gates = simple.Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+        )
+        review = simple.step(
+            prompt=simple.Prompt.inline("Inspect {review.item_state.missing}."),
+            scope=gates,
+            item_state={"attempts": simple.StateVar(0)},
+        )
+
+    with pytest.raises(
+        WorkflowValidationError,
+        match="unknown item_state field 'missing' on step 'review'",
+    ):
+        compile_workflow(BadStepItemStateWorkflow)
+
+
 def test_simple_workflow_accepts_scoped_step_item_state_prompt_placeholders() -> None:
     class StepItemStateWorkflow(simple.Workflow):
         gates = simple.Worklist.from_items(
