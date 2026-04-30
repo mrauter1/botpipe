@@ -33,7 +33,7 @@
 
 - Milestone 1 / AC-1: trimmed `autoloop.simple` globals and importability to the canonical authoring surface
 - Milestone 1 / AC-2: pruned legacy names from active `core/__init__.py` exports
-- Milestone 1 / AC-3: replaced the dynamic alias shim with an explicit `autoloop_v3.core` bridge and added regression assertions
+- Milestone 1 / AC-3: kept an explicit `autoloop_v3.core` bridge while preserving shared `core` / `autoloop_v3.core` submodule identity and adding regression assertions
 
 ## Assumptions
 
@@ -42,7 +42,7 @@
 ## Preserved invariants
 
 - `autoloop` root public surface remains unchanged and canonical
-- `autoloop_v3.core.<submodule>` imports continue to resolve without the old `sys.modules` alias
+- `autoloop_v3.core.<submodule>` imports resolve with the same module identities as `core.<submodule>`
 - persisted compatibility coverage can still import quarantined legacy names through `core._compat`
 
 ## Intended behavior changes
@@ -53,21 +53,25 @@
 ## Known non-changes
 
 - This phase does not remove legacy names from internal modules such as `core.steps`, `core.routes`, `core.primitives`, or `core.validation`
-- This phase does not migrate the broader legacy-heavy contract/runtime suites to canonical route and terminal expectations
+- This phase does not migrate the broader legacy-heavy contract/runtime suites to canonical route and terminal expectations; active suites were limited to import-path decoupling from top-level `core`
 
 ## Expected side effects
 
 - Maintained helpers that previously depended on top-level `core` imports now import from explicit submodules
 - Compatibility fixtures that still exercise legacy authoring names now do so through `core._compat`
+- Active legacy-heavy suites no longer rely on removed top-level `autoloop_v3.core` exports, but they still retain later-phase semantic expectations around legacy route and terminal names
 
 ## Validation performed
 
-- `python3` import smoke check for `autoloop.simple`, `autoloop_v3.core`, `autoloop_v3.core._compat`, and `autoloop_v3.core.compiler`
+- `python3` import and identity smoke checks for `autoloop.simple`, `autoloop_v3.core`, `autoloop_v3.core._compat`, `autoloop_v3.core.compiler`, and shared `core.*` / `autoloop_v3.core.*` module identity
 - `./.venv/bin/pytest tests/unit/test_simple_surface.py -q`
 - `./.venv/bin/pytest tests/unit/test_primitives_and_stores.py::test_public_authoring_surfaces_export_requested_runtime_primitives -q`
+- `./.venv/bin/pytest tests/runtime/test_compatibility_runtime.py::test_resolve_workflow_reference_preserves_same_root_workflow_class_identity -q`
+- `./.venv/bin/pytest tests/unit/test_validation.py --collect-only -q`
+- `./.venv/bin/pytest tests/contract/test_engine_contracts.py --collect-only -q`
 - Broader targeted suite run (`tests/unit/test_validation.py`, `tests/contract/test_engine_contracts.py`, `tests/runtime/test_compatibility_runtime.py`) remains red on pre-existing later-phase canonicalization gaps around `SUCCESS`/`RouteInfo` expectations and low-level contract assertions
 
 ## Deduplication / centralization decisions
 
 - Centralized quarantined legacy top-level imports in `core._compat` instead of leaving ad hoc re-exports on `core.__init__`
-- Centralized `autoloop_v3.core` compatibility in one explicit bridge package instead of a dynamic alias shim
+- Centralized `autoloop_v3.core` compatibility in one explicit bridge package while retaining shared module identity through the existing aliasing path
