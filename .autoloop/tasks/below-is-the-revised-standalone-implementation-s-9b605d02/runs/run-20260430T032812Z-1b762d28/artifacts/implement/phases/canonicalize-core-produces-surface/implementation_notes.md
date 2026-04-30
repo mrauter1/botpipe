@@ -13,6 +13,7 @@
 - `core/validation.py`
 - `core/engine.py`
 - `core/__init__.py`
+- `core/_compat.py`
 - `core/workflow_capabilities.py`
 - `tests/unit/test_validation.py`
 - `tests/contract/test_engine_contracts.py`
@@ -38,6 +39,7 @@
 - `core.validation._validate_required_artifacts`
 - `core.validation._normalize_route_required_writes`
 - `core.engine.Engine._write_workflow_step_outputs`
+- `core._compat.bridge_core_package`
 - `core.workflow_capabilities._inspect_catalog_entry`
 - `core.workflow_capabilities._resolve_reference`
 
@@ -53,7 +55,7 @@
 
 ## Assumptions
 - The maintained dual-package compatibility requirement is module/class identity for `autoloop_v3.core.*` versus `core.*`, not constructor-level `produces` support.
-- Repo-root `__init__.py` is part of the active import surface under the current test harness and is the correct explicit bridge location for `autoloop_v3.core`.
+- The repo can be imported through two package topologies, so both `__init__.py` entrypoints may exist, but the bridge implementation itself must stay centralized.
 
 ## Preserved invariants
 - Compiled/runtime artifacts still expose canonical `writes`, `producer_writes`, and `verifier_writes`.
@@ -74,8 +76,8 @@
 - Workflow capability inspection now imports runtime-loader types via top-level runtime compatibility paths instead of package-relative imports.
 
 ## Deduplication / centralization
-- Centralized the explicit `autoloop_v3.core -> core` identity bridge at the repo-root package entrypoint because the test harness resolves `autoloop_v3.core` through the repo root, not through the dormant nested compatibility package alone.
+- Centralized the explicit `autoloop_v3.core -> core` identity bridge implementation in `core/_compat.py`; the repo-root `__init__.py` and nested `autoloop_v3/core/__init__.py` are now thin shims over that single alias table.
 
 ## Validation performed
-- `.venv/bin/pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_provider_backends.py tests/strictness/test_no_compat.py`
-- Result: `259 passed`
+- `.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_provider_backends.py tests/strictness/test_no_compat.py`
+- Result: `279 passed`

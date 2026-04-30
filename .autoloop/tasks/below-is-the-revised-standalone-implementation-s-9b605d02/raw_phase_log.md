@@ -4184,3 +4184,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc76-51b5-7131-a0fe-01359c4a9afc
+---
+I’m looking at the actual import topology before editing. The safest fix is to keep both package entrypoints working but collapse the duplicated alias implementation to one authoritative place, so the bridge logic stops drifting while preserving the mixed-import identity requirement.
+
+I’m collapsing the duplicated bridge tables into the existing compatibility module now. The goal is to leave the repo-root package and the nested `autoloop_v3.core` entrypoint as thin shims over one authoritative alias implementation.
+
+The duplicated bridge logic is centralized. I’m rerunning the bridge-sensitive coverage now, with the previous canonical suite plus `tests/unit/test_simple_surface.py`, because that test is the direct module-identity regression guard for this fix.
+
+The bridge fix is validated. I’m updating the phase notes to reflect the final shape: one authoritative alias implementation in `core/_compat.py`, with both package entrypoints reduced to thin shims over that single source of truth.
+
+Scope considered
+
+- The reviewer-raised bridge duplication in [__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/__init__.py) and [autoloop_v3/core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_v3/core/__init__.py).
+- The shared compatibility helper surface in [core/_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/_compat.py) and the adjacent runtime-loader import fallback in [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py).
+- Bridge-sensitive regression coverage, especially [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) and the prior canonical verification suite.
+
+What I analyzed
+
+- How `autoloop_v3.core` resolves under both import topologies used in this repo.
+- Whether the reviewer finding could be fixed by removing duplication without reintroducing the old `core.__init__` dynamic alias mirroring.
+- The minimum centralization point that preserves shared module/class identity for `core.*` and `autoloop_v3.core.*`.
+
+What I changed
+
+- Moved the authoritative alias table and bridge logic into [core/_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/_compat.py) via `bridge_core_package`.
+- Reduced both [__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/__init__.py) and [autoloop_v3/core/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_v3/core/__init__.py) to thin shims that call the shared helper.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/implement/phases/canonicalize-core-produces-surface/implementation_notes.md) to reflect the centralized bridge and the expanded validation pass.
+
+Key findings / decisions
+
+- The reviewer’s blocking finding was valid: the previous pass had removed the dynamic shim but duplicated the explicit bridge implementation.
+- The fix keeps compatibility behavior intact while collapsing the bridge logic to one source of truth in `core/_compat.py`.
+- Validation passed: `.venv/bin/pytest tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_provider_backends.py tests/strictness/test_no_compat.py` with `279 passed`.
+
+Open issues / next step
+
+- No known blocking issues remain in this phase-local scope.
+- The next step is reviewer re-check of the centralized bridge shape against AC-2.
