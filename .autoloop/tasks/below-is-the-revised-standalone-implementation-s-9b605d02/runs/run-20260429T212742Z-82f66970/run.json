@@ -17,15 +17,15 @@
       "verification-and-strictness"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "verification-and-strictness"
+    "current_phase_index": 5,
+    "current_phase_id": null
   },
   "phase_status": {
     "public-surface-cleanup": "completed",
     "compiler-validation-normalization": "completed",
     "engine-provider-persistence": "completed",
     "consumer-migration-and-package-cleanup": "completed",
-    "verification-and-strictness": "in_progress"
+    "verification-and-strictness": "completed"
   },
   "phase_history": [
     {
@@ -85,6 +85,13 @@
       "run_id": "run-20260429T212742Z-82f66970",
       "status": "in_progress",
       "ts": "2026-04-30T01:05:04.161516+00:00"
+    },
+    {
+      "phase_id": "verification-and-strictness",
+      "run_id": "run-20260429T212742Z-82f66970",
+      "status": "completed",
+      "ts": "2026-04-30T01:27:40.143343+00:00",
+      "pair": "test"
     }
   ]
 }
