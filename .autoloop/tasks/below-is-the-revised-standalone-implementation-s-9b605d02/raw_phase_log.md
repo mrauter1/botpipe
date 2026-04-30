@@ -2252,3 +2252,51 @@ No reviewer action remains for this phase. The only noted warnings are the pre-e
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+---
+I’m checking the existing test-phase artifacts and the current verification tests to see whether the gate still has a meaningful uncovered regression surface before I touch the repo tests.
+
+The remaining useful gap is session contract coverage inside the phase-owned suite; the broader engine suite has it, but this phase’s dedicated canonical contract file doesn’t. I’m adding one focused test there instead of duplicating the larger compatibility suite.
+
+I found a cleaner regression target: copied workflow execution with the repo root removed from `sys.path`. The current parity tests cover copied packages and filtered resolution separately, but not both together, which is exactly the seam the import-fallback patch changed.
+
+I’m making one focused parity test addition rather than broadening the suite: copied-package execution with repo-root imports unavailable, which is the highest-signal regression target for this phase’s import-fallback patch.
+
+I’ve updated the phase-owned parity coverage and I’m rerunning the verification suite to confirm the new copied-package `sys.path` case stays green with the existing gate.
+
+The suite is still running; I’m waiting for the final result so I can close out with the exact validated scope instead of assuming from partial output.
+
+Scope considered
+
+Phase-local verification gate coverage only: strictness scans, canonical contract/runtime/topology tests, and copied workflow package parity around the repo-root import fallback seam.
+
+What I analyzed
+
+I reviewed the existing phase-owned test artifacts, the current strictness and canonical contract suites, and the parity coverage in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py). The main uncovered regression surface was copied-package execution with the repo root removed from `sys.path`, which is the exact seam changed by the repo-root `core` / `extensions` / `runtime` import fallbacks.
+
+What I changed
+
+I added one focused regression test in [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py) that copies `workflows/autoloop_v1`, removes the repo root from `sys.path`, runs the workflow through the general runtime, and asserts the canonical session artifacts are still produced. I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/verification-and-strictness/test_strategy.md) with the behavior-to-test coverage map and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/test/phases/verification-and-strictness/feedback.md).
+
+Key findings / decisions
+
+The highest-signal addition was a copied-package runtime test under a filtered `sys.path`; the existing suite already covered copied packages and filtered resolution separately, but not the combined execution path. I did not append to `decisions.txt` because there was no new runtime-created header for this turn.
+
+Open issues / next step
+
+Validation command rerun:
+`./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py tests/unit/test_simple_surface.py tests/unit/test_provider_boundary_core.py tests/contract/test_canonical_runtime_contracts.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_workflow_reference_resolution.py tests/runtime/test_workflow_integration_parity.py tests/runtime/test_provider_backends.py`
+
+Result: `112 passed, 14 warnings`. The warnings are the same pre-existing Pydantic `schema` field-name warnings from `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`.

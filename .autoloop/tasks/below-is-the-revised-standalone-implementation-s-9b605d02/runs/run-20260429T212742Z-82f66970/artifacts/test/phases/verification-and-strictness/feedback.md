@@ -6,3 +6,7 @@
 - Phase Directory Key: verification-and-strictness
 - Phase Title: Verification Gate
 - Scope: phase-local authoritative verifier artifact
+
+## Test additions
+
+- Added copied-package parity coverage for running `autoloop_v1` with the repo root removed from `sys.path`, locking the canonical import-fallback seam exercised by top-level `core`, `extensions`, and `runtime` imports.
