@@ -4,28 +4,30 @@ request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/b
 phases:
   - phase_id: "compatibility-bridge-removal"
     title: "Remove Compatibility Bridges"
-    objective: "Move production code to canonical internal imports and delete the deprecated autoloop_v3.core bridge."
+    objective: "Move production code and the maintained regression surface to canonical imports before deleting the deprecated autoloop_v3.core bridge."
     status: "planned"
     in_scope:
       - "Rewrite production imports in autoloop, runtime, and extensions from autoloop_v3.core to core."
+      - "Migrate maintained tests and fixtures that still import autoloop_v3.core to canonical core or autoloop imports."
       - "Remove root bridge wiring, autoloop_v3/core/__init__.py, and core/_compat.py."
-      - "Update strictness and import tests for intentional bridge removal."
+      - "Update strictness coverage so only intentional failure assertions still reference autoloop_v3.core."
     out_of_scope:
       - "Changing public autoloop API names beyond the spec."
       - "Telemetry or state model behavior changes."
     dependencies: []
     acceptance_criteria:
       - id: "AC-1"
-        text: "No production file imports autoloop_v3.core or core._compat."
+        text: "No production or maintained non-strictness test/fixture file imports autoloop_v3.core or core._compat."
       - id: "AC-2"
-        text: "Importing autoloop_v3.core fails, while canonical autoloop and core imports still work."
+        text: "Importing autoloop_v3.core fails intentionally, while canonical autoloop and core imports still work across the maintained regression surface."
     deliverables:
       - "Canonicalized production imports and deleted compatibility bridge files."
+      - "Migrated maintained tests and fixtures to canonical imports."
       - "Updated strictness coverage for removed compatibility surfaces."
     risks:
       - "Broad import touch set can break runtime, extensions, or tests if any path is missed."
     rollback:
-      - "Restore bridge files and revert import rewrites as one slice if canonical imports prove incomplete."
+      - "Restore bridge files and revert production plus maintained-test import rewrites as one slice if canonical imports prove incomplete."
 
   - phase_id: "hook-rerouting"
     title: "Enable Hook Rerouting"

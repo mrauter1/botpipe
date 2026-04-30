@@ -5,7 +5,7 @@ Implement the standalone spec without drifting from the current direction. Prese
 
 ## Current Repo Findings
 - The compatibility bridge is still live in root [`__init__.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/__init__.py) and [`autoloop_v3/core/__init__.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_v3/core/__init__.py), backed by [`core/_compat.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/_compat.py).
-- Production code still imports `autoloop_v3.core...` in `autoloop/simple.py`, `runtime/*`, and `extensions/*`; strictness currently assumes the bridge exists.
+- Production code still imports `autoloop_v3.core...` in `autoloop/simple.py`, `runtime/*`, and `extensions/*`, and 35 maintained test files still import the same bridge path; bridge removal must migrate the maintained regression surface, not only strictness assertions.
 - The engine already checkpoints workflow state, `step_states`, `item_states`, `step_item_states`, worklist selections, pending handoffs, and failure context, but step visit/last-route bookkeeping still lives outside persisted state.
 - Runtime hooks emit `hook_started` / `hook_finished` / `hook_failed`, but `_run_after_hook()` and `_normalize_after_hook_result()` still reject route redirects in [`core/engine.py`](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py).
 - Simple step state currently accepts only explicit `BaseModel` classes; prompt validation still rejects `item.state.*` and `step.item_state.*`; public exports do not yet reintroduce `StateVar`.
@@ -14,9 +14,9 @@ Implement the standalone spec without drifting from the current direction. Prese
 ## Milestones
 
 ### 1. Compatibility Bridge Removal
-- Update production imports in `autoloop/`, `runtime/`, and `extensions/` to `core...` only.
-- Remove the root bridge call, delete `autoloop_v3/core/__init__.py`, and delete `core/_compat.py` once no production import depends on it.
-- Update strictness and import tests so `import autoloop_v3.core` fails intentionally and production files no longer reference `autoloop_v3.core` or `core._compat`.
+- Update production imports in `autoloop/`, `runtime/`, and `extensions/` to `core...` only, and migrate all maintained tests/fixtures that still import `autoloop_v3.core` to canonical `core...` or `autoloop...` imports.
+- Remove the root bridge call, delete `autoloop_v3/core/__init__.py`, and delete `core/_compat.py` only after production code and the maintained regression surface no longer depend on them.
+- Update strictness coverage so `import autoloop_v3.core` fails intentionally, while every maintained non-strictness test uses canonical imports.
 - Keep `autoloop`, `core`, and `runtime` package behavior otherwise unchanged.
 
 ### 2. Hook Rerouting And Chaining
@@ -59,8 +59,8 @@ Implement the standalone spec without drifting from the current direction. Prese
 - Removed names remain absent: `SUCCESS`, `review_step`, `do_review_step`, `system_step`, `StrictWorkflow`, `RouteInfo`, `chain`, `Param`, old `out` / `outputs`, and public `produces`.
 
 ### Canonical Imports
-- Production source imports after phase 1 must use `core...` or `autoloop...` only.
-- `autoloop_v3.core` becomes an intentional hard failure and strictness tests must enforce that break.
+- Production source and maintained tests/fixtures after phase 1 must use `core...` or `autoloop...` only.
+- `autoloop_v3.core` becomes an intentional hard failure and only strictness coverage should continue to mention it.
 
 ### Runtime State Models
 - Every compiled step gets a runtime-owned built-in state model even when no custom state is declared.
@@ -82,14 +82,14 @@ Implement the standalone spec without drifting from the current direction. Prese
 - `completed` means at least one `step_finished` event; semantic success is tracked separately via configurable accepted route tags.
 
 ## Regression Controls
-- Keep phase ordering strict: remove compatibility shims before deleting files, then land hook behavior, then state surfaces, then scoped state, then required-write rendering, then telemetry.
+- Keep phase ordering strict: migrate production imports plus the maintained regression surface before deleting compatibility shims, then land hook behavior, then state surfaces, then scoped state, then required-write rendering, then telemetry.
 - Reuse existing engine checkpoint plumbing and compiled-step metadata instead of introducing a parallel state subsystem.
 - Centralize effective-required-write computation to avoid runtime/static-graph/provider drift.
 - Reuse existing hook event sink and trace writer rather than inventing a second observability path.
 - Preserve current non-scoped workflows and existing `state=BaseModel` simple steps as compatible paths.
 
 ## Validation Strategy
-- Expand strictness coverage for forbidden imports and failed `autoloop_v3.core` imports.
+- Migrate the maintained contract/runtime/unit test surface off `autoloop_v3.core`, then expand strictness coverage for forbidden imports and intentional failed `autoloop_v3.core` imports.
 - Update contract tests around after-hook redirect rejection to assert allowed rerouting, chained redirects, cycle detection, and final-route artifact validation.
 - Add state tests for built-in counters, reserved-name failures, `StateVar` sugar, checkpoint restore, and hook-mutated custom state persistence.
 - Add scoped-state tests covering item state, step-item state isolation, prompt placeholder resolution, and aggregate-vs-item state coexistence.
@@ -98,13 +98,14 @@ Implement the standalone spec without drifting from the current direction. Prese
 
 ## Compatibility And Intentional Breaks
 - Intentional break: `autoloop_v3.core` imports stop working after phase 1 because the spec explicitly removes that bridge.
+- Migration requirement for that break: maintained tests and fixtures must move in the same phase so bridge removal does not strand the regression suite on a deleted import path.
 - Intentional break: hook redirects become legal and route resolution semantics change from “reject non-None redirect” to “validate and chain redirects”.
 - Intentional break: simple prompt references to `item.state.*` and `step.item_state.*` become valid only when the corresponding state models are declared; undeclared usage must still fail clearly.
 - Existing workflows using `Params` and `State` as Pydantic models remain supported without migration.
 
 ## Risk Register
 - `R1 Import migration breadth`: many production and test files currently import `autoloop_v3.core`.
-  Mitigation: change production imports first, then strictness/tests, then delete bridge files last in the same slice.
+  Mitigation: change production imports and all maintained test/fixture imports first, reserve `autoloop_v3.core` references for strictness assertions only, then delete bridge files last in the same slice.
 - `R2 State persistence drift`: built-in counters currently live outside checkpointed state.
   Mitigation: move visit/route counters into persisted step state before adding new history derivations; add resume tests for aggregate and scoped state.
 - `R3 Hook redirect cycles and retry semantics`: redirect loops can create infinite churn or misclassify provider errors.
