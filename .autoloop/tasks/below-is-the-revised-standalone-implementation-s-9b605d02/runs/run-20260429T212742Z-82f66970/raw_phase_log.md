@@ -1536,3 +1536,172 @@ The phase should go back to implementation. The next pass needs to finish the ac
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m addressing the reviewer blockers in order: first the provider route contract mismatch, then the remaining active consumer migration, then capability inspection and stdlib/optimizer separation so the phase can converge on one consumer surface.
+
+I’m mapping the actual consumer blast radius before editing. The route-contract fix is local, but capability inspection and stdlib separation touch multiple readers, so I’m checking every live usage first to avoid another partial migration.
+
+The optimizer split is the biggest consumer change in this pass. I’m checking the existing package shape so I can move the active workflow imports once, instead of patching each callsite with another temporary path.
+
+The repo still runs with top-level `autoloop_optimizer` imports in some workflows. I’m checking the root package layout before I touch those imports, because the previous implementation note called out a real namespace constraint here.
+
+I confirmed the namespace trap the prior notes mentioned: top-level `autoloop_optimizer` is not safely importable because its relative imports expect the `autoloop_v3` package context. I’m validating the working package path now so the workflow import migration lands on the correct target.
+
+The remaining runtime failures look patterned rather than random. I’m inspecting one of the workflow runtime tests directly now; if the assertions all follow the same old contract, I can migrate that family consistently instead of treating them as isolated failures.
+
+I’ve confirmed the package split path. Next I’m moving the application-specific parameter bases under `autoloop_optimizer` and switching the active workflow/test/doc imports over, which should knock out the remaining stdlib drift and a good chunk of the runtime failures together.
+
+The largest remaining delta is the workflow-builder test fixture: it still generates legacy core workflows. I’m checking the current simple-surface authoring pattern before I replace that generated source, so the test starts validating the canonical authoring path instead of just swapping strings.
+
+I’m at the edit point. The first patch will centralize the provider route shape and move the workflow-parameter bundles under `autoloop_optimizer`, because those two changes unlock both the runtime assertions and the stdlib cleanup without branching the contract again.
+
+The first edit needs to be split up cleanly. I’m applying the provider-route and optimizer-parameter changes in smaller patches so I can validate each boundary independently instead of landing a monolithic diff blind.
+
+I’ve got the full active workflow import set. I’m converting those packages to the canonical optimizer namespace now, while keeping the generic validation/lifecycle helpers in `stdlib` where they still belong.
+
+The capability-inspection change is mostly a rename at the consumer boundary, but it touches both the direct JSON payload and the selected-workflow snapshot helper. I’m switching those in one pass so tests don’t end up split across two field names again.
+
+I’m on the runtime test migration now. The focused suite already shows the pattern: old `route_infos`/`route_required_outputs`/`SUCCESS` assertions in a handful of workflow-package tests. I’m converting those packages together so the focused runtime pass reflects one contract.
+
+Some of those workflow-package tests use slightly different step names than the ones I inferred. I’m reading the exact assertions before patching the family so I don’t inject a second round of mismatches.
+
+The workflow-builder and package-CLI fixtures were still generating old core workflows, which is exactly the kind of consumer drift this phase is supposed to remove. I’m switching those generators to the simple canonical authoring path now.
+
+I’ve landed the first source-side fixes and part of the runtime test migration. I’m running a narrow slice now to see which failures disappeared and which remaining ones are still consumer-contract mismatches rather than new regressions.
+
+The first fixes are paying off. I’m rerunning the same focused runtime slice the implementer used before; that gives a clean delta on whether the phase blockers are shrinking or if the remaining failures are concentrated in the untouched consumer files.
+
+The focused suite is still running, but the early output is already much healthier than the previous 170-failure pass. I’m letting it finish before I decide whether the next patch should stay in runtime tests or move to the docs/unit consumer cleanup.
+
+One failure surfaced late in the focused slice. I’m waiting for the traceback before editing again so I can fix the next real blocker instead of guessing from the pattern.
+
+The focused runtime slice is down to three failures. Two are still consumer migration fallout, and one is a real workflow regression: a Python step now emits `blocked` without declaring that route. I’m fixing that workflow contract and then I’ll clean up the remaining reference-resolution assertions.
+
+The remaining reference-resolution failure is not just a stale assertion; it shows one of the temporary workflow fixtures is no longer exercising the `Params` discovery path the way the loader expects. I’m checking the loader resolution order before I decide whether to change the fixture or the loader.
+
+The parameter-resolution failure came from a real code path, not just a stale test: strict workflow parameter discovery was still checking `Parameters` instead of `Params`. I’m fixing that in the loader path and then I’ll finish the two remaining test/workflow contract patches.
+
+I’m addressing the remaining blocking regressions and the leftover consumer-migration gaps now. First I’m verifying the three focused-suite failures and the still-stale docs/tests the reviewer called out, then I’ll patch the smallest central fixes and rerun the targeted suites.
+
+The remaining focused failures are concrete and local, and there are still stale consumer fixtures around capability inspection and package CLI output. I’m reading just those surfaces now so I can patch the route contract, the `Params` resolution path, and the leftover canonical-name assertions without broadening the change set unnecessarily.
+
+I’ve confirmed the main runtime regressions: one missing explicit `blocked` route, one loader path still preferring `Parameters`, and stale capability-inspection assertions. After that, the remaining work is mostly consumer cleanup in docs and tests rather than engine logic, so I’m reading only the exact spans that still mention legacy names.
+
+The engine-side fixes are straightforward; the larger question is consumer cleanup breadth. I’m keeping this pass tied to the reviewer’s concrete findings: capability payload names, package-CLI consumer expectations, and stdlib-versus-optimizer helper imports, while also fixing the three remaining focused runtime failures.
+
+I’ve narrowed the next patch set to one loader fix, one missing route declaration, and the stale consumer surfaces the reviewer named directly. After that I’ll rerun the previously failing focused tests and a small consumer-facing test slice to see what remains.
+
+I have enough context to edit safely now. The next patch will be narrow but multi-file: one core parameter-model fix, one workflow route fix, canonical consumer assertions in runtime/unit tests, and doc/import cleanup from `stdlib` to `autoloop_optimizer` for optimizer-specific helpers.
+
+One patch chunk missed an exact line match in the package-CLI tests, so I’m splitting the edits into smaller file-local patches. The change set itself is still the same: no broad refactor, just contract cleanup plus the two runtime fixes.
+
+The edits are in place. I’m running the exact regression slice they should affect first, so if anything still fails it should point to a real remaining contract mismatch rather than a broad repo-wide issue.
+
+The one remaining runtime test failure is just an expectation mismatch: the CLI now exposes canonical names, but it still groups step routes under `routes.steps` and global routes under `global_routes` / `routes.global`. I’m aligning that consumer expectation to the actual canonical payload and then running the focused runtime plus the touched unit/doc tests.
+
+The remaining CLI failure is just a spec nuance: custom `python_step` routes don’t get `question`/`blocked` injected, so the payload correctly shows only the declared semantic route plus `failed`. I’m aligning that expectation, then I’ll do one broader focused runtime sweep and decide whether the unit-doc file needs a separate cleanup pass or should remain a known deferred surface.
+
+The focused runtime regressions are clear now: that slice is green. The only active signal left from this pass is in the unit/doc consumer cleanup file, and I’m waiting on that exact narrowed subset to see whether it’s one leftover doc assertion or a broader import mismatch.
+
+The unit subset is useful: it exposed one stale workflow-package test helper that still writes `Parameters` into generated packages, and one doc assertion still expecting legacy `route_infos` wording. Those are both consumer-facing and directly in scope, so I’m patching them now rather than treating them as a separate cleanup pass.
+
+The last two narrowed unit failures are still the same theme: the helper snapshots now emit canonical step payload fields (`expected_output_schema`, `route_targets`, per-route `target`/`on_taken`) and the tests were still comparing the older flattened shape. I’m reducing those to stable subset assertions so the tests check the canonical contract without overfitting deprecated field names.
+
+The direct regressions are green now, and the unit/doc consumer slice I touched is also green. I’m doing one broader runtime regression sweep across the previously noisy workflow-package slice plus the package-CLI file to make sure these fixes didn’t break adjacent consumer paths.
+
+The broader runtime slice is in good shape: 293 tests passed and exactly one package-CLI flow still fails. I’m inspecting that one directly now; it looks like the run command is returning an error path instead of JSON, so I’m reproducing just that workflow package harness call to see the stderr contract mismatch.
+
+I found the last runtime regression. The CLI resolves the workflow once to validate `-wf` params, then mistakenly passes only the bare workflow class into the runner; that loses the package-level `Params` model on the second resolution path. I’m fixing the CLI to pass the original workflow reference through to execution/resume/answer so package exports remain authoritative end to end.
+
+The CLI regression is fixed: the package run path now keeps the original workflow reference and preserves package-level `Params` end to end. I’m rerunning the broader runtime slice once more so the validation record reflects the final state of this turn rather than a partially fixed run.
+
+I’m at the bookkeeping stage now. The code and test slices I changed are stable, so I’m recording the non-obvious runner decision and updating the phase notes with the actual validation state and remaining known gaps before I close the turn.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` phase only: consumer-facing workflow package execution, capability inspection payloads, optimizer-vs-stdlib imports, selected runtime/unit/doc consumers, and the reviewer’s blocking findings.
+
+What I analyzed
+
+I worked from the reviewer feedback first, then checked the remaining focused runtime failures, the package CLI parameter path, capability snapshot payload shape, and the docs/tests still consuming optimizer helpers from `stdlib`. I also checked the remaining legacy-name footprint in the active consumer files to avoid claiming the phase complete prematurely.
+
+What I changed
+
+I fixed the remaining runtime regressions by making strict `Params` discovery use `Params` in [core/descriptors.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/descriptors.py), adding the explicit `blocked -> PAUSE` route in [workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_package_to_composable_building_blocks/workflow.py), and making [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py) pass the original workflow reference into `execute_workflow_package(...)` so manifest-package `Params` survive execution.
+
+I migrated more consumer surfaces to the canonical contract: [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), and [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md). That included `Params` instead of `Parameters`, `routes` / `global_routes` instead of `transitions`, and `autoloop_v3.autoloop_optimizer` instead of optimizer helpers re-exported from `stdlib`. I also added [autoloop_optimizer/parameters.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/parameters.py), updated [autoloop_optimizer/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/__init__.py), and kept [stdlib/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/stdlib/__init__.py) pruned of those application-specific parameter bundles.
+
+Key findings / decisions
+
+The non-obvious runtime bug was in the CLI run path: validating `-wf` params against a resolved manifest package worked, but then execution re-resolved from the bare workflow class and lost the package-level `Params` model. I recorded that in `decisions.txt` and fixed it by preserving the original workflow reference.
+
+Validation is solid for the touched slice:
+- `tests/runtime/...` focused regression slice: `6 passed`
+- `tests/unit/test_stdlib_and_extensions.py` narrowed consumer/doc slice: `10 passed, 85 deselected`
+- broader runtime/package sweep: `294 passed` with only existing Pydantic warnings in optimization workflow contract models
+
+Open issues / next step
+
+This phase is still not complete. The active repo still has legacy compatibility fixtures in [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py) and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) that continue to use banned names like `SUCCESS`, `SystemStep`, `RouteInfo`, and `transitions`. The next pass should either migrate those fixtures to canonical authoring or explicitly isolate them as migration-only coverage so AC-1 can be satisfied cleanly.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddb8c-eaaf-7503-a6a2-905b77d9235c
+---
+I’m reviewing the producer’s second pass against the phase scope and the remaining acceptance gap. I’ll verify the changed consumer-facing surfaces first, then update the phase criteria and feedback with any remaining blocking gaps.
+
+I’ve got the prior reviewer state. Now I’m verifying which of those findings are actually resolved in the current diff and which ones still block the phase, with a quick pass over the provider-route contract, capability payloads, stdlib exports, and the remaining banned-name footprint.
+
+The earlier provider-route, capability-payload, and stdlib-export blockers are resolved in the current diff. What still blocks the phase is narrower: AC-1 is still not met because active consumer tests keep using banned public names in non-quarantined fixtures. I’m updating the review artifacts to reflect that exact remaining gap.
+
+Scope considered
+
+The active `consumer-migration-and-package-cleanup` phase only. I reviewed the producer’s second-pass source changes indirectly through the changed consumer-facing runtime, package CLI, capability inspection, optimizer-vs-stdlib surfaces, and the active review artifacts.
+
+What I analyzed
+
+I checked the updated implementation notes and decisions first, then verified the previously blocking areas: provider route typing, capability inspection naming, stdlib export pruning, package-level `Params` handling through CLI execution, and the remaining banned-name footprint in active docs/tests/workflow-package consumers.
+
+What I reviewed
+
+I confirmed that the earlier provider-route, capability-payload, and stdlib-export blockers are resolved in the current diff. I also validated the producer’s reported test slice by checking the current code paths and the remaining legacy-name search hits in active consumer tests. The review artifacts were updated to reflect the current state:
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/criteria.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260429T212742Z-82f66970/artifacts/implement/phases/consumer-migration-and-package-cleanup/feedback.md)
+
+Key findings / decisions
+
+Only one blocking finding remains: AC-1 is still unmet because active consumer tests still use banned public names in non-quarantined fixtures. The remaining blocking examples are documented as `IMP-001` in `feedback.md`, with concrete references in `tests/runtime/test_workflow_reference_resolution.py`, `tests/runtime/test_security_finding_to_verified_remediation.py`, and `tests/unit/test_stdlib_and_extensions.py`.
+
+Open issues / next step
+
+This phase should return to implementation. The next pass needs to finish migrating those active tests to the canonical contract, or explicitly isolate true legacy-compat coverage into migration-only fixtures, before the phase can be marked complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
