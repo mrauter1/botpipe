@@ -83,3 +83,12 @@ No open verification issues remain for the planning artifacts. The next step is 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=refresh-simple-signature-coverage
+explicit=True
+current_phase_index=0
