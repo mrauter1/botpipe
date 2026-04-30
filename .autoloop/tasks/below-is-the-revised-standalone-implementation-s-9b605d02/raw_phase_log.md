@@ -2511,3 +2511,52 @@ Updated the run-local planning artifacts:
 The plan is split into three ordered phases: public/top-level surface pruning, internal route/runtime canonicalization, and strictness plus active-suite migration. It also records the two main compatibility constraints that implementation must preserve: legacy terminal normalization should survive only in explicit persisted-run readers, and the `core` ↔ `autoloop_v3.core` bridge cannot be removed blindly because this checkout has no real `autoloop_v3.core` source package.
 
 I did not run tests; this was a planning-only turn.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc05-1eea-7962-8c54-cccee68366f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019ddc05-1eea-7962-8c54-cccee68366f7
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc05-1eea-7962-8c54-cccee68366f7
+---
+I’m verifying the generated plan against the request, the current repository state, and the machine-readable phase contract. First I’m re-reading the artifacts and checking whether the plan’s compatibility boundary and phase decomposition are actually safe given what’s still live in `core`, `runtime`, `stdlib`, and the active tests.
+
+I’m checking a couple of edge cases before I grade the plan: whether the proposed compatibility boundary is broader than the request allows, and whether any “likely quarantine” fixtures are actually used by active suites. Those are the main places where the plan could silently permit the wrong behavior.
+
+I found two material plan issues. I’m recording them now and leaving the criteria unchecked, because the current plan both widens the allowed legacy-compat boundary beyond the request and narrows strictness coverage in a way that could miss regressions in maintained workflow code.
+
+The findings are recorded. I’m doing one last pass on `criteria.md` and `feedback.md` so the final status matches the blocking issues exactly and the loop-control outcome is defensible.
+
+Scope considered
+
+Run-local plan verification against the immutable request, raw log, decisions ledger, and the generated planning artifacts. I also checked request-relevant repository areas to validate the claimed compatibility boundary and strictness scan scope.
+
+What I analyzed
+
+The request requires a narrower legacy boundary than the current plan allows: retained support is permitted only for real persisted-run readers. I also checked the maintained-tree shape around strictness by comparing the plan’s proposed scan roots with the existing strictness test and the active workflow packages.
+
+What I reviewed
+
+`plan.md`, `phase_plan.yaml`, `criteria.md`, `feedback.md`, and `decisions.txt`. I also re-checked `tests/strictness/test_no_compat.py`, maintained `workflows/`, and the legacy-name usage inventory in active tests and helpers.
+
+Key findings / decisions
+
+`phase_plan.yaml` is structurally coherent and parseable by inspection, with correct runtime-owned metadata preserved.
+Two blocking findings were appended to `feedback.md`:
+`PLAN-001`: the plan broadens allowed retained compatibility to fixture-driven cases, but the request allows retained legacy support only where real persisted-run readers need it.
+`PLAN-002`: the plan’s strictness scope omits repo-root `workflows/`, which are active maintained code and part of the current maintained-tree enforcement surface.
+Because of those issues, the criteria remain unchecked.
+
+Open issues / next step
+
+The planner should revise the plan so only persisted-run/session/checkpoint readers can justify retained legacy parsing in implementation code, and expand the strictness plan to include `workflows/` or explicitly point to an equivalent existing enforcement gate there.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
