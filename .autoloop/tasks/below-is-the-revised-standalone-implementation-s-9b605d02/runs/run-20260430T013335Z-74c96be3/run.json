@@ -15,13 +15,13 @@
       "strictness-and-suite-migration"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "strictness-and-suite-migration"
+    "current_phase_index": 3,
+    "current_phase_id": null
   },
   "phase_status": {
     "canonical-surface-pruning": "completed",
     "route-runtime-canonicalization": "completed",
-    "strictness-and-suite-migration": "in_progress"
+    "strictness-and-suite-migration": "completed"
   },
   "phase_history": [
     {
@@ -55,6 +55,13 @@
       "run_id": "run-20260430T013335Z-74c96be3",
       "status": "in_progress",
       "ts": "2026-04-30T02:44:25.491686+00:00"
+    },
+    {
+      "phase_id": "strictness-and-suite-migration",
+      "run_id": "run-20260430T013335Z-74c96be3",
+      "status": "completed",
+      "ts": "2026-04-30T03:21:54.842176+00:00",
+      "pair": "test"
     }
   ]
 }
