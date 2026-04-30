@@ -1,1 +1,3 @@
 # Intent Audit <-> Intent Audit Verifier Feedback
+
+- AUD-001 `non-blocking` — No audit defects found. The gap report correctly ties the request and superseding decisions to the final maintained code/tests, accurately classifies the remaining bridge shape as a justified explicit compatibility path rather than an unresolved gap, and is supported by an independent rerun of `.venv/bin/python -m pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_provider_backends.py tests/strictness/test_no_compat.py` (`259 passed`) plus an independent maintained-tree legacy-vocabulary scan.
