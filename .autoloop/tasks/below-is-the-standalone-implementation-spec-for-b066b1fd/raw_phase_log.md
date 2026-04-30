@@ -2650,3 +2650,43 @@ No open issues for this phase. Review artifacts are updated and the phase is com
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+---
+I’m checking the active test artifacts and the final changed test coverage to confirm whether any additional repo test edits are still necessary. Then I’ll update the phase-local test strategy and feedback to map the covered behavior explicitly.
+
+The existing unit test already covers the requested behavior once its tuples are corrected, so I’m not adding new test cases outside that scope. I’m recording the explicit coverage map, validation, and the test-phase decision so later turns don’t drift into unnecessary extra test churn.
+
+Scope considered
+
+Phase-local test coverage for the maintained simple-signature assertions only, plus the required test-phase artifacts and run-local decisions entry.
+
+What I analyzed
+
+I checked the updated canonical signature assertion in `tests/unit/test_simple_surface.py`, compared it against the exported factory signatures in `autoloop/simple.py`, reviewed the run decisions for scope control, and reran `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`.
+
+What I changed
+
+I updated the phase-local test artifacts:
+- `artifacts/test/phases/refresh-simple-signature-coverage/test_strategy.md` now maps each requested behavior to the existing canonical signature test, documents preserved invariants, failure paths, flake risk, and known gaps.
+- `artifacts/test/phases/refresh-simple-signature-coverage/feedback.md` now records the coverage/validation summary.
+- `decisions.txt` now states that this phase should not broaden test scope beyond the existing canonical signature assertion because the request is limited to maintained signature coverage.
+
+Key findings / decisions
+
+No additional repository test edits were needed in this phase beyond the already-updated canonical assertion, because that single focused test already covers the requested regression surface for `step`, `produce_verify_step`, and preserved `python_step` alignment. The focused suite remains green: `34 passed`.
+
+Open issues / next step
+
+No open issues from the test phase.

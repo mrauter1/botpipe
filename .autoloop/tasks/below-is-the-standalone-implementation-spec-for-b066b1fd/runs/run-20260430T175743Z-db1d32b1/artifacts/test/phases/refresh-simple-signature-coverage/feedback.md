@@ -6,3 +6,5 @@
 - Phase Directory Key: refresh-simple-signature-coverage
 - Phase Title: Refresh Simple Signature Coverage
 - Scope: phase-local authoritative verifier artifact
+
+- Recorded the behavior-to-test map for the canonical simple-signature assertions, including preserved `python_step(...)` coverage, and revalidated the focused file with `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py` (`34 passed`).
