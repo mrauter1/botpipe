@@ -1555,3 +1555,106 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddf30-328a-7573-add4-10cdd846340b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+I’m closing the auditor’s gap by adding the missing failure-path test for unknown scoped `step.item_state` prompt fields, then I’ll update the test artifacts to reflect that coverage.
+
+The remaining change is narrow: mirror the existing negative `{item.state.missing}` case with an unknown `{step_name.item_state.*}` failure test so the step-item validation branch is protected too.
+
+I’ve added the missing failure-path test. I’m checking its expected error text against the validator wording before I update the artifacts.
+
+The test compiles cleanly. I’m updating the strategy and feedback so the auditor sees the negative `step.item_state` coverage explicitly, not just in the source diff.
+
+Scope considered
+
+- Auditor follow-up for the scoped item-state test phase only.
+- I limited the change set to the missing `step.item_state` failure-path regression and the corresponding phase test artifacts.
+
+What I analyzed
+
+- The blocking audit finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/feedback.md).
+- The existing prompt-validation tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py).
+- The validator error branch for unknown scoped `step.item_state` fields in `core/validation.py`.
+- The current coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/test_strategy.md).
+
+What I changed
+
+- Added [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) `test_simple_workflow_rejects_unknown_scoped_step_item_state_prompt_fields`, which asserts that `{review.item_state.missing}` raises `WorkflowValidationError` on the scoped simple `step(...)` path.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/test_strategy.md) so AC-2 explicitly includes both positive and negative `step.item_state` coverage.
+- Appended a concise closure note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/feedback.md).
+- Appended the mirrored negative-coverage decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt).
+
+Key findings / decisions
+
+- The missing regression was isolated to the unknown-field failure path for scoped `step.item_state` placeholders; the rest of the scoped item-state coverage stayed intact.
+- I mirrored the existing `{item.state.missing}` pattern rather than introducing a new harness, so the new test stays deterministic and targeted.
+
+Open issues / next step
+
+- Validation run: `python3 -m py_compile tests/unit/test_simple_surface.py`
+- I still could not run `pytest` in this shell because `pytest` and runtime deps such as `pydantic` are unavailable here.
+- Next step is re-audit of the test phase.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019ddf30-328a-7573-add4-10cdd846340b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+I’m re-checking the scoped item-state tests after the added `step.item_state` failure-path regression, then I’ll close out the audit artifacts if the phase surface is covered cleanly.
+
+I don’t see a remaining material coverage gap in phase scope. I’m marking the criteria complete and recording that the prior audit finding is resolved.
+
+Scope considered
+
+- Re-audit of the scoped item-state test phase after the added unknown `step.item_state` failure-path regression.
+- I limited the review to the changed test surface and the phase-local audit artifacts.
+
+What I analyzed
+
+- The updated scoped prompt-validation tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py).
+- The phase coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/test_strategy.md).
+- The existing audit record in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/feedback.md).
+
+What I reviewed
+
+- The suite now covers:
+  - positive and negative `item.state.*` validation,
+  - positive and negative `step.item_state.*` validation on the scoped simple-step path,
+  - scoped simple-step runtime pause/resume restoration,
+  - preserved unscoped rejection behavior,
+  - generic vs produce/verify built-in step-item-state differences.
+- The added negative `step.item_state` case directly closes the prior AC-2 coverage gap.
+
+Key findings / decisions
+
+- No remaining blocking or non-blocking audit findings in phase scope.
+- I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/criteria.md) to all checked and appended a re-audit resolution note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/scoped-item-state/feedback.md).
+
+Open issues / next step
+
+- No test-audit issues remain for this phase.
+- The shell still lacks `pytest` and runtime deps, but the authored regression surface now matches the scoped item-state acceptance criteria and the audit artifacts are complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

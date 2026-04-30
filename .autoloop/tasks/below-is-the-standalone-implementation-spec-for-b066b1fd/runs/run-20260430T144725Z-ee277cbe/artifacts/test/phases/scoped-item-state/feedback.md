@@ -13,3 +13,6 @@
   The suite still has no negative prompt-validation test for an unknown `{step_name.item_state.*}` field. It covers `{item.state.missing}` and unscoped `item_state=...` rejection, but the validation branch for step-item-state field lookup only has happy-path assertions. A regression that stopped rejecting a typo such as `{review.item_state.attemps}` would now pass unnoticed even though AC-2 explicitly requires field validation for both `item.state.*` and `step.item_state.*`. Minimal correction: add a compile-time failure test mirroring the existing worklist item-state negative case, asserting that an unknown scoped `step.item_state` field raises `WorkflowValidationError`.
 
 - Added `tests/unit/test_simple_surface.py::test_simple_workflow_rejects_unknown_scoped_step_item_state_prompt_fields` to close `TST-001` by asserting that an unknown `{step_name.item_state.*}` placeholder fails compile-time validation on the simple prompt-step path.
+
+- Re-audit status:
+  `TST-001` is resolved. The suite now covers both positive and negative validation on the scoped `step.item_state` branch, and no remaining findings were identified in phase scope.
