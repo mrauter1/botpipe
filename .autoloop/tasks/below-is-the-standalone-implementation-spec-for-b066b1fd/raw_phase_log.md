@@ -1280,3 +1280,59 @@ Open issues / next step
 
 - Syntax validation passed with `python3 -m py_compile` on all touched modules and tests.
 - I could not run `pytest` here because the shell environment is missing `pytest`, and the available `python3` also lacks runtime deps like `pydantic`. The next step is to run the targeted unit/contract tests in the project’s real Python environment.
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf30-328a-7573-add4-10cdd846340b
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf30-328a-7573-add4-10cdd846340b
+---
+I’m reviewing the scoped item-state implementation against the phase contract, starting with the acceptance criteria artifact and the changed runtime/validation paths that control scoped state persistence and prompt-field validation.
+
+I’ve narrowed the highest-risk review surface to the simple authoring layer and the scoped runtime store behavior. One likely gap is whether per-step `item_state` authoring was actually added for all scoped simple steps, not just `produce_verify_step(...)`.
+
+I’m auditing the scoped item-state implementation against the phase contract and checking the review artifacts before I write findings.
+
+I found one material gap in the public simple surface and I’m verifying the supporting paths before I write it up as a blocking finding.
+
+I’ve narrowed this to one blocking contract miss in the simple authoring API. I’m updating the review artifacts now with the concrete failure mode and fix direction.
+
+Scope considered
+
+- Phase-local review of the scoped item-state implementation only.
+- Source inspection was limited to the changed simple-surface, validation, runtime, compiler, and test paths needed to verify AC-1 and AC-2.
+
+What I analyzed
+
+- Phase contract, implementation notes, and the current run decisions ledger.
+- The public simple authoring surface in [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py).
+- Scoped-state lowering and prompt validation in [core/validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/validation.py).
+- Runtime/checkpoint plumbing in [core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/engine.py), plus the added unit and contract tests.
+
+What I reviewed
+
+- `criteria.md` and `feedback.md` in the active phase artifact directory have been updated.
+- I verified that worklist `item_state` and runtime `ctx.item_state` / `ctx.step_item_state` plumbing were added.
+- I checked whether the public authoring APIs actually expose scoped per-step `item_state` across the scoped-step surface promised by the phase.
+
+Key findings / decisions
+
+- `IMP-001` is blocking: the simple `step(...)` API still does not accept `item_state`, so scoped simple prompt steps cannot declare custom per-item state. The implementation only added that authoring surface to `produce_verify_step(...)`, which misses the phase requirement for step item-state authoring on scoped steps.
+- The finding is recorded in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/scoped-item-state/feedback.md).
+- Because of that gap, I left all review criteria unchecked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/scoped-item-state/criteria.md).
+
+Open issues / next step
+
+- Extend `step(...)` / `StepDeclaration` with `item_state`, plumb it through the existing scoped item-state lowering path, and add a regression for a scoped simple `step(...)` using custom `item_state`.
+- After that, rerun this phase review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
