@@ -8,11 +8,11 @@ from pathlib import Path
 import pytest
 
 from core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from core.errors import WorkflowExecutionError
-from autoloop_v3.runtime.loader import WorkflowParameterError
-from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
-from autoloop_v3.runtime.workspace import (
+from runtime.loader import WorkflowParameterError
+from runtime.runner import RunnerOptions, run_workflow_package
+from runtime.workspace import (
     create_run,
     ensure_workspace,
     ensure_workflow_workspace,
@@ -1623,7 +1623,7 @@ import json
 from pydantic import BaseModel
 
 from autoloop import Event, FINISH, Workflow, python_step
-from autoloop_v3.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
+from stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
 
 
 class ParentCompositionHelperWorkflow(Workflow):

@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from autoloop_v3.autoloop_optimizer import (
+from autoloop_optimizer import (
     write_company_operation_snapshot,
     write_workflow_capability_snapshot,
     write_workflow_portfolio_health_snapshot,

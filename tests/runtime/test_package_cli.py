@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from core.compiler import compile_workflow
-from autoloop_v3.runtime import cli
-from autoloop_v3.runtime.loader import resolve_workflow_reference
+from runtime import cli
+from runtime.loader import resolve_workflow_reference
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

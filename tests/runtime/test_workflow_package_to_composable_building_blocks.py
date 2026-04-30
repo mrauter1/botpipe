@@ -14,14 +14,14 @@ from core.compiler import compile_workflow
 from core.context import Context
 from core.providers.fake import ScriptedLLMProvider
 from core.stores import InMemorySessionStore
-from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop_v3.runtime.loader import (
+from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
     discover_workflow_packages,
     resolve_workflow_reference,
 )
-from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
+from runtime.runner import RunnerOptions, run_workflow_package
 from core.primitives import Outcome
 
 
@@ -1451,7 +1451,7 @@ def _write_candidate_decomposition_surface(request) -> str:
                 "from pathlib import Path",
                 "",
                 "from core.compiler import compile_workflow",
-                "from autoloop_v3.runtime.loader import discover_workflow_packages, resolve_workflow_reference",
+                "from runtime.loader import discover_workflow_packages, resolve_workflow_reference",
                 "",
                 "",
                 "def _clear_workflow_modules() -> None:",

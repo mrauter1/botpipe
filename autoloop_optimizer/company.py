@@ -6,10 +6,10 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from ..runtime.loader import resolve_workflow_reference
-from ..runtime.workspace import list_task_operation_summaries
-from ..stdlib.lifecycle import write_workflow_json
-from ..stdlib.validation import require_non_empty_string
+from runtime.loader import resolve_workflow_reference
+from runtime.workspace import list_task_operation_summaries
+from stdlib.lifecycle import write_workflow_json
+from stdlib.validation import require_non_empty_string
 
 
 def write_company_operation_snapshot(

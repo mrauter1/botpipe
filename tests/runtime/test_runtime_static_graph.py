@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from autoloop import FINISH, Prompt, Route, Workflow, produce_verify_step, python_step
 from core import Artifact
 from core.compiler import compile_workflow
-from autoloop_v3.runtime.static_graph import (
+from runtime.static_graph import (
     TOPOLOGY_FILENAME,
     write_static_step_graph,
     write_topology_artifacts,

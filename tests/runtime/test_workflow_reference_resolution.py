@@ -9,14 +9,14 @@ import pytest
 
 from core.errors import WorkflowExecutionError
 from core.providers.fake import ScriptedLLMProvider
-from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop_v3.runtime.loader import (
+from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from runtime.loader import (
     ResolvedWorkflow,
     WorkflowDiscoveryError,
     inspect_workflow_reference,
     resolve_workflow_reference,
 )
-from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
+from runtime.runner import RunnerOptions, run_workflow_package
 from core.primitives import Outcome
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from autoloop_v3.autoloop_optimizer import write_workflow_portfolio_snapshot
+from autoloop_optimizer import write_workflow_portfolio_snapshot
 from stdlib import (
     adopt_child_artifacts,
     normalize_unique_strings,

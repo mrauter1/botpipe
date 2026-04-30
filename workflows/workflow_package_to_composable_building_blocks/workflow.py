@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from autoloop_v3.autoloop_optimizer import (
+from autoloop_optimizer import (
     capture_selected_workflow,
     derive_candidate_surface_manifest,
     materialize_baseline_surface,

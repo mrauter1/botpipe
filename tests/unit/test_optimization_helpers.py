@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from autoloop_v3.stdlib.optimization import (
+from stdlib.optimization import (
     OptimizationArtifactSpec,
     build_step_trace_metrics,
     collect_optimization_publication_surface,

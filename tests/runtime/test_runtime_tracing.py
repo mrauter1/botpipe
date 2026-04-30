@@ -10,10 +10,10 @@ from pydantic import BaseModel
 from core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
 from core.providers.models import StepProviderUsage, TokenUsage
 from core.primitives import Event, Outcome
-from autoloop_v3.runtime.config import TracingRuntimeConfig
+from runtime.config import TracingRuntimeConfig
 from core.schema_registry import RUNTIME_TRACE_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
-from autoloop_v3.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
-from autoloop_v3.runtime.workspace import next_observability_sequence
+from runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
+from runtime.workspace import next_observability_sequence
 
 
 class _State(BaseModel):
@@ -263,7 +263,7 @@ def test_runtime_trace_disabled_still_persists_static_step_graph(tmp_path: Path)
 def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     run_dir = _run_dir(tmp_path)
     monkeypatch.setattr(
-        "autoloop_v3.runtime.tracing.write_static_step_graph_payload",
+        "runtime.tracing.write_static_step_graph_payload",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("graph write failed")),
     )
 

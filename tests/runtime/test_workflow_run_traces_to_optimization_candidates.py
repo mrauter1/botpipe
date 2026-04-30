@@ -15,9 +15,9 @@ from core.compiler import compile_workflow
 from core.context import Context
 from core.providers.fake import ScriptedLLMProvider
 from core.stores import InMemorySessionStore
-from autoloop_v3.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from autoloop_v3.runtime.loader import discover_workflow_packages, resolve_workflow_reference
-from autoloop_v3.runtime.runner import RunnerOptions, run_workflow_package
+from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from runtime.loader import discover_workflow_packages, resolve_workflow_reference
+from runtime.runner import RunnerOptions, run_workflow_package
 from core.primitives import Outcome
 
 

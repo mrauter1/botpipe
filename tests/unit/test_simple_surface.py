@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import inspect
 from pathlib import Path
 import re
@@ -33,8 +32,6 @@ REMOVED_REVIEW_STEP = "review" + "_" + "step"
 REMOVED_DO_REVIEW_STEP = "do" + "_" + "review" + "_" + "step"
 REMOVED_SYSTEM_STEP_ALIAS = "system" + "_" + "step"
 REMOVED_VERIFIER_WRITES = "review_" + "writes"
-LEGACY_CORE_MODULE = "autoloop_v3" + ".core"
-LEGACY_COMPAT_MODULE = LEGACY_CORE_MODULE + "._" + "compat"
 
 
 def _import_from(module_name: str, symbol: str) -> object:
@@ -143,22 +140,6 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
 
     for symbol in ("Artifact", "Context", "FAIL", "FINISH", "GLOBAL", "PAUSE", "Prompt", "Route", "Workflow"):
         assert _import_from("core", symbol) is getattr(core, symbol)
-
-
-def test_legacy_core_package_imports_fail_after_bridge_removal() -> None:
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module(LEGACY_CORE_MODULE)
-
-    with pytest.raises(ModuleNotFoundError):
-        _import_from(LEGACY_CORE_MODULE, "Workflow")
-
-
-def test_legacy_core_compat_package_imports_fail_after_bridge_removal() -> None:
-    with pytest.raises(ModuleNotFoundError):
-        importlib.import_module(LEGACY_COMPAT_MODULE)
-
-    with pytest.raises(ModuleNotFoundError):
-        _import_from(LEGACY_COMPAT_MODULE, "Workflow")
 
 
 def test_core_module_identity_remains_canonical() -> None:

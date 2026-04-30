@@ -6,11 +6,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from ..runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
+from runtime.loader import coerce_workflow_parameter_mapping, resolve_workflow_reference
 
 from .adaptation import write_selected_workflow_capability_snapshot
-from ..stdlib.lifecycle import write_workflow_json
-from ..stdlib.validation import (
+from stdlib.lifecycle import write_workflow_json
+from stdlib.validation import (
     read_json_object,
     require_mapping,
     require_non_empty_string,

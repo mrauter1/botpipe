@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..core.workflow_capabilities import selected_workflow_authoring_surface_payload
+from core.workflow_capabilities import selected_workflow_authoring_surface_payload
 
 from ._selected_workflow import inspect_selected_workflow, write_selected_workflow_artifact
 

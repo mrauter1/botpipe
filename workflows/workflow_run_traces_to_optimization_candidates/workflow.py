@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from autoloop_v3.autoloop_optimizer import (
+from autoloop_optimizer import (
     EXCLUDED_RUN_REPORT_SCHEMA,
     FAILURE_SCENARIOS_SCHEMA,
     OptimizationArtifactSpec,

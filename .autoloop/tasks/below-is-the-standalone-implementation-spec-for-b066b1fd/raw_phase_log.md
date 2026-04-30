@@ -295,3 +295,93 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+I’m addressing the reviewer’s blocking point first: the maintained tests still lean on dead `autoloop_v3.runtime` and sibling namespaces, so the regression surface is not actually canonical yet. I’ll map the remaining legacy namespace imports, migrate them to the live root packages, and keep the strictness-only `autoloop_v3.core` failure assertions isolated.
+
+I’m making the remaining test-surface canonicalization in one mechanical pass now: `autoloop_v3.runtime`, `autoloop_v3.extensions`, `autoloop_v3.stdlib`, and `autoloop_v3.workflows` imports in maintained tests/fixtures are being moved to the live root packages, then I’ll tighten any tests whose assertions became too broad after the prefix swap.
+
+The bulk namespace swap exposed one test that now over-matches plain words like `runtime` and `workflows`. I’m tightening that assertion to check import statements rather than raw substrings before I do the final repo-wide scan and syntax pass.
+
+The runtime/extensions/workflows namespaces weren’t the only ones left under `autoloop_v3.*`; `autoloop_v3.autoloop_optimizer` may be the same class of dead path. I’m checking that before I stop at the reviewer’s first example, because the same namespace cleanup may need one more root package.
+
+I’m addressing the remaining reviewer blocker in the maintained test surface and checking the optimizer namespace before I touch more imports. After that I’ll clean up the overly broad strictness assertions and revalidate the remaining `autoloop_v3.*` references.
+
+The remaining legacy references are concentrated in the optimizer helper tests. I’m checking whether those should move to the root `autoloop_optimizer` package or to another canonical surface, because the package layout there is less straightforward than the `runtime` and `extensions` cases.
+
+There’s a second dependency seam here: a set of workflow and test files still reference `autoloop_v3.autoloop_optimizer`, and the root `autoloop_optimizer` package is not cleanly importable as-is because its modules use parent-relative imports. I’m checking whether these helpers were intentionally moved to `stdlib` so I can fix this without inventing a new compatibility path.
+
+The parameter classes are already present in `stdlib.parameters`, which suggests the optimizer namespace is a stale dependency rather than a required package. I’m tracing the write helpers next so I can replace the dead imports with the maintained modules instead of reviving another legacy bridge.
+
+The source of truth for those helper functions is the real `autoloop_optimizer/` package, not `stdlib`. The package is only failing because its internals still use parent-relative imports, so I’m switching that package and its consumers to canonical root imports instead of rebuilding another compatibility namespace.
+
+I have the fix direction now: make `autoloop_optimizer` importable via absolute root imports, then move its workflow and test consumers onto that canonical package. After that I’ll clean up the two test files that still encode outdated compatibility assumptions.
+
+The namespace rewrite is in place. I’m checking the high-risk files now: the optimizer package itself, the workflow consumers, the strictness scan, and the one unit test whose substring assertions became invalid after the earlier import migration.
+
+I’ve reduced the remaining legacy references to the single intentional strictness assertion. The last code edits are focused: remove the extra legacy-core failure tests from the unit surface, and tighten the stdlib purity check so it looks for import statements instead of raw substrings.
+
+The code changes are in; I’m running the regression-oriented scans now. I want a clean picture of remaining legacy imports and at least syntax validation on the touched package/workflow/test files before I update the run artifacts.
+
+The scan exposed one production hole I hadn’t touched earlier: `core/workflow_capabilities.py` still has lazy imports through the deleted `autoloop_v3.runtime.loader` path. I’m fixing that now because it would keep the canonical surface from working even after the test migrations.
+
+I found the last production compatibility fallback. It’s isolated to two lazy imports in `core/workflow_capabilities.py`, so I’m removing that bridge path instead of widening the change surface further.
+
+The last compatibility fallback is gone. I’m rerunning the scan over the active source and maintained tests, then I’ll update the implementation notes and the run decision ledger with the non-obvious import-path decision I had to make for the optimizer package.
+
+I’ve got a clean source scan now. The remaining work is just artifact hygiene: document the expanded dependency fix in the implementation notes, and record the optimizer import decision so later turns don’t accidentally reintroduce that dead namespace.
+
+I’ve verified the source tree is clean except for the one intentional strictness assertion. I’m updating the run artifacts now so the next turn inherits the real dependency decision instead of the earlier assumption that the non-core `autoloop_v3.*` namespaces could be left untouched.
+
+I’ve got the artifact content where it needs to be. I’m making one small cleanup in the notes, then I’ll close with the exact phase summary and current validation status.
+
+Scope considered
+
+- Phase-local compatibility bridge removal only, plus the dependency surfaces needed to keep the maintained regression imports alive after bridge deletion.
+- I stayed within production import paths, maintained workflows/tests, and the phase-local implementation artifacts.
+
+What I analyzed
+
+- The reviewer blockers in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/compatibility-bridge-removal/feedback.md).
+- Remaining `autoloop_v3.*` imports across `core`, `runtime`, `extensions`, `stdlib`, `workflows`, `autoloop_optimizer`, and maintained tests.
+- The root `autoloop_optimizer/` package internals, which were still using parent-relative imports and were not importable as a canonical root package.
+
+What I changed
+
+- Canonicalized the remaining maintained test/workflow imports off dead namespace paths:
+  - `autoloop_v3.runtime` -> `runtime`
+  - `autoloop_v3.extensions` -> `extensions`
+  - `autoloop_v3.stdlib` -> `stdlib`
+  - `autoloop_v3.workflows` -> `workflows`
+  - `autoloop_v3.autoloop_optimizer` -> `autoloop_optimizer`
+- Rewrote `autoloop_optimizer/*` internal imports from `..core` / `..runtime` / `..stdlib` to absolute root imports so the package is canonical and self-consistent.
+- Removed the last production fallback to deleted namespace imports in [core/workflow_capabilities.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/workflow_capabilities.py).
+- Cleaned up tests:
+  - [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py) no longer duplicates explicit `autoloop_v3.core` failed-import assertions outside strictness coverage.
+  - [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py) now checks for actual `runtime` / `workflows` import statements instead of raw substrings.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/implement/phases/compatibility-bridge-removal/implementation_notes.md) and appended the non-obvious optimizer import-path decision under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt).
+
+Key findings / decisions
+
+- In this checkout, the broader `autoloop_v3.*` source tree is already gone; leaving maintained tests or workflows on `autoloop_v3.runtime` / `extensions` / `workflows` / `autoloop_optimizer` was not a safe “non-change”, because those imports were already broken.
+- The real maintained optimizer helper surface is the root `autoloop_optimizer` package, so I made that package canonical instead of restoring another compatibility namespace.
+- Validation now shows only one remaining `autoloop_v3.*` reference in scope: the intentional failed-import assertion in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py).
+- `python3 -m py_compile` passed across `core/workflow_capabilities.py`, `autoloop_optimizer`, touched `workflows`, and maintained `tests/runtime`, `tests/unit`, and `tests/strictness`.
+
+Open issues / next step
+
+- I could not run `pytest`; this environment still lacks `pytest` and `pydantic`.
+- `py_compile` refreshed tracked `__pycache__/*.pyc` files again as a side effect.
+- Next step is verifier review of this updated phase slice, then targeted test execution in an environment with the project dependencies installed.

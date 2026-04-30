@@ -10,7 +10,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Callable
 
-from ..core.schema_registry import (
+from core.schema_registry import (
     WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA,
     WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA,
     WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA,
@@ -21,13 +21,13 @@ from ..core.schema_registry import (
     WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
     WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
 )
-from ..core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
-from ..runtime.loader import resolve_workflow_reference
-from ..runtime.workspace import list_run_records
+from core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
+from runtime.loader import resolve_workflow_reference
+from runtime.workspace import list_run_records
 
 from ._selected_workflow import capture_selected_workflow, inspect_selected_workflow
-from ..stdlib.lifecycle import write_workflow_json
-from ..stdlib.validation import (
+from stdlib.lifecycle import write_workflow_json
+from stdlib.validation import (
     require_non_empty_string,
     require_positive_int,
     require_string_list,

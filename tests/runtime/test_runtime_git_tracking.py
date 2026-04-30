@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from autoloop_v3.runtime.config import GitTrackingRuntimeConfig
+from runtime.config import GitTrackingRuntimeConfig
 from core.schema_registry import GIT_TRACKING_SCHEMA
-from autoloop_v3.runtime.git_tracking import RuntimeGitTracker, RuntimeGitTrackingError
+from runtime.git_tracking import RuntimeGitTracker, RuntimeGitTrackingError
 
 
 def _git(root: Path, *args: str) -> str:

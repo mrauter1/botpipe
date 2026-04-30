@@ -9,13 +9,13 @@ import pytest
 
 from core.providers.rendered import RenderedLLMProvider
 from core.providers.turns import ProviderTurnResult, RenderedProviderTurn
-from autoloop_v3.runtime import cli
-from autoloop_v3.runtime import providers as runtime_providers
-from autoloop_v3.runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
-import autoloop_v3.runtime.providers.claude as claude_runtime_provider
-from autoloop_v3.runtime.providers.codex import CodexProvider, CodexTransport, build_codex_provider
-import autoloop_v3.runtime.providers.codex as codex_runtime_provider
-from autoloop_v3.runtime.config import (
+from runtime import cli
+from runtime import providers as runtime_providers
+from runtime.providers.claude import ClaudeProvider, ClaudeTransport, build_claude_provider
+import runtime.providers.claude as claude_runtime_provider
+from runtime.providers.codex import CodexProvider, CodexTransport, build_codex_provider
+import runtime.providers.codex as codex_runtime_provider
+from runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
     ConfigError,
@@ -24,9 +24,9 @@ from autoloop_v3.runtime.config import (
     RuntimeConfig,
     resolve_runtime_config,
 )
-import autoloop_v3.runtime.config as runtime_config
-from autoloop_v3.runtime.provider_backends import resolve_provider_backend
-import autoloop_v3.runtime.provider_backends as provider_backends
+import runtime.config as runtime_config
+from runtime.provider_backends import resolve_provider_backend
+import runtime.provider_backends as provider_backends
 
 
 CLAUDE_HEADLESS_HELP = "--print\n-p\n--output-format\n--resume\n--model\n"
