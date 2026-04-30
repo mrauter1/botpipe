@@ -3060,3 +3060,59 @@ Open issues / next step
 - Validation performed: banned-token `rg` scans on the active tree and `python3 -m py_compile` on all touched source/test modules.
 - Not run: `pytest` or the canonical verification suite, because `pytest` is unavailable in this environment.
 - If you want the runtime verification completed in this turn, the next step is to provide an environment with `pytest` installed and run the canonical suite plus the explicit compatibility suite.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddc24-f2a2-7982-b340-9454a80a966f
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc24-f2a2-7982-b340-9454a80a966f
+---
+I’m reviewing the route/runtime canonicalization implementation against the phase contract and the run decisions, then I’ll update the phase criteria and feedback artifacts only. First I’m reading the current criteria, feedback, notes, and the request-relevant source/test files that changed or now define the compatibility boundary.
+
+Reviewing the implemented cleanup against the phase contract now. I’m checking whether legacy compatibility stayed confined to explicit migration seams, and whether the review artifacts reflect the actual state.
+
+The strictness scan is tighter than before; now I’m verifying whether the implementation still accepts legacy in-memory contracts through active compiler and validation paths, which would violate the requested compatibility quarantine.
+
+I found active validation and compiler code still reaching into the compatibility module. I’m drilling into whether that path is limited to persisted-run readers or whether it still widens the live authoring surface.
+
+The main risk is confirmed: the compatibility quarantine is incomplete. I’m doing one more pass for residual banned vocabulary in maintained stdlib/runtime surfaces, then I’ll write the review artifacts with the criteria state that matches that gap.
+
+I’ve narrowed this to one material blocking gap rather than a long list of symptoms. I’m writing that finding into the phase feedback now and leaving the criteria unchecked because the active compiler/validation surface still carries live legacy acceptance.
+
+Scope considered
+
+- Phase-local review for `route-runtime-canonicalization`.
+- Request-relevant route/runtime/compiler/static-graph/stdlib cleanup, with compatibility quarantine behavior checked against the run decisions and implementation notes.
+
+What I analyzed
+
+- Review artifacts: `criteria.md`, `feedback.md`, `implementation_notes.md`, and `decisions.txt`.
+- Active implementation paths in `core/routes.py`, `core/_compat.py`, `core/steps.py`, `core/compiler.py`, `core/validation.py`, `core/engine.py`, `runtime/static_graph.py`, `stdlib/composition.py`, `stdlib/__init__.py`, and `tests/strictness/test_no_compat.py`.
+- Targeted repo scans for `SUCCESS`, `RouteInfo`, `route_infos`, `required_outputs`, and related compatibility hooks across active code and tests.
+
+What I reviewed
+
+- `stdlib` cleanup is largely in place: `pair_step` is gone and `require_child_workflow_result(..., required_outputs=...)` has been removed.
+- Strictness was tightened to active roots and explicit compatibility exclusions.
+- The remaining blocker is in the active compile/validate path: `core/_compat.py` still defines live compat step wrappers and `SUCCESS`, while `core/validation.py::_valid_route_destinations` and `core/compiler.py::_compile_route` still explicitly accept and normalize that legacy terminal.
+
+Key findings / decisions
+
+- Added one blocking finding to `feedback.md` as `IMP-001`.
+- `criteria.md` remains fully unchecked because the implementation does not yet satisfy AC-1/AC-2: legacy terminal handling is still active in the main authoring/compile path instead of being isolated to persisted-run/session/checkpoint readers.
+
+Open issues / next step
+
+- Remove live `SUCCESS` acceptance from active validation/compiler and stop treating `core._compat` step wrappers as a supported in-memory authoring path.
+- Keep any retained legacy translation only in explicit persisted-run/session/checkpoint migration readers, then rerun this review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
