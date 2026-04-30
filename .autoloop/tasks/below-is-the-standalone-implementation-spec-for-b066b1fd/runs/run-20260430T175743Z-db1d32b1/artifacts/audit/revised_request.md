@@ -1,1 +1,1 @@
-# revised_request.md
+No follow-up implementation is required. The maintained simple-surface signature coverage now matches the implemented scoped-state API, `autoloop/simple.py` remains unchanged, and `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py` is fully green.
