@@ -4584,3 +4584,61 @@ No open test-audit issues for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019ddc91-9e2a-71c2-9e6f-27e9f8405ece
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019ddc91-9e2a-71c2-9e6f-27e9f8405ece
+
+
+---
+run_id=run-20260430T032812Z-1b762d28 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddc91-9e2a-71c2-9e6f-27e9f8405ece
+---
+I’m auditing the completed run against the original request, clarifications, and the final code/tests. First I’m reading the authoritative request and run artifacts, then I’ll verify the maintained code paths and strictness coverage before writing the audit files.
+
+I’ve got the request and decision history. Now I’m checking the final tree itself: the remaining `produces` footprint, the current bridge/strictness files, and the implement/test artifacts that record what was actually verified.
+
+The maintained tree scan is mostly clean from a quick search. I’m drilling into the remaining legacy-bearing files now to separate real compatibility readers from active code, and I’m reading the implement/test verifier artifacts to confirm what passed and what was flagged.
+
+I have the recorded verifier result and the only resolved review finding. Next I’m sampling the final implementation directly in the touched core/tests files to confirm the artifacts match the code that’s actually on disk.
+
+I want to settle the remaining bridge question against the actual package layout, not just the implementation notes. I’m checking the repo structure and then I’ll run the targeted verification suite once against the current tree.
+
+The canonical suite is running cleanly so far through validation, contract, and compatibility coverage. I’m waiting for the remaining runtime/provider/strictness cases to finish, then I’ll write the audit artifacts based on the verified final state.
+
+The final code and the canonical suite line up with the run artifacts so far. I’m reading the audit-owned criteria/feedback stubs now, then I’ll write the final gap report and result files.
+
+I’ve finished the audit determination: no material follow-up gap remains. I’m writing the gap report, the no-follow-up revised request, and the machine-readable audit result now.
+
+The audit artifacts are written. I’m doing one last validation pass on the three files now so the final handoff reflects exactly what’s on disk and the JSON is valid.
+
+Scope considered
+
+The immutable request snapshot, the authoritative `raw_phase_log.md`, `decisions.txt`, plan/implement/test artifacts for this run, the final maintained code and tests, the maintained-tree legacy-vocabulary scan, and a fresh rerun of the canonical verification suite.
+
+What I analyzed
+
+I checked whether active maintained `core` paths still used `produces`-family vocabulary, whether active non-migration suites still authored workflows with that surface, whether `tests/strictness/test_no_compat.py` now enforces the intended boundary, and whether the `core/__init__.py` alias cleanup was reduced to an explicit justified bridge. I also reran `.venv/bin/python -m pytest tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_compatibility_runtime.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_provider_backends.py tests/strictness/test_no_compat.py`, which passed with `259 passed`.
+
+What I changed
+
+I wrote the audit artifacts:
+- `.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T032812Z-1b762d28/artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+No material unresolved gaps remain. The final tree no longer uses active maintained `produces` / `review_produces` / `do_produces` vocabulary outside the strictness self-test, the maintained suites named in the request are canonicalized, strictness now scans the maintained tree with only explicit self-exclusion, and `core/__init__.py` no longer performs dynamic alias mirroring. The remaining bridge is justified: the alias table is centralized once in `core/_compat.py`, with thin package entrypoints preserving the required import topology.
+
+Open issues / next step
+
+No follow-up implementation is required. `audit_result.json` records `material_gaps_found: false`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
