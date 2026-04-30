@@ -92,3 +92,92 @@ phase_mode=single
 phase_ids=refresh-simple-signature-coverage
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+---
+I’m checking the phase artifacts and the simple-surface test/implementation to confirm the mismatch before editing. Then I’ll update only the maintained signature expectations, keep `autoloop/simple.py` unchanged unless a concrete mismatch appears, and run the focused suite.
+
+The implementation already shows `scope` and `item_state` on the declaration constructors, so I’m checking the exported factory signatures and the current failing assertion tuple before patching the test. After that I’ll update the phase notes and run the focused suite through `.venv/bin/python`.
+
+I’ve reproduced the single failing assertion. The fix is local to the maintained tuples in `tests/unit/test_simple_surface.py`; I’m updating those expectations to match the shipped factory order and then I’ll record the scoped change in the phase notes before rerunning the full focused file.
+
+The assertion tuples are patched. I’m running the full focused simple-surface file now, then I’ll update the notes with the final validation result and check whether this turn needs a decision entry.
+
+The focused suite is green, and the implementation stayed inside the requested blast radius. I’m making one final note update so the artifact reflects completed validation rather than a pending state.
+
+Scope considered
+
+Phase-local signature coverage only: the canonical simple-surface assertions and the required implementation artifact notes. I did not expand into `autoloop/simple.py` behavior or the other out-of-scope state/history work.
+
+What I analyzed
+
+I checked the exported factory signatures in `autoloop/simple.py` and compared them against the maintained tuples in [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:190). I also reviewed the active phase plan and updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T175743Z-db1d32b1/artifacts/implement/phases/refresh-simple-signature-coverage/implementation_notes.md:1).
+
+What I changed
+
+In [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py:190), I updated the canonical parameter-name expectations so:
+- `simple.step` now includes `scope` and `item_state` in the implemented order.
+- `simple.produce_verify_step` now includes `scope` and `item_state`, while keeping `state` in the implemented order.
+- `simple.python_step` was left unchanged because it already matched the implementation.
+
+I also recorded the scoped change, preserved invariants, and validation in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T175743Z-db1d32b1/artifacts/implement/phases/refresh-simple-signature-coverage/implementation_notes.md:10).
+
+Key findings / decisions
+
+`autoloop/simple.py` already exposed the requested public signatures, so the fix stayed in maintained test coverage only. The originally failing focused assertion reproduced exactly once, and no further implementation mismatch surfaced.
+
+Open issues / next step
+
+No open issues from this phase. Validation passed with `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py` and the focused file is fully green: `34 passed`.
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf8d-8212-7841-80db-66eddcbc23eb
+---
+I’m reviewing the phase-local diff against the accepted scope and acceptance criteria, then I’ll update the criteria checkboxes and append review feedback in the active artifact directory only.
+
+The diff is staying within the intended scope, and the focused suite reproduces green under the required interpreter. I’m updating the verifier artifacts now: all criteria pass, and I’ll record an explicit no-findings review entry with a stable ID.
+
+Scope considered
+
+Phase-local review of the simple-signature coverage change, limited to the requested test assertion updates, the implementation notes artifact, and the active review artifacts.
+
+What I analyzed
+
+I compared the changed assertion tuples in `tests/unit/test_simple_surface.py` against the implemented public factory signatures in `autoloop/simple.py`, checked the run decisions for scope constraints, and reran `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`.
+
+What I reviewed
+
+I verified that `simple.step` now expects `scope` and `item_state` in the implemented order, `simple.produce_verify_step` now expects `scope`, `state`, and `item_state` in the implemented order, and `simple.python_step` coverage remains unchanged. I also updated `criteria.md` to mark all acceptance dimensions complete and appended a no-findings entry to `feedback.md`.
+
+Key findings / decisions
+
+No blocking findings. The implementation stayed within the accepted blast radius, preserved shipped authoring behavior in `autoloop/simple.py`, and the focused suite passed with `34 passed`.
+
+Open issues / next step
+
+No open issues for this phase. Review artifacts are updated and the phase is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
