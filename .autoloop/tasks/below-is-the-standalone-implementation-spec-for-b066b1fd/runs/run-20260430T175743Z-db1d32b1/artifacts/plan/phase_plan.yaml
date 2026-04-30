@@ -1,4 +1,36 @@
 version: 1
 task_id: below-is-the-standalone-implementation-spec-for-b066b1fd
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T175743Z-db1d32b1/request.md
-phases: []
+phases:
+  - phase_id: "refresh-simple-signature-coverage"
+    title: "Refresh Simple Signature Coverage"
+    objective: "Update maintained canonical signature assertions to match the implemented scoped-state simple API and verify the focused simple-surface suite stays green."
+    status: "planned"
+    in_scope:
+      - "Adjust the canonical parameter-name expectations for simple.step in tests/unit/test_simple_surface.py."
+      - "Adjust the canonical parameter-name expectations for simple.produce_verify_step in tests/unit/test_simple_surface.py."
+      - "Keep python_step signature coverage aligned with the current implementation."
+      - "Run the focused simple-surface unit suite with the repository virtualenv interpreter."
+    out_of_scope:
+      - "Changing the shipped authoring behavior in autoloop/simple.py when the implementation already matches the requested surface."
+      - "Reopening bridge-removal, hook-rerouting, state, scoped-state, required-write, or history work without a newly reproduced signature mismatch."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "The maintained canonical signature assertion for simple.step includes scope and item_state in the implemented order."
+      - id: "AC-2"
+        text: "The maintained canonical signature assertion for simple.produce_verify_step includes scope, state, and item_state in the implemented order."
+      - id: "AC-3"
+        text: "The python_step signature assertion remains aligned with the current implementation."
+      - id: "AC-4"
+        text: "`.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py` completes without failures."
+    deliverables:
+      - "Updated plan artifact describing the signature-coverage-only change scope."
+      - "Updated canonical signature assertions in tests/unit/test_simple_surface.py."
+      - "Focused simple-surface test run confirmation."
+    risks:
+      - "A test-only change could accidentally drift from the real public signature order if the implementation is not rechecked first."
+      - "Using the wrong interpreter could produce a false-negative validation result."
+      - "Scope could expand into unrelated simple-surface cleanup if the implementation files are edited without a concrete mismatch."
+    rollback:
+      - "Revert the maintained signature expectation edits if focused verification reveals an implementation mismatch outside the approved scope."

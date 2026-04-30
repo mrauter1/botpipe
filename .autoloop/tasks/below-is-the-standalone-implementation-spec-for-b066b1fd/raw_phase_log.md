@@ -2477,3 +2477,40 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T175743Z-db1d32b1/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019ddf8a-203d-7620-a8c4-1a7cc515c213
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019ddf8a-203d-7620-a8c4-1a7cc515c213
+
+
+---
+run_id=run-20260430T175743Z-db1d32b1 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddf8a-203d-7620-a8c4-1a7cc515c213
+---
+I’m reading the request, current plan artifacts, and the signature-related code/tests first so the plan stays tight to the actual mismatch and doesn’t drift into unrelated state work.
+
+The run artifacts are mostly empty, so I’m grounding the plan in the actual `simple.py` and signature test expectations now, plus checking whether the raw log added any later clarification.
+
+The implemented declarations already expose the scoped-state parameters at the class layer. I’m checking the public factory functions now, because the plan needs to target signature metadata without changing those call paths.
+
+The factories already take the requested canonical arguments. The failure is likely in maintained signature assertions rather than behavior, and the local shell doesn’t have `pytest` on `PATH`, so I’m checking the project’s test entrypoint before I write the validation step into the plan.
+
+I’ve confirmed the public factories already accept the scoped-state keywords. One remaining check is whether the project expects `python3` or a local runner so the plan can name a real focused verification command instead of a placeholder.
+
+The focused test reproduces under `.venv/bin/python -m pytest`, and the failure is exactly the stale canonical parameter list in `tests/unit/test_simple_surface.py`. I’m checking for any other maintained signature metadata so the plan doesn’t miss a second edit surface.
+
+I have enough context to write the plan artifacts now. The plan will stay single-phase: update the maintained signature coverage in `tests/unit/test_simple_surface.py`, keep `autoloop/simple.py` unchanged unless a concrete signature mismatch appears, and verify with the focused simple-surface suite under `.venv`.
+
+I introduced a small YAML shape error while patching `phase_plan.yaml` by duplicating the `phases` key. I’m correcting that now so the machine-readable artifact stays valid.
+
+I’ve written the plan, phase breakdown, feedback note, and turn-local decisions. I’m doing one quick readback pass on those artifacts to catch formatting or scope drift before I close the planning turn.
+
+Updated the planning artifacts for this run.
+
+The plan is now in [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T175743Z-db1d32b1/artifacts/plan/plan.md), with a single implementation phase in [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T175743Z-db1d32b1/artifacts/plan/phase_plan.yaml). I also appended the plan feedback note in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T175743Z-db1d32b1/artifacts/plan/feedback.md) and recorded the non-obvious constraints in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T175743Z-db1d32b1/decisions.txt).
+
+Key finding: the implemented `autoloop/simple.py` factory signatures already include the requested scoped-state parameters, and the reproduced failure comes from stale canonical expectations in `tests/unit/test_simple_surface.py`. I verified the failure with `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py -k canonical_simple_signatures_expose_only_canonical_argument_names`, and the plan directs focused validation with `.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py`.
