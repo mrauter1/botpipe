@@ -111,3 +111,97 @@ The planner should revise the plan so only persisted-run/session/checkpoint read
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019ddc05-1eea-7962-8c54-cccee68366f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019ddc05-1eea-7962-8c54-cccee68366f7
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc05-1eea-7962-8c54-cccee68366f7
+---
+I’m addressing the verifier’s two blocking findings directly: tighten the compatibility boundary to real persisted-run readers only, and restore `workflows/` to the strictness scan scope so maintained workflow code stays covered. I’ll update the plan, phase contract, feedback history, and the current decisions block accordingly.
+
+I’ve isolated the two corrections the verifier asked for. I’m tightening every plan reference that still permits fixture-driven retained compatibility, and I’m explicitly restoring `workflows/` to the maintained strictness surface so the phase contract can’t silently weaken that coverage again.
+
+The blocking points are patched in the artifacts. I’m doing a final consistency pass now so the narrative plan, the phase YAML, and the cross-turn decisions all enforce the same narrower compatibility rule and the same strictness coverage boundary.
+
+Scope considered
+
+Run-local planning artifacts for the canonical public-surface cleanup, plus the verifier’s two blocking findings and the request’s strict legacy-boundary constraints.
+
+What I analyzed
+
+The verifier correctly identified two drift points in the first plan:
+1. the plan still allowed retained implementation compatibility for fixture-driven cases, which exceeded the request’s persisted-run-reader-only allowance
+2. the strictness plan had dropped repo-root `workflows/` from the maintained enforcement surface
+
+What I changed
+
+Updated [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/plan.md>) to:
+- restrict retained implementation compatibility to real persisted-run/session/checkpoint readers only
+- state that fixtures may cover old payloads but do not justify active implementation compatibility
+- restore maintained `workflows/*` to scope, strictness coverage, validation, and risk notes
+
+Updated [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/phase_plan.yaml>) to:
+- tighten phase 2 acceptance/deliverable language to persisted-run/session/checkpoint readers only
+- make phase 3 explicitly scan `workflows/` as part of the maintained tree
+
+Appended closure context to [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/feedback.md>) and added two preserving constraints under the current turn header in [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/decisions.txt>).
+
+Key findings / decisions
+
+Only explicit persisted-run/session/checkpoint readers may justify retained legacy parsing or symbols in implementation code.
+Repo-root `workflows/` is part of the maintained strictness surface for this cleanup and must stay covered by banned-name enforcement.
+
+Open issues / next step
+
+The plan is revised to address the two blocking verifier findings. Next step is verifier re-check of the updated plan and phase contract.
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019ddc05-1eea-7962-8c54-cccee68366f7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019ddc05-1eea-7962-8c54-cccee68366f7
+
+
+---
+run_id=run-20260430T013335Z-74c96be3 | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019ddc05-1eea-7962-8c54-cccee68366f7
+---
+I’m re-verifying the revised plan with focus on the two previously blocking points and the request’s acceptance criteria. I’ll check the updated artifacts, confirm the compatibility boundary and strictness scope now match the request, then mark the criteria accordingly.
+
+The revised plan now matches the request on the two previously unsafe points, and the phase YAML is valid. I’m marking the criteria complete and appending a final verifier note that the prior blocking findings are resolved.
+
+Scope considered
+
+Run-local verification of the revised planning artifacts against the immutable request, the raw-log authority chain, and the shared decisions ledger. I focused on the previously blocking compatibility-boundary and strictness-scope issues, then re-checked overall plan completeness and YAML validity.
+
+What I analyzed
+
+The revised `plan.md` now limits retained implementation compatibility to explicit persisted-run/session/checkpoint readers and no longer treats fixtures as justification for live legacy behavior. The strictness plan now explicitly includes repo-root `workflows/`, which restores maintained-tree coverage in line with the request and the current repository shape.
+
+What I reviewed
+
+I reviewed [plan.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/plan.md>), [phase_plan.yaml](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/phase_plan.yaml>), [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/criteria.md>), [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/artifacts/plan/feedback.md>), and [decisions.txt](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-revised-standalone-implementation-s-9b605d02/runs/run-20260430T013335Z-74c96be3/decisions.txt>). I also validated that `phase_plan.yaml` parses and that required lists are non-empty.
+
+Key findings / decisions
+
+No blocking findings remain.
+I updated `criteria.md` to check all verification boxes.
+I appended `PLAN-003 | non-blocking` to `feedback.md` to record that PLAN-001 and PLAN-002 are resolved.
+
+Open issues / next step
+
+The planning artifacts are now complete and internally consistent. The next step is to hand this plan to implementation.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

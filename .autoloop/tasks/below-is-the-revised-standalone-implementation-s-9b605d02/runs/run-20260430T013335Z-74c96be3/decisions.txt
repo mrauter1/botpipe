@@ -2,3 +2,6 @@
 Treat `tests/runtime/test_compatibility_runtime.py` and any explicitly renamed compatibility fixtures as the only allowed home for `SUCCESS`, `RouteInfo`, `route_infos`, and `required_outputs`; active suites must migrate to `FINISH` and `required_writes`.
 Keep historical terminal normalization only for persisted-run/session/checkpoint readers, and move that logic behind an explicit internal compatibility or migration module instead of active `core` exports.
 Do not remove the `core` to `autoloop_v3.core` bridge blindly; this checkout has no real `autoloop_v3.core` source package, so alias removal must be paired with import-path cleanup or an explicit replacement compatibility package.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260430T013335Z-74c96be3" ts="2026-04-30T01:40:41.873152+00:00" />
+Fixtures and compatibility tests may exercise old serialized payloads, but they do not justify retaining legacy parsing or symbols anywhere outside explicit persisted-run/session/checkpoint readers.
+The maintained strictness surface for this cleanup includes repo-root `workflows/` alongside `autoloop/`, `core/`, `runtime/`, `stdlib/`, and active tests.
