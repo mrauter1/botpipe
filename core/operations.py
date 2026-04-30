@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import hashlib
 import inspect
 import json
 from pathlib import Path
 import re
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from pydantic import BaseModel, TypeAdapter
 
@@ -43,6 +43,7 @@ class OperationRuntime:
     step_visit: int | None = None
     default_session_name: str = DEFAULT_SESSION_NAME
     occurrence_counts: dict[str, int] = field(default_factory=dict)
+    event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +120,7 @@ def execute_step_operation(ctx: Context, *, step_name: str, spec: OperationStepS
         step_visit=_step_visit(ctx),
         default_session_name=runtime.default_session_name,
         occurrence_counts=runtime.occurrence_counts,
+        event_sink=runtime.event_sink,
     )
     value = _run_operation(operation_runtime, spec=spec, callsite=f"step:{step_name}")
     _record_context_value(ctx, step_name=step_name, value=value)
@@ -163,6 +165,7 @@ def _resolve_runtime(
             step_visit=ambient.step_visit,
             default_session_name=ambient.default_session_name,
             occurrence_counts=ambient.occurrence_counts,
+            event_sink=ambient.event_sink,
         )
     if provider is None:
         raise RuntimeError("llm() and classify() require an active workflow runtime or an explicit provider=...")
@@ -176,6 +179,7 @@ def _resolve_runtime(
         source_hash=None,
         step_name=None,
         step_visit=_step_visit(context),
+        event_sink=None,
     )
 
 
@@ -208,6 +212,12 @@ def _run_operation(
     retry_feedback: str | None = None
     for attempt in range(1, max_attempts + 1):
         try:
+            _emit_operation_attempt_event(
+                runtime,
+                "provider_attempt_started",
+                operation_kind=spec.operation_kind,
+                attempt=attempt,
+            )
             response = runtime.provider.run_operation(
                 OperationRequest(
                     step_name=runtime.step_name or "<operation>",
@@ -223,6 +233,13 @@ def _run_operation(
                 )
             )
             value = _parse_operation_value(spec=spec, raw_output=response.raw_output)
+            _emit_operation_attempt_event(
+                runtime,
+                "provider_attempt_finished",
+                operation_kind=spec.operation_kind,
+                attempt=attempt,
+                token_usage=response.usage,
+            )
             _persist_session(runtime, response.session)
             _record_attempt(
                 replay_store,
@@ -244,6 +261,13 @@ def _run_operation(
             _write_replay_store(replay_path, replay_store)
             return value
         except Exception as exc:
+            _emit_operation_attempt_event(
+                runtime,
+                "provider_attempt_failed",
+                operation_kind=spec.operation_kind,
+                attempt=attempt,
+                failure_context=_operation_failure_context(exc),
+            )
             _record_attempt(
                 replay_store,
                 replay_key=replay_key,
@@ -368,6 +392,78 @@ def _parse_classification_value(raw_output: str, *, choices: Sequence[str]) -> s
         error._provider_retry_kind = "invalid_operation_choice"
         raise error
     return candidate
+
+
+def _emit_operation_attempt_event(
+    runtime: OperationRuntime,
+    event_type: str,
+    *,
+    operation_kind: str,
+    attempt: int,
+    token_usage: Any | None = None,
+    failure_context: Mapping[str, Any] | None = None,
+) -> None:
+    if runtime.event_sink is None:
+        return
+    payload: dict[str, Any] = {
+        "step_name": runtime.step_name or "<operation>",
+        "turn_kind": "operation",
+        "operation_kind": operation_kind,
+        "attempt": attempt,
+    }
+    if runtime.step_visit is not None:
+        payload["visit"] = runtime.step_visit
+    if runtime.step_name is not None:
+        scope_name, item_id = _operation_scope_item(runtime.context)
+        payload["step_execution_id"] = _operation_step_execution_id(
+            step_name=runtime.step_name,
+            visit=runtime.step_visit,
+            scope_name=scope_name,
+            item_id=item_id,
+        )
+        if scope_name is not None:
+            payload["scope"] = scope_name
+        if item_id is not None:
+            payload["item_id"] = item_id
+    if token_usage is not None:
+        payload["token_usage"] = {key: value for key, value in asdict(token_usage).items() if value is not None}
+    if failure_context:
+        payload["failure_context"] = dict(failure_context)
+    runtime.event_sink(event_type, payload)
+
+
+def _operation_scope_item(ctx: Context | None) -> tuple[str | None, str | None]:
+    if ctx is None:
+        return None, None
+    scope_name = getattr(ctx, "_active_worklist", None)
+    if not isinstance(scope_name, str) or not scope_name:
+        return None, None
+    item_id = _scope_item_id(ctx)
+    return scope_name, item_id
+
+
+def _operation_step_execution_id(
+    *,
+    step_name: str,
+    visit: int | None,
+    scope_name: str | None,
+    item_id: str | None,
+) -> str | None:
+    if visit is None:
+        return None
+    if scope_name is not None and item_id is not None:
+        return f"{step_name}:{scope_name}:{item_id}:{visit}"
+    return f"{step_name}:{visit}"
+
+
+def _operation_failure_context(exc: Exception) -> dict[str, Any]:
+    failure_context = getattr(exc, "_failure_context", None)
+    if isinstance(failure_context, dict) and failure_context:
+        return dict(failure_context)
+    return {
+        "error": str(exc),
+        "error_type": type(exc).__name__,
+    }
 
 
 def _record_context_value(ctx: Context, *, step_name: str, value: Any) -> None:

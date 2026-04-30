@@ -141,6 +141,52 @@ def test_runtime_trace_records_step_started_and_finished(tmp_path: Path) -> None
     assert lines[1]["state_after"]["note"] == "after"
 
 
+def test_runtime_trace_records_step_execution_identity(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+    writer = _writer(run_dir)
+    start = StepStart(
+        binding=_binding(run_dir),
+        step_name="assessment",
+        step_kind="produce_verify",
+        state=_State(note="before"),
+        visit=3,
+        step_execution_id="assessment:articles:item-7:3",
+        scope="articles",
+        item_id="item-7",
+    )
+    finish = StepFinish(
+        binding=_binding(run_dir),
+        step_name="assessment",
+        step_kind="produce_verify",
+        state_before=_State(note="before"),
+        state_after=_State(note="after"),
+        event=Event(tag="approved", reason="ok"),
+        outcome=Outcome(raw_output="raw", tag="approved", reason="ok"),
+        visit=3,
+        step_execution_id="assessment:articles:item-7:3",
+        scope="articles",
+        item_id="item-7",
+    )
+
+    writer.step_started(sequence=1, event=start, commit_before_step="abc123")
+    writer.step_finished(sequence=1, event=finish, commit_before_step="abc123")
+
+    records = [
+        json.loads(line)
+        for line in (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert records[0]["visit"] == 3
+    assert records[0]["step_execution_id"] == "assessment:articles:item-7:3"
+    assert records[0]["scope"] == "articles"
+    assert records[0]["item_id"] == "item-7"
+    assert records[1]["visit"] == 3
+    assert records[1]["step_execution_id"] == "assessment:articles:item-7:3"
+    assert records[1]["scope"] == "articles"
+    assert records[1]["item_id"] == "item-7"
+
+
 def test_runtime_trace_writes_produce_verify_raw_producer_and_verifier_files(tmp_path: Path) -> None:
     run_dir = _run_dir(tmp_path)
     writer = _writer(run_dir)
@@ -254,6 +300,29 @@ def test_runtime_trace_records_provider_usage_when_available(tmp_path: Path) -> 
     record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert record["provider_usage"]["producer"]["total_tokens"] == 12
     assert record["provider_usage"]["verifier"]["total_tokens"] == 5
+
+
+def test_runtime_trace_records_generic_runtime_events(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+    writer = _writer(run_dir)
+
+    writer.runtime_event(
+        event_type="provider_attempt_finished",
+        step_name="assessment",
+        turn_kind="verifier",
+        attempt=2,
+        visit=4,
+        step_execution_id="assessment:4",
+        token_usage={"total_tokens": 9, "input_tokens": 4},
+    )
+
+    record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert record["event_type"] == "provider_attempt_finished"
+    assert record["step_name"] == "assessment"
+    assert record["attempt"] == 2
+    assert record["visit"] == 4
+    assert record["step_execution_id"] == "assessment:4"
+    assert record["token_usage"] == {"total_tokens": 9, "input_tokens": 4}
 
 
 def test_runtime_trace_can_be_disabled(tmp_path: Path) -> None:

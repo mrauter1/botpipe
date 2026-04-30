@@ -82,6 +82,14 @@ class RuntimeTraceWriter:
             step_kind=event.step_kind,
             git={"commit_before_step": commit_before_step},
         )
+        if event.visit is not None:
+            payload["visit"] = event.visit
+        if event.step_execution_id is not None:
+            payload["step_execution_id"] = event.step_execution_id
+        if event.scope is not None:
+            payload["scope"] = event.scope
+        if event.item_id is not None:
+            payload["item_id"] = event.item_id
         if self._config.include_state_snapshots:
             payload["state"] = event.state.model_dump(mode="json")
         self._write(payload)
@@ -122,6 +130,14 @@ class RuntimeTraceWriter:
             raw_output_refs=raw_output_refs,
             provider_usage=self._serialize_provider_usage(event.provider_usage),
         )
+        if event.visit is not None:
+            payload["visit"] = event.visit
+        if event.step_execution_id is not None:
+            payload["step_execution_id"] = event.step_execution_id
+        if event.scope is not None:
+            payload["scope"] = event.scope
+        if event.item_id is not None:
+            payload["item_id"] = event.item_id
         if event.candidate_route is not None:
             payload["candidate_route"] = event.candidate_route
         if event.final_route is not None:
@@ -161,6 +177,15 @@ class RuntimeTraceWriter:
         )
         if self._config.include_state_snapshots and event.state is not None:
             payload["state"] = event.state.model_dump(mode="json")
+        self._write(payload)
+
+    def runtime_event(self, *, event_type: str, **fields: object) -> None:
+        if not self._config.enabled:
+            return
+        self._run_guarded(lambda: self._write_runtime_event(event_type=event_type, fields=fields))
+
+    def _write_runtime_event(self, *, event_type: str, fields: Mapping[str, object]) -> None:
+        payload = self._base_payload(event_type=event_type, **fields)
         self._write(payload)
 
     def fatal(
