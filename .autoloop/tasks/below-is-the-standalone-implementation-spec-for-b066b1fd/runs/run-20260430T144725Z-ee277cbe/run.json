@@ -18,16 +18,16 @@
       "history-telemetry"
     ],
     "explicit": true,
-    "current_phase_index": 4,
-    "current_phase_id": "effective-required-writes"
+    "current_phase_index": 5,
+    "current_phase_id": "history-telemetry"
   },
   "phase_status": {
     "compatibility-bridge-removal": "completed",
     "hook-rerouting": "completed",
     "state-surfaces": "completed",
     "scoped-item-state": "completed",
-    "effective-required-writes": "in_progress",
-    "history-telemetry": "planned"
+    "effective-required-writes": "completed",
+    "history-telemetry": "in_progress"
   },
   "phase_history": [
     {
@@ -87,6 +87,19 @@
       "run_id": "run-20260430T144725Z-ee277cbe",
       "status": "in_progress",
       "ts": "2026-04-30T16:51:55.863565+00:00"
+    },
+    {
+      "phase_id": "effective-required-writes",
+      "run_id": "run-20260430T144725Z-ee277cbe",
+      "status": "completed",
+      "ts": "2026-04-30T17:12:08.347309+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "history-telemetry",
+      "run_id": "run-20260430T144725Z-ee277cbe",
+      "status": "in_progress",
+      "ts": "2026-04-30T17:12:08.351373+00:00"
     }
   ]
 }
