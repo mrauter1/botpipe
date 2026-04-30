@@ -18,12 +18,12 @@
       "history-telemetry"
     ],
     "explicit": true,
-    "current_phase_index": 0,
-    "current_phase_id": "compatibility-bridge-removal"
+    "current_phase_index": 1,
+    "current_phase_id": "hook-rerouting"
   },
   "phase_status": {
-    "compatibility-bridge-removal": "in_progress",
-    "hook-rerouting": "planned",
+    "compatibility-bridge-removal": "completed",
+    "hook-rerouting": "in_progress",
     "state-surfaces": "planned",
     "scoped-item-state": "planned",
     "effective-required-writes": "planned",
@@ -35,6 +35,19 @@
       "run_id": "run-20260430T144725Z-ee277cbe",
       "status": "in_progress",
       "ts": "2026-04-30T14:58:26.758717+00:00"
+    },
+    {
+      "phase_id": "compatibility-bridge-removal",
+      "run_id": "run-20260430T144725Z-ee277cbe",
+      "status": "completed",
+      "ts": "2026-04-30T15:34:07.484664+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "hook-rerouting",
+      "run_id": "run-20260430T144725Z-ee277cbe",
+      "status": "in_progress",
+      "ts": "2026-04-30T15:34:07.486676+00:00"
     }
   ]
 }
