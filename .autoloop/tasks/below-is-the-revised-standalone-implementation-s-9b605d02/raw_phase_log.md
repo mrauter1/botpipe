@@ -2203,3 +2203,52 @@ The targeted verification gate passed:
 Result: `111 passed`
 
 There are still 14 pre-existing Pydantic warnings about `schema` field names in `workflows/workflow_run_traces_to_optimization_candidates/contracts.py`. The broader legacy suites `tests/contract/test_engine_contracts.py` and `tests/runtime/test_compatibility_runtime.py` were not migrated in this phase and are outside this gate by design.
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+
+
+---
+run_id=run-20260429T212742Z-82f66970 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddbeb-0119-7872-b06f-6d50e3c0f983
+---
+I’m validating the canonical gate as reviewer with the same targeted suite the implementation notes cite, then I’ll update the review artifacts based on that evidence.
+
+Reviewing the verification gate artifacts and confirming the targeted suite result before I update the reviewer outputs.
+
+The targeted suite passed cleanly; I’m checking the actual diff surface and implementation notes against the phase contract before I mark the gate complete.
+
+I’ve narrowed the review to the phase-owned change list and I’m spot-checking the import seam and test updates against the recorded decisions rather than the unrelated repo-wide churn.
+
+The deleted mirror isn’t present in the worktree, so I’m comparing the current files against `HEAD` blobs directly to verify the phase edits rather than the repo move itself.
+
+The phase contract is met as implemented: the strictness gate now proves the canonical public/runtime surface, and I did not find a correctness or regression issue in the scoped changes.
+
+Scope considered
+
+Phase-local verification artifacts plus the scoped implementation surface recorded in `implementation_notes.md`: strictness coverage, canonical runtime/provider/topology assertions, workflow-parity tests, and the repo-root import fallback changes in `runtime/*` and `extensions/*`.
+
+What I analyzed
+
+I read the phase contract, `implementation_notes.md`, and the run-local decisions ledger, then inspected the relevant test files and representative import-seam changes. I also reran the targeted verification command and confirmed the result was `111 passed, 14 warnings`, with the warnings matching the documented pre-existing Pydantic `schema`-field warnings.
+
+What I reviewed
+
+I checked that the strictness tests enforce banned public names and removed emitted payload keys on the intended canonical surface, that the new contract tests assert `FINISH`/`required_writes`/producer-verifier split behavior, and that the workflow-parity tests cover copied-package execution plus canonical session artifact layout. I also verified the review artifacts were updated to reflect a complete pass.
+
+Key findings / decisions
+
+No blocking or non-blocking findings in scoped review. The phase implementation matches the recorded decision to gate on the canonical public/runtime surface rather than the out-of-phase low-level compatibility harness, and the targeted regression suite passed.
+
+Open issues / next step
+
+No reviewer action remains for this phase. The only noted warnings are the pre-existing Pydantic `schema` shadowing warnings already called out in the implementation notes.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
