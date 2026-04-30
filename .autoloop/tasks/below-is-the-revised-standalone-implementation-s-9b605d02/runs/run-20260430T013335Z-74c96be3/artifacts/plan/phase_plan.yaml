@@ -49,12 +49,12 @@ phases:
       - id: "AC-1"
         text: "Active compiler/runtime/static-graph/provider code paths no longer depend on `SUCCESS`, `RouteInfo`, `route_infos`, `required_outputs`, or `route_required_outputs`."
       - id: "AC-2"
-        text: "Any remaining legacy parsing is isolated to explicit persisted-run or migration-reader code."
+        text: "Any remaining legacy parsing is isolated to explicit persisted-run/session/checkpoint readers."
       - id: "AC-3"
         text: "Maintained `stdlib` helpers no longer expose removed `PairStep` or `produces` vocabulary."
     deliverables:
       - "Canonical route/runtime/compiler implementation updates."
-      - "Explicit internal compatibility helper for any retained persisted-run migration logic."
+      - "Explicit internal compatibility helper for any retained persisted-run/session/checkpoint migration logic."
       - "Updated static-graph/runtime payload assertions."
     risks:
       - "Route metadata migration can break old in-memory fixtures if compatibility and active paths are not clearly separated."
@@ -69,7 +69,7 @@ phases:
     in_scope:
       - "Migrate active contract/unit/runtime/provider suites away from legacy names."
       - "Quarantine compatibility-only coverage and fixtures under explicit migration naming."
-      - "Expand strictness scanning to maintained code and active tests while excluding only explicit compatibility fixtures."
+      - "Expand strictness scanning to maintained code, including repo-root `workflows/`, and active tests while excluding only explicit compatibility fixtures."
       - "Run canonical verification and targeted compatibility regressions."
     out_of_scope:
       - "Weakening strictness by broadly excluding `core`, `runtime`, or all tests."
@@ -78,7 +78,7 @@ phases:
       - "route-runtime-canonicalization"
     acceptance_criteria:
       - id: "AC-1"
-        text: "Strictness tests fail on banned names across active code/tests outside explicit migration fixtures."
+        text: "Strictness tests fail on banned names across active code/tests, including repo-root `workflows/`, outside explicit migration fixtures."
       - id: "AC-2"
         text: "Named active suites such as engine-contract and validation tests use canonical `FINISH` and `required_writes` vocabulary."
       - id: "AC-3"
@@ -86,7 +86,7 @@ phases:
     deliverables:
       - "Updated active tests."
       - "Compatibility-only fixture/suite quarantine."
-      - "Strictness scan coverage update and verification results."
+      - "Strictness scan coverage update for `autoloop/`, `core/`, `runtime/`, `stdlib/`, `workflows/`, and active tests, plus verification results."
     risks:
       - "Expanding strictness before fixture quarantine will create noisy failures."
       - "Test migrations may mask behavioral regressions if canonical assertions are not kept semantically equivalent."

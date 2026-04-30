@@ -5,8 +5,8 @@
 Finish the post-pass cleanup so the documented greenfield surface is actually canonical:
 
 - `autoloop.simple` and `autoloop` stay as the only public authoring surface.
-- active `core/*`, `runtime/*`, `stdlib/*`, and active test suites stop exposing or depending on legacy names such as `SUCCESS`, `RouteInfo`, `route_infos`, `required_outputs`, `LLMStep`, `PairStep`, and `SystemStep`.
-- any remaining compatibility support is explicit, internal, and justified by persisted-run or fixture migration readers only.
+- active `core/*`, `runtime/*`, `stdlib/*`, maintained `workflows/*`, and active test suites stop exposing or depending on legacy names such as `SUCCESS`, `RouteInfo`, `route_infos`, `required_outputs`, `LLMStep`, `PairStep`, and `SystemStep`.
+- any remaining implementation compatibility support is explicit, internal, and justified only by real persisted-run/session/checkpoint readers; fixtures may cover old payloads but do not justify retained active implementation compatibility.
 
 Out of scope:
 
@@ -60,7 +60,7 @@ Expected active naming after cleanup:
 Legacy-only naming allowed after cleanup:
 
 - persisted-run terminal normalization from historical `"SUCCESS"` payloads
-- compatibility readers or quarantined migration fixtures that intentionally exercise old serialized shapes
+- explicit persisted-run/session/checkpoint readers that intentionally normalize old serialized shapes
 
 ## Milestones
 
@@ -90,7 +90,7 @@ Legacy-only naming allowed after cleanup:
   - `required_writes` instead of `required_outputs`
   - simple/public APIs instead of direct legacy step classes where the suite is validating active public behavior
 - update strictness scanning to cover maintained implementation and active tests:
-  - include `autoloop/`, `core/`, `runtime/`, `stdlib/`, and active `tests/`
+  - include `autoloop/`, `core/`, `runtime/`, `stdlib/`, maintained `workflows/`, and active `tests/`
   - exclude only explicit compatibility/migration fixtures and legacy docs/templates already treated separately by other tests
 - rerun the canonical verification suite plus targeted compatibility tests to confirm the quarantine boundary is correct
 
@@ -99,7 +99,7 @@ Legacy-only naming allowed after cleanup:
 ### Compatibility seam
 
 - persisted-run/session/checkpoint readers already have a legitimate migration need for terminal normalization; keep that behavior but move it behind an explicit internal compatibility helper instead of leaving `SUCCESS` on active imports
-- route metadata compatibility should follow the same rule: only keep old `RouteInfo` or `required_outputs` parsing if a real serialized-reader path still consumes it
+- route metadata compatibility should follow the same rule: only keep old `RouteInfo` or `required_outputs` parsing if a real persisted-run/session/checkpoint reader still consumes it
 - active in-memory authoring/compilation should not accept or propagate `route_infos`, `required_outputs`, or `SUCCESS`
 
 ### Alias handling
@@ -110,6 +110,7 @@ Legacy-only naming allowed after cleanup:
 ### Test quarantine boundary
 
 - keep compatibility coverage separate instead of weakening strictness for the whole tree
+- tests and fixtures may continue to assert old serialized payload normalization, but that coverage does not justify leaving legacy names or parsing on active implementation paths
 - likely quarantine candidates:
   - `tests/runtime/test_compatibility_runtime.py`
   - fixtures currently built solely for compatibility serialized-shape coverage, such as [tests/fixtures/toy_runtime_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/fixtures/toy_runtime_workflow.py), if they cannot be migrated cleanly
@@ -123,7 +124,7 @@ Legacy-only naming allowed after cleanup:
   - canonical topology/static-graph payloads contain `required_writes` and never emit `SUCCESS`, `route_infos`, `route_required_outputs`, or `required_outputs`
   - active runtime/provider contract payloads continue to expose the canonical route/write shape only
 - strictness tests:
-  - active maintained code/tests fail on banned legacy names outside explicit compatibility fixtures
+  - active maintained code/tests, including repo-root `workflows/`, fail on banned legacy names outside explicit compatibility fixtures
 - compatibility tests:
   - persisted-run migration readers still normalize historical terminal/session payloads as before
 - full regression check:
@@ -134,6 +135,7 @@ Legacy-only naming allowed after cleanup:
 
 - Alias removal risk: hidden dependence on `autoloop_v3.core` imports may break tests or installed usage unless import paths are migrated in the same slice or replaced with an explicit compat module.
 - Route metadata risk: removing `RouteInfo` too early can break any remaining serialized-reader or test fixture that still constructs legacy route metadata in memory.
+- Workflow strictness risk: omitting repo-root `workflows/` from the maintained scan would leave real authoring code outside the banned-name gate and permit regressions to re-enter unnoticed.
 - Strictness risk: broadening the scan before quarantining compatibility fixtures will create noisy failures and obscure real regressions.
 - Stdlib risk: deleting `pair_step` without replacing its active consumers can break maintained workflow helpers that still compile through strict `PairStep`.
 
