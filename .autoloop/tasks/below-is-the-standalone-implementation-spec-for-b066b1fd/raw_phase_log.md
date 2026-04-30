@@ -440,3 +440,67 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+
+
+---
+run_id=run-20260430T144725Z-ee277cbe | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019ddee5-fbcc-7b62-9603-183e85107bc7
+---
+I’m mapping the compatibility-removal behavior to the current tests first so I only add coverage where the changed surface still has gaps. Then I’ll tighten the strictness checks and update the phase test artifacts with the actual coverage map.
+
+The current tests already cover most of the public-surface break, but they don’t explicitly guard the broader dead `autoloop_v3.*` namespaces that caused the reviewer blocker. I’m adding that regression check in strictness, then I’ll document the exact coverage map in the phase test artifacts.
+
+I’m editing the strictness layer now. The goal is one focused regression check: guard the dead non-core `autoloop_v3.*` namespaces that broke the maintained suite, without reintroducing duplicate bridge-failure assertions outside strictness.
+
+The new strictness check is in place. I’m validating the scan behavior and recording the one non-obvious test decision: the maintained-source scan now includes `autoloop_optimizer` and `tests/strictness`, but still excludes this strictness file itself so the intentional `autoloop_v3.core` failure assertion doesn’t poison the regression check.
+
+The strictness file validates cleanly and the repo-wide scan for dead non-core `autoloop_v3` namespaces is empty. I’m recording that scan boundary in the decision ledger, then I’ll close with the phase test summary and current validation gap.
+
+I’ve finished the file edits. I’m doing a final pass over the updated strategy and feedback artifacts so the test-phase deliverables line up exactly with the coverage I added.
+
+Scope considered
+
+- Phase-local compatibility-bridge-removal test scope only: strictness coverage, adjacent maintained regression tests, and the phase test artifacts.
+- I focused on the changed import/compatibility behavior rather than runtime/state/telemetry behavior.
+
+What I analyzed
+
+- Existing coverage in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py), [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), and [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py).
+- The reviewer-cleared import migration across `autoloop_optimizer`, `workflows`, and maintained tests to identify the remaining regression gap the tests were not explicitly guarding.
+- The current test-phase artifacts and the run-local decisions ledger.
+
+What I changed
+
+- Added a new strictness regression test in [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py) that scans maintained Python roots for deleted non-core `autoloop_v3` namespace imports:
+  - `autoloop_v3.runtime`
+  - `autoloop_v3.extensions`
+  - `autoloop_v3.stdlib`
+  - `autoloop_v3.workflows`
+  - `autoloop_v3.autoloop_optimizer`
+- Centralized the maintained Python scan roots in that strictness file so the existing core-compatibility scan and the new non-core namespace scan share the same maintained-surface boundary.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/compatibility-bridge-removal/test_strategy.md) with the explicit behavior-to-test coverage map, preserved invariants, edge/failure-path handling, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/artifacts/test/phases/compatibility-bridge-removal/feedback.md).
+- Added the non-obvious scan-boundary decision under the current test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-standalone-implementation-spec-for-b066b1fd/runs/run-20260430T144725Z-ee277cbe/decisions.txt).
+
+Key findings / decisions
+
+- The existing strictness coverage already guarded `autoloop_v3.core` and `core._compat`, but it did not explicitly lock in the broader dead non-core `autoloop_v3.*` namespaces that caused the earlier reviewer blocker.
+- The new scan intentionally excludes `tests/strictness/test_no_compat.py` itself so the required `autoloop_v3.core` failed-import assertion remains allowed without poisoning the maintained-source regression scan.
+- Validation completed with:
+  - `python3 -m py_compile tests/strictness/test_no_compat.py`
+  - `rg -n "autoloop_v3\\.(runtime|extensions|stdlib|workflows|autoloop_optimizer)" ...`
+  - `rg -n "autoloop_v3\\.(core|runtime|extensions|stdlib|workflows|autoloop_optimizer)|core\\._compat" ...`
+  - Result: only the intentional `autoloop_v3.core` strictness assertion remains.
+
+Open issues / next step
+
+- I could not run `pytest`; this shell still lacks project dependencies such as `pytest` and `pydantic`.
+- Next step is test-phase verification in a configured environment so the strictness and unit files can execute, not just parse and scan.
