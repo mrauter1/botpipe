@@ -14,12 +14,12 @@
       "migrate-tests-and-lock-strictness"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "migrate-tests-and-lock-strictness"
+    "current_phase_index": 2,
+    "current_phase_id": null
   },
   "phase_status": {
     "canonicalize-core-produces-surface": "completed",
-    "migrate-tests-and-lock-strictness": "in_progress"
+    "migrate-tests-and-lock-strictness": "completed"
   },
   "phase_history": [
     {
@@ -40,6 +40,13 @@
       "run_id": "run-20260430T032812Z-1b762d28",
       "status": "in_progress",
       "ts": "2026-04-30T03:59:32.215720+00:00"
+    },
+    {
+      "phase_id": "migrate-tests-and-lock-strictness",
+      "run_id": "run-20260430T032812Z-1b762d28",
+      "status": "completed",
+      "ts": "2026-04-30T04:07:03.348747+00:00",
+      "pair": "test"
     }
   ]
 }
