@@ -300,6 +300,64 @@ def test_context_history_falls_back_to_events_without_trace(tmp_path: Path) -> N
     assert ctx.history.failures(step="implement") == ()
 
 
+def test_context_history_marks_goto_runtime_control_as_completed(tmp_path: Path) -> None:
+    ctx, run_folder = _context(tmp_path)
+    _write_jsonl(
+        run_folder / "trace.jsonl",
+        [
+            {
+                "schema": RUNTIME_TRACE_SCHEMA,
+                "event_type": "step_started",
+                "timestamp": "2026-04-30T11:10:00+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+            },
+            {
+                "schema": RUNTIME_TRACE_SCHEMA,
+                "event_type": "step_finished",
+                "timestamp": "2026-04-30T11:10:02+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+                "candidate_route": "needs_escalation",
+                "runtime_control": "goto",
+                "target_step": "human_review",
+                "provider_attributable": False,
+                "source_hook": "after",
+                "source_phase": "after",
+            },
+        ],
+    )
+    _write_jsonl(run_folder / "events.jsonl", [])
+
+    telemetry = ctx.history.step_telemetry("triage")
+    route_records = ctx.history.routes(step="triage")
+
+    assert telemetry["completed"] is True
+    assert telemetry["status"] == "completed"
+    assert route_records == (
+        {
+            "event_type": "step_finished",
+            "step_name": "triage",
+            "scope": None,
+            "item_id": None,
+            "candidate_route": "needs_escalation",
+            "final_route": None,
+            "runtime_control": "goto",
+            "target_step": "human_review",
+            "terminal": None,
+            "provider_attributable": False,
+            "source_hook": "after",
+            "source_phase": "after",
+            "visit": 1,
+            "step_execution_id": "triage:1",
+            "timestamp": "2026-04-30T11:10:02+00:00",
+            "hook_route_redirects": (),
+        },
+    )
+
+
 def test_context_history_attributes_scoped_hook_failures_from_trace(tmp_path: Path) -> None:
     ctx, run_folder = _context(tmp_path)
     _write_jsonl(

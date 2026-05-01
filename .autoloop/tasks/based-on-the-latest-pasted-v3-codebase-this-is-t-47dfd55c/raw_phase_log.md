@@ -1441,3 +1441,58 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+Working the two reviewer blockers in this phase only: optimizer-side schema enforcement for runtime-owned artifacts, and the `Goto` status regression in history telemetry. I’m reading the touched paths and the phase notes first so the fix stays local and consistent with the existing schema cutover behavior.
+
+I’ve confirmed the reviewer’s scope and the current phase notes. Next I’m patching the readers so runtime-owned artifacts share one schema-validation rule, then I’ll add the missing `Goto` telemetry coverage and re-run focused validation.
+
+I’ve got the exact patch points. The optimizer fix will stay inside its runtime-observability readers, and the `Goto` fix will be limited to history status derivation plus one focused regression test.
+
+The optimizer reader now has a single filename-based schema gate for runtime-owned observability files, with the same legacy/no-schema behavior as the runtime readers. I’m patching the history status next, then I’ll add targeted regressions for both fixes.
+
+The code changes are in. I’m running focused validation now on the touched runtime, optimizer, and test files so I can update the phase notes with concrete evidence instead of guesses.
+
+The focused validation passed at the syntax level, and `pytest` is still absent in this environment. I’m updating the run-local notes and decision ledger now so the schema-reader rule and the `Goto` telemetry behavior are explicit for the next turn.
+
+Scope considered
+
+- Phase-local fixes for the two blocking findings in `metadata-tracing-schema-and-attribution`.
+- Kept scope to optimizer runtime-observability readers, history status derivation, targeted tests, and the required phase-local notes/decision artifacts.
+
+What I analyzed
+
+- Reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/feedback.md).
+- Runtime schema handling in `autoloop_optimizer/optimization.py`, `core/schema_registry.py`, and the existing runtime readers.
+- History finalization status logic in `core/history.py` and adjacent telemetry expectations in `tests/runtime/test_history.py`.
+
+What I changed
+
+- Added optimizer-side runtime-observability schema enforcement in `autoloop_optimizer/optimization.py` for `run.json`, `trace.jsonl`, `git_tracking.jsonl`, and `static_step_graph.json`, reusing `validate_persisted_schema` and still accepting schema-less legacy payloads.
+- Changed `core/history.py` so finished direct `Goto` controls report `completed` instead of `running`.
+- Added focused regressions in `tests/unit/test_optimization_helpers.py` for schema-less legacy runtime artifacts and explicit unsupported runtime schemas.
+- Added a focused `Goto` history regression in `tests/runtime/test_history.py`.
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/implementation_notes.md) and appended the non-obvious decisions under the current turn header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+Key findings / decisions
+
+- The safest way to satisfy the schema-ownership requirement without broad refactoring was a filename-dispatched validator in the optimizer’s runtime-observability readers.
+- `Goto` telemetry is treated as a finished step outcome, not an in-progress state, because the step instance has already finalized successfully even though no route tag was taken.
+
+Open issues / next step
+
+- `python3 -m compileall autoloop_optimizer/optimization.py core/history.py tests/runtime/test_history.py tests/unit/test_optimization_helpers.py` passed.
+- `python3 -m pytest tests/runtime/test_history.py tests/unit/test_optimization_helpers.py` could not run because `pytest` is not installed in this environment (`No module named pytest`).
+- Next step is verifier review of this phase revision.

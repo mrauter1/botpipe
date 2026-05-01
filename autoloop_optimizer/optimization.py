@@ -11,6 +11,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from core.schema_registry import (
+    GIT_TRACKING_SCHEMA,
+    RUN_METADATA_SCHEMA,
+    RUNTIME_TRACE_SCHEMA,
+    WORKFLOW_STATIC_STEP_GRAPH_SCHEMA,
     WORKFLOW_OPTIMIZATION_EXCLUDED_RUN_REPORT_SCHEMA,
     WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA,
     WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA,
@@ -20,6 +24,7 @@ from core.schema_registry import (
     WORKFLOW_OPTIMIZATION_STEP_TRACE_METRICS_SCHEMA,
     WORKFLOW_OPTIMIZATION_TRACE_CORPUS_SCHEMA,
     WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
+    validate_persisted_schema,
 )
 from core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
 from runtime.loader import resolve_workflow_reference
@@ -49,6 +54,12 @@ FAILURE_SCENARIOS_SCHEMA = WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA
 
 _ELIGIBLE_STATUS_LABELS = frozenset({"failed", "awaiting_input", "blocked"})
 _PROMPT_SURFACE_SUFFIXES = ("_producer.md", "_verifier.md", ".md")
+_RUNTIME_OBSERVABILITY_SCHEMAS = {
+    "run.json": RUN_METADATA_SCHEMA,
+    "trace.jsonl": RUNTIME_TRACE_SCHEMA,
+    "git_tracking.jsonl": GIT_TRACKING_SCHEMA,
+    "static_step_graph.json": WORKFLOW_STATIC_STEP_GRAPH_SCHEMA,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -1079,6 +1090,7 @@ def _read_json_object(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError(f"{path} must decode to a JSON object")
+    _validate_runtime_observability_schema(path, payload)
     return payload
 
 
@@ -1090,8 +1102,16 @@ def _read_jsonl_objects(path: Path) -> list[dict[str, Any]]:
         payload = json.loads(raw_line)
         if not isinstance(payload, dict):
             raise ValueError(f"{path} line {index} must decode to a JSON object")
+        _validate_runtime_observability_schema(path, payload)
         entries.append(payload)
     return entries
+
+
+def _validate_runtime_observability_schema(path: Path, payload: Mapping[str, Any]) -> None:
+    expected = _RUNTIME_OBSERVABILITY_SCHEMAS.get(path.name)
+    if expected is None:
+        return
+    validate_persisted_schema(payload, expected=expected, artifact_name=str(path))
 
 
 def _git_tracking_index(records: Sequence[Mapping[str, Any]]) -> dict[int, dict[str, Any]]:

@@ -8,6 +8,7 @@
 - Scope: phase-local producer artifact
 
 ## Files changed
+- `autoloop_optimizer/optimization.py`
 - `core/schema_registry.py`
 - `core/history.py`
 - `core/operations.py`
@@ -22,11 +23,14 @@
 - `tests/runtime/test_workspace_and_context.py`
 - `tests/runtime/test_security_finding_to_verified_remediation.py`
 - `tests/runtime/test_compatibility_runtime.py`
+- `tests/unit/test_optimization_helpers.py`
 
 ## Symbols touched
+- `autoloop_optimizer._validate_runtime_observability_schema`
 - `validate_persisted_schema`
 - runtime schema constants for run metadata, checkpoint, events, child summaries, replay, and topology-side JSON artifacts
 - `HistoryReader._record_step_finished`
+- `HistoryReader._status_from_step_finished`
 - `HistoryReader._read_jsonl`
 - `HistoryReader._read_json_object`
 - `StepFinalizationRecord`
@@ -43,6 +47,7 @@
 - Phase 3 metadata/tracing: added run-metadata `finalization` payloads, child-summary `finalization`, and richer history route records.
 - Phase 3 awaiting-input attribution: preserved terminal/status `awaiting_input` separately from provider `question` in run metadata and child summaries.
 - Phase 3 schema registry: added owned schema ids for run metadata, checkpoint, runtime events, child summaries, operation replay, and topology-side JSON artifacts; readers accept schema-less legacy payloads and reject explicit unknown schemas.
+- Reviewer follow-up: extended optimizer runtime-observability readers to enforce owned schema ids on runtime-owned files, and fixed direct-`Goto` history telemetry to report a finished status.
 
 ## Assumptions
 - Schema-less persisted payloads are the only legacy format that must remain readable in this phase.
@@ -57,6 +62,8 @@
 - `run.json` now carries a top-level schema id and a `finalization` section for the last completed step transition.
 - `checkpoint.json`, `events.jsonl`, `children.jsonl`, `operation_replay.json`, and the topology-side JSON artifacts are schema-stamped.
 - History route records now surface `runtime_control`, `target_step`, `terminal`, `provider_attributable`, `source_hook`, and `source_phase`, and direct-control step finishes map to truthful statuses.
+- Optimizer observability ingestion now rejects explicit unsupported runtime-artifact schemas instead of silently accepting them.
+- Direct `Goto` step finishes now appear as `completed` in history telemetry instead of `running`.
 
 ## Known non-changes
 - No package-namespace relocation or optimizer import cleanup in this phase.
@@ -69,6 +76,7 @@
 
 ## Validation performed
 - `python3 -m compileall core runtime tests/runtime/test_runtime_tracing.py tests/runtime/test_history.py tests/runtime/test_workspace_and_context.py tests/runtime/test_security_finding_to_verified_remediation.py tests/runtime/test_compatibility_runtime.py`
+- `python3 -m compileall autoloop_optimizer/optimization.py core/history.py tests/runtime/test_history.py tests/unit/test_optimization_helpers.py`
 
 ## Validation gaps
 - `pytest` was not available in the environment (`python3 -m pytest` failed with `No module named pytest`), so targeted runtime tests were not executed.
@@ -76,3 +84,4 @@
 ## Deduplication / centralization
 - Centralized persisted-schema validation in `core/schema_registry.validate_persisted_schema`.
 - Reused a single `finalization` payload shape across run metadata and child-run summaries instead of introducing separate attribution structures.
+- Centralized optimizer-side runtime observability schema enforcement in a filename-dispatched helper instead of duplicating checks across each reader callsite.

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.schema_registry import RUN_METADATA_SCHEMA
 from stdlib.optimization import (
     OptimizationArtifactSpec,
     build_step_trace_metrics,
@@ -112,6 +113,62 @@ def test_missing_plan1_files_exclude_run_with_reason(tmp_path: Path) -> None:
     bundle = load_run_observability_bundle(run_dir)
 
     assert validate_observability_bundle(bundle) == (False, "missing_trace_jsonl")
+
+
+def test_load_run_observability_bundle_accepts_legacy_runtime_observability_payloads_without_schema(tmp_path: Path) -> None:
+    run_dir = _write_observable_run(tmp_path, "task-1", "release_candidate_to_go_no_go", "run-legacy-schema-less")
+    run_payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    run_payload.pop("schema", None)
+    (run_dir / "run.json").write_text(json.dumps(run_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    trace_records = [
+        json.loads(line)
+        for line in (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for record in trace_records:
+        record.pop("schema", None)
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(json.dumps(record, sort_keys=True) for record in trace_records) + "\n",
+        encoding="utf-8",
+    )
+
+    git_records = [
+        json.loads(line)
+        for line in (run_dir / "git_tracking.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    for record in git_records:
+        record.pop("schema", None)
+    (run_dir / "git_tracking.jsonl").write_text(
+        "\n".join(json.dumps(record, sort_keys=True) for record in git_records) + "\n",
+        encoding="utf-8",
+    )
+
+    static_graph_payload = json.loads((run_dir / "static_step_graph.json").read_text(encoding="utf-8"))
+    static_graph_payload.pop("schema", None)
+    (run_dir / "static_step_graph.json").write_text(
+        json.dumps(static_graph_payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    bundle = load_run_observability_bundle(run_dir)
+
+    assert validate_observability_bundle(bundle) == (True, None)
+    assert bundle.load_error is None
+
+
+def test_load_run_observability_bundle_rejects_explicit_unsupported_runtime_schema_ids(tmp_path: Path) -> None:
+    run_dir = _write_observable_run(tmp_path, "task-1", "release_candidate_to_go_no_go", "run-unknown-schema")
+    run_payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    run_payload["schema"] = RUN_METADATA_SCHEMA.replace("/v1", "/v2")
+    (run_dir / "run.json").write_text(json.dumps(run_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    bundle = load_run_observability_bundle(run_dir)
+
+    assert bundle.load_error is not None
+    assert "unsupported schema" in bundle.load_error
+    assert validate_observability_bundle(bundle) == (False, "unreadable_observability_files")
 
 
 def test_normalize_trace_corpus_preserves_raw_refs_and_git_commits(tmp_path: Path) -> None:

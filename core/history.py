@@ -774,7 +774,7 @@ def _status_from_step_finished(
     if terminal == FAIL:
         return "failed"
     if runtime_control == "goto":
-        return "running"
+        return "completed"
     return _status_from_route(final_route, completed=True)
 
 
