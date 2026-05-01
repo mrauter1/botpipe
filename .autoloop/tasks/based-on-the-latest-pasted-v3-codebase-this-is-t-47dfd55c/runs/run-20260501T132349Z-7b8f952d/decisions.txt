@@ -7,3 +7,6 @@ Treat legacy PAUSE/pending_question persisted data as an explicit compatibility 
 Schema-registry rollout and older-schema reader behavior are owned work items in the metadata/tracing phase, not deferred notes, because persisted artifact compatibility spans checkpoint, run metadata, topology, trace/history, and replay records.
 Workflow-facing GitTracking and Tracing declarations are removed as part of extension/package cleanup, while runtime-owned git tracking and tracing infrastructure remain supported runtime surfaces.
 Worklist per-step load caching and Mapping-to-dict boundary normalization remain explicit deliverables in the maintainability phase and must not be dropped as incidental cleanup.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="public-surface-terminal-cut" pair="implement" turn_seq="1" run_id="run-20260501T132349Z-7b8f952d" ts="2026-05-01T13:39:21.542736+00:00" />
+Phase 1 removes `on_route` only from the public simple authoring surface; internal core step hooks remain in place for the later runtime-control phase, while public topology hook payloads stop emitting `on_route`.
+Phase 1 switches canonical terminal/status spellings to `AWAIT_INPUT` and `awaiting_input`, but keeps legacy `paused` run-record detection readable through `RunRecord.paused` so older run metadata remains answerable during the cutover.
