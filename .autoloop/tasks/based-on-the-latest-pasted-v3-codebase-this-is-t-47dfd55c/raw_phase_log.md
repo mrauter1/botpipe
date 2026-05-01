@@ -238,3 +238,56 @@ Open issues / next step
 
 - I could not run `pytest`: this environment has no `pytest` module, and import-time smoke tests also could not run because the system interpreter lacks `pydantic`.
 - Broader repo-wide test/doc sweeps for remaining `PAUSE`/`paused` expectations outside this phase-local slice should be handled in subsequent phases or in a dependency-ready environment.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m reviewing the phase-local implementation against the hard-cut acceptance criteria first, then I’ll audit the changed surfaces for regressions and write the criteria/feedback artifacts with any blocking findings.
+
+The changed set is narrower than the implementation notes claim in one important way: several touched files are currently untracked in this worktree, so I’m reviewing them as the authoritative working copy rather than as a normal git diff. I’m checking the hard-cut surfaces for silent breakage next, especially importability, status naming, and the `on_route` removal boundary.
+
+I found two material runtime-surface regressions and one phase-local test-coverage gap. I’m recording them as blocking because they leave the hard cut half-renamed in public metadata and unverified in the phase-owned tests.
+
+Scope considered
+
+- Phase-local review of the public terminal/control cut only.
+- I focused on the changed public/exported surfaces, externally observed runtime metadata/status paths, touched docs, and the phase-owned tests/artifacts.
+
+What I analyzed
+
+- Public/export surface changes in `autoloop`, `core`, `core.primitives`, `core.routes`, `stdlib.control`, and `runtime.static_graph`.
+- Runtime status/metadata paths in `runtime.runner`, `runtime.workspace`, `runtime.cli`, and `core.history`.
+- Phase-owned tests and docs that were touched or still reference the renamed surface.
+- The implementation notes and run-local decisions ledger.
+
+What I reviewed
+
+- I updated the phase criteria artifact.
+- I appended prioritized findings to the phase feedback artifact.
+- I checked the hard-cut intent against the actual exposed runtime metadata, status filtering behavior, and remaining phase-local test expectations.
+
+Key findings / decisions
+
+- I found 3 blocking issues.
+- The main regression is that the hard cut is only partial on runtime metadata: public CLI/run payloads still expose `paused`, and summary/status filtering is not normalized across legacy `paused` data and new `awaiting_input` data.
+- The phase-owned stdlib/runtime tests were only partially updated and still contain many `PAUSE` / `paused` expectations.
+- I also noted one non-blocking docs mismatch: `docs/authoring.md` still mentions `Route.complete(...)`.
+
+Open issues / next step
+
+- Fix the blocking findings in `runtime.cli`, `runtime.workspace`, and the remaining phase-local test expectations, then rerun review.
+- Current verdict is not complete for this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
