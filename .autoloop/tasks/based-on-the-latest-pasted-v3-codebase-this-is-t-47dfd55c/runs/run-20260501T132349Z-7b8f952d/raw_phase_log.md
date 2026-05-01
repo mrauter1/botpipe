@@ -1309,3 +1309,135 @@ The phase-local test work is acceptable to advance. The only follow-up is housek
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+I’m treating this as the metadata/tracing/schema phase only. First I’m reading the phase artifacts and the runtime surfaces that already changed in prior phases so I can wire the new payloads without drifting the execution model.
+
+I’ve got the phase scope and the prior decisions. Next I’m mapping the existing runtime metadata flow: trace writer, history/event records, run records, checkpoint schemas, and any child-workflow summary surfaces that still encode the old pause/question assumptions.
+
+I found most of the required fields already partially threaded through `core.engine` and `runtime.tracing`, but the persisted surfaces are inconsistent. I’m reading the concrete serializers/readers now so I can tighten schema ownership and the awaiting-input vs question split in one pass.
+
+The schema story is still fragmented: trace and static graph have IDs, but checkpoint, run metadata, event logs, and replay store don’t. I’m drilling into those writers/readers now so I can add one registry and explicit legacy-reader rules instead of patching each file ad hoc.
+
+I’ve got enough context to edit. The concrete plan is:
+1. Centralize runtime artifact schema IDs plus lightweight legacy-schema validation.
+2. Stamp and validate `run.json`, `checkpoint.json`, `events.jsonl`, `children.jsonl`, and `operation_replay.json`.
+3. Enrich history/child-summary payloads so they carry the runtime-control and attribution fields already emitted by the engine.
+4. Add focused tests around schema ownership, legacy-reader behavior, and the richer history/child metadata.
+
+I’m applying the persistence-side changes now. The main risk surface is compatibility on previously written files, so I’m keeping missing-schema payloads readable and only rejecting explicit unknown schemas.
+
+I’ve finished the runtime/data-path edits and I’m moving to regression coverage. The most important checks now are that older schema-less files still load, and that the richer route/control fields show up consistently in history and child-run summaries.
+
+I found one schema gap while wiring the tests: `RuntimeTraceWriter` can create `run.json` through the tracing sidecar path before a formal run metadata write happens. I’m fixing that helper now so every runtime-owned mutation keeps `run.json` stamped consistently.
+
+The code changes are in. I’m running targeted tests across the touched persistence and history surfaces before I update the phase notes.
+
+The environment doesn’t have `pytest` or `python` on the default names. I’m switching to `python3` and checking whether the test runner is available there.
+
+I’ve finished the code path review after the syntax pass. The remaining work is administrative for this loop: capture the non-obvious schema/metadata decisions in the run ledger and write concise phase notes with the checklist mapping and validation outcome.
+
+Scope considered
+
+- Phase-local metadata/tracing/schema work only: run metadata, checkpoints, trace/events/history surfaces, child-run summaries, operation replay, and topology-side JSON artifacts.
+- I did not take package relocation, optimizer-boundary refactors, or replay mismatch policy changes into scope.
+
+What I analyzed
+
+- `core.engine` step-finalization and runtime-control outputs.
+- `runtime/runner.py`, `runtime/workspace.py`, `runtime/events.py`, `runtime/stores/filesystem.py`, `core/history.py`, `core/operations.py`, and `runtime/static_graph.py`.
+- The active phase notes, plan, and prior phase decisions.
+
+What I changed
+
+- Added central schema ids plus legacy-reader validation in `core/schema_registry.py`.
+- Stamped `run.json`, `checkpoint.json`, `events.jsonl`, `children.jsonl`, `operation_replay.json`, and topology-side JSON artifacts with owned schema ids.
+- Kept schema-less legacy payloads readable, but explicit unknown schema ids now fail clearly.
+- Added `StepFinalizationRecord` to carry candidate/final route, runtime control, target step, terminal, source hook/phase, provider attribution, and redirect chain out of `Engine`.
+- Persisted that finalization payload into `run.json` and child-run summaries so `AWAIT_INPUT` stays distinct from provider route tag `"question"`.
+- Updated `HistoryReader` so direct runtime-control step finishes derive truthful status from terminal/control metadata instead of defaulting to completed.
+- Extended focused tests for schema stamping, legacy checkpoint reads, direct-control history records, and child summary payloads.
+
+Key findings / decisions
+
+- The existing trace payload already had most of the needed fields; the real gaps were persistence ownership and downstream readers.
+- Child-run summaries were the right persisted “history summary” surface for this phase, so I reused one `finalization` payload shape across run metadata and child summaries.
+- Legacy compatibility is now explicit: missing `schema` is treated as legacy, but a declared unsupported schema is rejected.
+
+Open issues / next step
+
+- `python3 -m compileall` passed for the touched runtime, core, and test files.
+- I could not run `pytest` because the environment does not have it installed (`python3 -m pytest` -> `No module named pytest`).
+- Next step is to run the targeted pytest set once the test runner is available and then move to the next approved phase.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+I’m reviewing the phase-local implementation against the acceptance criteria and the run decisions first. I’ll inspect the review artifacts, then audit the touched runtime metadata paths for correctness, compatibility, and regression risk before I update the criteria and feedback.
+
+I’ve moved past the artifact read-through and I’m checking for missed production readers and behavior regressions now. The main review questions are whether the new schema policy is consistently enforced and whether the new finalization metadata actually covers all required child-run and history paths.
+
+Reviewing the phase-local metadata and schema changes now. I’m checking the persisted artifact readers and the new finalization payloads first, because that’s where regressions are most likely to hide.
+
+I’ve narrowed the review to the persistence and reader paths now. Next I’m checking whether the new schema gates and finalization fields are actually consumed safely by run readers and child-run summaries, not just written.
+
+The reader side is clearer now. I’m checking for two specific regressions: whether successful `Goto` transitions are misclassified in history, and whether child summaries duplicate or omit the new finalization state in a way that breaks downstream consumers.
+
+I found one behavior that looks materially wrong rather than just incomplete: the history reader treats a finished `Goto` step as still `running`. I’m checking where that status is consumed before I write it up, because if it feeds optimization or diagnostics it’s a blocking telemetry regression.
+
+I’ve got two blocking findings. I’m updating the verifier artifacts now: one is a schema-compatibility gap in the optimizer readers, the other is incorrect history status for `Goto`-finalized steps.
+
+I’ve written the review artifacts. I’m doing one last pass against the phase contract so the final verdict matches the blockers and doesn’t overreach the phase scope.
+
+Scope considered
+
+- Phase-local review of metadata, tracing, schema, history, run metadata, checkpoint, and child-summary changes for `metadata-tracing-schema-and-attribution`.
+- I broadened into optimizer ingestion because this phase explicitly covers persisted runtime artifact schemas and older-schema reader behavior.
+
+What I analyzed
+
+- Phase artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/criteria.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/feedback.md), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/implementation_notes.md).
+- Request/decision-aligned runtime paths in `core/history.py`, `core/schema_registry.py`, `runtime/runner.py`, `runtime/workspace.py`, `runtime/events.py`, `runtime/static_graph.py`, and `autoloop_optimizer/optimization.py`.
+- Targeted tests around history, tracing, child summaries, compatibility runtime, and optimizer helpers.
+
+What I reviewed
+
+- I updated the verifier artifacts only.
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/feedback.md) now contains two blocking findings: `IMP-001` and `IMP-002`.
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/criteria.md) remains unchecked because the blocking findings mean the phase is not yet acceptable.
+
+Key findings / decisions
+
+- `IMP-001` blocking: `autoloop_optimizer/optimization.py` still reads `run.json`, `trace.jsonl`, `git_tracking.jsonl`, and `static_step_graph.json` without validating their owned schema ids, so explicit unsupported schemas are silently accepted instead of failing clearly.
+- `IMP-002` blocking: `core/history.py` marks finished `Goto`-based step finalization as `running`, so step telemetry misreports completed direct-control transitions.
+
+Open issues / next step
+
+- The implementation is not ready to close this phase as-is.
+- Next step is to fix the two blockers, add coverage for schema-rejection in optimizer readers and `Goto` history status, then rerun verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
