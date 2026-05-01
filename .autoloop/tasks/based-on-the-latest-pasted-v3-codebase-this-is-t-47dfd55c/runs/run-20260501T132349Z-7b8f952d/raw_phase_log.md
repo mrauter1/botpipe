@@ -2612,3 +2612,120 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de470-1bde-75f2-92a8-f2fabee7d998
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+I’m treating this as a phase-local regression pass for the maintainability refactor. First I’m checking the existing test-phase artifacts and the current coverage around worklist caching, session backend composition, typed child results, and replay mismatch behavior so I can add only the missing tests.
+
+I’ve confirmed the phase test artifacts are basically empty, while the code already has some targeted maintainability regressions from the implement passes. I’m looking for the remaining gaps so this phase doesn’t just restate coverage that already exists.
+
+The current code already has happy-path coverage for cache reuse and typed child output. The most exposed remaining regression surface is cache invalidation after a mutable worklist write, so I’m adding that along with one boundary-copy check to keep the Mapping normalization from silently regressing.
+
+I’m adding two deterministic regressions in `test_primitives_and_stores.py`: one for mutable worklist cache refresh after a write, and one for one-time Mapping-to-dict normalization at the `Context` boundary. Those are the two maintainability-specific behaviors still undercovered.
+
+The new regressions passed. I’m updating the test artifacts to map behavior to coverage explicitly and to record the determinism choices for the mutable worklist/cache and Mapping-boundary tests.
+
+Scope considered
+
+- Phase-local `maintainability-refactors` test pass only.
+- Covered session backend composition, Mapping-to-dict boundary normalization, worklist cache behavior, typed child workflow output, and replay-fingerprint mismatch behavior.
+- Updated [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/maintainability-refactors/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/maintainability-refactors/feedback.md), and the current test-author block in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+What I analyzed
+
+- Existing maintainability-phase regressions already present in:
+  - `tests/unit/test_primitives_and_stores.py`
+  - `tests/runtime/test_workspace_and_context.py`
+  - `tests/contract/test_engine_contracts.py`
+- `autoloop/core/worklists.py` cache-refresh behavior on mutable writes.
+- `autoloop/core/context.py` workflow-parameter ingress copying semantics after centralizing `normalize_mapping(...)`.
+
+What I changed
+
+- Added `test_context_copies_workflow_params_from_mapping_boundary` to lock in one-time ingress normalization plus outward-copy behavior for `Context.workflow_params`.
+- Added `test_worklist_set_current_status_refreshes_cached_items_for_mutable_sources` to lock in cache refresh behavior after mutable worklist writes without a second source load.
+- Filled in the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/maintainability-refactors/test_strategy.md) with a behavior-to-test coverage map, invariants, edge cases, stabilization notes, and known gaps.
+- Appended a concise test-addition summary to phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/maintainability-refactors/feedback.md).
+
+Key findings / decisions
+
+- The highest-risk uncovered behavior was not the existing replay path, but the interaction between mutable worklist writes and the new per-context cache.
+- `MappingProxyType` was the right deterministic boundary input for the normalization regression because it proves the code is not only handling plain dicts.
+- Validation passed:
+  - `.venv/bin/python -m py_compile tests/unit/test_primitives_and_stores.py`
+  - `.venv/bin/pytest tests/unit/test_primitives_and_stores.py::test_context_copies_workflow_params_from_mapping_boundary tests/unit/test_primitives_and_stores.py::test_worklist_load_items_is_cached_per_context tests/unit/test_primitives_and_stores.py::test_worklist_set_current_status_refreshes_cached_items_for_mutable_sources tests/unit/test_primitives_and_stores.py::test_session_store_can_be_composed_from_backend tests/runtime/test_workspace_and_context.py::test_context_invoke_workflow_supports_typed_child_input_and_output tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_includes_provider_configuration tests/contract/test_engine_contracts.py::test_inline_operation_provider_override_participates_in_replay_fingerprint -q`
+
+Open issues / next step
+
+- I did not run the broader repository suite; this was a phase-local regression pass.
+- Next step is the auditor/verifier pass over the new tests and the populated test-phase artifacts.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de470-1bde-75f2-92a8-f2fabee7d998
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+Auditing the maintainability-phase test additions and the populated strategy artifact now. I’m checking whether the new tests actually cover the changed regression surfaces with deterministic assertions, then I’ll update the audit artifacts accordingly.
+
+I don’t see a material regression gap in the new tests themselves. I’m doing one last pass across the existing maintainability-phase regression tests to make sure the phase’s renamed operation surfaces and strict replay path are already covered before I finalize the audit.
+
+I’m finishing the audit as complete. The tests themselves are adequate; the only thing worth calling out is a minor documentation gap in the strategy artifact, not a coverage blocker.
+
+Scope considered
+
+- Phase-local `maintainability-refactors` test audit only.
+- Audited the newly added tests in [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py), the existing replay and typed-child regressions, and the populated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/maintainability-refactors/test_strategy.md).
+- Updated only the audit artifacts: [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/maintainability-refactors/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/maintainability-refactors/feedback.md).
+
+What I analyzed
+
+- New coverage for:
+  - one-time `Context` mapping normalization via `MappingProxyType`
+  - mutable worklist cache refresh after `set_current_status()`
+- Existing maintainability-phase coverage for:
+  - backend-composed `SessionStore`
+  - replay mismatch warn/fail behavior
+  - provider-config and inline override replay fingerprints
+  - typed child workflow output and typed-output validation failure paths
+  - public operation surface rename via `LLMOperation` / `ClassifyOperation`
+
+What I reviewed
+
+- Whether the new tests would catch the main maintainability regressions introduced by the refactor.
+- Whether failure paths and preserved invariants are materially covered without flaky setup.
+- Whether the strategy artifact accurately reflects the important maintainability-phase coverage surfaces.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- Coverage is sufficient for this phase’s changed behavior and preserved invariants, and the tests are deterministic.
+- I added one non-blocking note, `TST-001`, because the strategy artifact omits two already-existing failure-path tests from its coverage map even though the suite itself covers them.
+- All audit criteria are now checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/maintainability-refactors/criteria.md).
+
+Open issues / next step
+
+- No blocking issues remain for the maintainability-refactors test phase.
+- If the strategy artifact is revised later, it should explicitly list the strict replay-fail and typed child output validation failure regressions noted in `TST-001`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
