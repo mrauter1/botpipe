@@ -1044,7 +1044,7 @@ def test_frame_no_eligible_runs_publishes_noop_packet(tmp_path: Path) -> None:
             workflow_params={
                 "selected_workflow": "release_candidate_to_go_no_go",
                 "task_title": "Release workflow optimization",
-                "run_statuses": ["failed", "paused", "blocked"],
+                "run_statuses": ["failed", "awaiting_input", "blocked"],
                 "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
             },
             runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
@@ -1153,7 +1153,7 @@ def test_full_run_skips_disabled_optional_passes_without_provider_calls(tmp_path
                 "include_token_optimization": False,
                 "include_adversarial_generation": False,
                 "include_workflow_level_candidates": False,
-                "run_statuses": ["failed", "paused", "blocked"],
+                "run_statuses": ["failed", "awaiting_input", "blocked"],
                 "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
             },
             runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
@@ -1245,7 +1245,7 @@ def test_insufficient_evidence_short_circuit_does_not_publish_failure_scenarios(
             workflow_params={
                 "selected_workflow": "release_candidate_to_go_no_go",
                 "task_title": "Release workflow optimization",
-                "run_statuses": ["failed", "paused", "blocked"],
+                "run_statuses": ["failed", "awaiting_input", "blocked"],
                 "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
             },
             runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
@@ -1271,7 +1271,7 @@ def test_bootstrap_rejects_unknown_selected_workflow_before_side_effects(tmp_pat
     typed_params = workflow_pkg.Params(
         selected_workflow="does_not_exist",
         task_title="Release workflow optimization",
-        run_statuses=["failed", "paused", "blocked"],
+        run_statuses=["failed", "awaiting_input", "blocked"],
         route_tags=["needs_rework", "needs_replan", "failed", "blocked"],
     )
     task_folder = tmp_path / ".autoloop" / "tasks" / "optimizer-task"
@@ -1499,7 +1499,7 @@ def test_optimization_depth_ablation_records_planning_mode_without_executing_abl
                 "selected_workflow": "release_candidate_to_go_no_go",
                 "task_title": "Release workflow optimization",
                 "optimization_depth": "ablation",
-                "run_statuses": ["failed", "paused", "blocked"],
+                "run_statuses": ["failed", "awaiting_input", "blocked"],
                 "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
             },
             runtime_config=RuntimeConfig(git_tracking=GitTrackingRuntimeConfig(enabled=False)),
@@ -1677,7 +1677,7 @@ def _run_enabled_candidate_workflow(
             workflow_params={
                 "selected_workflow": "release_candidate_to_go_no_go",
                 "task_title": "Release workflow optimization",
-                "run_statuses": ["failed", "paused", "blocked"],
+                "run_statuses": ["failed", "awaiting_input", "blocked"],
                 "route_tags": ["needs_rework", "needs_replan", "failed", "blocked"],
             }
             | (workflow_params_overrides or {}),
@@ -1703,7 +1703,7 @@ def _bootstrap_context(
     typed_params = workflow_pkg.Params(
         selected_workflow="release_candidate_to_go_no_go",
         task_title="Release workflow optimization",
-        run_statuses=["failed", "paused", "blocked"],
+        run_statuses=["failed", "awaiting_input", "blocked"],
         route_tags=route_tags or ["needs_rework", "needs_replan", "failed", "blocked"],
         optimization_depth=optimization_depth,
         max_candidates_per_pass=max_candidates_per_pass,

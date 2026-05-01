@@ -342,9 +342,9 @@ def test_workflow_run_history_to_failure_modes_package_normalizes_repeatable_inp
             "statuses": [
                 " failed ",
                 "",
-                "paused",
+                "awaiting_input",
                 "blocked",
-                "paused",
+                "awaiting_input",
             ],
             "max_runs": 12,
             "sponsor_role": " Workflow Platform ",
@@ -367,7 +367,7 @@ def test_workflow_run_history_to_failure_modes_package_normalizes_repeatable_inp
         "max_runs": 12,
         "selected_workflow": "release_candidate_to_go_no_go",
         "sponsor_role": "Workflow Platform",
-        "statuses": ["blocked", "failed", "paused"],
+        "statuses": ["awaiting_input", "blocked", "failed"],
         "task_title": "Release workflow failure-mode diagnosis",
     }
 
@@ -389,7 +389,7 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
             {
                 "selected_workflow": " release_candidate_to_go_no_go ",
                 "task_title": " Release workflow failure-mode diagnosis ",
-                "statuses": [" failed ", "", "paused", "blocked", "paused"],
+                "statuses": [" failed ", "", "awaiting_input", "blocked", "awaiting_input"],
                 "max_runs": 12,
                 "sponsor_role": " Workflow Platform ",
                 "desired_outcome": " ",
@@ -431,7 +431,7 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
     assert event.tag == "inputs_prepared"
     assert next_state.selected_workflow_reference == "release_candidate_to_go_no_go"
     assert next_state.task_title == "Release workflow failure-mode diagnosis"
-    assert next_state.statuses == ["blocked", "failed", "paused"]
+    assert next_state.statuses == ["awaiting_input", "blocked", "failed"]
     assert next_state.max_runs == 12
     assert next_state.sponsor_role == "Workflow Platform"
     assert next_state.desired_outcome is None
@@ -446,7 +446,7 @@ def test_workflow_run_history_to_failure_modes_bootstrap_reads_typed_ctx_params(
     invocation_contract = json.loads((workflow_folder / "invocation_contract.json").read_text(encoding="utf-8"))
     assert invocation_contract["selected_workflow_reference"] == "release_candidate_to_go_no_go"
     assert invocation_contract["task_title"] == "Release workflow failure-mode diagnosis"
-    assert invocation_contract["statuses"] == ["blocked", "failed", "paused"]
+    assert invocation_contract["statuses"] == ["awaiting_input", "blocked", "failed"]
     assert invocation_contract["max_runs"] == 12
     assert invocation_contract["desired_outcome"] is None
     assert invocation_contract["constraints"] == next_state.constraints
@@ -553,7 +553,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
             workflow_params={
                 "selected_workflow": "release_candidate_to_go_no_go",
                 "task_title": "Release workflow failure-mode diagnosis",
-                "statuses": ["failed", "blocked", "paused"],
+                "statuses": ["failed", "blocked", "awaiting_input"],
                 "max_runs": 3,
                 "sponsor_role": "workflow platform",
                 "desired_outcome": "Publish a reusable failure-mode package and ranked next actions for the selected workflow.",
@@ -604,7 +604,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
         "run_id": run_dir.name,
         "selected_workflow_reference": "release_candidate_to_go_no_go",
         "sponsor_role": "workflow platform",
-        "statuses": ["blocked", "failed", "paused"],
+        "statuses": ["awaiting_input", "blocked", "failed"],
         "task_id": "workflow-failure-modes-task",
         "task_title": "Release workflow failure-mode diagnosis",
         "workflow_name": "workflow_run_history_to_failure_modes",
@@ -629,7 +629,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     "events": [
                         {"event_type": "run_started", "seq": 1},
                         {"event_type": "step_executed", "seq": 2, "step_name": "frame_release"},
-                        {"event_type": "run_finished", "seq": 3, "status": "paused"},
+                        {"event_type": "run_finished", "seq": 3, "status": "awaiting_input"},
                     ],
                     "parent_record": {
                         "run_folder": ".autoloop/tasks/ops-program/wf_task_to_workflow_strategy/runs/run-parent",
@@ -646,9 +646,9 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                         "package_folder": "workflows/release_candidate_to_go_no_go",
                         "pending_question": "Who owns rollback approval for release 2026.07?",
                         "run_id": "run-release-paused",
-                        "status": "paused",
+                        "status": "awaiting_input",
                         "task_id": "release-gamma",
-                        "terminal": "PAUSE",
+                        "terminal": "AWAIT_INPUT",
                         "updated_at": "2026-04-23T08:10:00+00:00",
                         "workflow_name": "release_candidate_to_go_no_go",
                         "workflow_params": {
@@ -776,7 +776,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                         "run_id": "run-release-blocked",
                         "status": "blocked",
                         "task_id": "release-beta",
-                        "terminal": "PAUSE",
+                        "terminal": "AWAIT_INPUT",
                         "updated_at": "2026-04-22T09:15:00+00:00",
                         "workflow_name": "release_candidate_to_go_no_go",
                         "workflow_params": {
@@ -1009,7 +1009,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
                     },
                 },
             ],
-            "statuses": ["blocked", "failed", "paused"],
+            "statuses": ["awaiting_input", "blocked", "failed"],
         },
         "task_id": "workflow-failure-modes-task",
         "workflow_name": "workflow_run_history_to_failure_modes",
@@ -1165,7 +1165,7 @@ def test_workflow_run_history_to_failure_modes_package_runs_and_publishes_termin
         "selected_workflow_reference": "release_candidate_to_go_no_go",
         "selected_workflow_run_history": str(workflow_dir / "selected_workflow_run_history.json"),
         "sponsor_role": "workflow platform",
-        "statuses": ["blocked", "failed", "paused"],
+        "statuses": ["awaiting_input", "blocked", "failed"],
         "task_title": "Release workflow failure-mode diagnosis",
         "workflow_name": "workflow_run_history_to_failure_modes",
     }
@@ -1595,7 +1595,7 @@ def test_workflow_run_history_capture_step_normalizes_alias_and_preserves_filter
     state = workflow_pkg.WorkflowRunHistoryToFailureModes.State(
         selected_workflow_reference="release-readiness",
         task_title="Release workflow failure-mode diagnosis",
-        statuses=["blocked", "failed", "paused"],
+        statuses=["awaiting_input", "blocked", "failed"],
         max_runs=3,
     )
     ctx = Context(
@@ -1666,7 +1666,7 @@ def _make_publish_failure_modes_test_context(
     initial_state = workflow_pkg.WorkflowRunHistoryToFailureModes.State(
         selected_workflow_reference="release_candidate_to_go_no_go",
         task_title="Release workflow failure-mode diagnosis",
-        statuses=["blocked", "failed", "paused"],
+        statuses=["awaiting_input", "blocked", "failed"],
         max_runs=3,
         sponsor_role="workflow platform",
         desired_outcome="Publish a reusable failure-mode package and ranked next actions for the selected workflow.",
@@ -2005,21 +2005,21 @@ def _seed_release_run_history(root: Path, *, include_matching_failures: bool = T
                 }
             ],
             workflow_params={"release_name": "2026.06", "deployment_environment": "production"},
-            terminal="PAUSE",
+            terminal="AWAIT_INPUT",
         )
         _write_run_history_record(
             root,
             task_id="release-gamma",
             workflow_name="release_candidate_to_go_no_go",
             run_id="run-release-paused",
-            status="paused",
+            status="awaiting_input",
             created_at="2026-04-23T08:00:00+00:00",
             updated_at="2026-04-23T08:10:00+00:00",
             request_text="Ship release 2026.07 while rollback ownership is unresolved.\n",
             events=[
                 {"event_type": "run_started", "seq": 1},
                 {"event_type": "step_executed", "seq": 2, "step_name": "frame_release"},
-                {"event_type": "run_finished", "seq": 3, "status": "paused"},
+                {"event_type": "run_finished", "seq": 3, "status": "awaiting_input"},
             ],
             parent_record={
                 "task_id": "ops-program",
@@ -2030,7 +2030,7 @@ def _seed_release_run_history(root: Path, *, include_matching_failures: bool = T
                 "run_folder": ".autoloop/tasks/ops-program/wf_task_to_workflow_strategy/runs/run-parent",
             },
             workflow_params={"release_name": "2026.07", "deployment_environment": "production"},
-            terminal="PAUSE",
+            terminal="AWAIT_INPUT",
             pending_question="Who owns rollback approval for release 2026.07?",
         )
     _write_run_history_record(

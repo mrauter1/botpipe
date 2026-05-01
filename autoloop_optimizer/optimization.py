@@ -23,7 +23,7 @@ from core.schema_registry import (
 )
 from core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
 from runtime.loader import resolve_workflow_reference
-from runtime.workspace import list_run_records
+from runtime.workspace import list_run_records, normalize_run_status
 
 from ._selected_workflow import capture_selected_workflow, inspect_selected_workflow
 from stdlib.lifecycle import write_workflow_json
@@ -47,7 +47,7 @@ STEP_PRIORITY_REPORT_SCHEMA = WORKFLOW_OPTIMIZATION_STEP_PRIORITY_REPORT_SCHEMA
 FAILURE_SCENARIO_SEEDS_SCHEMA = WORKFLOW_OPTIMIZATION_FAILURE_SCENARIO_SEEDS_SCHEMA
 FAILURE_SCENARIOS_SCHEMA = WORKFLOW_OPTIMIZATION_FAILURE_SCENARIOS_SCHEMA
 
-_ELIGIBLE_STATUS_LABELS = frozenset({"failed", "paused", "blocked"})
+_ELIGIBLE_STATUS_LABELS = frozenset({"failed", "awaiting_input", "blocked"})
 _PROMPT_SURFACE_SUFFIXES = ("_producer.md", "_verifier.md", ".md")
 
 
@@ -151,19 +151,22 @@ def list_selected_workflow_runs(
             selected_paths.append(run_dir)
         return selected_paths
 
-    normalized_statuses = require_string_list(
+    normalized_statuses = [
+        normalize_run_status(status)
+        for status in require_string_list(
         list(run_statuses),
         field_name="run_statuses",
         error_message="run_statuses must be a list of non-empty strings",
         dedupe=True,
         sort_output=False,
     )
+    ]
     records = list_run_records(repo_root, workflow_name=workflow_name)
     allowed_statuses = set(normalized_statuses)
     selected = [
         record.run_dir
         for record in records
-        if record.status is not None and record.status in allowed_statuses
+        if record.normalized_status is not None and record.normalized_status in allowed_statuses
     ]
     return selected[:history_limit]
 
@@ -598,7 +601,9 @@ def compute_static_step_centrality(
         if not isinstance(routes, Mapping):
             continue
         nonterminal_targets = [
-            target for target in routes.values() if isinstance(target, str) and target not in {"FINISH", "PAUSE", "FAIL"}
+            target
+            for target in routes.values()
+            if isinstance(target, str) and target not in {"FINISH", "AWAIT_INPUT", "FAIL"}
         ]
         counts[str(source)] += float(len(nonterminal_targets))
         for target in nonterminal_targets:

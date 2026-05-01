@@ -270,8 +270,8 @@ class SimpleExample(Workflow):
     assert inspected.entry_step_name == "a"
     assert inspected.routes["a"] == {
         "done": "FINISH",
-        "question": "PAUSE",
-        "blocked": "PAUSE",
+        "question": "AWAIT_INPUT",
+        "blocked": "AWAIT_INPUT",
         "failed": "FAIL",
     }
 

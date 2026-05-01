@@ -49,7 +49,7 @@ def test_list_selected_workflow_runs_filters_by_workflow_and_status(tmp_path: Pa
         tmp_path,
         "release_candidate_to_go_no_go",
         run_refs=[],
-        run_statuses=["failed", "paused"],
+        run_statuses=["failed", "awaiting_input"],
         history_limit=10,
     )
 

@@ -771,7 +771,7 @@ def test_workflow_package_to_composable_building_blocks_routes_to_blocked_for_un
     run_dir = next((workflow_dir / "runs").iterdir())
     evidence_manifest = json.loads((workflow_dir / "decomposition_evidence_manifest.json").read_text(encoding="utf-8"))
 
-    assert result.terminal == "PAUSE"
+    assert result.terminal == "AWAIT_INPUT"
     assert result.last_event.tag == "blocked"
     assert evidence_manifest["capture_status"] == "blocked"
     assert "evidence_paths does not exist" in evidence_manifest["blocking_reason"]

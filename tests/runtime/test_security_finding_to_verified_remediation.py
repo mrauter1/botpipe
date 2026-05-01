@@ -608,15 +608,15 @@ def test_security_remediation_package_propagates_child_question_without_adopting
         if line
     ]
 
-    assert result.terminal == "PAUSE"
-    assert parent_meta["status"] == "paused"
+    assert result.terminal == "AWAIT_INPUT"
+    assert parent_meta["status"] == "awaiting_input"
     assert parent_meta["pending_question"] == "Which production environment should bound the blast radius?"
-    assert child_meta["status"] == "paused"
+    assert child_meta["status"] == "awaiting_input"
     assert child_meta["pending_question"] == "Which production environment should bound the blast radius?"
     assert not (workflow_dir / "finding_scope_brief.md").exists()
     assert not (workflow_dir / "security_evidence_pack.md").exists()
     assert child_records[0]["workflow_name"] == "investigation_request_to_evidence_pack"
-    assert child_records[0]["status"] == "paused"
+    assert child_records[0]["status"] == "awaiting_input"
     assert child_records[0]["last_event"] == {
         "tag": "question",
         "reason": "",
@@ -672,7 +672,7 @@ def test_security_remediation_package_blocks_when_child_publishes_not_ready_pack
         if line
     ]
 
-    assert result.terminal == "PAUSE"
+    assert result.terminal == "AWAIT_INPUT"
     assert result.last_event is not None
     assert result.last_event.tag == "blocked"
     assert result.last_event.reason == "Child evidence pack published without downstream-readiness approval."

@@ -14,7 +14,7 @@ class Params(SelectedWorkflowTaskFramingParameters):
     """Invocation contract for ``workflow_run_traces_to_optimization_candidates``."""
 
     run_refs: list[str] = Field(default_factory=list)
-    run_statuses: list[str] = Field(default_factory=lambda: ["failed", "paused", "blocked"])
+    run_statuses: list[str] = Field(default_factory=lambda: ["failed", "awaiting_input", "blocked"])
     route_tags: list[str] = Field(default_factory=lambda: ["needs_rework", "needs_replan", "failed", "blocked"])
     history_limit: int = 25
     top_k_steps: int = 1

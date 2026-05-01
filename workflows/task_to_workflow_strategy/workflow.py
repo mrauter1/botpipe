@@ -233,7 +233,7 @@ class TaskToWorkflowStrategy(Workflow):
             },
         )
         child_last_event = None if child_result.last_event is None else child_result.last_event.tag
-        if child_result.status == "paused" and child_last_event in {"question", "blocked"}:
+        if child_result.status == "awaiting_input" and child_last_event in {"question", "blocked"}:
             question = None if child_result.last_event is None else child_result.last_event.question
             return state, Event(child_last_event, question=question)
 

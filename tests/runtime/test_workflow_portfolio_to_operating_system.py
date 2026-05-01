@@ -693,7 +693,7 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
     assert strategy_health["latest_run_id"] == "run-strategy-paused"
     assert strategy_health["latest_updated_at"] == "2026-04-24T08:10:00+00:00"
     assert strategy_health["run_count"] == 2
-    assert strategy_health["status_counts"] == {"failed": 1, "paused": 1}
+    assert strategy_health["status_counts"] == {"awaiting_input": 1, "failed": 1}
     assert strategy_health["recent_runs"] == [
         {
             "created_at": "2026-04-24T08:00:00+00:00",
@@ -703,9 +703,9 @@ def test_workflow_portfolio_to_operating_system_runs_and_publishes_terminal_gove
             "request_file": str(seeded_paths["strategy_paused"] / "request.md"),
             "run_folder": str(seeded_paths["strategy_paused"]),
             "run_id": "run-strategy-paused",
-            "status": "paused",
+            "status": "awaiting_input",
             "task_id": "portfolio-alpha",
-            "terminal": "PAUSE",
+            "terminal": "AWAIT_INPUT",
             "updated_at": "2026-04-24T08:10:00+00:00",
         },
         {
@@ -1585,11 +1585,11 @@ def _seed_portfolio_run_health(root: Path) -> dict[str, Path]:
             task_id="portfolio-alpha",
             workflow_name="task_to_workflow_strategy",
             run_id="run-strategy-paused",
-            status="paused",
+            status="awaiting_input",
             created_at="2026-04-24T08:00:00+00:00",
             updated_at="2026-04-24T08:10:00+00:00",
             request_text="Decide whether this initiative should reuse or create workflows.\n",
-            terminal="PAUSE",
+            terminal="AWAIT_INPUT",
             pending_question="Should strategy adapt or compose next?",
         ),
         "diagnostics_success": _write_run_summary_record(

@@ -401,7 +401,7 @@ def test_company_operation_to_recursive_improvement_cycle_normalizes_repeatable_
             "statuses": [
                 " success ",
                 "",
-                "paused",
+                "awaiting_input",
                 "success",
             ],
             "max_tasks": 12,
@@ -429,7 +429,7 @@ def test_company_operation_to_recursive_improvement_cycle_normalizes_repeatable_
         "max_runs_per_workflow": 4,
         "max_tasks": 12,
         "sponsor_role": "Workflow Platform",
-        "statuses": ["success", "paused"],
+        "statuses": ["awaiting_input", "success"],
         "task_title": "Company recursive-improvement review",
     }
 
@@ -471,7 +471,7 @@ def test_company_operation_to_recursive_improvement_cycle_bootstrap_reads_typed_
                     "workflow_package_to_composable_building_blocks",
                     "workflow_portfolio_to_operating_system",
                 ],
-                "statuses": [" success ", "", "paused", "success"],
+                "statuses": [" success ", "", "awaiting_input", "success"],
                 "max_tasks": 12,
                 "max_runs_per_workflow": 4,
                 "max_messages_per_task": 3,
@@ -521,7 +521,7 @@ def test_company_operation_to_recursive_improvement_cycle_bootstrap_reads_typed_
         "workflow_portfolio_to_operating_system",
         "workflow_package_to_composable_building_blocks",
     ]
-    assert next_state.statuses == ["success", "paused"]
+    assert next_state.statuses == ["success", "awaiting_input"]
     assert next_state.max_tasks == 12
     assert next_state.max_runs_per_workflow == 4
     assert next_state.max_messages_per_task == 3
@@ -669,7 +669,7 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
                     "workflow_and_eval_to_refined_workflow_package",
                     "company_operation_to_recursive_improvement_cycle",
                 ],
-                "statuses": ["success", "paused", "failed"],
+                "statuses": ["success", "awaiting_input", "failed"],
                 "max_tasks": 2,
                 "max_runs_per_workflow": 2,
                 "max_messages_per_task": 2,
@@ -730,7 +730,7 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
         "request_file": str(run_dir / "request.md"),
         "run_id": run_dir.name,
         "sponsor_role": "workflow platform",
-        "statuses": ["success", "paused", "failed"],
+        "statuses": ["success", "awaiting_input", "failed"],
         "task_id": "company-recursive-task",
         "task_title": "Company recursive-improvement review",
         "workflow_name": "company_operation_to_recursive_improvement_cycle",
@@ -750,7 +750,7 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
     assert health_snapshot["workflow_name"] == "company_operation_to_recursive_improvement_cycle"
     assert health_snapshot["workflow_portfolio_health"]["max_runs_per_workflow"] == 2
     assert health_snapshot["workflow_portfolio_health"]["selected_workflow_names"] == _FOCUS_WORKFLOWS
-    assert health_snapshot["workflow_portfolio_health"]["statuses"] == ["failed", "paused", "success"]
+    assert health_snapshot["workflow_portfolio_health"]["statuses"] == ["awaiting_input", "failed", "success"]
     assert health_snapshot["workflow_portfolio_health"]["workflow_count"] == 4
 
     health_by_workflow = {
@@ -763,7 +763,7 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
     assert health_by_workflow["workflow_package_to_composable_building_blocks"]["run_count"] == 1
     assert health_by_workflow["workflow_package_to_composable_building_blocks"]["status_counts"] == {"failed": 1}
     assert health_by_workflow["workflow_portfolio_to_operating_system"]["run_count"] == 2
-    assert health_by_workflow["workflow_portfolio_to_operating_system"]["status_counts"] == {"paused": 1, "success": 1}
+    assert health_by_workflow["workflow_portfolio_to_operating_system"]["status_counts"] == {"awaiting_input": 1, "success": 1}
 
     assert company_snapshot["repo_root"] == str(tmp_path.resolve())
     assert company_snapshot["run_id"] == run_dir.name
@@ -774,7 +774,7 @@ def test_company_operation_to_recursive_improvement_cycle_runs_and_publishes_ter
     assert company_snapshot["company_operation"]["max_messages_per_task"] == 2
     assert company_snapshot["company_operation"]["selected_task_ids"] == ["recursive-alpha", "recursive-beta"]
     assert company_snapshot["company_operation"]["selected_workflow_names"] == _FOCUS_WORKFLOWS
-    assert company_snapshot["company_operation"]["statuses"] == ["failed", "paused", "success"]
+    assert company_snapshot["company_operation"]["statuses"] == ["awaiting_input", "failed", "success"]
     assert company_snapshot["company_operation"]["task_count"] == 2
     assert [entry["task_id"] for entry in company_snapshot["company_operation"]["tasks"]] == _SCOPED_TASK_IDS
     assert company_snapshot["company_operation"]["tasks"][0]["recent_messages"][0] == {
@@ -1345,7 +1345,7 @@ def _make_publish_company_operation_cycle_test_context(
                 "workflow_portfolio_health": {
                     "max_runs_per_workflow": 2,
                     "selected_workflow_names": focus_workflows,
-                    "statuses": ["failed", "paused", "success"],
+                    "statuses": ["awaiting_input", "failed", "success"],
                     "workflow_count": len(focus_workflows),
                     "workflows": [
                         {
@@ -1373,7 +1373,7 @@ def _make_publish_company_operation_cycle_test_context(
                     "max_tasks": 2,
                     "selected_task_ids": ["recursive-alpha", "recursive-beta"],
                     "selected_workflow_names": focus_workflows,
-                    "statuses": ["failed", "paused", "success"],
+                    "statuses": ["awaiting_input", "failed", "success"],
                     "task_count": len(scoped_task_ids),
                     "tasks": [
                         {
@@ -1703,11 +1703,11 @@ def _seed_company_operation_history(root: Path) -> dict[str, Path]:
             task_id="recursive-alpha",
             workflow_name="workflow_portfolio_to_operating_system",
             run_id="run-portfolio-paused",
-            status="paused",
+            status="awaiting_input",
             created_at="2026-04-24T09:00:00+00:00",
             updated_at="2026-04-24T09:04:00+00:00",
             request_text="Refresh the portfolio governance package after decomposition feedback.\n",
-            terminal="PAUSE",
+            terminal="AWAIT_INPUT",
             pending_question="Who owns the next governance handoff?",
         ),
         "refinement_success": _write_run_summary_record(
