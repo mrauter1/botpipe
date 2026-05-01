@@ -1544,3 +1544,59 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+I’m taking the test phase as phase-local coverage work only. First I’m reading the active test artifacts and the already-touched test files so I can add the smallest deterministic coverage that closes the metadata/schema regressions without creating unrelated churn.
+
+I’ve got the active test-phase header and the phase decisions. I’m checking the current test coverage against AC-1 through AC-3 now, specifically for reader compatibility on trace/event/history surfaces and the persisted-schema cutover rules, because that’s where the phase is easiest to under-test.
+
+The current test coverage already hits the new optimizer and `Goto` paths, but it still doesn’t explicitly guard the trace/history reader’s legacy-vs-unsupported schema behavior. I’m adding that at the `HistoryReader` boundary so the phase covers one more owned reader surface from AC-3 instead of only the writer side.
+
+I’ve added the extra history-reader compatibility coverage. Now I’m updating the phase test strategy and feedback so they map the behaviors we actually cover, then I’ll run focused validation on the touched test file and record the environment gap again if `pytest` is still unavailable.
+
+`pytest` is still missing here, so this turn will stay at deterministic file-level validation plus a clear coverage map. I’m appending the test decision under the active test header and updating the phase artifacts now.
+
+The coverage map and feedback artifacts are updated. I’m doing one quick readback of the changed test and artifact files so the final handoff is precise about what was added and what still couldn’t be executed in this environment.
+
+Scope considered
+
+- Phase-local test coverage for `metadata-tracing-schema-and-attribution`.
+- Focused on trace/history finalization metadata, direct runtime-control status derivation, and persisted-schema compatibility behavior on owned reader surfaces.
+
+What I analyzed
+
+- Existing runtime tests in `tests/runtime/test_history.py`, `tests/runtime/test_runtime_tracing.py`, `tests/runtime/test_compatibility_runtime.py`, and `tests/runtime/test_workspace_and_context.py`.
+- The new optimizer coverage in `tests/unit/test_optimization_helpers.py`.
+- The active test artifacts and the phase decisions in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/metadata-tracing-schema-and-attribution/test_strategy.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+What I changed
+
+- Extended [tests/runtime/test_history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_history.py) with:
+  - legacy schema-less trace acceptance coverage;
+  - explicit unsupported trace schema failure coverage.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/metadata-tracing-schema-and-attribution/test_strategy.md) with a behavior-to-test map for AC-1 through AC-3, preserved invariants, failure paths, flake controls, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/metadata-tracing-schema-and-attribution/feedback.md).
+- Appended the non-obvious test decision under the active test-author header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+Key findings / decisions
+
+- The phase already had solid writer-side and optimizer-side schema coverage; the missing gap was an explicit history-reader boundary test for the same legacy-vs-unsupported schema rule.
+- I kept the added coverage deterministic by using inline JSON payloads in temp directories only.
+
+Open issues / next step
+
+- `python3 -m compileall tests/runtime/test_history.py` passed.
+- `python3 -m pytest tests/runtime/test_history.py tests/unit/test_optimization_helpers.py` could not run because `pytest` is not installed in this environment (`No module named pytest`).
+- Next step is auditor review of the updated test coverage.

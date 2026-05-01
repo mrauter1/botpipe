@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from pydantic import BaseModel
 
 from core.context import Context
@@ -356,6 +357,62 @@ def test_context_history_marks_goto_runtime_control_as_completed(tmp_path: Path)
             "hook_route_redirects": (),
         },
     )
+
+
+def test_context_history_accepts_legacy_trace_records_without_schema(tmp_path: Path) -> None:
+    ctx, run_folder = _context(tmp_path)
+    _write_jsonl(
+        run_folder / "trace.jsonl",
+        [
+            {
+                "event_type": "step_started",
+                "timestamp": "2026-04-30T11:20:00+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+            },
+            {
+                "event_type": "step_finished",
+                "timestamp": "2026-04-30T11:20:02+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+                "candidate_route": "done",
+                "final_route": "done",
+                "provider_attributable": True,
+                "event": {"tag": "done"},
+            },
+        ],
+    )
+    _write_jsonl(run_folder / "events.jsonl", [])
+
+    telemetry = ctx.history.step_telemetry("triage")
+    routes = ctx.history.routes(step="triage")
+
+    assert telemetry["completed"] is True
+    assert telemetry["status"] == "completed"
+    assert routes[0]["final_route"] == "done"
+
+
+def test_context_history_rejects_explicit_unsupported_trace_schema(tmp_path: Path) -> None:
+    ctx, run_folder = _context(tmp_path)
+    _write_jsonl(
+        run_folder / "trace.jsonl",
+        [
+            {
+                "schema": "autoloop.runtime_trace/v2",
+                "event_type": "step_started",
+                "timestamp": "2026-04-30T11:30:00+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+            }
+        ],
+    )
+    _write_jsonl(run_folder / "events.jsonl", [])
+
+    with pytest.raises(ValueError, match="unsupported schema"):
+        ctx.history.trace()
 
 
 def test_context_history_attributes_scoped_hook_failures_from_trace(tmp_path: Path) -> None:
