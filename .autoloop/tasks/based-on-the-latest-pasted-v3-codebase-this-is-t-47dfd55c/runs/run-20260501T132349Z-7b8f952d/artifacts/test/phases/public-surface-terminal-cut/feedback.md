@@ -8,3 +8,4 @@
 - Scope: phase-local authoritative verifier artifact
 
 - 2026-05-01: Added regression coverage for legacy persisted `status="paused"` normalization at the workspace record-listing boundary and the public `runs list --status awaiting_input` CLI surface; documented the phase coverage map and remaining runtime-control-scope gaps in `test_strategy.md`.
+- TST-001 `non-blocking`: Legacy persisted `paused` compatibility is now directly covered for workspace filtering and `runs list`, but `runs show` on an old `run.json` record is still only indirectly protected through shared payload helpers. Adding one explicit `runs show` compatibility assertion later would make the public cutover contract easier to audit.

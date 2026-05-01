@@ -588,3 +588,54 @@ Open issues / next step
 - Targeted pytest execution is still blocked in this environment: `python3 -m pytest ...` fails with `No module named pytest`.
 - Import-time smoke execution remains blocked by the missing `pydantic` dependency in the system interpreter.
 - The next step is verifier review of this phase’s test artifacts and added regression coverage.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m auditing the phase-local test coverage and the new compatibility regressions first, then I’ll update the audit artifacts with either blocking gaps or a clean completion. I’ll read the criteria, the test strategy, and the exact test slices that are supposed to protect the public `AWAIT_INPUT` cut.
+
+The main question now is whether the suite covers the compatibility promise for older persisted paused runs beyond listing/filtering. I’m checking for explicit `resume`/`answer` coverage against legacy metadata before I decide whether there’s a real blocking gap or just a follow-up suggestion.
+
+The coverage looks adequate for this phase: the new tests hit the centralized normalization seam, the public CLI list path, the hard-cut import/signature surface, and the compatibility invariant stays within the recorded decision boundary. I’m marking the audit complete and adding one low-confidence follow-up suggestion rather than treating it as a blocking gap.
+
+Scope considered
+
+- Phase-local audit of the test coverage for the public terminal/control hard cut.
+- I focused on the changed tests and the strategy artifact first, then widened only enough to confirm the hard-cut expectations and the legacy persisted `paused` compatibility boundary.
+
+What I analyzed
+
+- The active audit artifacts in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/public-surface-terminal-cut/criteria.md), [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/public-surface-terminal-cut/test_strategy.md), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/public-surface-terminal-cut/feedback.md).
+- The relevant tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py), and [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py).
+- The compatibility decision history in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+What I reviewed
+
+- The suite now covers the canonical public exports, removed-name import failures, removed `on_route` public entrypoints, renamed route helper surface, and canonical `AWAIT_INPUT` / `awaiting_input` runtime payloads.
+- The new regressions directly protect the central compatibility seam: legacy persisted `status="paused"` is matched by public `awaiting_input` filtering in workspace record listing and the public `runs list --status awaiting_input` CLI surface.
+- I updated the audit artifacts: all criteria boxes are checked, and I appended one non-blocking follow-up note to the feedback artifact.
+
+Key findings / decisions
+
+- No blocking audit findings.
+- The test coverage is aligned with the recorded compatibility boundary: legacy `paused` remains only as persisted-fixture input, while direct public outputs and assertions stay canonical.
+- I recorded one non-blocking suggestion, `TST-001`, to add an explicit `runs show` compatibility assertion later even though the current behavior is already indirectly protected through shared helpers.
+
+Open issues / next step
+
+- This phase’s test audit is complete.
+- If the team revisits the runtime status boundary later, the `TST-001` suggestion is the next low-cost improvement.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
