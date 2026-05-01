@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from autoloop import FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
+from autoloop import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
 from core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
 from core.compiler import compile_workflow
 from core.providers.retries import ProviderRetryPolicy
@@ -320,6 +320,40 @@ def test_topology_payload_keeps_explicit_global_route_required_writes_concrete()
     assert payload["global_routes"]["failed"]["required_writes"] == ["report"]
     assert payload["global_routes"]["failed"]["explicit_required_writes"] == ["report"]
     assert payload["global_routes"]["failed"]["effective_required_writes"] == ["report"]
+
+
+def test_route_table_and_compile_report_include_hidden_global_routes(tmp_path: Path) -> None:
+    class HiddenGlobalRouteWorkflow(CoreWorkflow):
+        class State(BaseModel):
+            pass
+
+        ask = PromptStep(
+            name="ask",
+            producer="ask.md",
+            retry_policy=ProviderRetryPolicy(max_attempts=1),
+        )
+        entry = ask
+        transitions = {
+            ask: {"done": FINISH},
+            GLOBAL: {"blocked": Route.to(AWAIT_INPUT, provider_visible=False)},
+        }
+
+        @staticmethod
+        def on_ask(state, outcome, artifacts):
+            return state
+
+    compiled = compile_workflow(HiddenGlobalRouteWorkflow)
+
+    payload = workflow_topology_payload(compiled)
+
+    assert payload["global_routes"]["blocked"]["provider_visible"] is False
+
+    write_topology_artifacts(tmp_path, compiled)
+    route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
+    compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
+
+    assert "| GLOBAL | blocked | AWAIT_INPUT | false | inherit | - | - | - |" in route_table
+    assert "- hidden routes: `1`" in compile_report
 
 
 def test_static_graph_schema_uses_registry_constant() -> None:

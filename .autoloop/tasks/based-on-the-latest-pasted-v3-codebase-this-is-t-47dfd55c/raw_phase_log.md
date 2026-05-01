@@ -1770,3 +1770,61 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de445-0372-7da3-a51b-5c9350070632
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+I’m auditing the changed phase behavior and the existing new coverage before adding anything. First I’m reading the active test artifacts and the current targeted tests around validation, provider rendering, and static artifacts so I can fill the real gaps rather than churn tests.
+
+There’s already solid coverage for the main step/verifier path, so I’m adding only the missing edge surfaces created by this phase’s code: provider operation rendering with hidden routes, and artifact rendering for hidden global routes. Those are the two places the implementation changed behavior without direct dedicated tests yet.
+
+I’ve identified two uncovered regressions worth pinning down: hidden-route filtering for `operation` prompts, and hidden global-route preservation in static artifacts. I’m adding just those tests and then I’ll rerun the targeted phase slice plus the new regression points.
+
+The new tests are in. I’m running the focused phase suite plus the specific files I touched so I can update the strategy and feedback with real results instead of intended coverage.
+
+The focused test slice is green. I’m updating the phase test artifacts now with the actual behavior-to-coverage map and the specific regression points these tests lock down.
+
+Need ensure no nested bullets? Developer says flat bullets; but in file artifacts okay? That's for responses, not file contents? likely fine but maybe keep structured. Yet maybe okay. Need feedback concise entry.
+
+Scope considered
+
+- Phase-local test work for `validation-rendering-and-topology`.
+- Focused on changed behavior around hook-validation cleanup, hidden-route provider rendering, and enriched topology/static artifacts.
+- Broadened only to adjacent contract tests that guard the same hidden-route and direct-control invariants.
+
+What I analyzed
+
+- Existing new coverage in `tests/unit/test_validation.py`, `tests/unit/test_provider_boundary_core.py`, and `tests/runtime/test_runtime_static_graph.py`.
+- Adjacent runtime contract coverage in `tests/contract/test_engine_contracts.py`.
+- Phase notes and run decisions, especially the requirement that runtime stays authoritative for hook-return validation and that hidden-route filtering is provider-render-only.
+
+What I changed
+
+- Added `test_render_provider_operation_prompt_excludes_hidden_choices` to [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py) to cover hidden-route filtering on the `operation` render path.
+- Added `test_route_table_and_compile_report_include_hidden_global_routes` to [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py) to cover hidden global routes in static artifacts and hidden-route counting.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/validation-rendering-and-topology/test_strategy.md) with a behavior-to-coverage map.
+- Appended the phase test summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/validation-rendering-and-topology/feedback.md).
+
+Key findings / decisions
+
+- The remaining uncovered regression surface was not the main step/verifier contract, but the `operation` prompt renderer, because the implementation also changed `_render_operation_response`.
+- Hidden global routes needed explicit artifact coverage because the route-table implementation now emits global rows and the compile report counts hidden routes across both step-local and global routes.
+- Appended one line under the current test-phase header in `decisions.txt` to capture that coverage intent.
+
+Open issues / next step
+
+- No open blocker in this phase.
+- Validation run:
+  `./.venv/bin/pytest tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py -q`
+  `./.venv/bin/pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py tests/contract/test_engine_contracts.py -q -k 'does_not_infer_after_hook_routes_from_source or does_not_infer_after_producer_redirects_from_source or excludes_hidden_routes_from_prompt_contract or excludes_hidden_choices or include_hidden_global_routes or hidden_routes_are_runtime_legal_but_excluded_from_provider_choices'`
+- Result: all selected tests passed.

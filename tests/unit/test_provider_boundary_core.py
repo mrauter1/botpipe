@@ -247,6 +247,38 @@ def test_render_provider_turn_excludes_hidden_routes_from_prompt_contract() -> N
     assert "needs_rework" in turn.prompt_text
 
 
+def test_render_provider_operation_prompt_excludes_hidden_choices() -> None:
+    context = _turn_context()
+    turn = render_provider_turn(
+        ProviderTurnContext(
+            step_name="decision",
+            turn_kind="operation",
+            prompt=ResolvedPrompt(path="decision.md", text="Choose the next route."),
+            context=context.context,
+            artifacts=context.artifacts,
+            session=context.session,
+            expected_output_schema=None,
+            available_routes=("done", "needs_rework", "human_escalation"),
+            routes={
+                "done": ProviderRoute(summary="Complete the operation."),
+                "needs_rework": ProviderRoute(summary="Retry locally."),
+                "human_escalation": ProviderRoute(
+                    summary="Escalate to a hidden SOP branch.",
+                    provider_visible=False,
+                ),
+            },
+            route_required_writes={
+                "done": (),
+                "needs_rework": (),
+                "human_escalation": (),
+            },
+        )
+    )
+
+    assert "Allowed choices: done, needs_rework." in turn.prompt_text
+    assert "human_escalation" not in turn.prompt_text
+
+
 def test_render_required_inputs_marks_runtime_preconditions_required_even_for_optional_artifacts() -> None:
     context = _turn_context()
     turn = render_provider_turn(
