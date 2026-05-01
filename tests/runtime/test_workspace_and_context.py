@@ -198,7 +198,7 @@ def test_resume_fails_when_saved_topology_hash_differs(tmp_path: Path) -> None:
     run_meta["topology"]["topology_hash"] = "mismatched-topology"
     run_meta_file.write_text(json.dumps(run_meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    assert paused.terminal == "PAUSE"
+    assert paused.terminal == "AWAIT_INPUT"
     with pytest.raises(WorkflowExecutionError, match="different compiled topology"):
         run_workflow_package(
             "resume_topology_demo",
@@ -276,7 +276,7 @@ def test_resume_preserves_persisted_workflow_params_when_not_resupplied(tmp_path
     resumed_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
-    assert paused.terminal == "PAUSE"
+    assert paused.terminal == "AWAIT_INPUT"
     assert paused_meta["workflow_params"] == {"mode": "strict"}
     assert resumed.terminal == "FINISH"
     assert resumed_context["workflow_params"] == {"mode": "strict"}
@@ -347,7 +347,7 @@ def test_resume_ignores_explicit_workflow_param_override_for_existing_run(tmp_pa
     resumed_context = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     resumed_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
-    assert paused.terminal == "PAUSE"
+    assert paused.terminal == "AWAIT_INPUT"
     assert resumed.terminal == "FINISH"
     assert resumed_context["workflow_params"] == {"mode": "strict"}
     assert resumed_context["answer"] == "42"
@@ -435,7 +435,7 @@ class Params(BaseModel):
     run_dir = next((workflow_dir / "runs").iterdir())
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
-    assert paused.terminal == "PAUSE"
+    assert paused.terminal == "AWAIT_INPUT"
     assert payload["typed_mode"] == "focused"
     assert payload["typed_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
     assert payload["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
@@ -488,7 +488,7 @@ class Params(BaseModel):
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
 
-    assert paused.terminal == "PAUSE"
+    assert paused.terminal == "AWAIT_INPUT"
     assert payload["typed_params"] == {"retries": 5, "mode": "strict"}
     assert payload["workflow_params"] == {"retries": 5, "mode": "strict"}
     assert run_meta["workflow_params"] == {"retries": 5, "mode": "strict"}
@@ -568,7 +568,7 @@ class Params(BaseModel):
 
     payload = json.loads((run_dir / "context.json").read_text(encoding="utf-8"))
 
-    assert paused.terminal == "PAUSE"
+    assert paused.terminal == "AWAIT_INPUT"
     assert resumed.terminal == "FINISH"
     assert payload["typed_mode"] == "strict"
     assert payload["typed_params"] == {"mode": "strict"}
@@ -679,14 +679,14 @@ def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filte
                     "request_file": str(paused_dir / "request.md"),
                     "run_folder": str(paused_dir),
                     "run_id": "run-paused",
-                    "status": "paused",
+                    "status": "awaiting_input",
                     "task_id": "task-1",
                     "terminal": None,
                     "updated_at": "2026-04-24T06:03:00+00:00",
                 }
             ],
             "run_count": 2,
-            "status_counts": {"failed": 1, "paused": 1},
+            "status_counts": {"awaiting_input": 1, "failed": 1},
             "workflow_name": "release_candidate_to_go_no_go",
         },
     )
@@ -822,14 +822,14 @@ def test_list_task_operation_summaries_publish_bounded_task_history_and_filtered
                     "request_file": str(paused_dir / "request.md"),
                     "run_folder": str(paused_dir),
                     "run_id": "run-paused",
-                    "status": "paused",
+                    "status": "awaiting_input",
                     "task_id": "task-1",
                     "terminal": None,
                     "updated_at": "2026-04-24T06:04:00+00:00",
                 }
             ],
             "run_count": 2,
-            "status_counts": {"failed": 1, "paused": 1},
+            "status_counts": {"awaiting_input": 1, "failed": 1},
             "workflow_name": "release_candidate_to_go_no_go",
         },
     ]
@@ -1142,24 +1142,24 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
         if line
     ]
 
-    assert paused_parent.terminal == "PAUSE"
+    assert paused_parent.terminal == "AWAIT_INPUT"
     assert resumed_parent.terminal == "FINISH"
     assert (task_dir / "request.md").read_text(encoding="utf-8") == "Parent request\n"
     assert [entry["message"] for entry in task_messages] == ["Parent request"]
     assert parent_payload["parent_answer"] == "Proceed parent"
     assert parent_payload["child_workflow"] == "child_pause"
-    assert parent_payload["child_status"] == "paused"
+    assert parent_payload["child_status"] == "awaiting_input"
     assert parent_payload["child_last_event"] == "question"
     assert Path(parent_payload["child_checkpoint_file"]) == child_run_dir / "checkpoint.json"
     assert child_payload["answer"] is None
     assert child_payload["workflow_params"] == {"mode": "strict"}
-    assert child_meta["status"] == "paused"
+    assert child_meta["status"] == "awaiting_input"
     assert child_meta["pending_question"] == "Child question?"
     assert (child_run_dir / "checkpoint.json").exists()
     assert child_parent["workflow_name"] == "parent_name"
     assert child_parent["run_id"] == parent_run_dir.name
     assert child_records[0]["workflow_name"] == "child_pause"
-    assert child_records[0]["status"] == "paused"
+    assert child_records[0]["status"] == "awaiting_input"
     assert child_records[0]["last_event"] == {"tag": "question", "reason": "", "question": "Child question?"}
 
 
@@ -1480,7 +1480,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import FINISH, PAUSE, Prompt, Raw, Workflow, step
+from autoloop import AWAIT_INPUT, FINISH, Prompt, Raw, Workflow, step
 
 
 class {class_name}(Workflow):
@@ -1493,7 +1493,7 @@ class {class_name}(Workflow):
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
         writes=[context_dump],
-        routes={{"answered": FINISH, "question": PAUSE}},
+        routes={{"answered": FINISH, "question": AWAIT_INPUT}},
     )
 """.strip()
         + "\n",
@@ -1699,7 +1699,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from autoloop import PAUSE, Prompt, Raw, Session, Workflow, step
+from autoloop import AWAIT_INPUT, Prompt, Raw, Session, Workflow, step
 
 
 class ChildPauseWorkflow(Workflow):
@@ -1714,7 +1714,7 @@ class ChildPauseWorkflow(Workflow):
         prompt=Prompt.file("prompts/ask.md"),
         session=main,
         writes=[child_dump],
-        routes={"question": PAUSE},
+        routes={"question": AWAIT_INPUT},
     )
 
     def on_start(self, ctx):
@@ -1741,7 +1741,7 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, PAUSE, Workflow, python_step
+from autoloop import AWAIT_INPUT, Event, FINISH, Workflow, python_step
 
 
 class ParentNameWorkflow(Workflow):
@@ -1750,7 +1750,7 @@ class ParentNameWorkflow(Workflow):
     class State(BaseModel):
         finished: bool = False
 
-    @python_step(name="wait", routes={"question": PAUSE, "done": FINISH})
+    @python_step(name="wait", routes={"question": AWAIT_INPUT, "done": FINISH})
     def wait(state: State, ctx):
         if ctx.answer is None:
             return state, Event("question", question="Parent question?")

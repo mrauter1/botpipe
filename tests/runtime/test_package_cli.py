@@ -170,7 +170,7 @@ import json
 
 from pydantic import BaseModel
 
-from autoloop import Event, FINISH, PAUSE, Workflow, python_step
+from autoloop import AWAIT_INPUT, Event, FINISH, Workflow, python_step
 
 
 class {class_name}(Workflow):
@@ -179,7 +179,7 @@ class {class_name}(Workflow):
     class State(BaseModel):
         answered: bool = False
 
-    @python_step(name="ask", routes={{"question": PAUSE, "answered": FINISH}})
+    @python_step(name="ask", routes={{"question": AWAIT_INPUT, "answered": FINISH}})
     def ask(state: State, ctx):
         payload = {{
             "answer": ctx.answer,
@@ -662,8 +662,8 @@ class Params(BaseModel):
     assert run_exit == 0
     assert run_output["workflow"] == "review"
     assert run_output["task_id"] == "task-42"
-    assert run_output["status"] == "paused"
-    assert run_output["paused"] is True
+    assert run_output["status"] == "awaiting_input"
+    assert run_output["awaiting_input"] is True
     run_id = run_output["run_id"]
 
     run_dir = tmp_path / ".autoloop" / "tasks" / "task-42" / "wf_review" / "runs" / run_id
@@ -674,8 +674,9 @@ class Params(BaseModel):
 
     assert show_exit == 0
     assert show_output["run_id"] == run_id
-    assert show_output["status"] == "paused"
+    assert show_output["status"] == "awaiting_input"
     assert show_output["resumable"] is True
+    assert show_output["awaiting_input"] is True
     assert show_output["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
     assert show_output["pending_question"] == "What value?"
 
@@ -685,7 +686,7 @@ class Params(BaseModel):
     assert list_exit == 0
     assert len(list_output) == 1
     assert list_output[0]["run_id"] == run_id
-    assert list_output[0]["paused"] is True
+    assert list_output[0]["awaiting_input"] is True
 
     logs_exit = cli.main(["logs", "review", "task-42", "--root", str(tmp_path)])
     logs_output = capsys.readouterr().out
@@ -707,7 +708,7 @@ class Params(BaseModel):
 
     assert resume_exit == 0
     assert resume_output["run_id"] == run_id
-    assert resume_output["status"] == "paused"
+    assert resume_output["status"] == "awaiting_input"
     assert len(list((run_dir.parent).iterdir())) == 1
 
     answer_exit = cli.main(
@@ -719,7 +720,7 @@ class Params(BaseModel):
     assert answer_exit == 0
     assert answer_output["run_id"] == run_id
     assert answer_output["status"] == "success"
-    assert answer_output["paused"] is False
+    assert answer_output["awaiting_input"] is False
     assert len(list((run_dir.parent).iterdir())) == 1
 
     final_show_exit = cli.main(["runs", "show", "reviewer", "task-42", "--root", str(tmp_path)])
@@ -728,7 +729,7 @@ class Params(BaseModel):
 
     assert final_show_exit == 0
     assert final_show["status"] == "success"
-    assert final_show["paused"] is False
+    assert final_show["awaiting_input"] is False
     assert result_payload["answer"] == "Use OAuth"
     assert result_payload["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
 
@@ -765,7 +766,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
 
     assert latest_show_exit == 0
     assert latest_show["run_id"] == second_run["run_id"]
-    assert latest_show["status"] == "paused"
+    assert latest_show["status"] == "awaiting_input"
 
     latest_resume_exit = cli.main(
         ["resume", "review", "task-runs", "--root", str(tmp_path), "--no-git"],
@@ -775,7 +776,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
 
     assert latest_resume_exit == 0
     assert latest_resume["run_id"] == second_run["run_id"]
-    assert latest_resume["status"] == "paused"
+    assert latest_resume["status"] == "awaiting_input"
 
     explicit_answer_exit = cli.main(
         [
@@ -814,7 +815,7 @@ def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministi
 
     assert latest_run_state_exit == 0
     assert latest_run_state["run_id"] == second_run["run_id"]
-    assert latest_run_state["status"] == "paused"
+    assert latest_run_state["status"] == "awaiting_input"
 
 
 def test_cli_rejects_invalid_or_unsupported_workflow_params(

@@ -419,7 +419,7 @@ assess = step(
 
 Canonical authoring declares step-local `routes={...}` and terminates with `FINISH`.
 
-Use `Route.to(...)`, `Route.complete(...)`, `Route.await_input(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
+Use `Route.to(...)`, `Route.finish(...)`, `Route.await_input(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
 
 `Handoff(...)` adds source-step-to-target-step text that the runtime delivers only to the resolved provider-mediated target step. Dynamic handoff text may also be returned through `Event(tag="needs_rework", handoff="...")`. Handoffs are text-only and the current Runtime Step Contract remains authoritative.
 

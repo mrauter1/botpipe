@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from runtime.loader import resolve_workflow_reference
-from runtime.workspace import list_task_operation_summaries
+from runtime.workspace import list_task_operation_summaries, normalize_run_status
 from stdlib.lifecycle import write_workflow_json
 from stdlib.validation import require_non_empty_string
 
@@ -90,10 +90,12 @@ def _normalized_text_filters(values: str | Iterable[str] | None, *, field_name: 
         raw_values = values
     normalized = sorted(
         {
-            require_non_empty_string(
-                value,
-                error_message=f"{field_name} entries must be non-empty strings",
-                coerce=False,
+            normalize_run_status(
+                require_non_empty_string(
+                    value,
+                    error_message=f"{field_name} entries must be non-empty strings",
+                    coerce=False,
+                )
             )
             for value in raw_values
         }

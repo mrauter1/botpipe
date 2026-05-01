@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from runtime.workspace import list_run_records
+from runtime.workspace import list_run_records, normalize_run_status
 
 from ._selected_workflow import capture_selected_workflow, write_selected_workflow_artifact
 from stdlib.validation import require_non_empty_string
@@ -30,7 +30,7 @@ def write_selected_workflow_run_history_snapshot(
     records = list_run_records(capture.repo_root, workflow_name=capture.selected_workflow_name)
     if normalized_statuses is not None:
         allowed_statuses = set(normalized_statuses)
-        records = tuple(record for record in records if record.status in allowed_statuses)
+        records = tuple(record for record in records if record.normalized_status in allowed_statuses)
     if normalized_max_runs is not None:
         records = records[:normalized_max_runs]
 
@@ -78,7 +78,7 @@ def _normalized_run_metadata(record) -> dict[str, Any]:
         "error": _optional_text_value(metadata.get("error")),
         "pending_question": record.pending_question,
         "run_id": record.run_id,
-        "status": record.status,
+        "status": record.normalized_status,
         "task_id": record.task_id,
         "terminal": _optional_text_value(metadata.get("terminal")),
         "updated_at": record.updated_at,
@@ -101,10 +101,12 @@ def _normalize_statuses(statuses: str | Iterable[str] | None) -> list[str] | Non
         raw_statuses = statuses
     normalized = sorted(
         {
-            require_non_empty_string(
-                status,
-                error_message="statuses entries must be non-empty strings",
-                coerce=False,
+            normalize_run_status(
+                require_non_empty_string(
+                    status,
+                    error_message="statuses entries must be non-empty strings",
+                    coerce=False,
+                )
             )
             for status in raw_statuses
         }

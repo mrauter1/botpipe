@@ -9,7 +9,7 @@ from typing import Any
 from core.workflow_capabilities import inspect_workflow_capabilities, workflow_capability_payload
 from core.workflow_catalog import discover_workflow_catalog
 from runtime.loader import resolve_workflow_reference
-from runtime.workspace import list_workflow_run_summaries
+from runtime.workspace import list_workflow_run_summaries, normalize_run_status
 from stdlib.lifecycle import write_workflow_json
 from stdlib.validation import require_non_empty_string
 
@@ -188,10 +188,12 @@ def _normalized_filters(statuses: str | Iterable[str] | None) -> list[str] | Non
         raw_values = statuses
     normalized = sorted(
         {
-            require_non_empty_string(
-                value,
-                error_message="statuses entries must be non-empty strings",
-                coerce=False,
+            normalize_run_status(
+                require_non_empty_string(
+                    value,
+                    error_message="statuses entries must be non-empty strings",
+                    coerce=False,
+                )
             )
             for value in raw_values
         }

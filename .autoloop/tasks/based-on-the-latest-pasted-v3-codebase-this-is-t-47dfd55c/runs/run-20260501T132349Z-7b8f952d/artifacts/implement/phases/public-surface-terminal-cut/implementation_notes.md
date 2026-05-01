@@ -21,14 +21,20 @@
 - `runtime/runner.py`
 - `runtime/workspace.py`
 - `runtime/cli.py`
+- `autoloop_optimizer/company.py`
+- `autoloop_optimizer/diagnostics.py`
+- `autoloop_optimizer/portfolio.py`
 - `stdlib/__init__.py`
 - `stdlib/control.py`
 - `docs/authoring.md`
 - `workflows/workflow_package_to_composable_building_blocks/workflow.py`
+- `tests/runtime/test_package_cli.py`
+- `tests/runtime/test_workspace_and_context.py`
 - `tests/unit/test_simple_surface.py`
 - `tests/runtime/test_runtime_static_graph.py`
 - `tests/strictness/test_no_compat.py`
 - `tests/unit/test_stdlib_and_extensions.py`
+- `tests/unit/test_validation.py`
 
 ## Symbols touched
 - Public terminals: `AWAIT_INPUT`, `FINISH`, `FAIL`, `SELF`
@@ -37,21 +43,24 @@
 - Removed public simple keywords: `on_route` on `step`, `produce_verify_step`, `python_step`, `workflow_step`
 - Stdlib helper rename: `await_input_on_outcome_tags`
 - Public/runtime status string: `awaiting_input`
+- Public run-record compatibility surface: `RunRecord.normalized_status`, `RunRecord.awaiting_input`
 
 ## Checklist mapping
 - Phase 1 / terminal cleanup: completed via terminal constant/export rename and static artifact terminal payload update.
 - Phase 1 / runtime-control objects: completed for public dataclass surface and export wiring.
 - Phase 1 / remove public `on_route`: completed for simple declarations/signatures and simple lowering.
-- Phase 1 / remove old public names: partially covered here through `PAUSE` hard cut and strict/public-surface tests; broader removed-name enforcement remains in existing strictness coverage.
+- Phase 1 / remove old public names: covered for the phase-owned public surface, CLI payloads, direct consumer docs, and touched strict/public-surface/runtime tests; broader repo-wide removed-name sweeps remain outside this phase.
 
 ## Assumptions
 - Internal core-step `on_route` hooks stay temporarily supported for later runtime-control work; only the public simple authoring surface is cut in this phase.
 - Legacy persisted run metadata with status `paused` still needs to remain answerable during the rename.
+- Direct consumer snapshot helpers should emit canonical `awaiting_input` even when they read legacy persisted `paused` run records.
 
 ## Preserved invariants
 - Existing checkpoint payload shape stays unchanged in this phase (`pending_question` remains untouched).
 - Route tag `"question"` remains the reserved provider/runtime route name.
 - Engine semantics for pause-like suspension remain the same apart from terminal/status naming.
+- Legacy persisted `run.json` files are not rewritten in place during read-path normalization.
 
 ## Intended behavior changes
 - `PAUSE` is no longer exported from `autoloop` or `core`; `AWAIT_INPUT` is canonical.
@@ -59,15 +68,18 @@
 - Simple authoring declarations reject `on_route` as a keyword.
 - Public topology hook payloads no longer emit an `on_route` hook field.
 - Runtime status normalization now emits `awaiting_input` for the await-input terminal.
+- CLI payloads now expose `awaiting_input: bool` instead of the deprecated public `paused: bool`.
+- Workspace, portfolio, company-operation, and diagnostics read APIs accept legacy `paused` filters but emit canonical `awaiting_input` status payloads.
 
 ## Known non-changes
 - Pending-input checkpoint/schema redesign is deferred to the runtime-control metadata phase.
 - Internal core-step/runtime hook plumbing still uses `on_route`.
-- Broader docs/tests/workflow examples outside the touched phase-local surfaces were not swept.
+- Runtime selectors and compatibility helpers still use `latest_paused` / `RunRecord.paused` internally as read-path aliases during the cutover.
+- Broader optimizer-terminal logic and non-phase runtime tests that still model old `paused` behavior remain for later phases.
 
 ## Expected side effects
 - Consumers that imported `PAUSE` or passed `on_route=` through the simple surface now fail fast.
-- CLI/help text now refers to awaiting-input runs, while record selection still accepts legacy paused records through compatibility logic.
+- CLI/help text now refers to awaiting-input runs, while record selection and snapshot filters still accept legacy paused records through compatibility logic.
 
 ## Validation performed
 - `python3 -m py_compile` passed for all touched production files.
