@@ -163,3 +163,12 @@ No open blocking issues in the run-local planning artifacts. The plan is ready t
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=public-surface-terminal-cut,runtime-controls-and-hidden-routes,checkpoint-resume-and-failure-model,metadata-tracing-schema-and-attribution,validation-rendering-and-topology,namespace-cut-optimizer-boundary-prompts-and-extensions,maintainability-refactors,tests-docs-and-golden-workflow
+explicit=True
+current_phase_index=0
