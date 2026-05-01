@@ -1258,3 +1258,54 @@ Focused validation passed: 9 targeted tests, including the new regression and th
 Open issues / next step
 
 I did not rerun `tests/runtime/test_package_cli.py` directly because this repo still has the pre-existing `runtime/cli.py` relative-import collector failure noted earlier. The strategy still references that file as existing coverage, but the new phase-local validation here excludes that known unrelated import-mode issue.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de411-9744-7c62-8942-3681d87698d0
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+I’m auditing the phase-local test additions against the acceptance criteria and the run decisions first, then I’ll rerun the focused slice to check for coverage gaps or flaky boundaries before I touch the audit artifacts.
+
+The strategy already exposed one thing I need to verify carefully: some referenced test names may not match the current suite. I’m checking that first because a coverage map that points at non-existent or uncollectable tests weakens regression protection.
+
+The focused non-CLI slice passed. I also confirmed the package-CLI coverage point is currently not runnable at all because that module still fails collection on an existing relative-import bug, so I’m deciding whether that makes the coverage gap blocking for this phase.
+
+The core contract/unit/runtime-compatibility tests are solid and they passed. I’m recording one artifact-accuracy note about the strategy’s test-name references and the known uncollectable CLI module, but I don’t see a phase-blocking coverage hole.
+
+Scope considered
+
+Phase-local audit of the `checkpoint-resume-and-failure-model` test work only: pending-input persistence and resume behavior, consumed-input clearing, structured failure preservation, and read-only runtime-owned step/step-item state coverage.
+
+What I analyzed
+
+I reviewed the active [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/checkpoint-resume-and-failure-model/test_strategy.md), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/checkpoint-resume-and-failure-model/feedback.md), and the run decisions. I then checked the referenced tests in `tests/contract/test_engine_contracts.py`, `tests/unit/test_simple_surface.py`, `tests/unit/test_primitives_and_stores.py`, `tests/unit/test_provider_retries.py`, and `tests/runtime/test_compatibility_runtime.py`, with special attention to the new multi-step resumed-input regression.
+
+What I reviewed
+
+I reran the focused executable slice for this phase. The contract/unit/runtime-compatibility set passed: 19 targeted tests in 0.91s, including the new `test_resumed_request_input_is_consumed_before_later_steps`.
+
+I also checked the claimed CLI coverage point separately and confirmed `tests/runtime/test_package_cli.py` is still uncollectable because `runtime/cli.py` imports `..core.errors` from a top-level module path. I treated that as a non-blocking artifact-accuracy issue here because the phase acceptance criteria are still materially covered by the passing focused slice.
+
+Key findings / decisions
+
+No blocking audit findings.
+
+I recorded one non-blocking finding, `TST-001`: the strategy references one non-existent test name for step-state read-only coverage and one CLI coverage point that currently cannot be collected. The underlying behavior is still materially covered, so the phase can complete, but the strategy should be corrected in a later pass.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/checkpoint-resume-and-failure-model/criteria.md) to fully checked and appended the finding to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/checkpoint-resume-and-failure-model/feedback.md).
+
+Open issues / next step
+
+The phase-local test work is acceptable to advance. The only follow-up is housekeeping: align `test_strategy.md` with the actual executable test names and note the pre-existing CLI collection issue explicitly when that module is addressed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
