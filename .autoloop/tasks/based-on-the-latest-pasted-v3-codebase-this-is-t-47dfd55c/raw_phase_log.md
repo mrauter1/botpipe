@@ -639,3 +639,76 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de3ea-88d2-7822-a347-d5ac75792453
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+I’m implementing the `runtime-controls-and-hidden-routes` phase only. First I’m reading the phase artifacts and the current engine/compiler paths that handle routes, hooks, checkpoints, and provider route rendering so I can make the changes without pulling unrelated work into scope.
+
+The public terminal cut is already in place, so I’m focusing on the remaining runtime path: compiled route metadata, hook normalization/finalization in `core.engine`, and provider/topology filtering. After that I’ll tighten tests around direct controls and hidden routes instead of widening scope into later package cleanup work.
+
+The current engine still treats hook overrides only as `Event`/route redirects, restores hook session state on failure, and checkpoints only `pending_question`. I’m tracing those seams now so I can add direct-control execution without smuggling a fake route through the existing finalizer.
+
+I have the edit set now: `core.routes`/`core.compiler` for visibility metadata, `core.engine`/`core.context`/checkpoint models for direct runtime controls and resumed input, and the topology/provider surfaces that currently still expose every route. I’m patching those paths next, then I’ll add focused contract tests for `RequestInput`, `Goto`, `Fail`, hidden-route filtering, and redirect chaining stop conditions.
+
+I’m starting the code edits in the route/compiler layer first so the engine can consume one compiled source of truth for visibility and control metadata. After that I’ll patch the engine/runtime path and then update the tests against the new behavior.
+
+The engine work is in place now: provider-facing routes are being filtered separately from runtime-valid routes, and the step finalizer can branch into a direct runtime control path without updating built-in route state. I’m patching the persistence and trace surfaces next so those new control paths are observable and resumable.
+
+I hit a stale test surface while wiring the new engine path: `tests/contract/test_engine_contracts.py` still imports `PAUSE`, so I’m updating that contract file to the canonical `AWAIT_INPUT` spelling while I add the new runtime-control cases. That keeps the targeted phase tests runnable instead of collecting against a removed symbol.
+
+I’ve finished the main patches and I’m at verification. First pass is a syntax check on the touched modules so I can catch tuple-signature drift and dataclass shape mismatches before I run the targeted phase tests.
+
+I’ve finished the main code path edits for runtime controls and hidden routes, and I’m validating the affected engine, tracing, and artifact surfaces now. Next I’m running targeted checks against the touched modules and tests, then I’ll tighten any tuple or checkpointing regressions before updating the phase notes.
+
+The first validation pass exposed only an environment issue: this workspace doesn’t have `python`, so I’m switching to `python3` and then running the targeted runtime-control tests. After that I’ll inspect any engine failures around finalization arity and checkpoint payloads.
+
+`pytest` isn’t installed in the base interpreter, so I’m checking the repo’s actual test runner next instead of guessing. The code itself compiles under `python3`; the remaining work is finding the project test entrypoint and fixing any behavioral regressions it exposes.
+
+The repository has a local `.venv`, so I’m using that interpreter for the real test pass rather than the system Python. That should give the actual failure surface for the engine changes instead of environment noise.
+
+The only failing assertion is in a new test I added: the engine still exposes the normal provider-visible global routes, which is consistent with the existing contract. I’m narrowing that test so it checks the real requirement here, which is “hidden route excluded, visible route retained,” without accidentally banning the global provider choices.
+
+I found the mismatch: the new hidden-route test was overconstraining provider choices and ignored the existing global control routes. I’m fixing the assertion to match the phase contract, then rerunning the full targeted suite.
+
+The targeted suite is clean now: `162` relevant tests passed under the repo’s `.venv`. I’m updating the phase notes and the turn decision ledger next, focusing on the non-obvious behaviors we intentionally preserved around provider-visible routing and state preservation on hook/runtime-control failures.
+
+I’m writing down the phase-local invariants now so later turns don’t accidentally drift: hidden routes are filtered only at provider rendering, and hook/runtime-control failures preserve the mutated custom state/session snapshot instead of rolling it back. After that, I’ll do one quick diff sanity pass and close the turn.
+
+Scope considered
+
+Phase `runtime-controls-and-hidden-routes` only. I stayed on the engine/finalization path, route compilation/rendering, checkpoint resume for pending input, trace/static-graph metadata, and the targeted tests/docs artifacts required by this phase.
+
+What I analyzed
+
+I traced the request through `core/engine.py`, `core/routes.py`, `core/compiler.py`, `core/context.py`, checkpoint storage, runtime metadata/tracing/static-graph rendering, and the contract/runtime/unit tests that cover route finalization and provider route visibility. I also checked the phase plan, feedback, implementation notes target, and decisions ledger before editing.
+
+What I changed
+
+I implemented direct hook runtime controls and hidden-route visibility support. `Route` and compiled route data now carry `provider_visible`; provider-facing route choices filter hidden routes, while topology/capability/static-graph outputs still include them and mark them explicitly.
+
+The engine now normalizes hook returns for `RequestInput`, `Goto`, and `Fail`, stops redirect chaining on those direct controls, checkpoints pending input metadata, exposes resumed input on `ctx.input_response`, and avoids mutating built-in route fields unless a route finalizes successfully. Tracing/finalization payloads now record runtime-control metadata, hook source, target step, terminal, provider attribution, and redirect indexes.
+
+I added focused regression coverage for pending-input checkpoint round-trip, hidden-route rendering/filtering, direct-runtime-control tracing, resume validation through `ctx.input_response`, `Goto`/`Fail` execution, and the preserved-state behavior on hook/finalization failures. I also updated the phase `implementation_notes.md` and appended the non-obvious phase decisions to `decisions.txt`.
+
+Key findings / decisions
+
+Hidden routes are filtered only at provider rendering. Existing provider-visible global control routes remain available; the new hidden-route behavior does not silently narrow that broader runtime contract.
+
+Failure preservation now matches the requested semantics for this phase: route-hook and runtime-control failures checkpoint the currently mutated custom state/session snapshot instead of restoring the pre-hook snapshot, while built-in route fields remain truthful because they update only after successful route finalization.
+
+Open issues / next step
+
+Targeted validation is green: `python3 -m py_compile` on touched files and `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py` with `162 passed`.
+
+The remaining next step is the later structured-failures/metadata phase work: replacing private exception annotations with the requested structured failure objects and extending the broader observability surfaces beyond this phase’s runtime-control path.

@@ -142,13 +142,28 @@ class RuntimeTraceWriter:
             payload["candidate_route"] = event.candidate_route
         if event.final_route is not None:
             payload["final_route"] = event.final_route
+        if event.runtime_control is not None:
+            payload["runtime_control"] = event.runtime_control
+        if event.target_step is not None:
+            payload["target_step"] = event.target_step
+        if event.terminal is not None:
+            payload["terminal"] = event.terminal
+        if event.provider_attributable is not None:
+            payload["provider_attributable"] = event.provider_attributable
+        if event.source_hook is not None:
+            payload["source_hook"] = event.source_hook
+        if event.source_phase is not None:
+            payload["source_phase"] = event.source_phase
         if event.hook_route_override_from is not None or event.hook_route_override_to is not None:
             payload["hook_route_override"] = {
                 "from": event.hook_route_override_from,
                 "to": event.hook_route_override_to,
             }
         if event.hook_route_redirects:
-            payload["hook_route_redirects"] = [asdict(redirect) for redirect in event.hook_route_redirects]
+            payload["hook_route_redirects"] = [
+                {key: value for key, value in asdict(redirect).items() if value is not None}
+                for redirect in event.hook_route_redirects
+            ]
         if self._config.include_state_snapshots:
             payload["state_before"] = event.state_before.model_dump(mode="json")
             payload["state_after"] = event.state_after.model_dump(mode="json")

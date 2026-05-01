@@ -275,6 +275,7 @@ def _topology_route_payload(
             "effective_required_writes": [],
             "handoff": None,
             "on_taken": None,
+            "provider_visible": True,
         }
     return {
         "tag": route_tag,
@@ -288,6 +289,7 @@ def _topology_route_payload(
         ),
         "handoff": route.handoff,
         "on_taken": _callable_name(route.on_taken),
+        "provider_visible": route.provider_visible,
         "source_step": step_name or "GLOBAL",
     }
 
@@ -316,8 +318,8 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
     lines = [
         "# Route Table",
         "",
-        "| Step | Route | Target | Explicit Required Writes | Effective Required Writes |",
-        "| --- | --- | --- | --- | --- |",
+        "| Step | Route | Target | Provider Visible | Explicit Required Writes | Effective Required Writes |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for step_name, routes in compiled.routes.items():
         for route_tag, route in routes.items():
@@ -332,7 +334,7 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
             effective = payload["effective_required_writes"]
             effective_text = ", ".join(effective) if effective else "-"
             lines.append(
-                f"| {step_name} | {route_tag} | {route.target} | "
+                f"| {step_name} | {route_tag} | {route.target} | {str(route.provider_visible).lower()} | "
                 f"{explicit_text} | {effective_text} |"
             )
     return "\n".join(lines)
@@ -343,11 +345,13 @@ def _topology_mermaid(compiled: CompiledWorkflow) -> str:
     for step_name, routes in compiled.routes.items():
         for route_tag, route in routes.items():
             hook = f" / {_callable_name(route.on_taken)}" if route.on_taken is not None else ""
+            visibility = " [hidden]" if not route.provider_visible else ""
             lines.append(
-                f"    {step_name} -- {route_tag}{hook} --> {route.target}"
+                f"    {step_name} -- {route_tag}{hook}{visibility} --> {route.target}"
             )
     for route_tag, route in compiled.global_routes.items():
-        lines.append(f"    GLOBAL -- {route_tag} --> {route.target}")
+        visibility = " [hidden]" if not route.provider_visible else ""
+        lines.append(f"    GLOBAL -- {route_tag}{visibility} --> {route.target}")
     return "\n".join(lines)
 
 

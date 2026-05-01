@@ -63,6 +63,7 @@ class WorkflowRouteCapability:
     required_writes: tuple[str, ...]
     handoff: str | None
     on_taken: str | None
+    provider_visible: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -334,6 +335,7 @@ def workflow_capability_payload(entry: WorkflowCapabilityEntry) -> dict[str, obj
                         "required_writes": list(route.required_writes or ()),
                         "handoff": route.handoff,
                         "on_taken": route.on_taken,
+                        "provider_visible": route.provider_visible,
                     }
                     for route_name, route in step.routes.items()
                 },
@@ -672,6 +674,7 @@ def _compiled_routes(step_routes: Mapping[str, Any]) -> dict[str, WorkflowRouteC
             required_writes=tuple(route.required_writes or ()),
             handoff=route.handoff,
             on_taken=getattr(route.on_taken, "__name__", None),
+            provider_visible=route.provider_visible,
         )
     return routes
 
@@ -743,6 +746,7 @@ def _compiled_step_payload(
                 "required_writes": list(route.required_writes or ()),
                 "handoff": route.handoff,
                 "on_taken": route.on_taken,
+                "provider_visible": route.provider_visible,
             }
             for route_name, route in step.routes.items()
         },

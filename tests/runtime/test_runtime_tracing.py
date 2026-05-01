@@ -283,6 +283,38 @@ def test_runtime_trace_records_hook_route_override_metadata(tmp_path: Path) -> N
     ]
 
 
+def test_runtime_trace_records_direct_runtime_control_metadata(tmp_path: Path) -> None:
+    run_dir = _run_dir(tmp_path)
+    writer = _writer(run_dir)
+    event = StepFinish(
+        binding=_binding(run_dir),
+        step_name="assessment",
+        step_kind="produce_verify",
+        state_before=_State(note="before"),
+        state_after=_State(note="after"),
+        event=None,
+        outcome=Outcome(raw_output="hidden raw", tag="ready", reason="validated"),
+        producer_raw_output="producer output\n",
+        verifier_raw_output="verifier output\n",
+        candidate_route="ready",
+        runtime_control="request_input",
+        terminal="AWAIT_INPUT",
+        provider_attributable=False,
+        source_hook="ask_for_input",
+        source_phase="on_taken",
+    )
+
+    writer.step_finished(sequence=1, event=event, commit_before_step="abc123")
+
+    record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert record["candidate_route"] == "ready"
+    assert record["runtime_control"] == "request_input"
+    assert record["terminal"] == "AWAIT_INPUT"
+    assert record["provider_attributable"] is False
+    assert record["source_hook"] == "ask_for_input"
+    assert record["source_phase"] == "on_taken"
+
+
 def test_runtime_trace_records_provider_usage_when_available(tmp_path: Path) -> None:
     run_dir = _run_dir(tmp_path)
     writer = _writer(run_dir)

@@ -42,6 +42,7 @@ class Route:
     required_writes: tuple[str, ...] | None = None
     handoff: str | None = None
     on_taken: object | None = None
+    provider_visible: bool = True
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "summary", _normalize_optional_text(self.summary, field_name="summary"))
@@ -50,6 +51,7 @@ class Route:
         else:
             object.__setattr__(self, "required_writes", _normalize_required_writes(self.required_writes))
         object.__setattr__(self, "handoff", _normalize_optional_text(self.handoff, field_name="handoff"))
+        object.__setattr__(self, "provider_visible", bool(self.provider_visible))
 
     @staticmethod
     def to(
@@ -60,6 +62,7 @@ class Route:
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
+        provider_visible: bool = True,
     ) -> "Route":
         return Route(
             target=target,
@@ -68,6 +71,7 @@ class Route:
             required_writes=(_normalize_required_writes(required_writes) if required_writes is not None else None),
             handoff=handoff,
             on_taken=on_taken,
+            provider_visible=provider_visible,
         )
 
     @staticmethod
@@ -78,6 +82,7 @@ class Route:
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
+        provider_visible: bool = True,
     ) -> "Route":
         return Route.to(
             FINISH,
@@ -86,6 +91,7 @@ class Route:
             required_writes=required_writes,
             handoff=handoff,
             on_taken=on_taken,
+            provider_visible=provider_visible,
         )
 
     @staticmethod
@@ -96,6 +102,7 @@ class Route:
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
+        provider_visible: bool = True,
     ) -> "Route":
         return Route.to(
             AWAIT_INPUT,
@@ -104,6 +111,7 @@ class Route:
             required_writes=required_writes,
             handoff=handoff,
             on_taken=on_taken,
+            provider_visible=provider_visible,
         )
 
     @staticmethod
@@ -114,6 +122,7 @@ class Route:
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
         on_taken: object | None = None,
+        provider_visible: bool = True,
     ) -> "Route":
         return Route.to(
             FAIL,
@@ -122,6 +131,7 @@ class Route:
             required_writes=required_writes,
             handoff=handoff,
             on_taken=on_taken,
+            provider_visible=provider_visible,
         )
 
 

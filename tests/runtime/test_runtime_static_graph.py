@@ -131,6 +131,7 @@ def test_topology_payload_exposes_canonical_writes_and_required_writes() -> None
 
     assert assessment["writes"] == ["assessment.note"]
     assert assessment["routes"][0]["required_writes"] == []
+    assert assessment["routes"][0]["provider_visible"] is True
     assert finish["routes"][0]["target"] == "FINISH"
     assert payload["source_hash"] == compiled.source_hash
     assert payload["topology_hash"] == compiled.topology_hash
@@ -164,8 +165,34 @@ def test_topology_payload_and_route_table_preserve_explicit_vs_effective_require
     write_topology_artifacts(tmp_path, compiled)
     route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
 
-    assert "| publish | done | FINISH | inherit | publish.report |" in route_table
-    assert "| publish | skip | FINISH | none (explicit) | - |" in route_table
+    assert "| publish | done | FINISH | true | inherit | publish.report |" in route_table
+    assert "| publish | skip | FINISH | true | none (explicit) | - |" in route_table
+
+
+def test_topology_payload_marks_hidden_routes_and_mermaid_route_table_keep_them(tmp_path: Path) -> None:
+    class HiddenRouteWorkflow(Workflow):
+        publish = step(
+            prompt=Prompt.inline("Publish the report."),
+            routes={
+                "done": FINISH,
+                "human_escalation": Route.to(FINISH, provider_visible=False),
+            },
+        )
+
+    compiled = compile_workflow(HiddenRouteWorkflow)
+
+    payload = workflow_topology_payload(compiled)
+    publish = next(step_payload for step_payload in payload["steps"] if step_payload["name"] == "publish")
+    hidden = next(route for route in publish["routes"] if route["tag"] == "human_escalation")
+
+    assert hidden["provider_visible"] is False
+
+    write_topology_artifacts(tmp_path, compiled)
+    route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
+    mermaid = (tmp_path / "topology.mmd").read_text(encoding="utf-8")
+
+    assert "| publish | human_escalation | FINISH | false | inherit | - |" in route_table
+    assert "publish -- human_escalation [hidden] --> FINISH" in mermaid
 
 
 def test_topology_payload_omits_unbound_effective_set_for_inherited_global_routes() -> None:
