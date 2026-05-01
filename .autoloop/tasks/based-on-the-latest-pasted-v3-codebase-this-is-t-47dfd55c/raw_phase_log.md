@@ -8,3 +8,43 @@ workspace=/home/rauter/autoloop_v3_bkp/autoloop_v3
 pairs=plan,implement,test,audit
 request_file=/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/request.md
 session_mode=persistent
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=plan | phase=producer | cycle=1 | attempt=1 | thread_id=019de3b5-b853-7893-a51c-1a6849fda64f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019de3b5-b853-7893-a51c-1a6849fda64f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3b5-b853-7893-a51c-1a6849fda64f
+---
+I’m treating this as a planning pass against the current codebase and the run-local artifacts. First I’m checking the existing package layout, runtime/compiler surfaces, and the current plan files so the updated plan matches the repository’s real dependency and regression surfaces.
+
+The repo still carries both canonical and compatibility-era package trees, and there are runtime/compiler modules under top-level `core/`, `runtime/`, `stdlib/`, and `extensions/`. I’m narrowing onto the public exports, terminal/control primitives, hook declaration/runtime paths, and the existing run artifacts before I rewrite the plan.
+
+The current runtime already has route-local `on_taken`, but public `on_route` is still wired through declarations, compiler metadata, validation, traces, and tests. I’m reading the control primitives and engine finalization path now because the plan needs to separate route-based finalization from direct runtime controls without losing current state-preservation behavior.
+
+The compiler still does static AST inference for hook-returned route tags, and the runtime still uses private exception annotations for checkpoint/failure propagation. I’m checking provider-rendering, topology, and optimization code next so the phase ordering in the plan matches those downstream consumers instead of treating the engine change as isolated.
+
+One non-obvious baseline detail: topology and related static artifacts are already written at run initialization through the tracing bootstrap path, before the first step executes. I’m keeping that in the plan as a preserve-and-extend path rather than inventing a second artifact writer.
+
+I’ve got enough context to write the plan now. The remaining pass is converting the repo findings into a dependency-aware phase file and a concise implementation contract, with explicit migration and regression controls for the hard namespace cut.
+
+I’m editing the run-local plan artifacts now. The write-up will keep the user’s phase ordering, but it’s grounded in the current module boundaries so later implementation phases don’t duplicate artifact writers, split checkpoint schemas twice, or mix old and new failure propagation models.
+
+The plan files are written. I’m doing a quick verification pass on the generated markdown/YAML and the decision block so I can catch any shape or dependency mistakes before closing the turn.
+
+Updated the run-local planning artifacts:
+
+- [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/plan.md)
+- [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/phase_plan.yaml)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt)
+
+The plan now tracks the requested 8-phase implementation order, but it is tied to the actual repo boundaries: `core.engine` owns the coupled runtime/finalization work today, `runtime.tracing` already writes topology artifacts at run start, checkpointing still uses `pending_question`, and the namespace cut still has to unwind top-level `core`/`runtime`/`stdlib`/`extensions` plus `autoloop_v3`. I also recorded the non-obvious decisions needed to keep later turns from duplicating artifact writers, mixing old/new failure propagation, or inventing parallel optimizer inspection readers.
+
+I did a manual verification pass on the written markdown/YAML/decision block. No tests were run.
