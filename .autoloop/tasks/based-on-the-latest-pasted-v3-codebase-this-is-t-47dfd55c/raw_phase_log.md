@@ -1828,3 +1828,57 @@ Open issues / next step
   `./.venv/bin/pytest tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py -q`
   `./.venv/bin/pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py tests/contract/test_engine_contracts.py -q -k 'does_not_infer_after_hook_routes_from_source or does_not_infer_after_producer_redirects_from_source or excludes_hidden_routes_from_prompt_contract or excludes_hidden_choices or include_hidden_global_routes or hidden_routes_are_runtime_legal_but_excluded_from_provider_choices'`
 - Result: all selected tests passed.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de445-0372-7da3-a51b-5c9350070632
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+I’m auditing the phase test coverage against the changed implementation and the recorded strategy. First I’m reading the active audit artifacts and the exact new tests so I can mark the criteria based on what is actually covered, not just what the strategy claims.
+
+The new tests hit the intended uncovered edges. I’m doing one quick execution pass on the same focused slices they claim, plus the adjacent runtime-failure guard for illegal hook returns, before I mark the audit complete.
+
+Scope considered
+
+- Phase-local audit for `validation-rendering-and-topology` test coverage only.
+- Reviewed the changed tests plus adjacent contract coverage that protects the same runtime-authoritative hook validation and hidden-route invariants.
+
+What I analyzed
+
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/validation-rendering-and-topology/test_strategy.md)
+- [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py)
+- [tests/unit/test_provider_boundary_core.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_provider_boundary_core.py)
+- [tests/runtime/test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py)
+- Adjacent preserved-invariant coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py)
+
+What I reviewed
+
+- AC-1 coverage: compile-time validation no longer source-parses hook returns, while runtime failure-path guards for illegal hook returns still exist.
+- AC-2 coverage: hidden-route exclusion is covered for step prompts and operation prompts, and hidden routes remain present in topology, route table, compile report, and global-route surfaces.
+- Reliability: all covered tests are deterministic, local filesystem-only, and run through the repo venv.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated the audit criteria to complete and appended a no-findings note to the audit feedback.
+
+Open issues / next step
+
+- No open audit issues in this phase scope.
+- Verification run:
+  `./.venv/bin/pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py -q`
+  `./.venv/bin/pytest tests/contract/test_engine_contracts.py -q -k 'hidden_routes_are_runtime_legal_but_excluded_from_provider_choices or after_producer_goto_short_circuits_verifier or after_producer_request_input_checkpoints_pending_input_before_verifier or missing_route'`
+- Result: all selected tests passed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
