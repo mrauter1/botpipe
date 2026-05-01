@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from autoloop.core.mappings import normalize_mapping
 from autoloop.core.schema_registry import CHECKPOINT_SCHEMA, validate_persisted_schema
 from autoloop.core.sessions import SessionKey, canonical_session_slot_name
 from autoloop.core.stores import SessionStore
@@ -155,19 +156,19 @@ class FilesystemSessionBackend(SessionBackend):
             session_id=payload["session_id"],
             provider=payload["metadata"]["provider"],
             provider_metadata=payload["metadata"]["provider_metadata"],
-            metadata=dict(payload["metadata"]),
+            metadata=normalize_mapping(payload["metadata"]),
         )
         self._memory.upsert(binding, activate=True)
 
     def _write_binding(self, binding: SessionBinding) -> None:
         path = self.path_for(key=binding.key)
         existing = load_session_payload(path, self.default_mode, self.default_provider)
-        merged_metadata = dict(existing["metadata"])
+        merged_metadata = normalize_mapping(existing["metadata"])
         merged_metadata.update(binding.metadata)
         if binding.provider is not None:
             merged_metadata["provider"] = binding.provider
         if binding.provider_metadata or "provider_metadata" in binding.metadata:
-            merged_metadata["provider_metadata"] = dict(binding.provider_metadata)
+            merged_metadata["provider_metadata"] = normalize_mapping(binding.provider_metadata)
         write_session_payload(
             path,
             binding.session_id,
@@ -240,7 +241,7 @@ class FilesystemCheckpointStore:
         active_keys_by_slot = (
             {
                 str(slot): _session_key_from_payload(item, fallback_slot=str(slot))
-                for slot, item in dict(active_keys_payload).items()
+                for slot, item in normalize_mapping(active_keys_payload).items()
                 if isinstance(item, dict)
             }
             if isinstance(active_keys_payload, dict)
@@ -248,13 +249,13 @@ class FilesystemCheckpointStore:
         )
         active_scopes = {
             str(key): value if isinstance(value, str) else None
-            for key, value in dict(session_payload.get("active_scopes") or {}).items()
+            for key, value in normalize_mapping(session_payload.get("active_scopes")).items()
         }
         worklist_payload = payload.get("worklist_selections")
         worklist_selections = (
             {
                 str(name): _selection_snapshot_from_payload(item, fallback_name=str(name))
-                for name, item in dict(worklist_payload).items()
+                for name, item in normalize_mapping(worklist_payload).items()
                 if isinstance(item, dict)
             }
             if isinstance(worklist_payload, dict)
@@ -292,7 +293,7 @@ class FilesystemCheckpointStore:
             if isinstance(payload.get("pending_question"), str)
             else None,
             pending_answer=payload.get("pending_answer") if isinstance(payload.get("pending_answer"), str) else None,
-            failure_context=dict(payload.get("failure_context") or {})
+            failure_context=normalize_mapping(payload.get("failure_context"))
             if isinstance(payload.get("failure_context"), dict)
             else None,
         )
@@ -315,7 +316,7 @@ def load_session_payload(path: Path, default_mode: str, default_provider: str) -
                 metadata = {
                     "provider": provider,
                     "mode": str(payload.get("mode") or default_mode),
-                    "provider_metadata": dict(provider_metadata),
+                    "provider_metadata": normalize_mapping(provider_metadata),
                     "model_override": payload.get("model_override")
                     if isinstance(payload.get("model_override"), str)
                     else None,
@@ -374,7 +375,7 @@ def ensure_session_payload_placeholder(
     write_session_payload(
         path,
         payload["session_id"],
-        dict(payload["metadata"]),
+        normalize_mapping(payload["metadata"]),
         default_mode=default_mode,
         default_provider=default_provider,
     )
@@ -382,7 +383,7 @@ def ensure_session_payload_placeholder(
 
 def set_pending_session_note(session_file: Path, note: str) -> None:
     payload = load_session_payload(session_file, default_mode="persistent", default_provider="codex")
-    metadata = dict(payload["metadata"])
+    metadata = normalize_mapping(payload["metadata"])
     metadata["pending_clarification_note"] = note
     write_session_payload(
         session_file,
@@ -400,7 +401,7 @@ def _session_payload_from_values(
     default_mode: str,
     default_provider: str,
 ) -> dict[str, Any]:
-    metadata = dict(metadata)
+    metadata = normalize_mapping(metadata)
     provider = metadata.get("provider") if isinstance(metadata.get("provider"), str) else default_provider
     provider_metadata = metadata.get("provider_metadata")
     if not isinstance(provider_metadata, dict):
@@ -409,7 +410,7 @@ def _session_payload_from_values(
         "mode": metadata.get("mode") if isinstance(metadata.get("mode"), str) else default_mode,
         "provider": provider,
         "session_id": session_id,
-        "provider_metadata": dict(provider_metadata),
+        "provider_metadata": normalize_mapping(provider_metadata),
         "model_override": metadata.get("model_override") if isinstance(metadata.get("model_override"), str) else None,
         "effort_override": metadata.get("effort_override")
         if isinstance(metadata.get("effort_override"), str)
@@ -431,8 +432,8 @@ def _binding_payload(binding: SessionBinding) -> dict[str, Any]:
         "scope": binding.scope,
         "session_id": binding.session_id,
         "provider": binding.provider,
-        "provider_metadata": dict(binding.provider_metadata),
-        "metadata": dict(binding.metadata),
+        "provider_metadata": normalize_mapping(binding.provider_metadata),
+        "metadata": normalize_mapping(binding.metadata),
     }
 
 
@@ -451,10 +452,10 @@ def _binding_from_payload(payload: dict[str, Any]) -> SessionBinding:
         scope=scope,
         session_id=payload.get("session_id") if isinstance(payload.get("session_id"), str) else None,
         provider=payload.get("provider") if isinstance(payload.get("provider"), str) else None,
-        provider_metadata=dict(payload.get("provider_metadata") or {})
+        provider_metadata=normalize_mapping(payload.get("provider_metadata"))
         if isinstance(payload.get("provider_metadata"), dict)
         else None,
-        metadata=dict(payload.get("metadata") or {}) if isinstance(payload.get("metadata"), dict) else None,
+        metadata=normalize_mapping(payload.get("metadata")) if isinstance(payload.get("metadata"), dict) else None,
     )
 
 
@@ -548,7 +549,7 @@ def _pending_input_payload(pending_input: PendingInput | None) -> dict[str, Any]
         "question": pending_input.question,
         "reason": pending_input.reason,
         "best_supposition": pending_input.best_supposition,
-        "input_schema": dict(pending_input.input_schema) if isinstance(pending_input.input_schema, Mapping) else None,
+        "input_schema": normalize_mapping(pending_input.input_schema) if isinstance(pending_input.input_schema, Mapping) else None,
         "input_schema_model": pending_input.input_schema_model,
         "created_at": pending_input.created_at,
     }
@@ -566,7 +567,7 @@ def _pending_input_from_payload(payload: Mapping[str, Any]) -> PendingInput:
         best_supposition=payload.get("best_supposition")
         if isinstance(payload.get("best_supposition"), str)
         else None,
-        input_schema=dict(input_schema) if isinstance(input_schema, Mapping) else None,
+        input_schema=normalize_mapping(input_schema) if isinstance(input_schema, Mapping) else None,
         input_schema_model=payload.get("input_schema_model")
         if isinstance(payload.get("input_schema_model"), str)
         else None,
@@ -580,7 +581,7 @@ def _nested_string_dict(value: object) -> dict[str, dict[str, Any]] | None:
     normalized: dict[str, dict[str, Any]] = {}
     for key, nested in value.items():
         if isinstance(key, str) and isinstance(nested, Mapping):
-            normalized[key] = dict(nested)
+            normalized[key] = normalize_mapping(nested)
     return normalized
 
 
@@ -600,7 +601,7 @@ def _triple_nested_string_dict(value: object) -> dict[str, dict[str, dict[str, A
         normalized_nested: dict[str, dict[str, Any]] = {}
         for nested_key, nested_value in nested.items():
             if isinstance(nested_key, str) and isinstance(nested_value, Mapping):
-                normalized_nested[nested_key] = dict(nested_value)
+                normalized_nested[nested_key] = normalize_mapping(nested_value)
         normalized[key] = normalized_nested
     return normalized
 

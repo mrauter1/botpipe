@@ -21,6 +21,7 @@ from pydantic import BaseModel, ValidationError, create_model
 from autoloop.core.compiler import CompiledWorkflow, compile_workflow
 from autoloop.core.context import EmptyParameters
 from autoloop.core.descriptors import effective_parameters_model
+from autoloop.core.mappings import normalize_mapping
 from autoloop.core.validation import is_workflow_class
 from autoloop.core.workflow_capabilities import (
     WorkflowCapabilityEntry,
@@ -241,7 +242,7 @@ def coerce_workflow_parameter_mapping(
 ) -> dict[str, Any]:
     """Validate and coerce workflow parameters supplied as a mapping."""
 
-    payload = dict(raw_values or {})
+    payload = normalize_mapping(raw_values)
     if parameters_cls is None:
         if payload:
             raise WorkflowParameterError("workflow does not declare Params and does not accept workflow parameters")
@@ -267,7 +268,7 @@ def materialize_workflow_params(
 ) -> BaseModel:
     """Return a typed params object for runtime context access."""
 
-    payload = dict(raw_values or {})
+    payload = normalize_mapping(raw_values)
     if parameters_cls is None:
         return EmptyParameters()
 

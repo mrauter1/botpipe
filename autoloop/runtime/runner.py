@@ -16,6 +16,7 @@ from autoloop.core.compiler import CompiledArtifact, CompiledWorkflow, compile_w
 from autoloop.core.context import ChildWorkflowResult
 from autoloop.core.engine import Engine, RunResult, StepFinalizationRecord
 from autoloop.core.errors import WorkflowExecutionError
+from autoloop.core.mappings import normalize_mapping
 from autoloop.core.primitives import AWAIT_INPUT, FINISH
 from autoloop.core.providers.protocols import LLMProvider
 from autoloop.core.schema_registry import RUN_METADATA_SCHEMA, validate_persisted_schema
@@ -733,13 +734,13 @@ def _normalize_execution_options(
     normalized_params = options.workflow_params
     if not options.resume and options.workflow_params is not None:
         if parameters_cls is None:
-            normalized_params = dict(options.workflow_params)
+            normalized_params = normalize_mapping(options.workflow_params)
         else:
             normalized_params = coerce_workflow_parameter_mapping(parameters_cls, options.workflow_params)
 
     normalized_input = options.workflow_input
     if not options.resume and options.workflow_input is not None:
-        normalized_input = dict(options.workflow_input)
+        normalized_input = normalize_mapping(options.workflow_input)
 
     if normalized_params is options.workflow_params and normalized_input is options.workflow_input:
         return options

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from uuid import uuid4
 
+from autoloop.core.mappings import normalize_mapping
 from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA, RUN_METADATA_SCHEMA, validate_persisted_schema
 
 
@@ -103,14 +104,14 @@ class RunRecord:
     def workflow_params(self) -> dict[str, Any]:
         payload = self.metadata.get("workflow_params")
         if isinstance(payload, dict):
-            return dict(payload)
+            return normalize_mapping(payload)
         return {}
 
     @property
     def pending_input(self) -> dict[str, Any] | None:
         payload = self.metadata.get("pending_input")
         if isinstance(payload, dict):
-            return dict(payload)
+            return normalize_mapping(payload)
         return None
 
     @property
@@ -703,11 +704,11 @@ def update_run_metadata(
         authoring_shape=workflow_workspace.authoring_shape,
     )
     if workflow_params is not None:
-        payload["workflow_params"] = workflow_params
+        payload["workflow_params"] = normalize_mapping(workflow_params)
     else:
         payload.setdefault("workflow_params", {})
     if workflow_input is not None:
-        payload["workflow_input"] = workflow_input
+        payload["workflow_input"] = normalize_mapping(workflow_input)
     if status is not None:
         payload["status"] = status
     if terminal is not None:
@@ -715,7 +716,7 @@ def update_run_metadata(
     elif status == "running":
         payload.pop("terminal", None)
     if pending_input is not None:
-        payload["pending_input"] = dict(pending_input)
+        payload["pending_input"] = normalize_mapping(pending_input)
     elif "pending_input" in payload and pending_input is None:
         payload["pending_input"] = None
     payload.pop("pending_question", None)
@@ -724,10 +725,10 @@ def update_run_metadata(
     elif error is None and "error" in payload and status not in {"fatal_error"}:
         payload.pop("error", None)
     if topology is not None:
-        payload["topology"] = dict(topology)
+        payload["topology"] = normalize_mapping(topology)
     if finalization is not _UNSET:
         if isinstance(finalization, Mapping):
-            payload["finalization"] = dict(finalization)
+            payload["finalization"] = normalize_mapping(finalization)
         else:
             payload.pop("finalization", None)
     payload["updated_at"] = now
@@ -741,7 +742,7 @@ def update_run_git_tracking(run_dir: Path, payload: Mapping[str, Any]) -> None:
         if not isinstance(section, dict):
             section = {}
             run_meta["git_tracking"] = section
-        section.update(dict(payload))
+        section.update(normalize_mapping(payload))
 
     _update_run_metadata_file(run_dir, mutate)
 
@@ -752,7 +753,7 @@ def append_run_git_step(run_dir: Path, payload: Mapping[str, Any]) -> None:
         if not isinstance(section, dict):
             section = {}
             run_meta["git_tracking"] = section
-        summary = dict(payload)
+        summary = normalize_mapping(payload)
         section["latest_step"] = summary
         sequence = summary.get("sequence")
         if isinstance(sequence, int):
@@ -767,7 +768,7 @@ def update_run_tracing(run_dir: Path, payload: Mapping[str, Any]) -> None:
         if not isinstance(section, dict):
             section = {}
             run_meta["tracing"] = section
-        section.update(dict(payload))
+        section.update(normalize_mapping(payload))
 
     _update_run_metadata_file(run_dir, mutate)
 
@@ -778,7 +779,7 @@ def append_run_warning(run_dir: Path, payload: Mapping[str, Any]) -> None:
         if not isinstance(warnings, list):
             warnings = []
             run_meta["warnings"] = warnings
-        warnings.append(dict(payload))
+        warnings.append(normalize_mapping(payload))
 
     _update_run_metadata_file(run_dir, mutate)
 
@@ -819,11 +820,11 @@ def resolve_run_workflow_params(
         payload = _load_json(run_workspace.run_meta_file, default={})
         stored_params = payload.get("workflow_params")
         if isinstance(stored_params, dict):
-            return dict(stored_params)
+            return normalize_mapping(stored_params)
         return {}
 
     if workflow_params is not None:
-        return dict(workflow_params)
+        return normalize_mapping(workflow_params)
     return {}
 
 
@@ -835,13 +836,13 @@ def resolve_run_workflow_input(
         payload = _load_json(run_workspace.run_meta_file, default={})
         stored_input = payload.get("workflow_input")
         if isinstance(stored_input, dict):
-            return dict(stored_input)
+            return normalize_mapping(stored_input)
         if workflow_input is not None:
-            return dict(workflow_input)
+            return normalize_mapping(workflow_input)
         return None
 
     if workflow_input is not None:
-        return dict(workflow_input)
+        return normalize_mapping(workflow_input)
     return None
 
 
@@ -913,7 +914,7 @@ def write_parent_run_metadata(child_run: RunWorkspace, parent_run: RunWorkspace)
 
 
 def append_child_run_record(parent_run: RunWorkspace, payload: dict[str, Any]) -> None:
-    record = dict(payload)
+    record = normalize_mapping(payload)
     record.setdefault("schema", CHILD_RUN_SUMMARY_SCHEMA)
     record.setdefault("ts", _utcnow())
     parent_run.children_file.parent.mkdir(parents=True, exist_ok=True)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
-from .operations import OperationRuntime, bind_operation_runtime
+from .operations import OperationRuntime, bind_operation_runtime, provider_configuration
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -127,6 +127,10 @@ class OperationRecorder:
         with bind_operation_runtime(
             OperationRuntime(
                 provider=self._engine.provider,
+                provider_configuration=provider_configuration(
+                    self._engine.provider,
+                    default_session_name=self._engine.compiled.default_session_name,
+                ),
                 prompt_registry=self._engine.prompt_registry,
                 context=context,
                 run_folder=run_folder,

@@ -12,6 +12,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict
 
 from .errors import WorkflowExecutionError
+from .mappings import normalize_mapping
 from .primitives import Event
 from .sessions import Continuity, DEFAULT_SESSION_NAME, SessionKey, derive_session_key
 from .stores.protocols import SessionBinding, is_run_key_bound_to_slot
@@ -195,12 +196,12 @@ class Context:
         self.package_folder = package_folder
         self._state = state
         self._session_store = session_store
-        self._session_definitions = dict(session_definitions or {})
-        self._worklists = dict(worklists or {})
+        self._session_definitions = normalize_mapping(session_definitions)
+        self._worklists = normalize_mapping(worklists)
         self._selections = selections if selections is not None else {}
         self._active_worklist = active_worklist
         self._params = params if params is not None else EmptyParameters()
-        self._workflow_params = dict(workflow_params or {})
+        self._workflow_params = normalize_mapping(workflow_params)
         self._input = workflow_input
         self._workflow_invoker = workflow_invoker
         self._answer = answer
@@ -208,7 +209,7 @@ class Context:
         self._step_name = step_name
         self._default_session_name = default_session_name
         self._artifacts = artifacts
-        self._values = values if isinstance(values, dict) else dict(values or {})
+        self._values = normalize_mapping(values)
         self._route = route
         self._event = None
         self._outcome = outcome
@@ -436,7 +437,7 @@ class Context:
         self._artifacts = artifacts
 
     def _set_values(self, values: Mapping[str, Any] | None) -> None:
-        self._values = values if isinstance(values, dict) else dict(values or {})
+        self._values = normalize_mapping(values)
 
     def _set_route(self, route: Mapping[str, Any] | Any | None) -> None:
         self._route = route
@@ -484,8 +485,8 @@ class Context:
         elif input is None:
             payload_input = None
         else:
-            payload_input = _normalize_mapping(input)
-        invocation_parameters = _normalize_mapping(parameters)
+            payload_input = normalize_mapping(input)
+        invocation_parameters = normalize_mapping(parameters)
         signature = inspect.signature(self._workflow_invoker)
         supports_input = "input" in signature.parameters or any(
             parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
@@ -552,11 +553,3 @@ def _resolve_context_root(*, root: Path | None, task_folder: Path, package_folde
     if resolved_package_folder.parent.name == "workflows":
         return resolved_package_folder.parent.parent.resolve()
     return task_folder.resolve()
-
-
-def _normalize_mapping(value: Mapping[str, Any] | None) -> dict[str, Any]:
-    if value is None:
-        return {}
-    if isinstance(value, dict):
-        return dict(value)
-    return {str(key): item for key, item in value.items()}

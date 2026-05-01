@@ -16,7 +16,12 @@ class FilesystemPromptRegistry:
     def resolve(self, prompt: PromptSpec) -> ResolvedPrompt:
         if isinstance(prompt, Prompt):
             if prompt.source == "inline":
-                return ResolvedPrompt(path=prompt.path, text=prompt.text, source="inline")
+                return ResolvedPrompt(
+                    path=prompt.path,
+                    text=prompt.text,
+                    source="inline",
+                    reference_values={"source": "inline", "inline": True},
+                )
             raw_path = prompt.path
             source = prompt.source
         else:

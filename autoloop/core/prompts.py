@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Literal, Mapping, Protocol
+from typing import Any, Iterable, Literal, Mapping, Protocol
 
 
 PromptSource = Literal["inline", "file", "registry"]
@@ -38,6 +38,7 @@ class ResolvedPrompt:
     path: str | None
     text: str | None = None
     source: PromptSource = "registry"
+    reference_values: Mapping[str, Any] = field(default_factory=dict)
 
 
 PromptSpec = str | Prompt
@@ -59,7 +60,12 @@ class PromptRegistry:
     def resolve(self, prompt: PromptSpec) -> ResolvedPrompt:
         if isinstance(prompt, Prompt):
             if prompt.source == "inline":
-                return ResolvedPrompt(path=prompt.path, text=prompt.text, source=prompt.source)
+                return ResolvedPrompt(
+                    path=prompt.path,
+                    text=prompt.text,
+                    source=prompt.source,
+                    reference_values={"source": prompt.source, "inline": True},
+                )
             path = prompt.path
             return resolve_prompt_reference(path, source=prompt.source, prompt_lookup=self._prompts)
         return resolve_prompt_reference(prompt, source="registry", prompt_lookup=self._prompts)
@@ -75,7 +81,7 @@ def resolve_prompt_reference(
     """Resolve a prompt path against registry text and optional filesystem roots."""
 
     if raw_path is None:
-        return ResolvedPrompt(path=None, text=None, source=source)
+        return ResolvedPrompt(path=None, text=None, source=source, reference_values={"source": source})
     candidate = Path(raw_path)
     if candidate.is_absolute():
         return _prompt_from_candidate(candidate, display_path=raw_path, source=source, prompt_lookup=prompt_lookup)
@@ -91,7 +97,16 @@ def resolve_prompt_reference(
             )
 
     text = prompt_lookup.get(raw_path) if prompt_lookup is not None else None
-    return ResolvedPrompt(path=raw_path, text=text, source=source)
+    return ResolvedPrompt(
+        path=raw_path,
+        text=text,
+        source=source,
+        reference_values={
+            "source": source,
+            "requested_path": raw_path,
+            "resolved_via": "registry_lookup" if prompt_lookup is not None else "unresolved",
+        },
+    )
 
 
 def _prompt_from_candidate(
@@ -102,6 +117,24 @@ def _prompt_from_candidate(
     prompt_lookup: Mapping[str, str] | None = None,
 ) -> ResolvedPrompt:
     if candidate.exists():
-        return ResolvedPrompt(path=str(candidate), text=candidate.read_text(encoding="utf-8"), source=source)
+        return ResolvedPrompt(
+            path=str(candidate),
+            text=candidate.read_text(encoding="utf-8"),
+            source=source,
+            reference_values={
+                "source": source,
+                "requested_path": display_path,
+                "resolved_path": str(candidate),
+            },
+        )
     text = prompt_lookup.get(display_path) if prompt_lookup is not None else None
-    return ResolvedPrompt(path=display_path, text=text, source=source)
+    return ResolvedPrompt(
+        path=display_path,
+        text=text,
+        source=source,
+        reference_values={
+            "source": source,
+            "requested_path": display_path,
+            "resolved_via": "registry_lookup" if prompt_lookup is not None else "unresolved",
+        },
+    )

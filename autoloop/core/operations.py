@@ -16,6 +16,7 @@ from pydantic import BaseModel, TypeAdapter
 
 from .context import Context
 from .errors import FailureContext, ProviderExecutionError, WorkflowExecutionError
+from .mappings import normalize_mapping
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest
 from .providers.protocols import LLMProvider
@@ -34,6 +35,7 @@ _CURRENT_OPERATION_RUNTIME: ContextVar["OperationRuntime | None"] = ContextVar(
 @dataclass(slots=True)
 class OperationRuntime:
     provider: LLMProvider
+    provider_configuration: Mapping[str, Any] | None = None
     prompt_registry: PromptRegistry | None = None
     context: Context | None = None
     run_folder: Path | None = None
@@ -112,6 +114,7 @@ def execute_step_operation(ctx: Context, *, step_name: str, spec: OperationStepS
         raise RuntimeError(f"operation step {step_name!r} requires an active workflow runtime")
     operation_runtime = OperationRuntime(
         provider=runtime.provider,
+        provider_configuration=runtime.provider_configuration,
         prompt_registry=runtime.prompt_registry,
         context=ctx,
         run_folder=runtime.run_folder,
@@ -158,6 +161,7 @@ def _resolve_runtime(
     if ambient is not None:
         return OperationRuntime(
             provider=ambient.provider if provider is None else provider,
+            provider_configuration=ambient.provider_configuration,
             prompt_registry=ambient.prompt_registry if prompt_registry is None else prompt_registry,
             context=ambient.context if context is None else context,
             run_folder=ambient.run_folder if run_folder is None else run_folder,
@@ -175,6 +179,7 @@ def _resolve_runtime(
         raise RuntimeError("llm() and classify() require an active workflow runtime or an explicit provider=...")
     return OperationRuntime(
         provider=provider,
+        provider_configuration=provider_configuration(provider, default_session_name=DEFAULT_SESSION_NAME),
         prompt_registry=prompt_registry,
         context=context,
         run_folder=run_folder,
@@ -501,7 +506,12 @@ def _resolve_prompt(prompt: Prompt | str, *, runtime: OperationRuntime) -> Resol
     if registry is not None:
         return registry.resolve(prompt)
     if prompt.source == "inline":
-        return ResolvedPrompt(path=prompt.path, text=prompt.text, source="inline")
+        return ResolvedPrompt(
+            path=prompt.path,
+            text=prompt.text,
+            source="inline",
+            reference_values={"source": "inline", "inline": True},
+        )
     search_roots: tuple[Path, ...] = ()
     if runtime.context is not None:
         search_roots = (runtime.context.package_folder, runtime.context.workflow_folder)
@@ -755,20 +765,73 @@ def _emit_replay_warning(
 
 
 def _prompt_reference_values(prompt: ResolvedPrompt) -> dict[str, Any]:
-    return {
-        "path": prompt.path,
-        "source": prompt.source,
-        "text_hash": _sha256_text(prompt.text or ""),
-    }
+    values = normalize_mapping(prompt.reference_values, stringify_keys=True)
+    values.setdefault("source", prompt.source)
+    values.setdefault("resolved_path", prompt.path)
+    return values
 
 
 def _provider_configuration(runtime: OperationRuntime) -> dict[str, Any]:
-    provider = runtime.provider
-    return {
+    if runtime.provider_configuration is not None:
+        return normalize_mapping(runtime.provider_configuration, stringify_keys=True)
+    return provider_configuration(runtime.provider, default_session_name=runtime.default_session_name)
+
+
+def provider_configuration(provider: LLMProvider, *, default_session_name: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "provider_module": type(provider).__module__,
         "provider_type": type(provider).__qualname__,
-        "default_session_name": runtime.default_session_name,
+        "default_session_name": default_session_name,
     }
+    transport = getattr(provider, "_transport", None)
+    if transport is not None:
+        payload["transport"] = _configuration_payload(transport)
+    provider_payload = _configuration_payload(provider)
+    if provider_payload:
+        payload["provider"] = provider_payload
+    return payload
+
+
+def _configuration_payload(value: Any) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    config = getattr(value, "_config", None)
+    if config is not None:
+        payload["config"] = _json_safe_configuration_value(config)
+    commands = getattr(value, "_commands", None)
+    if commands is not None:
+        payload["commands"] = _json_safe_configuration_value(commands)
+    for source_name in (
+        "model",
+        "_model",
+        "model_effort",
+        "_model_effort",
+        "effort",
+        "_effort",
+        "permission_strategy",
+        "default_provider",
+        "default_mode",
+    ):
+        if not hasattr(value, source_name):
+            continue
+        normalized_name = source_name.lstrip("_")
+        payload[normalized_name] = _json_safe_configuration_value(getattr(value, source_name))
+    return payload
+
+
+def _json_safe_configuration_value(value: Any) -> Any:
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
+    if hasattr(value, "__dataclass_fields__"):
+        return _json_safe_configuration_value(asdict(value))
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe_configuration_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_configuration_value(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return repr(value)
 
 
 def _record_attempt(
