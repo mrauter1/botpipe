@@ -15,7 +15,7 @@ from typing import Any, Callable, Mapping, Sequence
 from pydantic import BaseModel, TypeAdapter
 
 from .context import Context
-from .errors import ProviderExecutionError, WorkflowExecutionError
+from .errors import FailureContext, ProviderExecutionError, WorkflowExecutionError
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest
 from .providers.protocols import LLMProvider
@@ -339,34 +339,35 @@ def _parse_operation_value(*, spec: OperationStepSpec, raw_output: str) -> Any:
         return _parse_classification_value(raw_output, choices=spec.choices)
     if spec.returns in {None, str}:
         if not raw_output.strip():
-            error = ProviderExecutionError("provider returned an empty llm value")
-            error._provider_retry_kind = "empty_operation_value"
-            raise error
+            raise ProviderExecutionError("provider returned an empty llm value", retry_kind="empty_operation_value")
         return raw_output
     payload = _parse_json_value(raw_output)
     try:
         return TypeAdapter(spec.returns).validate_python(payload)
     except Exception as exc:
-        error = ProviderExecutionError(f"provider returned an invalid typed llm value: {exc}")
-        error._provider_retry_kind = "invalid_operation_value"
-        raise error from exc
+        raise ProviderExecutionError(
+            f"provider returned an invalid typed llm value: {exc}",
+            retry_kind="invalid_operation_value",
+        ) from exc
 
 
 def _parse_json_value(raw_output: str) -> Any:
     candidate = raw_output.strip()
     if not candidate:
-        error = ProviderExecutionError("provider returned an empty structured llm value")
-        error._provider_retry_kind = "empty_operation_value"
-        raise error
+        raise ProviderExecutionError(
+            "provider returned an empty structured llm value",
+            retry_kind="empty_operation_value",
+        )
     match = _JSON_FENCE_RE.fullmatch(candidate)
     if match is not None:
         candidate = match.group("body").strip()
     try:
         return json.loads(candidate)
     except json.JSONDecodeError as exc:
-        error = ProviderExecutionError(f"provider returned malformed operation JSON: {exc.msg}")
-        error._provider_retry_kind = "malformed_operation_value"
-        raise error from exc
+        raise ProviderExecutionError(
+            f"provider returned malformed operation JSON: {exc.msg}",
+            retry_kind="malformed_operation_value",
+        ) from exc
 
 
 def _parse_classification_value(raw_output: str, *, choices: Sequence[str]) -> str:
@@ -382,15 +383,15 @@ def _parse_classification_value(raw_output: str, *, choices: Sequence[str]) -> s
         if isinstance(parsed, str):
             candidate = parsed.strip()
     if not candidate:
-        error = ProviderExecutionError("provider returned an empty classification value")
-        error._provider_retry_kind = "empty_operation_value"
-        raise error
-    if candidate not in choices:
-        error = ProviderExecutionError(
-            f"provider returned invalid classification choice {candidate!r}; legal choices: {', '.join(choices)}"
+        raise ProviderExecutionError(
+            "provider returned an empty classification value",
+            retry_kind="empty_operation_value",
         )
-        error._provider_retry_kind = "invalid_operation_choice"
-        raise error
+    if candidate not in choices:
+        raise ProviderExecutionError(
+            f"provider returned invalid classification choice {candidate!r}; legal choices: {', '.join(choices)}",
+            retry_kind="invalid_operation_choice",
+        )
     return candidate
 
 
@@ -457,7 +458,9 @@ def _operation_step_execution_id(
 
 
 def _operation_failure_context(exc: Exception) -> dict[str, Any]:
-    failure_context = getattr(exc, "_failure_context", None)
+    failure_context = getattr(exc, "failure_context", None)
+    if isinstance(failure_context, FailureContext):
+        return failure_context.to_payload()
     if isinstance(failure_context, dict) and failure_context:
         return dict(failure_context)
     return {

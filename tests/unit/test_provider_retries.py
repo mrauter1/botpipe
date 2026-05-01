@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.errors import FailureContext, ProviderExecutionError
 from core.providers.retries import build_retry_feedback
 
 
@@ -12,15 +13,14 @@ def _retry_error(
     artifact_name: str | None = None,
     failure_context: dict[str, str] | None = None,
 ) -> Exception:
-    error = RuntimeError(message)
-    error._provider_retry_kind = kind
+    error = ProviderExecutionError(message, retry_kind=kind)
     context: dict[str, str] = {}
     if artifact_name is not None:
         context["artifact_name"] = artifact_name
     if failure_context is not None:
         context.update(failure_context)
     if context:
-        error._failure_context = context
+        error.failure_context = FailureContext(kind=kind, step_name="review", details=context)
     return error
 
 

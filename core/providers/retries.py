@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..errors import FailureContext
+
 
 @dataclass(frozen=True, slots=True)
 class ProviderRetryPolicy:
@@ -54,7 +56,7 @@ def build_retry_feedback(
 
 
 def _problem_summary(exc: Exception, *, step_name: str) -> str:
-    kind = getattr(exc, "_provider_retry_kind", None)
+    kind = getattr(exc, "retry_kind", None)
     if kind == "illegal_route":
         return f"The selected route was not allowed for step {step_name!r}."
     if kind == "invalid_payload":
@@ -84,7 +86,12 @@ def _problem_summary(exc: Exception, *, step_name: str) -> str:
 
 
 def _failure_context_field(exc: Exception, key: str) -> str | None:
-    failure_context = getattr(exc, "_failure_context", None)
+    failure_context = getattr(exc, "failure_context", None)
+    if isinstance(failure_context, FailureContext):
+        value = failure_context.to_payload().get(key)
+        if isinstance(value, str) and value:
+            return value
+        return None
     if not isinstance(failure_context, dict):
         return None
     value = failure_context.get(key)

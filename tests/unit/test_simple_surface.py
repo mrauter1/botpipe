@@ -1063,8 +1063,9 @@ def test_simple_context_suppresses_unmodeled_item_state_surfaces(tmp_path) -> No
         step_state_store=ReviewState(),
     )
 
-    assert isinstance(ctx.step_state, ReviewState)
     assert ctx.step_state.attempts == 0
+    with pytest.raises(AttributeError, match="visits is runtime-owned and read-only"):
+        ctx.step_state.visits = 2
 
     with pytest.raises(
         WorkflowExecutionError,
@@ -1105,3 +1106,29 @@ def test_simple_context_exposes_modeled_item_state_surfaces(tmp_path) -> None:
 
     assert ctx.item_state.status == "active"
     assert ctx.step_item_state.attempts == 2
+
+
+def test_simple_context_step_item_state_runtime_fields_are_read_only(tmp_path) -> None:
+    class WorkflowState(BaseModel):
+        approved: bool = False
+
+    class StepItemState(BaseModel):
+        attempts: int = 0
+
+    ctx = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="simple-demo",
+        task_folder=tmp_path,
+        workflow_folder=tmp_path,
+        run_folder=tmp_path,
+        package_folder=tmp_path,
+        state=WorkflowState(),
+        session_store=InMemorySessionStore(),
+        step_item_state_store=StepItemState(attempts=2),
+    )
+
+    ctx.step_item_state.attempts = 3
+    assert ctx.step_item_state.attempts == 3
+    with pytest.raises(AttributeError, match="last_route is runtime-owned and read-only"):
+        ctx.step_item_state.last_route = "done"

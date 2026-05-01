@@ -664,6 +664,7 @@ class Params(BaseModel):
     assert run_output["task_id"] == "task-42"
     assert run_output["status"] == "awaiting_input"
     assert run_output["awaiting_input"] is True
+    assert run_output["pending_input"]["question"] == "What value?"
     run_id = run_output["run_id"]
 
     run_dir = tmp_path / ".autoloop" / "tasks" / "task-42" / "wf_review" / "runs" / run_id
@@ -678,7 +679,7 @@ class Params(BaseModel):
     assert show_output["resumable"] is True
     assert show_output["awaiting_input"] is True
     assert show_output["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
-    assert show_output["pending_question"] == "What value?"
+    assert show_output["pending_input"]["question"] == "What value?"
 
     list_exit = cli.main(["runs", "list", "--workflow", "reviewer", "--task", "task-42", "--root", str(tmp_path)])
     list_output = json.loads(capsys.readouterr().out)
