@@ -827,3 +827,48 @@ Targeted validation is green:
 Result: `165 passed`.
 
 The next step is verifier re-review of this phase.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de3ea-88d2-7822-a347-d5ac75792453
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+I’m re-reviewing only the phase-local runtime-control surface that changed in response to the prior findings. I’m checking the updated engine paths against the reviewer issues first, then I’ll refresh the criteria and feedback artifacts based on that result.
+
+The full phase-local suite is green again, including the new regressions for `after_producer` controls and `Goto` handoff/checkpoint behavior. I’m doing a final source read on the exact fix points now so I can clear the previous blocking IDs explicitly rather than relying only on passing tests.
+
+I’ve finished the source audit against the prior blocking IDs. The engine now honors candidate-free `after_producer` controls, carries `Goto.handoff` through the same pending-handoff path, and checkpoints destination state before jumped-to dispatch, so I’m marking the phase complete and appending a re-review note in feedback.
+
+Scope considered
+
+Phase `runtime-controls-and-hidden-routes` only. I reviewed the updated direct-runtime-control engine paths, hidden-route/provider filtering behavior, the targeted implementation notes, and the phase-local test surfaces that changed in response to the prior blocking findings.
+
+What I analyzed
+
+I compared the updated implementation against the accepted phase contract and the existing run-local decisions, then re-read the exact source points that previously failed review: candidate-free `after_producer` control handling, `Goto.handoff` propagation, and checkpoint persistence before non-terminal `Goto` dispatch. I also verified the refreshed phase-local test run.
+
+What I reviewed
+
+I verified that `after_producer` now propagates direct controls through the pair-step path without forcing verifier dispatch, that shared direct-control finalization now schedules `Goto` handoffs for provider-mediated targets, and that the run loop checkpoints destination state before executing a non-terminal `Goto`. I also confirmed the phase-local regression suite passed: `165 passed`.
+
+Key findings / decisions
+
+The prior blocking findings are closed. `IMP-001` is resolved by the explicit candidate-free direct-control path in the pair-step producer flow, and `IMP-002` is resolved by carrying `handoff` on `_DirectRuntimeControl`, routing it through shared pending-handoff scheduling, and checkpointing direct `Goto` transitions before the target step starts.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/runtime-controls-and-hidden-routes/criteria.md) to checked-complete and appended a re-review closure note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/runtime-controls-and-hidden-routes/feedback.md). No new in-scope findings were identified.
+
+Open issues / next step
+
+No in-scope blocking or non-blocking issues remain for this phase. The next step is to advance to the next implementation/review phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
