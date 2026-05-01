@@ -977,3 +977,124 @@ No phase-local test-audit issues remain. The next step is to advance out of this
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de411-9744-7c62-8942-3681d87698d0
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+I’m implementing the active `checkpoint-resume-and-failure-model` phase. First I’m reading the phase artifacts and the current runtime/checkpoint code paths to pin down the exact pending-input, resume, and failure-state surfaces before editing.
+
+The active feedback artifact is effectively empty, so I’m treating the phase contract and existing code as the source of truth. I’ve identified the main surfaces: `core.context`, `core.engine`, checkpoint store protocols and filesystem persistence, plus runtime metadata readers that still expose legacy `pending_question`.
+
+I’ve confirmed the current gap: the engine already persists `PendingInput`, but it still duplicates `pending_question`, resumes without clearing consumed input from the next checkpoint surface, and failure propagation still hangs off private exception attributes. Next I’m tracing the exact engine update points so the fix lands once instead of scattering wrappers across the runtime.
+
+I have enough context to edit safely. The work breaks into three coupled changes:
+1. Replace checkpoint/run metadata’s `pending_question` duplication with `pending_input` as the canonical persisted surface, including resume-time validation and clearing after consumption.
+2. Add structured failure objects and route all engine/provider/operation failure annotations through them instead of private ad hoc dict attributes.
+3. Wrap `ctx.step_state` and `ctx.step_item_state` in read-only-runtime views so built-ins stay immutable while custom fields remain writable, then update focused tests and phase notes.
+
+I’m about to edit the core surfaces now: `core.context` for state views, `core.errors` and `core.engine` for structured failures, and the checkpoint/workspace/runner persistence path for canonical pending-input metadata. After that I’ll run the focused contract and unit tests that cover resume, failure persistence, and state immutability.
+
+I’m making the first code pass now. The goal of this pass is to centralize the new data shapes and helper APIs first, so the later engine changes are mechanical instead of ad hoc.
+
+The next edit is the risky one: swapping the engine off private exception attributes. I’m doing that by adding conversion helpers first, then changing the hot paths to use them, so failures still checkpoint the current mutated state while the error objects carry structured metadata.
+
+I’ve landed the structural pieces. I’m now tightening the tests around the changed contracts: new checkpoints should rely on `pending_input`, resumed input failures should checkpoint cleanly, and built-in step-state fields should reject author mutation while custom fields still work.
+
+The structural edits are in. I’m running a syntax pass before I touch the tests, because the engine/error changes are the kind of patch where one malformed constructor call can invalidate the whole run.
+
+I’m running the focused regression slice now: provider retry formatting, simple context/state-view behavior, the request-input resume path, and the run metadata/CLI surfaces that changed from `pending_question` to `pending_input`.
+
+The repo has a local `.venv`, so I’m switching to that interpreter for the test slice. If the failures are behavioral rather than environment-related, I’ll patch them directly and rerun the same subset.
+
+`tests/runtime/test_package_cli.py` can’t even import in this environment because `runtime/cli.py` is using a package-relative import pattern that only works under the repository’s packaged entrypoint, not direct top-level test import. I’m excluding that module from the focused slice and continuing with the phase-specific runtime and contract tests.
+
+The core slice is behaving: the focused tests for request-input resume, failure-context persistence, provider retry feedback, and the new state-view immutability all passed under the repo’s `.venv`. I’m finishing by recording the phase-local decisions and implementation notes so later turns inherit the compatibility boundaries cleanly.
+
+I found one cleanup item from validation: tracked `__pycache__` files changed because of the syntax/test runs. I’m restoring only those generated artifacts to their pre-run state so the phase result stays source-only.
+
+I made one last source-only cleanup to remove a lingering `pending_question` excerpt field. I’m rerunning the focused checks with bytecode writes disabled so validation itself doesn’t dirty tracked cache files again.
+
+Scope considered
+
+Active phase `checkpoint-resume-and-failure-model` only: pending-input checkpoint/run metadata, resume-time input validation and `ctx.input_response`, structured failure propagation, and read-only runtime-owned step/step-item state fields.
+
+What I analyzed
+
+I traced the current behavior through `core/engine.py`, `core/context.py`, `core/errors.py`, `core/operations.py`, `core/providers/retries.py`, `runtime/runner.py`, `runtime/workspace.py`, and `runtime/stores/filesystem.py`, plus the focused contract/unit/runtime tests that cover request-input resume, failure checkpointing, provider retry feedback, and state surfaces.
+
+What I changed
+
+I made `pending_input` the canonical new-write surface for checkpoints and run metadata. New checkpoint/run metadata writes no longer persist duplicate `pending_question`; read surfaces still derive the question from `pending_input`, and resume now fails clearly for legacy checkpoints that only have `pending_question`. Resume-time input validation now checkpoints structured failure context and leaves the pending input intact when validation fails.
+
+I added `FailureContext` and `StepExecutionError` in `core/errors.py`, then moved the engine/provider/operation retry paths onto public structured fields instead of private exception annotations. I also wrapped `ctx.step_state` and `ctx.step_item_state` in a `StateView` so runtime-owned built-ins like `visits`, `last_route`, `last_reason`, `rework_count`, and `replan_count` are read-only while custom fields remain mutable.
+
+I updated the focused tests and phase artifacts accordingly, including new coverage for invalid resumed input preserving the checkpoint and for read-only runtime-owned state fields.
+
+Key findings / decisions
+
+Legacy `pending_question` remains readable for compatibility, but new writes now use only `pending_input`, and legacy pending-question-only checkpoints are treated as non-resumable by design.
+
+The built-in field protection is enforced in `Context`, not by freezing the compiled Pydantic models, so existing checkpoint/state serialization shapes stay stable.
+
+Focused validation passed:
+`PYTHONDONTWRITEBYTECODE=1 python3 -B -m py_compile ...`
+and
+`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest ...`
+with 17 targeted tests passing.
+
+Open issues / next step
+
+I did not run `tests/runtime/test_package_cli.py` directly because that module currently fails top-level test import due an existing `runtime/cli.py` package-relative import mode issue unrelated to this phase. The source change there is limited to `pending_input` payload expectations.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de411-9744-7c62-8942-3681d87698d0
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+I’m reviewing the phase-local implementation against the acceptance criteria and the actual changed execution paths. First I’m reading the criteria artifact and the relevant failure/resume/state-view code to identify whether the new behavior is complete or if there are regression holes.
+
+I found a material correctness hole in the new structured-failure path. I’m confirming the exact references now so the feedback points to the central fix location instead of scattering symptom-level comments.
+
+I’ve got one blocking issue, and it’s central rather than cosmetic: several of the new structured-failure call sites don’t actually carry their state/failure annotations through to the top-level checkpoint. I’m recording that against the engine helper so the fix stays centralized.
+
+Scope considered
+
+Phase-local review of `checkpoint-resume-and-failure-model` only: pending-input persistence/resume, structured failure propagation, and read-only runtime-owned step-state surfaces. I limited artifact writes to the active review directory.
+
+What I analyzed
+
+I reviewed the active criteria/feedback artifacts, the implementation notes and run decisions, and the changed execution paths in `core/engine.py`, `core/context.py`, `core/errors.py`, `runtime/workspace.py`, `runtime/runner.py`, and `runtime/stores/filesystem.py`. I focused on whether failure-time checkpointing still preserves mutated custom state/session and whether structured failure context is carried end-to-end.
+
+What I reviewed
+
+I updated the phase feedback artifact with one prioritized blocking finding. The criteria remain unchecked because the current implementation does not yet satisfy AC-2 safely.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The new `_annotate_execution_error(...)` helper only annotates `StepExecutionError`, but many engine-generated failures are still plain `WorkflowExecutionError`. In those paths, hook/finalization/runtime-control failures lose `checkpoint_state` and `failure_context`, so the top-level checkpoint falls back to the pre-step state and can silently discard just-mutated custom state. That directly contradicts the phase requirement to preserve current state/session mutations on failure with structured failure context.
+
+Open issues / next step
+
+Fix `core/engine.py` centrally by upgrading plain engine validation/runtime-control failures into `StepExecutionError` (or by giving `WorkflowExecutionError` the same public execution metadata) before re-raising, then rerun the focused failure-preservation cases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
