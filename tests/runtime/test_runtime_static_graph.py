@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from autoloop import FINISH, Md, Prompt, Route, Workflow, produce_verify_step, python_step, step
+from autoloop import FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
 from core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
 from core.compiler import compile_workflow
 from core.providers.retries import ProviderRetryPolicy
@@ -89,6 +89,8 @@ def test_static_step_graph_includes_route_metadata_and_schema_presence(tmp_path:
     assert assessment["routes"]["assessment_ready"]["summary"] == "assessment completed"
     assert assessment["routes"]["assessment_ready"]["required_writes"] == []
     assert assessment["has_expected_output_schema"] is True
+    assert payload["terminals"] == ["FINISH", "AWAIT_INPUT", "FAIL"]
+    assert assessment["runtime_control_hook_locations"] == []
 
 
 def test_topology_artifacts_are_written_additively_with_canonical_finish_surface(tmp_path: Path) -> None:
@@ -193,6 +195,68 @@ def test_topology_payload_marks_hidden_routes_and_mermaid_route_table_keep_them(
 
     assert "| publish | human_escalation | FINISH | false | inherit | - |" in route_table
     assert "publish -- human_escalation [hidden] --> FINISH" in mermaid
+
+
+def test_topology_artifacts_include_state_surfaces_runtime_control_hook_locations_and_compile_report_details(
+    tmp_path: Path,
+) -> None:
+    class WorkItemState(BaseModel):
+        severity: str = "medium"
+
+    def after_review(ctx, outcome, route):
+        return None
+
+    def on_hidden_taken(ctx):
+        return None
+
+    class RichTopologyWorkflow(Workflow):
+        gates = Worklist.from_items(
+            "gate",
+            items=({"id": "alpha", "title": "Alpha"},),
+            item_state=WorkItemState,
+        )
+        review = step(
+            prompt=Prompt.inline("Review the selected gate."),
+            scope=gates,
+            item_state={"attempts": StateVar(0)},
+            after=after_review,
+            routes={
+                "done": FINISH,
+                "human_escalation": Route.to(FINISH, provider_visible=False, on_taken=on_hidden_taken),
+            },
+        )
+
+    compiled = compile_workflow(RichTopologyWorkflow)
+
+    static_payload = workflow_static_step_graph_payload(compiled)
+    topology_payload = workflow_topology_payload(compiled)
+    review_static = next(step_payload for step_payload in static_payload["steps"] if step_payload["name"] == "review")
+    review_topology = next(step_payload for step_payload in topology_payload["steps"] if step_payload["name"] == "review")
+
+    assert static_payload["worklists"]["gate"] == {
+        "item_state_model": "WorkItemState",
+        "item_state_fields": ["severity"],
+    }
+    assert review_static["step_item_state_fields"] == ["visits", "last_route", "last_reason", "attempts"]
+    assert review_topology["step_item_state_surface"] == {
+        "model": "ReviewStepItemState",
+        "fields": ["visits", "last_route", "last_reason", "attempts"],
+        "runtime_fields": ["visits", "last_route", "last_reason"],
+        "custom_fields": ["attempts"],
+    }
+    assert review_topology["runtime_control_hook_locations"] == [
+        {"hook": "after", "callable": "after_review"},
+        {"hook": "on_taken", "callable": "on_hidden_taken", "route": "human_escalation", "source_step": "review"},
+    ]
+
+    write_topology_artifacts(tmp_path, compiled)
+    compile_report = (tmp_path / "compile_report.md").read_text(encoding="utf-8")
+    route_table = (tmp_path / ROUTE_TABLE_FILENAME).read_text(encoding="utf-8")
+
+    assert "- terminals: `FINISH`, `AWAIT_INPUT`, `FAIL`" in compile_report
+    assert "## Runtime-Control Hook Locations" in compile_report
+    assert "`review`: after:after_review, on_taken:human_escalation" in compile_report
+    assert "| review | human_escalation | FINISH | false | inherit | - | - | on_hidden_taken |" in route_table
 
 
 def test_topology_payload_omits_unbound_effective_set_for_inherited_global_routes() -> None:

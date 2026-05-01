@@ -101,11 +101,24 @@ def _yes_no(value: bool) -> str:
 def _required_by_routes(context: ProviderTurnContext, ref: ProviderArtifactRef) -> str:
     required_by = [
         route
-        for route in context.available_routes
+        for route in _visible_routes(context)
         if ref.name in _route_required_writes(context, route)
         or ref.qualified_name in _route_required_writes(context, route)
     ]
     return ", ".join(required_by) if required_by else "none"
+
+
+def _visible_routes(context: ProviderTurnContext) -> tuple[str, ...]:
+    visible: list[str] = []
+    for route in context.available_routes:
+        info = context.routes.get(route)
+        if isinstance(info, Mapping):
+            if info.get("provider_visible") is False:
+                continue
+        elif info is not None and info.provider_visible is False:
+            continue
+        visible.append(route)
+    return tuple(visible)
 
 
 def _route_required_writes(context: ProviderTurnContext, route: str) -> tuple[str, ...]:
@@ -214,8 +227,9 @@ def _operation_sections(context: ProviderTurnContext, *, prompt_text: str) -> li
 
 
 def _render_operation_response(context: ProviderTurnContext) -> str:
-    if context.available_routes:
-        choices = ", ".join(context.available_routes)
+    visible_routes = _visible_routes(context)
+    if visible_routes:
+        choices = ", ".join(visible_routes)
         return "\n".join(
             [
                 "Return raw text containing exactly one declared choice.",
@@ -331,7 +345,7 @@ def _render_routes(context: ProviderTurnContext) -> str:
             _render_explicit_route_required_writes(context, route),
             _render_route_required_writes(context, route),
         )
-        for route in context.available_routes
+        for route in _visible_routes(context)
     ]
     if not rows:
         rows.append(("none", "No routes were declared.", "inherit", "none"))

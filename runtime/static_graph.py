@@ -18,6 +18,7 @@ from core.schema_registry import (
     WORKFLOW_STATIC_STEP_GRAPH_SCHEMA,
     WORKFLOW_TOPOLOGY_SCHEMA,
 )
+from core.step_state import built_in_step_state_model
 
 
 STATIC_GRAPH_SCHEMA = WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
@@ -43,6 +44,10 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
     return {
         "schema": STATIC_GRAPH_SCHEMA,
         "workflow_name": compiled.workflow_name,
+        "terminals": [FINISH, AWAIT_INPUT, FAIL],
+        "workflow_state": _workflow_state_surface_payload(compiled),
+        "workflow_params": _workflow_params_surface_payload(compiled),
+        "worklists": _worklist_surfaces_payload(compiled),
         "steps": [
             {
                 "name": step.name,
@@ -62,6 +67,11 @@ def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, 
                 "log_artifacts": list(step.log_artifacts),
                 "available_routes": list(step.available_routes),
                 "verifier_session_name": step.verifier_session_name,
+                "state_surface": _step_state_surface_payload(step),
+                "step_item_state_model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
+                "step_item_state_fields": list(step.step_item_state_fields),
+                "step_item_state_surface": _step_item_state_surface_payload(step),
+                "runtime_control_hook_locations": _runtime_control_hook_locations(compiled, step),
                 "routes": {
                     route_name: _topology_route_payload(
                         compiled=compiled,
@@ -100,6 +110,9 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "topology_hash": compiled.topology_hash,
         "entry": compiled.entry_step_name,
         "terminals": [FINISH, AWAIT_INPUT, FAIL],
+        "workflow_state": _workflow_state_surface_payload(compiled),
+        "workflow_params": _workflow_params_surface_payload(compiled),
+        "worklists": _worklist_surfaces_payload(compiled),
         "steps": [
             {
                 "name": step.name,
@@ -130,6 +143,11 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                 "verifier_session_name": step.verifier_session_name,
                 "state_model": step.step_state_model.__name__,
                 "state_fields": list(step.step_state_fields),
+                "state_surface": _step_state_surface_payload(step),
+                "step_item_state_model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
+                "step_item_state_fields": list(step.step_item_state_fields),
+                "step_item_state_surface": _step_item_state_surface_payload(step),
+                "runtime_control_hook_locations": _runtime_control_hook_locations(compiled, step),
                 "routes": [
                     _topology_route_payload(
                         compiled=compiled,
@@ -212,9 +230,29 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
                     step.name: {
                         "model": step.step_state_model.__name__,
                         "fields": list(step.step_state_fields),
+                        "runtime_fields": _step_runtime_state_fields(step),
+                        "custom_fields": [
+                            field_name
+                            for field_name in step.step_state_fields
+                            if field_name not in _step_runtime_state_fields(step)
+                        ],
                     }
                     for step in compiled.steps.values()
                 },
+                "step_item_states": {
+                    step.name: {
+                        "model": step.step_item_state_model.__name__ if step.step_item_state_model is not None else None,
+                        "fields": list(step.step_item_state_fields),
+                        "runtime_fields": _step_runtime_state_fields(step) if step.step_item_state_model is not None else [],
+                        "custom_fields": [
+                            field_name
+                            for field_name in step.step_item_state_fields
+                            if field_name not in _step_runtime_state_fields(step)
+                        ],
+                    }
+                    for step in compiled.steps.values()
+                },
+                "worklist_item_states": _worklist_surfaces_payload(compiled),
             },
         ),
         SESSION_CONTRACTS_FILENAME: _write_json_file(
@@ -272,6 +310,99 @@ def _prompt_path(prompt: str | Prompt | None) -> str | None:
 
 def _prompt_references(step: Any) -> tuple[str, ...]:
     return tuple(_json_value(reference) for reference in getattr(step.step, "simple_prompt_references", ()))
+
+
+def _workflow_state_surface_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
+    return {
+        "model": compiled.state_cls.__name__,
+        "fields": sorted(getattr(compiled.state_cls, "model_fields", {}).keys()),
+    }
+
+
+def _workflow_params_surface_payload(compiled: CompiledWorkflow) -> dict[str, Any] | None:
+    if compiled.parameters_cls is None:
+        return None
+    return {
+        "model": compiled.parameters_cls.__name__,
+        "fields": sorted(getattr(compiled.parameters_cls, "model_fields", {}).keys()),
+    }
+
+
+def _worklist_surfaces_payload(compiled: CompiledWorkflow) -> dict[str, dict[str, Any]]:
+    return {
+        name: {
+            "item_state_model": worklist.item_state_model.__name__ if worklist.item_state_model is not None else None,
+            "item_state_fields": (
+                sorted(worklist.item_state_model.model_fields.keys()) if worklist.item_state_model is not None else []
+            ),
+        }
+        for name, worklist in compiled.worklists.items()
+    }
+
+
+def _step_runtime_state_fields(step: Any) -> list[str]:
+    return list(built_in_step_state_model(step.kind).model_fields.keys())
+
+
+def _state_surface_payload(
+    *,
+    model_name: str | None,
+    fields: list[str],
+    runtime_fields: list[str],
+) -> dict[str, Any]:
+    runtime_field_set = set(runtime_fields)
+    return {
+        "model": model_name,
+        "fields": fields,
+        "runtime_fields": runtime_fields,
+        "custom_fields": [field_name for field_name in fields if field_name not in runtime_field_set],
+    }
+
+
+def _step_state_surface_payload(step: Any) -> dict[str, Any]:
+    runtime_fields = _step_runtime_state_fields(step)
+    return _state_surface_payload(
+        model_name=step.step_state_model.__name__,
+        fields=list(step.step_state_fields),
+        runtime_fields=runtime_fields,
+    )
+
+
+def _step_item_state_surface_payload(step: Any) -> dict[str, Any] | None:
+    if step.step_item_state_model is None:
+        return None
+    runtime_fields = _step_runtime_state_fields(step)
+    return _state_surface_payload(
+        model_name=step.step_item_state_model.__name__,
+        fields=list(step.step_item_state_fields),
+        runtime_fields=runtime_fields,
+    )
+
+
+def _runtime_control_hook_locations(compiled: CompiledWorkflow, step: Any) -> list[dict[str, Any]]:
+    locations: list[dict[str, Any]] = []
+    for hook_phase, hook in (
+        ("after", step.after_hook),
+        ("after_producer", step.after_producer_hook),
+        ("after_verifier", step.after_verifier_hook),
+        ("on_route", step.on_route_hook),
+    ):
+        if hook is None:
+            continue
+        locations.append({"hook": hook_phase, "callable": _callable_name(hook)})
+    for route_tag in step.available_routes:
+        route = compiled.routes.get(step.name, {}).get(route_tag) or compiled.global_routes.get(route_tag)
+        if route is None or route.on_taken is None:
+            continue
+        locations.append(
+            {
+                "hook": "on_taken",
+                "callable": _callable_name(route.on_taken),
+                "route": route_tag,
+                "source_step": route.source_step,
+            }
+        )
+    return locations
 
 
 def _topology_route_payload(
@@ -334,8 +465,8 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
     lines = [
         "# Route Table",
         "",
-        "| Step | Route | Target | Provider Visible | Explicit Required Writes | Effective Required Writes |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Step | Route | Target | Provider Visible | Explicit Required Writes | Effective Required Writes | Handoff | On Taken |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for step_name, routes in compiled.routes.items():
         for route_tag, route in routes.items():
@@ -351,8 +482,23 @@ def _route_table_text(compiled: CompiledWorkflow) -> str:
             effective_text = ", ".join(effective) if effective else "-"
             lines.append(
                 f"| {step_name} | {route_tag} | {route.target} | {str(route.provider_visible).lower()} | "
-                f"{explicit_text} | {effective_text} |"
+                f"{explicit_text} | {effective_text} | {route.handoff or '-'} | {_callable_name(route.on_taken) or '-'} |"
             )
+    for route_tag, route in compiled.global_routes.items():
+        payload = route_required_write_payload(
+            compiled,
+            step_name=None,
+            route_tag=route_tag,
+            route=route,
+        )
+        explicit = payload["explicit_required_writes"]
+        explicit_text = "inherit" if explicit is None else ", ".join(explicit) if explicit else "none (explicit)"
+        effective = payload["effective_required_writes"]
+        effective_text = ", ".join(effective) if effective else "-"
+        lines.append(
+            f"| GLOBAL | {route_tag} | {route.target} | {str(route.provider_visible).lower()} | "
+            f"{explicit_text} | {effective_text} | {route.handoff or '-'} | {_callable_name(route.on_taken) or '-'} |"
+        )
     return "\n".join(lines)
 
 
@@ -372,6 +518,24 @@ def _topology_mermaid(compiled: CompiledWorkflow) -> str:
 
 
 def _compile_report_text(compiled: CompiledWorkflow) -> str:
+    hidden_route_count = sum(
+        1
+        for routes in compiled.routes.values()
+        for route in routes.values()
+        if not route.provider_visible
+    ) + sum(1 for route in compiled.global_routes.values() if not route.provider_visible)
+    runtime_control_hooks = [
+        f"`{step.name}`: " + ", ".join(
+            (
+                f"{location['hook']}:{location.get('route', location['callable'])}"
+                if location["hook"] == "on_taken"
+                else f"{location['hook']}:{location['callable']}"
+            )
+            for location in _runtime_control_hook_locations(compiled, step)
+        )
+        for step in compiled.steps.values()
+        if _runtime_control_hook_locations(compiled, step)
+    ]
     return "\n".join(
         (
             "# Compile Report",
@@ -380,10 +544,16 @@ def _compile_report_text(compiled: CompiledWorkflow) -> str:
             f"- entry: `{compiled.entry_step_name}`",
             f"- source hash: `{compiled.source_hash}`",
             f"- topology hash: `{compiled.topology_hash}`",
+            f"- terminals: `{FINISH}`, `{AWAIT_INPUT}`, `{FAIL}`",
             f"- steps: `{len(compiled.steps)}`",
-            f"- routes: `{sum(len(routes) for routes in compiled.routes.values())}`",
+            f"- routes: `{sum(len(routes) for routes in compiled.routes.values()) + len(compiled.global_routes)}`",
+            f"- hidden routes: `{hidden_route_count}`",
             f"- artifacts: `{len(compiled.artifacts_by_qualified_name)}`",
             f"- sessions: `{len(compiled.sessions)}`",
+            f"- worklists: `{len(compiled.worklists)}`",
+            "",
+            "## Runtime-Control Hook Locations",
+            *(runtime_control_hooks or ("- none",)),
         )
     )
 
