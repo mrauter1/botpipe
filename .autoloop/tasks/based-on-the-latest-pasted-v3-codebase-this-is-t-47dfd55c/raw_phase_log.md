@@ -2443,3 +2443,67 @@ Open issues / next step
 
 - I did not rerun the full repository test suite; only the maintainability-refactor regression set above.
 - The next step is verifier review against the three blocking findings that triggered this turn.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de470-1bde-75f2-92a8-f2fabee7d998
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+I’m reviewing the maintainability refactor against the three prior blocking findings and the phase criteria first, then I’ll widen to adjacent regression surfaces only where the new ownership split or replay changes could have drifted behavior.
+
+I found one concrete replay regression candidate already: explicit `provider=` overrides inside an active workflow runtime inherit the old provider configuration hash. I’m checking whether that’s actually reachable in the public operation surface and whether there are any similar ownership-split regressions before I write findings.
+
+Reviewing the second-pass refactor against the prior blocking findings and the current source paths. I’m checking whether the validation split and mapping normalization are now substantive, then I’ll verify replay fingerprint safety before updating the review artifacts.
+
+The validation split now looks substantive. I’m drilling into the replay/runtime path because that’s the remaining place where a subtle behavioral regression can hide even after the refactor landed.
+
+The remaining risk is specific: explicit `provider=` overrides during an active workflow runtime. That path can bypass the newly added provider-config snapshot unless the runtime recomputes it when the provider object changes.
+
+I’ve confirmed the public `llm(..., provider=...)` and `classify(..., provider=...)` override surface still exists. I’m running a small runtime-level check now to verify whether replay fingerprints follow the explicit override provider or only the ambient engine provider.
+
+The validation/module ownership issue and the mapping-normalization issue now look fixed. I found one remaining blocker instead: replay reuse is still unsafe when a step makes an inline `llm(..., provider=...)` or `classify(..., provider=...)` call under an active workflow runtime.
+
+Scope considered
+
+- Phase-local `maintainability-refactors` only.
+- Re-reviewed the second-pass fixes for `IMP-001` through `IMP-003`, plus adjacent replay/runtime behavior.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/feedback.md) only.
+
+What I analyzed
+
+- `autoloop/core/operations.py`, especially `_resolve_runtime()`, `_operation_fingerprint()`, and `_provider_configuration()`.
+- The new validation ownership split across `discovery.py`, `inventory.py`, `lowering.py`, `topology.py`, `hook_validation.py`, `prompt_validation.py`, `state_validation.py`, and `validation.py`.
+- The new mapping normalization path in `autoloop/core/mappings.py` and its use from context/loader/workspace/filesystem-store boundaries.
+- The current implementation notes and decisions ledger for this phase.
+
+What I reviewed
+
+- Whether the prior blocking findings were actually resolved in code, not just wrapped.
+- Whether replay mismatch handling now tracks concrete provider config in all public operation call paths.
+- Whether the validation/compiler split and mapping normalization now satisfy AC-1 and AC-3.
+- A runtime-level reproduction of inline `llm(..., provider=...)` replay behavior under an active operation runtime.
+
+Key findings / decisions
+
+- `IMP-001`, `IMP-002`, and `IMP-003` are resolved by the current diff.
+- I added one new blocking finding, `IMP-004`, in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/feedback.md).
+- `IMP-004`: `autoloop/core/operations.py:_resolve_runtime` keeps the ambient `provider_configuration` even when an inline operation explicitly overrides `provider=...`, so replay fingerprinting can silently reuse cached values across override-provider/model changes.
+- I reproduced that failure directly: two `RenderedLLMProvider` overrides under the same ambient runtime caused the second rerun to replay the first provider’s cached value and skip calling the second provider entirely.
+- Criteria remain incomplete; I marked only `Technical Debt / Simplicity` as satisfied in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/criteria.md).
+
+Open issues / next step
+
+- Fix `IMP-004` by recomputing `provider_configuration()` whenever `_resolve_runtime()` selects an explicit provider different from the ambient runtime provider.
+- Add a regression test covering inline `llm(..., provider=...)` or `classify(..., provider=...)` during an active step runtime, then rerun review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
