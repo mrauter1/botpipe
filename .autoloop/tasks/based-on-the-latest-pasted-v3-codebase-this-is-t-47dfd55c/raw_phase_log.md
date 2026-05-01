@@ -761,3 +761,69 @@ Implementation needs a follow-up pass to 1) allow candidate-free `after_producer
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de3ea-88d2-7822-a347-d5ac75792453
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+I’m implementing the two blocked areas together because they share the same transition path: candidate-free direct controls from `after_producer`, and direct `Goto` transition bookkeeping. I’m tracing existing pending-handoff and checkpoint behavior first so I can fix both without adding a second transition mechanism.
+
+I’m adding focused regressions for the exact blocked surfaces rather than broad new coverage: one `produce_verify` case that exercises a direct control from `after_producer`, and one `Goto` case that proves handoff plus checkpoint behavior survive the jump. That keeps the test blast radius tied to the reviewer findings.
+
+I’ve finished the design pass. The smallest safe change is to keep one direct-control shape, let `after_producer` emit it explicitly, schedule `Goto` handoffs through the existing pending-handoff path, and persist a checkpoint only for non-terminal direct jumps before the next step starts.
+
+I caught one more propagation point while wiring tests: the `Goto.handoff` fix has to apply to the normal `after`/`on_taken` direct-control path too, not just the new `after_producer` shortcut. I’m moving that scheduling into the shared finalization path so both surfaces behave the same way.
+
+The engine patch compiled cleanly; the only failure is test construction. `ProduceVerifyStep` doesn’t take the public-style `after_producer=` keyword directly at this layer, so I’m adjusting the regression to the actual core constructor shape instead of forcing a surface mismatch into the contract test.
+
+The focused regressions are now green, including the previously blocked `after_producer` and `Goto` cases. I’m running the earlier phase-local suite again to make sure the shared finalization path still behaves the same after the handoff/checkpoint changes.
+
+I’m tightening the phase notes now to reflect the second implementation pass: candidate-free `after_producer` controls, `Goto` handoff propagation, and the new checkpoint-on-jump behavior. Then I’ll do one last sanity read of the reviewer feedback to make sure both blocking IDs are actually closed in the code and tests.
+
+Scope considered
+
+Phase `runtime-controls-and-hidden-routes` only. I stayed on the engine/runtime-control path, the direct `Goto` handoff/checkpoint behavior, the `produce_verify` after-hook path, and the phase-local implementation notes artifact.
+
+What I analyzed
+
+I traced the two blocking reviewer findings through `core/engine.py`, the `ProduceVerifyStep` hook flow in `core/steps.py`/compiler mapping, pending-handoff scheduling, and checkpoint persistence in the run loop. I also rechecked the existing hidden-route/provider-filtering changes to avoid regressing the earlier phase-local suite.
+
+What I changed
+
+I fixed candidate-free direct controls from `after_producer` by letting `_run_after_hook()` explicitly allow them when requested and by teaching `_run_pair_step()` / `_execute_pair_step()` to short-circuit verifier dispatch and return the runtime control directly.
+
+I fixed `Goto` transition bookkeeping by carrying `handoff` on `_DirectRuntimeControl`, scheduling it through a shared `_schedule_direct_control_handoffs()` helper for both `after`/`on_taken` and `after_producer` direct controls, and writing a checkpoint at the destination cursor before the next step dispatch begins for non-terminal `Goto` transitions.
+
+I added focused contract tests for:
+- `after_producer` returning `Goto` and skipping verifier dispatch
+- `Goto(..., handoff=...)` delivering handoff text to the target provider step
+- destination checkpoint persistence before the jumped-to step starts
+- the earlier `on_taken` direct-`Goto` regression
+
+I updated `implementation_notes.md` with the new symbols, reviewer-finding mapping, intended behavior changes, and refreshed validation results.
+
+Key findings / decisions
+
+Both blocking reviewer findings were addressed in the shared engine path rather than with one-off test scaffolding. `Goto` handoff scheduling is now centralized in one helper so the behavior is consistent whether the direct control came from `after_producer`, `after`, or `on_taken`.
+
+I did not append to `decisions.txt` this turn because there was no new runtime-created header for this turn, and the fixes were straightforward closures of the recorded reviewer findings rather than a new cross-turn design constraint.
+
+Open issues / next step
+
+Targeted validation is green:
+- `python3 -m py_compile core/engine.py tests/contract/test_engine_contracts.py`
+- `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k 'after_producer_goto_short_circuits_verifier or on_taken_goto_handoff_reaches_target_provider_step or on_taken_goto_checkpoints_target_before_next_step_dispatch or on_taken_goto_skips_declared_route_target_and_emits_runtime_control'`
+- `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py`
+
+Result: `165 passed`.
+
+The next step is verifier re-review of this phase.
