@@ -2,218 +2,288 @@ version: 1
 task_id: based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/request.md
 phases:
-  - phase_id: "public-surface-terminal-cut"
-    title: "Public Surface And Terminal Cut"
-    objective: "Replace PAUSE with AWAIT_INPUT, add the public runtime-control objects, and remove deprecated public names and on_route entrypoints without leaving compatibility exports."
-    status: "planned"
-    in_scope:
-      - "Update autoloop.__init__, autoloop.simple, core.__init__, core.primitives, and route helpers for the new terminal/control surface."
-      - "Rename pause-oriented public/runtime metadata and status terminology where it is externally observed."
-      - "Remove on_route and the requested deleted names from declarations, exports, docs, and strictness coverage."
-    out_of_scope:
-      - "Engine collaborator extraction."
-    dependencies: []
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "FINISH, AWAIT_INPUT, FAIL, SELF, RequestInput, Goto, and Fail are the canonical public terminal/control exports, and PAUSE cannot be imported."
-      - id: "AC-2"
-        text: "Authoring declarations no longer accept on_route, and removed public names fail import/usage checks."
-    deliverables:
-      - "Updated public API and route helper surface."
-      - "Strictness and authoring-surface test updates for the hard cut."
-    risks:
-      - "Broad surface changes can miss status strings or helper aliases embedded in runtime metadata and examples."
-    rollback:
-      - "Restore the previous export/declaration surface from the pre-phase diff if downstream import failures show unresolved hard-cut fallout."
-
-  - phase_id: "runtime-controls-and-hidden-routes"
-    title: "Runtime Controls And Hidden Routes"
-    objective: "Implement RequestInput, Goto, Fail, hidden route visibility, and direct-control hook execution semantics while preserving truthful built-in route state."
-    status: "planned"
-    in_scope:
-      - "Extend Route and compiled route data with provider_visible."
-      - "Normalize hook returns for strings, Event, RequestInput, Goto, and Fail."
-      - "Apply redirect chaining only to route-tag and Event reroutes, with direct controls stopping the chain."
-    out_of_scope:
-      - "Schema-registry versioning and reader migration policy."
-    dependencies:
-      - "public-surface-terminal-cut"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Hook-returned RequestInput, Goto, and Fail validate and execute directly without pretending a route was taken."
-      - id: "AC-2"
-        text: "Hidden routes remain legal runtime routes and topology entries but are absent from provider-visible route choices."
-    deliverables:
-      - "Engine/compiler/runtime updates for direct runtime controls."
-      - "Compiled route visibility support and provider filtering hooks."
-    risks:
-      - "The finalization path is tightly coupled to route validation and built-in state mutation."
-    rollback:
-      - "Revert the direct-control branch and restore route-only finalization if hidden-route or control execution semantics break step dispatch."
-
-  - phase_id: "checkpoint-resume-and-failure-model"
-    title: "Checkpoint Resume And Failure Model"
-    objective: "Replace pending-question persistence with pending-input persistence, expose resumed input on context, protect runtime-owned state fields, and swap private exception annotations for structured failures."
-    status: "planned"
-    in_scope:
-      - "Checkpoint/run metadata/schema updates for pending input ids, schema, timestamps, and source metadata."
-      - "Resume-time input validation and ctx.input_response exposure."
-      - "FailureContext, StepExecutionError, and read-only built-in step/step-item state views."
-    out_of_scope:
-      - "Provider prompt rendering changes."
-    dependencies:
-      - "runtime-controls-and-hidden-routes"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "AWAIT_INPUT checkpoints persist pending-input metadata, resumed answers validate against input_schema, and consumed input is cleared."
-      - id: "AC-2"
-        text: "Failure persistence uses structured failure context and preserves current custom state/session mutations without allowing assignment to runtime-owned built-ins."
-    deliverables:
-      - "Checkpoint/store/context updates for pending input and resume."
-      - "Structured failure classes and state-view enforcement."
-    risks:
-      - "Checkpoint schema changes can break resume on existing runs if legacy handling is ambiguous."
-    rollback:
-      - "Restore the old checkpoint payload and exception propagation model if resume coverage exposes unsafe migration gaps."
-
-  - phase_id: "metadata-tracing-schema-and-attribution"
-    title: "Metadata Tracing Schema And Attribution"
-    objective: "Record the new runtime-control, redirect-chain, provider-attribution, and persisted-schema semantics in traces, history, run metadata, checkpoints, and child-run summaries."
-    status: "planned"
-    in_scope:
-      - "Add hook_runtime_control events and richer step-finalization payloads."
-      - "Update run status normalization for awaiting_input versus provider route question."
-      - "Carry runtime-control and redirect data into history and child workflow summaries."
-      - "Assign schema ids to persisted runtime artifacts and define older-schema reader behavior per surface."
-    out_of_scope:
-      - "Namespace/package relocation."
-    dependencies:
-      - "checkpoint-resume-and-failure-model"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Trace/history metadata distinguishes candidate_route, final_route, runtime_control, target_step, terminal, source hook/phase, and provider attribution."
-      - id: "AC-2"
-        text: "Run metadata and child-run summaries report awaiting_input without conflating it with the provider question route tag."
-      - id: "AC-3"
-        text: "Run metadata, checkpoint, topology/static graph, trace/event/history, and operation replay artifacts have owned schema ids plus explicit older-schema reader behavior."
-    deliverables:
-      - "Tracing/history/run-metadata payload updates."
-      - "Child-workflow result and summary alignment with the new terminal model."
-      - "Schema registry expansion and reader-compatibility plan for persisted runtime artifacts."
-    risks:
-      - "Multiple metadata writers can drift if payload shape changes are not centralized."
-      - "Schema-id rollout can strand existing persisted data if reader behavior is left implicit."
-    rollback:
-      - "Revert the new payload fields while keeping runtime behavior if observability consumers fail on the richer schema."
-
-  - phase_id: "validation-rendering-and-topology"
-    title: "Validation Rendering And Topology"
-    objective: "Remove AST hook inference, keep runtime validation authoritative, and update provider rendering and static artifacts for hidden routes, required writes, and runtime-control locations."
-    status: "planned"
-    in_scope:
-      - "Delete AST-based hook route inference and keep callable/signature validation only."
-      - "Filter provider-visible routes during contract rendering."
-      - "Extend topology/static graph/route-table/compile-report content while preserving existing run-start artifact timing."
-    out_of_scope:
-      - "Engine collaborator decomposition."
-    dependencies:
-      - "metadata-tracing-schema-and-attribution"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Validation no longer infers hook-return routes from source code and instead validates runtime returns directly."
-      - id: "AC-2"
-        text: "Static artifacts include hidden routes, explicit and effective required writes, runtime-control hook locations, and AWAIT_INPUT while provider prompts exclude hidden routes."
-    deliverables:
-      - "Validation cleanup for hook returns."
-      - "Updated provider rendering and topology/static artifact payloads."
-    risks:
-      - "Provider filtering and topology rendering can diverge if they stop sharing the same compiled-route inventory."
-    rollback:
-      - "Restore prior rendering/validation helpers if artifact generation or provider contracts regress before the shared route model is stabilized."
-
-  - phase_id: "namespace-cut-optimizer-boundary-prompts-and-extensions"
-    title: "Namespace Cut Optimizer Boundary Prompts And Extensions"
-    objective: "Finish the single-namespace package layout, remove compatibility trees and workflow-facing git/tracing declarations, move optimizer consumers to stable APIs, and widen prompt-registry seeding."
-    status: "planned"
-    in_scope:
-      - "Move internal packages under autoloop/ and delete autoloop_v3/ plus top-level production import paths."
-      - "Delete workflow-facing git/tracing declaration modules and remove their public exports while preserving runtime-owned git/tracing infrastructure."
-      - "Expose stable inspection/query APIs from canonical autoloop namespaces using existing runtime/workspace/history/capability helpers."
-      - "Update optimizer imports/status logic and build the prompt registry from all resolved prompt roots."
-    out_of_scope:
-      - "Behavioral changes beyond the requested namespace cut and prompt-resolution contract."
-    dependencies:
-      - "validation-rendering-and-topology"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Production code and migrated tests use canonical autoloop.* imports, and autoloop_v3 plus top-level internal namespaces are no longer importable as supported surfaces."
-      - id: "AC-2"
-        text: "Optimizer code consumes stable autoloop inspection APIs and recognizes AWAIT_INPUT/awaiting_input semantics."
-      - id: "AC-3"
-        text: "Workflow-facing GitTracking/Tracing declaration modules and exports are removed, while runtime-owned git/tracing infrastructure remains supported."
-    deliverables:
-      - "Canonical package layout and import migration."
-      - "Stable inspection/query API surface and prompt-registry expansion."
-      - "Extension cleanup covering workflow-facing git/tracing declarations, exports, docs, and tests."
-    risks:
-      - "Namespace relocation is the broadest mechanical change and can leave orphan imports in tests, tooling, or generated fixtures."
-      - "Extension cleanup can accidentally remove runtime-owned tracing or git-tracking paths if authoring and runtime surfaces are not separated explicitly."
-    rollback:
-      - "Restore the pre-move package tree if the import migration cannot be completed atomically."
-
-  - phase_id: "maintainability-refactors"
-    title: "Maintainability Refactors"
-    objective: "Refactor stabilized logic into clearer collaborators and public operation/session surfaces without reintroducing compatibility glue or speculative abstractions."
-    status: "planned"
-    in_scope:
-      - "Extract engine collaborators around dispatch, finalization, hooks, checkpoints, state/session runtime, operations, and workflow invocation."
-      - "Split validation/compiler logic into discovery, lowering, inventory, topology, hook, prompt, and state modules."
-      - "Unify session store behavior with backend composition and rename the public operation surfaces."
-      - "Cache artifact-backed worklist loading per step execution."
-      - "Normalize Mapping inputs to dicts once at public boundaries and remove scattered internal defensive conversions."
-      - "Update operation replay fingerprinting and mismatch behavior, and type ChildWorkflowResult outputs."
-    out_of_scope:
-      - "New workflow features beyond the remaining-delta spec."
-    dependencies:
-      - "namespace-cut-optimizer-boundary-prompts-and-extensions"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "Engine, validation, and session responsibilities are separated into the requested collaborators/modules without behavior drift from prior phases."
-      - id: "AC-2"
-        text: "Public operation surfaces are renamed, replay mismatch defaults to warn-and-replay with strict fail support, and child workflow output typing is available."
-      - id: "AC-3"
-        text: "Worklist item loading is cached per step execution, and Mapping-to-dict normalization is centralized at public boundaries instead of repeated internally."
-    deliverables:
-      - "Collaborator/module refactors."
-      - "Session backend composition, operation-surface rename, replay updates, and typed child results."
-      - "Worklist load-cache and boundary-normalization cleanup."
-    risks:
-      - "Late refactors can accidentally re-open earlier behavioral changes if they happen before runtime semantics are stabilized."
-      - "Caching and normalization changes can hide correctness regressions if cache lifetime and boundary ownership are not explicit."
-    rollback:
-      - "Back out the refactor commits while retaining the already-stable behavior changes if module extraction proves too disruptive."
-
-  - phase_id: "tests-docs-and-golden-workflow"
-    title: "Tests Docs And Golden Workflow"
-    objective: "Prove the hard cut and the new runtime semantics end to end, then update canonical docs/examples to match the shipped surface exactly."
-    status: "planned"
-    in_scope:
-      - "Runtime, unit, contract, strictness, and integration coverage for terminals, runtime controls, hidden routes, state preservation, prompt registry, replay mismatch, and topology artifacts."
-      - "One golden workflow covering the requested combined surface."
-      - "Canonical documentation and examples that use only the final public surface."
-    out_of_scope:
-      - "Additional example families beyond what is needed to validate the shipped contract."
-    dependencies:
-      - "maintainability-refactors"
-    acceptance_criteria:
-      - id: "AC-1"
-        text: "The required runtime-control, hidden-route, state-preservation, namespace-cut, replay, prompt-registry, topology, and optimizer-boundary tests pass."
-      - id: "AC-2"
-        text: "Docs/examples and the golden workflow use only the final exported API and demonstrate AWAIT_INPUT, RequestInput, Goto, Fail, hidden routes, on_taken chaining, and resume behavior."
-    deliverables:
-      - "Expanded automated coverage including the golden workflow."
-      - "Updated docs/examples aligned to the hard-cut API."
-    risks:
-      - "If coverage lands too late, regressions in earlier phases can hide behind broad refactors."
-    rollback:
-      - "Keep the previous documentation/examples while retaining code changes if canonical doc rewrites need to be split from runtime stabilization."
+- phase_id: public-surface-terminal-cut
+  title: Public Surface And Terminal Cut
+  objective: Replace PAUSE with AWAIT_INPUT, add the public runtime-control objects,
+    and remove deprecated public names and on_route entrypoints without leaving compatibility
+    exports.
+  status: planned
+  in_scope:
+  - Update autoloop.__init__, autoloop.simple, core.__init__, core.primitives, and
+    route helpers for the new terminal/control surface.
+  - Rename pause-oriented public/runtime metadata and status terminology where it
+    is externally observed.
+  - Remove on_route and the requested deleted names from declarations, exports, docs,
+    and strictness coverage.
+  out_of_scope:
+  - Engine collaborator extraction.
+  dependencies: []
+  acceptance_criteria:
+  - id: AC-1
+    text: FINISH, AWAIT_INPUT, FAIL, SELF, RequestInput, Goto, and Fail are the canonical
+      public terminal/control exports, and PAUSE cannot be imported.
+  - id: AC-2
+    text: Authoring declarations no longer accept on_route, and removed public names
+      fail import/usage checks.
+  deliverables:
+  - Updated public API and route helper surface.
+  - Strictness and authoring-surface test updates for the hard cut.
+  risks:
+  - Broad surface changes can miss status strings or helper aliases embedded in runtime
+    metadata and examples.
+  rollback:
+  - Restore the previous export/declaration surface from the pre-phase diff if downstream
+    import failures show unresolved hard-cut fallout.
+- phase_id: runtime-controls-and-hidden-routes
+  title: Runtime Controls And Hidden Routes
+  objective: Implement RequestInput, Goto, Fail, hidden route visibility, and direct-control
+    hook execution semantics while preserving truthful built-in route state.
+  status: planned
+  in_scope:
+  - Extend Route and compiled route data with provider_visible.
+  - Normalize hook returns for strings, Event, RequestInput, Goto, and Fail.
+  - Apply redirect chaining only to route-tag and Event reroutes, with direct controls
+    stopping the chain.
+  out_of_scope:
+  - Schema-registry versioning and reader migration policy.
+  dependencies:
+  - public-surface-terminal-cut
+  acceptance_criteria:
+  - id: AC-1
+    text: Hook-returned RequestInput, Goto, and Fail validate and execute directly
+      without pretending a route was taken.
+  - id: AC-2
+    text: Hidden routes remain legal runtime routes and topology entries but are absent
+      from provider-visible route choices.
+  deliverables:
+  - Engine/compiler/runtime updates for direct runtime controls.
+  - Compiled route visibility support and provider filtering hooks.
+  risks:
+  - The finalization path is tightly coupled to route validation and built-in state
+    mutation.
+  rollback:
+  - Revert the direct-control branch and restore route-only finalization if hidden-route
+    or control execution semantics break step dispatch.
+- phase_id: checkpoint-resume-and-failure-model
+  title: Checkpoint Resume And Failure Model
+  objective: Replace pending-question persistence with pending-input persistence,
+    expose resumed input on context, protect runtime-owned state fields, and swap
+    private exception annotations for structured failures.
+  status: planned
+  in_scope:
+  - Checkpoint/run metadata/schema updates for pending input ids, schema, timestamps,
+    and source metadata.
+  - Resume-time input validation and ctx.input_response exposure.
+  - FailureContext, StepExecutionError, and read-only built-in step/step-item state
+    views.
+  out_of_scope:
+  - Provider prompt rendering changes.
+  dependencies:
+  - runtime-controls-and-hidden-routes
+  acceptance_criteria:
+  - id: AC-1
+    text: AWAIT_INPUT checkpoints persist pending-input metadata, resumed answers
+      validate against input_schema, and consumed input is cleared.
+  - id: AC-2
+    text: Failure persistence uses structured failure context and preserves current
+      custom state/session mutations without allowing assignment to runtime-owned
+      built-ins.
+  deliverables:
+  - Checkpoint/store/context updates for pending input and resume.
+  - Structured failure classes and state-view enforcement.
+  risks:
+  - Checkpoint schema changes can break resume on existing runs if legacy handling
+    is ambiguous.
+  rollback:
+  - Restore the old checkpoint payload and exception propagation model if resume coverage
+    exposes unsafe migration gaps.
+- phase_id: metadata-tracing-schema-and-attribution
+  title: Metadata Tracing Schema And Attribution
+  objective: Record the new runtime-control, redirect-chain, provider-attribution,
+    and persisted-schema semantics in traces, history, run metadata, checkpoints,
+    and child-run summaries.
+  status: planned
+  in_scope:
+  - Add hook_runtime_control events and richer step-finalization payloads.
+  - Update run status normalization for awaiting_input versus provider route question.
+  - Carry runtime-control and redirect data into history and child workflow summaries.
+  - Assign schema ids to persisted runtime artifacts and define older-schema reader
+    behavior per surface.
+  out_of_scope:
+  - Namespace/package relocation.
+  dependencies:
+  - checkpoint-resume-and-failure-model
+  acceptance_criteria:
+  - id: AC-1
+    text: Trace/history metadata distinguishes candidate_route, final_route, runtime_control,
+      target_step, terminal, source hook/phase, and provider attribution.
+  - id: AC-2
+    text: Run metadata and child-run summaries report awaiting_input without conflating
+      it with the provider question route tag.
+  - id: AC-3
+    text: Run metadata, checkpoint, topology/static graph, trace/event/history, and
+      operation replay artifacts have owned schema ids plus explicit older-schema
+      reader behavior.
+  deliverables:
+  - Tracing/history/run-metadata payload updates.
+  - Child-workflow result and summary alignment with the new terminal model.
+  - Schema registry expansion and reader-compatibility plan for persisted runtime
+    artifacts.
+  risks:
+  - Multiple metadata writers can drift if payload shape changes are not centralized.
+  - Schema-id rollout can strand existing persisted data if reader behavior is left
+    implicit.
+  rollback:
+  - Revert the new payload fields while keeping runtime behavior if observability
+    consumers fail on the richer schema.
+- phase_id: validation-rendering-and-topology
+  title: Validation Rendering And Topology
+  objective: Remove AST hook inference, keep runtime validation authoritative, and
+    update provider rendering and static artifacts for hidden routes, required writes,
+    and runtime-control locations.
+  status: planned
+  in_scope:
+  - Delete AST-based hook route inference and keep callable/signature validation only.
+  - Filter provider-visible routes during contract rendering.
+  - Extend topology/static graph/route-table/compile-report content while preserving
+    existing run-start artifact timing.
+  out_of_scope:
+  - Engine collaborator decomposition.
+  dependencies:
+  - metadata-tracing-schema-and-attribution
+  acceptance_criteria:
+  - id: AC-1
+    text: Validation no longer infers hook-return routes from source code and instead
+      validates runtime returns directly.
+  - id: AC-2
+    text: Static artifacts include hidden routes, explicit and effective required
+      writes, runtime-control hook locations, and AWAIT_INPUT while provider prompts
+      exclude hidden routes.
+  deliverables:
+  - Validation cleanup for hook returns.
+  - Updated provider rendering and topology/static artifact payloads.
+  risks:
+  - Provider filtering and topology rendering can diverge if they stop sharing the
+    same compiled-route inventory.
+  rollback:
+  - Restore prior rendering/validation helpers if artifact generation or provider
+    contracts regress before the shared route model is stabilized.
+- phase_id: namespace-cut-optimizer-boundary-prompts-and-extensions
+  title: Namespace Cut Optimizer Boundary Prompts And Extensions
+  objective: Finish the single-namespace package layout, remove compatibility trees
+    and workflow-facing git/tracing declarations, move optimizer consumers to stable
+    APIs, and widen prompt-registry seeding.
+  status: planned
+  in_scope:
+  - Move internal packages under autoloop/ and delete autoloop_v3/ plus top-level
+    production import paths.
+  - Delete workflow-facing git/tracing declaration modules and remove their public
+    exports while preserving runtime-owned git/tracing infrastructure.
+  - Expose stable inspection/query APIs from canonical autoloop namespaces using existing
+    runtime/workspace/history/capability helpers.
+  - Update optimizer imports/status logic and build the prompt registry from all resolved
+    prompt roots.
+  out_of_scope:
+  - Behavioral changes beyond the requested namespace cut and prompt-resolution contract.
+  dependencies:
+  - validation-rendering-and-topology
+  acceptance_criteria:
+  - id: AC-1
+    text: Production code and migrated tests use canonical autoloop.* imports, and
+      autoloop_v3 plus top-level internal namespaces are no longer importable as supported
+      surfaces.
+  - id: AC-2
+    text: Optimizer code consumes stable autoloop inspection APIs and recognizes AWAIT_INPUT/awaiting_input
+      semantics.
+  - id: AC-3
+    text: Workflow-facing GitTracking/Tracing declaration modules and exports are
+      removed, while runtime-owned git/tracing infrastructure remains supported.
+  deliverables:
+  - Canonical package layout and import migration.
+  - Stable inspection/query API surface and prompt-registry expansion.
+  - Extension cleanup covering workflow-facing git/tracing declarations, exports,
+    docs, and tests.
+  risks:
+  - Namespace relocation is the broadest mechanical change and can leave orphan imports
+    in tests, tooling, or generated fixtures.
+  - Extension cleanup can accidentally remove runtime-owned tracing or git-tracking
+    paths if authoring and runtime surfaces are not separated explicitly.
+  rollback:
+  - Restore the pre-move package tree if the import migration cannot be completed
+    atomically.
+- phase_id: maintainability-refactors
+  title: Maintainability Refactors
+  objective: Refactor stabilized logic into clearer collaborators and public operation/session
+    surfaces without reintroducing compatibility glue or speculative abstractions.
+  status: planned
+  in_scope:
+  - Extract engine collaborators around dispatch, finalization, hooks, checkpoints,
+    state/session runtime, operations, and workflow invocation.
+  - Split validation/compiler logic into discovery, lowering, inventory, topology,
+    hook, prompt, and state modules.
+  - Unify session store behavior with backend composition and rename the public operation
+    surfaces.
+  - Cache artifact-backed worklist loading per step execution.
+  - Normalize Mapping inputs to dicts once at public boundaries and remove scattered
+    internal defensive conversions.
+  - Update operation replay fingerprinting and mismatch behavior, and type ChildWorkflowResult
+    outputs.
+  out_of_scope:
+  - New workflow features beyond the remaining-delta spec.
+  dependencies:
+  - namespace-cut-optimizer-boundary-prompts-and-extensions
+  acceptance_criteria:
+  - id: AC-1
+    text: Engine, validation, and session responsibilities are separated into the
+      requested collaborators/modules without behavior drift from prior phases.
+  - id: AC-2
+    text: Public operation surfaces are renamed, replay mismatch defaults to warn-and-replay
+      with strict fail support, and child workflow output typing is available.
+  - id: AC-3
+    text: Worklist item loading is cached per step execution, and Mapping-to-dict
+      normalization is centralized at public boundaries instead of repeated internally.
+  deliverables:
+  - Collaborator/module refactors.
+  - Session backend composition, operation-surface rename, replay updates, and typed
+    child results.
+  - Worklist load-cache and boundary-normalization cleanup.
+  risks:
+  - Late refactors can accidentally re-open earlier behavioral changes if they happen
+    before runtime semantics are stabilized.
+  - Caching and normalization changes can hide correctness regressions if cache lifetime
+    and boundary ownership are not explicit.
+  rollback:
+  - Back out the refactor commits while retaining the already-stable behavior changes
+    if module extraction proves too disruptive.
+- phase_id: tests-docs-and-golden-workflow
+  title: Tests Docs And Golden Workflow
+  objective: Prove the hard cut and the new runtime semantics end to end, then update
+    canonical docs/examples to match the shipped surface exactly.
+  status: planned
+  in_scope:
+  - Runtime, unit, contract, strictness, and integration coverage for terminals, runtime
+    controls, hidden routes, state preservation, prompt registry, replay mismatch,
+    and topology artifacts.
+  - One golden workflow covering the requested combined surface.
+  - Canonical documentation and examples that use only the final public surface.
+  out_of_scope:
+  - Additional example families beyond what is needed to validate the shipped contract.
+  dependencies:
+  - maintainability-refactors
+  acceptance_criteria:
+  - id: AC-1
+    text: The required runtime-control, hidden-route, state-preservation, namespace-cut,
+      replay, prompt-registry, topology, and optimizer-boundary tests pass.
+  - id: AC-2
+    text: Docs/examples and the golden workflow use only the final exported API and
+      demonstrate AWAIT_INPUT, RequestInput, Goto, Fail, hidden routes, on_taken chaining,
+      and resume behavior.
+  deliverables:
+  - Expanded automated coverage including the golden workflow.
+  - Updated docs/examples aligned to the hard-cut API.
+  risks:
+  - If coverage lands too late, regressions in earlier phases can hide behind broad
+    refactors.
+  rollback:
+  - Keep the previous documentation/examples while retaining code changes if canonical
+    doc rewrites need to be split from runtime stabilization.

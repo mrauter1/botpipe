@@ -89,3 +89,77 @@ The planner needs to revise `plan.md` and `phase_plan.yaml` so the missing reque
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019de3b5-b853-7893-a51c-1a6849fda64f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019de3b5-b853-7893-a51c-1a6849fda64f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de3b5-b853-7893-a51c-1a6849fda64f
+---
+I’m revising the run-local plan to close the verifier’s blocking gaps without widening scope. First I’m checking the current feedback and the latest decision block so the next edits explicitly own the missing schema-registry, git/tracing cleanup, and worklist/dict-normalization slices.
+
+I’m patching the existing plan rather than reworking its structure. The fixes are surgical: phase ownership for schema registry and reader behavior, explicit extension cleanup for workflow-facing git/tracing declarations, and concrete maintainability scope for worklist caching plus `Mapping`→`dict` normalization.
+
+The first patch only partially matched the current phase file, so I’m re-reading the affected sections and patching them with exact context. The intent of the revision is unchanged: own the verifier-blocked scope explicitly, not reshape the whole plan.
+
+I’m splitting the edits into smaller patches now. The phase file has enough local drift that a one-shot patch is brittle; smaller hunks are safer and keep the plan revision traceable.
+
+The revision is in place. I’m doing one more shape check on the modified phase file and a quick content pass on the changed sections so the next verifier turn sees the missing scope as phase-owned, not just mentioned in prose.
+
+Revised the run-local plan artifacts to close the verifier’s blocking gaps:
+
+- [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/plan.md)
+- [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/phase_plan.yaml)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/feedback.md)
+- [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt)
+
+The changes are narrow and phase-owned: Phase 4 now explicitly owns schema-registry rollout plus older-schema reader behavior, Phase 6 owns workflow-facing git/tracing declaration cleanup while preserving runtime-owned infrastructure, and Phase 7 owns per-step worklist-load caching plus `Mapping`→`dict` boundary normalization. I also appended a feedback note documenting that revision and recorded the non-obvious constraints in the current decision block.
+
+I verified that `phase_plan.yaml` still parses and that the updated dependency chain is valid. I did not touch verifier-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/criteria.md).
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=plan | phase=verifier | cycle=2 | attempt=1 | thread_id=019de3b5-b853-7893-a51c-1a6849fda64f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019de3b5-b853-7893-a51c-1a6849fda64f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de3b5-b853-7893-a51c-1a6849fda64f
+---
+I’m re-verifying the revised plan against the request and the earlier blocking findings. First pass is whether the missing scope is now explicitly phase-owned and whether the machine-readable phase file still holds together after the revision.
+
+I’m re-running the verifier pass against the revised plan artifacts, then I’ll update `criteria.md` and append the verification outcome to `feedback.md` if the blocking gaps are actually closed.
+
+The revised plan now has explicit ownership for the previously missing schema, extension-cleanup, and maintainability slices. I’m updating the verifier artifacts to reflect that re-review outcome.
+
+The verifier-owned artifacts are updated. I’m doing one quick consistency read to make sure the checklist state and feedback entry match the actual review result.
+
+Scope considered
+Run-local plan artifacts for verifier cycle 2: [plan.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/plan.md), [phase_plan.yaml](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/phase_plan.yaml), [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/feedback.md), [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/criteria.md), and the read-only [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+What I analyzed
+I checked the revised narrative plan against the remaining-delta spec and the current decision ledger, with focus on the previously blocked gaps: schema-registry plus older-schema reader behavior, workflow-facing git/tracing cleanup, and worklist/cache plus `Mapping` boundary normalization. I also confirmed the machine-readable phase file still has coherent sequencing and runtime-owned metadata intact.
+
+What I reviewed
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/criteria.md) to checked state and appended the re-review result to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/feedback.md) as `PLAN-004`. `phase_plan.yaml` remains parseable and the revised phase ownership aligns with the prior verifier feedback.
+
+Key findings / decisions
+The prior blocking findings are addressed. Phase 4 now explicitly owns schema ids and older-schema reader behavior, Phase 6 explicitly owns workflow-facing git/tracing declaration removal while preserving runtime-owned infrastructure, and Phase 7 explicitly owns per-step worklist-load caching plus boundary `Mapping[str, Any]` to `dict[str, Any]` normalization. No new blocking verifier findings remain.
+
+Open issues / next step
+No open blocking issues in the run-local planning artifacts. The plan is ready to move forward as the implementation contract for later execution phases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

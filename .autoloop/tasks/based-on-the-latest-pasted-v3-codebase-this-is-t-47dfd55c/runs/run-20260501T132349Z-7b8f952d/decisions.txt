@@ -3,3 +3,7 @@ Preserve the existing run-start topology/static-artifact writer in runtime.traci
 Land runtime-control semantics and structured failure propagation before engine collaborator extraction so core.engine behavior changes once, then gets moved.
 Reuse the existing workspace/history/capability helpers behind canonical autoloop inspection APIs for optimizer work instead of creating parallel readers.
 Treat legacy PAUSE/pending_question persisted data as an explicit compatibility decision per reader surface; resume must fail clearly where no safe translator exists.
+<autoloop-decisions-header version="1" block_seq="2" owner="planner" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260501T132349Z-7b8f952d" ts="2026-05-01T13:32:28.774779+00:00" />
+Schema-registry rollout and older-schema reader behavior are owned work items in the metadata/tracing phase, not deferred notes, because persisted artifact compatibility spans checkpoint, run metadata, topology, trace/history, and replay records.
+Workflow-facing GitTracking and Tracing declarations are removed as part of extension/package cleanup, while runtime-owned git tracking and tracing infrastructure remain supported runtime surfaces.
+Worklist per-step load caching and Mapping-to-dict boundary normalization remain explicit deliverables in the maintainability phase and must not be dropped as incidental cleanup.
