@@ -1496,3 +1496,51 @@ Open issues / next step
 - `python3 -m compileall autoloop_optimizer/optimization.py core/history.py tests/runtime/test_history.py tests/unit/test_optimization_helpers.py` passed.
 - `python3 -m pytest tests/runtime/test_history.py tests/unit/test_optimization_helpers.py` could not run because `pytest` is not installed in this environment (`No module named pytest`).
 - Next step is verifier review of this phase revision.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+I’m on the final review pass now. I’m checking whether the two prior blockers are fully closed and whether the review artifacts need to record “no remaining findings” so the phase can be marked complete cleanly.
+
+The prior blockers look closed. I’m updating the review artifacts to reflect that this pass found no remaining issues and that the phase can be marked complete.
+
+Scope considered
+
+- Phase-local re-review of `metadata-tracing-schema-and-attribution`.
+- Focused on the two prior blocking findings, the touched runtime/optimizer readers, the history-status fix, and the updated phase-local artifacts.
+
+What I analyzed
+
+- The updated implementation in `autoloop_optimizer/optimization.py`, `core/history.py`, `tests/unit/test_optimization_helpers.py`, and `tests/runtime/test_history.py`.
+- The active [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt) entries for this turn.
+- The existing reviewer artifacts to verify that the previous blockers were actually closed rather than bypassed.
+
+What I reviewed
+
+- [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/criteria.md) is now fully checked.
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/metadata-tracing-schema-and-attribution/feedback.md) now records that cycle 2 introduced no new findings and that `IMP-001` and `IMP-002` are resolved.
+
+Key findings / decisions
+
+- No remaining blocking or non-blocking findings in this review pass.
+- The optimizer now enforces the same legacy-schema and explicit-unknown-schema behavior for runtime-owned observability artifacts that the phase required.
+- The history reader now reports finished `Goto` controls as finished step telemetry, with focused regression coverage.
+
+Open issues / next step
+
+- Syntax validation remains the only executed validation here; `pytest` is still unavailable in this environment, which is already documented in the implementation notes.
+- From a review standpoint, this phase revision is acceptable and can move forward.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
