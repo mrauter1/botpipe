@@ -159,9 +159,16 @@ def _resolve_runtime(
 ) -> OperationRuntime:
     ambient = _CURRENT_OPERATION_RUNTIME.get()
     if ambient is not None:
+        effective_provider = ambient.provider if provider is None else provider
+        effective_provider_configuration = ambient.provider_configuration
+        if provider is not None and provider is not ambient.provider:
+            effective_provider_configuration = provider_configuration(
+                provider,
+                default_session_name=ambient.default_session_name,
+            )
         return OperationRuntime(
-            provider=ambient.provider if provider is None else provider,
-            provider_configuration=ambient.provider_configuration,
+            provider=effective_provider,
+            provider_configuration=effective_provider_configuration,
             prompt_registry=ambient.prompt_registry if prompt_registry is None else prompt_registry,
             context=ambient.context if context is None else context,
             run_folder=ambient.run_folder if run_folder is None else run_folder,

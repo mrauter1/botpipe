@@ -43,7 +43,7 @@
 - `ChildWorkflowResult[OutputT]`, `Context.invoke_workflow`
 - `normalize_mapping(...)` ingress helpers
 - `Worklist.load_items`, `Worklist.set_current_status`
-- `OperationRuntime`, `provider_configuration(...)`, replay fingerprint helpers, replay mismatch warning/fail path
+- `OperationRuntime`, `_resolve_runtime(...)`, `provider_configuration(...)`, replay fingerprint helpers, replay mismatch warning/fail path
 - `LLMOperation`, `ClassifyOperation`, `llm`, `classify`
 - `RuntimeConfig.replay_mismatch_behavior`
 - `StepDispatcher`, `RouteFinalizer`, `HookRunner`, `ArtifactGuard`, `StateRuntime`, `SessionRuntime`, `CheckpointManager`, `OperationRecorder`, `WorkflowInvoker`
@@ -65,6 +65,7 @@
 - Operation replay fingerprint mismatches now warn and return the cached value by default instead of failing immediately.
 - Strict replay mismatch failure is still available through `Engine(..., operation_replay_mismatch_behavior="fail")` and runtime config.
 - Provider model/config drift now participates in operation replay mismatch detection even when the provider class stays the same.
+- Explicit inline operation provider overrides now participate in replay mismatch detection inside active step runtimes instead of inheriting the ambient engine provider fingerprint.
 - Worklist item reads avoid repeated artifact-backed loads within the same step execution.
 
 ## Known Non-Changes
@@ -74,6 +75,7 @@
 - `.venv/bin/python -m py_compile` on all changed Python modules.
 - `.venv/bin/pytest tests/unit/test_primitives_and_stores.py::test_session_store_can_be_composed_from_backend tests/unit/test_primitives_and_stores.py::test_worklist_load_items_is_cached_per_context tests/unit/test_simple_surface.py::test_operation_surface_singletons_expose_public_runtime_types tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_warns_and_reuses_cached_value_by_default tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_fails_in_strict_mode tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_includes_provider_configuration tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation -q`
 - `.venv/bin/pytest tests/contract/test_engine_contracts.py::test_low_level_engine_requires_prompt_registry_for_relative_file_prompts tests/contract/test_engine_contracts.py::test_low_level_engine_resolves_relative_file_prompts_with_filesystem_registry tests/runtime/test_workspace_and_context.py::test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_records_child_metadata tests/runtime/test_workspace_and_context.py::test_context_invoke_workflow_supports_typed_child_input_and_output tests/runtime/test_workspace_and_context.py::test_new_runs_validate_workflow_params_before_persisting_run_metadata -q`
+- `.venv/bin/pytest tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_includes_provider_configuration tests/contract/test_engine_contracts.py::test_inline_operation_provider_override_participates_in_replay_fingerprint tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_warns_and_reuses_cached_value_by_default tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_fails_in_strict_mode -q`
 
 ## Assumptions / Risks
 - Broader contract suite failures observed during exploratory runs are treated as pre-existing expectation drift from earlier phases, not regressions introduced by this maintainability turn.

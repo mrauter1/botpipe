@@ -2507,3 +2507,55 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de470-1bde-75f2-92a8-f2fabee7d998
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+Addressing `IMP-004` only. I’m checking the operation runtime path and the current turn’s decision log structure first, then I’ll patch the provider-override fingerprint path and add a regression test that exercises it inside an active step runtime.
+
+I have the concrete failure isolated. The patch will stay small: fix `_resolve_runtime()` so explicit override providers carry their own config snapshot, then add a focused replay regression beside the existing fingerprint tests.
+
+I’m patching the runtime-selection logic now. The fix is to treat the effective provider and its config snapshot as a pair, so replay fingerprinting follows the provider actually used by the inline call rather than the ambient engine provider.
+
+The fix is in and the focused replay tests are green. I’m updating the phase notes and the turn’s decision block now so the override-provider nuance stays explicit for later turns.
+
+Scope considered
+
+- Phase-local `maintainability-refactors` only.
+- Reviewer finding `IMP-004` on replay fingerprinting for inline `provider=` overrides under an active step runtime.
+- Updated source plus the required phase artifacts: [operations.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/operations.py), [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/implementation_notes.md), and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+What I analyzed
+
+- `autoloop/core/operations.py:_resolve_runtime` and how it carries `provider_configuration` into `_operation_fingerprint`.
+- The verifier’s reproduced failure mode: explicit `llm(..., provider=...)` / `classify(..., provider=...)` under an ambient runtime reusing the ambient provider snapshot.
+- Existing replay mismatch tests around provider configuration so the new regression could sit beside them cleanly.
+
+What I changed
+
+- Fixed `_resolve_runtime()` so an explicit inline override provider recomputes its own `provider_configuration(...)` when it differs from the ambient engine provider, instead of inheriting the ambient snapshot.
+- Added a focused regression test proving inline override providers now participate in replay mismatch detection inside an active step runtime, while warn-and-reuse behavior still replays the cached value.
+- Updated the phase notes and appended the non-obvious runtime decision to the current turn’s decision block.
+
+Key findings / decisions
+
+- The bug was real and narrow: the effective provider object changed, but the replay fingerprint still followed the ambient provider config.
+- The safest fix was local to runtime selection; no replay format or engine-collaborator changes were needed.
+- Validation passed:
+  - `.venv/bin/python -m py_compile autoloop/core/operations.py tests/contract/test_engine_contracts.py`
+  - `.venv/bin/pytest tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_includes_provider_configuration tests/contract/test_engine_contracts.py::test_inline_operation_provider_override_participates_in_replay_fingerprint tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_warns_and_reuses_cached_value_by_default tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_fails_in_strict_mode -q`
+
+Open issues / next step
+
+- I did not rerun the broader suite; only the replay-focused regression set for this fix.
+- Next step is verifier review of `IMP-004`.
