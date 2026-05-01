@@ -2847,3 +2847,93 @@ No phase-local reviewer issues remain. The verifier artifacts were updated in `c
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+---
+Reviewing the existing phase tests first to find any remaining gaps against the request and the recent runtime fixes, then I’ll add only the smallest missing regression coverage and update the phase test artifacts.
+
+I found one useful gap to close: we assert `request_input` and `goto` status derivation, but not the direct `fail` runtime-control status, and we don’t directly pin the legacy `pending_question` to `pending_input` read-compatibility on `RunRecord`. I’m adding those two regression tests now.
+
+I’m making two narrow test additions: one for direct `Fail` history status derivation, one for legacy `pending_question` read compatibility through `RunRecord.pending_input`. After that I’ll rerun the targeted slice and update the phase test artifacts.
+
+The new tests are passing. I’m doing one final full phase-slice run so the artifact can point to phase-level validation, not just the two focused files.
+
+Scope considered
+
+Phase-local test work for `tests-docs-and-golden-workflow`: existing runtime/control/history/workspace/docs coverage, the new golden workflow proof, and the active test artifacts `test_strategy.md` and `feedback.md`.
+
+What I analyzed
+
+I checked the active phase artifacts, the run decisions ledger, and the current phase test surfaces. The remaining gaps after the implementation pass were narrow: there was no direct history test for `Fail` runtime-control status derivation, and no direct regression test pinning legacy `pending_question` read-compatibility through `RunRecord.pending_input`.
+
+What I changed
+
+I added two focused tests:
+- [tests/runtime/test_history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_history.py): direct `Fail` runtime-control telemetry now has an explicit regression test asserting `status == "failed"` and preserving route metadata.
+- [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py): legacy persisted `pending_question` now has a direct compatibility test through `record.pending_input`.
+
+I also updated the phase artifacts:
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/tests-docs-and-golden-workflow/test_strategy.md)
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/tests-docs-and-golden-workflow/feedback.md)
+
+Key findings / decisions
+
+The phase coverage was already broad; the safest addition was to lock down the two recent regression-prone seams directly instead of expanding the golden workflow further. Validation passed for the focused additions (`31 passed`) and for the full phase slice (`277 passed`).
+
+Open issues / next step
+
+No phase-local test blockers remain. The updated strategy now maps the runtime-control, hidden-route, replay, topology, namespace-cut, and docs surfaces to concrete test files for the auditor pass.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+---
+Auditing the phase-local test additions against the request and the test strategy first, then I’ll rerun the claimed phase slice and check the new regression tests for coverage quality and flake risk.
+
+The added tests hold up under the full phase slice, and the new assertions are deterministic and aligned with the decisions ledger. I’m updating the audit artifacts now.
+
+Scope considered
+
+Phase-local audit for `tests-docs-and-golden-workflow`: the added regression tests in `tests/runtime/test_history.py` and `tests/runtime/test_workspace_and_context.py`, the existing phase proof coverage including the golden workflow, and the active `test_strategy.md` and `feedback.md` artifacts. I excluded unrelated repository churn.
+
+What I analyzed
+
+I read the active test strategy, the current feedback artifact, and the latest relevant decisions for paused/pending-input compatibility and direct runtime-control status handling. I also inspected the changed test code to verify the new assertions matched the requested behavior rather than silently normalizing a regression.
+
+What I reviewed
+
+I re-ran the full claimed phase slice and got `277 passed in 4.41s`. I spot-checked that the new tests pin the two recent regression seams directly:
+- direct `Fail` runtime-control history status remains `failed` instead of collapsing back to `running`
+- legacy persisted `pending_question` remains readable through the canonical `pending_input` summary surface
+
+Key findings / decisions
+
+No blocking findings. The added tests are deterministic, phase-relevant, and consistent with the request and the decisions ledger. I marked all audit criteria as satisfied and appended a single audit record noting that no actionable findings were found.
+
+Open issues / next step
+
+No phase-local test audit issues remain. The audit artifacts were updated in `criteria.md` and `feedback.md`, and this test phase can close as complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
