@@ -291,3 +291,123 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m addressing the reviewer’s blocking findings only: public `paused` metadata removal, normalized `awaiting_input` status handling across summaries/filters, and the remaining phase-local `PAUSE`/`paused` test expectations. I’ll recheck the affected runtime metadata paths first, then patch the tests and notes in the same pass.
+
+I’m addressing the reviewer’s blocking findings in the phase-local surface: public run payloads still leak `paused`, raw status filtering is not normalized, and one test file still expects the old spellings. I’ll inspect those paths, then patch the minimum set of files and refresh the implementation notes.
+
+The reviewer’s scope is confirmed: the remaining problems are narrow and external-facing. I’ve found the old `paused` fields still being emitted by the CLI, and the workspace layer is still filtering on raw stored status instead of one canonical normalized status.
+
+I’ve got the concrete patch plan now: centralize status normalization in `runtime.workspace`, switch CLI payloads to the canonical field/value, then sweep the remaining phase-owned test expectations that still assert `paused` output. After that I’ll refresh the notes and record the compatibility decision if the patch introduces a new one.
+
+I’m checking the adjacent helper surfaces now, not just the three named findings. The test file exercises optimizer/stdlb snapshots built on top of `runtime.workspace`, so I need to make sure the normalization change flows through those public payloads instead of only fixing the CLI.
+
+I found one more adjacent gap that explains the stale test coverage: the optimizer snapshot helpers normalize text filters but not the renamed status vocabulary, and the diagnostics snapshot still serializes `record.status` directly. I’m folding those into the same fix so the public status cut is consistent across the phase-owned authoring helpers.
+
+I’ve confirmed the exact call sites. The next patch is mechanical but important: one canonical status mapper, then every public summary/payload in this phase will read from that mapper instead of raw stored values.
+
+There are a few adjacent test files that now obviously disagree with the phase changes, especially the CLI payload tests and workspace summary tests. I’m sweeping those direct consumers as regression prevention so the public rename is coherent across the changed surfaces, not just in one unit file.
+
+The code patch is in place. I’ve started a smoke pass now, and one correction surfaced immediately: I accidentally included a Markdown doc in `py_compile`, so I’m rerunning syntax checks on the actual Python files only and then reconciling any remaining phase-local status expectations.
+
+I’ve finished the code and test-surface edits and the syntax pass is clean. I’m updating the run notes now so the next turn has an accurate record of what changed, what stayed deliberately compatible, and what I still couldn’t validate in this environment.
+
+Scope considered
+
+- Phase-local public-surface follow-up for the reviewer’s blocking findings.
+- I stayed on the externally observed status/control surfaces: [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py), the snapshot helpers under [autoloop_optimizer](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer), and the direct consumer tests/docs for those paths.
+
+What I analyzed
+
+- Reviewer findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/public-surface-terminal-cut/feedback.md).
+- Public run payload emission in [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py) and run-record filtering/counting in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py).
+- Direct helper consumers in [autoloop_optimizer/portfolio.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/portfolio.py), [autoloop_optimizer/company.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/company.py), and [autoloop_optimizer/diagnostics.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/diagnostics.py).
+- Remaining phase-relevant expectations in [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py), and [tests/unit/test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py).
+
+What I changed
+
+- Centralized read-path status normalization in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py) with `normalize_run_status`, `RunRecord.normalized_status`, and `RunRecord.awaiting_input`.
+- Switched run discovery, summary filtering, summary counts, and excerpt payloads to canonical `awaiting_input` output while still reading legacy persisted `paused` records.
+- Changed CLI JSON payloads in [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py) to emit `status: "awaiting_input"` and `awaiting_input: bool`, removing the public `paused` field.
+- Updated portfolio/company/diagnostics helper filters and emitted status payloads to normalize `paused` to `awaiting_input`.
+- Fixed the remaining docs mismatch in [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) from `Route.complete(...)` to `Route.finish(...)`.
+- Updated the phase-owned and direct consumer tests to the new terminal/status vocabulary, while leaving legacy persisted fixture data in place where the compatibility read path is what is being exercised.
+- Refreshed [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/public-surface-terminal-cut/implementation_notes.md) and appended the non-obvious normalization decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+Key findings / decisions
+
+- The smallest safe fix was to normalize status once on the workspace read path, then reuse that in CLI and snapshot helpers instead of scattering more one-off `paused` checks.
+- I kept internal compatibility aliases like `RunRecord.paused` and `latest_paused` intact for this phase so legacy persisted runs remain resumable/readable during the cutover.
+- Validation performed: `python3 -m py_compile` passed for all touched Python production and test files.
+
+Open issues / next step
+
+- I did not run `pytest`; this environment still lacks the `pytest` module.
+- Import-time smoke runs are still blocked by missing `pydantic` in the system interpreter.
+- The next step is reviewer recheck of this phase. Broader repo areas that still intentionally reference legacy `paused` outside this phase remain for later phases.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m re-reviewing the phase after the follow-up patch, focusing on the three prior blockers plus the adjacent public consumers that were touched to keep the rename coherent. I’ll verify the status normalization path, the hard-cut API surface, and whether the active criteria can now be marked complete.
+
+I’ve cleared the originally reported blockers, so I’m doing one broader pass for obvious regressions from the hard cut itself: any remaining direct `PAUSE` import or public-output assertion would still make the phase incomplete even if the named files now look correct.
+
+The broader scan found more hard-cut fallout than just the previously touched file. I’m sampling the highest-signal remaining references now to see whether they’re truly out-of-scope internals or still direct public-surface consumers that should block phase completion.
+
+The follow-up patch fixed the named blockers, but the re-review found one real production regression and one broader remaining hard-cut coverage gap. I’m recording those in the phase feedback now; criteria will stay incomplete because the phase still leaves a broken workflow path and direct public-surface tests that expect `PAUSE`.
+
+Scope considered
+
+- Phase-local re-review of the public terminal/control hard cut after the follow-up patch.
+- I focused first on the previously reported blockers, then widened only where the same rename could still break direct public consumers or production workflow behavior.
+
+What I analyzed
+
+- The updated status normalization/read-path code in `runtime/workspace.py` and public CLI payloads in `runtime/cli.py`.
+- The direct helper consumers changed in this round: `autoloop_optimizer/portfolio.py`, `autoloop_optimizer/company.py`, and `autoloop_optimizer/diagnostics.py`.
+- The updated phase-owned tests and adjacent direct consumer tests.
+- Remaining repo references to `PAUSE` / `paused` that still exercise the public authoring or runtime-control surface.
+
+What I reviewed
+
+- The original three blocking findings were addressed: public CLI payloads no longer expose `paused`, summary filtering/counting now uses normalized status, and the touched test/doc file was updated.
+- I left `criteria.md` incomplete because I found two new blocking issues.
+- I appended the new findings to `feedback.md` as `IMP-005` and `IMP-006`.
+
+Key findings / decisions
+
+- `IMP-005` blocking: `workflows/task_to_workflow_strategy/workflow.py` still branches on `child_result.status == "paused"`. With the canonical status now emitted as `awaiting_input`, this production workflow can mis-handle child question/blocked outcomes and fail instead of propagating them.
+- `IMP-006` blocking: the hard-cut sweep is still incomplete across direct public-surface consumers. A representative example is `tests/runtime/test_workflow_reference_resolution.py`, which still expects route targets to be `"PAUSE"`, and there are broader remaining direct runtime tests/fixtures with the same stale surface.
+
+Open issues / next step
+
+- Fix the production workflow status check to use the canonical status or a centralized predicate.
+- Finish the remaining direct public-surface test/fixture sweep for `PAUSE` / `paused` expectations, then rerun review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
