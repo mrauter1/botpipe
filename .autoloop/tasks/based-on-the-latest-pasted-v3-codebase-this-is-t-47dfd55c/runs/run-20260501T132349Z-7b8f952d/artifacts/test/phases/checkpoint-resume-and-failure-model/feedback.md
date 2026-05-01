@@ -6,3 +6,5 @@
 - Phase Directory Key: checkpoint-resume-and-failure-model
 - Phase Title: Checkpoint Resume And Failure Model
 - Scope: phase-local authoritative verifier artifact
+
+- Added focused regression coverage for consumed resumed input across step boundaries, alongside the existing pending-input persistence, invalid-resume validation, structured failure checkpointing, and read-only runtime-owned state-surface assertions.
