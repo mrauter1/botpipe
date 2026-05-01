@@ -1151,3 +1151,52 @@ with 18 focused tests passing.
 Open issues / next step
 
 The blocking reviewer finding is addressed. The next step is a verifier rerun of the active phase artifacts and the focused failure-preservation slice.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de411-9744-7c62-8942-3681d87698d0
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+I’m reviewing the cycle-2 fix against the earlier blocking finding. First I’m checking the updated engine/error paths and the new regression test, then I’ll update the review artifacts to reflect whether `IMP-001` is actually resolved.
+
+I’m doing one final independent validation pass before closing the review: the new invalid-`Goto` preservation test plus the earlier resume/state-view checks. If that stays green, I’ll mark the phase complete and note that `IMP-001` is resolved in the feedback artifact.
+
+Scope considered
+
+Phase-local re-review of `checkpoint-resume-and-failure-model`, focused on the prior blocking finding in structured failure propagation plus the acceptance-criteria surfaces for pending-input resume and read-only runtime-owned state fields.
+
+What I analyzed
+
+I re-read the active feedback, criteria, implementation notes, and run decisions, then inspected the updated `core/errors.py` and `core/engine.py` paths around `_annotate_execution_error(...)`, hook/finalization failure handling, and top-level checkpoint persistence. I also reviewed the new regression in `tests/contract/test_engine_contracts.py`.
+
+What I reviewed
+
+I independently reran the focused validation slice with bytecode writes disabled:
+`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest -q ...`
+including the new invalid-`Goto` preservation test, the pending-input resume tests, the state-view tests, the provider-retry tests, and the checkpoint failure-context compatibility test. All 18 targeted tests passed.
+
+I updated the review artifacts accordingly:
+`criteria.md` is now fully checked.
+`feedback.md` now records that `IMP-001` was rechecked and resolved, with no new scoped findings.
+
+Key findings / decisions
+
+The prior blocking issue is resolved. The implementation now attaches public execution metadata to generic execution exceptions, propagates structured `FailureContext` through the non-provider hook/finalization paths, and preserves mutated custom state in the checkpoint for the previously failing scenario.
+
+No new blocking or non-blocking implementation defects were identified in the reviewed scope.
+
+Open issues / next step
+
+No scoped review issues remain for this phase. The implementation is ready to advance.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
