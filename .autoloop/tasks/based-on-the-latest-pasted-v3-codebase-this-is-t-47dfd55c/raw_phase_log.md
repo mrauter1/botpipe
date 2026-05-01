@@ -1098,3 +1098,56 @@ Fix `core/engine.py` centrally by upgrading plain engine validation/runtime-cont
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de411-9744-7c62-8942-3681d87698d0
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+I’m addressing the reviewer’s blocking finding in the structured-failure path. First I’m re-reading the feedback and the engine/error code around `_annotate_execution_error(...)` so the fix is centralized and doesn’t scatter more special cases through hook/finalization paths.
+
+The fix is straightforward and central: `_annotate_execution_error(...)` needs to attach public checkpoint/failure metadata even when the exception isn’t already a `StepExecutionError`. I’m applying that centrally, then I’ll add a regression test that mutates state before an invalid `Goto` so the checkpoint path is forced to prove it preserves the mutated state.
+
+The reviewer was right about two things, not one: the checkpoint state was being dropped, and those same failure paths still weren’t consistently attaching structured context. I’m fixing both together at the same call sites so the top-level checkpoint gets the mutated state and a usable `FailureContext`.
+
+I hit a patch context mismatch in the contract test file. I’m reopening the `Goto` test section and inserting the regression next to the existing runtime-control cases so it stays with the same coverage cluster.
+
+I’ve applied the central fix and added a regression that forces the exact reviewer scenario: mutate state, return an invalid `Goto`, then inspect the checkpoint. I’m rerunning the focused contract slice plus the earlier state-view and retry checks to confirm the failure path now preserves both state and structured context.
+
+The focused regression slice passed, including the new invalid-`Goto` preservation case. I’m recording the one non-obvious decision from this fix: we kept original exception types and attached public metadata generically, instead of wrapping every engine error into a new exception class.
+
+Scope considered
+
+Active phase `checkpoint-resume-and-failure-model` only, with the reviewer’s blocking finding as the immediate scope: structured failure propagation for non-provider execution errors, plus regression checks around pending-input resume and read-only runtime-owned state fields.
+
+What I analyzed
+
+I re-read the active feedback artifact and traced the failing preservation path through `core/engine.py`, especially `_annotate_execution_error(...)`, the hook/finalization callers, and the top-level checkpoint save path. I also checked `core/errors.py` to decide whether to wrap exceptions or attach public metadata in place.
+
+What I changed
+
+I fixed the central bug in `Engine._annotate_execution_error(...)` so it now attaches public `checkpoint_state`, `failure_context`, and `retry_kind` metadata to generic execution exceptions instead of only handling `StepExecutionError` instances. I also updated the hook/finalization validation call sites to pass structured `FailureContext` objects for non-provider hook and route-validation failures, so the top-level checkpoint path receives both the mutated current state and structured failure context.
+
+I added a regression test in `tests/contract/test_engine_contracts.py` that mutates workflow state and then returns an invalid `Goto(...)`, asserting that the checkpoint preserves the mutation and records structured hook-failure metadata. I updated the phase implementation notes and appended the non-obvious preservation decision to `decisions.txt`.
+
+Key findings / decisions
+
+The reviewer’s `IMP-001` was valid. The original implementation preserved structured metadata only for `StepExecutionError`, which left plain `WorkflowExecutionError` paths dropping the mutated checkpoint state and failure context. The fix keeps original exception types intact while attaching public execution metadata centrally, which satisfies the preservation requirement without broad exception-type churn.
+
+Validation passed after the fix:
+`PYTHONDONTWRITEBYTECODE=1 python3 -B -m py_compile core/errors.py core/engine.py tests/contract/test_engine_contracts.py`
+and
+`PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest ...`
+with 18 focused tests passing.
+
+Open issues / next step
+
+The blocking reviewer finding is addressed. The next step is a verifier rerun of the active phase artifacts and the focused failure-preservation slice.
