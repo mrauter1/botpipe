@@ -543,7 +543,12 @@ def test_security_remediation_package_runs_and_emits_terminal_receipt(tmp_path: 
     )
     assert child_records[0]["workflow_name"] == "investigation_request_to_evidence_pack"
     assert child_records[0]["status"] == "success"
-    assert child_records[0]["last_event"] == {"tag": "evidence_pack_published", "reason": "", "question": None}
+    assert child_records[0]["last_event"] == {
+        "tag": "evidence_pack_published",
+        "reason": "",
+        "question": None,
+        "handoff": None,
+    }
     assert child_records[0]["output_artifacts"]["evidence_pack_receipt"] == str(
         child_workflow_dir / "evidence_pack_receipt.json"
     )
@@ -689,7 +694,12 @@ def test_security_remediation_package_blocks_when_child_publishes_not_ready_pack
     assert not (workflow_dir / "exploit_summary.md").exists()
     assert child_records[0]["workflow_name"] == "investigation_request_to_evidence_pack"
     assert child_records[0]["status"] == "success"
-    assert child_records[0]["last_event"] == {"tag": "evidence_pack_published", "reason": "", "question": None}
+    assert child_records[0]["last_event"] == {
+        "tag": "evidence_pack_published",
+        "reason": "",
+        "question": None,
+        "handoff": None,
+    }
     assert [call.step_name for call in provider.calls] == [
         "frame_investigation",
         "frame_investigation",

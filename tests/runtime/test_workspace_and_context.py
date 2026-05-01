@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from core.providers.fake import ScriptedLLMProvider
+from core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA
 from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from core.errors import WorkflowExecutionError
 from runtime.loader import WorkflowParameterError
@@ -1018,13 +1019,26 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
     assert (child_run_dir / "sessions" / "main.json").exists()
     assert child_parent["workflow_name"] == "parent_class"
     assert child_parent["run_id"] == parent_run_dir.name
+    expected_finalization = {
+        "candidate_route": "done",
+        "final_route": "done",
+        "runtime_control": None,
+        "target_step": None,
+        "terminal": None,
+        "provider_attributable": True,
+        "source_hook": None,
+        "source_phase": None,
+        "hook_route_redirects": [],
+    }
     assert child_records == [
         {
+            "schema": CHILD_RUN_SUMMARY_SCHEMA,
             "workflow_name": "child_success",
             "run_id": child_run_dir.name,
             "terminal": "FINISH",
             "status": "success",
-            "last_event": {"tag": "done", "reason": "", "question": None},
+            "last_event": {"tag": "done", "reason": "", "question": None, "handoff": None},
+            "finalization": expected_finalization,
             "output_metadata": {"summary": "child complete"},
             "output_artifacts": {
                 "ask.child_dump": str(child_run_dir / "child.json"),
@@ -1047,7 +1061,7 @@ def test_context_invoke_workflow_accepts_imported_main_workflow_classes_and_reco
                 "ask.child_dump": str(child_run_dir / "child.json"),
                 "child_dump": str(child_run_dir / "child.json"),
             },
-            "metadata": {},
+            "metadata": {"finalization": expected_finalization},
             "ts": child_records[0]["ts"],
         }
     ]
@@ -1198,7 +1212,12 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
     assert child_parent["run_id"] == parent_run_dir.name
     assert child_records[0]["workflow_name"] == "child_pause"
     assert child_records[0]["status"] == "awaiting_input"
-    assert child_records[0]["last_event"] == {"tag": "question", "reason": "", "question": "Child question?"}
+    assert child_records[0]["last_event"] == {
+        "tag": "question",
+        "reason": "",
+        "question": "Child question?",
+        "handoff": None,
+    }
 
 
 def test_context_invoke_workflow_records_stable_child_metadata_shape_for_fatal_children(tmp_path: Path) -> None:

@@ -19,6 +19,7 @@ from .errors import FailureContext, ProviderExecutionError, WorkflowExecutionErr
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest
 from .providers.protocols import LLMProvider
+from .schema_registry import OPERATION_REPLAY_SCHEMA, validate_persisted_schema
 from .sessions import DEFAULT_SESSION_NAME
 from .stores.protocols import SessionBinding
 
@@ -681,13 +682,15 @@ def _operation_replay_path(run_folder: Path | None) -> Path | None:
 
 def _load_replay_store(path: Path | None) -> dict[str, Any]:
     if path is None or not path.is_file():
-        return {"records": {}, "attempts": []}
+        return {"schema": OPERATION_REPLAY_SCHEMA, "records": {}, "attempts": []}
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
-        return {"records": {}, "attempts": []}
+        return {"schema": OPERATION_REPLAY_SCHEMA, "records": {}, "attempts": []}
+    validate_persisted_schema(payload, expected=OPERATION_REPLAY_SCHEMA, artifact_name=str(path))
     records = payload.get("records")
     attempts = payload.get("attempts")
     return {
+        "schema": OPERATION_REPLAY_SCHEMA,
         "records": records if isinstance(records, dict) else {},
         "attempts": attempts if isinstance(attempts, list) else [],
     }
@@ -698,7 +701,8 @@ def _write_replay_store(path: Path | None, payload: Mapping[str, Any]) -> None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_suffix(path.suffix + ".tmp")
-    temp_path.write_text(json.dumps(dict(payload), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    serialized = {"schema": OPERATION_REPLAY_SCHEMA, **dict(payload)}
+    temp_path.write_text(json.dumps(serialized, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     temp_path.replace(path)
 
 

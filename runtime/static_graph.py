@@ -10,7 +10,14 @@ from core.compiler import CompiledRoute, CompiledWorkflow
 from core.primitives import AWAIT_INPUT, FAIL, FINISH
 from core.prompts import Prompt
 from core.route_required_writes import route_required_write_payload
-from core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
+from core.schema_registry import (
+    WORKFLOW_ARTIFACT_CONTRACTS_SCHEMA,
+    WORKFLOW_PROMPT_REFS_SCHEMA,
+    WORKFLOW_SESSION_CONTRACTS_SCHEMA,
+    WORKFLOW_STATE_CONTRACTS_SCHEMA,
+    WORKFLOW_STATIC_STEP_GRAPH_SCHEMA,
+    WORKFLOW_TOPOLOGY_SCHEMA,
+)
 
 
 STATIC_GRAPH_SCHEMA = WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
@@ -25,6 +32,11 @@ PROMPT_REFS_FILENAME = "prompt_refs.json"
 STATE_CONTRACTS_FILENAME = "state_contracts.json"
 SESSION_CONTRACTS_FILENAME = "session_contracts.json"
 COMPILE_REPORT_FILENAME = "compile_report.md"
+
+ARTIFACT_CONTRACTS_SCHEMA = WORKFLOW_ARTIFACT_CONTRACTS_SCHEMA
+PROMPT_REFS_SCHEMA = WORKFLOW_PROMPT_REFS_SCHEMA
+STATE_CONTRACTS_SCHEMA = WORKFLOW_STATE_CONTRACTS_SCHEMA
+SESSION_CONTRACTS_SCHEMA = WORKFLOW_SESSION_CONTRACTS_SCHEMA
 
 
 def workflow_static_step_graph_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
@@ -153,6 +165,7 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
         ARTIFACT_CONTRACTS_FILENAME: _write_json_file(
             run_dir / ARTIFACT_CONTRACTS_FILENAME,
             {
+                "schema": ARTIFACT_CONTRACTS_SCHEMA,
                 "workflow_name": compiled.workflow_name,
                 "source_hash": compiled.source_hash,
                 "topology_hash": compiled.topology_hash,
@@ -171,6 +184,7 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
         PROMPT_REFS_FILENAME: _write_json_file(
             run_dir / PROMPT_REFS_FILENAME,
             {
+                "schema": PROMPT_REFS_SCHEMA,
                 "workflow_name": compiled.workflow_name,
                 "source_hash": compiled.source_hash,
                 "topology_hash": compiled.topology_hash,
@@ -180,6 +194,7 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
         STATE_CONTRACTS_FILENAME: _write_json_file(
             run_dir / STATE_CONTRACTS_FILENAME,
             {
+                "schema": STATE_CONTRACTS_SCHEMA,
                 "workflow_name": compiled.workflow_name,
                 "source_hash": compiled.source_hash,
                 "topology_hash": compiled.topology_hash,
@@ -205,6 +220,7 @@ def write_topology_artifacts(run_dir: Path, compiled: CompiledWorkflow) -> dict[
         SESSION_CONTRACTS_FILENAME: _write_json_file(
             run_dir / SESSION_CONTRACTS_FILENAME,
             {
+                "schema": SESSION_CONTRACTS_SCHEMA,
                 "workflow_name": compiled.workflow_name,
                 "source_hash": compiled.source_hash,
                 "topology_hash": compiled.topology_hash,

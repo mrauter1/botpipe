@@ -10,6 +10,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .primitives import AWAIT_INPUT, FAIL
+from .schema_registry import CHECKPOINT_SCHEMA, RUNTIME_EVENT_SCHEMA, RUNTIME_TRACE_SCHEMA, validate_persisted_schema
+
 
 DEFAULT_ACCEPTED_ROUTE_TAGS = frozenset({"done", "accepted", "approved"})
 _STATUS_PRIORITY = {
@@ -381,6 +384,11 @@ class HistoryReader:
         timestamp = _string_value(record.get("timestamp"))
         final_route = _string_value(record.get("final_route")) or _string_value(_mapping_get(record.get("event"), "tag"))
         candidate_route = _string_value(record.get("candidate_route"))
+        runtime_control = _string_value(record.get("runtime_control"))
+        target_step = _string_value(record.get("target_step"))
+        terminal = _string_value(record.get("terminal"))
+        source_hook = _string_value(record.get("source_hook"))
+        source_phase = _string_value(record.get("source_phase"))
         acc.finished_count += 1
         acc.latest_route = final_route
         acc.latest_timestamp = timestamp or acc.latest_timestamp
@@ -388,7 +396,11 @@ class HistoryReader:
         acc.last_finished_at = timestamp or acc.last_finished_at
         if final_route in success_routes:
             acc.accepted_once = True
-        acc.last_status = _status_from_route(final_route, completed=True)
+        acc.last_status = _status_from_step_finished(
+            final_route=final_route,
+            runtime_control=runtime_control,
+            terminal=terminal,
+        )
         usage = _mapping(record.get("provider_usage"))
         if usage:
             for phase, payload in usage.items():
@@ -408,6 +420,12 @@ class HistoryReader:
             "item_id": acc.item_id,
             "candidate_route": candidate_route,
             "final_route": final_route,
+            "runtime_control": runtime_control,
+            "target_step": target_step,
+            "terminal": terminal,
+            "provider_attributable": bool(record.get("provider_attributable")),
+            "source_hook": source_hook,
+            "source_phase": source_phase,
             "visit": _int_value(record.get("visit")),
             "step_execution_id": step_execution_id,
             "timestamp": timestamp,
@@ -486,6 +504,10 @@ class HistoryReader:
                 except json.JSONDecodeError:
                     continue
                 if isinstance(value, dict):
+                    if path == self._trace_file:
+                        validate_persisted_schema(value, expected=RUNTIME_TRACE_SCHEMA, artifact_name=str(path))
+                    elif path == self._events_file:
+                        validate_persisted_schema(value, expected=RUNTIME_EVENT_SCHEMA, artifact_name=str(path))
                     payloads.append(value)
             records = tuple(payloads)
         self._jsonl_cache[path] = (signature, records)
@@ -504,6 +526,8 @@ class HistoryReader:
             except json.JSONDecodeError:
                 value = None
             payload = value if isinstance(value, dict) else None
+            if payload is not None and path == self._checkpoint_file:
+                validate_persisted_schema(payload, expected=CHECKPOINT_SCHEMA, artifact_name=str(path))
         self._object_cache[path] = (signature, payload)
         return payload
 
@@ -737,6 +761,21 @@ def _status_from_route(route: str | None, *, completed: bool) -> str:
     if route in {"failed"}:
         return "failed"
     return route if completed else "running"
+
+
+def _status_from_step_finished(
+    *,
+    final_route: str | None,
+    runtime_control: str | None,
+    terminal: str | None,
+) -> str:
+    if terminal == AWAIT_INPUT:
+        return "awaiting_input"
+    if terminal == FAIL:
+        return "failed"
+    if runtime_control == "goto":
+        return "running"
+    return _status_from_route(final_route, completed=True)
 
 
 def _merge_timestamp_bounds(target: dict[str, Any], payload: Any) -> None:

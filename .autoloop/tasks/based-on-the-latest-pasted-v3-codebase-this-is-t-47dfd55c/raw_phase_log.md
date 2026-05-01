@@ -1309,3 +1309,75 @@ The phase-local test work is acceptable to advance. The only follow-up is housek
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+I’m treating this as the metadata/tracing/schema phase only. First I’m reading the phase artifacts and the runtime surfaces that already changed in prior phases so I can wire the new payloads without drifting the execution model.
+
+I’ve got the phase scope and the prior decisions. Next I’m mapping the existing runtime metadata flow: trace writer, history/event records, run records, checkpoint schemas, and any child-workflow summary surfaces that still encode the old pause/question assumptions.
+
+I found most of the required fields already partially threaded through `core.engine` and `runtime.tracing`, but the persisted surfaces are inconsistent. I’m reading the concrete serializers/readers now so I can tighten schema ownership and the awaiting-input vs question split in one pass.
+
+The schema story is still fragmented: trace and static graph have IDs, but checkpoint, run metadata, event logs, and replay store don’t. I’m drilling into those writers/readers now so I can add one registry and explicit legacy-reader rules instead of patching each file ad hoc.
+
+I’ve got enough context to edit. The concrete plan is:
+1. Centralize runtime artifact schema IDs plus lightweight legacy-schema validation.
+2. Stamp and validate `run.json`, `checkpoint.json`, `events.jsonl`, `children.jsonl`, and `operation_replay.json`.
+3. Enrich history/child-summary payloads so they carry the runtime-control and attribution fields already emitted by the engine.
+4. Add focused tests around schema ownership, legacy-reader behavior, and the richer history/child metadata.
+
+I’m applying the persistence-side changes now. The main risk surface is compatibility on previously written files, so I’m keeping missing-schema payloads readable and only rejecting explicit unknown schemas.
+
+I’ve finished the runtime/data-path edits and I’m moving to regression coverage. The most important checks now are that older schema-less files still load, and that the richer route/control fields show up consistently in history and child-run summaries.
+
+I found one schema gap while wiring the tests: `RuntimeTraceWriter` can create `run.json` through the tracing sidecar path before a formal run metadata write happens. I’m fixing that helper now so every runtime-owned mutation keeps `run.json` stamped consistently.
+
+The code changes are in. I’m running targeted tests across the touched persistence and history surfaces before I update the phase notes.
+
+The environment doesn’t have `pytest` or `python` on the default names. I’m switching to `python3` and checking whether the test runner is available there.
+
+I’ve finished the code path review after the syntax pass. The remaining work is administrative for this loop: capture the non-obvious schema/metadata decisions in the run ledger and write concise phase notes with the checklist mapping and validation outcome.
+
+Scope considered
+
+- Phase-local metadata/tracing/schema work only: run metadata, checkpoints, trace/events/history surfaces, child-run summaries, operation replay, and topology-side JSON artifacts.
+- I did not take package relocation, optimizer-boundary refactors, or replay mismatch policy changes into scope.
+
+What I analyzed
+
+- `core.engine` step-finalization and runtime-control outputs.
+- `runtime/runner.py`, `runtime/workspace.py`, `runtime/events.py`, `runtime/stores/filesystem.py`, `core/history.py`, `core/operations.py`, and `runtime/static_graph.py`.
+- The active phase notes, plan, and prior phase decisions.
+
+What I changed
+
+- Added central schema ids plus legacy-reader validation in `core/schema_registry.py`.
+- Stamped `run.json`, `checkpoint.json`, `events.jsonl`, `children.jsonl`, `operation_replay.json`, and topology-side JSON artifacts with owned schema ids.
+- Kept schema-less legacy payloads readable, but explicit unknown schema ids now fail clearly.
+- Added `StepFinalizationRecord` to carry candidate/final route, runtime control, target step, terminal, source hook/phase, provider attribution, and redirect chain out of `Engine`.
+- Persisted that finalization payload into `run.json` and child-run summaries so `AWAIT_INPUT` stays distinct from provider route tag `"question"`.
+- Updated `HistoryReader` so direct runtime-control step finishes derive truthful status from terminal/control metadata instead of defaulting to completed.
+- Extended focused tests for schema stamping, legacy checkpoint reads, direct-control history records, and child summary payloads.
+
+Key findings / decisions
+
+- The existing trace payload already had most of the needed fields; the real gaps were persistence ownership and downstream readers.
+- Child-run summaries were the right persisted “history summary” surface for this phase, so I reused one `finalization` payload shape across run metadata and child summaries.
+- Legacy compatibility is now explicit: missing `schema` is treated as legacy, but a declared unsupported schema is rejected.
+
+Open issues / next step
+
+- `python3 -m compileall` passed for the touched runtime, core, and test files.
+- I could not run `pytest` because the environment does not have it installed (`python3 -m pytest` -> `No module named pytest`).
+- Next step is to run the targeted pytest set once the test runner is available and then move to the next approved phase.

@@ -11,7 +11,7 @@ from core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart
 from core.providers.models import StepProviderUsage, TokenUsage
 from core.primitives import Event, Outcome
 from runtime.config import TracingRuntimeConfig
-from core.schema_registry import RUNTIME_TRACE_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 from runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
 from runtime.workspace import next_observability_sequence
 
@@ -109,6 +109,7 @@ def test_runtime_trace_enabled_by_default_writes_trace_jsonl(tmp_path: Path) -> 
 
     assert (run_dir / "trace.jsonl").exists()
     run_meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert run_meta["schema"] == RUN_METADATA_SCHEMA
     assert run_meta["tracing"]["enabled"] is True
     assert run_meta["tracing"]["trace_file"] == "trace.jsonl"
 
@@ -350,6 +351,7 @@ def test_runtime_trace_records_generic_runtime_events(tmp_path: Path) -> None:
 
     record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert record["event_type"] == "provider_attempt_finished"
+    assert record["schema"] == RUNTIME_TRACE_SCHEMA
     assert record["step_name"] == "assessment"
     assert record["attempt"] == 2
     assert record["visit"] == 4
