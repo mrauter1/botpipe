@@ -1968,3 +1968,64 @@ Open issues / next step
 - I did not run the full test suite; only the focused phase-relevant subset above.
 - The workspace already contains unrelated dirty/untracked material outside this phase, and I left it untouched.
 - If you want the next pass, the natural follow-up is a broader suite run to catch remaining out-of-phase tests that still encode older `PAUSE`/`on_route` expectations.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de454-ef56-7923-a01b-33e237b994fd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de454-ef56-7923-a01b-33e237b994fd
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de454-ef56-7923-a01b-33e237b994fd
+---
+I’m reviewing the namespace-cut phase against the active criteria and the actual moved package/runtime seams. I’ll inspect the phase artifacts first, then spot-check the moved runtime, optimizer, extension, and strictness/test surfaces for correctness and regressions before I update the reviewer-owned files.
+
+Reviewing the namespace-cut phase now. I’m checking the touched runtime, optimizer, extension, and strictness surfaces directly, then I’ll update the phase criteria and feedback artifacts based on concrete findings.
+
+The main review surfaces are straightforward: runtime inspection/export shape, prompt-root seeding, optimizer read-only seams, and the hard namespace cut. I’m drilling into the specific helper functions now to look for silent regressions rather than just import churn.
+
+One potential regression surface is already visible in the optimizer: the observability validator now treats any non-decode load error as “unreadable,” so I’m checking whether schema-version mismatches and contract failures get misclassified or silently admitted. I’m also verifying the source-manifest rewrite didn’t expand scope in a way that changes published artifacts unexpectedly.
+
+I’ve narrowed the review to two likely risk points: whether the optimizer’s new read-only seams preserve the previous observability contract, and whether the namespace cut really removed supported fallback import paths rather than just moving code. Next I’m cross-checking the reviewer criteria against the actual tree and running a small verification slice of my own.
+
+The tree shape matches the namespace-cut objective so far: only `autoloop`, `autoloop_optimizer`, and supporting dirs remain at repo root, with the old top-level code namespaces gone. I’ve also started a stricter test slice around the compatibility cut and optimizer helpers to confirm the review findings against executable behavior.
+
+I found one area that may be more than cosmetic: the optimizer’s source-manifest writer now resolves only manifest-backed workflow package names. I’m checking whether that narrowed an existing accepted input surface, because if it did, that would be a real compatibility regression for this phase.
+
+The compatibility-cut pieces look clean so far. I’m running one more targeted slice around selected-workflow manifest generation, since that’s the one place where the optimizer behavior changed in a nontrivial way rather than just following the new namespace.
+
+I’m at the update stage. I didn’t find a material correctness or compatibility regression in-scope, so I’m marking the review artifacts accordingly and recording that this pass found no actionable findings.
+
+The reviewer artifacts are updated. I’m doing one last quick readback, then I’ll close with the required summary and loop-control block.
+
+Scope considered
+
+Phase-local review of the namespace cut, optimizer boundary, prompt-registry widening, and workflow-facing git/tracing cleanup. I kept the audit on changed runtime, optimizer, extension, packaging, docs, and strictness surfaces, with limited repo-wide checks for lingering old imports and removed package paths.
+
+What I analyzed
+
+I read the active phase criteria, feedback, implementation notes, and run decisions ledger. I inspected [autoloop/runtime/inspection.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/inspection.py), [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py), [autoloop/runtime/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/__init__.py), [autoloop/extensions/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/extensions/__init__.py), [autoloop/extensions/git/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/extensions/git/__init__.py), [autoloop_optimizer/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/optimization.py), [autoloop_optimizer/_selected_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/_selected_workflow.py), [pyproject.toml](/home/rauter/autoloop_v3_bkp/autoloop_v3/pyproject.toml), and [tests/strictness/test_no_compat.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/strictness/test_no_compat.py). I also searched the maintained tree for residual `autoloop_v3` and top-level `core`/`runtime`/`stdlib`/`extensions` production imports.
+
+What I reviewed
+
+The namespace cut is materially complete: the removed top-level code directories are gone, canonical imports are in place, and the strictness coverage matches the requested hard cut. The new read-only optimizer seam through `autoloop.runtime.inspection` is coherent and is what optimizer modules now consume. Prompt-registry widening in the runner is centralized and consistent with the phase decision to seed from workflow root plus capability- and compile-derived prompt paths. Workflow-facing `GitTracking` and `Tracing` declarations/exports were removed without disrupting runtime-owned tracking/tracing surfaces. I also reran focused verification:
+`PYTHONPATH=. .venv/bin/pytest tests/strictness/test_no_compat.py tests/unit/test_optimization_helpers.py -q`
+and
+`PYTHONPATH=. .venv/bin/pytest tests/unit/test_optimization_helpers.py -k 'source_manifest or observability_bundle' -q`
+Both passed.
+
+Key findings / decisions
+
+No blocking or non-blocking findings for this phase. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/criteria.md) to checked and recorded “No findings in this review pass” in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/feedback.md).
+
+Open issues / next step
+
+No in-scope blockers remain for this phase. The only remaining caution is that I did not rerun the entire repository suite, only the phase-relevant slices above.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
