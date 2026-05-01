@@ -37,7 +37,7 @@ from stdlib import (
 from stdlib.control import event_on_outcome_tags
 from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
-from autoloop import Event, FINISH, Outcome, PAUSE, Prompt, Session, Workflow, produce_verify_step, python_step
+from autoloop import AWAIT_INPUT, Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from core import Artifact
 
 from .contracts import (
@@ -285,7 +285,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         ],
         routes={
             "decomposition_context_captured": "frame_decomposition_request",
-            "blocked": PAUSE,
+            "blocked": AWAIT_INPUT,
         },
     )
     def capture_decomposition_context(state: State, ctx):

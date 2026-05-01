@@ -276,7 +276,7 @@ Available runtime placeholders include:
 New runs are message-first:
 
 - `autoloop run ... --message "..."` starts a new run
-- `autoloop answer ... --answer "..."` resumes a paused run with an explicit answer
+- `autoloop answer ... --answer "..."` resumes an awaiting-input run with an explicit answer
 
 `message` and `answer` are distinct concepts. Resume and diagnostics do not accept a replacement message.
 
@@ -419,7 +419,7 @@ assess = step(
 
 Canonical authoring declares step-local `routes={...}` and terminates with `FINISH`.
 
-Use `Route.to(...)`, `Route.complete(...)`, `Route.pause(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
+Use `Route.to(...)`, `Route.complete(...)`, `Route.await_input(...)`, and `Route.fail(...)` when the target alone is not expressive enough.
 
 `Handoff(...)` adds source-step-to-target-step text that the runtime delivers only to the resolved provider-mediated target step. Dynamic handoff text may also be returned through `Event(tag="needs_rework", handoff="...")`. Handoffs are text-only and the current Runtime Step Contract remains authoritative.
 
@@ -605,7 +605,7 @@ from autoloop_v3.autoloop_optimizer import (
 )
 
 write_workflow_portfolio_snapshot(ctx)
-write_workflow_portfolio_health_snapshot(ctx, statuses=["paused", "failed"], max_runs_per_workflow=5)
+write_workflow_portfolio_health_snapshot(ctx, statuses=["awaiting_input", "failed"], max_runs_per_workflow=5)
 ```
 
 Portfolio snapshot boundary:
@@ -638,7 +638,7 @@ write_company_operation_snapshot(
     ctx,
     task_ids=("recursive-framework-evolution-20260423t173132-c12",),
     workflows=("workflow_portfolio_to_operating_system", "workflow_idea_to_workflow_package"),
-    statuses=("success", "paused"),
+    statuses=("success", "awaiting_input"),
     max_tasks=10,
     max_runs_per_workflow=5,
     max_messages_per_task=3,
@@ -796,7 +796,7 @@ from autoloop_v3.autoloop_optimizer import write_selected_workflow_run_history_s
 write_selected_workflow_run_history_snapshot(
     ctx,
     "release_candidate_to_go_no_go",
-    statuses=("failed", "paused"),
+    statuses=("failed", "awaiting_input"),
     max_runs=25,
 )
 ```

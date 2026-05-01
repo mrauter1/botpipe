@@ -10,7 +10,7 @@ from pydantic import BaseModel
 
 from core import Artifact
 from core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-from core.primitives import Event, FAIL, FINISH, Outcome, PAUSE, SELF
+from core.primitives import AWAIT_INPUT, Event, FAIL, FINISH, Goto, Outcome, RequestInput, SELF, Fail
 from core.prompts import Prompt
 from core.routes import Route
 from core.sessions import Continuity
@@ -149,7 +149,6 @@ class StepDeclaration(_NamedDeclaration):
         routes: RouteMapping | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        on_route: Any | None = None,
         control_schema: Any | None = None,
         retry: Any | None = None,
         session: Any | None = None,
@@ -166,7 +165,6 @@ class StepDeclaration(_NamedDeclaration):
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
-        self.on_route = on_route
         self.control_schema = control_schema
         self.retry = retry
         self.session = session
@@ -203,7 +201,6 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         retry: Any | None = None,
         session: Any | None = None,
         verifier_session: Any | None = None,
-        on_route: Any | None = None,
         control_routes: bool = True,
     ) -> None:
         super().__init__(name=name)
@@ -225,7 +222,6 @@ class ProduceVerifyStepDeclaration(_NamedDeclaration):
         self.after_producer = after_producer
         self.before_verifier = before_verifier
         self.after_verifier = after_verifier
-        self.on_route = on_route
         self.control_schema = control_schema
         self.retry = retry
         self.session = session
@@ -257,7 +253,6 @@ class PythonStepDeclaration(_NamedDeclaration):
         routes: RouteMapping | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        on_route: Any | None = None,
         control_routes: bool = True,
     ) -> None:
         super().__init__(name=name)
@@ -269,7 +264,6 @@ class PythonStepDeclaration(_NamedDeclaration):
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
-        self.on_route = on_route
         self.control_routes = control_routes
 
 
@@ -293,7 +287,6 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         routes: RouteMapping | None = None,
         before: Any | None = None,
         after: Any | None = None,
-        on_route: Any | None = None,
         control_routes: bool = True,
     ) -> None:
         super().__init__(name=name)
@@ -309,7 +302,6 @@ class _WorkflowStepDeclaration(_NamedDeclaration):
         self.routes = dict(routes or {})
         self.before = before
         self.after = after
-        self.on_route = on_route
         self.control_routes = control_routes
 
 
@@ -370,7 +362,6 @@ def step(
     routes: RouteMapping | None = None,
     before: Any | None = None,
     after: Any | None = None,
-    on_route: Any | None = None,
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
@@ -387,7 +378,6 @@ def step(
         routes=routes,
         before=before,
         after=after,
-        on_route=on_route,
         control_schema=control_schema,
         retry=retry,
         session=session,
@@ -414,7 +404,6 @@ def produce_verify_step(
     after_producer: Any | None = None,
     before_verifier: Any | None = None,
     after_verifier: Any | None = None,
-    on_route: Any | None = None,
     control_schema: Any | None = None,
     retry: Any | None = None,
     session: Any | None = None,
@@ -439,7 +428,6 @@ def produce_verify_step(
         after_producer=after_producer,
         before_verifier=before_verifier,
         after_verifier=after_verifier,
-        on_route=on_route,
         control_schema=control_schema,
         retry=retry,
         session=session,
@@ -458,7 +446,6 @@ def python_step(
     routes: RouteMapping | None = None,
     before: Any | None = None,
     after: Any | None = None,
-    on_route: Any | None = None,
     control_routes: bool = True,
 ) -> PythonStepDeclaration | Any:
     if fn is None:
@@ -472,7 +459,6 @@ def python_step(
                 routes=routes,
                 before=before,
                 after=after,
-                on_route=on_route,
                 control_routes=control_routes,
             )
 
@@ -486,7 +472,6 @@ def python_step(
         routes=routes,
         before=before,
         after=after,
-        on_route=on_route,
         control_routes=control_routes,
     )
 
@@ -505,7 +490,6 @@ def workflow_step(
     routes: RouteMapping | None = None,
     before: Any | None = None,
     after: Any | None = None,
-    on_route: Any | None = None,
     control_routes: bool = True,
 ) -> _WorkflowStepDeclaration:
     return _WorkflowStepDeclaration(
@@ -521,7 +505,6 @@ def workflow_step(
         routes=routes,
         before=before,
         after=after,
-        on_route=on_route,
         control_routes=control_routes,
     )
 
@@ -649,16 +632,19 @@ classify = _ClassifyOperationSurface()
 
 
 __all__ = [
+    "AWAIT_INPUT",
     "Continuity",
     "Event",
     "FAIL",
+    "Fail",
     "FINISH",
+    "Goto",
     "Json",
     "Md",
     "Outcome",
-    "PAUSE",
     "Prompt",
     "Raw",
+    "RequestInput",
     "Route",
     "SELF",
     "Session",

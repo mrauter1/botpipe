@@ -1,6 +1,23 @@
 """Public simple authoring surface."""
 
-from .simple import Continuity, Event, FAIL, FINISH, Json, Md, Outcome, PAUSE, Prompt, Raw, Route, SELF, Session
+from .simple import (
+    AWAIT_INPUT,
+    Continuity,
+    Event,
+    FAIL,
+    FINISH,
+    Fail,
+    Goto,
+    Json,
+    Md,
+    Outcome,
+    Prompt,
+    Raw,
+    RequestInput,
+    Route,
+    SELF,
+    Session,
+)
 from .simple import StateVar, Text, Workflow, Worklist, classify, llm, produce_verify_step, python_step, step, workflow_step
 
 __all__ = [
@@ -23,8 +40,11 @@ __all__ = [
     "StateVar",
     "Event",
     "Outcome",
+    "RequestInput",
+    "Goto",
+    "Fail",
     "FINISH",
-    "PAUSE",
+    "AWAIT_INPUT",
     "FAIL",
     "SELF",
 ]

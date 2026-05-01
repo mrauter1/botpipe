@@ -172,3 +172,69 @@ phase_mode=single
 phase_ids=public-surface-terminal-cut,runtime-controls-and-hidden-routes,checkpoint-resume-and-failure-model,metadata-tracing-schema-and-attribution,validation-rendering-and-topology,namespace-cut-optimizer-boundary-prompts-and-extensions,maintainability-refactors,tests-docs-and-golden-workflow
 explicit=True
 current_phase_index=0
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m treating this as the phase-1 hard cut only: public terminal/control surface, `on_route` removal, and deprecated export cleanup. I’ll inspect the phase artifacts and the current public API wiring first, then I’ll make the minimal repo changes needed to satisfy the acceptance criteria without pulling later-phase runtime semantics into scope.
+
+The worktree is already heavily modified, including broad namespace/package changes outside this phase. I’m narrowing to the current public surface files and their direct tests so I can land the phase contract without interfering with unrelated in-flight refactors.
+
+I’ve confirmed the current baseline still exposes `PAUSE` publicly and still accepts `on_route` in the simple authoring entrypoints. Next I’m tracing the smallest internal blast radius for a clean hard cut: terminal constants, route helpers, declaration lowering, and the strictness tests that guard removed exports.
+
+I’ve reached the main decision point: either leave the old public/status spellings in place and only patch the import surface, or do the broader phase-1 rename that the spec calls for. I’m taking the broader phase-1 path inside production code only for terminal/status/public-contract surfaces, and I’ll keep later-phase checkpoint model changes out of scope.
+
+I have enough context to edit. I’m changing the canonical public/exported surface first, then I’ll sweep the small set of production terminal helpers and artifact renderers that still spell `PAUSE` or expose `on_route` through the public/simple layer.
+
+The bulk patch hit a context mismatch in `runtime/cli.py`, so I’m splitting the edit into smaller verified chunks. I’m keeping the change set the same, just applying it file-by-file so I don’t trample the existing dirty worktree.
+
+I’ve finished the production-side surface changes. I’m updating the narrow public-surface tests now: export lists, removed-import checks, simple signatures, and the helper/static-graph assertions that still expect `PAUSE` or `pause_on_outcome_tags`.
+
+The code edits are in place. I’m doing a syntax pass first, then I’ll run the public-surface tests that exercise the new exports, removed `on_route` signatures, and the terminal/static-graph rename.
+
+The files compile, but the system interpreter here doesn’t have `pytest` installed. I’m checking for the repo’s project runner or virtualenv next so I can still validate the targeted tests instead of stopping at syntax.
+
+`pytest` isn’t available in the current environment or the checked-in virtualenv, so I can’t execute the repository’s test suite directly. I’m replacing that with a focused import/signature smoke script to verify the exact phase-1 surface I changed.
+
+I’ve verified the edited files at syntax level. The remaining gap is environment-only: this shell lacks `pytest` and even `pydantic` for import-time smoke checks, so I’m recording the exact validation limits and the phase-scoped decisions in the run artifacts before I close out.
+
+Scope considered
+
+- Phase-local public surface only: terminal/control exports, simple authoring signatures, route helper naming, visible topology payloads, and direct test coverage around those surfaces.
+- I stayed out of later-phase work like pending-input checkpoint redesign, runtime-control execution semantics, and engine decomposition.
+
+What I analyzed
+
+- Public exports in [autoloop/__init__.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/__init__.py) and [autoloop/simple.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/simple.py).
+- Canonical primitives and route helpers in [core/primitives.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/primitives.py) and [core/routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/routes.py).
+- Public/static artifact emission in [runtime/static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/static_graph.py), plus status normalization in [runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/runner.py), [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py), and [core/history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/core/history.py).
+- Phase-owned tests and notes artifacts.
+
+What I changed
+
+- Replaced public `PAUSE` with `AWAIT_INPUT`, added public `RequestInput`, `Goto`, and `Fail`, and exported them from `autoloop` and `core`.
+- Removed `on_route` from the simple public authoring signatures and stopped simple declaration lowering from carrying it forward.
+- Renamed the public route/control helper surface from `Route.pause(...)` to `Route.await_input(...)`, and renamed the stdlib helper to `await_input_on_outcome_tags(...)`.
+- Updated visible terminal/status payloads to use `AWAIT_INPUT` and `awaiting_input`, and removed `on_route` from public topology hook payloads.
+- Updated the phase-local tests/docs/artifacts accordingly, including the implementation notes and decisions ledger.
+
+Key findings / decisions
+
+- I kept internal core-step `on_route` plumbing intact for later phases; this turn only hard-cuts the public simple surface.
+- I kept legacy run-record detection readable through `RunRecord.paused` so older persisted `paused` records remain answerable during the rename.
+- Syntax validation passed with `python3 -m py_compile` for touched production and test files.
+
+Open issues / next step
+
+- I could not run `pytest`: this environment has no `pytest` module, and import-time smoke tests also could not run because the system interpreter lacks `pydantic`.
+- Broader repo-wide test/doc sweeps for remaining `PAUSE`/`paused` expectations outside this phase-local slice should be handled in subsequent phases or in a dependency-ready environment.

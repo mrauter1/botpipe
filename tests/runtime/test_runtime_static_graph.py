@@ -108,9 +108,10 @@ def test_topology_artifacts_are_written_additively_with_canonical_finish_surface
     assert topology["entry"] == "assessment"
     assert topology["source_hash"] == compiled.source_hash
     assert topology["topology_hash"] == compiled.topology_hash
-    assert topology["terminals"] == ["FINISH", "PAUSE", "FAIL"]
+    assert topology["terminals"] == ["FINISH", "AWAIT_INPUT", "FAIL"]
     assert topology["steps"][1]["routes"][0]["target"] == "FINISH"
     assert topology["steps"][0]["hooks"]["before"] is None
+    assert "on_route" not in topology["steps"][0]["hooks"]
     assert topology["steps"][0]["state_model"] == "ProduceVerifyRuntimeState"
     assert topology["steps"][0]["state_fields"] == [
         "visits",

@@ -61,8 +61,11 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
         "StateVar",
         "Event",
         "Outcome",
+        "RequestInput",
+        "Goto",
+        "Fail",
         "FINISH",
-        "PAUSE",
+        "AWAIT_INPUT",
         "FAIL",
         "SELF",
     )
@@ -75,6 +78,7 @@ def test_autoloop_root_exports_only_the_canonical_public_surface() -> None:
 
 def test_removed_root_public_symbols_fail_to_import() -> None:
     for symbol in (
+        "PAUSE",
         "SU" + "CCESS",
         "Route" + "Info",
         REMOVED_STRICT_WORKFLOW,
@@ -123,12 +127,25 @@ def test_removed_simple_symbols_fail_to_import() -> None:
             _import_from("autoloop.simple", symbol)
 
 
+def test_runtime_control_exports_are_canonical_and_validate_basic_fields() -> None:
+    assert autoloop.RequestInput(question="What changed?").question == "What changed?"
+    assert autoloop.Goto(target="publish").target == "publish"
+    assert autoloop.Fail(reason="stop").reason == "stop"
+
+    with pytest.raises(ValueError):
+        autoloop.RequestInput(question="  ")
+
+    with pytest.raises(ValueError):
+        autoloop.Fail(reason="  ")
+
+
 def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
     for symbol in (
         REMOVED_AFTER_HOOK_RESULT,
         REMOVED_LLM_STEP,
         REMOVED_PAIR_STEP,
         REMOVED_PARAM,
+        "PAUSE",
         "Route" + "Info",
         REMOVED_STATE_VAR,
         "SU" + "CCESS",
@@ -139,7 +156,17 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
         with pytest.raises(ImportError):
             _import_from("core", symbol)
 
-    for symbol in ("Artifact", "Context", "FAIL", "FINISH", "GLOBAL", "PAUSE", "Prompt", "Route", "Workflow"):
+    for symbol in (
+        "Artifact",
+        "AWAIT_INPUT",
+        "Context",
+        "FAIL",
+        "FINISH",
+        "GLOBAL",
+        "Prompt",
+        "Route",
+        "Workflow",
+    ):
         assert _import_from("core", symbol) is getattr(core, symbol)
 
 
@@ -199,7 +226,6 @@ def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> N
         "routes",
         "before",
         "after",
-        "on_route",
         "control_schema",
         "retry",
         "session",
@@ -223,7 +249,6 @@ def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> N
         "after_producer",
         "before_verifier",
         "after_verifier",
-        "on_route",
         "control_schema",
         "retry",
         "session",
@@ -239,7 +264,6 @@ def test_canonical_simple_signatures_expose_only_canonical_argument_names() -> N
         "routes",
         "before",
         "after",
-        "on_route",
         "control_routes",
     )
 
@@ -263,6 +287,19 @@ def test_legacy_simple_keyword_arguments_fail_fast() -> None:
 
     with pytest.raises(TypeError):
         simple.Route.to(simple.FINISH, **{"required_" + "outputs": ("note",)})
+
+    with pytest.raises(TypeError):
+        simple.step("Draft the note.", on_route=lambda ctx: None)
+
+    with pytest.raises(TypeError):
+        simple.produce_verify_step(
+            producer_prompt="draft",
+            verifier_prompt="verify",
+            on_route=lambda ctx: None,
+        )
+
+    with pytest.raises(TypeError):
+        simple.python_step(lambda ctx: None, on_route=lambda ctx: None)
 
 
 def test_simple_workflow_compiles_with_pydantic_state_params_and_produce_verify_step() -> None:
@@ -727,7 +764,7 @@ def test_runtime_built_in_step_state_updates_and_checkpoints_for_simple_steps(tm
         review = simple.produce_verify_step(
             producer_prompt="Draft.",
             verifier_prompt="Verify.",
-            routes={"needs_rework": simple.PAUSE},
+            routes={"needs_rework": simple.AWAIT_INPUT},
             control_routes=False,
         )
 
@@ -752,7 +789,7 @@ def test_runtime_built_in_step_state_updates_and_checkpoints_for_simple_steps(tm
         root=tmp_path,
     )
 
-    assert result.terminal == simple.PAUSE
+    assert result.terminal == simple.AWAIT_INPUT
     assert result.checkpoint is not None
     assert result.checkpoint.step_states == {
         "review": {
@@ -778,7 +815,7 @@ def test_runtime_step_state_restores_built_ins_and_custom_fields_on_resume(tmp_p
             verifier_prompt="Verify.",
             state=ReviewState,
             after_verifier=record_attempt,
-            routes={"needs_replan": simple.PAUSE},
+            routes={"needs_replan": simple.AWAIT_INPUT},
             control_routes=False,
         )
 
@@ -816,7 +853,7 @@ def test_runtime_step_state_restores_built_ins_and_custom_fields_on_resume(tmp_p
         root=tmp_path,
     )
 
-    assert first.terminal == simple.PAUSE
+    assert first.terminal == simple.AWAIT_INPUT
     assert first.checkpoint is not None
     assert first.checkpoint.step_states == {
         "review": {
@@ -829,7 +866,7 @@ def test_runtime_step_state_restores_built_ins_and_custom_fields_on_resume(tmp_p
         }
     }
 
-    assert second.terminal == simple.PAUSE
+    assert second.terminal == simple.AWAIT_INPUT
     assert second.checkpoint is not None
     assert second.checkpoint.step_states == {
         "review": {
@@ -872,7 +909,7 @@ def test_simple_scoped_item_state_and_step_item_state_restore_on_resume(tmp_path
             scope=gates,
             item_state={"attempts": simple.StateVar(0)},
             after=record_scoped_state,
-            routes={"done": simple.PAUSE},
+            routes={"done": simple.AWAIT_INPUT},
             control_routes=False,
         )
 
@@ -909,7 +946,7 @@ def test_simple_scoped_item_state_and_step_item_state_restore_on_resume(tmp_path
         root=tmp_path,
     )
 
-    assert first.terminal == simple.PAUSE
+    assert first.terminal == simple.AWAIT_INPUT
     assert first.checkpoint is not None
     assert first.checkpoint.item_states == {
         "gate:alpha": {
@@ -928,7 +965,7 @@ def test_simple_scoped_item_state_and_step_item_state_restore_on_resume(tmp_path
         }
     }
 
-    assert second.terminal == simple.PAUSE
+    assert second.terminal == simple.AWAIT_INPUT
     assert second.checkpoint is not None
     assert second.checkpoint.item_states == {
         "gate:alpha": {
@@ -958,7 +995,7 @@ def test_runtime_built_in_step_state_is_available_on_core_steps(tmp_path) -> Non
 
         inspect = core_steps.PythonStep(name="inspect")
         entry = inspect
-        transitions = {inspect: {"done": core.PAUSE}}
+        transitions = {inspect: {"done": core.AWAIT_INPUT}}
 
         @staticmethod
         def on_inspect(state: WorkflowState, ctx: Context):
@@ -993,7 +1030,7 @@ def test_runtime_built_in_step_state_is_available_on_core_steps(tmp_path) -> Non
         root=tmp_path,
     )
 
-    assert result.terminal == core.PAUSE
+    assert result.terminal == core.AWAIT_INPUT
     assert result.state.seen_visits == 1
     assert result.state.seen_last_route is None
     assert result.checkpoint is not None

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from .effects import Effect
-from .primitives import FAIL, FINISH, PAUSE
+from .primitives import AWAIT_INPUT, FAIL, FINISH
 
 
 def _normalize_optional_text(value: str | None, *, field_name: str) -> str | None:
@@ -89,7 +89,7 @@ class Route:
         )
 
     @staticmethod
-    def pause(
+    def await_input(
         *,
         effects: Iterable[Effect] = (),
         summary: str | None = None,
@@ -98,7 +98,7 @@ class Route:
         on_taken: object | None = None,
     ) -> "Route":
         return Route.to(
-            PAUSE,
+            AWAIT_INPUT,
             effects=effects,
             summary=summary,
             required_writes=required_writes,
@@ -132,8 +132,8 @@ def normalize_route_spec(destination: object) -> Route:
         return destination
     if destination == FINISH:
         return Route.finish()
-    if destination == PAUSE:
-        return Route.pause()
+    if destination == AWAIT_INPUT:
+        return Route.await_input()
     if destination == FAIL:
         return Route.fail()
     return Route.to(destination)

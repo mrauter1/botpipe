@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from core.compiler import CompiledRoute, CompiledWorkflow
-from core.primitives import FAIL, FINISH, PAUSE
+from core.primitives import AWAIT_INPUT, FAIL, FINISH
 from core.prompts import Prompt
 from core.route_required_writes import route_required_write_payload
 from core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA, WORKFLOW_TOPOLOGY_SCHEMA
@@ -87,7 +87,7 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         "source_hash": compiled.source_hash,
         "topology_hash": compiled.topology_hash,
         "entry": compiled.entry_step_name,
-        "terminals": [FINISH, PAUSE, FAIL],
+        "terminals": [FINISH, AWAIT_INPUT, FAIL],
         "steps": [
             {
                 "name": step.name,
@@ -110,7 +110,6 @@ def workflow_topology_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
                 "hooks": {
                     "before": _callable_name(step.before_hook),
                     "after": _callable_name(step.after_hook),
-                    "on_route": _callable_name(step.on_route_hook),
                     "before_producer": _callable_name(step.before_producer_hook),
                     "after_producer": _callable_name(step.after_producer_hook),
                     "before_verifier": _callable_name(step.before_verifier_hook),

@@ -15,6 +15,7 @@ DEFAULT_ACCEPTED_ROUTE_TAGS = frozenset({"done", "accepted", "approved"})
 _STATUS_PRIORITY = {
     "failed": 5,
     "running": 4,
+    "awaiting_input": 3,
     "paused": 3,
     "completed": 2,
     "pending": 1,
@@ -730,9 +731,9 @@ def _status_from_route(route: str | None, *, completed: bool) -> str:
     if route in DEFAULT_ACCEPTED_ROUTE_TAGS:
         return "completed"
     if route == "question":
-        return "paused"
+        return "awaiting_input"
     if route in {"blocked"}:
-        return "paused"
+        return "awaiting_input"
     if route in {"failed"}:
         return "failed"
     return route if completed else "running"
