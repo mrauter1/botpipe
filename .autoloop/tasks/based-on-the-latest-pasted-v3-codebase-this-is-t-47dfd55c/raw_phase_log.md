@@ -1600,3 +1600,55 @@ Open issues / next step
 - `python3 -m compileall tests/runtime/test_history.py` passed.
 - `python3 -m pytest tests/runtime/test_history.py tests/unit/test_optimization_helpers.py` could not run because `pytest` is not installed in this environment (`No module named pytest`).
 - Next step is auditor review of the updated test coverage.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de42a-cf1f-7191-b3d3-ccb743ccad7f
+---
+Auditing the phase-local test additions now. I’m checking the new history-reader schema coverage against the phase contract first, then I’ll update the audit artifacts with either remaining gaps or a clean completion.
+
+The added coverage matches the phase scope cleanly: it closes the trace/history reader compatibility gap without normalizing any unsupported behavior. I’m marking the audit artifacts complete now with no findings.
+
+Scope considered
+
+- Phase-local audit of the `metadata-tracing-schema-and-attribution` test additions.
+- Focused on the new history-reader schema tests, the optimizer schema coverage already in scope, and the updated test strategy/feedback artifacts.
+
+What I analyzed
+
+- [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/metadata-tracing-schema-and-attribution/test_strategy.md).
+- [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/metadata-tracing-schema-and-attribution/feedback.md) and [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/metadata-tracing-schema-and-attribution/criteria.md).
+- `tests/runtime/test_history.py` and `tests/unit/test_optimization_helpers.py`, with the phase decisions in `decisions.txt` as the intent baseline.
+
+What I reviewed
+
+- The added coverage for:
+  - direct `Goto` history telemetry;
+  - schema-less legacy trace acceptance;
+  - explicit unsupported trace schema failure;
+  - optimizer-side legacy-vs-unsupported runtime observability schema handling.
+- The strategy artifact’s mapping of AC-1 through AC-3, preserved invariants, failure paths, and known validation gaps.
+
+Key findings / decisions
+
+- No blocking or non-blocking audit findings.
+- The added tests are deterministic, phase-aligned, and materially improve regression protection for the persisted-schema cutover and runtime-control history semantics.
+- I updated the audit artifacts to mark the test phase complete.
+
+Open issues / next step
+
+- The only outstanding gap is environmental: `pytest` is still unavailable in this environment, which the strategy already documents.
+- From a test-audit standpoint, this phase is acceptable.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
