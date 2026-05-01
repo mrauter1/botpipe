@@ -16,6 +16,7 @@ from runtime.workspace import (
     create_run,
     ensure_workspace,
     ensure_workflow_workspace,
+    list_run_records,
     list_task_operation_summaries,
     list_workflow_run_summaries,
     resolve_run_workflow_input,
@@ -604,6 +605,43 @@ class Params(BaseModel):
         )
 
     assert not (tmp_path / ".autoloop").exists()
+
+
+def test_list_run_records_normalizes_legacy_paused_status_for_public_filters(tmp_path: Path) -> None:
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-1",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-paused",
+        status="paused",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:03:00+00:00",
+        request_text="Investigate the paused release gate.\n",
+        pending_question="Who owns the gate?",
+    )
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-1",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-success",
+        status="success",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:04:00+00:00",
+        request_text="Routine release check.\n",
+    )
+
+    records = list_run_records(
+        tmp_path,
+        workflow_name="release_candidate_to_go_no_go",
+        task_id="task-1",
+        status="awaiting_input",
+    )
+
+    assert [record.run_id for record in records] == ["run-paused"]
+    assert records[0].status == "paused"
+    assert records[0].normalized_status == "awaiting_input"
+    assert records[0].awaiting_input is True
+    assert records[0].paused is True
 
 
 def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:

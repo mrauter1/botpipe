@@ -522,3 +522,69 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m treating this as a coverage pass on the hard cut rather than another implementation sweep. I’ll verify what the existing tests now cover, add any missing regression cases around `AWAIT_INPUT`/status normalization and `on_route` removal, then update the phase test strategy and test feedback artifacts.
+
+I’m reviewing the remaining phase-local test surface and checking whether there’s a real coverage gap before I edit tests. I’ll inspect the leftover `PAUSE` literals and the current CLI/workspace filter coverage, then add only the missing regression checks and update the phase test artifacts.
+
+The leftover `PAUSE` literals in the simple-surface tests are intentional hard-cut assertions, not stale expectations. I’m checking the CLI tests now to see whether they already cover `awaiting_input` filtering against legacy persisted metadata or whether that regression path still needs one targeted test.
+
+The happy-path CLI tests are already good, but they don’t prove the compatibility edge where `runs list --status awaiting_input` should still surface a legacy persisted `paused` record. I’m tracing the exact workspace/CLI filter boundary now so I can add one deterministic regression test instead of broad churn.
+
+The filter boundary is centralized in `runtime.workspace.list_run_records`, which is good news: one narrow compatibility test will cover both workspace behavior and the CLI handler that delegates to it. I’m adding that regression check and then I’ll update the phase test artifacts to reflect what is and is not covered.
+
+I’ve narrowed the missing regression coverage to the centralized record-listing path and the public `runs list --status` surface. I’m editing two focused tests for that edge, then I’ll capture the coverage map and the known compatibility boundary in the phase artifacts.
+
+I’ve got the exact seam now. I’m making the tests assert two things at once: legacy persisted `status="paused"` remains readable internally, but any public-facing filter or payload path must normalize it to `awaiting_input`.
+
+I’m editing the test files now. The changes are narrow: one workspace-level regression test for normalized record filtering, one CLI regression test for `runs list --status awaiting_input` against legacy persisted metadata, plus the required phase test artifacts and a short test-scope decision entry.
+
+The edit failed cleanly because one of the anchor function names was off. I’m re-reading the exact insertion points and then I’ll apply the same narrow patch against the real test names.
+
+The edits are in. I’m doing a quick syntax-level verification on the touched test files and then I’ll summarize exactly what coverage was added and what remains unexecuted in this environment.
+
+The new tests compile. I’m doing one last execution probe to see whether this environment can actually run the targeted pytest cases or whether it remains blocked at the interpreter dependency layer.
+
+Scope considered
+
+- Phase-local test coverage for the public terminal/control hard cut: canonical `AWAIT_INPUT` status/output, removed public names, removed `on_route` public entrypoints, and compatibility behavior for legacy persisted `status="paused"` records.
+- I stayed out of later-phase runtime-control execution semantics.
+
+What I analyzed
+
+- Existing public-surface tests in [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), [tests/unit/test_stdlib_and_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_stdlib_and_extensions.py), [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py), and [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- The workspace normalization boundary in [runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/workspace.py) and the public listing path in [runtime/cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/runtime/cli.py).
+- The phase test artifacts [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/public-surface-terminal-cut/test_strategy.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/public-surface-terminal-cut/feedback.md).
+
+What I changed
+
+- Added a workspace regression test in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) that seeds legacy persisted `status="paused"` metadata and verifies `list_run_records(..., status="awaiting_input")` matches it while exposing normalized `awaiting_input`.
+- Added a CLI regression test in [tests/runtime/test_package_cli.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_package_cli.py) that verifies `runs list --status awaiting_input` returns a legacy persisted paused run with canonical payload fields.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/public-surface-terminal-cut/test_strategy.md) with a behavior-to-test coverage map, preserved invariants, edge/failure coverage, and known gaps.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/public-surface-terminal-cut/feedback.md).
+- Appended the non-obvious compatibility-boundary test decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+Key findings / decisions
+
+- The missing regression surface was the read/filter boundary, not the already-updated happy-path outputs. The added tests lock down that legacy persisted `paused` remains readable only through normalization to public `awaiting_input`.
+- The remaining literal `PAUSE`/`paused` values in the phase-owned tests are intentional compatibility fixtures or hard-cut absence assertions, not stale public expectations.
+- Validation performed: `python3 -m py_compile tests/runtime/test_workspace_and_context.py tests/runtime/test_package_cli.py` passed.
+
+Open issues / next step
+
+- Targeted pytest execution is still blocked in this environment: `python3 -m pytest ...` fails with `No module named pytest`.
+- Import-time smoke execution remains blocked by the missing `pydantic` dependency in the system interpreter.
+- The next step is verifier review of this phase’s test artifacts and added regression coverage.

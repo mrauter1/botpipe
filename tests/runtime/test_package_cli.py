@@ -734,6 +734,67 @@ class Params(BaseModel):
     assert result_payload["workflow_params"] == {"mode": "focused", "reviewers": ["alice", "bob"]}
 
 
+def test_cli_runs_list_filters_legacy_paused_run_metadata_as_awaiting_input(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    _write_workflow_package(
+        tmp_path,
+        "review_workflow",
+        workflow_name="review",
+        class_name="ReviewWorkflow",
+    )
+
+    run_dir = tmp_path / ".autoloop" / "tasks" / "task-legacy" / "wf_review" / "runs" / "run-legacy"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "run.json").write_text(
+        json.dumps(
+            {
+                "created_at": "2026-04-24T06:00:00+00:00",
+                "run_id": "run-legacy",
+                "status": "paused",
+                "task_id": "task-legacy",
+                "updated_at": "2026-04-24T06:03:00+00:00",
+                "workflow_name": "review",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = cli.main(
+        [
+            "runs",
+            "list",
+            "--workflow",
+            "review",
+            "--task",
+            "task-legacy",
+            "--status",
+            "awaiting_input",
+            "--root",
+            str(tmp_path),
+        ]
+    )
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload == [
+        {
+            "awaiting_input": True,
+            "created_at": "2026-04-24T06:00:00+00:00",
+            "resumable": False,
+            "run_id": "run-legacy",
+            "status": "awaiting_input",
+            "task_id": "task-legacy",
+            "updated_at": "2026-04-24T06:03:00+00:00",
+            "workflow": "review",
+        }
+    ]
+
+
 def test_cli_latest_run_selection_and_explicit_run_id_targeting_are_deterministic(
     tmp_path: Path,
     capsys,
