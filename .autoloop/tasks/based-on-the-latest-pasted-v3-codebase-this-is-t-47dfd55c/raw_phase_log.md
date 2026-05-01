@@ -872,3 +872,55 @@ No in-scope blocking or non-blocking issues remain for this phase. The next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de3ea-88d2-7822-a347-d5ac75792453
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+I’m treating this as a coverage pass on the just-fixed runtime-control phase rather than a source audit. First I’m checking the active test strategy and the existing contract tests so I can add the smallest missing regression that materially strengthens the `after_producer` direct-control surface.
+
+The current suite already covers plain `after` request-input, `after_producer` goto, and `on_taken` fail/goto. The missing high-signal gap is `RequestInput` specifically from `after_producer`, because that exercises the newly fixed candidate-free direct-control path plus pending-input checkpoint/resume semantics in one place.
+
+The new `after_producer` request-input regression is green and it exercises the missing candidate-free checkpoint/resume path cleanly. I’m refreshing the full phase-local suite once so the strategy artifact can cite the final coverage set and pass count accurately.
+
+I have the final pass count now, so I’m writing the phase test strategy with an explicit behavior-to-test map instead of a changelog. I’m also appending a short feedback note that calls out the new candidate-free `after_producer` request-input regression and the final `166 passed` scope.
+
+Scope considered
+
+Phase `runtime-controls-and-hidden-routes` test coverage only. I stayed on the contract/runtime tests for direct runtime controls, hidden-route visibility, checkpoint/resume, and the phase-local test strategy and feedback artifacts.
+
+What I analyzed
+
+I checked the existing runtime-control tests against the now-fixed engine behavior and looked for the highest-risk uncovered path in scope. The main remaining gap was candidate-free `RequestInput` from `after_producer`, because that combines the newly fixed direct-control path with pending-input checkpoint/resume behavior.
+
+What I changed
+
+I added `test_after_producer_request_input_checkpoints_pending_input_before_verifier` to [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), covering:
+- verifier short-circuit on the first run
+- pending-input checkpoint payload from `after_producer`
+- resumed input injection through `ctx.input_response`
+- verifier execution only after resume
+
+I updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/runtime-controls-and-hidden-routes/test_strategy.md) with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, flake controls, and known gaps. I also appended a concise validation summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/runtime-controls-and-hidden-routes/feedback.md).
+
+Key findings / decisions
+
+The new test intentionally targets `RequestInput` from `after_producer` rather than another `Goto`/`Fail` variant, because that was the highest-signal uncovered path after the implementation and review loops. I did not append to `decisions.txt` because there was no new runtime-created header for this turn and the added coverage did not introduce a new cross-turn test contract.
+
+Open issues / next step
+
+Validation is green:
+- `python3 -m py_compile tests/contract/test_engine_contracts.py`
+- `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -k 'after_producer_request_input_checkpoints_pending_input_before_verifier or after_producer_goto_short_circuits_verifier or after_hook_request_input_checkpoints_pending_input_and_resume_validates_input'`
+- `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py`
+
+Result: `166 passed`.

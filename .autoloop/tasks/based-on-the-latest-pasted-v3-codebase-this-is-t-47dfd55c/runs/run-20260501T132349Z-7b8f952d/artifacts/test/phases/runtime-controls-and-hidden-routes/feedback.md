@@ -6,3 +6,6 @@
 - Phase Directory Key: runtime-controls-and-hidden-routes
 - Phase Title: Runtime Controls And Hidden Routes
 - Scope: phase-local authoritative verifier artifact
+
+- Added focused regressions for candidate-free direct runtime controls from `after_producer`, especially `RequestInput` checkpoint/resume before verifier dispatch, and refreshed the phase-local runtime-control suite.
+- Validation run: `python3 -m py_compile tests/contract/test_engine_contracts.py` plus `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py` with `166 passed`.
