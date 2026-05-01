@@ -2559,3 +2559,56 @@ Open issues / next step
 
 - I did not rerun the broader suite; only the replay-focused regression set for this fix.
 - Next step is verifier review of `IMP-004`.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de470-1bde-75f2-92a8-f2fabee7d998
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+Re-reviewing the narrow `IMP-004` fix and the added regression coverage. I’m verifying that inline `provider=` overrides now carry the effective provider config into replay fingerprints, then I’ll close out the review artifacts if nothing else regressed.
+
+The core path looks correct now, and the new regression test targets the exact previously failing surface. I’m checking the tail of that test and the implementation notes/decisions alignment before I close the criteria.
+
+The targeted fix and test line up with the prior failure exactly, and I don’t see a remaining blocker in phase scope. I’m closing the criteria and appending the re-review resolution note now.
+
+Scope considered
+
+- Phase-local `maintainability-refactors` only.
+- Re-reviewed the narrow `IMP-004` replay-fingerprint fix plus its new regression coverage.
+- Updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/feedback.md) only.
+
+What I analyzed
+
+- `autoloop/core/operations.py:_resolve_runtime` and its interaction with `provider_configuration(...)` and replay fingerprint generation.
+- The new regression test in `tests/contract/test_engine_contracts.py` covering inline `llm(..., provider=...)` under an active step runtime.
+- The implementation notes and the turn-3 decision entry to confirm the fix matches the intended contract.
+
+What I reviewed
+
+- Whether explicit inline provider overrides now carry the effective provider configuration instead of inheriting the ambient engine provider snapshot.
+- Whether the reproduced failure mode from `IMP-004` is now covered by a focused test.
+- Whether anything else in the maintainability-refactors phase still fails AC-1 through AC-3 after the prior re-reviews.
+
+Key findings / decisions
+
+- No remaining blocking or non-blocking phase-scope findings.
+- `IMP-004` is resolved: `_resolve_runtime()` now recomputes the provider configuration snapshot when an inline override provider differs from the ambient runtime provider.
+- The added regression test targets the exact previously failing surface and is sufficient for this narrow fix.
+- All criteria are now checked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/criteria.md), and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/feedback.md) records the resolution note.
+
+Open issues / next step
+
+- No open review issues remain in this phase.
+- Next step is to let the loop advance beyond `maintainability-refactors`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
