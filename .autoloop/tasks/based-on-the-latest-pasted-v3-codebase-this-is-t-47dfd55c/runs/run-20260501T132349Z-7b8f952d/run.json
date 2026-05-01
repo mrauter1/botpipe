@@ -20,8 +20,8 @@
       "tests-docs-and-golden-workflow"
     ],
     "explicit": true,
-    "current_phase_index": 5,
-    "current_phase_id": "namespace-cut-optimizer-boundary-prompts-and-extensions"
+    "current_phase_index": 6,
+    "current_phase_id": "maintainability-refactors"
   },
   "phase_status": {
     "public-surface-terminal-cut": "completed",
@@ -29,8 +29,8 @@
     "checkpoint-resume-and-failure-model": "completed",
     "metadata-tracing-schema-and-attribution": "completed",
     "validation-rendering-and-topology": "completed",
-    "namespace-cut-optimizer-boundary-prompts-and-extensions": "in_progress",
-    "maintainability-refactors": "planned",
+    "namespace-cut-optimizer-boundary-prompts-and-extensions": "completed",
+    "maintainability-refactors": "in_progress",
     "tests-docs-and-golden-workflow": "planned"
   },
   "phase_history": [
@@ -104,6 +104,19 @@
       "run_id": "run-20260501T132349Z-7b8f952d",
       "status": "in_progress",
       "ts": "2026-05-01T16:17:44.084109+00:00"
+    },
+    {
+      "phase_id": "namespace-cut-optimizer-boundary-prompts-and-extensions",
+      "run_id": "run-20260501T132349Z-7b8f952d",
+      "status": "completed",
+      "ts": "2026-05-01T16:47:24.982849+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "maintainability-refactors",
+      "run_id": "run-20260501T132349Z-7b8f952d",
+      "status": "in_progress",
+      "ts": "2026-05-01T16:47:24.986261+00:00"
     }
   ]
 }
