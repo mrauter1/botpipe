@@ -24,3 +24,6 @@
 
 - IMP-006 `blocking` `tests/runtime/test_workflow_reference_resolution.py` and remaining direct public-surface consumers
   The hard cut is still incomplete across direct consumer tests and fixtures: for example, `tests/runtime/test_workflow_reference_resolution.py` still expects reserved routes to target `"PAUSE"`, and broader direct runtime tests/fixtures still import or assert `PAUSE` / `"paused"` on public surfaces. Once the project test environment is available, the phase’s hard-cut coverage will still fail even though the previously touched files were updated. Minimal fix: complete the phase-local sweep for direct public authoring/runtime consumer tests and fixtures that exercise the renamed terminal/status surface, keeping legacy `paused` only where a fixture is intentionally validating compatibility read paths.
+
+- IMP-007 `non-blocking` `autoloop_optimizer/optimization.py`
+  The optimizer run-selection path now normalizes legacy `paused` filters for matching, but `workflow_optimization_scope.json` still echoes the caller’s raw `run_statuses` list. If a caller explicitly passes legacy `paused`, the artifact can still publish the old spelling even though the direct defaults/tests were moved to `awaiting_input`. Minimal fix: reuse the already-computed normalized run-status list when emitting outward-facing optimization scope payloads.

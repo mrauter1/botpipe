@@ -473,3 +473,52 @@ Open issues / next step
 - I did not run `pytest`; the environment still lacks the `pytest` module.
 - Import-time smoke runs are still blocked by missing `pydantic` in the system interpreter.
 - Next step is reviewer recheck of this phase; the remaining legacy `PAUSE` / `paused` references should now be limited to intentional internal compatibility/contract coverage outside this phase’s public-surface slice.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m checking one last edge before I mark the phase complete: whether the newly touched optimizer run-status path fully normalizes outward-facing payloads, not just filters. If that stays internally canonical too, the phase is probably clear.
+
+I didn’t find another phase-blocking issue. The only remaining inconsistency I can justify is a narrower optimizer-scope artifact echo that keeps a caller’s raw legacy status string if they explicitly pass it; that’s not enough to block the hard cut, but it’s worth recording as follow-up debt.
+
+Scope considered
+
+- Final phase-local review of the public terminal/control hard cut after the last implementation sweep.
+- I rechecked the previously blocking production workflow path, the direct public/runtime consumers that still used `PAUSE` / `paused`, and the touched optimizer/status-normalization edges.
+
+What I analyzed
+
+- The updated production workflow/status consumers in `workflows/task_to_workflow_strategy/workflow.py`, `workflows/workflow_run_traces_to_optimization_candidates/params.py`, and `autoloop_optimizer/optimization.py`.
+- The direct runtime/public tests that were part of the last sweep, including workflow reference resolution, optional extensions, security remediation, integration parity, portfolio/company diagnostics, and optimization trace workflows.
+- The implementation notes and run-local decisions ledger to verify that the compatibility boundary was explicit and internally consistent.
+
+What I reviewed
+
+- The prior blocking findings `IMP-005` and `IMP-006` are resolved.
+- I updated `criteria.md` to checked-complete because I found no remaining blocking issue within this phase scope.
+- I appended one non-blocking follow-up, `IMP-007`, for an optimizer artifact echo that could still preserve a caller’s raw legacy status spelling if explicitly provided.
+
+Key findings / decisions
+
+- No blocking findings remain for this phase.
+- The remaining legacy `paused` values in the runtime test slice are now limited to intentional compatibility fixtures that seed old persisted run metadata for normalization tests, which matches the recorded decision boundary.
+- `IMP-007` is follow-up debt only: optimizer scope artifacts should eventually emit normalized `run_statuses`, not raw caller input, even though matching behavior is already correct.
+
+Open issues / next step
+
+- The phase can be treated as complete.
+- A later cleanup pass can address `IMP-007` when the optimizer/status boundary is revisited.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

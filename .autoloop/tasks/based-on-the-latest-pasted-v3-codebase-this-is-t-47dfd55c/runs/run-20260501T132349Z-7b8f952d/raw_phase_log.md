@@ -411,3 +411,114 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m broadening the implementation just enough to close the remaining hard-cut gap: one production workflow still branches on the old status, and several direct runtime/public tests still assert the old terminal/status strings. I’m enumerating those consumers first so I can patch them coherently rather than doing another partial sweep.
+
+I’m fixing the real production regression first and then the remaining direct-consumer tests that still assert the removed spellings. After that I’ll rescan the repo slice again; if any stale `PAUSE`/`paused` paths remain on the public side, I’ll keep sweeping until the hard cut is actually coherent.
+
+The targeted sweep is done, and the stale public tokens are gone from the previously flagged production workflow plus the direct runtime tests I touched. I’m doing one last repo-slice scan now to make sure I didn’t leave another obvious `PAUSE`/`paused` consumer on the public side before I update the notes.
+
+The remaining `paused` strings in the runtime test slice are now only in compatibility fixtures that intentionally seed old run metadata for normalization tests. I’m recording that boundary in the notes and decisions so later turns don’t “clean it up” and accidentally remove the compatibility coverage.
+
+Scope considered
+
+- Reviewer findings `IMP-005` and `IMP-006`, plus the direct public/runtime consumers they implied.
+- I widened beyond the originally touched files only where the hard cut would otherwise leave broken public workflow behavior or stale direct-consumer coverage.
+
+What I analyzed
+
+- The production workflow branch in [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py).
+- Remaining direct public/runtime status consumers in [autoloop_optimizer/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/optimization.py) and [workflows/workflow_run_traces_to_optimization_candidates/params.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/workflow_run_traces_to_optimization_candidates/params.py).
+- The direct runtime/public tests still asserting `PAUSE` / `paused`, including:
+  [tests/runtime/test_workflow_reference_resolution.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_reference_resolution.py),
+  [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py),
+  [tests/runtime/test_security_finding_to_verified_remediation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_security_finding_to_verified_remediation.py),
+  [tests/runtime/test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py),
+  [tests/runtime/test_workflow_package_to_composable_building_blocks.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_package_to_composable_building_blocks.py),
+  [tests/runtime/test_workflow_portfolio_to_operating_system.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_portfolio_to_operating_system.py),
+  [tests/runtime/test_company_operation_to_recursive_improvement_cycle.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_company_operation_to_recursive_improvement_cycle.py),
+  [tests/runtime/test_workflow_run_history_to_failure_modes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_history_to_failure_modes.py),
+  [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py),
+  and [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py).
+
+What I changed
+
+- Fixed the production regression in `task_to_workflow_strategy` by switching child-run pause detection to canonical `status == "awaiting_input"`.
+- Updated optimizer/public workflow run-status defaults and filtering to canonical `awaiting_input`, including terminal exclusion logic in `autoloop_optimizer/optimization.py`.
+- Completed the remaining direct public/runtime test sweep so they now expect `AWAIT_INPUT` / `awaiting_input` instead of `PAUSE` / `paused`.
+- Kept raw `paused` fixture values only where a test is intentionally seeding legacy persisted run metadata to exercise the compatibility read path, such as the normalization tests in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py).
+- Updated [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/public-surface-terminal-cut/implementation_notes.md) and appended the compatibility-boundary decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+Key findings / decisions
+
+- The important distinction is now explicit: legacy `paused` is still readable on persisted fixtures, but direct public workflows, helpers, defaults, and assertions should use only `AWAIT_INPUT` / `awaiting_input`.
+- I treated optimizer run-status defaults as phase-relevant because the remaining direct runtime tests and the selected workflow params exposed the old spelling publicly.
+- Validation performed: `python3 -m py_compile` passed for all newly touched production and test Python files.
+
+Open issues / next step
+
+- I did not run `pytest`; the environment still lacks the `pytest` module.
+- Import-time smoke runs are still blocked by missing `pydantic` in the system interpreter.
+- Next step is reviewer recheck of this phase; the remaining legacy `PAUSE` / `paused` references should now be limited to intentional internal compatibility/contract coverage outside this phase’s public-surface slice.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019de3c3-ef6a-7ba0-a0b9-ec5968198927
+---
+I’m checking one last edge before I mark the phase complete: whether the newly touched optimizer run-status path fully normalizes outward-facing payloads, not just filters. If that stays internally canonical too, the phase is probably clear.
+
+I didn’t find another phase-blocking issue. The only remaining inconsistency I can justify is a narrower optimizer-scope artifact echo that keeps a caller’s raw legacy status string if they explicitly pass it; that’s not enough to block the hard cut, but it’s worth recording as follow-up debt.
+
+Scope considered
+
+- Final phase-local review of the public terminal/control hard cut after the last implementation sweep.
+- I rechecked the previously blocking production workflow path, the direct public/runtime consumers that still used `PAUSE` / `paused`, and the touched optimizer/status-normalization edges.
+
+What I analyzed
+
+- The updated production workflow/status consumers in `workflows/task_to_workflow_strategy/workflow.py`, `workflows/workflow_run_traces_to_optimization_candidates/params.py`, and `autoloop_optimizer/optimization.py`.
+- The direct runtime/public tests that were part of the last sweep, including workflow reference resolution, optional extensions, security remediation, integration parity, portfolio/company diagnostics, and optimization trace workflows.
+- The implementation notes and run-local decisions ledger to verify that the compatibility boundary was explicit and internally consistent.
+
+What I reviewed
+
+- The prior blocking findings `IMP-005` and `IMP-006` are resolved.
+- I updated `criteria.md` to checked-complete because I found no remaining blocking issue within this phase scope.
+- I appended one non-blocking follow-up, `IMP-007`, for an optimizer artifact echo that could still preserve a caller’s raw legacy status spelling if explicitly provided.
+
+Key findings / decisions
+
+- No blocking findings remain for this phase.
+- The remaining legacy `paused` values in the runtime test slice are now limited to intentional compatibility fixtures that seed old persisted run metadata for normalization tests, which matches the recorded decision boundary.
+- `IMP-007` is follow-up debt only: optimizer scope artifacts should eventually emit normalized `run_statuses`, not raw caller input, even though matching behavior is already correct.
+
+Open issues / next step
+
+- The phase can be treated as complete.
+- A later cleanup pass can address `IMP-007` when the optimizer/status boundary is revisited.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
