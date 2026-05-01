@@ -7,17 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from core.errors import WorkflowExecutionError
-from core.providers.fake import ScriptedLLMProvider
-from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from runtime.loader import (
+from autoloop.core.errors import WorkflowExecutionError
+from autoloop.core.providers.fake import ScriptedLLMProvider
+from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from autoloop.runtime.loader import (
     ResolvedWorkflow,
     WorkflowDiscoveryError,
     inspect_workflow_reference,
     resolve_workflow_reference,
 )
-from runtime.runner import RunnerOptions, run_workflow_package
-from core.primitives import Outcome
+from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+from autoloop.core.primitives import Outcome
 
 
 def _clear_generated_modules() -> None:

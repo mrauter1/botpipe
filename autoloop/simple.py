@@ -8,15 +8,15 @@ from typing import Any, Mapping, Sequence
 
 from pydantic import BaseModel
 
-from core import Artifact
-from core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
-from core.primitives import AWAIT_INPUT, Event, FAIL, FINISH, Goto, Outcome, RequestInput, SELF, Fail
-from core.prompts import Prompt
-from core.routes import Route
-from core.sessions import Continuity
-from core.step_state import StateVar
-from core.steps import Session
-from core.worklists import Worklist
+from autoloop.core import Artifact
+from autoloop.core.operations import OperationStepSpec, classify_call, execute_step_operation, llm_call
+from autoloop.core.primitives import AWAIT_INPUT, Event, FAIL, FINISH, Goto, Outcome, RequestInput, SELF, Fail
+from autoloop.core.prompts import Prompt
+from autoloop.core.routes import Route
+from autoloop.core.sessions import Continuity
+from autoloop.core.step_state import StateVar
+from autoloop.core.steps import Session
+from autoloop.core.worklists import Worklist
 
 
 PromptInput = str | Path | Prompt

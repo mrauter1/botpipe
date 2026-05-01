@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from autoloop_optimizer import PortfolioReviewParameters
-from stdlib import deduped_string_list_fields, positive_int_fields
+from autoloop.stdlib import deduped_string_list_fields, positive_int_fields
 
 from pydantic import Field
 

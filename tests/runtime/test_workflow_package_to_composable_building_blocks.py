@@ -10,19 +10,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.compiler import compile_workflow
-from core.context import Context
-from core.providers.fake import ScriptedLLMProvider
-from core.stores import InMemorySessionStore
-from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from runtime.loader import (
+from autoloop.core.compiler import compile_workflow
+from autoloop.core.context import Context
+from autoloop.core.providers.fake import ScriptedLLMProvider
+from autoloop.core.stores import InMemorySessionStore
+from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from autoloop.runtime.loader import (
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
     discover_workflow_packages,
     resolve_workflow_reference,
 )
-from runtime.runner import RunnerOptions, run_workflow_package
-from core.primitives import Outcome
+from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+from autoloop.core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -1450,8 +1450,8 @@ def _write_candidate_decomposition_surface(request) -> str:
                 "import sys",
                 "from pathlib import Path",
                 "",
-                "from core.compiler import compile_workflow",
-                "from runtime.loader import discover_workflow_packages, resolve_workflow_reference",
+                "from autoloop.core.compiler import compile_workflow",
+                "from autoloop.runtime.loader import discover_workflow_packages, resolve_workflow_reference",
                 "",
                 "",
                 "def _clear_workflow_modules() -> None:",

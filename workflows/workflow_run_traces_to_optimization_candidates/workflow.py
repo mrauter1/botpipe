@@ -22,7 +22,7 @@ from autoloop_optimizer import (
     validate_selected_workflow_source_unchanged,
     write_optimization_refinement_evidence,
 )
-from stdlib import (
+from autoloop.stdlib import (
     open_workflow_sessions,
     read_json_object,
     read_required_text,
@@ -36,10 +36,10 @@ from stdlib import (
     write_publication_receipt,
     write_workflow_json,
 )
-from stdlib.control import event_on_outcome_tags
+from autoloop.stdlib.control import event_on_outcome_tags
 
 from autoloop import Event, FINISH, Outcome, Prompt, Route, Session, Workflow, produce_verify_step, python_step
-from core import Artifact
+from autoloop.core import Artifact
 
 from .contracts import (
     ADVERSARIAL_CASES_ROUTE_CONTRACTS,

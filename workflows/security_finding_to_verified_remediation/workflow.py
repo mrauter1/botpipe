@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from stdlib import (
+from autoloop.stdlib import (
     adopt_child_artifacts,
     read_json_object,
     require_child_workflow_result,
@@ -13,11 +13,11 @@ from stdlib import (
     require_string_list,
     run_child_workflow,
 )
-from stdlib.control import event_on_outcome_tags
-from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
+from autoloop.stdlib.control import event_on_outcome_tags
+from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
-from core import Artifact
+from autoloop.core import Artifact
 
 from .contracts import (
     ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS,

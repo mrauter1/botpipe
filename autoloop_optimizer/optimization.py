@@ -10,7 +10,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Callable
 
-from core.schema_registry import (
+from autoloop.core.schema_registry import (
     GIT_TRACKING_SCHEMA,
     RUN_METADATA_SCHEMA,
     RUNTIME_TRACE_SCHEMA,
@@ -26,13 +26,17 @@ from core.schema_registry import (
     WORKFLOW_REFINEMENT_EVIDENCE_SCHEMA,
     validate_persisted_schema,
 )
-from core.workflow_capabilities import inspect_workflow_reference, selected_workflow_authoring_surface_payload
-from runtime.loader import resolve_workflow_reference
-from runtime.workspace import list_run_records, normalize_run_status
+from autoloop.runtime.inspection import (
+    inspect_workflow_reference,
+    list_run_records,
+    normalize_run_status,
+    resolve_workflow_package,
+    resolve_workflow_reference,
+)
 
-from ._selected_workflow import capture_selected_workflow, inspect_selected_workflow
-from stdlib.lifecycle import write_workflow_json
-from stdlib.validation import (
+from ._selected_workflow import capture_selected_workflow
+from autoloop.stdlib.lifecycle import write_workflow_json
+from autoloop.stdlib.validation import (
     require_non_empty_string,
     require_positive_int,
     require_string_list,
@@ -245,7 +249,8 @@ def validate_observability_bundle(bundle: RunObservabilityBundle) -> tuple[bool,
     if not bundle.raw_dir.is_dir():
         return False, "missing_raw_dir"
     if bundle.load_error is not None:
-        if "decode" in bundle.load_error.lower() or "json" in bundle.load_error.lower():
+        lowered = bundle.load_error.lower()
+        if "decode" in lowered or "could not parse" in lowered:
             return False, "malformed_observability_files"
         return False, "unreadable_observability_files"
     if not isinstance(bundle.run_json, dict):
@@ -847,24 +852,16 @@ def write_selected_workflow_source_manifest(
 ) -> Path:
     """Write a stable source-surface manifest for one selected workflow."""
 
-    inspection = inspect_selected_workflow(ctx, selected_workflow)
-    repo_root = inspection.capture.repo_root
-    surface = selected_workflow_authoring_surface_payload(inspection.capability)
-    editable_paths = [
-        Path(path).resolve()
-        for path in require_string_list(
-            surface.get("editable_paths"),
-            error_message="selected workflow authoring surface must define editable_paths",
-            field_name="editable_paths",
-            dedupe=True,
-            sort_output=True,
-        )
-    ]
-    package_dir = Path(surface["package_dir"]).resolve()
+    repo_root = ctx.root.resolve()
+    package = resolve_workflow_package(repo_root, selected_workflow)
+    package_dir = package.package_dir.resolve()
+    editable_paths = sorted(
+        path.resolve()
+        for path in package_dir.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+    )
     files: list[dict[str, object]] = []
     for path in editable_paths:
-        if not path.is_file():
-            continue
         payload = path.read_bytes()
         files.append(
             {
@@ -875,7 +872,7 @@ def write_selected_workflow_source_manifest(
         )
     manifest = {
         "schema": SOURCE_MANIFEST_SCHEMA,
-        "selected_workflow": inspection.capture.selected_workflow_name,
+        "selected_workflow": package.workflow_name,
         "package_dir": _repo_relative_if_possible(package_dir, repo_root),
         "files": sorted(files, key=lambda entry: str(entry["path"])),
     }

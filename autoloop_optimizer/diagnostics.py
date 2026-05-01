@@ -7,10 +7,10 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from runtime.workspace import list_run_records, normalize_run_status
+from autoloop.runtime.inspection import list_run_records, normalize_run_status
 
 from ._selected_workflow import capture_selected_workflow, write_selected_workflow_artifact
-from stdlib.validation import require_non_empty_string
+from autoloop.stdlib.validation import require_non_empty_string
 
 
 def write_selected_workflow_run_history_snapshot(

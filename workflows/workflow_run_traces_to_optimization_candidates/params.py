@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from autoloop_optimizer import SelectedWorkflowTaskFramingParameters
-from stdlib import positive_int_fields
+from autoloop.stdlib import positive_int_fields
 
 
 class Params(SelectedWorkflowTaskFramingParameters):

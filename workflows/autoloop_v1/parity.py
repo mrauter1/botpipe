@@ -11,9 +11,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from core.compiler import CompiledWorkflow, compile_workflow
-from core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
-from runtime.stores.filesystem import ensure_session_payload_placeholder, load_session_payload, set_pending_session_note
+from autoloop.core.compiler import CompiledWorkflow, compile_workflow
+from autoloop.core.extensions import RunBinding, StepFinish, StepStart, TerminalFinish
+from autoloop.runtime.stores.filesystem import ensure_session_payload_placeholder, load_session_payload, set_pending_session_note
 
 from .conventions import autoloop_v1_session_path
 

@@ -241,11 +241,7 @@ Normal runs write runtime-owned evidence under each run folder:
 
 `run.json` summarizes the runtime-owned tracing and git-tracking state.
 
-Workflows do not need `GitTracking` or `Tracing` declarations for normal observability.
-
-Workflow-declared `GitTracking` is ignored with a deprecation warning because runtime git tracking is authoritative.
-
-Workflow-declared `Tracing` remains sidecar-compatible for workflows that still want an extra trace sink.
+Workflows do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `autoloop.runtime.config`.
 
 `workflow_run_traces_to_optimization_candidates` consumes runtime-owned `run.json`, `events.jsonl`, `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and `raw/` evidence.
 

@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from stdlib import JsonArtifactSpec
+from autoloop.stdlib import JsonArtifactSpec
 
 from autoloop import Route, SELF
 

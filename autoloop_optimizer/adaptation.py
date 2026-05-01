@@ -6,8 +6,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from core.workflow_capabilities import selected_workflow_capability_payload
-from runtime.loader import coerce_workflow_parameter_mapping
+from autoloop.runtime.loader import coerce_workflow_parameter_mapping
+from autoloop.runtime.inspection import selected_workflow_capability_payload
 
 from ._selected_workflow import (
     capture_selected_workflow,

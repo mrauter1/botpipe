@@ -6,11 +6,11 @@ import json
 
 from pydantic import BaseModel, Field
 
-from extensions import SessionPaths
-from stdlib.control import event_on_outcome_tags
+from autoloop.extensions import SessionPaths
+from autoloop.stdlib.control import event_on_outcome_tags
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
-from core import Artifact
+from autoloop.core import Artifact
 
 from .conventions import AutoloopV1SessionPathStrategy, phase_dir_key
 from .parity import AutoloopV1Parity

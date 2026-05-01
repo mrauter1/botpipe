@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.workflow_capabilities import WorkflowCapabilityEntry, inspect_workflow_reference
-from runtime.loader import ResolvedWorkflow, resolve_workflow_reference
-from stdlib.lifecycle import write_workflow_json
+from autoloop.runtime.inspection import WorkflowCapabilityEntry, ResolvedWorkflow, inspect_workflow_reference, resolve_workflow_reference
+from autoloop.stdlib.lifecycle import write_workflow_json
 
 
 @dataclass(frozen=True, slots=True)

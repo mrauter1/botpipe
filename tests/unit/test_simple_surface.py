@@ -9,15 +9,15 @@ from pydantic import BaseModel, Field
 
 import autoloop
 import autoloop.simple as simple
-import core
-import core.steps as core_steps
-import core.validation as core_validation
-from core.compiler import compile_workflow
-from core.context import Context
-from core.engine import Engine
-from core.errors import WorkflowExecutionError, WorkflowValidationError
-from core.providers.fake import ScriptedLLMProvider
-from core.stores import InMemoryCheckpointStore, InMemorySessionStore
+import autoloop.core
+import autoloop.core.steps as core_steps
+import autoloop.core.validation as core_validation
+from autoloop.core.compiler import compile_workflow
+from autoloop.core.context import Context
+from autoloop.core.engine import Engine
+from autoloop.core.errors import WorkflowExecutionError, WorkflowValidationError
+from autoloop.core.providers.fake import ScriptedLLMProvider
+from autoloop.core.stores import InMemoryCheckpointStore, InMemorySessionStore
 
 
 REMOVED_WORKFLOW_STEP = "Workflow" + "Step"
@@ -171,7 +171,7 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
 
 
 def test_core_module_identity_remains_canonical() -> None:
-    import core.workflow_capabilities as core_capabilities
+    import autoloop.core.workflow_capabilities as core_capabilities
 
     assert core.validation is core_validation
     assert core.steps is core_steps

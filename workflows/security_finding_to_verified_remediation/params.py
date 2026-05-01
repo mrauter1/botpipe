@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
+from autoloop.stdlib import deduped_string_list_fields, optional_text_fields, required_text_fields
 
 from pydantic import BaseModel, Field, field_validator
 

@@ -5,17 +5,17 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from autoloop_optimizer import write_workflow_capability_snapshot
-from stdlib import (
+from autoloop.stdlib import (
     normalize_unique_strings,
     read_json_object,
     require_non_empty_string,
     require_string_list,
 )
-from stdlib.control import event_on_outcome_tags
-from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
+from autoloop.stdlib.control import event_on_outcome_tags
+from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
-from core import Artifact
+from autoloop.core import Artifact
 
 from .contracts import (
     ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,

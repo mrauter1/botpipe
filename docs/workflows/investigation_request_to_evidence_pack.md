@@ -38,7 +38,7 @@ Params:
 Composed usage stays explicit in workflow code through the authoring-only helper seam:
 
 ```python
-from autoloop_v3.stdlib import adopt_child_artifacts, run_child_workflow
+from autoloop.stdlib import adopt_child_artifacts, run_child_workflow
 
 child = run_child_workflow(
     ctx,

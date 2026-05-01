@@ -197,11 +197,7 @@ Runtime tracing is enabled by default.
 
 Runtime git tracking is runtime-owned and enabled by default when the repository is clean.
 
-Workflow authors do not need `GitTracking` or `Tracing` declarations for normal observability.
-
-Workflow-declared `GitTracking` is ignored with a deprecation warning because runtime git tracking is authoritative.
-
-Workflow-declared `Tracing` remains sidecar-compatible when a workflow wants an extra trace sink beyond the runtime default.
+Workflow authors do not declare `GitTracking` or `Tracing`; runtime observability is configured only through `autoloop.runtime.config`.
 
 Runtime-owned observability writes `trace.jsonl`, `git_tracking.jsonl`, `static_step_graph.json`, and runtime-owned `raw/` outputs under the run folder.
 
@@ -473,7 +469,7 @@ If the child workflow declares `Output` and `build_output(...)`, the returned `C
 `stdlib/lifecycle.py` provides a small opt-in helper seam for deterministic authoring tasks such as opening declared sessions and writing workflow-local JSON artifacts like invocation contracts and publication receipts.
 
 ```python
-from autoloop_v3.stdlib import (
+from autoloop.stdlib import (
     open_workflow_sessions,
     write_invocation_contract,
     write_publication_receipt,
@@ -492,7 +488,7 @@ Use it only as authoring support inside explicit workflow hooks such as `on_boot
 When a workflow owns a durable JSON summary or manifest, keep its artifact contract explicit in the workflow package instead of starting publish handlers from raw dictionaries.
 
 ```python
-from autoloop_v3.stdlib import JsonArtifactSpec
+from autoloop.stdlib import JsonArtifactSpec
 
 
 PACKAGE_SUMMARY_ARTIFACT = JsonArtifactSpec(
@@ -520,7 +516,7 @@ Typed JSON artifact boundary:
 `stdlib/validation.py` provides a small opt-in helper seam for generic workflow-local JSON, string, list, mapping, non-negative-int, and positive-int validation.
 
 ```python
-from autoloop_v3.stdlib import (
+from autoloop.stdlib import (
     extract_workflow_names_from_capability_snapshot,
     extract_workflow_names_from_portfolio_health,
     read_required_text,
@@ -562,7 +558,7 @@ Validation helper boundary:
 For workflow `Params` models, reuse the shared Pydantic validator factories instead of copying the same `field_validator(...)` bodies into every `params.py`.
 
 ```python
-from autoloop_v3.stdlib import (
+from autoloop.stdlib import (
     deduped_string_list_fields,
     optional_text_fields,
     positive_int_fields,
@@ -599,7 +595,7 @@ Parameter-model helper boundary:
 `autoloop_optimizer.portfolio` provides a small opt-in helper seam for portfolio-routing workflows that need an inspectable snapshot of the current workflow library.
 
 ```python
-from autoloop_v3.autoloop_optimizer import (
+from autoloop_optimizer import (
     write_workflow_portfolio_health_snapshot,
     write_workflow_portfolio_snapshot,
 )
@@ -614,7 +610,7 @@ Portfolio snapshot boundary:
 - it uses the shared workflow catalog seam to capture manifest metadata plus inferred source paths such as `flow.py`, `workflow.py`, top-level single-file workflows, optional `specs.py`, prompts, assets, docs, and tests when present
 - it does not add new `workflow.toml` fields and preserves the metadata-only manifest doctrine
 - it does not auto-rank, auto-select, auto-adapt, or auto-run workflows
-- it does not import runtime-owned routing behavior into workflow packages; portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics
+- it does not import autoloop.runtime-owned routing behavior into workflow packages; portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics
 
 Portfolio health snapshot boundary:
 
@@ -632,7 +628,7 @@ Portfolio health snapshot boundary:
 `autoloop_optimizer.company` provides a narrow authoring-only seam for workflows that need one bounded snapshot of repo-local company operation history.
 
 ```python
-from autoloop_v3.autoloop_optimizer import write_company_operation_snapshot
+from autoloop_optimizer import write_company_operation_snapshot
 
 write_company_operation_snapshot(
     ctx,
@@ -682,7 +678,7 @@ Family boundary:
 `autoloop_optimizer.adaptation` provides a small authoring seam for workflows that need to inspect one already-selected workflow and publish a validated parameter artifact for that choice.
 
 ```python
-from autoloop_v3.autoloop_optimizer import (
+from autoloop_optimizer import (
     write_selected_workflow_capability_snapshot,
     write_validated_workflow_parameters,
 )
@@ -704,14 +700,14 @@ Adaptation helper boundary:
 - they are authoring-only support for explicit workflow code; they do not add CLI syntax, manifest fields, runtime-owned adaptation, or automatic downstream execution
 - they do not broaden the shared runtime step contract or move provider-facing prompt rendering into authoring helpers
 - portfolio-routing workflows still own ranking, selection, adaptation, create-new policy, and prompt semantics in workflow code and prompt templates
-- the helper does not import runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
+- the helper does not import autoloop.runtime-owned routing behavior into workflow packages; it only writes a workflow-local artifact
 
 ## Optional Refinement Surface Helpers
 
 `autoloop_optimizer.refinement` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's editable authoring surface.
 
 ```python
-from autoloop_v3.autoloop_optimizer import write_selected_workflow_authoring_surface
+from autoloop_optimizer import write_selected_workflow_authoring_surface
 
 write_selected_workflow_authoring_surface(ctx, "release_candidate_to_go_no_go")
 ```
@@ -734,7 +730,7 @@ Refinement helper boundary:
 `autoloop_optimizer.decomposition` provides a narrow authoring-only seam for workflows that need one read-only artifact combining a selected workflow's identity, editable authoring surface, and compiled step/route topology.
 
 ```python
-from autoloop_v3.autoloop_optimizer import write_selected_workflow_decomposition_surface
+from autoloop_optimizer import write_selected_workflow_decomposition_surface
 
 write_selected_workflow_decomposition_surface(ctx, "release_candidate_to_go_no_go")
 ```
@@ -759,7 +755,7 @@ Decomposition helper boundary:
 `autoloop_optimizer.candidate_surfaces` provides a narrow authoring-only seam for workflows that need the repeated mechanical parts of candidate-only publication for one selected workflow surface.
 
 ```python
-from autoloop_v3.autoloop_optimizer import (
+from autoloop_optimizer import (
     derive_candidate_surface_manifest,
     materialize_baseline_surface,
     normalize_candidate_surface_overlay_result,
@@ -791,7 +787,7 @@ Candidate-surface helper boundary:
 `autoloop_optimizer.diagnostics` provides a narrow authoring-only seam for workflows that need a workflow-local snapshot of one selected workflow's historical run evidence.
 
 ```python
-from autoloop_v3.autoloop_optimizer import write_selected_workflow_run_history_snapshot
+from autoloop_optimizer import write_selected_workflow_run_history_snapshot
 
 write_selected_workflow_run_history_snapshot(
     ctx,
@@ -818,7 +814,7 @@ Diagnostic helper boundary:
 `autoloop_optimizer.evaluation` provides a narrow authoring-only seam for workflows that need to validate and canonicalize one workflow-local evaluation case manifest against one selected workflow.
 
 ```python
-from autoloop_v3.autoloop_optimizer import write_validated_eval_case_manifest
+from autoloop_optimizer import write_validated_eval_case_manifest
 
 write_validated_eval_case_manifest(
     ctx,
@@ -854,7 +850,7 @@ Evaluation helper boundary:
 `autoloop_optimizer.optimization` provides deterministic authoring-only helpers for workflows that need to ingest runtime observability and publish candidate-only optimization evidence.
 
 ```python
-from autoloop_v3.autoloop_optimizer import (
+from autoloop_optimizer import (
     build_step_trace_metrics,
     list_selected_workflow_runs,
     normalize_trace_corpus,
@@ -882,7 +878,7 @@ Optimization helper boundary:
 `autoloop_optimizer.portfolio` also provides an opt-in helper for portfolio workflows that need richer importing inspection of workflow parameters and compiled step contracts while keeping the lightweight catalog seam unchanged.
 
 ```python
-from autoloop_v3.autoloop_optimizer import write_workflow_capability_snapshot
+from autoloop_optimizer import write_workflow_capability_snapshot
 
 write_workflow_capability_snapshot(ctx)
 ```
@@ -914,7 +910,7 @@ Child workflows run as normal workflow packages with their own run ids and run-l
 For optional authoring-level composition helpers, `stdlib/composition.py` keeps the same runtime semantics while making artifact adoption explicit in workflow code:
 
 ```python
-from autoloop_v3.stdlib import (
+from autoloop.stdlib import (
     adopt_child_artifacts,
     require_child_workflow_result,
     run_child_workflow,

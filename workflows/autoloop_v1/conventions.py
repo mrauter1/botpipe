@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from runtime.stores.filesystem import scope_key
+from autoloop.runtime.stores.filesystem import scope_key
 
 
 PHASE_DIR_SAFE_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")

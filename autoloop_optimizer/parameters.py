@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from stdlib.validation import deduped_string_list_fields, optional_text_fields, required_text_fields
+from autoloop.stdlib.validation import deduped_string_list_fields, optional_text_fields, required_text_fields
 
 
 class TaskContextParameters(BaseModel):

@@ -4,14 +4,14 @@ import subprocess
 
 import pytest
 
-from core.errors import ProviderExecutionError
-from core.prompts import ResolvedPrompt
-from core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
-from core.providers.parsing import parse_outcome_json
-from core.providers.rendered import RenderedLLMProvider
-from core.providers.turns import RenderedProviderTurn
-from core.stores.protocols import SessionBinding
-from runtime.config import (
+from autoloop.core.errors import ProviderExecutionError
+from autoloop.core.prompts import ResolvedPrompt
+from autoloop.core.providers.models import LLMRequest, ProducerRequest, TokenUsage, VerifierRequest
+from autoloop.core.providers.parsing import parse_outcome_json
+from autoloop.core.providers.rendered import RenderedLLMProvider
+from autoloop.core.providers.turns import RenderedProviderTurn
+from autoloop.core.stores.protocols import SessionBinding
+from autoloop.runtime.config import (
     ClaudeProviderConfig,
     CodexProviderConfig,
     ConfigError,
@@ -19,27 +19,27 @@ from runtime.config import (
     ResolvedRuntimeConfig,
     RuntimeConfig,
 )
-from runtime.providers._common import (
+from autoloop.runtime.providers._common import (
     build_session_binding,
     ensure_session_provider_match,
     format_subprocess_streams,
     require_prompt_text,
 )
-from runtime.providers.claude import (
+from autoloop.runtime.providers.claude import (
     ClaudeTransport,
     claude_permission_args,
     parse_claude_exec_json,
     verify_claude_code_capabilities,
 )
-import runtime.providers.claude as claude_runtime_provider
-from runtime.providers.codex import (
+import autoloop.runtime.providers.claude as claude_runtime_provider
+from autoloop.runtime.providers.codex import (
     CodexCLICommand,
     CodexTransport,
     resolve_codex_cli_commands,
     parse_codex_exec_json,
     verify_codex_exec_capabilities,
 )
-import runtime.providers.codex as codex_runtime_provider
+import autoloop.runtime.providers.codex as codex_runtime_provider
 
 
 CODEX_START_HELP = "--json\n-m, --model <MODEL>\n--dangerously-bypass-approvals-and-sandbox\n"

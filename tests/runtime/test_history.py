@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from core.context import Context
-from core.history import StepInstanceKey
-from core.primitives import AWAIT_INPUT
-from core.schema_registry import RUNTIME_TRACE_SCHEMA
-from core.stores import InMemorySessionStore
+from autoloop.core.context import Context
+from autoloop.core.history import StepInstanceKey
+from autoloop.core.primitives import AWAIT_INPUT
+from autoloop.core.schema_registry import RUNTIME_TRACE_SCHEMA
+from autoloop.core.stores import InMemorySessionStore
 
 
 class _State(BaseModel):

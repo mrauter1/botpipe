@@ -6,11 +6,11 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from autoloop import AWAIT_INPUT, FINISH, Md, Prompt, Route, StateVar, Workflow, Worklist, produce_verify_step, python_step, step
-from core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
-from core.compiler import compile_workflow
-from core.providers.retries import ProviderRetryPolicy
-from core.steps import PromptStep
-from runtime.static_graph import (
+from autoloop.core import Artifact, FAIL, GLOBAL, Workflow as CoreWorkflow
+from autoloop.core.compiler import compile_workflow
+from autoloop.core.providers.retries import ProviderRetryPolicy
+from autoloop.core.steps import PromptStep
+from autoloop.runtime.static_graph import (
     ROUTE_TABLE_FILENAME,
     TOPOLOGY_FILENAME,
     write_static_step_graph,
@@ -18,7 +18,7 @@ from runtime.static_graph import (
     workflow_static_step_graph_payload,
     workflow_topology_payload,
 )
-from core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from autoloop.core.schema_registry import WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
 
 
 class _AssessmentPayload(BaseModel):

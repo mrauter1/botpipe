@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from stdlib import (
+from autoloop.stdlib import (
     read_json_object,
     require_non_empty_string,
     require_non_negative_int,
 )
-from stdlib.control import event_on_outcome_tags
-from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
+from autoloop.stdlib.control import event_on_outcome_tags
+from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
-from core import Artifact
+from autoloop.core import Artifact
 
 from .contracts import (
     ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,

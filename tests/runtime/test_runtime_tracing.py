@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
-from core.providers.models import StepProviderUsage, TokenUsage
-from core.primitives import Event, Outcome
-from runtime.config import TracingRuntimeConfig
-from core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
-from runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
-from runtime.workspace import next_observability_sequence
+from autoloop.core.extensions import HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
+from autoloop.core.providers.models import StepProviderUsage, TokenUsage
+from autoloop.core.primitives import Event, Outcome
+from autoloop.runtime.config import TracingRuntimeConfig
+from autoloop.core.schema_registry import RUNTIME_TRACE_SCHEMA, RUN_METADATA_SCHEMA, WORKFLOW_STATIC_STEP_GRAPH_SCHEMA
+from autoloop.runtime.tracing import RuntimeTraceError, RuntimeTraceWriter
+from autoloop.runtime.workspace import next_observability_sequence
 
 
 class _State(BaseModel):

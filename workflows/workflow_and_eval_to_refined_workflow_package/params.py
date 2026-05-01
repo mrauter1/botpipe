@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from autoloop_optimizer import SelectedWorkflowTaskFramingParameters
-from stdlib import optional_text_fields, required_text_fields
+from autoloop.stdlib import optional_text_fields, required_text_fields
 
 
 class Params(SelectedWorkflowTaskFramingParameters):

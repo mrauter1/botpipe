@@ -9,21 +9,21 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from core.compiler import compile_workflow
-from core.context import Context
-from core.providers.fake import ScriptedLLMProvider
-from core.stores import InMemorySessionStore
-from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from runtime.loader import (
+from autoloop.core.compiler import compile_workflow
+from autoloop.core.context import Context
+from autoloop.core.providers.fake import ScriptedLLMProvider
+from autoloop.core.stores import InMemorySessionStore
+from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from autoloop.runtime.loader import (
     WorkflowDiscoveryError,
     WorkflowParameterError,
     coerce_workflow_parameter_mapping,
     discover_workflow_packages,
     resolve_workflow_reference,
 )
-from runtime.runner import RunnerOptions, run_workflow_package
+from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop_optimizer.adaptation import write_selected_workflow_capability_snapshot
-from core.primitives import Outcome
+from autoloop.core.primitives import Outcome
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

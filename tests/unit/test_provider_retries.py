@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from core.errors import FailureContext, ProviderExecutionError
-from core.providers.retries import build_retry_feedback
+from autoloop.core.errors import FailureContext, ProviderExecutionError
+from autoloop.core.providers.retries import build_retry_feedback
 
 
 def _retry_error(

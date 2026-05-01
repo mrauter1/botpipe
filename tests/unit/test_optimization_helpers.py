@@ -8,8 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.schema_registry import RUN_METADATA_SCHEMA
-from stdlib.optimization import (
+from autoloop_optimizer.optimization import (
     OptimizationArtifactSpec,
     build_step_trace_metrics,
     collect_optimization_publication_surface,
@@ -26,6 +25,7 @@ from stdlib.optimization import (
     write_optimization_refinement_evidence,
     write_selected_workflow_source_manifest,
 )
+from autoloop.core.schema_registry import RUN_METADATA_SCHEMA
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

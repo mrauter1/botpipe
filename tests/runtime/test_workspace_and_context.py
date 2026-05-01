@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from core.providers.fake import ScriptedLLMProvider
-from core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA
-from runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
-from core.errors import WorkflowExecutionError
-from runtime.loader import WorkflowParameterError
-from runtime.runner import RunnerOptions, run_workflow_package
-from runtime.workspace import (
+from autoloop.core.providers.fake import ScriptedLLMProvider
+from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA
+from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
+from autoloop.core.errors import WorkflowExecutionError
+from autoloop.runtime.loader import WorkflowParameterError
+from autoloop.runtime.runner import RunnerOptions, run_workflow_package
+from autoloop.runtime.workspace import (
     create_run,
     ensure_workspace,
     ensure_workflow_workspace,
@@ -22,7 +22,7 @@ from runtime.workspace import (
     list_workflow_run_summaries,
     resolve_run_workflow_input,
 )
-from core.primitives import Outcome
+from autoloop.core.primitives import Outcome
 
 
 def _clear_workflow_modules() -> None:
@@ -1680,7 +1680,7 @@ import json
 from pydantic import BaseModel
 
 from autoloop import Event, FINISH, Workflow, python_step
-from stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
+from autoloop.stdlib import adopt_child_artifacts, require_child_workflow_result, run_child_workflow
 
 
 class ParentCompositionHelperWorkflow(Workflow):

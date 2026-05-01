@@ -6,12 +6,16 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from core.workflow_capabilities import inspect_workflow_capabilities, workflow_capability_payload
-from core.workflow_catalog import discover_workflow_catalog
-from runtime.loader import resolve_workflow_reference
-from runtime.workspace import list_workflow_run_summaries, normalize_run_status
-from stdlib.lifecycle import write_workflow_json
-from stdlib.validation import require_non_empty_string
+from autoloop.runtime.inspection import (
+    discover_workflow_catalog,
+    inspect_workflow_capabilities,
+    list_workflow_run_summaries,
+    normalize_run_status,
+    resolve_workflow_reference,
+    workflow_capability_payload,
+)
+from autoloop.stdlib.lifecycle import write_workflow_json
+from autoloop.stdlib.validation import require_non_empty_string
 
 
 def write_workflow_portfolio_snapshot(

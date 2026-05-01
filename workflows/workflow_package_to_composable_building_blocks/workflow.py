@@ -24,7 +24,7 @@ from autoloop_optimizer import (
     validate_candidate_surface_overlay,
     write_selected_workflow_decomposition_surface,
 )
-from stdlib import (
+from autoloop.stdlib import (
     normalize_optional_string,
     normalize_unique_strings,
     read_json_object,
@@ -34,11 +34,11 @@ from stdlib import (
     require_string_list,
     validate_selected_workflow_decomposition_surface_snapshot,
 )
-from stdlib.control import event_on_outcome_tags
-from stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
+from autoloop.stdlib.control import event_on_outcome_tags
+from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
 from autoloop import AWAIT_INPUT, Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
-from core import Artifact
+from autoloop.core import Artifact
 
 from .contracts import (
     CandidateDecompositionBuildPayload,
