@@ -1,0 +1,5 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260501T132349Z-7b8f952d" ts="2026-05-01T13:23:49.262515+00:00" />
+Preserve the existing run-start topology/static-artifact writer in runtime.tracing and extend its payloads instead of introducing a second artifact-generation path.
+Land runtime-control semantics and structured failure propagation before engine collaborator extraction so core.engine behavior changes once, then gets moved.
+Reuse the existing workspace/history/capability helpers behind canonical autoloop inspection APIs for optimizer work instead of creating parallel readers.
+Treat legacy PAUSE/pending_question persisted data as an explicit compatibility decision per reader surface; resume must fail clearly where no safe translator exists.
