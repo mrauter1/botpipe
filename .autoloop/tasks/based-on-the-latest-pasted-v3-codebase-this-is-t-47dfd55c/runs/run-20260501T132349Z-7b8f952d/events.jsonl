@@ -135,3 +135,6 @@
 {"ts": "2026-05-01T18:14:53.512008+00:00", "run_id": "run-20260501T132349Z-7b8f952d", "seq": 135, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "tests-docs-and-golden-workflow"}
 {"ts": "2026-05-01T18:15:57.545950+00:00", "run_id": "run-20260501T132349Z-7b8f952d", "seq": 136, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "tests-docs-and-golden-workflow"}
 {"ts": "2026-05-01T18:15:57.577409+00:00", "run_id": "run-20260501T132349Z-7b8f952d", "seq": 137, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "tests-docs-and-golden-workflow"}
+{"ts": "2026-05-01T18:15:57.687936+00:00", "run_id": "run-20260501T132349Z-7b8f952d", "seq": 138, "event_type": "phase_completed", "pair": "test", "phase_id": "tests-docs-and-golden-workflow", "phase_mode": "single"}
+{"ts": "2026-05-01T18:15:57.690102+00:00", "run_id": "run-20260501T132349Z-7b8f952d", "seq": 139, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-01T18:15:57.690549+00:00", "run_id": "run-20260501T132349Z-7b8f952d", "seq": 140, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
