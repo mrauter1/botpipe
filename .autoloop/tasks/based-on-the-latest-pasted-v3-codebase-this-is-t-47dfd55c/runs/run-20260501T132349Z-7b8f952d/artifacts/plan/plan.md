@@ -31,10 +31,11 @@ Implement the remaining-delta spec against the current v3 baseline without keepi
 - Introduce `FailureContext` plus `StepExecutionError`, and migrate checkpoint/failure/retry propagation off private exception annotations in the engine and operation replay path.
 - Wrap built-in step and step-item state in a read-only runtime view so `visits`, `last_route`, `last_reason`, `rework_count`, and `replan_count` stay readable but not assignable, while custom fields remain mutable.
 
-### Phase 4: Metadata, Tracing, And Provider Attribution
+### Phase 4: Metadata, Tracing, Schema Registry, And Provider Attribution
 - Add runtime-control trace/event payloads for `request_input`, `goto`, and `fail`, plus step-finalization records that distinguish candidate route, final route, direct runtime control, terminal, target step, source hook/phase, and redirect chain.
 - Preserve route-redirect trace records with redirect index and hook metadata, and make provider attribution depend on the provider-selected route instead of hook-introduced reroutes.
 - Update run metadata/history normalization so `AWAIT_INPUT` maps to status `awaiting_input`, while provider route tag `"question"` remains distinct from the terminal/status layer.
+- Centralize schema ids for run metadata, checkpoint payloads, topology/static graph artifacts, trace/event/history payloads, and operation replay records, and define explicit older-schema reader behavior per surface.
 - Keep child-workflow telemetry aligned with the new terminal semantics so parent workflows can resume and inspect child runs without pause-specific assumptions.
 
 ### Phase 5: Validation, Rendering, And Topology
@@ -43,8 +44,9 @@ Implement the remaining-delta spec against the current v3 baseline without keepi
 - Extend static artifacts with explicit/effective required writes, route-local hooks, runtime-control hook locations, hidden-route markers, `AWAIT_INPUT`, and unified state/item-state surfaces.
 - Preserve the existing run-start artifact generation path in tracing initialization so artifacts still exist even if the first step fails.
 
-### Phase 6: Namespace Cut, Optimizer Boundary, And Prompt Registry
+### Phase 6: Namespace Cut, Optimizer Boundary, Prompt Registry, And Extension Cleanup
 - Move runtime/core/stdlib/extensions under `autoloop/`, delete `autoloop_v3/`, remove top-level internal production imports, and migrate remaining code/tests/tooling to canonical `autoloop.*` imports.
+- Delete workflow-facing `extensions/git/declaration.py` and `extensions/tracing.py`, remove `GitTracking` / `GitTrackingConfig` / `Tracing` / `TracingConfig` exports, and preserve runtime-owned git/tracing infrastructure separately from workflow authoring hooks.
 - Expose stable inspection/query APIs from the canonical namespace by reusing the existing run/workspace/history/capability helpers instead of letting optimizer code reach into arbitrary internals.
 - Update optimizer terminal/status logic for `AWAIT_INPUT`, hidden-route-aware topology, and the new route/control metadata surfaces.
 - Expand prompt-registry construction to use workflow parent, compiled prompt paths, workflow capability prompt paths, and configured prompt roots with deterministic precedence.
@@ -53,6 +55,8 @@ Implement the remaining-delta spec against the current v3 baseline without keepi
 - Decompose the engine around the existing responsibilities (`StepDispatcher`, `RouteFinalizer`, `HookRunner`, `ArtifactGuard`, `StateRuntime`, `SessionRuntime`, `CheckpointManager`, `OperationRecorder`, `WorkflowInvoker`) without adding speculative layers.
 - Split validation/compiler code into discovery/lowering/inventory/topology/hook/prompt/state modules by moving the current logic behind clearer ownership boundaries.
 - Unify session-store behavior behind backend composition and keep persistence-specific behavior in the backend classes.
+- Cache artifact-backed worklist item loading per step execution so repeated selection/restore work does not re-read the same worklist payload within one step visit.
+- Normalize `Mapping[str, Any]` to `dict[str, Any]` once at public boundaries and remove the scattered internal `dict(...)` defensive conversions that become redundant afterward.
 - Rename `_LLMOperationSurface`/`_ClassifyOperationSurface` to public `LLMOperation`/`ClassifyOperation`, add docstrings/repr/stubs, type `ChildWorkflowResult[OutputT]`, and update operation replay fingerprinting/mismatch behavior.
 
 ### Phase 8: Tests, Docs, And Golden Workflow
@@ -77,6 +81,7 @@ Implement the remaining-delta spec against the current v3 baseline without keepi
 ## Compatibility And Migration Notes
 - This is a hard cut. Do not leave import aliases or fallback branches for `PAUSE`, `on_route`, `autoloop_v3`, or top-level `core`/`runtime`/`stdlib`/`extensions`.
 - Persisted checkpoint/run/trace readers must either tolerate known older schema ids explicitly or fail with a clear migration error; resume must not silently reinterpret legacy `PAUSE` or `pending_question` payloads.
+- Workflow-facing git/tracing declarations are removed entirely; runtime config, runtime trackers, and runtime observers remain the only supported git/tracing control surfaces after the cut.
 - Hidden routes must come from the same compiled route inventory as provider-visible routes so provider rendering and topology artifacts cannot drift.
 - Provider-selected `"question"` remains legal when declared, but hook-returned `RequestInput(...)` is runtime-attributable and must not require provider-visible question-route scaffolding.
 

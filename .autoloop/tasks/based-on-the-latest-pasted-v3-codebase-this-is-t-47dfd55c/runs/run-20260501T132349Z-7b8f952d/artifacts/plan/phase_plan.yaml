@@ -76,14 +76,15 @@ phases:
     rollback:
       - "Restore the old checkpoint payload and exception propagation model if resume coverage exposes unsafe migration gaps."
 
-  - phase_id: "metadata-tracing-and-attribution"
-    title: "Metadata Tracing And Attribution"
-    objective: "Record the new runtime-control, redirect-chain, and provider-attribution semantics in traces, history, run metadata, and child-run summaries."
+  - phase_id: "metadata-tracing-schema-and-attribution"
+    title: "Metadata Tracing Schema And Attribution"
+    objective: "Record the new runtime-control, redirect-chain, provider-attribution, and persisted-schema semantics in traces, history, run metadata, checkpoints, and child-run summaries."
     status: "planned"
     in_scope:
       - "Add hook_runtime_control events and richer step-finalization payloads."
       - "Update run status normalization for awaiting_input versus provider route question."
       - "Carry runtime-control and redirect data into history and child workflow summaries."
+      - "Assign schema ids to persisted runtime artifacts and define older-schema reader behavior per surface."
     out_of_scope:
       - "Namespace/package relocation."
     dependencies:
@@ -93,11 +94,15 @@ phases:
         text: "Trace/history metadata distinguishes candidate_route, final_route, runtime_control, target_step, terminal, source hook/phase, and provider attribution."
       - id: "AC-2"
         text: "Run metadata and child-run summaries report awaiting_input without conflating it with the provider question route tag."
+      - id: "AC-3"
+        text: "Run metadata, checkpoint, topology/static graph, trace/event/history, and operation replay artifacts have owned schema ids plus explicit older-schema reader behavior."
     deliverables:
       - "Tracing/history/run-metadata payload updates."
       - "Child-workflow result and summary alignment with the new terminal model."
+      - "Schema registry expansion and reader-compatibility plan for persisted runtime artifacts."
     risks:
       - "Multiple metadata writers can drift if payload shape changes are not centralized."
+      - "Schema-id rollout can strand existing persisted data if reader behavior is left implicit."
     rollback:
       - "Revert the new payload fields while keeping runtime behavior if observability consumers fail on the richer schema."
 
@@ -112,7 +117,7 @@ phases:
     out_of_scope:
       - "Engine collaborator decomposition."
     dependencies:
-      - "metadata-tracing-and-attribution"
+      - "metadata-tracing-schema-and-attribution"
     acceptance_criteria:
       - id: "AC-1"
         text: "Validation no longer infers hook-return routes from source code and instead validates runtime returns directly."
@@ -126,12 +131,13 @@ phases:
     rollback:
       - "Restore prior rendering/validation helpers if artifact generation or provider contracts regress before the shared route model is stabilized."
 
-  - phase_id: "namespace-cut-optimizer-boundary-and-prompts"
-    title: "Namespace Cut Optimizer Boundary And Prompts"
-    objective: "Finish the single-namespace package layout, remove compatibility trees and top-level internal imports, move optimizer consumers to stable APIs, and widen prompt-registry seeding."
+  - phase_id: "namespace-cut-optimizer-boundary-prompts-and-extensions"
+    title: "Namespace Cut Optimizer Boundary Prompts And Extensions"
+    objective: "Finish the single-namespace package layout, remove compatibility trees and workflow-facing git/tracing declarations, move optimizer consumers to stable APIs, and widen prompt-registry seeding."
     status: "planned"
     in_scope:
       - "Move internal packages under autoloop/ and delete autoloop_v3/ plus top-level production import paths."
+      - "Delete workflow-facing git/tracing declaration modules and remove their public exports while preserving runtime-owned git/tracing infrastructure."
       - "Expose stable inspection/query APIs from canonical autoloop namespaces using existing runtime/workspace/history/capability helpers."
       - "Update optimizer imports/status logic and build the prompt registry from all resolved prompt roots."
     out_of_scope:
@@ -143,11 +149,15 @@ phases:
         text: "Production code and migrated tests use canonical autoloop.* imports, and autoloop_v3 plus top-level internal namespaces are no longer importable as supported surfaces."
       - id: "AC-2"
         text: "Optimizer code consumes stable autoloop inspection APIs and recognizes AWAIT_INPUT/awaiting_input semantics."
+      - id: "AC-3"
+        text: "Workflow-facing GitTracking/Tracing declaration modules and exports are removed, while runtime-owned git/tracing infrastructure remains supported."
     deliverables:
       - "Canonical package layout and import migration."
       - "Stable inspection/query API surface and prompt-registry expansion."
+      - "Extension cleanup covering workflow-facing git/tracing declarations, exports, docs, and tests."
     risks:
       - "Namespace relocation is the broadest mechanical change and can leave orphan imports in tests, tooling, or generated fixtures."
+      - "Extension cleanup can accidentally remove runtime-owned tracing or git-tracking paths if authoring and runtime surfaces are not separated explicitly."
     rollback:
       - "Restore the pre-move package tree if the import migration cannot be completed atomically."
 
@@ -159,21 +169,27 @@ phases:
       - "Extract engine collaborators around dispatch, finalization, hooks, checkpoints, state/session runtime, operations, and workflow invocation."
       - "Split validation/compiler logic into discovery, lowering, inventory, topology, hook, prompt, and state modules."
       - "Unify session store behavior with backend composition and rename the public operation surfaces."
+      - "Cache artifact-backed worklist loading per step execution."
+      - "Normalize Mapping inputs to dicts once at public boundaries and remove scattered internal defensive conversions."
       - "Update operation replay fingerprinting and mismatch behavior, and type ChildWorkflowResult outputs."
     out_of_scope:
       - "New workflow features beyond the remaining-delta spec."
     dependencies:
-      - "namespace-cut-optimizer-boundary-and-prompts"
+      - "namespace-cut-optimizer-boundary-prompts-and-extensions"
     acceptance_criteria:
       - id: "AC-1"
         text: "Engine, validation, and session responsibilities are separated into the requested collaborators/modules without behavior drift from prior phases."
       - id: "AC-2"
         text: "Public operation surfaces are renamed, replay mismatch defaults to warn-and-replay with strict fail support, and child workflow output typing is available."
+      - id: "AC-3"
+        text: "Worklist item loading is cached per step execution, and Mapping-to-dict normalization is centralized at public boundaries instead of repeated internally."
     deliverables:
       - "Collaborator/module refactors."
       - "Session backend composition, operation-surface rename, replay updates, and typed child results."
+      - "Worklist load-cache and boundary-normalization cleanup."
     risks:
       - "Late refactors can accidentally re-open earlier behavioral changes if they happen before runtime semantics are stabilized."
+      - "Caching and normalization changes can hide correctness regressions if cache lifetime and boundary ownership are not explicit."
     rollback:
       - "Back out the refactor commits while retaining the already-stable behavior changes if module extraction proves too disruptive."
 
