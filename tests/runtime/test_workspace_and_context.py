@@ -12,6 +12,13 @@ from autoloop.core.schema_registry import CHILD_RUN_SUMMARY_SCHEMA
 from autoloop.runtime.config import GitTrackingRuntimeConfig, RuntimeConfig
 from autoloop.core.errors import WorkflowExecutionError
 from autoloop.runtime.loader import WorkflowParameterError
+from autoloop.runtime.inspection import (
+    list_runs as inspection_list_runs,
+    load_run_history as inspection_load_run_history,
+    load_run_metadata as inspection_load_run_metadata,
+    load_run_record as inspection_load_run_record,
+    load_run_topology as inspection_load_run_topology,
+)
 from autoloop.runtime.runner import RunnerOptions, run_workflow_package
 from autoloop.runtime.workspace import (
     create_run,
@@ -175,6 +182,76 @@ def test_run_metadata_records_topology_hashes_and_artifact_contract_paths(tmp_pa
     assert topology["artifacts"]["topology"] == "topology.json"
     assert topology["artifacts"]["prompt_refs"] == "prompt_refs.json"
     assert (run_dir / topology["artifacts"]["topology"]).exists()
+
+
+def test_runtime_inspection_loaders_filter_status_and_require_disambiguation(tmp_path: Path) -> None:
+    _write_pause_resume_workflow_package(tmp_path, "inspection_demo", "InspectionWorkflow")
+    provider = ScriptedLLMProvider(
+        llm_turns=[
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+            Outcome(raw_output="Need answer", tag="question", question="What value?"),
+        ]
+    )
+
+    first = run_workflow_package(
+        "inspection_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="inspection-task-1",
+            run_id="shared-run",
+            message="Pause task one",
+        ),
+    )
+    second = run_workflow_package(
+        "inspection_demo",
+        provider=provider,
+        options=_runner_options(
+            tmp_path,
+            task_id="inspection-task-2",
+            run_id="shared-run",
+            message="Pause task two",
+        ),
+    )
+
+    records = inspection_list_runs(tmp_path, workflow_name="inspection_demo", status="awaiting_input")
+
+    assert first.terminal == "AWAIT_INPUT"
+    assert second.terminal == "AWAIT_INPUT"
+    assert {record.task_id for record in records} == {"inspection-task-1", "inspection-task-2"}
+    assert all(record.normalized_status == "awaiting_input" for record in records)
+
+    with pytest.raises(ValueError, match="ambiguous"):
+        inspection_load_run_record(
+            tmp_path,
+            workflow_name="inspection_demo",
+            run_id="shared-run",
+        )
+
+    record = inspection_load_run_record(
+        tmp_path,
+        workflow_name="inspection_demo",
+        task_id="inspection-task-1",
+        run_id="shared-run",
+    )
+    metadata = inspection_load_run_metadata(record)
+    topology = inspection_load_run_topology(record)
+    history = inspection_load_run_history(record)
+
+    assert record.task_id == "inspection-task-1"
+    assert metadata["status"] == "awaiting_input"
+    assert metadata["pending_input"]["question"] == "What value?"
+    assert topology["workflow_name"] == "inspection_demo"
+    assert topology["entry"] == "ask"
+    assert history.events()
+    assert history.trace()
+
+    with pytest.raises(FileNotFoundError, match="missing-run"):
+        inspection_load_run_record(
+            tmp_path,
+            workflow_name="inspection_demo",
+            run_id="missing-run",
+        )
 
 
 def test_resume_fails_when_saved_topology_hash_differs(tmp_path: Path) -> None:
