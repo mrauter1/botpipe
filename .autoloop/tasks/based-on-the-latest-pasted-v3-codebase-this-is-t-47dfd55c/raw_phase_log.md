@@ -712,3 +712,52 @@ Open issues / next step
 Targeted validation is green: `python3 -m py_compile` on touched files and `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py` with `162 passed`.
 
 The remaining next step is the later structured-failures/metadata phase work: replacing private exception annotations with the requested structured failure objects and extending the broader observability surfaces beyond this phase’s runtime-control path.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de3ea-88d2-7822-a347-d5ac75792453
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+I’m auditing the runtime-control and hidden-route changes against the phase contract first, then I’ll update the phase criteria and feedback artifacts with any concrete gaps or regressions I find. I’m focusing on the engine finalization path, provider-visible route filtering, checkpoint/resume behavior, and the new tests before I mark criteria complete.
+
+I’ve isolated two places that need closer review against the spec rather than the current tests: direct controls from `after_producer`-style hooks, and the new `Goto.handoff` field. I’m checking whether those are actually honored anywhere in the engine or just accepted and then dropped.
+
+I have two concrete contract gaps now, both in the changed engine path rather than adjacent legacy code. I’m pulling exact line references and then I’ll record them in the review artifacts with the minimal fix directions.
+
+I’ve got the review artifacts ready: two blocking findings, both tied directly to the new runtime-control surface rather than legacy follow-on work. I’m recording them now and leaving the phase criteria unchecked because those gaps are material against the accepted contract.
+
+The criteria outcome is unchanged from the unchecked baseline because both findings are blocking against the phase acceptance criteria. I’m adding a one-line verifier note there so the artifact explicitly records that the unchecked state is intentional, not untouched.
+
+Scope considered
+
+Phase `runtime-controls-and-hidden-routes` only. I limited edits to the active review artifacts and reviewed the changed engine/runtime/test paths that implement direct runtime controls, pending-input resume, and hidden-route provider filtering.
+
+What I analyzed
+
+I checked the phase contract, criteria, feedback/notes, and run-local decisions first. Then I audited `core/engine.py`, `core/primitives.py`, route compilation/rendering metadata, and the new contract/runtime/unit tests for the behaviors this phase claims to implement.
+
+What I reviewed
+
+I verified hidden-route filtering against provider-visible route choices versus topology/runtime legality, and I traced the direct-control flow for `RequestInput`, `Goto`, and `Fail` from hook return normalization through finalization, checkpointing, and subsequent dispatch. I also checked whether the newly exposed `Goto.handoff` field and the `produce_verify_step` hook surfaces are actually honored by the engine.
+
+Key findings / decisions
+
+I recorded two blocking findings in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/runtime-controls-and-hidden-routes/feedback.md). The first is that `after_producer` hooks still cannot return `RequestInput`, `Goto`, or `Fail`, even though the accepted hook contract says hooks may return runtime controls and `after_producer` is part of the public hook surface. The second is that `Goto.handoff` is currently dropped and direct non-terminal `Goto` transitions are not checkpointed before execution, which contradicts the requested runtime-control semantics.
+
+I left all phase criteria unchecked in [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/runtime-controls-and-hidden-routes/criteria.md) because those gaps are material against the phase acceptance criteria.
+
+Open issues / next step
+
+Implementation needs a follow-up pass to 1) allow candidate-free `after_producer` hooks to emit direct runtime controls and 2) carry `Goto.handoff` plus checkpoint validated direct `Goto` transitions before advancing to the target step. After those fixes, this phase should be re-reviewed.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
