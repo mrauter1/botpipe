@@ -6,3 +6,5 @@
 - Phase Directory Key: tests-docs-and-golden-workflow
 - Phase Title: Tests Docs And Golden Workflow
 - Scope: phase-local authoritative verifier artifact
+
+- Added targeted regression coverage for direct `Fail` runtime-control status derivation in history telemetry and for legacy `pending_question` read-compatibility through `RunRecord.pending_input`, alongside the existing phase slice and golden workflow coverage.

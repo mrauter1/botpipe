@@ -359,6 +359,64 @@ def test_context_history_marks_goto_runtime_control_as_completed(tmp_path: Path)
     )
 
 
+def test_context_history_marks_fail_runtime_control_as_failed(tmp_path: Path) -> None:
+    ctx, run_folder = _context(tmp_path)
+    _write_jsonl(
+        run_folder / "trace.jsonl",
+        [
+            {
+                "schema": RUNTIME_TRACE_SCHEMA,
+                "event_type": "step_started",
+                "timestamp": "2026-04-30T11:15:00+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+            },
+            {
+                "schema": RUNTIME_TRACE_SCHEMA,
+                "event_type": "step_finished",
+                "timestamp": "2026-04-30T11:15:02+00:00",
+                "step_name": "triage",
+                "visit": 1,
+                "step_execution_id": "triage:1",
+                "candidate_route": "needs_escalation",
+                "runtime_control": "fail",
+                "terminal": "FAIL",
+                "provider_attributable": False,
+                "source_hook": "after",
+                "source_phase": "after",
+            },
+        ],
+    )
+    _write_jsonl(run_folder / "events.jsonl", [])
+
+    telemetry = ctx.history.step_telemetry("triage")
+    route_records = ctx.history.routes(step="triage")
+
+    assert telemetry["completed"] is True
+    assert telemetry["status"] == "failed"
+    assert route_records == (
+        {
+            "event_type": "step_finished",
+            "step_name": "triage",
+            "scope": None,
+            "item_id": None,
+            "candidate_route": "needs_escalation",
+            "final_route": None,
+            "runtime_control": "fail",
+            "target_step": None,
+            "terminal": "FAIL",
+            "provider_attributable": False,
+            "source_hook": "after",
+            "source_phase": "after",
+            "visit": 1,
+            "step_execution_id": "triage:1",
+            "timestamp": "2026-04-30T11:15:02+00:00",
+            "hook_route_redirects": (),
+        },
+    )
+
+
 def test_context_history_accepts_legacy_trace_records_without_schema(tmp_path: Path) -> None:
     ctx, run_folder = _context(tmp_path)
     _write_jsonl(

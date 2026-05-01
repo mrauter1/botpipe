@@ -722,6 +722,30 @@ def test_list_run_records_normalizes_legacy_paused_status_for_public_filters(tmp
     assert records[0].paused is True
 
 
+def test_run_record_projects_legacy_pending_question_as_pending_input(tmp_path: Path) -> None:
+    _write_run_summary_record(
+        tmp_path,
+        task_id="task-1",
+        workflow_name="release_candidate_to_go_no_go",
+        run_id="run-paused",
+        status="paused",
+        created_at="2026-04-24T06:00:00+00:00",
+        updated_at="2026-04-24T06:03:00+00:00",
+        request_text="Investigate the paused release gate.\n",
+        pending_question="Who owns the gate?",
+    )
+
+    records = list_run_records(
+        tmp_path,
+        workflow_name="release_candidate_to_go_no_go",
+        task_id="task-1",
+    )
+
+    assert len(records) == 1
+    assert records[0].pending_input == {"question": "Who owns the gate?"}
+    assert records[0].pending_question == "Who owns the gate?"
+
+
 def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filters(tmp_path: Path) -> None:
     paused_dir = _write_run_summary_record(
         tmp_path,
