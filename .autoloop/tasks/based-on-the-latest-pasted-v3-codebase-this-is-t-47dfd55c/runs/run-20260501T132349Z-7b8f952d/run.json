@@ -20,13 +20,13 @@
       "tests-docs-and-golden-workflow"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "runtime-controls-and-hidden-routes"
+    "current_phase_index": 2,
+    "current_phase_id": "checkpoint-resume-and-failure-model"
   },
   "phase_status": {
     "public-surface-terminal-cut": "completed",
-    "runtime-controls-and-hidden-routes": "in_progress",
-    "checkpoint-resume-and-failure-model": "planned",
+    "runtime-controls-and-hidden-routes": "completed",
+    "checkpoint-resume-and-failure-model": "in_progress",
     "metadata-tracing-schema-and-attribution": "planned",
     "validation-rendering-and-topology": "planned",
     "namespace-cut-optimizer-boundary-prompts-and-extensions": "planned",
@@ -52,6 +52,19 @@
       "run_id": "run-20260501T132349Z-7b8f952d",
       "status": "in_progress",
       "ts": "2026-05-01T14:21:31.063783+00:00"
+    },
+    {
+      "phase_id": "runtime-controls-and-hidden-routes",
+      "run_id": "run-20260501T132349Z-7b8f952d",
+      "status": "completed",
+      "ts": "2026-05-01T15:04:10.712846+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "checkpoint-resume-and-failure-model",
+      "run_id": "run-20260501T132349Z-7b8f952d",
+      "status": "in_progress",
+      "ts": "2026-05-01T15:04:10.715235+00:00"
     }
   ]
 }
