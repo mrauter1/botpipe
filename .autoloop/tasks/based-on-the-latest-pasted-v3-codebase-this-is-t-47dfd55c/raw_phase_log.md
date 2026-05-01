@@ -1717,3 +1717,56 @@ Open issues / next step
 
 - Targeted verification passed with the repo venv: `./.venv/bin/pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py -q` -> `114 passed`.
 - No open blocker from this phase. The next phase can build on the richer topology/static artifact payloads without revisiting AST hook inference.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de445-0372-7da3-a51b-5c9350070632
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+I’m reviewing the phase-local implementation against the acceptance criteria and the actual changed surfaces. First I’m reading the criteria/feedback artifacts and the final diff so I can mark scope accurately before deciding whether anything is blocking.
+
+The artifact diff was already staged into the current working copy, so I’m reading the resulting source directly rather than relying on `git diff`. I’m doing one more dependency pass now for regressions around static-graph consumers and provider rendering contracts.
+
+The targeted phase tests are green, but I want one broader regression check outside the exact edited files: hidden-route contract behavior and the after-producer control path still need to behave the same with the new render-time filtering.
+
+The broader contract slice is also green. I’m marking the criteria complete and recording that this review found no blocking or non-blocking issues within the phase scope.
+
+Scope considered
+
+- Phase-local review for `validation-rendering-and-topology`.
+- Reviewed only the request-relevant implementation surfaces plus adjacent regression paths: hook validation, provider prompt rendering, and static artifact generation.
+
+What I analyzed
+
+- `core/validation.py` for removal of AST/source-based hook inference.
+- `core/providers/models.py`, `core/providers/rendering.py`, and `core/engine.py` for hidden-route filtering and provider contract flow.
+- `runtime/static_graph.py` and the updated tests for topology, route-table, compile-report, and state-surface payload changes.
+
+What I reviewed
+
+- Verified AC-1: validation no longer inspects hook source and runtime remains authoritative for actual hook return validation.
+- Verified AC-2: provider prompts exclude hidden routes, while topology/static artifacts include hidden routes, explicit/effective required writes, runtime-control hook locations, and `AWAIT_INPUT`.
+- Checked targeted validation with `./.venv/bin/pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py -q` and adjacent regression coverage with `./.venv/bin/pytest tests/contract/test_engine_contracts.py -q -k 'hidden_routes_are_runtime_legal_but_excluded_from_provider_choices or after_producer_goto_short_circuits_verifier or after_producer_request_input_checkpoints_pending_input_before_verifier'`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to complete and appended the no-findings review note to `feedback.md`.
+
+Open issues / next step
+
+- No open review issues in this phase scope.
+- Review status is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

@@ -1652,3 +1652,121 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de445-0372-7da3-a51b-5c9350070632
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+I’m implementing the `validation-rendering-and-topology` phase only. First I’m reading the active phase artifacts and the current code paths for hook validation, provider rendering, and static artifact generation so I can scope the edits precisely.
+
+I’ve got the phase inputs and the current code still has the old AST hook inference and older artifact/rendering payload assumptions. Next I’m narrowing to the specific modules that own validation, provider route rendering, and topology/static graph generation so the changes stay phase-local.
+
+The main owners are `core/validation.py`, `core/compiler.py`, `core/providers/rendering.py`, and `runtime/static_graph.py`. I’m reading those next, plus the targeted tests, to align the implementation with the existing runtime behavior instead of rewriting adjacent pieces.
+
+I’ve confirmed the runtime already owns hook-return validation; the remaining gap is that `core/validation.py` still rejects some hook behavior by parsing source, and the static artifact payloads are still too thin for the new topology contract. I’m moving to targeted edits in validation, provider rendering, and static graph generation now.
+
+I’m removing the source-parsing validation path now. After that I’ll expand the static artifact payloads in one pass so the topology, static graph, route table, and compile report stay derived from the same compiled route data.
+
+I’ve applied the core edits. I’m checking the patched files now for structural issues before I run the targeted test slice, since the static-artifact payload changes touched a few nested dictionaries.
+
+The AST-inference code is gone and the new payload fields are in place. I’m running a tight verification loop now: syntax first, then just the validation/provider/static-graph tests that cover this phase.
+
+The environment doesn’t have a `pytest` shell entrypoint, so I’m rerunning the same test slice through `python3 -m pytest`. If that fails too, I’ll report it as an environment limitation rather than guessing at green status.
+
+The repository code compiles cleanly under `python3`. Test execution is blocked by the environment: there’s no installed `pytest` module or `pytest` executable, so I’m doing a quick sanity pass on the touched files and then I’ll write the phase notes with that limitation called out explicitly.
+
+I found a local virtualenv with `pytest`, so I’m using that instead of the system Python. That should give us an actual phase signal rather than stopping at syntax-only verification.
+
+The targeted phase slice is green in the repo venv. I’m recording the non-obvious decisions and phase notes now, then I’ll close with the requested phase summary and the concrete validation result.
+
+Scope considered
+
+- Phase-local work for `validation-rendering-and-topology` only.
+- Focused on hook validation, provider prompt route rendering, and static artifact/topology generation.
+- Left engine decomposition, package cleanup, optimizer boundary, and schema-version work out of scope.
+
+What I analyzed
+
+- `core/validation.py` for AST-based hook return inference and compile-time redirect checks.
+- `core/engine.py`, `core/providers/models.py`, and `core/providers/rendering.py` for provider-visible route handling.
+- `runtime/static_graph.py` plus targeted tests covering topology, route tables, compile reports, and provider prompt contracts.
+
+What I changed
+
+- Removed AST/source-based hook-return inference from validation; hook validation now stays at callable/signature level and runtime remains authoritative for actual return values.
+- Added defensive provider prompt filtering for `provider_visible=False` routes by extending `ProviderRoute` and filtering at render time.
+- Expanded static artifacts to include terminals, worklist item-state surfaces, step-item-state surfaces, runtime-control hook locations, richer route table columns, global-route rows, and compile-report runtime-control summaries.
+- Updated targeted tests in `tests/unit/test_validation.py`, `tests/unit/test_provider_boundary_core.py`, and `tests/runtime/test_runtime_static_graph.py`.
+
+Key findings / decisions
+
+- The runtime already had the correct hook-return enforcement path, so the main fix was deleting compile-time source inspection rather than changing engine behavior.
+- Hidden-route exclusion was already enforced when building provider contracts in the engine; I added render-time filtering as a last-mile guard so prompts cannot accidentally expose hidden routes.
+- Phase notes and the turn decision ledger were updated to record the runtime-authoritative validation decision and the defensive provider-rendering guard.
+
+Open issues / next step
+
+- Targeted verification passed with the repo venv: `./.venv/bin/pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py -q` -> `114 passed`.
+- No open blocker from this phase. The next phase can build on the richer topology/static artifact payloads without revisiting AST hook inference.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de445-0372-7da3-a51b-5c9350070632
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de445-0372-7da3-a51b-5c9350070632
+---
+I’m reviewing the phase-local implementation against the acceptance criteria and the actual changed surfaces. First I’m reading the criteria/feedback artifacts and the final diff so I can mark scope accurately before deciding whether anything is blocking.
+
+The artifact diff was already staged into the current working copy, so I’m reading the resulting source directly rather than relying on `git diff`. I’m doing one more dependency pass now for regressions around static-graph consumers and provider rendering contracts.
+
+The targeted phase tests are green, but I want one broader regression check outside the exact edited files: hidden-route contract behavior and the after-producer control path still need to behave the same with the new render-time filtering.
+
+The broader contract slice is also green. I’m marking the criteria complete and recording that this review found no blocking or non-blocking issues within the phase scope.
+
+Scope considered
+
+- Phase-local review for `validation-rendering-and-topology`.
+- Reviewed only the request-relevant implementation surfaces plus adjacent regression paths: hook validation, provider prompt rendering, and static artifact generation.
+
+What I analyzed
+
+- `core/validation.py` for removal of AST/source-based hook inference.
+- `core/providers/models.py`, `core/providers/rendering.py`, and `core/engine.py` for hidden-route filtering and provider contract flow.
+- `runtime/static_graph.py` and the updated tests for topology, route-table, compile-report, and state-surface payload changes.
+
+What I reviewed
+
+- Verified AC-1: validation no longer inspects hook source and runtime remains authoritative for actual hook return validation.
+- Verified AC-2: provider prompts exclude hidden routes, while topology/static artifacts include hidden routes, explicit/effective required writes, runtime-control hook locations, and `AWAIT_INPUT`.
+- Checked targeted validation with `./.venv/bin/pytest tests/unit/test_validation.py tests/unit/test_provider_boundary_core.py tests/runtime/test_runtime_static_graph.py -q` and adjacent regression coverage with `./.venv/bin/pytest tests/contract/test_engine_contracts.py -q -k 'hidden_routes_are_runtime_legal_but_excluded_from_provider_choices or after_producer_goto_short_circuits_verifier or after_producer_request_input_checkpoints_pending_input_before_verifier'`.
+
+Key findings / decisions
+
+- No blocking findings.
+- No non-blocking findings.
+- Updated `criteria.md` to complete and appended the no-findings review note to `feedback.md`.
+
+Open issues / next step
+
+- No open review issues in this phase scope.
+- Review status is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
