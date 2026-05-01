@@ -2125,3 +2125,91 @@ Add direct import-failure assertions for the removed extension module paths, the
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019de454-ef56-7923-a01b-33e237b994fd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de454-ef56-7923-a01b-33e237b994fd
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de454-ef56-7923-a01b-33e237b994fd
+---
+I’m addressing the audit gap directly now: I’m adding a regression that the deleted extension modules themselves stay non-importable, and I’m expanding the strategy artifact so it maps the full phase coverage rather than only the two new tests.
+
+The repo already has the prompt-root and namespace-hard-cut regressions the auditor called out; I’m making the strategy artifact point to them explicitly and adding the missing removed-module import-failure test so AC-3 is covered at the right level.
+
+The audit gap is patched. I’m running the extension-cleanup slice now to verify the new module-import failure assertions behave the way the phase contract requires.
+
+Scope considered
+
+Phase-local follow-up on the auditor’s gaps for the namespace cut, specifically the deleted workflow-facing extension modules and the completeness of the phase coverage map.
+
+What I analyzed
+
+I reviewed the auditor findings in the active [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/feedback.md), the current [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/test_strategy.md), and the existing strictness/prompt-root tests the auditor said were missing from the map.
+
+What I changed
+
+I added a direct import-failure regression in [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py:99) so `autoloop.extensions.tracing` and `autoloop.extensions.git.declaration` must stay non-importable, not just absent from package re-exports.
+
+I expanded [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/test_strategy.md) to map the full phase surface, including the preexisting hard namespace-cut coverage in `tests/strictness/test_no_compat.py` and the prompt-root widening regression in `tests/unit/test_primitives_and_stores.py`. I also appended a producer update to the active phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/feedback.md).
+
+Key findings / decisions
+
+The deleted-module coverage the auditor requested is now present and passes:
+`PYTHONPATH=. .venv/bin/pytest tests/runtime/test_optional_extensions.py -k 'workflow_extension_exports_drop_git_tracking_and_tracing_declarations or removed_workflow_observability_declaration_modules_are_not_importable' -q`
+
+I did not weaken or remove the inspection regression. The known remaining issue is still the real implementation defect in `autoloop.runtime.inspection.load_run_metadata()`.
+
+Open issues / next step
+
+The remaining open item for this phase is implementation-side: fix the `validate_persisted_schema` call shape in `autoloop.runtime.inspection`, then rerun the inspection regression in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:190).
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019de454-ef56-7923-a01b-33e237b994fd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de454-ef56-7923-a01b-33e237b994fd
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de454-ef56-7923-a01b-33e237b994fd
+---
+Re-auditing the phase test artifacts after the follow-up changes now. I’m verifying that the deleted-module coverage gap is actually closed and that the strategy artifact now maps the full phase surface before I clear the audit criteria.
+
+The earlier audit gaps are closed. I’m clearing the criteria and appending a short resolution note so the artifact history shows why the previous blocking finding no longer applies.
+
+The audit artifacts are updated and consistent now. I’m doing a final readback, then I’ll close with the required completion block.
+
+Scope considered
+
+Phase-local re-audit of the namespace-cut test pass after the follow-up changes, with focus on the deleted workflow-facing extension modules, the completeness of the coverage map, and the reliability of the new regressions.
+
+What I analyzed
+
+I reviewed the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/test_strategy.md), the phase [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/feedback.md), the new module-import regression in [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py:99), and the existing strictness/prompt-root regressions that the strategy now references. I also reran the focused extension-cleanup slice.
+
+What I reviewed
+
+The previous blocking audit gap is closed: the suite now checks both that the removed workflow-facing names are not re-exported and that the deleted module paths themselves remain non-importable. The strategy artifact now maps the full phase surface rather than only the newly added tests. The focused validation run passed:
+`PYTHONPATH=. .venv/bin/pytest tests/runtime/test_optional_extensions.py -k 'workflow_extension_exports_drop_git_tracking_and_tracing_declarations or removed_workflow_observability_declaration_modules_are_not_importable' -q`
+
+Key findings / decisions
+
+No remaining audit findings in this pass. The still-failing inspection regression is an implementation defect in `autoloop.runtime.inspection`, not a gap in the tests. I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/criteria.md) to all checked and appended a resolution note in feedback.
+
+Open issues / next step
+
+The next step remains implementation-side: fix the `validate_persisted_schema` call shape in `autoloop.runtime.inspection`, then rerun the inspection regression in `tests/runtime/test_workspace_and_context.py`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
