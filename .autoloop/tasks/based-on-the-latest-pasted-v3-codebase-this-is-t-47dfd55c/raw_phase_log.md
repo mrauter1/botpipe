@@ -2294,3 +2294,62 @@ Key findings / decisions
 Open issues / next step
 
 - The broader contract/unit suite still contains older expectation drift outside this phase’s accepted scope; next step is a dedicated cleanup pass for those tests if you want the larger suite green against the already-landed earlier phases.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de470-1bde-75f2-92a8-f2fabee7d998
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+I’m reviewing the maintainability-refactors diff against the phase contract and prior decisions. First I’m reading the phase criteria/feedback artifacts, then I’m checking the changed runtime/compiler/session surfaces for behavioral regressions and scope misses before I update the review artifacts.
+
+I’ve narrowed the likely review risk to the replay fingerprint and the claimed compiler split. I’m checking the prompt-rendering path now to confirm whether the new fingerprint actually tracks rendered prompt inputs, because that’s the most likely place a stale cached operation could leak across runs.
+
+I confirmed the replay path renders provider operation prompts from `Context`, but the new fingerprint only hashes the prompt file/text metadata, not the rendered context values. I’m checking the remaining mapping-normalization and compiler-split surfaces now to decide whether they’re just partials or phase-blocking misses.
+
+I found another material regression surface in the broader contract checks: non-provider artifact-validation failures now lose structured failure context in checkpoints after the maintainability edits. I’m diffing that helper directly so I can tell whether this phase introduced it or merely exposed an older bug before I write it up.
+
+I’ve got the review call. I’m recording three prioritized blocking findings: one correctness bug in replay fingerprinting, and two phase-contract misses where the requested decomposition/normalization work was only partially done. Then I’ll leave the criteria unchecked and mark the review `INCOMPLETE`.
+
+Scope considered
+
+- Phase-local `maintainability-refactors` only.
+- Changed runtime/compiler/session/operation files plus the phase artifacts and decisions ledger.
+- I left [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/criteria.md) with all boxes unchecked because blocking findings remain.
+
+What I analyzed
+
+- `autoloop/core/operations.py`, `autoloop/core/providers/rendering.py`, `autoloop/runtime/config.py`
+- `autoloop/core/validation.py` and the new facade modules under `autoloop/core/`
+- `autoloop/core/context.py`, `autoloop/runtime/loader.py`, `autoloop/runtime/workspace.py`, `autoloop/runtime/stores/filesystem.py`
+- The implementation notes and authoritative decisions for this phase
+
+What I reviewed
+
+- Whether replay mismatch behavior matches the requested fingerprint inputs and default warn/fail semantics
+- Whether compiler/validation logic was actually split into owned modules or only re-exported
+- Whether mapping normalization was centralized at public boundaries as required by AC-3
+- Whether the refactor stayed within the accepted maintainability scope without reintroducing ambiguity
+
+Key findings / decisions
+
+- Added three blocking findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/feedback.md).
+- `IMP-001`: replay fingerprinting still misses concrete provider operation configuration, so cached operation values can be silently reused across model/config changes.
+- `IMP-002`: the requested compiler/validation split was not actually completed; the new modules are thin facades over the existing `validation.py` monolith.
+- `IMP-003`: mapping normalization is still scattered across multiple boundaries and internals, so AC-3 is not met.
+
+Open issues / next step
+
+- Fix the three blocking findings, then rerun the review with updated criteria and feedback artifacts.
+- No source changes were made from review mode.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
