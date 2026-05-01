@@ -2080,3 +2080,48 @@ Validation:
 Open issues / next step
 
 The next step is to fix the keyword usage in `autoloop.runtime.inspection`, then rerun the new inspection test and the nearby phase suite. I did not broaden this pass to full optimizer workflow integration reruns once the focused inspection seam exposed a concrete defect.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de454-ef56-7923-a01b-33e237b994fd
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de454-ef56-7923-a01b-33e237b994fd
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de454-ef56-7923-a01b-33e237b994fd
+---
+Auditing the new test pass now. I’m checking whether the added regressions actually cover the requested namespace/extension cut or if they leave any meaningful silent-regression paths untested.
+
+The main audit issue is specific: the new extension cleanup test only checks package re-exports, not that the deleted module paths themselves stay gone. That leaves a direct-import compatibility regression unguarded for a phase where module deletion is part of the contract.
+
+I’ve updated the audit artifacts with one blocking coverage gap and one non-blocking strategy gap. I’m doing a quick readback and then I’ll close with the required status block.
+
+Scope considered
+
+Phase-local audit of the new namespace-cut test additions, the updated test strategy artifact, and the phase-relevant existing coverage they rely on. I focused on the inspection seam, extension cleanup, prompt-registry widening, and the hard namespace-cut acceptance criteria.
+
+What I analyzed
+
+I reviewed the active phase contract, the decisions ledger, the updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/test_strategy.md), the current [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/namespace-cut-optimizer-boundary-prompts-and-extensions/feedback.md), and the new regressions in [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py:190) and [tests/runtime/test_optional_extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_optional_extensions.py:12). I also searched the suite for any existing direct coverage of the deleted module paths `autoloop.extensions.tracing` and `autoloop.extensions.git.declaration`.
+
+What I reviewed
+
+The new inspection regression is useful and correctly exposes a real implementation defect in `autoloop.runtime.inspection`. The new extension cleanup regression is deterministic and useful, but it only checks package re-exports. It does not guard the stronger AC-3 requirement that the deleted workflow-facing modules themselves stay gone. I updated the audit artifacts to reflect that missing regression coverage and the narrower-than-requested behavior map in the strategy artifact.
+
+Key findings / decisions
+
+`TST-001` is blocking: the suite does not currently assert that `autoloop.extensions.tracing` and `autoloop.extensions.git.declaration` are non-importable. A restored shim or accidental module reintroduction would still pass the current export-only test while violating the phase objective.
+
+`TST-002` is non-blocking: the strategy artifact only maps the two new tests and omits the already-existing strictness and prompt-root regressions that also carry this phase.
+
+Open issues / next step
+
+Add direct import-failure assertions for the removed extension module paths, then refresh the strategy map to mention the existing hard-cut and prompt-root coverage as part of the full phase surface.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
