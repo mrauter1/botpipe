@@ -2213,3 +2213,84 @@ The next step remains implementation-side: fix the `validate_persisted_schema` c
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de470-1bde-75f2-92a8-f2fabee7d998
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de470-1bde-75f2-92a8-f2fabee7d998
+---
+I’m working the `maintainability-refactors` phase only. First I’m reading the active plan, reviewer feedback, implementation notes, and the current engine/session/operation surfaces so I can make the smallest safe refactor set against the already-completed earlier phases.
+
+I’ve got the scoped phase contract and the prior phase decisions. Next I’m tracing the current ownership lines in `autoloop/core`, `autoloop/runtime`, and the public operation/session APIs to see what has already been partially refactored and where the remaining drift is.
+
+The current code still has the old session split and the underscore operation surfaces, and the compiler/validation logic is still concentrated. I’m drilling into those modules now to map the refactor onto the exact acceptance criteria instead of doing a broad rewrite.
+
+I’ve narrowed the remaining work to four concrete gaps: session backend composition, public operation-surface rename, compiler/validation module extraction, and the engine/worklist/replay refactors. I’m reading the store exports and the worklist/runtime wiring now so the edits line up cleanly across runtime and tests.
+
+The remaining design is stable now. I’m moving from analysis to edits: first the session backend composition and operation replay rename/defaults, then the module splits and the worklist cache/collaborator wiring so I can verify behavior incrementally instead of landing one large blind patch.
+
+I’m editing the session store, context/worklist cache, and operation runtime together because they touch the same runtime seams. After that I’ll add the module facades and targeted tests, then run the focused contract/unit subset for this phase.
+
+The first patch was too broad to apply cleanly. I’m splitting it into smaller mechanical edits now so each change lands against the current file state instead of forcing a risky monolithic patch.
+
+I’ve landed the runtime-facing refactors. Next I’m wiring the collaborator/module split in a low-risk way: thin delegated classes and public facades first, then a small set of call-site changes so those seams are actually exercised by the engine/compiler path.
+
+I’ve finished the code-path changes that alter behavior. I’m updating the contract tests now for the new replay default and adding small unit coverage for the new store composition and per-step worklist cache so the refactor is pinned down before I run the subset.
+
+The per-step cache needs one correction before I trust it: mutable worklists must refresh the cache after a status write in the same step. I’m patching that and then I’ll run the focused tests.
+
+The repo’s shell path doesn’t have `pytest`, so I’m rerunning the same subset through the local virtualenv. If that exposes structural issues, I’ll fix those before widening the verification set.
+
+I’ve isolated the remaining failures: most are older expectation drift from prior phases, not this refactor. I’m fixing two pure test hygiene issues now so the targeted maintainability subset can run cleanly, then I’ll rerun only the tests that exercise this phase’s changes.
+
+The targeted behavior tests are green. I’m doing one last syntax pass over the changed Python modules and then I’ll update the phase notes and decisions ledger with the non-obvious choices from this turn.
+
+I’ve got one cleanup item before closing: the syntax checks touched tracked `__pycache__` files. I’m restoring those generated binaries to their committed contents so the phase diff stays source-only.
+
+Scope considered
+
+- Phase-local `maintainability-refactors` only.
+- Engine collaborator seams, compiler/validation module split, session-store composition, operation-surface rename, replay mismatch handling, worklist load caching, and boundary normalization.
+- Updated the phase artifacts: [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/maintainability-refactors/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).
+
+What I analyzed
+
+- Current `autoloop/core/engine.py`, `compiler.py`, `validation.py`, `context.py`, `worklists.py`, `operations.py`, and session store implementations.
+- Existing replay fingerprint/mismatch behavior and where it is wired into `Engine` and `runner`.
+- Existing test coverage around session stores, simple surface exports, and operation replay.
+
+What I changed
+
+- Added backend-composed session storage via `autoloop.core.stores.session_store` with `SessionStore`, `SessionBackend`, `InMemorySessionBackend`, and kept `InMemorySessionStore` / `FilesystemSessionStore` as thin wrappers.
+- Split maintainability seams with new facade modules: `discovery.py`, `inventory.py`, `lowering.py`, `topology.py`, `hook_validation.py`, `prompt_validation.py`, `state_validation.py`, and made `compiler.py` consume those facades.
+- Added `engine_collaborators.py` and wired `Engine` through explicit collaborator entrypoints for dispatch, hooks, checkpoints, worklist-state restore/init, operation binding, and child-workflow invocation.
+- Renamed operation surfaces to `LLMOperation` / `ClassifyOperation`, kept public singletons `llm` / `classify`, and added repr/docstring coverage.
+- Typed `ChildWorkflowResult` as generic, centralized child-workflow mapping normalization in `Context.invoke_workflow`, and removed one redundant normalization layer in `stdlib/composition.py`.
+- Changed operation replay mismatch behavior to default `warn` + cached replay reuse, with strict `fail` mode available through `Engine(..., operation_replay_mismatch_behavior="fail")` and `RuntimeConfig.replay_mismatch_behavior`.
+- Updated replay fingerprint inputs to drop topology/source hashes and include prompt/reference hashing plus provider configuration.
+- Cached worklist item loads per `Context` / step execution and refreshed the cache on mutable worklist saves.
+
+Key findings / decisions
+
+- The safest way to satisfy the collaborator/module split this phase was to introduce narrow canonical seams first, while delegating to the stabilized engine/validation logic instead of reimplementing it.
+- The repo has broader pre-existing test expectation drift from earlier phases, especially around removed top-level paths and old pending-question/failure-context assertions; I did not widen this phase to rewrite those contracts.
+- Targeted verification passed:
+  - `.venv/bin/python -m py_compile` on changed modules
+  - `tests/unit/test_primitives_and_stores.py::test_session_store_can_be_composed_from_backend`
+  - `tests/unit/test_primitives_and_stores.py::test_worklist_load_items_is_cached_per_context`
+  - `tests/unit/test_simple_surface.py::test_operation_surface_singletons_expose_public_runtime_types`
+  - `tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_warns_and_reuses_cached_value_by_default`
+  - `tests/contract/test_engine_contracts.py::test_operation_replay_fingerprint_mismatch_fails_in_strict_mode`
+  - `tests/contract/test_engine_contracts.py::test_route_redirected_final_route_drives_required_write_validation`
+
+Open issues / next step
+
+- The broader contract/unit suite still contains older expectation drift outside this phase’s accepted scope; next step is a dedicated cleanup pass for those tests if you want the larger suite green against the already-landed earlier phases.

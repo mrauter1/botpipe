@@ -193,6 +193,9 @@ class Worklist(Generic[T]):
         return bool(getattr(self.source, "artifact_backed", False))
 
     def load_items(self, ctx: "Context") -> tuple[WorkItem[T], ...]:
+        cached = ctx._get_cached_worklist_items(self.name)
+        if cached is not None:
+            return cached
         items = tuple(self.source.load(ctx))
         validation_error = self.source.validate(ctx, items)
         if validation_error:
@@ -203,7 +206,7 @@ class Worklist(Generic[T]):
             raise WorkflowExecutionError(
                 f"worklist {self.name!r} contains duplicate item id(s): {duplicates}"
             )
-        return items
+        return ctx._cache_worklist_items(self.name, items)
 
     def initial_selection(self, ctx: "Context") -> Selection[T]:
         items = self.load_items(ctx)
@@ -278,6 +281,7 @@ class Worklist(Generic[T]):
         updated_selection = replace(selection, items=tuple(updated_items))
         if self.mutable:
             self.source.save(ctx, updated_selection.items)
+        ctx._cache_worklist_items(self.name, updated_selection.items)
         return updated_selection
 
     def validate_items(self, ctx: "Context", items: Sequence[WorkItem[T]]) -> str | None:

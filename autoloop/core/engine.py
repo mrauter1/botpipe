@@ -10,7 +10,7 @@ import importlib
 import inspect
 import json
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable, Literal, Mapping
 from uuid import uuid4
 
 from pydantic import BaseModel, TypeAdapter
@@ -19,9 +19,20 @@ from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, resolve_arti
 from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
 from .effects import Advance, Handoff, Refresh, ResetCompletion, SetStatus
 from .context import Context
+from .engine_collaborators import (
+    ArtifactGuard,
+    CheckpointManager,
+    HookRunner,
+    OperationRecorder,
+    RouteFinalizer,
+    SessionRuntime,
+    StateRuntime,
+    StepDispatcher,
+    WorkflowInvoker,
+)
 from .extensions import BoundWorkflowExtension, HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
 from .errors import FailureContext, MissingArtifactError, ProviderExecutionError, StepExecutionError, WorkflowExecutionError
-from .operations import OperationRuntime, bind_operation_runtime, serialize_context_values
+from .operations import serialize_context_values
 from .primitives import AWAIT_INPUT, Checkpoint, Event, FAIL, FINISH, Fail, Goto, Outcome, PendingHandoff, RequestInput
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt
 from .providers.models import (
@@ -118,6 +129,7 @@ class Engine:
         session_store: SessionStore,
         checkpoint_store: CheckpointStore,
         prompt_registry: PromptRegistry | None = None,
+        operation_replay_mismatch_behavior: Literal["warn", "fail"] = "warn",
         runtime_extension_factories: Sequence[Callable[[RunBinding], BoundWorkflowExtension]] = (),
         hook_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
         runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
@@ -127,9 +139,19 @@ class Engine:
         self.session_store = session_store
         self.checkpoint_store = checkpoint_store
         self.prompt_registry = prompt_registry
+        self.operation_replay_mismatch_behavior = operation_replay_mismatch_behavior
         self.runtime_extension_factories = tuple(runtime_extension_factories)
         self.hook_event_sink = hook_event_sink
         self.runtime_event_sink = runtime_event_sink
+        self.step_dispatcher = StepDispatcher(self)
+        self.route_finalizer = RouteFinalizer(self)
+        self.hook_runner = HookRunner(self)
+        self.artifact_guard = ArtifactGuard(self)
+        self.state_runtime = StateRuntime(self)
+        self.session_runtime = SessionRuntime(self)
+        self.checkpoint_manager = CheckpointManager(self)
+        self.operation_recorder = OperationRecorder(self)
+        self.workflow_invoker = WorkflowInvoker(self)
 
     def run(
         self,
@@ -186,7 +208,7 @@ class Engine:
                 checkpoint = self.checkpoint_store.load()
                 if checkpoint is None:
                     raise WorkflowExecutionError("resume requested but no checkpoint is available")
-                self.session_store.restore(normalize_session_snapshot(checkpoint.session_bindings, run_id=run_id))
+                self.session_runtime.restore(normalize_session_snapshot(checkpoint.session_bindings, run_id=run_id))
                 state = checkpoint.state
                 values = deepcopy(checkpoint.values or {})
                 step_states = deepcopy(checkpoint.step_states or {})
@@ -215,7 +237,7 @@ class Engine:
                     default_session_name=self.compiled.default_session_name,
                     values=values,
                 )
-                selections = self._restore_worklist_selections(
+                selections = self.state_runtime.restore_worklist_selections(
                     selection_context,
                     checkpoint.worklist_selections or {},
                 )
@@ -225,7 +247,7 @@ class Engine:
                 try:
                     current_input_response = self._resume_input_response(checkpoint=checkpoint, answer=current_answer)
                 except Exception as exc:
-                    self._save_checkpoint(
+                    self.checkpoint_manager.save(
                         stage=current_step_name,
                         state=self._state_for_failure(state, exc) or state,
                         values=values,
@@ -240,7 +262,7 @@ class Engine:
                     )
                     raise
             else:
-                self.session_store.restore(SessionSnapshot(bindings=(), active_keys_by_slot={}))
+                self.session_runtime.restore(SessionSnapshot(bindings=(), active_keys_by_slot={}))
                 state = initial_state if initial_state is not None else self.compiled.new_state()
                 context = Context(
                     root=root,
@@ -265,7 +287,7 @@ class Engine:
                     default_session_name=self.compiled.default_session_name,
                     values=values,
                 )
-                selections = self._initialize_worklist_selections(context)
+                selections = self.state_runtime.initialize_worklist_selections(context)
                 context._set_selections(selections)
                 if self.compiled.default_session_open:
                     context.open_session(self.compiled.default_session_name)
@@ -355,20 +377,11 @@ class Engine:
                 )
                 state_before = self._clone_state(state)
                 try:
-                    with bind_operation_runtime(
-                        OperationRuntime(
-                            provider=self.provider,
-                            prompt_registry=self.prompt_registry,
-                            context=context,
-                            run_folder=run_folder,
-                            workflow_name=self.compiled.workflow_name,
-                            topology_hash=self.compiled.topology_hash,
-                            source_hash=self.compiled.source_hash,
-                            step_name=step.name,
-                            step_visit=self._step_execution_visit(step, step_state_store, step_item_state_store),
-                            default_session_name=self.compiled.default_session_name,
-                            event_sink=self.runtime_event_sink,
-                        )
+                    with self.operation_recorder.bind_step(
+                        context=context,
+                        run_folder=run_folder,
+                        step_name=step.name,
+                        step_visit=self._step_execution_visit(step, step_state_store, step_item_state_store),
                     ):
                         (
                             state,
@@ -391,7 +404,7 @@ class Engine:
                             hook_route_override_from,
                             hook_route_override_to,
                             hook_route_redirects,
-                        ) = self._execute_step(step, context, state, pending_handoffs)
+                        ) = self.step_dispatcher.execute(step, context, state, pending_handoffs)
                         last_transition = StepFinalizationRecord(
                             candidate_route=candidate_route,
                             final_route=final_route,
@@ -434,7 +447,7 @@ class Engine:
                             ),
                         )
                 except Exception as exc:
-                    checkpoint = self._save_checkpoint(
+                    checkpoint = self.checkpoint_manager.save(
                         stage=current_step_name,
                         state=self._state_for_failure(state, exc),
                         values=values,
@@ -725,7 +738,7 @@ class Engine:
                 hook_route_override_to,
                 hook_route_redirects,
                 scheduled_handoffs,
-            ) = self._finalize_step_result(
+            ) = self.route_finalizer.finalize(
                 step,
                 context,
                 state=next_state,
@@ -887,7 +900,7 @@ class Engine:
                     hook_route_override_to,
                     hook_route_redirects,
                     scheduled_handoffs,
-                ) = self._finalize_step_result(
+                ) = self.route_finalizer.finalize(
                     step,
                     context,
                     state=next_state,
@@ -1001,7 +1014,7 @@ class Engine:
                     hook_route_override_to,
                     hook_route_redirects,
                     scheduled_handoffs,
-                ) = self._finalize_step_result(
+                ) = self.route_finalizer.finalize(
                     step,
                     context,
                     state=next_state,
@@ -1071,7 +1084,7 @@ class Engine:
         tuple[HookRouteRedirect, ...],
     ]:
         _, remaining_pending_handoffs = self._matching_pending_handoffs(step, context, pending_handoffs)
-        child_result = self._run_workflow_step(step, context)
+        child_result = self.workflow_invoker.run_child_step(step, context)
         event = self._map_workflow_step_result(child_result)
         try:
             self._validate_event(step, event, provider_attributable=False, error_cls=WorkflowExecutionError)
@@ -1106,7 +1119,7 @@ class Engine:
             hook_route_override_to,
             hook_route_redirects,
             scheduled_handoffs,
-        ) = self._finalize_step_result(
+        ) = self.route_finalizer.finalize(
             step,
             context,
             state=state,
@@ -1543,7 +1556,7 @@ class Engine:
                 raise
             raise annotated from exc
         candidate_route = candidate_event.tag
-        final_state, final_event, explicit_event_override, after_redirect, direct_control = self._run_after_hook(
+        final_state, final_event, explicit_event_override, after_redirect, direct_control = self.hook_runner.run_after(
             step,
             context,
             state=state,
@@ -1599,7 +1612,7 @@ class Engine:
                 )
                 context._set_event(self._event_context_payload(final_event))
                 context._set_outcome(after_subject)
-                final_state, final_event, route_override, route_redirect, direct_control = self._run_route_hook(
+                final_state, final_event, route_override, route_redirect, direct_control = self.hook_runner.run_route(
                     step,
                     context,
                     final_state,
@@ -1640,7 +1653,7 @@ class Engine:
                         scheduled_handoffs,
                     )
                 context._set_event(self._event_context_payload(final_event))
-                final_state, final_event, route_override, route_redirect, direct_control = self._run_route_hook(
+                final_state, final_event, route_override, route_redirect, direct_control = self.hook_runner.run_route(
                     step,
                     context,
                     final_state,
@@ -1693,7 +1706,7 @@ class Engine:
             raise annotated from exc
         final_provider_attributable = provider_attributable and not explicit_event_override
         final_error_cls = error_cls if final_provider_attributable else WorkflowExecutionError
-        self._enforce_artifact_contracts(
+        self.artifact_guard.enforce(
             step,
             context,
             finalized_artifacts,
@@ -2444,26 +2457,28 @@ class Engine:
             errors=list(errors),
             provider_attributable=provider_attributable,
         )
-        error = error_cls(
-            self._format_artifact_validation_error(
-                step_name=step_name,
-                route_tag=route_tag,
-                handle=handle,
-                errors=errors,
-            ),
-            checkpoint_state=state if issubclass(error_cls, StepExecutionError) else None,
-            failure_context=FailureContext(
-                kind=retry_kind,
-                step_name=step_name,
-                candidate_route=route_tag,
-                final_route=route_tag,
-                provider_attributable=provider_attributable,
-                details=failure_context,
-            )
-            if issubclass(error_cls, StepExecutionError)
-            else None,
-            retry_kind=retry_kind if provider_attributable and issubclass(error_cls, ProviderExecutionError) else None,
+        message = self._format_artifact_validation_error(
+            step_name=step_name,
+            route_tag=route_tag,
+            handle=handle,
+            errors=errors,
         )
+        if issubclass(error_cls, StepExecutionError):
+            error = error_cls(
+                message,
+                checkpoint_state=state,
+                failure_context=FailureContext(
+                    kind=retry_kind,
+                    step_name=step_name,
+                    candidate_route=route_tag,
+                    final_route=route_tag,
+                    provider_attributable=provider_attributable,
+                    details=failure_context,
+                ),
+                retry_kind=retry_kind if provider_attributable and issubclass(error_cls, ProviderExecutionError) else None,
+            )
+        else:
+            error = error_cls(message)
         raise error
 
     def _format_artifact_validation_error(

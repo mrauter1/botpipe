@@ -22,6 +22,7 @@ SUPPORTED_CLAUDE_PERMISSION_STRATEGIES = frozenset({"inherit", "allow_core_tools
 DEFAULT_MAX_STEPS = 100
 SUPPORTED_GIT_COMMIT_POLICIES = frozenset({"off", "run", "step"})
 SUPPORTED_FAILURE_MODES = frozenset({"raise", "ignore"})
+SUPPORTED_REPLAY_MISMATCH_BEHAVIORS = frozenset({"warn", "fail"})
 
 
 class ConfigError(ValueError):
@@ -70,6 +71,7 @@ class TracingRuntimeConfig:
 @dataclass(frozen=True, slots=True)
 class RuntimeConfig:
     max_steps: int = DEFAULT_MAX_STEPS
+    replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
     git_tracking: GitTrackingRuntimeConfig = field(default_factory=GitTrackingRuntimeConfig)
     tracing: TracingRuntimeConfig = field(default_factory=TracingRuntimeConfig)
 
@@ -120,6 +122,7 @@ class TracingRuntimeConfigOverride:
 @dataclass(frozen=True, slots=True)
 class RuntimeConfigOverride:
     max_steps: int | None = None
+    replay_mismatch_behavior: Literal["warn", "fail"] | None = None
     git_tracking: GitTrackingRuntimeConfigOverride = field(default_factory=GitTrackingRuntimeConfigOverride)
     tracing: TracingRuntimeConfigOverride = field(default_factory=TracingRuntimeConfigOverride)
 
@@ -177,7 +180,7 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
         source,
         "runtime",
         runtime_payload,
-        {"max_steps", "git_tracking", "tracing"},
+        {"max_steps", "replay_mismatch_behavior", "git_tracking", "tracing"},
     )
 
     codex_payload = provider_payload.get("codex")
@@ -229,6 +232,11 @@ def parse_runtime_config(payload: object, source: Path) -> RuntimeConfigLayer:
     )
     runtime = RuntimeConfigOverride(
         max_steps=_optional_positive_int(runtime_payload.get("max_steps"), "runtime.max_steps", source),
+        replay_mismatch_behavior=_optional_replay_mismatch_behavior(
+            runtime_payload.get("replay_mismatch_behavior"),
+            "runtime.replay_mismatch_behavior",
+            source,
+        ),
         git_tracking=GitTrackingRuntimeConfigOverride(
             enabled=_optional_bool(git_tracking_payload.get("enabled"), "runtime.git_tracking.enabled", source),
             commit_policy=_optional_git_commit_policy(
@@ -351,6 +359,7 @@ def _merge_runtime_config(
     args: argparse.Namespace,
 ) -> RuntimeConfig:
     max_steps = DEFAULT_MAX_STEPS
+    replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
     git_tracking_enabled = True
     git_tracking_commit_policy: GitCommitPolicy = "step"
     git_tracking_failure_mode: FailureMode = "raise"
@@ -362,6 +371,8 @@ def _merge_runtime_config(
     for layer in layers:
         if layer.max_steps is not None:
             max_steps = layer.max_steps
+        if layer.replay_mismatch_behavior is not None:
+            replay_mismatch_behavior = layer.replay_mismatch_behavior
         if layer.git_tracking.enabled is not None:
             git_tracking_enabled = layer.git_tracking.enabled
         if layer.git_tracking.commit_policy is not None:
@@ -403,6 +414,7 @@ def _merge_runtime_config(
 
     return RuntimeConfig(
         max_steps=max_steps,
+        replay_mismatch_behavior=replay_mismatch_behavior,
         git_tracking=GitTrackingRuntimeConfig(
             enabled=git_tracking_enabled,
             commit_policy=git_tracking_commit_policy,
@@ -540,3 +552,18 @@ def _optional_failure_mode(raw_value: object, label: str, source: Path) -> Failu
     if value not in SUPPORTED_FAILURE_MODES:
         raise ConfigError(f"{source}: {label} must be one of: {', '.join(sorted(SUPPORTED_FAILURE_MODES))}.")
     return cast(FailureMode, value)
+
+
+def _optional_replay_mismatch_behavior(
+    raw_value: object,
+    label: str,
+    source: Path,
+) -> Literal["warn", "fail"] | None:
+    value = _optional_string(raw_value, label, source)
+    if value is None:
+        return None
+    if value not in SUPPORTED_REPLAY_MISMATCH_BEHAVIORS:
+        raise ConfigError(
+            f"{source}: {label} must be one of: {', '.join(sorted(SUPPORTED_REPLAY_MISMATCH_BEHAVIORS))}."
+        )
+    return cast(Literal["warn", "fail"], value)

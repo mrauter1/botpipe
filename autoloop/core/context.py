@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 import inspect
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
@@ -25,8 +25,11 @@ if TYPE_CHECKING:
     from .worklists import Selection, WorkItem, Worklist
 
 
+OutputT = TypeVar("OutputT")
+
+
 @dataclass(frozen=True, slots=True)
-class ChildWorkflowResult:
+class ChildWorkflowResult(Generic[OutputT]):
     """Structured result returned by ``ctx.invoke_workflow(...)``."""
 
     workflow_name: str
@@ -48,8 +51,8 @@ class ChildWorkflowResult:
     trace_file: Path
     raw_dir: Path
     parent_file: Path
-    output: Any | None = None
-    artifacts: dict[str, Path] = field(default_factory=dict)
+    output: OutputT | None = None
+    artifacts: Mapping[str, Path] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     checkpoint: Any | None = None
 
@@ -214,6 +217,7 @@ class Context:
         self._item_state = item_state_store
         self._step_item_state = step_item_state_store
         self._history: HistoryReader | None = None
+        self._worklist_items_cache: dict[str, tuple[Any, ...]] = {}
 
     @property
     def state(self) -> BaseModel:
@@ -471,7 +475,7 @@ class Context:
         message: str,
         parameters: Mapping[str, Any] | None = None,
         input: BaseModel | Mapping[str, Any] | None = None,
-    ) -> ChildWorkflowResult:
+    ) -> ChildWorkflowResult[Any]:
         if self._workflow_invoker is None:
             raise RuntimeError("ctx.invoke_workflow(...) is only available on runtime-backed contexts")
         payload_input: BaseModel | dict[str, Any] | None
@@ -480,8 +484,8 @@ class Context:
         elif input is None:
             payload_input = None
         else:
-            payload_input = dict(input)
-        invocation_parameters = dict(parameters or {})
+            payload_input = _normalize_mapping(input)
+        invocation_parameters = _normalize_mapping(parameters)
         signature = inspect.signature(self._workflow_invoker)
         supports_input = "input" in signature.parameters or any(
             parameter.kind == inspect.Parameter.VAR_KEYWORD for parameter in signature.parameters.values()
@@ -500,6 +504,13 @@ class Context:
             parameters=invocation_parameters,
             input=payload_input,
         )
+
+    def _get_cached_worklist_items(self, worklist_name: str) -> tuple[Any, ...] | None:
+        return self._worklist_items_cache.get(worklist_name)
+
+    def _cache_worklist_items(self, worklist_name: str, items: tuple[Any, ...]) -> tuple[Any, ...]:
+        self._worklist_items_cache[worklist_name] = items
+        return items
 
     def _worklist_name(self, worklist: "Worklist[Any] | str") -> str:
         if isinstance(worklist, str):
@@ -541,3 +552,11 @@ def _resolve_context_root(*, root: Path | None, task_folder: Path, package_folde
     if resolved_package_folder.parent.name == "workflows":
         return resolved_package_folder.parent.parent.resolve()
     return task_folder.resolve()
+
+
+def _normalize_mapping(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return dict(value)
+    return {str(key): item for key, item in value.items()}

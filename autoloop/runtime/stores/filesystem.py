@@ -13,7 +13,8 @@ from pydantic import BaseModel
 
 from autoloop.core.schema_registry import CHECKPOINT_SCHEMA, validate_persisted_schema
 from autoloop.core.sessions import SessionKey, canonical_session_slot_name
-from autoloop.core.stores.memory import InMemorySessionStore
+from autoloop.core.stores import SessionStore
+from autoloop.core.stores.session_store import InMemorySessionBackend, SessionBackend
 from autoloop.core.stores.protocols import (
     CheckpointPayload,
     PendingHandoff,
@@ -39,8 +40,8 @@ def scope_key(scope: str) -> str:
     return f"_scope-{normalized.encode('utf-8').hex()}"
 
 
-class FilesystemSessionStore:
-    """Session store backed by one JSON file per binding."""
+class FilesystemSessionBackend(SessionBackend):
+    """Filesystem-backed session backend."""
 
     def __init__(
         self,
@@ -65,7 +66,7 @@ class FilesystemSessionStore:
         self.default_provider = provider or default_provider
         self.path_strategy = path_strategy
         self.path_resolver = path_resolver
-        self._memory = InMemorySessionStore()
+        self._memory = InMemorySessionBackend()
 
     def open(self, ref_name: str | SessionKey, scope: str | None = None) -> SessionBinding:
         key = self._normalize_key(ref_name, scope=scope)
@@ -174,6 +175,16 @@ class FilesystemSessionStore:
             default_mode=self.default_mode,
             default_provider=self.default_provider,
         )
+
+
+class FilesystemSessionStore(SessionStore):
+    """Filesystem-backed concrete session store."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(FilesystemSessionBackend(*args, **kwargs))
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self.backend, item)
 
 
 class FilesystemCheckpointStore:

@@ -251,6 +251,7 @@ def _execute_compiled_workflow(
         session_store=prepared.session_store,
         checkpoint_store=prepared.checkpoint_store,
         prompt_registry=prepared.prompt_registry,
+        operation_replay_mismatch_behavior=options.runtime_config.replay_mismatch_behavior,
         runtime_extension_factories=(
             lambda binding: runtime_observability,
         ),

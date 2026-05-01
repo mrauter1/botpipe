@@ -3,6 +3,7 @@
 from .filesystem import (
     ensure_session_payload_placeholder,
     FilesystemCheckpointStore,
+    FilesystemSessionBackend,
     FilesystemSessionStore,
     load_session_payload,
     scope_key,
@@ -13,6 +14,7 @@ from .filesystem import (
 __all__ = [
     "ensure_session_payload_placeholder",
     "FilesystemCheckpointStore",
+    "FilesystemSessionBackend",
     "FilesystemSessionStore",
     "load_session_payload",
     "scope_key",

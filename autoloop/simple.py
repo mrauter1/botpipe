@@ -539,7 +539,9 @@ def _normalize_simple_choices(choices: Sequence[str]) -> tuple[str, ...]:
     return unique
 
 
-class _LLMOperationSurface:
+class LLMOperation:
+    """Public LLM operation surface for inline calls and operation steps."""
+
     def __call__(
         self,
         prompt: PromptInput,
@@ -582,8 +584,13 @@ class _LLMOperationSurface:
             retry=retry,
         )
 
+    def __repr__(self) -> str:
+        return "LLMOperation()"
 
-class _ClassifyOperationSurface:
+
+class ClassifyOperation:
+    """Public classification operation surface for inline calls and operation steps."""
+
     def __call__(
         self,
         prompt: PromptInput,
@@ -626,9 +633,12 @@ class _ClassifyOperationSurface:
             retry=retry,
         )
 
+    def __repr__(self) -> str:
+        return "ClassifyOperation()"
 
-llm = _LLMOperationSurface()
-classify = _ClassifyOperationSurface()
+
+llm = LLMOperation()
+classify = ClassifyOperation()
 
 
 __all__ = [
@@ -640,6 +650,7 @@ __all__ = [
     "FINISH",
     "Goto",
     "Json",
+    "LLMOperation",
     "Md",
     "Outcome",
     "Prompt",
@@ -652,6 +663,7 @@ __all__ = [
     "Text",
     "Workflow",
     "Worklist",
+    "ClassifyOperation",
     "classify",
     "llm",
     "produce_verify_step",

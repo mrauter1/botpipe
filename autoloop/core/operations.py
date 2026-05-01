@@ -10,7 +10,7 @@ import inspect
 import json
 from pathlib import Path
 import re
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Literal, Mapping, Sequence
 
 from pydantic import BaseModel, TypeAdapter
 
@@ -43,6 +43,7 @@ class OperationRuntime:
     step_name: str | None = None
     step_visit: int | None = None
     default_session_name: str = DEFAULT_SESSION_NAME
+    replay_mismatch_behavior: Literal["warn", "fail"] = "warn"
     occurrence_counts: dict[str, int] = field(default_factory=dict)
     event_sink: Callable[[str, Mapping[str, Any]], None] | None = None
 
@@ -120,6 +121,7 @@ def execute_step_operation(ctx: Context, *, step_name: str, spec: OperationStepS
         step_name=step_name,
         step_visit=_step_visit(ctx),
         default_session_name=runtime.default_session_name,
+        replay_mismatch_behavior=runtime.replay_mismatch_behavior,
         occurrence_counts=runtime.occurrence_counts,
         event_sink=runtime.event_sink,
     )
@@ -165,6 +167,7 @@ def _resolve_runtime(
             step_name=ambient.step_name,
             step_visit=ambient.step_visit,
             default_session_name=ambient.default_session_name,
+            replay_mismatch_behavior=ambient.replay_mismatch_behavior,
             occurrence_counts=ambient.occurrence_counts,
             event_sink=ambient.event_sink,
         )
@@ -180,6 +183,7 @@ def _resolve_runtime(
         source_hash=None,
         step_name=None,
         step_visit=_step_visit(context),
+        replay_mismatch_behavior="warn",
         event_sink=None,
     )
 
@@ -206,7 +210,13 @@ def _run_operation(
     )
     replay_path = _operation_replay_path(runtime.run_folder)
     replay_store = _load_replay_store(replay_path)
-    replayed = _maybe_replay_value(replay_store, replay_key=replay_key, fingerprint=fingerprint, spec=spec)
+    replayed = _maybe_replay_value(
+        runtime,
+        replay_store,
+        replay_key=replay_key,
+        fingerprint=fingerprint,
+        spec=spec,
+    )
     if replayed is not _MISSING:
         return replayed
 
@@ -299,6 +309,7 @@ _MISSING = _Missing()
 
 
 def _maybe_replay_value(
+    runtime: OperationRuntime,
     replay_store: dict[str, Any],
     *,
     replay_key: str,
@@ -313,9 +324,17 @@ def _maybe_replay_value(
         return _MISSING
     saved_fingerprint = record.get("fingerprint")
     if saved_fingerprint != fingerprint:
-        raise ProviderExecutionError(
+        message = (
             f"operation replay fingerprint mismatch for key {replay_key!r}: "
             f"saved={saved_fingerprint!r} current={fingerprint!r}"
+        )
+        if runtime.replay_mismatch_behavior == "fail":
+            raise ProviderExecutionError(message)
+        _emit_replay_warning(
+            runtime,
+            replay_key=replay_key,
+            saved_fingerprint=saved_fingerprint,
+            fingerprint=fingerprint,
         )
     return _hydrate_replayed_value(record.get("value"), spec=spec)
 
@@ -561,8 +580,6 @@ def _operation_fingerprint(
 ) -> str:
     payload = {
         "workflow_name": runtime.workflow_name,
-        "topology_hash": runtime.topology_hash,
-        "source_hash": runtime.source_hash,
         "step_name": runtime.step_name,
         "step_visit": runtime.step_visit,
         "operation_kind": spec.operation_kind,
@@ -570,11 +587,13 @@ def _operation_fingerprint(
         "prompt_source": prompt.source,
         "prompt_path": prompt.path,
         "prompt_hash": _sha256_text(prompt.text or ""),
+        "prompt_reference_values_hash": _sha256_json(_prompt_reference_values(prompt)),
         "return_schema_hash": _sha256_json(_return_schema(spec.returns)),
         "choices_hash": _sha256_json(list(spec.choices)),
         "session_slot": None if session is None else session.ref_name,
         "scope_item_id": _scope_item_id(runtime.context),
         "occurrence_index": occurrence,
+        "provider_configuration": _provider_configuration(runtime),
     }
     return _sha256_json(payload)
 
@@ -704,6 +723,52 @@ def _write_replay_store(path: Path | None, payload: Mapping[str, Any]) -> None:
     serialized = {"schema": OPERATION_REPLAY_SCHEMA, **dict(payload)}
     temp_path.write_text(json.dumps(serialized, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     temp_path.replace(path)
+
+
+def _emit_replay_warning(
+    runtime: OperationRuntime,
+    *,
+    replay_key: str,
+    saved_fingerprint: Any,
+    fingerprint: str,
+) -> None:
+    if runtime.event_sink is None:
+        return
+    payload: dict[str, Any] = {
+        "step_name": runtime.step_name or "<operation>",
+        "turn_kind": "operation",
+        "event_type": "operation_replay_fingerprint_mismatch",
+        "replay_key": replay_key,
+        "saved_fingerprint": saved_fingerprint,
+        "current_fingerprint": fingerprint,
+        "behavior": runtime.replay_mismatch_behavior,
+    }
+    if runtime.context is not None:
+        scope_name, item_id = _operation_scope_item(runtime.context)
+        payload["step_execution_id"] = _operation_step_execution_id(
+            step_name=runtime.step_name or "<operation>",
+            visit=runtime.step_visit,
+            scope_name=scope_name,
+            item_id=item_id,
+        )
+    runtime.event_sink("operation_replay_fingerprint_mismatch", payload)
+
+
+def _prompt_reference_values(prompt: ResolvedPrompt) -> dict[str, Any]:
+    return {
+        "path": prompt.path,
+        "source": prompt.source,
+        "text_hash": _sha256_text(prompt.text or ""),
+    }
+
+
+def _provider_configuration(runtime: OperationRuntime) -> dict[str, Any]:
+    provider = runtime.provider
+    return {
+        "provider_module": type(provider).__module__,
+        "provider_type": type(provider).__qualname__,
+        "default_session_name": runtime.default_session_name,
+    }
 
 
 def _record_attempt(

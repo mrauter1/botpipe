@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 import autoloop
 import autoloop.simple as simple
-import autoloop.core
+import autoloop.core as core
 import autoloop.core.steps as core_steps
 import autoloop.core.validation as core_validation
 from autoloop.core.compiler import compile_workflow
@@ -125,6 +125,13 @@ def test_removed_simple_symbols_fail_to_import() -> None:
     ):
         with pytest.raises(ImportError):
             _import_from("autoloop.simple", symbol)
+
+
+def test_operation_surface_singletons_expose_public_runtime_types() -> None:
+    assert repr(simple.llm) == "LLMOperation()"
+    assert repr(simple.classify) == "ClassifyOperation()"
+    assert isinstance(simple.llm, simple.LLMOperation)
+    assert isinstance(simple.classify, simple.ClassifyOperation)
 
 
 def test_runtime_control_exports_are_canonical_and_validate_basic_fields() -> None:

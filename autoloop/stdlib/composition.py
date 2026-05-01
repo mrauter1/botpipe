@@ -18,7 +18,7 @@ def run_child_workflow(
 ):
     """Invoke a child workflow through the existing runtime-backed context surface."""
 
-    return ctx.invoke_workflow(workflow, message=message, parameters=dict(parameters or {}), input=input)
+    return ctx.invoke_workflow(workflow, message=message, parameters=parameters, input=input)
 
 
 def require_child_workflow_result(
