@@ -58,14 +58,14 @@ def load_run_record(
 def load_run_topology(run: RunRecord | str | Path) -> dict[str, Any]:
     run_dir = _run_dir(run)
     payload = json.loads((run_dir / TOPOLOGY_FILENAME).read_text(encoding="utf-8"))
-    validate_persisted_schema(payload, WORKFLOW_TOPOLOGY_SCHEMA, artifact_name=TOPOLOGY_FILENAME)
+    validate_persisted_schema(payload, expected=WORKFLOW_TOPOLOGY_SCHEMA, artifact_name=TOPOLOGY_FILENAME)
     return payload
 
 
 def load_run_metadata(run: RunRecord | str | Path) -> dict[str, Any]:
     run_dir = _run_dir(run)
     payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
-    validate_persisted_schema(payload, RUN_METADATA_SCHEMA, artifact_name="run.json")
+    validate_persisted_schema(payload, expected=RUN_METADATA_SCHEMA, artifact_name="run.json")
     return payload
 
 

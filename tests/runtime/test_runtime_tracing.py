@@ -386,7 +386,7 @@ def test_runtime_trace_disabled_still_persists_static_step_graph(tmp_path: Path)
 def test_runtime_trace_failure_mode_ignore_swallows_initialization_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     run_dir = _run_dir(tmp_path)
     monkeypatch.setattr(
-        "runtime.tracing.write_static_step_graph_payload",
+        "autoloop.runtime.tracing.write_static_step_graph_payload",
         lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("graph write failed")),
     )
 

@@ -556,7 +556,9 @@ def _finalize_telemetry(
         retry_count = 0
     token_usage = _select_token_usage(acc)
     status = acc.last_status
-    if acc.finished_count and acc.latest_route in success_routes:
+    if acc.finished_count and status in {"awaiting_input", "failed", "completed"}:
+        pass
+    elif acc.finished_count and acc.latest_route in success_routes:
         status = "completed"
     elif acc.finished_count and acc.latest_route is not None:
         status = _status_from_route(acc.latest_route, completed=True)

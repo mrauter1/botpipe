@@ -112,6 +112,9 @@ class RunRecord:
         payload = self.metadata.get("pending_input")
         if isinstance(payload, dict):
             return normalize_mapping(payload)
+        question = self.metadata.get("pending_question")
+        if isinstance(question, str) and question:
+            return {"question": question}
         return None
 
     @property

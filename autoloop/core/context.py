@@ -209,7 +209,7 @@ class Context:
         self._step_name = step_name
         self._default_session_name = default_session_name
         self._artifacts = artifacts
-        self._values = normalize_mapping(values)
+        self._values = values if isinstance(values, dict) else normalize_mapping(values)
         self._route = route
         self._event = None
         self._outcome = outcome
@@ -437,7 +437,7 @@ class Context:
         self._artifacts = artifacts
 
     def _set_values(self, values: Mapping[str, Any] | None) -> None:
-        self._values = normalize_mapping(values)
+        self._values = values if isinstance(values, dict) else normalize_mapping(values)
 
     def _set_route(self, route: Mapping[str, Any] | Any | None) -> None:
         self._route = route

@@ -2479,6 +2479,18 @@ class Engine:
             )
         else:
             error = error_cls(message)
+            self._annotate_execution_error(
+                error,
+                checkpoint_state=state,
+                failure_context=FailureContext(
+                    kind=retry_kind,
+                    step_name=step_name,
+                    candidate_route=route_tag,
+                    final_route=route_tag,
+                    provider_attributable=provider_attributable,
+                    details=failure_context,
+                ),
+            )
         raise error
 
     def _format_artifact_validation_error(

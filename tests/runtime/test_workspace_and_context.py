@@ -790,7 +790,8 @@ def test_workspace_lists_grouped_workflow_run_summaries_with_deterministic_filte
                 {
                     "created_at": "2026-04-24T06:00:00+00:00",
                     "error": None,
-                    "pending_question": "Who owns the gate?",
+                    "finalization": None,
+                    "pending_input": {"question": "Who owns the gate?"},
                     "request_excerpt": "Investigate the paused release gate. Need owner confirmation.",
                     "request_file": str(paused_dir / "request.md"),
                     "run_folder": str(paused_dir),
@@ -933,7 +934,8 @@ def test_list_task_operation_summaries_publish_bounded_task_history_and_filtered
                 {
                     "created_at": "2026-04-24T06:00:00+00:00",
                     "error": None,
-                    "pending_question": "Who owns the gate?",
+                    "finalization": None,
+                    "pending_input": {"question": "Who owns the gate?"},
                     "request_excerpt": "Investigate the paused release gate. Need owner confirmation.",
                     "request_file": str(paused_dir / "request.md"),
                     "run_folder": str(paused_dir),
@@ -1213,7 +1215,17 @@ def test_composition_helpers_keep_child_invocation_explicit_and_adopt_selected_a
         "child_dump": str(child_run_dir / "child.json"),
     }
     assert child_records[0]["artifacts"] == child_records[0]["output_artifacts"]
-    assert child_records[0]["metadata"] == {}
+    assert child_records[0]["metadata"]["finalization"] == {
+        "candidate_route": "done",
+        "final_route": "done",
+        "hook_route_redirects": [],
+        "provider_attributable": True,
+        "runtime_control": None,
+        "source_hook": None,
+        "source_phase": None,
+        "target_step": None,
+        "terminal": None,
+    }
 
 
 def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inheriting_parent_answers(tmp_path: Path) -> None:
@@ -1283,7 +1295,7 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
     assert child_payload["answer"] is None
     assert child_payload["workflow_params"] == {"mode": "strict"}
     assert child_meta["status"] == "awaiting_input"
-    assert child_meta["pending_question"] == "Child question?"
+    assert child_meta["pending_input"]["question"] == "Child question?"
     assert (child_run_dir / "checkpoint.json").exists()
     assert child_parent["workflow_name"] == "parent_name"
     assert child_parent["run_id"] == parent_run_dir.name

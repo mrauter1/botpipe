@@ -174,7 +174,7 @@ def test_core_top_level_surface_excludes_quarantined_legacy_names() -> None:
         "Route",
         "Workflow",
     ):
-        assert _import_from("core", symbol) is getattr(core, symbol)
+        assert _import_from("autoloop.core", symbol) is getattr(core, symbol)
 
 
 def test_core_module_identity_remains_canonical() -> None:
@@ -182,9 +182,9 @@ def test_core_module_identity_remains_canonical() -> None:
 
     assert core.validation is core_validation
     assert core.steps is core_steps
-    assert core_capabilities.__name__ == "core.workflow_capabilities"
-    assert core.Workflow is _import_from("core", "Workflow")
-    assert core_steps.Step is _import_from("core.steps", "Step")
+    assert core_capabilities.__name__ == "autoloop.core.workflow_capabilities"
+    assert core.Workflow is _import_from("autoloop.core", "Workflow")
+    assert core_steps.Step is _import_from("autoloop.core.steps", "Step")
 
 
 def test_legacy_core_import_usage_is_absent_from_active_python_files() -> None:

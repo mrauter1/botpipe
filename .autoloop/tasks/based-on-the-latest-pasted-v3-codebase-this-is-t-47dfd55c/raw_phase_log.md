@@ -2729,3 +2729,72 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de4a5-1e09-7f01-85b2-4d88d1aa0425
+---
+I’m treating this as the final phase: add the missing coverage, golden workflow, and canonical docs updates for the hard-cut API. I’ll read the active phase artifacts and inspect the current test/docs surfaces first so the changes stay scoped to what the prior phases actually shipped.
+
+I’ve confirmed the phase artifact files are mostly placeholders, so the real scope comes from the plan, prior decisions, and what the repo already exposes. Next I’m scanning the current test/doc surfaces for gaps around runtime controls, hidden routes, replay mismatch, prompt registry, namespace hard-cut, and the existing examples.
+
+The repo already has most of the mechanics, but I can see remaining drift in the validation/tests/docs layer: public `on_route` references still exist in tests, some docs still need a hard-cut audit, and there isn’t an obvious single golden workflow covering the combined surface yet. I’m checking the current strictness/doc tests and the main authoring docs next, then I’ll patch the missing cases before running the phase-focused test slice.
+
+I’ve got enough context to move from scanning to proofing the current phase. I’m running the focused strictness/docs/public-surface slice first; that should expose whether the remaining work is mostly test expectation drift, missing golden coverage, or actual doc/API gaps.
+
+`pytest` isn’t on the bare PATH here, so I’m switching to `python -m pytest` against the same phase slice. If that still fails, I’ll inspect the local env/bootstrap and use the repo’s test runner instead of guessing.
+
+The first focused run found exactly what I expected from the namespace hard cut: a couple of tests are still asserting the deleted top-level `core` import path. I’m widening to the runtime-control and artifact slices now so I can patch the remaining phase-level expectations in one pass instead of chasing them piecemeal.
+
+The widened slice turned up both expectation drift and real regressions. The main buckets are: namespace-cut tests still pointing at deleted `core`/`runtime` paths, history/inspection readers not fully aligned with the new runtime-control metadata, some checkpoint/child-run payload shapes still exposing old fields, and two engine regressions around recorded values / operation-step replay.
+
+I’ve isolated the code fixes from the pure expectation updates. The concrete runtime bugs are small and local: one schema-validator call site, history status collapsing direct controls back to `running`, context values being copied instead of shared into operation steps, and artifact-validation errors not always carrying structured failure context. After that I can switch to the public-surface tests/docs and the new golden workflow without mixing concerns.
+
+I’ve finished the root-cause pass. I’m editing the runtime now: preserve shared context values for operation steps and resume, fix the read-only inspection loader to use the schema registry correctly, keep history status derived from direct controls instead of collapsing to `running`, and attach structured failure context to non-provider artifact-validation errors so checkpoint persistence stays truthful.
+
+The remaining expectation changes are mostly about the new metadata shape, not behavior: `pending_input` replaces `pending_question` on summary surfaces, child-run records now carry finalization metadata, and hard-cut tests need to stop reaching for deleted top-level packages. I’m patching those tests together and adding one small compatibility improvement so legacy run metadata still projects into the new `pending_input` summary surface.
+
+I’ve moved past the regression fixes. The next edit is the actual phase deliverable: a temporary public-surface workflow package exercised through the runner, including pause/resume, hidden routes, route-local `on_taken` chaining, `RequestInput`, `Goto`, `Fail`, worklist scope, typed input, operation steps, inline `llm()`, topology artifacts, and history telemetry.
+
+The golden test file is in, but I need one cleanup pass before running it: the temporary provider callbacks should return real `Outcome` objects, and the runner returns `RunResult` directly, not a wrapper. I’m correcting those API details now, then I’ll execute the new tests and tighten any assertions to the shipped artifact shapes.
+
+The repo-level docs are mostly aligned already, but they don’t explicitly teach the new runtime-control and hidden-route surface yet. I’m adding one focused authoring section and tightening the docs test so the hard-cut vocabulary stays pinned: `AWAIT_INPUT`, `RequestInput`, `Goto`, `Fail`, `ctx.input_response`, and `Route.to(..., on_taken=..., provider_visible=False)`.
+
+The golden workflow and docs hardening are both in. I’m running the phase-focused proof slice now: strictness, docs, public surface, topology/history/workspace/runtime control coverage, optimizer/read-only inspection paths, and the new golden workflow package.
+
+The phase slice is green. I’m doing the close-out bookkeeping now: capture the non-obvious decisions in the run ledger, update the implementation notes with the checklist mapping and validation, then I’ll send the condensed handoff with scope, analysis, changes, and any remaining risks.
+
+Scope considered
+
+Phase-local `tests-docs-and-golden-workflow` work only: runtime/history/workspace readers needed for the new proof coverage, public-surface and strictness tests, canonical docs, the new golden workflow package, and the required phase artifacts (`implementation_notes.md`, `decisions.txt`).
+
+What I analyzed
+
+I read the phase plan plus prior decisions, then checked the current test/docs surfaces and ran the phase-focused pytest slice. The initial failures split into two groups: stale hard-cut expectations (`core`/`runtime` top-level paths, `pending_question` summaries) and real regressions in runtime readers/engine behavior (`validate_persisted_schema` call shape, runtime-control statuses collapsing to `running`, context values being copied instead of shared, and artifact-validation failures losing structured failure context).
+
+What I changed
+
+I fixed the small runtime regressions in [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py), [autoloop/core/history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/history.py), [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [autoloop/runtime/inspection.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/inspection.py), and [autoloop/runtime/workspace.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/workspace.py). That keeps operation-step values resumable, preserves direct-control status in history, normalizes legacy `pending_question` into read-only `pending_input` summaries, and attaches failure context to checkpointed artifact-validation errors.
+
+I updated the phase tests and added a new golden public-surface package in [tests/runtime/test_golden_workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_golden_workflow.py). The golden workflow proves `RequestInput`, hidden `Route.to(..., on_taken=...)` chains, `Goto`, `Fail`, worklist scope, `StateVar`, `classify.step()`, inline `llm()`, checkpoint/resume, topology artifacts, and history telemetry through the runtime runner. I also hardened [docs/authoring.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/docs/authoring.md) and its docs test to pin the shipped runtime-control vocabulary.
+
+Key findings / decisions
+
+Legacy persisted `pending_question` is now projected only at read time into `pending_input.question`; new writes remain `pending_input`-only. The golden proof stays self-contained as a temporary runtime package instead of adding permanent workflow fixtures. Phase validation passed with:
+
+`./.venv/bin/python -m pytest -q tests/unit/test_simple_surface.py tests/strictness/test_no_compat.py tests/test_architecture_baseline_docs.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/runtime/test_history.py tests/runtime/test_workspace_and_context.py tests/runtime/test_golden_workflow.py tests/contract/test_engine_contracts.py tests/unit/test_optimization_helpers.py tests/runtime/test_workflow_reference_resolution.py tests/contract/test_canonical_runtime_contracts.py`
+
+Result: `275 passed`
+
+Open issues / next step
+
+No phase-local blockers remain. The active phase artifacts and run decisions ledger were updated in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/implement/phases/tests-docs-and-golden-workflow/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/decisions.txt).

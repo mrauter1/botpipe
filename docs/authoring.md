@@ -158,6 +158,63 @@ Authoring rules:
 - use `needs_rework` when the current work-item boundary still holds and `needs_replan` when the boundary changed materially
 - do not declare provider control schemas on `python_step(...)`; Python steps pick routes by returning `Event(...)`
 
+## Runtime Controls And Hidden Routes
+
+Use runtime controls when workflow code, not the provider, owns the next move:
+
+```python
+from pydantic import BaseModel
+
+from autoloop import AWAIT_INPUT, FINISH, Fail, Goto, Prompt, RequestInput, Route, Workflow, python_step, step
+
+
+class ApprovalInput(BaseModel):
+    approved: bool
+
+
+def on_hidden_escalation(ctx):
+    return RequestInput(
+        "Approve publication?",
+        reason="Verifier escalated the gate.",
+        input_schema=ApprovalInput,
+    )
+
+
+def after_publish(ctx, event, route):
+    if ctx.input_response is None:
+        return Goto("draft", reason="Collect approval first.")
+    if not ctx.input_response.approved:
+        return Fail("Publication was not approved.")
+    return None
+
+
+class ApprovalWorkflow(Workflow):
+    draft = step(
+        prompt=Prompt.inline("Draft the release packet."),
+        routes={
+            "done": Route.to("publish"),
+            "human_escalation": Route.to(
+                "publish",
+                provider_visible=False,
+                on_taken=on_hidden_escalation,
+            ),
+        },
+    )
+
+    @python_step(name="publish", routes={"done": FINISH}, after=after_publish)
+    def publish(state, ctx):
+        return state, "done"
+```
+
+Key rules:
+
+- `RequestInput(...)` suspends the run with terminal `AWAIT_INPUT`; resumed input is available on `ctx.input_response`
+- `Goto(...)` jumps directly to a declared step and does not pretend a route was taken
+- `Fail(...)` terminates with `FAIL` and preserves the current state/session snapshot
+- plain hook-returned strings always mean route tags, never step targets
+- use `Route.to(..., on_taken=...)` for route-local chaining
+- use `provider_visible=False` for hidden SOP routes that workflow hooks may select but providers must not see
+
 ## Runtime Config And Provider Selection
 
 Workflow code does not construct providers directly. Operators select the built-in runtime backend through typed config and generic CLI flags.
