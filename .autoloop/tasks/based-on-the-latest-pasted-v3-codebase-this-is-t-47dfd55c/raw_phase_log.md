@@ -1055,3 +1055,46 @@ with 17 targeted tests passing.
 Open issues / next step
 
 I did not run `tests/runtime/test_package_cli.py` directly because that module currently fails top-level test import due an existing `runtime/cli.py` package-relative import mode issue unrelated to this phase. The source change there is limited to `pending_input` payload expectations.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de411-9744-7c62-8942-3681d87698d0
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de411-9744-7c62-8942-3681d87698d0
+---
+I’m reviewing the phase-local implementation against the acceptance criteria and the actual changed execution paths. First I’m reading the criteria artifact and the relevant failure/resume/state-view code to identify whether the new behavior is complete or if there are regression holes.
+
+I found a material correctness hole in the new structured-failure path. I’m confirming the exact references now so the feedback points to the central fix location instead of scattering symptom-level comments.
+
+I’ve got one blocking issue, and it’s central rather than cosmetic: several of the new structured-failure call sites don’t actually carry their state/failure annotations through to the top-level checkpoint. I’m recording that against the engine helper so the fix stays centralized.
+
+Scope considered
+
+Phase-local review of `checkpoint-resume-and-failure-model` only: pending-input persistence/resume, structured failure propagation, and read-only runtime-owned step-state surfaces. I limited artifact writes to the active review directory.
+
+What I analyzed
+
+I reviewed the active criteria/feedback artifacts, the implementation notes and run decisions, and the changed execution paths in `core/engine.py`, `core/context.py`, `core/errors.py`, `runtime/workspace.py`, `runtime/runner.py`, and `runtime/stores/filesystem.py`. I focused on whether failure-time checkpointing still preserves mutated custom state/session and whether structured failure context is carried end-to-end.
+
+What I reviewed
+
+I updated the phase feedback artifact with one prioritized blocking finding. The criteria remain unchecked because the current implementation does not yet satisfy AC-2 safely.
+
+Key findings / decisions
+
+`IMP-001` is blocking. The new `_annotate_execution_error(...)` helper only annotates `StepExecutionError`, but many engine-generated failures are still plain `WorkflowExecutionError`. In those paths, hook/finalization/runtime-control failures lose `checkpoint_state` and `failure_context`, so the top-level checkpoint falls back to the pre-step state and can silently discard just-mutated custom state. That directly contradicts the phase requirement to preserve current state/session mutations on failure with structured failure context.
+
+Open issues / next step
+
+Fix `core/engine.py` centrally by upgrading plain engine validation/runtime-control failures into `StepExecutionError` (or by giving `WorkflowExecutionError` the same public execution metadata) before re-raising, then rerun the focused failure-preservation cases.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
