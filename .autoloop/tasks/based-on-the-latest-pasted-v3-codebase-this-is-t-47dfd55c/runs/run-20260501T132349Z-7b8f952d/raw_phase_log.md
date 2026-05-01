@@ -2937,3 +2937,113 @@ No phase-local test audit issues remain. The audit artifacts were updated in `cr
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+---
+I’m auditing the final run against the original request, later clarifications, and the shipped code/tests. First I’m reading the authoritative request and run artifacts, then I’ll compare those against the current repository state and write the audit outputs under the run-local `artifacts/audit` directory.
+
+I’ve got the authoritative request and decision ledger. Next I’m mapping what actually landed: phase artifacts, final repository layout, and targeted code/test surfaces around runtime controls, hidden routes, namespace cleanup, optimizer boundaries, and the golden workflow.
+
+The broad scan shows the namespace cut is largely in place, but I need the phase-end evidence now: verifier feedback, test results, and any unresolved blockers recorded after implementation. I’m reading the run-local feedback artifacts and the tail of the raw log to separate intentional deltas from real misses.
+
+The tail shows most later phases closed cleanly, but I don’t want to infer completion from summaries alone. I’m checking the phase criteria directly and spot-reading the current code/tests around the earlier blocking public-surface findings to see whether they were actually fixed or merely superseded.
+
+The phase criteria are all marked complete, and the public-surface notes explicitly mention follow-on fixes that superseded the initial blockers. I’m validating that against the current tree now: canonical `autoloop/*` layout, removed compatibility package, exported surface, and a few representative runtime/test paths.
+
+I’ve confirmed the live namespace and public export surface. The remaining audit work is narrowing to request-vs-code deltas: old names still present anywhere meaningful, internal `on_route` retention vs public removal, optimizer inspection APIs, and whether the golden workflow plus phase tests actually cover the requested behaviors.
+
+I’m past the broad compatibility sweep. Now I’m checking a few spec-specific seams that could still be subtly incomplete: public exports, stable inspection APIs, hidden-route rendering, and any leftover legacy checkpoint/schema fields that were intentionally kept only for read compatibility.
+
+I’m close to the classification step. Before I write the audit, I’m doing a last evidence pass on the specific high-risk deliverables the request called out: deleted public names/modules, runtime-control semantics, hidden-route/provider rendering, stable inspection APIs, and the workflow-facing extension cleanup.
+
+The deleted extension declarations are gone at the source level; only stale bytecode remains under `__pycache__`, which is not part of the live import surface. I’m verifying the direct-control tracing/finalization payloads now so the audit can state whether the requested metadata landed, not just the API rename.
+
+I have enough static evidence to draft the gap classification, but I want one direct runtime proof from the current tree. I’m rerunning a narrow representative slice now: strictness on removed namespaces, golden workflow end-to-end, and pending-input/history compatibility.
+
+I’ve reached the write stage. My current read is that the implementation is materially complete, with only compatibility-preserving internal/read-surface exceptions that were explicitly recorded in the decisions ledger. I’m reading the existing audit placeholders once, then I’ll replace them with the final gap report, revised request, machine result, and checked audit criteria.
+
+I’m writing the audit artifacts now. The report will classify the remaining compatibility exceptions as intentional and conclude that no material follow-up implementation run is required.
+
+The audit artifacts are written. I’m doing one quick verification pass on the final markdown/JSON so the classification and machine result are consistent before I close with the required loop-control block.
+
+Scope considered
+
+Immutable request snapshot, authoritative raw log clarifications, `decisions.txt`, run-local implement/test artifacts, the final `autoloop/` and `autoloop_optimizer/` codebase, canonical docs, and representative current-tree tests.
+
+What I analyzed
+
+I checked the requested remaining-delta areas against the shipped tree: public API/terminal cut, runtime controls and pending input, hidden-route rendering, namespace/package cleanup, optimizer inspection boundary, schema/read compatibility, session-store composition, replay behavior, and the final golden workflow/docs/tests. I also re-ran a representative pytest slice: `15 passed`.
+
+What I changed
+
+I updated only the run-local audit artifacts under `artifacts/audit`:
+- `gap_report.md`
+- `revised_request.md`
+- `audit_result.json`
+- `criteria.md`
+
+Key findings / decisions
+
+No material unresolved gaps remain. The final codebase matches the requested behavior, and the remaining differences are intentional and already justified in the decision ledger: public `on_route` is removed while internal core-step plumbing remains staged, legacy `paused` / `pending_question` stay readable on compatibility read surfaces, and schema-less legacy runtime artifacts remain readable while unknown schema ids fail.
+
+Open issues / next step
+
+No follow-up implementation run is required from this audit. Next step is verifier review of the audit artifacts.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+---
+I’m in the final audit-verifier pass now. The producer’s classification holds up against the current tree and the representative rerun, so I’m updating only the verifier-owned audit artifacts: criteria stays complete and feedback gets a single no-findings audit record.
+
+The representative rerun is green again. I’m appending the verifier record now; there are no blocking or non-blocking audit findings to raise.
+
+Scope considered
+
+The run-local audit artifacts under `artifacts/audit`, the immutable request, `raw_phase_log.md`, `decisions.txt`, the final `autoloop/` and `autoloop_optimizer/` tree, and representative current-tree tests for strictness, golden workflow coverage, pending-input compatibility, and direct `Fail` history status.
+
+What I analyzed
+
+I checked whether the producer audit’s “no material gaps” conclusion matched the final code and the explicit decisions ledger, especially around public-surface removal, staged internal `on_route` retention, legacy `paused` / `pending_question` read compatibility, deleted extension declarations, and the stable inspection/runtime-control surfaces.
+
+What I reviewed
+
+I verified `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`. I also re-ran:
+`./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/runtime/test_golden_workflow.py tests/runtime/test_workspace_and_context.py::test_run_record_projects_legacy_pending_question_as_pending_input tests/runtime/test_history.py::test_context_history_marks_fail_runtime_control_as_failed`
+Result: `15 passed in 2.42s`.
+
+Key findings / decisions
+
+No blocking audit issues. The producer audit is accurate: `audit_result.json` correctly sets `material_gaps_found` to `false`, `revised_request.md` appropriately says no follow-up implementation is required, and the report’s justified differences align with explicit recorded decisions. All audit criteria remain correctly checked. I appended a single `AUD-000` no-findings verifier record to `feedback.md`.
+
+Open issues / next step
+
+No audit-verifier issues remain. The audit artifacts are complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

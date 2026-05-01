@@ -3004,3 +3004,46 @@ No follow-up implementation run is required from this audit. Next step is verifi
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=audit | phase=verifier | cycle=1 | attempt=1 | thread_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_verifier.md
+session_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=audit | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de4c1-2c65-78f1-acf7-5b5fa561d627
+---
+I’m in the final audit-verifier pass now. The producer’s classification holds up against the current tree and the representative rerun, so I’m updating only the verifier-owned audit artifacts: criteria stays complete and feedback gets a single no-findings audit record.
+
+The representative rerun is green again. I’m appending the verifier record now; there are no blocking or non-blocking audit findings to raise.
+
+Scope considered
+
+The run-local audit artifacts under `artifacts/audit`, the immutable request, `raw_phase_log.md`, `decisions.txt`, the final `autoloop/` and `autoloop_optimizer/` tree, and representative current-tree tests for strictness, golden workflow coverage, pending-input compatibility, and direct `Fail` history status.
+
+What I analyzed
+
+I checked whether the producer audit’s “no material gaps” conclusion matched the final code and the explicit decisions ledger, especially around public-surface removal, staged internal `on_route` retention, legacy `paused` / `pending_question` read compatibility, deleted extension declarations, and the stable inspection/runtime-control surfaces.
+
+What I reviewed
+
+I verified `gap_report.md`, `revised_request.md`, `audit_result.json`, `criteria.md`, and `feedback.md`. I also re-ran:
+`./.venv/bin/python -m pytest -q tests/strictness/test_no_compat.py tests/runtime/test_golden_workflow.py tests/runtime/test_workspace_and_context.py::test_run_record_projects_legacy_pending_question_as_pending_input tests/runtime/test_history.py::test_context_history_marks_fail_runtime_control_as_failed`
+Result: `15 passed in 2.42s`.
+
+Key findings / decisions
+
+No blocking audit issues. The producer audit is accurate: `audit_result.json` correctly sets `material_gaps_found` to `false`, `revised_request.md` appropriately says no follow-up implementation is required, and the report’s justified differences align with explicit recorded decisions. All audit criteria remain correctly checked. I appended a single `AUD-000` no-findings verifier record to `feedback.md`.
+
+Open issues / next step
+
+No audit-verifier issues remain. The audit artifacts are complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
