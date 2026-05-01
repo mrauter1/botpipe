@@ -924,3 +924,56 @@ Validation is green:
 - `./.venv/bin/python -m pytest tests/unit/test_primitives_and_stores.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_runtime_tracing.py tests/contract/test_engine_contracts.py`
 
 Result: `166 passed`.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de3ea-88d2-7822-a347-d5ac75792453
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3ea-88d2-7822-a347-d5ac75792453
+---
+I’m auditing the phase-local test additions against the runtime-control contract first, then I’ll update the test-phase criteria and feedback artifacts based on coverage quality and flake risk. I’m focusing on whether the new tests actually pin the risky candidate-free direct-control paths and hidden-route/provider-filter split.
+
+The phase-local suite and the strategy map line up with the risky surfaces that actually changed in this phase. I don’t see a material uncovered regression path within the accepted scope, so I’m marking the audit complete and appending a short no-findings re-review note.
+
+Scope considered
+
+Phase `runtime-controls-and-hidden-routes` test coverage only. I limited the audit to the phase-local strategy/feedback artifacts and the request-relevant test surfaces covering direct runtime controls, pending-input checkpoint/resume, hidden-route provider filtering, and trace/checkpoint metadata.
+
+What I analyzed
+
+I reviewed the active test strategy, the updated contract/runtime/unit tests, and the phase-local validation run. I checked the new candidate-free `after_producer` runtime-control coverage against the earlier implementation/review findings and re-ran the full phase-local suite.
+
+What I reviewed
+
+I verified that the suite now covers:
+- plain `after` `RequestInput`
+- candidate-free `after_producer` `RequestInput`
+- candidate-free `after_producer` `Goto`
+- `on_taken` `Goto` jump semantics
+- `Goto(..., handoff=...)` propagation plus destination checkpointing
+- `on_taken` `Fail`
+- hidden-route filtering versus topology/runtime legality
+- runtime-control trace payloads and pending-input checkpoint round-trip
+
+The phase-local validation run passed: `166 passed`.
+
+Key findings / decisions
+
+No in-scope blocking or non-blocking audit findings remain. The added `after_producer` `RequestInput` regression closes the highest-risk remaining candidate-free control path, and the documented strategy matches the exercised suite rather than claiming coverage it does not have.
+
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/runtime-controls-and-hidden-routes/criteria.md) to checked-complete and appended a no-findings audit note to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/test/phases/runtime-controls-and-hidden-routes/feedback.md).
+
+Open issues / next step
+
+No phase-local test-audit issues remain. The next step is to advance out of this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
