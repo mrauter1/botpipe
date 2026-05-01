@@ -20,8 +20,8 @@
       "tests-docs-and-golden-workflow"
     ],
     "explicit": true,
-    "current_phase_index": 6,
-    "current_phase_id": "maintainability-refactors"
+    "current_phase_index": 7,
+    "current_phase_id": "tests-docs-and-golden-workflow"
   },
   "phase_status": {
     "public-surface-terminal-cut": "completed",
@@ -30,8 +30,8 @@
     "metadata-tracing-schema-and-attribution": "completed",
     "validation-rendering-and-topology": "completed",
     "namespace-cut-optimizer-boundary-prompts-and-extensions": "completed",
-    "maintainability-refactors": "in_progress",
-    "tests-docs-and-golden-workflow": "planned"
+    "maintainability-refactors": "completed",
+    "tests-docs-and-golden-workflow": "in_progress"
   },
   "phase_history": [
     {
@@ -117,6 +117,19 @@
       "run_id": "run-20260501T132349Z-7b8f952d",
       "status": "in_progress",
       "ts": "2026-05-01T16:47:24.986261+00:00"
+    },
+    {
+      "phase_id": "maintainability-refactors",
+      "run_id": "run-20260501T132349Z-7b8f952d",
+      "status": "completed",
+      "ts": "2026-05-01T17:45:18.911550+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "tests-docs-and-golden-workflow",
+      "run_id": "run-20260501T132349Z-7b8f952d",
+      "status": "in_progress",
+      "ts": "2026-05-01T17:45:18.915350+00:00"
     }
   ]
 }
