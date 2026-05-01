@@ -48,3 +48,44 @@ Updated the run-local planning artifacts:
 The plan now tracks the requested 8-phase implementation order, but it is tied to the actual repo boundaries: `core.engine` owns the coupled runtime/finalization work today, `runtime.tracing` already writes topology artifacts at run start, checkpointing still uses `pending_question`, and the namespace cut still has to unwind top-level `core`/`runtime`/`stdlib`/`extensions` plus `autoloop_v3`. I also recorded the non-obvious decisions needed to keep later turns from duplicating artifact writers, mixing old/new failure propagation, or inventing parallel optimizer inspection readers.
 
 I did a manual verification pass on the written markdown/YAML/decision block. No tests were run.
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=session_turn | pair=plan | phase=verifier | cycle=1 | attempt=1 | thread_id=019de3b5-b853-7893-a51c-1a6849fda64f
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_verifier.md
+session_id=019de3b5-b853-7893-a51c-1a6849fda64f
+
+
+---
+run_id=run-20260501T132349Z-7b8f952d | entry=phase_output | pair=plan | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de3b5-b853-7893-a51c-1a6849fda64f
+---
+I’m auditing the plan artifacts against the request snapshot and the repo surfaces the planner referenced. First pass is intent coverage, behavioral safety, and the machine-readable phase file shape before I touch the verifier-owned criteria and feedback files.
+
+The phase file shape is fine, but the plan is light on a few explicit spec slices that are not optional cleanup items. I’m checking those against the current repo surfaces now so the feedback points to concrete missed work rather than abstract completeness complaints.
+
+I found a few real gaps: the phase file is valid YAML, but some explicit request slices still have no phase ownership. I’m updating verifier-owned criteria and feedback now with concrete blocking findings tied to the affected sections and repo surfaces.
+
+Scope considered
+Run-local planning artifacts, the immutable request snapshot, the current decision block, and the request-relevant repo surfaces tied to the flagged plan areas: runtime tracing/static artifacts, checkpoint/schema persistence, workflow-facing git/tracing extensions, and maintainability/runtime cleanup items.
+
+What I analyzed
+I checked `plan.md` and `phase_plan.yaml` against the remaining-delta spec, validated `phase_plan.yaml` parsing and dependency ordering, and compared the plan’s owned phases against the current repo surfaces for schema/persistence, extension cleanup, and omitted maintainability requirements.
+
+What I reviewed
+I updated [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/criteria.md) and appended verifier findings to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/based-on-the-latest-pasted-v3-codebase-this-is-t-47dfd55c/runs/run-20260501T132349Z-7b8f952d/artifacts/plan/feedback.md). `phase_plan.yaml` is parseable YAML and its dependency ordering is coherent.
+
+Key findings / decisions
+- `PLAN-001` blocking: no phase owns the explicit schema-registry and older-schema reader/migration work, despite the request requiring schema coverage for persisted artifacts and clear reader behavior.
+- `PLAN-002` blocking: the requested workflow-facing git/tracing cleanup is not concretely owned by any phase, even though the repo still has those modules, exports, runtime warning logic, and tests.
+- `PLAN-003` blocking: explicit requested slices for worklist-load caching and `Mapping`→`dict` boundary normalization are absent from both the narrative plan and the phase file.
+- Because of those gaps, all criteria checkboxes remain unchecked.
+
+Open issues / next step
+The planner needs to revise `plan.md` and `phase_plan.yaml` so the missing requested work has explicit phase ownership, deliverables, and acceptance criteria. After that, rerun plan verification.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
