@@ -9,12 +9,20 @@
 
 ## Behavior Coverage Map
 
+- Hard namespace cut for removed compatibility/internal package roots:
+  covered by `tests/strictness/test_no_compat.py::test_deleted_workflow_package_paths_do_not_exist`
+  and `tests/strictness/test_no_compat.py::test_deleted_top_level_and_compatibility_package_imports_fail`
+  checks that `autoloop_v3` plus top-level `core`/`runtime`/`stdlib`/`extensions` paths remain absent and unsupported.
+- Prompt-registry widening beyond the immediate workflow package root:
+  covered by `tests/unit/test_primitives_and_stores.py::test_prompt_registry_roots_include_capability_prompt_dirs_outside_workflow_parent`
+  checks capability-derived prompt directories outside the workflow parent remain part of runtime prompt resolution roots.
 - `autoloop.runtime.inspection` stable read API:
   covered by `tests/runtime/test_workspace_and_context.py::test_runtime_inspection_loaders_filter_status_and_require_disambiguation`
   checks canonical status filtering, ambiguous run-id rejection, filtered record lookup, metadata/topology/history loading, and missing-run failure.
 - Workflow-facing git/tracing declaration removal:
   covered by `tests/runtime/test_optional_extensions.py::test_workflow_extension_exports_drop_git_tracking_and_tracing_declarations`
-  checks removed public exports stay absent while retained workflow extension helpers and runtime-owned git helpers remain importable.
+  and `tests/runtime/test_optional_extensions.py::test_removed_workflow_observability_declaration_modules_are_not_importable`
+  checks removed public exports stay absent, deleted declaration modules stay non-importable, and retained workflow extension helpers plus runtime-owned git helpers remain importable.
 
 ## Preserved Invariants Checked
 
