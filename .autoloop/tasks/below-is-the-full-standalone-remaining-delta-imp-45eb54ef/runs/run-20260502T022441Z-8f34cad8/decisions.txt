@@ -14,3 +14,7 @@ Best supposition: NO, unless you specifically want item-wide runtime metadata to
 Reply with either "1" or "2".
 <autoloop-decisions-header version="1" block_seq="3" owner="runtime" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260502T022441Z-8f34cad8" ts="2026-05-02T10:52:01.473464+00:00" entry="answers" qa_seq="1" source="human" />
 2
+<autoloop-decisions-header version="1" block_seq="4" owner="planner" phase_id="task-global" pair="plan" turn_seq="3" run_id="run-20260502T022441Z-8f34cad8" ts="2026-05-02T10:52:01.633165+00:00" />
+Supersedes the earlier explicit-only item-state direction: the clarified contract is a built-in runtime-owned `ctx.item_state` surface for active scoped items with fields `status`, `last_step`, and `last_route`.
+Built-in `ctx.item_state` fields are runtime-owned and read-only; optional declared custom item-state fields remain mutable on top of the built-in model.
+Do not delete or reject route effects before worklist helper parity exists; helper APIs, parity tests, and equivalent `on_taken` rewrites land first, then route-effect declarations and execution paths are removed in the same milestone.
