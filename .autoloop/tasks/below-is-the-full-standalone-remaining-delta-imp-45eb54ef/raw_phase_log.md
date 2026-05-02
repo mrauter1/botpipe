@@ -2918,3 +2918,54 @@ No open review issues for this phase.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de956-c08b-7b51-982d-34edc684ff72
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de956-c08b-7b51-982d-34edc684ff72
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de956-c08b-7b51-982d-34edc684ff72
+---
+I’m treating this as a test-surface pass over the repo-compatibility gate. First I’m reading the active test artifacts and the current parity tests so I can decide whether an additional regression case is still missing beyond the implementation-phase updates.
+
+The main remaining gap is the backward-compatibility branch in `autoloop_v1` resume clarification logging. I’m adding a targeted parity regression for legacy checkpoints that still carry `pending_question`, then I’ll update the phase test strategy and feedback with the resulting coverage map.
+
+The new regression case is in place. I’m running the parity file plus the strictness/compile gate to make sure the legacy-checkpoint fallback test is stable and the repo-level gate still passes unchanged.
+
+The new fallback branch is not reachable through a real resume because the engine rejects legacy `pending_question` checkpoints before autoloop-v1 parity hooks run. I’m switching this to a direct parity-runtime regression test instead of encoding an impossible end-to-end expectation.
+
+The right coverage here is a direct parity-hook regression, not a full resume. I’m rewriting the new test to invoke the autoloop-v1 parity extension’s `before_step` hook against a legacy checkpoint payload, which isolates the exact backward-compatibility branch without asserting a resume behavior the engine intentionally rejects.
+
+The added regression is now stable. I’m recording the one non-obvious test decision, then I’ll update the phase strategy and feedback artifacts with the exact behavior-to-test map and validation outcome.
+
+Scope considered
+
+Phase-local test coverage for the repo-compatibility gate, centered on [test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py), the autoloop-v1 parity fallback branch in [parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/parity.py:173), and the active test-phase artifacts.
+
+What I analyzed
+
+I reviewed the active decisions ledger, the updated parity tests, and the new autoloop-v1 fallback logic. The main gap was that the backward-compatibility branch for legacy `pending_question` checkpoints is not reachable through a real engine resume, because the engine rejects that checkpoint shape before parity hooks run.
+
+What I changed
+
+I added a targeted regression to [test_workflow_integration_parity.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_integration_parity.py) that seeds a legacy checkpoint payload and directly invokes the autoloop-v1 parity extension `before_step` hook. That covers the exact fallback branch without normalizing an unsupported full-resume path.
+
+I also updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/test/phases/enforce-repo-compatibility-gate/test_strategy.md) with a behavior-to-test coverage map, and appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/test/phases/enforce-repo-compatibility-gate/feedback.md).
+
+Key findings / decisions
+
+The non-obvious test decision is that legacy `pending_question` coverage must be a direct parity-hook test, not an end-to-end resume test, because the engine intentionally blocks legacy pending-question resumes before extension hooks execute.
+
+Validation passed:
+`./.venv/bin/pytest tests/unit/test_simple_surface.py tests/runtime/test_workflow_integration_parity.py -q`
+Result: `62 passed`.
+
+Open issues / next step
+
+No open test-authoring issues in this phase.
