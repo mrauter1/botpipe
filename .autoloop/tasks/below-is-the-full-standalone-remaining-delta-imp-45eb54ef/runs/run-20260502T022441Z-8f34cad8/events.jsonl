@@ -96,3 +96,6 @@
 {"ts": "2026-05-02T14:06:36.222513+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 96, "event_type": "phase_completed", "pair": "test", "phase_id": "docs-and-tests", "phase_mode": "single"}
 {"ts": "2026-05-02T14:06:36.225815+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 97, "event_type": "pair_started", "pair": "audit", "phase_id": null}
 {"ts": "2026-05-02T14:06:36.225995+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 98, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
+{"ts": "2026-05-02T14:12:16.025184+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 99, "event_type": "phase_finished", "pair": "audit", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-02T14:13:45.584109+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 100, "event_type": "phase_finished", "pair": "audit", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": null}
+{"ts": "2026-05-02T14:13:45.618279+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 101, "event_type": "pair_completed", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
