@@ -16,3 +16,9 @@
 ## Findings
 
 - `TST-001` `blocking` [autoloop/core/engine.py:_execute_pair_step, tests/contract/test_engine_contracts.py]: the new pair-step `before_producer` short-circuit branch is still untested. This phase changed `before_producer` to share the unified hook/control path, but the authored regression coverage only exercises pre-provider `before`, `after_producer`, and `before_verifier`. A regression that still invokes the producer turn, misattributes `candidate_route`, or fails to checkpoint direct control from `before_producer` would currently pass the suite. Minimal fix: add one contract test for `before_producer` route short-circuit and one for `before_producer` direct control or `RequestInput(...)`, each asserting zero provider calls and the expected finalization/checkpoint fields.
+
+## Cycle 2 Summary
+
+- Added contract coverage for `before_producer` route short-circuit and `before_producer` `RequestInput(...)` short-circuit behavior, both with explicit zero-provider-call assertions and `candidate_route is None`.
+- The new direct-control coverage also asserts pending-input checkpointing, `source_phase == "before_producer"`, preserved state mutation, and no finalized `last_route` before any provider turn.
+- Validation in this shell remained limited to `python3 -m py_compile` because `pytest` and `pydantic` are unavailable.
