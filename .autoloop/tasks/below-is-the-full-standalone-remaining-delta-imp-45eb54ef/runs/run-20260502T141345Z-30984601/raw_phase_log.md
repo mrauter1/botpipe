@@ -352,3 +352,106 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de915-4877-78f0-bd6c-8297859278b2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de915-4877-78f0-bd6c-8297859278b2
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de915-4877-78f0-bd6c-8297859278b2
+---
+I’m checking the existing test-phase artifacts and the changed test surfaces first. If the repository tests already cover the migration cleanly, I’ll avoid adding redundant source churn and focus the turn on the coverage map and test-phase handoff artifacts.
+
+The current source-level contract gate is good, but I’m checking whether one low-churn addition would close an obvious remaining blind spot before I decide to leave the source tests as-is.
+
+I found one low-churn improvement that materially tightens the raw public-contract audit: the current source scan does not catch hooks that return a local replacement state like `next_state` or `state`. I’m adding that to the unit gate, then I’ll update the test-phase artifacts around the resulting coverage.
+
+The raw audit was tightened. I’m running the affected unit gate now to verify the broader pattern check stays green against the migrated workflow set.
+
+The only source-test change I’m carrying forward is the stronger raw-contract audit. I’m recording that in the coverage map and feedback artifacts now, and I’ll append the corresponding test decision so later turns don’t weaken the alias-based state-return guard.
+
+Scope considered
+- The repo-level raw contract and compile gates for the 16 exported workflow packages.
+- The changed runtime test surface already added in the repository, plus the active test-phase artifacts and run-local decisions ledger.
+- One additional low-churn regression guard in `tests/unit/test_simple_surface.py`.
+
+What I analyzed
+- The active `test_strategy.md` and `feedback.md` artifacts.
+- `tests/unit/test_simple_surface.py` and `tests/runtime/workflow_contract_helpers.py`.
+- The decisions ledger entries around compiled-handler invocation, normalized runtime metadata, and route handoff constraints.
+
+What I changed
+- Strengthened `tests/unit/test_simple_surface.py` so the raw exported-workflow contract audit also fails on aliased replacement-state returns: `return state` and `return next_state`.
+- Updated `artifacts/test/phases/migrate-exported-workflow-contracts/test_strategy.md` with an explicit behavior-to-test coverage map, preserved invariants, edge/failure paths, flake controls, and known gaps.
+- Appended a concise test-phase summary to `artifacts/test/phases/migrate-exported-workflow-contracts/feedback.md`.
+- Appended the alias-based raw-audit decision to `decisions.txt`.
+
+Key findings / decisions
+- The existing runtime/package tests already cover the migrated ctx-only behavior well; the meaningful remaining gap was the raw source audit’s ability to catch aliased replacement-state hook returns.
+- Public-contract regression coverage should stay anchored on source audit plus discovered-package compile coverage, not only compiled wrapper behavior.
+- Validation passed for the tightened gate:
+  `./.venv/bin/pytest -q tests/unit/test_simple_surface.py::test_discovered_exported_workflow_sources_avoid_removed_public_contract_forms tests/runtime/test_workflow_integration_parity.py::test_all_repo_workflow_packages_resolve_and_compile_under_canonical_simple_surface`
+  Result: `2 passed`.
+
+Open issues / next step
+- No open issues in phase scope.
+- Existing Pydantic warnings in `workflow_run_traces_to_optimization_candidates/contracts.py` remain unchanged and are outside this test-phase change.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de915-4877-78f0-bd6c-8297859278b2
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de915-4877-78f0-bd6c-8297859278b2
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de915-4877-78f0-bd6c-8297859278b2
+---
+I’m auditing the test-phase additions against the request and the run decisions first. Then I’ll verify the tightened raw-contract gate and update the audit artifacts with either findings or a clean pass.
+
+I’ve reconciled the artifact coverage map with the run decisions. I’m running the exact tightened gate cited in the test feedback now, so the audit is grounded in an independent execution result rather than artifact text alone.
+
+The independent audit run passed. I’m marking the test criteria complete and recording that there are no additional blocking audit findings.
+
+Scope considered
+- The active test-phase artifacts, the repo-level raw contract and compile gates, and the run-local decisions for compiled-handler invocation and normalized runtime metadata.
+- The tightened source audit in `tests/unit/test_simple_surface.py` and its alignment with the original migration request.
+
+What I analyzed
+- `artifacts/test/phases/migrate-exported-workflow-contracts/test_strategy.md`
+- `artifacts/test/phases/migrate-exported-workflow-contracts/feedback.md`
+- `tests/unit/test_simple_surface.py`
+- `decisions.txt`
+
+What I reviewed
+- The coverage map against AC-1 through AC-3 and the preserved invariants called out in the test strategy.
+- The new alias-based raw-contract guard for `return state` / `return next_state`.
+- An independent rerun of:
+  `./.venv/bin/pytest -q tests/unit/test_simple_surface.py::test_discovered_exported_workflow_sources_avoid_removed_public_contract_forms tests/runtime/test_workflow_integration_parity.py::test_all_repo_workflow_packages_resolve_and_compile_under_canonical_simple_surface`
+  Result: `2 passed`.
+
+Key findings / decisions
+- No blocking audit findings.
+- The test additions and strategy are consistent with the run decisions: raw source audit remains separate from compiled-wrapper behavior, and the discovered-package compile sweep remains the repo-level compatibility gate.
+- The tightened raw audit meaningfully improves regression protection by catching aliased replacement-state returns that previously could have bypassed direct `model_copy(...)` pattern checks.
+
+Open issues / next step
+- No open issues in phase scope.
+- `criteria.md` is fully checked and `feedback.md` now records the clean audit result.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
