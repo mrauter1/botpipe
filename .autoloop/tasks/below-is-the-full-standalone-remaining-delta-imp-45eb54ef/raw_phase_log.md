@@ -688,3 +688,51 @@ Validation:
 Open issues / next step
 
 No new in-scope gaps were found for this phase after adding the regression test. The remaining repo compile issues are still the separate route-handoff validation failures, which should be handled in a later phase rather than encoded into this phase’s tests.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de854-cad3-74d0-a960-3effc949e32b
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+Auditing the new test coverage against the public-surface cleanup scope. I’m checking the added regression test and the strategy artifact first, then I’ll update the audit criteria and feedback only.
+
+The added test is narrow but sound. I’m rerunning the file-level slice myself once more so the audit decision is based on fresh evidence from this turn, not only the producer’s report.
+
+The audit came back clean for this phase. I’m marking the criteria complete and appending a brief audit note so the artifact explains why there are no new test findings.
+
+Scope considered
+
+Phase-local audit of the `public-surface-cleanup` test additions only. I checked the new regression test, the existing nearby public-surface tests, and the updated `test_strategy.md` artifact.
+
+What I analyzed
+
+I reviewed the changed section of [tests/unit/test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), the active [test_strategy.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/public-surface-cleanup/test_strategy.md>), the test feedback artifact, and the relevant run decisions. I also reran `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py -q` in this turn.
+
+What I reviewed
+
+The new parametrized test covers the actual regression risk that remained unpinned: exported public simple workflows regressing back to removed class-level `on_outcome` / `on_<step>` surfaces. It is scoped correctly because it does not encode success for the unrelated out-of-scope route-handoff validation failures; it only rejects the removed-surface validation message.
+
+The test strategy now matches the code: it documents changed behavior, preserved invariants, the intended failure-path scope, and the stabilization choice for the exported-workflow regression test. The file-level test rerun passed: `50 passed`.
+
+Key findings / decisions
+
+No in-scope audit findings. I updated:
+
+- [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/public-surface-cleanup/criteria.md>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/public-surface-cleanup/feedback.md>)
+
+Open issues / next step
+
+The remaining workflow compile failures are still the separate route-handoff-to-`PythonStep` validations, which are outside this phase and are not normalized by the new tests.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
