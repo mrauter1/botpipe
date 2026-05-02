@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260502T022441Z-8f34cad8" ts="2026-05-02T02:24:41.238341+00:00" />
+Choose the explicit-only item-state branch: `ctx.item_state` remains available only when a worklist declares `item_state=...`; do not introduce a new built-in runtime-owned item model without later clarification.
+All removed surfaces in this task are fail-fast breaks with no compatibility aliases or silent coercions, including `on_route`, route effects, `AfterStepResult`, multi-arity hooks, python-step tuple/BaseModel returns, and old `outputs` / `review_outputs` vocabulary.
+Refactor existing collaborator classes into real owners by moving logic into the named collaborators already present; do not add new wrapper layers or generic indirection beyond the explicit data structures needed for hook/finalization control.
