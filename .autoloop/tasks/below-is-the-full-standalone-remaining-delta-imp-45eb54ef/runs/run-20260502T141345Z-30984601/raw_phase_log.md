@@ -455,3 +455,109 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de94a-caeb-7a30-944b-222c1d444138
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+I’m updating the runtime-facing tests for the exported workflow contract migration, not the workflow packages themselves. First I’m reading the phase artifacts and locating the affected suites that still call legacy `WorkflowClass.on_*` or tuple-style helpers directly.
+
+I’ve confirmed the workflow package migration already landed in a prior phase; this phase is narrowly about test surfaces and direct invocation helpers. Next I’m isolating the suites that still exercise unsupported `on_*` entry points or assume legacy returned-state patterns.
+
+The obvious direct `WorkflowClass.on_*` calls are already gone from the runtime suites. What remains is subtler: the shared helper still presents compiled handlers as legacy-style `(state, result)` tuples, so I’m checking whether the phase needs that surface flattened to `ctx.state` plus normalized returns.
+
+The targeted suite is still running. In parallel I’m checking the phase contract against the current helper surface, because the remaining gap looks semantic rather than a red test: tests still destructure `next_state` from a helper instead of treating `ctx.state` as the source of truth.
+
+The suites are green so far, which confirms this is a contract-shape cleanup rather than a break/fix cycle. I’m proceeding with a narrow refactor: make the helper return only the normalized control result and switch direct-behavior assertions to read state from `ctx.state`.
+
+I’ve got a clean green baseline. I’m now making the contract-facing cleanup across the helper and its direct-behavior call sites, keeping the runtime behavior unchanged and limiting the blast radius to tests plus the shared test helper.
+
+I’m editing the shared direct-invocation helper and the affected runtime suites now. The change is mechanical: compiled handler helpers will return only the normalized control result, and the assertions will read mutated state from `ctx.state` instead of a helper-synthesized `next_state`.
+
+The helper surface is flattened. I’m rerunning the affected runtime suites to catch any missed tuple assumptions or places where assertions still refer to a stale local `next_state`.
+
+The first half of the rerun is green. I’m letting the full changed-suites pass complete before I update the run artifacts and close out the phase notes.
+
+The helper change flushed out a late suite dependency in the optimizer tests. I’m pulling the failure details now and will patch those residual assertions directly instead of broadening scope.
+
+The failures are isolated to one remaining local helper inside the optimizer suite: `_bootstrap_context` was still unpacking the old tuple form. I’m patching that helper and rerunning the same suite set.
+
+The optimizer helper fix is in; the rerun is back to steady green progress. I’m waiting for completion, then I’ll update the authoritative notes and decision ledger with the final contract-surface change.
+
+I’m updating the phase artifacts now. I’m recording the one non-obvious decision from this pass: the shared compiled-handler helper no longer synthesizes `(state, result)` tuples, so runtime tests treat `ctx.state` as the only direct state surface.
+
+Scope considered
+
+Phase-local runtime test surfaces for the exported workflow contract migration: the shared compiled-handler helper and the affected runtime suites that still exercised direct handler behavior.
+
+What I analyzed
+
+I read the phase plan, decisions, and prior implementation notes, then traced every `invoke_python_step(...)` and `invoke_after_verifier_hook(...)` use in `tests/runtime`. I confirmed direct `WorkflowClass.on_*` calls were already removed, and identified the remaining mismatch: tests were still consuming helper-synthesized `(state, result)` tuples instead of treating `ctx.state` as the authoritative mutated state surface.
+
+What I changed
+
+I changed [tests/runtime/workflow_contract_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/workflow_contract_helpers.py) so compiled-step and after-verifier helpers return only the normalized control result. I updated the affected runtime suites to assert state through `ctx.state` after invocation, including the representative optimizer suite [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py), and the bootstrap/publish/capture tests across the other migrated workflow packages. I also updated the phase [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/implement/phases/migrate-runtime-test-surfaces/implementation_notes.md) and appended the non-obvious helper-surface decision to [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/decisions.txt).
+
+Key findings / decisions
+
+The remaining contract drift was in the shared test helper, not in the workflow packages: compiled handlers were already the invoked surface, but the helper was still hiding state via tuple returns. The direct-call contract for these tests is now: invoke the compiled callable, inspect the normalized return value, and read state from `ctx.state`.
+
+Open issues / next step
+
+Validation passed: `./.venv/bin/pytest -q` over the 15 affected runtime suites finished with `368 passed, 588 warnings`. The warnings are the existing `schema` shadowing warnings in optimizer contracts and were not changed here.
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de94a-caeb-7a30-944b-222c1d444138
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+I’m reviewing only the phase-local test-surface changes and their regression impact. First I’m checking the implementation notes, the decision ledger, and the scoped diffs against the phase acceptance criteria before I update the review artifacts.
+
+I’ve read the scoped diff and the phase notes. I’m doing two quick contract checks now: no affected runtime suite still consumes the helper as a tuple-return API, and no direct `WorkflowClass.on_*` calls remain in the runtime test surface.
+
+The tuple-return contract check came back clean. The only remaining `.on_*` hit is an unrelated runtime tracker method, not a workflow package helper, so it’s out of scope for this phase. I’m waiting on the spot-check suite to finish, then I’ll finalize the review artifacts.
+
+The spot-check passed. I’m marking the criteria complete and recording that this review produced no blocking findings in the phase feedback artifact.
+
+Scope considered
+
+Phase-local review of the runtime test-surface migration under `tests/runtime/*` plus the shared helper `tests/runtime/workflow_contract_helpers.py`, constrained by the active phase contract and the run-local decisions ledger.
+
+What I analyzed
+
+I compared the scoped diff against the phase objective, implementation notes, and decisions. I checked that affected suites no longer consume direct handler execution as a tuple-return compatibility surface, and that the remaining `.on_*` runtime hit is an unrelated tracker method outside this phase’s workflow-helper scope.
+
+What I reviewed
+
+I reviewed the helper contract change to normalized return-only behavior, the updated bootstrap/publish/capture/after-verifier assertions across the affected suites, and reran a verifier spot-check:
+`./.venv/bin/pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py`
+Result: `97 passed, 588 warnings`.
+
+Key findings / decisions
+
+No blocking findings. The implementation matches the phase intent: affected runtime suites now assert direct behavior through compiled callables plus `ctx.state`, without treating helper-synthesized `(state, result)` tuples as supported API.
+
+Open issues / next step
+
+I updated the phase review artifacts: all criteria checkboxes are checked, and `feedback.md` records `IMP-000` as a non-blocking no-findings review note.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

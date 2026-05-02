@@ -2663,3 +2663,50 @@ The remaining contract drift was in the shared test helper, not in the workflow 
 Open issues / next step
 
 Validation passed: `./.venv/bin/pytest -q` over the 15 affected runtime suites finished with `368 passed, 588 warnings`. The warnings are the existing `schema` shadowing warnings in optimizer contracts and were not changed here.
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de94a-caeb-7a30-944b-222c1d444138
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+I’m reviewing only the phase-local test-surface changes and their regression impact. First I’m checking the implementation notes, the decision ledger, and the scoped diffs against the phase acceptance criteria before I update the review artifacts.
+
+I’ve read the scoped diff and the phase notes. I’m doing two quick contract checks now: no affected runtime suite still consumes the helper as a tuple-return API, and no direct `WorkflowClass.on_*` calls remain in the runtime test surface.
+
+The tuple-return contract check came back clean. The only remaining `.on_*` hit is an unrelated runtime tracker method, not a workflow package helper, so it’s out of scope for this phase. I’m waiting on the spot-check suite to finish, then I’ll finalize the review artifacts.
+
+The spot-check passed. I’m marking the criteria complete and recording that this review produced no blocking findings in the phase feedback artifact.
+
+Scope considered
+
+Phase-local review of the runtime test-surface migration under `tests/runtime/*` plus the shared helper `tests/runtime/workflow_contract_helpers.py`, constrained by the active phase contract and the run-local decisions ledger.
+
+What I analyzed
+
+I compared the scoped diff against the phase objective, implementation notes, and decisions. I checked that affected suites no longer consume direct handler execution as a tuple-return compatibility surface, and that the remaining `.on_*` runtime hit is an unrelated tracker method outside this phase’s workflow-helper scope.
+
+What I reviewed
+
+I reviewed the helper contract change to normalized return-only behavior, the updated bootstrap/publish/capture/after-verifier assertions across the affected suites, and reran a verifier spot-check:
+`./.venv/bin/pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py tests/runtime/test_candidate_workflow_to_adapted_execution_plan.py tests/runtime/test_workflow_to_eval_suite.py`
+Result: `97 passed, 588 warnings`.
+
+Key findings / decisions
+
+No blocking findings. The implementation matches the phase intent: affected runtime suites now assert direct behavior through compiled callables plus `ctx.state`, without treating helper-synthesized `(state, result)` tuples as supported API.
+
+Open issues / next step
+
+I updated the phase review artifacts: all criteria checkboxes are checked, and `feedback.md` records `IMP-000` as a non-blocking no-findings review note.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
