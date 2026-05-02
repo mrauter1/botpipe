@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..errors import FailureContext
+from ..errors import exception_failure_context, exception_retry_kind
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,11 +56,13 @@ def build_retry_feedback(
 
 
 def _problem_summary(exc: Exception, *, step_name: str) -> str:
-    kind = getattr(exc, "retry_kind", None)
+    kind = exception_retry_kind(exc)
     if kind == "illegal_route":
         return f"The selected route was not allowed for step {step_name!r}."
     if kind == "invalid_payload":
         route = _failure_context_field(exc, "route")
+        if route is None:
+            route = _failure_context_field(exc, "candidate_route")
         detail = _failure_context_field(exc, "error")
         if detail and route:
             return f"The selected route {route!r} has an invalid payload: {detail}."
@@ -86,15 +88,10 @@ def _problem_summary(exc: Exception, *, step_name: str) -> str:
 
 
 def _failure_context_field(exc: Exception, key: str) -> str | None:
-    failure_context = getattr(exc, "failure_context", None)
-    if isinstance(failure_context, FailureContext):
-        value = failure_context.to_payload().get(key)
-        if isinstance(value, str) and value:
-            return value
+    failure_context = exception_failure_context(exc)
+    if failure_context is None:
         return None
-    if not isinstance(failure_context, dict):
-        return None
-    value = failure_context.get(key)
+    value = failure_context.to_payload().get(key)
     if isinstance(value, str) and value:
         return value
     return None

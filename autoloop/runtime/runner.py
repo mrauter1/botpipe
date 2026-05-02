@@ -1034,9 +1034,13 @@ def _last_transition_payload(transition: StepFinalizationRecord | None) -> dict[
         "candidate_route": transition.candidate_route,
         "final_route": transition.final_route,
         "runtime_control": transition.runtime_control,
+        "pending_input_id": transition.pending_input_id,
         "target_step": transition.target_step,
         "terminal": transition.terminal,
         "provider_attributable": transition.provider_attributable,
+        "provider_attempted": transition.provider_attempted,
+        "producer_attempted": transition.producer_attempted,
+        "verifier_attempted": transition.verifier_attempted,
         "source_hook": transition.source_hook,
         "source_phase": transition.source_phase,
         "hook_route_redirects": [

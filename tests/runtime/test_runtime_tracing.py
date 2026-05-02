@@ -299,8 +299,12 @@ def test_runtime_trace_records_direct_runtime_control_metadata(tmp_path: Path) -
         verifier_raw_output="verifier output\n",
         candidate_route="ready",
         runtime_control="request_input",
+        pending_input_id="pending-approval-1",
         terminal="AWAIT_INPUT",
         provider_attributable=False,
+        provider_attempted=True,
+        producer_attempted=True,
+        verifier_attempted=False,
         source_hook="ask_for_input",
         source_phase="on_taken",
     )
@@ -310,8 +314,12 @@ def test_runtime_trace_records_direct_runtime_control_metadata(tmp_path: Path) -
     record = json.loads((run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()[-1])
     assert record["candidate_route"] == "ready"
     assert record["runtime_control"] == "request_input"
+    assert record["pending_input_id"] == "pending-approval-1"
     assert record["terminal"] == "AWAIT_INPUT"
     assert record["provider_attributable"] is False
+    assert record["provider_attempted"] is True
+    assert record["producer_attempted"] is True
+    assert record["verifier_attempted"] is False
     assert record["source_hook"] == "ask_for_input"
     assert record["source_phase"] == "on_taken"
 

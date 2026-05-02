@@ -15,7 +15,11 @@ from typing import Any, Callable, Literal, Mapping, Sequence
 from pydantic import BaseModel, TypeAdapter
 
 from .context import Context
-from .errors import FailureContext, ProviderExecutionError, WorkflowExecutionError
+from .errors import (
+    ProviderExecutionError,
+    WorkflowExecutionError,
+    exception_failure_context_payload,
+)
 from .mappings import normalize_mapping
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt, resolve_prompt_reference
 from .providers.models import OperationRequest
@@ -490,15 +494,7 @@ def _operation_step_execution_id(
 
 
 def _operation_failure_context(exc: Exception) -> dict[str, Any]:
-    failure_context = getattr(exc, "failure_context", None)
-    if isinstance(failure_context, FailureContext):
-        return failure_context.to_payload()
-    if isinstance(failure_context, dict) and failure_context:
-        return dict(failure_context)
-    return {
-        "error": str(exc),
-        "error_type": type(exc).__name__,
-    }
+    return exception_failure_context_payload(exc)
 
 
 def _record_context_value(ctx: Context, *, step_name: str, value: Any) -> None:

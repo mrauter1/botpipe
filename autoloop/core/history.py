@@ -385,8 +385,12 @@ class HistoryReader:
         final_route = _string_value(record.get("final_route")) or _string_value(_mapping_get(record.get("event"), "tag"))
         candidate_route = _string_value(record.get("candidate_route"))
         runtime_control = _string_value(record.get("runtime_control"))
+        pending_input_id = _string_value(record.get("pending_input_id"))
         target_step = _string_value(record.get("target_step"))
         terminal = _string_value(record.get("terminal"))
+        provider_attempted = record.get("provider_attempted")
+        producer_attempted = record.get("producer_attempted")
+        verifier_attempted = record.get("verifier_attempted")
         source_hook = _string_value(record.get("source_hook"))
         source_phase = _string_value(record.get("source_phase"))
         acc.finished_count += 1
@@ -421,9 +425,13 @@ class HistoryReader:
             "candidate_route": candidate_route,
             "final_route": final_route,
             "runtime_control": runtime_control,
+            "pending_input_id": pending_input_id,
             "target_step": target_step,
             "terminal": terminal,
             "provider_attributable": bool(record.get("provider_attributable")),
+            "provider_attempted": provider_attempted if isinstance(provider_attempted, bool) else None,
+            "producer_attempted": producer_attempted if isinstance(producer_attempted, bool) else None,
+            "verifier_attempted": verifier_attempted if isinstance(verifier_attempted, bool) else None,
             "source_hook": source_hook,
             "source_phase": source_phase,
             "visit": _int_value(record.get("visit")),

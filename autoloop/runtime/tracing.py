@@ -144,12 +144,20 @@ class RuntimeTraceWriter:
             payload["final_route"] = event.final_route
         if event.runtime_control is not None:
             payload["runtime_control"] = event.runtime_control
+        if event.pending_input_id is not None:
+            payload["pending_input_id"] = event.pending_input_id
         if event.target_step is not None:
             payload["target_step"] = event.target_step
         if event.terminal is not None:
             payload["terminal"] = event.terminal
         if event.provider_attributable is not None:
             payload["provider_attributable"] = event.provider_attributable
+        if event.provider_attempted is not None:
+            payload["provider_attempted"] = event.provider_attempted
+        if event.producer_attempted is not None:
+            payload["producer_attempted"] = event.producer_attempted
+        if event.verifier_attempted is not None:
+            payload["verifier_attempted"] = event.verifier_attempted
         if event.source_hook is not None:
             payload["source_hook"] = event.source_hook
         if event.source_phase is not None:

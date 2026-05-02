@@ -1485,3 +1485,72 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de8df-9d67-77a3-a352-a28558942623
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de8df-9d67-77a3-a352-a28558942623
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8df-9d67-77a3-a352-a28558942623
+---
+I’m treating this as the `failure-trace-optimizer-alignment` phase only. First I’m reading the phase artifacts and the current runtime/optimizer code paths that own failure context, checkpointing, trace, and history semantics.
+
+The phase artifacts are minimal, so I’m following the code itself. Next I’m reading the engine, error, tracing, history, provider-retry, and optimizer normalization paths where stale exception metadata and route/control assumptions are most likely still wired in.
+
+I’ve confirmed the high-risk surfaces: `WorkflowExecutionError` still carries mutable metadata fields, operations/retries still use `getattr`, and history/optimizer need a pass for control-source semantics. I’m drilling into those exact sections before editing so I can replace them end-to-end instead of leaving hybrid paths.
+
+I’ve isolated the remaining hybrid behavior. The main cleanup is to replace exception-side mutation for `checkpoint_state`, `retry_kind`, and `pending_handoffs`, then thread the typed data through checkpoint save, retry feedback, trace writing, and optimizer normalization in one pass.
+
+I’ve got the change shape now. I’m editing the typed error path first so the rest of the runtime can stop recovering metadata with `getattr`, then I’ll thread the new trace fields through history and optimizer normalization and backfill focused tests.
+
+I’m on the test and payload alignment pass now. The remaining work is mostly contract shape updates: the runtime now carries typed failure metadata and explicit attempt/source fields, so the history, summary, and trace fixtures need to assert the final shape instead of the older sparse payloads.
+
+The code changes are in place. I’m running the focused runtime, history, retry, optimizer, and workspace suites that cover this phase’s surfaces before I touch the phase notes and decision log.
+
+The environment doesn’t have `python` or a standalone `pytest` binary on `PATH`. I’m retrying with `python3` so I can at least get a real compile/test signal before finalizing.
+
+There is a local virtualenv in the repo, so I’m switching to that interpreter for the actual test pass. Compile-only passed already; this next run will tell me whether any contract payloads still need adjustment.
+
+The first real test run exposed a circular import introduced by typing `pending_handoffs` against the store protocol class. I’m removing that hard import and keeping the exception payload typed structurally instead, then I’ll rerun the same focused suites.
+
+I’ve fixed the concrete failures from the first pass: one ignored annotation path, the attempt-flag derivation for provider calls without usage metadata, and the expected exception/payload shapes in the focused tests. I’m rerunning the failing subset only to verify those exact regressions are gone before I do the full notes update.
+
+The code and focused suites are green. I’m finishing the turn by writing the phase-local implementation notes and recording only the non-obvious decisions that future turns would otherwise drift on.
+
+Scope considered
+
+- Phase-local `failure-trace-optimizer-alignment` only.
+- I stayed on failure metadata, checkpoint persistence, trace/history payloads, child-run finalization metadata, and optimizer trace normalization.
+
+What I analyzed
+
+- `autoloop/core/errors.py`, `engine.py`, `engine_collaborators.py`, `operations.py`, `providers/retries.py`
+- `autoloop/runtime/tracing.py`, `runner.py`, `autoloop/core/history.py`
+- `autoloop_optimizer/optimization.py`
+- The focused runtime/contract/unit tests that assert failure context, runtime-control traces, child-run summaries, and optimizer corpus normalization
+
+What I changed
+
+- Replaced `getattr`/`setattr` exception metadata recovery with typed helpers in [autoloop/core/errors.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/errors.py) and wired engine/retry/operation paths to use them.
+- Made the engine wrap generic provider/hook/runtime failures as `WorkflowExecutionError` when it needs structured checkpoint/failure metadata, instead of mutating arbitrary exceptions.
+- Added `pending_input_id`, `provider_attempted`, `producer_attempted`, and `verifier_attempted` to step finalization/trace/history/child-run metadata in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), [autoloop/core/extensions.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/extensions.py), [autoloop/runtime/tracing.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/tracing.py), [autoloop/core/history.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/history.py), and [autoloop/runtime/runner.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/runner.py).
+- Updated optimizer trace normalization in [autoloop_optimizer/optimization.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop_optimizer/optimization.py) so direct controls survive as explicit observations instead of being flattened into route-only assumptions.
+- Updated the focused tests and phase notes, and appended the non-obvious turn decisions to the authoritative ledger.
+
+Key findings / decisions
+
+- Generic hook/provider transport failures now surface as structured `WorkflowExecutionError` wrappers with the original message preserved; tests were updated to assert the structured type where applicable.
+- Provider attempt booleans cannot rely on token usage alone; they now derive from actual provider-turn evidence such as raw outputs and `Outcome` presence, which fixes zero-usage provider turns being misreported as not attempted.
+- Child-run `finalization` payloads now carry the same richer metadata shape as in-run transitions.
+
+Open issues / next step
+
+- Focused validation passed: `./.venv/bin/python -m pytest tests/unit/test_provider_retries.py tests/runtime/test_runtime_tracing.py tests/runtime/test_history.py tests/unit/test_optimization_helpers.py tests/runtime/test_workspace_and_context.py tests/contract/test_engine_contracts.py -q` with `210 passed`.
+- Syntax validation passed with `python3 -m compileall ...`.
+- I did not run the full repository test suite outside this phase-focused surface.

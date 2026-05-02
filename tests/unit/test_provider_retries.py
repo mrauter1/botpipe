@@ -13,15 +13,16 @@ def _retry_error(
     artifact_name: str | None = None,
     failure_context: dict[str, str] | None = None,
 ) -> Exception:
-    error = ProviderExecutionError(message, retry_kind=kind)
     context: dict[str, str] = {}
     if artifact_name is not None:
         context["artifact_name"] = artifact_name
     if failure_context is not None:
         context.update(failure_context)
-    if context:
-        error.failure_context = FailureContext(kind=kind, step_name="review", details=context)
-    return error
+    return ProviderExecutionError(
+        message,
+        retry_kind=kind,
+        failure_context=FailureContext(kind=kind, step_name="review", details=context) if context else None,
+    )
 
 
 @pytest.mark.parametrize(

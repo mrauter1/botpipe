@@ -260,6 +260,57 @@ def test_normalize_trace_corpus_keeps_eligible_runs_when_route_filter_matches_no
     assert corpus["step_observations"] == []
 
 
+def test_normalize_trace_corpus_preserves_direct_runtime_control_metadata(tmp_path: Path) -> None:
+    run_dir = _write_observable_run(tmp_path, "task-1", "release_candidate_to_go_no_go", "run-awaiting")
+    run_payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    run_payload["status"] = "awaiting_input"
+    run_payload["terminal"] = "AWAIT_INPUT"
+    (run_dir / "run.json").write_text(json.dumps(run_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.runtime_trace/v1",
+                "event_type": "step_finished",
+                "sequence": 1,
+                "step_name": "assessment",
+                "step_kind": "pair",
+                "candidate_route": None,
+                "final_route": None,
+                "runtime_control": "request_input",
+                "pending_input_id": "pending-assessment-1",
+                "terminal": "AWAIT_INPUT",
+                "provider_attempted": False,
+                "producer_attempted": False,
+                "verifier_attempted": False,
+                "source_hook": "before",
+                "source_phase": "before",
+                "raw_output_refs": {},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    corpus = normalize_trace_corpus(
+        selected_workflow="release_candidate_to_go_no_go",
+        run_dirs=[run_dir],
+        route_tags=["runtime_control:request_input"],
+    )
+
+    observation = corpus["all_step_observations"][0]
+    assert observation["route"] == "runtime_control:request_input"
+    assert observation["runtime_control"] == "request_input"
+    assert observation["terminal"] == "AWAIT_INPUT"
+    assert observation["pending_input_id"] == "pending-assessment-1"
+    assert observation["provider_attempted"] is False
+    assert observation["producer_attempted"] is False
+    assert observation["verifier_attempted"] is False
+    assert observation["source_hook"] == "before"
+    assert observation["source_phase"] == "before"
+    assert observation["local_outcome"] == "awaiting_input"
+    assert observation["downstream_outcome"] == "awaiting_input_terminal_after_local_pass"
+
+
 def test_filtered_published_observations_still_allow_upstream_ranking_from_internal_trace_context(tmp_path: Path) -> None:
     run_dir = _write_upstream_pass_downstream_fail_run(
         tmp_path,

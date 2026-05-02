@@ -69,9 +69,13 @@ class StepFinish:
     candidate_route: str | None = None
     final_route: str | None = None
     runtime_control: str | None = None
+    pending_input_id: str | None = None
     target_step: str | None = None
     terminal: str | None = None
     provider_attributable: bool | None = None
+    provider_attempted: bool | None = None
+    producer_attempted: bool | None = None
+    verifier_attempted: bool | None = None
     source_hook: str | None = None
     source_phase: str | None = None
     hook_route_override_from: str | None = None

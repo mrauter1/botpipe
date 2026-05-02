@@ -466,10 +466,12 @@ def normalize_trace_corpus(
             sequence = int(record["sequence"])
             step_name = str(record["step_name"])
             route = _extract_route_tag(record)
+            runtime_control = _optional_text(record.get("runtime_control"))
+            terminal = _optional_text(record.get("terminal"))
             raw_output_refs = _normalize_raw_output_refs(record.get("raw_output_refs"))
             provider_usage = _normalize_provider_usage(record.get("provider_usage"))
             git_step = git_index.get(sequence, {})
-            local_outcome = _local_outcome_from_route(route)
+            local_outcome = _local_outcome_from_record(record, route=route)
             downstream_outcome = _downstream_outcome(filtered_step_events[index + 1 :], run_entry["terminal"])
             observation = {
                 "observation_id": f"{bundle.run_ref}:{sequence:06d}:{step_name}",
@@ -480,6 +482,17 @@ def normalize_trace_corpus(
                 "step_name": step_name,
                 "step_kind": _optional_text(record.get("step_kind")) or "unknown",
                 "route": route,
+                "candidate_route": _optional_text(record.get("candidate_route")),
+                "final_route": _optional_text(record.get("final_route")),
+                "runtime_control": runtime_control,
+                "terminal": terminal,
+                "pending_input_id": _optional_text(record.get("pending_input_id")),
+                "target_step": _optional_text(record.get("target_step")),
+                "provider_attempted": record.get("provider_attempted"),
+                "producer_attempted": record.get("producer_attempted"),
+                "verifier_attempted": record.get("verifier_attempted"),
+                "source_hook": _optional_text(record.get("source_hook")),
+                "source_phase": _optional_text(record.get("source_phase")),
                 "raw_output_refs": raw_output_refs,
                 "usage": provider_usage,
                 "commit_before_step": _optional_text(git_step.get("commit_before_step"))
@@ -571,7 +584,7 @@ def build_step_trace_metrics(
                 "route_counts": dict(sorted(route_counts.items())),
                 "producer_failed_verifier_count": route_counts.get("needs_rework", 0),
                 "blocked_count": route_counts.get("blocked", 0),
-                "failed_count": route_counts.get("failed", 0),
+                "failed_count": route_counts.get("failed", 0) + route_counts.get("runtime_control:fail", 0),
                 "needs_rework_count": route_counts.get("needs_rework", 0),
                 "needs_replan_count": route_counts.get("needs_replan", 0),
                 "estimated_token_total": estimated_token_total,
@@ -804,6 +817,8 @@ def extract_failure_scenario_seeds(
         reasons: list[str] = []
         if route in {"needs_rework", "needs_replan", "blocked", "failed"}:
             reasons.append(f"route:{route}")
+        if route in {"runtime_control:request_input", "runtime_control:fail"}:
+            reasons.append(route)
         if total_tokens >= 1500 and route not in {"ready", "success"}:
             reasons.append("high_token_usage_without_success")
         if not _require_mapping_or_empty(observation.get("raw_output_refs")):
@@ -1139,6 +1154,10 @@ def _classify_seed_failure_kind(reasons: Sequence[str]) -> str:
         return "needs_replan_loop"
     if "terminal_failure_after_local_pass" in reasons:
         return "downstream_failure_after_local_pass"
+    if "runtime_control:request_input" in reasons:
+        return "blocked_missing_context"
+    if "runtime_control:fail" in reasons:
+        return "artifact_invalid"
     if "route:blocked" in reasons:
         return "blocked_missing_context"
     if "route:failed" in reasons:
@@ -1182,12 +1201,29 @@ def _normalize_provider_usage(value: Any) -> dict[str, int]:
 
 
 def _extract_route_tag(record: Mapping[str, Any]) -> str:
+    final_route = _optional_text(record.get("final_route"))
+    if final_route is not None:
+        return final_route
     outcome = _require_mapping_or_empty(record.get("outcome"))
     event = _require_mapping_or_empty(record.get("event"))
-    return _optional_text(outcome.get("tag")) or _optional_text(event.get("tag")) or "unknown"
+    route = _optional_text(outcome.get("tag")) or _optional_text(event.get("tag"))
+    if route is not None:
+        return route
+    runtime_control = _optional_text(record.get("runtime_control"))
+    if runtime_control is not None:
+        return f"runtime_control:{runtime_control}"
+    return "unknown"
 
 
-def _local_outcome_from_route(route: str) -> str:
+def _local_outcome_from_record(record: Mapping[str, Any], *, route: str) -> str:
+    runtime_control = _optional_text(record.get("runtime_control"))
+    terminal = _optional_text(record.get("terminal"))
+    if runtime_control == "request_input" or terminal == "AWAIT_INPUT":
+        return "awaiting_input"
+    if runtime_control == "goto":
+        return "runtime_control_goto"
+    if runtime_control == "fail" or terminal == "FAIL":
+        return "failed"
     if route == "needs_rework":
         return "rejected_by_verifier"
     if route == "needs_replan":
@@ -1205,8 +1241,16 @@ def _downstream_outcome(next_records: Sequence[Mapping[str, Any]], terminal: Any
         route = _extract_route_tag(record)
         if route in {"needs_rework", "needs_replan", "blocked", "failed"}:
             return f"next_step_{route}"
+        if route == "runtime_control:request_input":
+            return "next_step_request_input"
+        if route == "runtime_control:goto":
+            return "next_step_goto"
+        if route == "runtime_control:fail":
+            return "next_step_failed"
     if terminal_value == "FAIL":
         return "terminal_failure_after_local_pass"
+    if terminal_value == "AWAIT_INPUT":
+        return "awaiting_input_terminal_after_local_pass"
     return "unknown"
 
 
@@ -1264,6 +1308,8 @@ def _weighted_route_pressure(route_counts: Mapping[str, int], observed_count: in
         "blocked": 0.85,
         "needs_replan": 0.75,
         "needs_rework": 0.65,
+        "runtime_control:fail": 1.0,
+        "runtime_control:request_input": 0.5,
     }
     weighted_sum = sum(count * weights.get(route, 0.0) for route, count in route_counts.items())
     return min(1.0, weighted_sum / max(1, observed_count))

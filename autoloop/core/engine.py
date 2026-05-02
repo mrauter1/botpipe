@@ -31,7 +31,20 @@ from .engine_collaborators import (
     WorkflowInvoker,
 )
 from .extensions import BoundWorkflowExtension, HookRouteRedirect, RunBinding, StepFinish, StepStart, TerminalFinish
-from .errors import FailureContext, MissingArtifactError, ProviderExecutionError, StepExecutionError, WorkflowExecutionError
+from .errors import (
+    FailureContext,
+    MissingArtifactError,
+    ProviderExecutionError,
+    StepExecutionError,
+    WorkflowExecutionError,
+    enrich_execution_error,
+    exception_checkpoint_state,
+    exception_failure_context,
+    exception_failure_context_payload,
+    exception_pending_handoffs,
+    exception_retry_kind,
+    replace_execution_error,
+)
 from .operations import serialize_context_values
 from .primitives import AWAIT_INPUT, Checkpoint, Event, FAIL, FINISH, Fail, Goto, Outcome, PendingHandoff, RequestInput
 from .prompts import Prompt, PromptRegistry, ResolvedPrompt
@@ -86,9 +99,13 @@ class StepFinalizationRecord:
     candidate_route: str | None = None
     final_route: str | None = None
     runtime_control: str | None = None
+    pending_input_id: str | None = None
     target_step: str | None = None
     terminal: str | None = None
     provider_attributable: bool = False
+    provider_attempted: bool | None = None
+    producer_attempted: bool | None = None
+    verifier_attempted: bool | None = None
     source_hook: str | None = None
     source_phase: str | None = None
     hook_route_redirects: tuple[HookRouteRedirect, ...] = ()
@@ -416,13 +433,29 @@ class Engine:
                             hook_route_override_to,
                             hook_route_redirects,
                         ) = self.step_dispatcher.execute(step, context, state, pending_handoffs)
+                        provider_attempted, producer_attempted, verifier_attempted = self._provider_attempt_flags(
+                            step_kind=step.kind,
+                            provider_usage=provider_usage,
+                            outcome=last_outcome,
+                            producer_raw_output=producer_raw_output,
+                            verifier_raw_output=verifier_raw_output,
+                        )
+                        pending_input_id = (
+                            control_pending_input.pending_input_id
+                            if isinstance(control_pending_input, PendingInput)
+                            else None
+                        )
                         last_transition = StepFinalizationRecord(
                             candidate_route=candidate_route,
                             final_route=final_route,
                             runtime_control=runtime_control,
+                            pending_input_id=pending_input_id,
                             target_step=target_step,
                             terminal=control_terminal,
                             provider_attributable=bool(final_provider_attributable),
+                            provider_attempted=provider_attempted,
+                            producer_attempted=producer_attempted,
+                            verifier_attempted=verifier_attempted,
                             source_hook=control_source_hook,
                             source_phase=control_source_phase,
                             hook_route_redirects=hook_route_redirects,
@@ -443,9 +476,13 @@ class Engine:
                                 candidate_route=candidate_route,
                                 final_route=final_route,
                                 runtime_control=runtime_control,
+                                pending_input_id=pending_input_id,
                                 target_step=target_step,
                                 terminal=control_terminal,
                                 provider_attributable=final_provider_attributable,
+                                provider_attempted=provider_attempted,
+                                producer_attempted=producer_attempted,
+                                verifier_attempted=verifier_attempted,
                                 source_hook=control_source_hook,
                                 source_phase=control_source_phase,
                                 hook_route_override_from=hook_route_override_from,
@@ -933,9 +970,11 @@ class Engine:
                     finalization.hook_route_redirects,
                 )
             except Exception as exc:
-                next_feedback = self._next_retry_feedback(step, exc, attempt=attempt)
+                next_feedback, annotated_exc = self._next_retry_feedback(step, exc, attempt=attempt)
                 if next_feedback is None:
-                    raise
+                    if annotated_exc is exc:
+                        raise
+                    raise annotated_exc from exc
                 retry_feedback = next_feedback
         raise AssertionError("pair-step retry loop exhausted without returning or raising")
 
@@ -1033,9 +1072,11 @@ class Engine:
                     finalization.hook_route_redirects,
                 )
             except Exception as exc:
-                next_feedback = self._next_retry_feedback(step, exc, attempt=attempt)
+                next_feedback, annotated_exc = self._next_retry_feedback(step, exc, attempt=attempt)
                 if next_feedback is None:
-                    raise
+                    if annotated_exc is exc:
+                        raise
+                    raise annotated_exc from exc
                 retry_feedback = next_feedback
         raise AssertionError("llm-step retry loop exhausted without returning or raising")
 
@@ -1177,16 +1218,22 @@ class Engine:
                 )
             )
         except Exception as exc:
+            annotated_exc = exc
             if route_handoff is not None:
-                setattr(exc, "pending_handoffs", restorable_pending_handoffs)
+                annotated_exc = self._annotate_execution_error(
+                    exc,
+                    pending_handoffs=restorable_pending_handoffs,
+                )
             self._emit_provider_attempt_failed(
                 step=step,
                 context=context,
                 turn_kind="producer",
                 attempt=attempt,
-                exc=exc,
+                exc=annotated_exc,
             )
-            raise
+            if annotated_exc is exc:
+                raise
+            raise annotated_exc from exc
         self._emit_provider_attempt_finished(
             step=step,
             context=context,
@@ -1321,16 +1368,22 @@ class Engine:
                 )
                 self._validate_outcome(step, verifier_response.outcome)
             except Exception as exc:
+                annotated_exc = exc
                 if route_handoff is not None:
-                    setattr(exc, "pending_handoffs", restorable_pending_handoffs)
+                    annotated_exc = self._annotate_execution_error(
+                        exc,
+                        pending_handoffs=restorable_pending_handoffs,
+                    )
                 self._emit_provider_attempt_failed(
                     step=step,
                     context=context,
                     turn_kind="verifier",
                     attempt=attempt,
-                    exc=exc,
+                    exc=annotated_exc,
                 )
-                raise
+                if annotated_exc is exc:
+                    raise
+                raise annotated_exc from exc
             self._emit_provider_attempt_finished(
                 step=step,
                 context=context,
@@ -1339,9 +1392,13 @@ class Engine:
                 token_usage=verifier_response.usage,
             )
         except Exception as exc:
-            if not isinstance(getattr(exc, "pending_handoffs", None), tuple):
-                setattr(exc, "pending_handoffs", consumed_pending_handoffs)
-            raise
+            annotated_exc = self._annotate_execution_error(
+                exc,
+                pending_handoffs=consumed_pending_handoffs,
+            )
+            if annotated_exc is exc:
+                raise
+            raise annotated_exc from exc
         return (
             producer_response.raw_output,
             verifier_response.outcome.raw_output,
@@ -1400,18 +1457,26 @@ class Engine:
             )
             self._validate_outcome(step, response.outcome)
         except Exception as exc:
+            annotated_exc = exc
             if route_handoff is not None:
-                setattr(exc, "pending_handoffs", restorable_pending_handoffs)
+                annotated_exc = self._annotate_execution_error(
+                    exc,
+                    pending_handoffs=restorable_pending_handoffs,
+                )
             self._emit_provider_attempt_failed(
                 step=step,
                 context=context,
                 turn_kind="llm",
                 attempt=attempt,
-                exc=exc,
+                exc=annotated_exc,
             )
-            if not isinstance(getattr(exc, "pending_handoffs", None), tuple):
-                setattr(exc, "pending_handoffs", consumed_pending_handoffs)
-            raise
+            annotated_exc = self._annotate_execution_error(
+                annotated_exc,
+                pending_handoffs=consumed_pending_handoffs,
+            )
+            if annotated_exc is exc:
+                raise
+            raise annotated_exc from exc
         self._emit_provider_attempt_finished(
             step=step,
             context=context,
@@ -1908,7 +1973,7 @@ class Engine:
             )
         else:
             error = error_cls(message)
-            self._annotate_execution_error(
+            error = self._annotate_execution_error(
                 error,
                 checkpoint_state=state,
                 failure_context=FailureContext(
@@ -2606,28 +2671,17 @@ class Engine:
 
     @staticmethod
     def _state_for_failure(current_state: BaseModel | None, exc: Exception) -> BaseModel | None:
-        checkpoint_state = getattr(exc, "checkpoint_state", None)
-        if isinstance(checkpoint_state, BaseModel):
-            return checkpoint_state
-        return current_state
+        return exception_checkpoint_state(exc, current_state=current_state)
 
     def _failure_context_for_exception(self, exc: Exception) -> FailureContext | None:
-        failure_context = getattr(exc, "failure_context", None)
-        if isinstance(failure_context, FailureContext):
-            return FailureContext.from_payload(failure_context.to_payload())
-        if isinstance(failure_context, dict):
-            return FailureContext.from_payload(deepcopy(failure_context))
-        return None
+        return exception_failure_context(exc)
 
     @staticmethod
     def _pending_handoffs_for_exception(
         exc: Exception,
         pending_handoffs: tuple[PendingHandoff, ...],
     ) -> tuple[PendingHandoff, ...]:
-        annotated = getattr(exc, "pending_handoffs", None)
-        if isinstance(annotated, tuple):
-            return tuple(item for item in annotated if isinstance(item, PendingHandoff))
-        return pending_handoffs
+        return exception_pending_handoffs(exc, default=pending_handoffs)
 
     @staticmethod
     def _failure_context_payload(
@@ -2641,10 +2695,7 @@ class Engine:
 
     @staticmethod
     def _retry_kind_for_exception(exc: Exception) -> str | None:
-        retry_kind = getattr(exc, "retry_kind", None)
-        if isinstance(retry_kind, str) and retry_kind:
-            return retry_kind
-        return None
+        return exception_retry_kind(exc)
 
     def _annotate_execution_error(
         self,
@@ -2653,14 +2704,15 @@ class Engine:
         checkpoint_state: BaseModel | None = None,
         failure_context: FailureContext | None = None,
         retry_kind: str | None = None,
+        pending_handoffs: tuple[PendingHandoff, ...] | None = None,
     ) -> Exception:
-        if checkpoint_state is not None and getattr(exc, "checkpoint_state", None) is None:
-            setattr(exc, "checkpoint_state", checkpoint_state)
-        if failure_context is not None and getattr(exc, "failure_context", None) is None:
-            setattr(exc, "failure_context", failure_context)
-        if retry_kind is not None and getattr(exc, "retry_kind", None) is None:
-            setattr(exc, "retry_kind", retry_kind)
-        return exc
+        return enrich_execution_error(
+            exc,
+            checkpoint_state=checkpoint_state,
+            failure_context=failure_context,
+            retry_kind=retry_kind,
+            pending_handoffs=pending_handoffs,
+        )
 
     def _next_retry_feedback(
         self,
@@ -2668,22 +2720,21 @@ class Engine:
         exc: Exception,
         *,
         attempt: int,
-    ) -> str | None:
+    ) -> tuple[str | None, Exception]:
         kind = self._provider_retry_kind(exc)
         if kind is None:
-            return None
+            return None, exc
         if not self._retry_policy_allows(step.retry_policy, kind):
-            return None
+            return None, exc
         if attempt >= step.retry_policy.max_attempts:
-            self._annotate_retry_exhaustion(exc, step=step, attempt=attempt, kind=kind)
-            return None
-        self._ensure_retry_failure_context(exc, step=step, kind=kind)
+            return None, self._annotate_retry_exhaustion(exc, step=step, attempt=attempt, kind=kind)
+        updated_exc = self._ensure_retry_failure_context(exc, step=step, kind=kind)
         return build_retry_feedback(
-            exc,
+            updated_exc,
             step_name=step.name,
             attempt=attempt + 1,
             max_attempts=step.retry_policy.max_attempts,
-        )
+        ), updated_exc
 
     def _annotate_retry_exhaustion(
         self,
@@ -2692,11 +2743,11 @@ class Engine:
         step: CompiledStep,
         attempt: int,
         kind: str,
-    ) -> None:
-        self._ensure_retry_failure_context(exc, step=step, kind=kind)
-        failure_context = self._failure_context_for_exception(exc)
+    ) -> Exception:
+        updated_exc = self._ensure_retry_failure_context(exc, step=step, kind=kind)
+        failure_context = self._failure_context_for_exception(updated_exc)
         if failure_context is None:
-            return
+            return updated_exc
         updated_details = dict(failure_context.details)
         updated_details["retry_attempts_consumed"] = attempt
         updated_details["retry_max_attempts"] = step.retry_policy.max_attempts
@@ -2714,7 +2765,9 @@ class Engine:
             pending_input_id=failure_context.pending_input_id,
             details=updated_details,
         )
-        setattr(exc, "failure_context", updated)
+        if isinstance(updated_exc, WorkflowExecutionError):
+            return replace_execution_error(updated_exc, failure_context=updated)
+        return WorkflowExecutionError(str(updated_exc), failure_context=updated)
 
     def _ensure_retry_failure_context(
         self,
@@ -2722,7 +2775,7 @@ class Engine:
         *,
         step: CompiledStep,
         kind: str,
-    ) -> None:
+    ) -> Exception:
         existing = self._failure_context_for_exception(exc)
         if existing is None:
             details = {"step": step.name, "error": str(exc)}
@@ -2749,8 +2802,9 @@ class Engine:
                 pending_input_id=existing.pending_input_id,
                 details=details,
             )
-        setattr(exc, "failure_context", failure_context)
-        setattr(exc, "retry_kind", kind)
+        if isinstance(exc, WorkflowExecutionError):
+            return replace_execution_error(exc, failure_context=failure_context, retry_kind=kind)
+        return WorkflowExecutionError(str(exc), failure_context=failure_context, retry_kind=kind)
 
     @staticmethod
     def _retry_policy_allows(policy: ProviderRetryPolicy, kind: str) -> bool:
@@ -2768,7 +2822,7 @@ class Engine:
 
     @staticmethod
     def _provider_retry_kind(exc: Exception) -> str | None:
-        explicit = getattr(exc, "retry_kind", None)
+        explicit = exception_retry_kind(exc)
         if isinstance(explicit, str) and explicit:
             return explicit
         if not isinstance(exc, ProviderExecutionError):
@@ -3475,16 +3529,34 @@ class Engine:
         return {"value": token_usage}
 
     @staticmethod
+    def _provider_attempt_flags(
+        *,
+        step_kind: str,
+        provider_usage: StepProviderUsage | None,
+        outcome: Outcome | None,
+        producer_raw_output: str | None,
+        verifier_raw_output: str | None,
+    ) -> tuple[bool, bool | None, bool | None]:
+        if step_kind == "produce_verify":
+            producer_attempted = (
+                producer_raw_output is not None
+                or (provider_usage is not None and provider_usage.producer is not None)
+            )
+            verifier_attempted = (
+                verifier_raw_output is not None
+                or (provider_usage is not None and provider_usage.verifier is not None)
+            )
+            return producer_attempted or verifier_attempted, producer_attempted, verifier_attempted
+        provider_attempted = (
+            outcome is not None
+            or producer_raw_output is not None
+            or (provider_usage is not None and provider_usage.llm is not None)
+        )
+        return provider_attempted, None, None
+
+    @staticmethod
     def _exception_failure_context(exc: Exception) -> dict[str, Any]:
-        failure_context = getattr(exc, "failure_context", None)
-        if isinstance(failure_context, FailureContext):
-            return failure_context.to_payload()
-        if isinstance(failure_context, dict) and failure_context:
-            return deepcopy(failure_context)
-        return {
-            "error": str(exc),
-            "error_type": type(exc).__name__,
-        }
+        return exception_failure_context_payload(exc)
 
     @staticmethod
     def _current_step_scope_item(context: Context, step: CompiledStep) -> tuple[str | None, str | None]:

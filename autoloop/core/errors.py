@@ -120,9 +120,20 @@ class WorkflowCompilationError(WorkflowError):
 class WorkflowExecutionError(WorkflowError):
     """Raised when workflow execution fails."""
 
-    checkpoint_state: BaseModel | None = None
-    failure_context: FailureContext | None = None
-    retry_kind: RetryKind | None = None
+    def __init__(
+        self,
+        message: str,
+        *,
+        checkpoint_state: BaseModel | None = None,
+        failure_context: FailureContext | None = None,
+        retry_kind: RetryKind | None = None,
+        pending_handoffs: tuple[object, ...] = (),
+    ) -> None:
+        super().__init__(message)
+        self.checkpoint_state = checkpoint_state
+        self.failure_context = failure_context
+        self.retry_kind = retry_kind
+        self.pending_handoffs = tuple(pending_handoffs)
 
 
 class StepExecutionError(WorkflowExecutionError):
@@ -135,11 +146,15 @@ class StepExecutionError(WorkflowExecutionError):
         checkpoint_state: BaseModel | None = None,
         failure_context: FailureContext | None = None,
         retry_kind: RetryKind | None = None,
+        pending_handoffs: tuple[object, ...] = (),
     ) -> None:
-        super().__init__(message)
-        self.checkpoint_state = checkpoint_state
-        self.failure_context = failure_context
-        self.retry_kind = retry_kind
+        super().__init__(
+            message,
+            checkpoint_state=checkpoint_state,
+            failure_context=failure_context,
+            retry_kind=retry_kind,
+            pending_handoffs=pending_handoffs,
+        )
 
 
 class RoutingError(StepExecutionError):
@@ -160,3 +175,108 @@ class CheckpointError(StepExecutionError):
 
 class ProviderExecutionError(StepExecutionError):
     """Raised when the provider contract is violated."""
+
+
+_UNSET = object()
+
+
+def exception_checkpoint_state(
+    exc: BaseException,
+    *,
+    current_state: BaseModel | None = None,
+) -> BaseModel | None:
+    if isinstance(exc, WorkflowExecutionError) and isinstance(exc.checkpoint_state, BaseModel):
+        return exc.checkpoint_state
+    return current_state
+
+
+def exception_failure_context(exc: BaseException) -> FailureContext | None:
+    if not isinstance(exc, WorkflowExecutionError):
+        return None
+    if not isinstance(exc.failure_context, FailureContext):
+        return None
+    return FailureContext.from_payload(exc.failure_context.to_payload())
+
+
+def exception_failure_context_payload(exc: BaseException) -> dict[str, Any]:
+    failure_context = exception_failure_context(exc)
+    if failure_context is not None:
+        return failure_context.to_payload()
+    return {
+        "error": str(exc),
+        "error_type": type(exc).__name__,
+    }
+
+
+def exception_retry_kind(exc: BaseException) -> RetryKind | None:
+    if not isinstance(exc, WorkflowExecutionError):
+        return None
+    return exc.retry_kind
+
+
+def exception_pending_handoffs(
+    exc: BaseException,
+    *,
+    default: tuple[Any, ...] = (),
+) -> tuple[Any, ...]:
+    if isinstance(exc, WorkflowExecutionError) and exc.pending_handoffs:
+        return exc.pending_handoffs
+    return default
+
+
+def replace_execution_error(
+    exc: WorkflowExecutionError,
+    *,
+    checkpoint_state: BaseModel | None | object = _UNSET,
+    failure_context: FailureContext | None | object = _UNSET,
+    retry_kind: RetryKind | None | object = _UNSET,
+    pending_handoffs: tuple[Any, ...] | object = _UNSET,
+) -> WorkflowExecutionError:
+    resolved_checkpoint_state = exc.checkpoint_state if checkpoint_state is _UNSET else checkpoint_state
+    resolved_failure_context = exc.failure_context if failure_context is _UNSET else failure_context
+    resolved_retry_kind = exc.retry_kind if retry_kind is _UNSET else retry_kind
+    resolved_pending_handoffs = exc.pending_handoffs if pending_handoffs is _UNSET else pending_handoffs
+    return type(exc)(
+        str(exc),
+        checkpoint_state=resolved_checkpoint_state,
+        failure_context=resolved_failure_context,
+        retry_kind=resolved_retry_kind,
+        pending_handoffs=tuple(resolved_pending_handoffs or ()),
+    )
+
+
+def enrich_execution_error(
+    exc: BaseException,
+    *,
+    checkpoint_state: BaseModel | None = None,
+    failure_context: FailureContext | None = None,
+    retry_kind: RetryKind | None = None,
+    pending_handoffs: tuple[Any, ...] | None = None,
+) -> WorkflowExecutionError:
+    if isinstance(exc, WorkflowExecutionError):
+        resolved_checkpoint_state = exc.checkpoint_state or checkpoint_state
+        resolved_failure_context = exc.failure_context or failure_context
+        resolved_retry_kind = exc.retry_kind or retry_kind
+        resolved_pending_handoffs = exc.pending_handoffs or tuple(pending_handoffs or ())
+        if (
+            resolved_checkpoint_state is exc.checkpoint_state
+            and resolved_failure_context is exc.failure_context
+            and resolved_retry_kind == exc.retry_kind
+            and resolved_pending_handoffs == exc.pending_handoffs
+        ):
+            return exc
+        return replace_execution_error(
+            exc,
+            checkpoint_state=resolved_checkpoint_state,
+            failure_context=resolved_failure_context,
+            retry_kind=resolved_retry_kind,
+            pending_handoffs=resolved_pending_handoffs,
+        )
+    message = str(exc).strip() or f"{type(exc).__name__} raised during workflow execution"
+    return WorkflowExecutionError(
+        message,
+        checkpoint_state=checkpoint_state,
+        failure_context=failure_context,
+        retry_kind=retry_kind,
+        pending_handoffs=tuple(pending_handoffs or ()),
+    )
