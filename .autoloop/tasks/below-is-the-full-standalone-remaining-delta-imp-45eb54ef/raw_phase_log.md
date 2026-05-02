@@ -1346,3 +1346,48 @@ Key findings / decisions
 Open issues / next step
 - No additional blocker remains in the implementer scope for this reviewer finding.
 - The next step is verifier re-review of the updated phase artifacts and helper semantics.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de8b9-0cec-7491-ae85-95ceca41a272
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+I’m re-reviewing only the reviewer-relevant delta: the worklist reload/cache fix, the new regression tests, and the phase artifacts. If the stale-refresh/validate path is actually closed and nothing new was introduced, I’ll clear the criteria and record the re-review outcome in the feedback artifact.
+
+The cache/reload fix looks coherent now: forced reload is centralized, full-source cache shape is preserved, and the regression tests hit the exact stale-refresh and stale-validate scenarios that were missing before. I’m marking the criteria complete and appending a short re-review note to the feedback artifact.
+
+Scope considered
+- Phase-local `scoped-state-worklists` only.
+- Re-reviewed the reviewer-driven delta: the worklist cache/reload fix, the new regression tests, and the updated phase artifacts.
+
+What I analyzed
+- The revised loader/update logic in `autoloop/core/worklists.py`.
+- The new regression coverage in `tests/unit/test_primitives_and_stores.py`.
+- The active implementation notes and the phase decision ledger to confirm the fix stayed aligned with the accepted scoped-state/worklist contract.
+
+What I reviewed
+- `Worklist.load_items(...)`, `reload_items(...)`, `_load_items_snapshot(...)`, `refresh_selection(...)`, and `set_current_status(...)`.
+- `WorklistRuntimeView.validation_error()` and the stale-refresh / stale-validate scenarios from `IMP-001`.
+- The implementer’s reported validation result: the phase-targeted pytest suite now passes with `302 passed`.
+
+Key findings / decisions
+- `IMP-001` is resolved.
+- The fix is structurally sound: cached full-source snapshots and forced source reloads now have one centralized owner, and mutable helper updates no longer shrink the cache to the selected subset.
+- No new blocking or non-blocking findings were identified in the reviewed delta.
+- Criteria have been updated to complete, and the feedback artifact now records the re-review outcome.
+
+Open issues / next step
+- No remaining phase-local review blocker for `scoped-state-worklists`.
+- This phase is ready to advance from code review.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
