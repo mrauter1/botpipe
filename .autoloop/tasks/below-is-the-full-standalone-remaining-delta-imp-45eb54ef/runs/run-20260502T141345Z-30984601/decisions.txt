@@ -1,0 +1,4 @@
+<autoloop-decisions-header version="1" block_seq="1" owner="planner" phase_id="task-global" pair="plan" turn_seq="1" run_id="run-20260502T141345Z-30984601" ts="2026-05-02T14:13:46.149018+00:00" />
+Do not add runtime or package-level compatibility shims for legacy simple-workflow handlers; migrate exported workflow code and tests to the enforced ctx-only public contract.
+When tests need direct step execution, treat compiled step hooks and python handlers as the supported invocation surface instead of WorkflowClass.on_* tuple-return helpers.
+Keep the discovered-package parity sweep as the repo-level compatibility gate and require zero exported-package compile failures after the migration.
