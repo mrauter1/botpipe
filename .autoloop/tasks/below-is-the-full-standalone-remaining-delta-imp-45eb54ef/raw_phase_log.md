@@ -2710,3 +2710,46 @@ I updated the phase review artifacts: all criteria checkboxes are checked, and `
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de94a-caeb-7a30-944b-222c1d444138
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+I’m checking whether the implementation-phase test edits already provide the coverage the test phase needs, or whether there’s a remaining regression seam worth pinning with one more explicit test. I’m reading the phase test artifact and scanning the helper usage patterns before I decide whether to add code or just document the existing coverage.
+
+The remaining gap I found is small but worth fixing in-repo: the optimizer suite’s local helper wrappers still advertise the old tuple-return shape in their type annotations, even though the runtime test surface now uses return-only control values plus `ctx.state`. I’m aligning those annotations and then I’ll update the phase test artifacts.
+
+I’ve made the only repository test-file refinement I found: the representative optimizer helpers now advertise the final return shape in their annotations. I’m running that suite once more, then I’ll write the behavior-to-coverage map into the phase test artifact.
+
+Scope considered
+
+Phase-local runtime test-surface coverage for the exported workflow contract migration: the representative optimizer suite, shared direct-invocation helper usage, and the required test-phase artifacts.
+
+What I analyzed
+
+I reviewed the current helper contract, the migrated runtime suites that invoke compiled handlers directly, and the phase decisions/implementation notes. I also checked for lingering tuple-return helper usage and verified that the representative optimizer suite still provides direct-call coverage for bootstrap, capture, route-skip, publish, and after-verifier behavior.
+
+What I changed
+
+I aligned the local helper annotations in [tests/runtime/test_workflow_run_traces_to_optimization_candidates.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workflow_run_traces_to_optimization_candidates.py) with the final contract so they no longer advertise legacy tuple returns. I updated the phase [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/test/phases/migrate-runtime-test-surfaces/test_strategy.md) with an explicit behavior-to-coverage map, and appended a concise validation summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/artifacts/test/phases/migrate-runtime-test-surfaces/feedback.md).
+
+Key findings / decisions
+
+The runtime suites already covered the migrated behavior well; the only remaining repo-side cleanup was stale helper annotations in the representative optimizer suite. I kept scope narrow and did not add new compatibility tests, consistent with the phase contract and decisions ledger.
+
+Open issues / next step
+
+Validation passed: `./.venv/bin/pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py` finished green with existing contract warnings only.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

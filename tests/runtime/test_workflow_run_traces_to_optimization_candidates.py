@@ -38,7 +38,7 @@ def _isolate_workflow_modules():
     _clear_workflow_modules()
 
 
-def _invoke_optimizer_python_step(workflow_pkg, step_name: str, ctx: Context) -> tuple[object, object]:
+def _invoke_optimizer_python_step(workflow_pkg, step_name: str, ctx: Context) -> object:
     return invoke_python_step(workflow_pkg.WorkflowRunTracesToOptimizationCandidates, step_name, ctx)
 
 
@@ -49,7 +49,7 @@ def _invoke_optimizer_after_verifier_hook(
     *,
     outcome: Outcome,
     artifacts: object | None = None,
-) -> tuple[object, object]:
+) -> object:
     return invoke_after_verifier_hook(
         workflow_pkg.WorkflowRunTracesToOptimizationCandidates,
         step_name,
