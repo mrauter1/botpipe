@@ -800,3 +800,52 @@ Open issues / next step
 - Validation was limited to `python3 -m py_compile` across the touched core modules, tests, and workflow packages.
 - I could not run runtime tests in this shell because the environment is missing `pydantic` and `pytest`.
 - There are still likely untouched tests outside the edited set that assume the old python-step tuple-return style and should be migrated when the test environment is available.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de885-df79-7b33-a639-f87cf8f67f03
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+I’m reviewing the changed engine/compiler path against the phase contract first, then I’ll update the active review artifacts with any blocking gaps against the requested hook/control model and the deliverables.
+
+Reviewing the phase diff against the acceptance criteria and the request-relevant runtime paths first. I’m checking the changed engine/compiler/hooks surface, then I’ll update the review artifacts with concrete blocking findings if the implementation diverges from the phase contract.
+
+I’ve confirmed one behavioral regression in route attribution and one scope miss in the collaborator refactor. I’m checking a few nearby runtime paths now to make sure the feedback is precise and limited to concrete, reproducible issues before I write the review artifacts.
+
+The remaining issue set is clear now: one runtime regression, one unimplemented in-scope deliverable, and one incomplete repo-wide migration that leaves removed behavior codified in tests/examples. I’m writing those into the phase feedback and leaving the criteria unchecked accordingly.
+
+Scope considered
+- Phase-local `hook-control-unification` runtime/compiler surface and the repo-owned tests/examples that still define that public contract.
+- Review edits were limited to the active verifier artifacts in the phase directory.
+
+What I analyzed
+- Hook/finalization execution in `autoloop/core/engine.py`.
+- Collaborator ownership in `autoloop/core/engine_collaborators.py`.
+- The phase implementation notes and the remaining repo-owned python-step examples under `tests/`, `workflows/`, and `autoloop/runtime/cli.py`.
+
+What I reviewed
+- Acceptance criteria against the implemented diff, especially single-arity hooks, hook short-circuit control, and python-step return normalization.
+- Regression risk around route attribution and whether the collaborator refactor was actually completed.
+- Remaining repo-owned fixtures/tests that still codify removed tuple/state-return behavior.
+
+Key findings / decisions
+- Added three blocking findings to `feedback.md`.
+- Left all criteria unchecked in `criteria.md` because the phase still has blocking gaps.
+- The main issues are: hook-originated pre-provider routes are misattributed as candidate routes, the collaborator ownership refactor was not completed, and many repo-owned tests/examples still encode removed python-step return forms.
+
+Open issues / next step
+- Fix `IMP-001` by preserving explicit `candidate_route=None` for hook-originated pre-provider routes.
+- Fix `IMP-002` by moving real dispatch/finalization/hook logic into `StepDispatcher`, `RouteFinalizer`, and `HookRunner`.
+- Fix `IMP-003` by migrating the remaining repo-owned tests/templates/fixtures off tuple/state returns and adding rejection coverage for removed forms.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
