@@ -216,3 +216,12 @@ The plan artifacts are acceptable as revised. No further planner changes are req
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_scope_resolved
+---
+phase_mode=single
+phase_ids=public-surface-cleanup,hook-control-unification,scoped-state-worklists,failure-trace-optimizer-alignment,docs-and-tests
+explicit=True
+current_phase_index=0
