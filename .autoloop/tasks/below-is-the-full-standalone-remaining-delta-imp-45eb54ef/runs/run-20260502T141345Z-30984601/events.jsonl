@@ -46,3 +46,6 @@
 {"ts": "2026-05-02T15:49:06.070297+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 46, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "enforce-repo-compatibility-gate"}
 {"ts": "2026-05-02T15:50:16.925748+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 47, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "enforce-repo-compatibility-gate"}
 {"ts": "2026-05-02T15:50:16.978698+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 48, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "enforce-repo-compatibility-gate"}
+{"ts": "2026-05-02T15:50:17.071078+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 49, "event_type": "phase_completed", "pair": "test", "phase_id": "enforce-repo-compatibility-gate", "phase_mode": "single"}
+{"ts": "2026-05-02T15:50:17.072801+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 50, "event_type": "pair_started", "pair": "audit", "phase_id": null}
+{"ts": "2026-05-02T15:50:17.072883+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 51, "event_type": "cycle_started", "pair": "audit", "cycle": 1, "attempt": 1, "phase_id": null}
