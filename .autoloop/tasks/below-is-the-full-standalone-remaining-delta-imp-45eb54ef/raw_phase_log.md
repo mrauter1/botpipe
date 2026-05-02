@@ -435,3 +435,69 @@ Validation that passed:
 Open issues / next step
 
 A broader compile sweep over exported workflow packages still finds untouched public workflow packages that need the same explicit-hook migration, plus some pre-existing route-handoff-to-`PythonStep` validation failures outside this reviewer fix. I recorded that in the implementation notes and decisions instead of treating the repo-wide workflow sweep as clean.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=2 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de854-cad3-74d0-a960-3effc949e32b
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+I’m reviewing the producer changes against the phase scope, with emphasis on whether the public simple compiler path is actually clean end to end rather than only for the touched fixtures. I’ll verify the remaining public workflow packages and update the phase artifacts based on that.
+
+Reviewing the updated phase artifacts and the remaining public workflow compile surface first. I’m checking whether the reviewer findings were actually closed end to end, then I’ll update `criteria.md` and `feedback.md` only.
+
+The earlier two blocking items look addressed in the touched code. I’m verifying the remaining public simple workflow surface now, because a central gate is only safe if the shipped public workflow packages were migrated consistently.
+
+The focused tests are still running. The main risk already reproduced is broader: several shipped public simple workflows still fail the new validation gate because they were not migrated off legacy class-level handlers.
+
+I’ve got the verification result: the touched test slices pass, but the repo-wide compile sweep still breaks on multiple shipped `autoloop.simple.Workflow` packages that retain removed class-level handler forms. I’m recording that as the remaining blocking issue in the review artifact.
+
+The review artifact now reflects the one remaining blocking gap: untouched exported simple workflows that still rely on removed class-level handlers. I’m doing one last readback of the review files before closing the cycle.
+
+Scope considered
+
+Phase-local review of the `public-surface-cleanup` implementation, limited to the changed public compiler-path cleanup, the updated tests, and the shipped public simple workflow packages that are directly affected by the new validation gate. I only updated the active review artifacts.
+
+What I analyzed
+
+I reviewed the touched compiler and validation path around `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/compiler.py`, and `autoloop/core/hook_validation.py`, plus the updated tests in `tests/unit/test_simple_surface.py`, `tests/contract/test_engine_contracts.py`, `tests/runtime/test_workspace_and_context.py`, and `tests/runtime/test_runtime_static_graph.py`. I also checked the active `implementation_notes.md`, `criteria.md`, and `feedback.md`.
+
+What I reviewed
+
+The two earlier blockers are no longer the main issue: the central public simple-workflow gate is now in place, and the touched test slices pass. I confirmed that with:
+
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+  Result: `189 passed`.
+
+I then ran a repo-wide exported-workflow compile sweep and confirmed a remaining blocking regression: multiple shipped `autoloop.simple.Workflow` packages still fail `compile_workflow()` because they retain removed class-level `on_start`, `on_outcome`, or `on_<step>` handlers.
+
+Key findings / decisions
+
+`IMP-003` remains blocking. The repo still ships public simple workflows that do not meet the newly enforced explicit-declaration contract, including:
+
+- `workflows/company_operation_to_recursive_improvement_cycle/workflow.py`
+- `workflows/incident_to_hardening_program/workflow.py`
+- `workflows/workflow_and_eval_to_refined_workflow_package/workflow.py`
+- `workflows/workflow_idea_to_workflow_package/workflow.py`
+- `workflows/workflow_package_to_composable_building_blocks/workflow.py`
+- `workflows/workflow_portfolio_to_operating_system/workflow.py`
+- `workflows/workflow_run_history_to_failure_modes/workflow.py`
+- `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`
+- `workflows/workflow_to_eval_suite/workflow.py`
+
+I appended that finding to `feedback.md`. I left all `criteria.md` boxes unchecked because this is still a material compatibility and maintainability failure for the public surface.
+
+Open issues / next step
+
+Migrate the remaining exported simple workflow packages to explicit declaration hooks in the same pattern already used for the workflows fixed this cycle, then rerun the exported-workflow compile sweep. After that, the criteria can be reevaluated.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
