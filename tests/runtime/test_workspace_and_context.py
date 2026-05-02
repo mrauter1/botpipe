@@ -1568,7 +1568,8 @@ class {class_name}(Workflow):
 
     @python_step(name="start", routes={{"done": FINISH}})
     def start(state: State, ctx):
-        return state.model_copy(update={{"done": True}}), Event("done")
+        ctx.state = state.model_copy(update={{"done": True}})
+        return Event("done")
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -1763,7 +1764,9 @@ class ParentClassWorkflow(Workflow):
             "parent_session_id": ctx.get_session("main").session_id,
         }
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
-        return state.model_copy(update={"finished": True}), Event("done")
+
+        ctx.state = state.model_copy(update={"finished": True})
+        return Event("done")
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -1830,7 +1833,9 @@ class ParentCompositionHelperWorkflow(Workflow):
             "child_request_file": str(child.request_file),
         }
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
-        return state.model_copy(update={"finished": True}), Event("done")
+
+        ctx.state = state.model_copy(update={"finished": True})
+        return Event("done")
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -1917,7 +1922,7 @@ class ParentNameWorkflow(Workflow):
     @python_step(name="wait", routes={"question": AWAIT_INPUT, "done": FINISH})
     def wait(state: State, ctx):
         if ctx.answer is None:
-            return state, Event("question", question="Parent question?")
+            return Event("question", question="Parent question?")
         result = ctx.invoke_workflow("child_pause", message="Run child by name", parameters={"mode": "strict"})
         payload = {
             "parent_answer": ctx.answer,
@@ -1928,7 +1933,9 @@ class ParentNameWorkflow(Workflow):
             "child_checkpoint_file": str(result.checkpoint_file),
         }
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
-        return state.model_copy(update={"finished": True}), Event("done")
+
+        ctx.state = state.model_copy(update={"finished": True})
+        return Event("done")
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -2033,7 +2040,9 @@ class ChildTypedWorkflow(Workflow):
             "mode": ctx.params.mode,
         }}
         (ctx.run_folder / "typed-child.json").write_text(json.dumps(payload), encoding="utf-8")
-        return state.model_copy(update={{"topic": ctx.input.topic, "mode": ctx.params.mode}}), Event("done")
+
+        ctx.state = state.model_copy(update={{"topic": ctx.input.topic, "mode": ctx.params.mode}})
+        return Event("done")
 
     @staticmethod
     def build_output(state: State, ctx):
@@ -2091,7 +2100,9 @@ class ParentTypedInvokerWorkflow(Workflow):
             "child_metadata": child.metadata,
         }}
         (ctx.run_folder / "summary.json").write_text(json.dumps(payload), encoding="utf-8")
-        return state.model_copy(update={{"finished": True}}), Event("done")
+
+        ctx.state = state.model_copy(update={{"finished": True}})
+        return Event("done")
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -2127,7 +2138,7 @@ class ParentFailingWorkflow(Workflow):
     @python_step(name="launch", routes={"done": FINISH})
     def launch(state: State, ctx):
         ctx.invoke_workflow("child_failing", message="Run child fatal")
-        return state, Event("done")
+        return Event("done")
 """.strip()
         + "\n",
         encoding="utf-8",

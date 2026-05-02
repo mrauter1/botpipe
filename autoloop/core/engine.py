@@ -27,6 +27,7 @@ from .engine_collaborators import (
     RouteFinalizer,
     SessionRuntime,
     StateRuntime,
+    StepFinalizationRequest,
     StepDispatcher,
     WorkflowInvoker,
 )
@@ -114,20 +115,6 @@ class _DirectRuntimeControl:
     handoff: str | None = None
     source_hook: str | None = None
     source_phase: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class HookResult:
-    event: Event | None = None
-    control: RequestInput | Goto | Fail | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class _HookExecutionResult:
-    state: BaseModel
-    result: HookResult = HookResult()
-    explicit_event_override: bool = False
-    redirect: HookRouteRedirect | None = None
 
 
 class Engine:
@@ -671,247 +658,6 @@ class Engine:
             max_steps=max_steps,
         )
 
-    def _execute_step(
-        self,
-        step: CompiledStep,
-        context: Context,
-        state: BaseModel,
-        pending_handoffs: tuple[PendingHandoff, ...],
-    ) -> tuple[
-        BaseModel,
-        str,
-        Event | None,
-        Outcome | None,
-        str | None,
-        str | None,
-        StepProviderUsage | None,
-        tuple[PendingHandoff, ...],
-        str | None,
-        str | None,
-        str | None,
-        str | None,
-        str | None,
-        str | None,
-        str | None,
-        PendingInput | None,
-        str | None,
-        str | None,
-        bool,
-        tuple[HookRouteRedirect, ...],
-    ]:
-        context._set_state(state)
-        context._set_active_worklist(step.scope_name)
-        initial_artifacts = self._resolve_artifacts(context)
-        context._set_artifacts(initial_artifacts)
-        self._ensure_required_artifacts(step, initial_artifacts)
-        if step.kind == "produce_verify":
-            return self._execute_pair_step(step, context, state, pending_handoffs)
-        before_result = self._run_before_hook(step, context, state, artifacts=initial_artifacts)
-        state = before_result.state
-        context._set_state(state)
-        context._set_artifacts(self._resolve_artifacts(context))
-        if before_result.result.control is not None:
-            _, remaining_pending_handoffs = self._matching_pending_handoffs(step, context, pending_handoffs)
-            direct_control = self._normalize_direct_runtime_control(
-                step=step,
-                context=context,
-                control=before_result.result.control,
-                hook_name=getattr(step.before_hook, "__name__", type(step.before_hook).__name__),
-                hook_phase="before",
-            )
-            scheduled_handoffs = self._schedule_direct_control_handoffs(
-                remaining_pending_handoffs,
-                control=direct_control,
-                context=context,
-                source_step=step.name,
-            )
-            return (
-                state,
-                direct_control.destination,
-                None,
-                None,
-                None,
-                None,
-                None,
-                scheduled_handoffs,
-                None,
-                None,
-                direct_control.control,
-                direct_control.target_step,
-                direct_control.terminal,
-                direct_control.pending_input,
-                direct_control.source_hook,
-                direct_control.source_phase,
-                False,
-                None,
-                None,
-                (),
-            )
-        if before_result.result.event is not None:
-            _, remaining_pending_handoffs = self._matching_pending_handoffs(step, context, pending_handoffs)
-            (
-                finalized_state,
-                destination,
-                finalized_event,
-                candidate_route,
-                final_route,
-                runtime_control,
-                target_step,
-                control_terminal,
-                control_pending_input,
-                control_source_hook,
-                control_source_phase,
-                final_provider_attributable,
-                hook_route_override_from,
-                hook_route_override_to,
-                hook_route_redirects,
-                scheduled_handoffs,
-            ) = self.route_finalizer.finalize(
-                step,
-                context,
-                state=state,
-                artifacts=self._resolve_artifacts(context),
-                candidate_event=before_result.result.event,
-                candidate_route=None,
-                after_subject=before_result.result.event,
-                pending_handoffs=remaining_pending_handoffs,
-                error_cls=WorkflowExecutionError,
-                provider_attributable=False,
-            )
-            return (
-                finalized_state,
-                destination,
-                finalized_event,
-                None,
-                None,
-                None,
-                None,
-                scheduled_handoffs,
-                candidate_route,
-                final_route,
-                runtime_control,
-                target_step,
-                control_terminal,
-                control_pending_input,
-                control_source_hook,
-                control_source_phase,
-                final_provider_attributable,
-                hook_route_override_from,
-                hook_route_override_to,
-                hook_route_redirects,
-            )
-        if step.kind == "step":
-            return self._execute_llm_step(step, context, state, pending_handoffs)
-        if step.kind == "workflow":
-            return self._execute_workflow_step(step, context, state, pending_handoffs)
-        if step.kind in {"python", "operation"}:
-            _, remaining_pending_handoffs = self._matching_pending_handoffs(step, context, pending_handoffs)
-            if step.python_handler is None:
-                raise WorkflowExecutionError(f"{step.kind} step {step.name!r} has no compiled handler")
-            context._set_route(None)
-            context._set_event(None)
-            context._set_outcome(None)
-            result = step.python_handler(context)
-            next_state = context.state
-            handler_name = getattr(step.python_handler, "__name__", step.name)
-            hook_result, _, _ = self._normalize_hook_result(
-                step,
-                context=context,
-                current_event=None,
-                result=result,
-                hook_phase="python_step",
-                hook_name=handler_name,
-            )
-            if hook_result.control is not None:
-                direct_control = self._normalize_direct_runtime_control(
-                    step=step,
-                    context=context,
-                    control=hook_result.control,
-                    hook_name=handler_name,
-                    hook_phase="python_step",
-                )
-                scheduled_handoffs = self._schedule_direct_control_handoffs(
-                    remaining_pending_handoffs,
-                    control=direct_control,
-                    context=context,
-                    source_step=step.name,
-                )
-                return (
-                    next_state,
-                    direct_control.destination,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    scheduled_handoffs,
-                    None,
-                    None,
-                    direct_control.control,
-                    direct_control.target_step,
-                    direct_control.terminal,
-                    direct_control.pending_input,
-                    direct_control.source_hook,
-                    direct_control.source_phase,
-                    False,
-                    None,
-                    None,
-                    (),
-                )
-            event = hook_result.event or Event("done")
-            (
-                finalized_state,
-                destination,
-                finalized_event,
-                candidate_route,
-                final_route,
-                runtime_control,
-                target_step,
-                control_terminal,
-                control_pending_input,
-                control_source_hook,
-                control_source_phase,
-                final_provider_attributable,
-                hook_route_override_from,
-                hook_route_override_to,
-                hook_route_redirects,
-                scheduled_handoffs,
-            ) = self.route_finalizer.finalize(
-                step,
-                context,
-                state=next_state,
-                artifacts=self._resolve_artifacts(context),
-                candidate_event=event,
-                candidate_route=event.tag,
-                after_subject=event,
-                pending_handoffs=remaining_pending_handoffs,
-                error_cls=WorkflowExecutionError,
-                provider_attributable=False,
-            )
-            return (
-                finalized_state,
-                destination,
-                finalized_event,
-                None,
-                None,
-                None,
-                None,
-                scheduled_handoffs,
-                candidate_route,
-                final_route,
-                runtime_control,
-                target_step,
-                control_terminal,
-                control_pending_input,
-                control_source_hook,
-                control_source_phase,
-                final_provider_attributable,
-                hook_route_override_from,
-                hook_route_override_to,
-                hook_route_redirects,
-            )
-        raise WorkflowExecutionError(f"unsupported step kind {step.kind!r}")
-
     def _execute_pair_step(
         self,
         step: CompiledStep,
@@ -948,7 +694,7 @@ class Engine:
             artifacts = self._resolve_artifacts(context)
             context._set_artifacts(artifacts)
             try:
-                before_result = self._run_before_hook(
+                before_result = self.hook_runner.run_before(
                     step,
                     context,
                     state,
@@ -995,57 +741,42 @@ class Engine:
                         (),
                     )
                 if before_result.result.event is not None:
-                    (
-                        finalized_state,
-                        destination,
-                        finalized_event,
-                        candidate_route,
-                        final_route,
-                        runtime_control,
-                        target_step,
-                        control_terminal,
-                        control_pending_input,
-                        control_source_hook,
-                        control_source_phase,
-                        final_provider_attributable,
-                        hook_route_override_from,
-                        hook_route_override_to,
-                        hook_route_redirects,
-                        scheduled_handoffs,
-                    ) = self.route_finalizer.finalize(
-                        step,
-                        context,
-                        state=state,
-                        artifacts=self._resolve_artifacts(context),
-                        candidate_event=before_result.result.event,
-                        candidate_route=None,
-                        after_subject=before_result.result.event,
-                        pending_handoffs=remaining_pending_handoffs,
-                        error_cls=WorkflowExecutionError,
-                        provider_attributable=False,
-                        after_hook=None,
+                    finalization = self.route_finalizer.finalize(
+                        StepFinalizationRequest(
+                            step=step,
+                            context=context,
+                            state=state,
+                            artifacts=self._resolve_artifacts(context),
+                            candidate_event=before_result.result.event,
+                            candidate_route_present=False,
+                            after_subject=before_result.result.event,
+                            pending_handoffs=remaining_pending_handoffs,
+                            error_cls=WorkflowExecutionError,
+                            provider_attributable=False,
+                            after_hook=None,
+                        )
                     )
                     return (
-                        finalized_state,
-                        destination,
-                        finalized_event,
+                        finalization.state,
+                        finalization.destination,
+                        finalization.finalized_event,
                         None,
                         None,
                         None,
                         None,
-                        scheduled_handoffs,
-                        candidate_route,
-                        final_route,
-                        runtime_control,
-                        target_step,
-                        control_terminal,
-                        control_pending_input,
-                        control_source_hook,
-                        control_source_phase,
-                        final_provider_attributable,
-                        hook_route_override_from,
-                        hook_route_override_to,
-                        hook_route_redirects,
+                        finalization.scheduled_handoffs,
+                        finalization.candidate_route,
+                        finalization.final_route,
+                        finalization.runtime_control,
+                        finalization.target_step,
+                        finalization.terminal,
+                        finalization.pending_input,
+                        finalization.source_hook,
+                        finalization.source_phase,
+                        finalization.provider_attributable,
+                        finalization.hook_route_override_from,
+                        finalization.hook_route_override_to,
+                        finalization.hook_route_redirects,
                     )
                 (
                     producer_raw_output,
@@ -1106,57 +837,42 @@ class Engine:
                     )
                 if short_circuit_event is not None:
                     assert direct_control_state is not None
-                    (
-                        finalized_state,
-                        destination,
-                        finalized_event,
-                        candidate_route,
-                        final_route,
-                        runtime_control,
-                        target_step,
-                        control_terminal,
-                        control_pending_input,
-                        control_source_hook,
-                        control_source_phase,
-                        final_provider_attributable,
-                        hook_route_override_from,
-                        hook_route_override_to,
-                        hook_route_redirects,
-                        scheduled_handoffs,
-                    ) = self.route_finalizer.finalize(
-                        step,
-                        context,
-                        state=direct_control_state,
-                        artifacts=self._resolve_artifacts(context),
-                        candidate_event=short_circuit_event,
-                        candidate_route=None,
-                        after_subject=short_circuit_event,
-                        pending_handoffs=remaining_pending_handoffs,
-                        error_cls=WorkflowExecutionError,
-                        provider_attributable=False,
-                        after_hook=None,
+                    finalization = self.route_finalizer.finalize(
+                        StepFinalizationRequest(
+                            step=step,
+                            context=context,
+                            state=direct_control_state,
+                            artifacts=self._resolve_artifacts(context),
+                            candidate_event=short_circuit_event,
+                            candidate_route_present=False,
+                            after_subject=short_circuit_event,
+                            pending_handoffs=remaining_pending_handoffs,
+                            error_cls=WorkflowExecutionError,
+                            provider_attributable=False,
+                            after_hook=None,
+                        )
                     )
                     return (
-                        finalized_state,
-                        destination,
-                        finalized_event,
+                        finalization.state,
+                        finalization.destination,
+                        finalization.finalized_event,
                         None,
                         producer_raw_output,
                         verifier_raw_output,
                         provider_usage,
-                        scheduled_handoffs,
-                        candidate_route,
-                        final_route,
-                        runtime_control,
-                        target_step,
-                        control_terminal,
-                        control_pending_input,
-                        control_source_hook,
-                        control_source_phase,
-                        final_provider_attributable,
-                        hook_route_override_from,
-                        hook_route_override_to,
-                        hook_route_redirects,
+                        finalization.scheduled_handoffs,
+                        finalization.candidate_route,
+                        finalization.final_route,
+                        finalization.runtime_control,
+                        finalization.target_step,
+                        finalization.terminal,
+                        finalization.pending_input,
+                        finalization.source_hook,
+                        finalization.source_phase,
+                        finalization.provider_attributable,
+                        finalization.hook_route_override_from,
+                        finalization.hook_route_override_to,
+                        finalization.hook_route_redirects,
                     )
                 assert outcome is not None
                 event = self._apply_outcome(step, context, artifacts, state, outcome)
@@ -1167,57 +883,44 @@ class Engine:
                 )
                 final_event = event or Event(outcome.tag, reason=outcome.reason, question=outcome.question)
                 artifacts = self._resolve_artifacts(context)
-                (
-                    finalized_state,
-                    destination,
-                    finalized_event,
-                    candidate_route,
-                    final_route,
-                    runtime_control,
-                    target_step,
-                    control_terminal,
-                    control_pending_input,
-                    control_source_hook,
-                    control_source_phase,
-                    final_provider_attributable,
-                    hook_route_override_from,
-                    hook_route_override_to,
-                    hook_route_redirects,
-                    scheduled_handoffs,
-                ) = self.route_finalizer.finalize(
-                    step,
-                    context,
-                    state=next_state,
-                    artifacts=artifacts,
-                    candidate_event=final_event,
-                    after_subject=outcome,
-                    pending_handoffs=remaining_pending_handoffs,
-                    error_cls=ProviderExecutionError,
-                    provider_attributable=True,
-                    after_hook=step.after_verifier_hook,
-                    after_hook_phase="after_verifier",
+                finalization = self.route_finalizer.finalize(
+                    StepFinalizationRequest(
+                        step=step,
+                        context=context,
+                        state=next_state,
+                        artifacts=artifacts,
+                        candidate_event=final_event,
+                        candidate_route=final_event.tag,
+                        candidate_route_present=True,
+                        after_subject=outcome,
+                        pending_handoffs=remaining_pending_handoffs,
+                        error_cls=ProviderExecutionError,
+                        provider_attributable=True,
+                        after_hook=step.after_verifier_hook,
+                        after_hook_phase="after_verifier",
+                    )
                 )
                 return (
-                    finalized_state,
-                    destination,
-                    finalized_event,
+                    finalization.state,
+                    finalization.destination,
+                    finalization.finalized_event,
                     outcome,
                     producer_raw_output,
                     verifier_raw_output,
                     provider_usage,
-                    scheduled_handoffs,
-                    candidate_route,
-                    final_route,
-                    runtime_control,
-                    target_step,
-                    control_terminal,
-                    control_pending_input,
-                    control_source_hook,
-                    control_source_phase,
-                    final_provider_attributable,
-                    hook_route_override_from,
-                    hook_route_override_to,
-                    hook_route_redirects,
+                    finalization.scheduled_handoffs,
+                    finalization.candidate_route,
+                    finalization.final_route,
+                    finalization.runtime_control,
+                    finalization.target_step,
+                    finalization.terminal,
+                    finalization.pending_input,
+                    finalization.source_hook,
+                    finalization.source_phase,
+                    finalization.provider_attributable,
+                    finalization.hook_route_override_from,
+                    finalization.hook_route_override_to,
+                    finalization.hook_route_redirects,
                 )
             except Exception as exc:
                 next_feedback = self._next_retry_feedback(step, exc, attempt=attempt)
@@ -1281,56 +984,43 @@ class Engine:
                 )
                 final_event = event or Event(outcome.tag, reason=outcome.reason, question=outcome.question)
                 artifacts = self._resolve_artifacts(context)
-                (
-                    finalized_state,
-                    destination,
-                    finalized_event,
-                    candidate_route,
-                    final_route,
-                    runtime_control,
-                    target_step,
-                    control_terminal,
-                    control_pending_input,
-                    control_source_hook,
-                    control_source_phase,
-                    final_provider_attributable,
-                    hook_route_override_from,
-                    hook_route_override_to,
-                    hook_route_redirects,
-                    scheduled_handoffs,
-                ) = self.route_finalizer.finalize(
-                    step,
-                    context,
-                    state=next_state,
-                    artifacts=artifacts,
-                    candidate_event=final_event,
-                    after_subject=outcome,
-                    pending_handoffs=remaining_pending_handoffs,
-                    error_cls=ProviderExecutionError,
-                    provider_attributable=True,
+                finalization = self.route_finalizer.finalize(
+                    StepFinalizationRequest(
+                        step=step,
+                        context=context,
+                        state=next_state,
+                        artifacts=artifacts,
+                        candidate_event=final_event,
+                        candidate_route=final_event.tag,
+                        candidate_route_present=True,
+                        after_subject=outcome,
+                        pending_handoffs=remaining_pending_handoffs,
+                        error_cls=ProviderExecutionError,
+                        provider_attributable=True,
+                    )
                 )
                 self._persist_session(resolved_session)
                 return (
-                    finalized_state,
-                    destination,
-                    finalized_event,
+                    finalization.state,
+                    finalization.destination,
+                    finalization.finalized_event,
                     outcome,
                     outcome.raw_output,
                     None,
                     provider_usage,
-                    scheduled_handoffs,
-                    candidate_route,
-                    final_route,
-                    runtime_control,
-                    target_step,
-                    control_terminal,
-                    control_pending_input,
-                    control_source_hook,
-                    control_source_phase,
-                    final_provider_attributable,
-                    hook_route_override_from,
-                    hook_route_override_to,
-                    hook_route_redirects,
+                    finalization.scheduled_handoffs,
+                    finalization.candidate_route,
+                    finalization.final_route,
+                    finalization.runtime_control,
+                    finalization.target_step,
+                    finalization.terminal,
+                    finalization.pending_input,
+                    finalization.source_hook,
+                    finalization.source_phase,
+                    finalization.provider_attributable,
+                    finalization.hook_route_override_from,
+                    finalization.hook_route_override_to,
+                    finalization.hook_route_redirects,
                 )
             except Exception as exc:
                 next_feedback = self._next_retry_feedback(step, exc, attempt=attempt)
@@ -1386,55 +1076,42 @@ class Engine:
             if annotated is exc:
                 raise
             raise annotated from exc
-        (
-            finalized_state,
-            destination,
-            finalized_event,
-            candidate_route,
-            final_route,
-            runtime_control,
-            target_step,
-            control_terminal,
-            control_pending_input,
-            control_source_hook,
-            control_source_phase,
-            final_provider_attributable,
-            hook_route_override_from,
-            hook_route_override_to,
-            hook_route_redirects,
-            scheduled_handoffs,
-        ) = self.route_finalizer.finalize(
-            step,
-            context,
-            state=state,
-            artifacts=self._resolve_artifacts(context),
-            candidate_event=event,
-            after_subject=event,
-            pending_handoffs=remaining_pending_handoffs,
-            error_cls=WorkflowExecutionError,
-            provider_attributable=False,
+        finalization = self.route_finalizer.finalize(
+            StepFinalizationRequest(
+                step=step,
+                context=context,
+                state=state,
+                artifacts=self._resolve_artifacts(context),
+                candidate_event=event,
+                candidate_route=event.tag,
+                candidate_route_present=True,
+                after_subject=event,
+                pending_handoffs=remaining_pending_handoffs,
+                error_cls=WorkflowExecutionError,
+                provider_attributable=False,
+            )
         )
         return (
-            finalized_state,
-            destination,
-            finalized_event,
+            finalization.state,
+            finalization.destination,
+            finalization.finalized_event,
             None,
             None,
             None,
             None,
-            scheduled_handoffs,
-            candidate_route,
-            final_route,
-            runtime_control,
-            target_step,
-            control_terminal,
-            control_pending_input,
-            control_source_hook,
-            control_source_phase,
-            final_provider_attributable,
-            hook_route_override_from,
-            hook_route_override_to,
-            hook_route_redirects,
+            finalization.scheduled_handoffs,
+            finalization.candidate_route,
+            finalization.final_route,
+            finalization.runtime_control,
+            finalization.target_step,
+            finalization.terminal,
+            finalization.pending_input,
+            finalization.source_hook,
+            finalization.source_phase,
+            finalization.provider_attributable,
+            finalization.hook_route_override_from,
+            finalization.hook_route_override_to,
+            finalization.hook_route_redirects,
         )
 
     def _run_pair_step(
@@ -1510,7 +1187,7 @@ class Engine:
         self._append_logs(step, artifacts, producer_response.raw_output)
         if producer_response.session is not None:
             self._persist_session(producer_response.session)
-        after_producer_result = self._run_after_hook(
+        after_producer_result = self.hook_runner.run_after(
             step,
             context,
             state=state,
@@ -1558,7 +1235,7 @@ class Engine:
             review_artifacts = self._resolve_artifacts(context)
             context._set_artifacts(review_artifacts)
             self._ensure_named_artifacts_exist(step.verifier_requires, review_artifacts, step_name=step.name)
-            before_verifier_result = self._run_before_hook(
+            before_verifier_result = self.hook_runner.run_before(
                 step,
                 context,
                 next_state,
@@ -1771,542 +1448,6 @@ class Engine:
         if not isinstance(next_state, BaseModel):
             raise WorkflowExecutionError(f"handler for step {step.name!r} must return a pydantic model")
         return next_state
-
-    def _run_before_hook(
-        self,
-        step: CompiledStep,
-        context: Context,
-        state: BaseModel,
-        *,
-        artifacts: ResolvedArtifacts,
-        hook: Callable[..., Any] | None = None,
-        hook_phase: str = "before",
-    ) -> _HookExecutionResult:
-        hook = step.before_hook if hook is None else hook
-        if hook is None:
-            return _HookExecutionResult(state=state)
-        hook_name = getattr(hook, "__name__", type(hook).__name__)
-        self._emit_hook_event(
-            "hook_started",
-            step=step,
-            context=context,
-            hook_name=hook_name,
-            phase=hook_phase,
-        )
-        try:
-            context._set_state(state)
-            context._set_artifacts(artifacts)
-            context._set_route(None)
-            context._set_event(None)
-            context._set_outcome(None)
-            result = hook(context)
-            next_state = context.state
-            hook_result, explicit_event_override, redirect_record = self._normalize_hook_result(
-                step,
-                context=context,
-                current_event=None,
-                result=result,
-                hook_phase=hook_phase,
-                hook_name=hook_name,
-            )
-            self._emit_hook_event(
-                "hook_finished",
-                step=step,
-                context=context,
-                hook_name=hook_name,
-                phase=hook_phase,
-                route=hook_result.event.tag if hook_result.event is not None else None,
-            )
-            return _HookExecutionResult(
-                state=next_state,
-                result=hook_result,
-                explicit_event_override=explicit_event_override,
-                redirect=redirect_record,
-            )
-        except Exception as exc:
-            self._emit_hook_event(
-                "hook_failed",
-                step=step,
-                context=context,
-                hook_name=hook_name,
-                phase=hook_phase,
-                error=str(exc),
-            )
-            annotated = self._annotate_execution_error(
-                exc,
-                checkpoint_state=self._clone_state(context.state),
-                failure_context=FailureContext(
-                    kind="hook_failure",
-                    step_name=step.name,
-                    source_hook=hook_name,
-                    source_phase=hook_phase,
-                    details={"error": str(exc), "error_type": type(exc).__name__},
-                ),
-            )
-            if annotated is exc:
-                raise
-            raise annotated from exc
-
-    def _finalize_step_result(
-        self,
-        step: CompiledStep,
-        context: Context,
-        *,
-        state: BaseModel,
-        artifacts: ResolvedArtifacts,
-        candidate_event: Event,
-        candidate_route: str | None = None,
-        after_subject: Any,
-        pending_handoffs: tuple[PendingHandoff, ...],
-        error_cls: type[WorkflowExecutionError],
-        provider_attributable: bool,
-        after_hook: Callable[..., Any] | None = None,
-        after_hook_phase: str = "after",
-    ) -> tuple[
-        BaseModel,
-        str,
-        Event | None,
-        str | None,
-        str | None,
-        str | None,
-        str | None,
-        str | None,
-        PendingInput | None,
-        str | None,
-        str | None,
-        bool,
-        str | None,
-        str | None,
-        tuple[HookRouteRedirect, ...],
-        tuple[PendingHandoff, ...],
-    ]:
-        try:
-            self._validate_event(
-                step,
-                candidate_event,
-                provider_attributable=provider_attributable,
-                error_cls=error_cls,
-            )
-        except WorkflowExecutionError as exc:
-            annotated = self._annotate_execution_error(
-                exc,
-                checkpoint_state=state,
-                failure_context=FailureContext(
-                    kind="route_validation",
-                    step_name=step.name,
-                candidate_route=getattr(candidate_event, "tag", None)
-                    if isinstance(getattr(candidate_event, "tag", None), str)
-                    else None,
-                    details={"error": str(exc), "error_type": type(exc).__name__},
-                ),
-            )
-            if annotated is exc:
-                raise
-            raise annotated from exc
-        candidate_route = candidate_event.tag if candidate_route is None else candidate_route
-        after_result = self.hook_runner.run_after(
-            step,
-            context,
-            state=state,
-            artifacts=artifacts,
-            subject=after_subject,
-            candidate_event=candidate_event,
-            hook=after_hook,
-            hook_phase=after_hook_phase,
-        )
-        final_state = after_result.state
-        final_event = after_result.result.event or candidate_event
-        explicit_event_override = after_result.explicit_event_override
-        after_redirect = after_result.redirect
-        context._set_state(final_state)
-        finalized_artifacts = self._resolve_artifacts(context)
-        context._set_artifacts(finalized_artifacts)
-        route_redirects: list[HookRouteRedirect] = []
-        if after_redirect is not None:
-            route_redirects.append(replace(after_redirect, redirect_index=len(route_redirects) + 1))
-            self._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
-        if after_result.result.control is not None:
-            direct_control = self._normalize_direct_runtime_control(
-                step=step,
-                context=context,
-                control=after_result.result.control,
-                hook_name=getattr(after_hook or step.after_hook, "__name__", type(after_hook or step.after_hook).__name__),
-                hook_phase=after_hook_phase,
-            )
-            scheduled_handoffs = self._schedule_direct_control_handoffs(
-                pending_handoffs,
-                control=direct_control,
-                context=context,
-                source_step=step.name,
-            )
-            return (
-                final_state,
-                direct_control.destination,
-                None,
-                candidate_route,
-                None,
-                direct_control.control,
-                direct_control.target_step,
-                direct_control.terminal,
-                direct_control.pending_input,
-                direct_control.source_hook,
-                direct_control.source_phase,
-                False,
-                route_redirects[0].from_route if route_redirects else None,
-                route_redirects[-1].to_route if route_redirects else None,
-                tuple(route_redirects),
-                scheduled_handoffs,
-            )
-        final_route: CompiledRoute
-        try:
-            while True:
-                final_route = self.compiled.route(step.name, final_event.tag)
-                context._set_route(
-                    {
-                        "tag": final_event.tag,
-                        "target": final_route.target,
-                        "summary": final_route.summary,
-                        "handoff": final_route.handoff,
-                    }
-                )
-                context._set_event(self._event_context_payload(final_event))
-                context._set_outcome(after_subject)
-                route_result = self.hook_runner.run_route(
-                    step,
-                    context,
-                    final_state,
-                    finalized_artifacts,
-                    event=final_event,
-                    hook=final_route.on_taken,
-                    hook_phase="on_taken",
-                )
-                final_state = route_result.state
-                if route_result.result.event is not None:
-                    final_event = route_result.result.event
-                explicit_event_override = explicit_event_override or route_result.explicit_event_override
-                context._set_state(final_state)
-                finalized_artifacts = self._resolve_artifacts(context)
-                context._set_artifacts(finalized_artifacts)
-                route_redirect = route_result.redirect
-                if route_redirect is not None:
-                    route_redirects.append(replace(route_redirect, redirect_index=len(route_redirects) + 1))
-                    self._ensure_hook_redirect_limit(step, candidate_route=candidate_route, redirects=route_redirects)
-                    continue
-                if route_result.result.control is not None:
-                    direct_control = self._normalize_direct_runtime_control(
-                        step=step,
-                        context=context,
-                        control=route_result.result.control,
-                        hook_name=getattr(final_route.on_taken, "__name__", type(final_route.on_taken).__name__),
-                        hook_phase="on_taken",
-                    )
-                    scheduled_handoffs = self._schedule_direct_control_handoffs(
-                        pending_handoffs,
-                        control=direct_control,
-                        context=context,
-                        source_step=step.name,
-                    )
-                    return (
-                        final_state,
-                        direct_control.destination,
-                        None,
-                        candidate_route,
-                        None,
-                        direct_control.control,
-                        direct_control.target_step,
-                        direct_control.terminal,
-                        direct_control.pending_input,
-                        direct_control.source_hook,
-                        direct_control.source_phase,
-                        False,
-                        route_redirects[0].from_route if route_redirects else None,
-                        route_redirects[-1].to_route if route_redirects else None,
-                        tuple(route_redirects),
-                        scheduled_handoffs,
-                    )
-                break
-        except Exception as exc:
-            context._set_route(None)
-            context._set_event(None)
-            context._set_outcome(None)
-            annotated = self._annotate_execution_error(exc, checkpoint_state=self._clone_state(context.state))
-            if annotated is exc:
-                raise
-            raise annotated from exc
-        final_provider_attributable = provider_attributable and not explicit_event_override
-        final_error_cls = error_cls if final_provider_attributable else WorkflowExecutionError
-        self.artifact_guard.enforce(
-            step,
-            context,
-            finalized_artifacts,
-            route_tag=final_event.tag,
-            state=final_state,
-            error_cls=final_error_cls,
-            provider_attributable=final_provider_attributable,
-        )
-        destination = self._apply_route_effects(final_route, context, step=step) or final_route.target
-        self._update_final_step_runtime_state(step, getattr(context, "_step_state", None), final_event)
-        self._update_final_step_runtime_state(step, getattr(context, "_step_item_state", None), final_event)
-        return (
-            final_state,
-            destination,
-            final_event,
-            candidate_route,
-            final_event.tag,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            final_provider_attributable,
-            route_redirects[0].from_route if route_redirects else None,
-            route_redirects[-1].to_route if route_redirects else None,
-            tuple(route_redirects),
-            self._schedule_route_handoffs(
-                pending_handoffs,
-                route=final_route,
-                event=final_event,
-                destination=destination,
-                context=context,
-                source_step=step.name,
-            ),
-        )
-
-    def _run_after_hook(
-        self,
-        step: CompiledStep,
-        context: Context,
-        *,
-        state: BaseModel,
-        artifacts: ResolvedArtifacts,
-        subject: Any,
-        candidate_event: Event | None,
-        hook: Callable[..., Any] | None = None,
-        hook_phase: str = "after",
-    ) -> _HookExecutionResult:
-        hook = step.after_hook if hook is None else hook
-        if hook is None:
-            return _HookExecutionResult(state=state)
-        hook_name = getattr(hook, "__name__", type(hook).__name__)
-        self._emit_hook_event(
-            "hook_started",
-            step=step,
-            context=context,
-            hook_name=hook_name,
-            phase=hook_phase,
-            route=None if candidate_event is None else candidate_event.tag,
-        )
-        try:
-            context._set_state(state)
-            context._set_artifacts(artifacts)
-            if candidate_event is not None:
-                compiled_route = self.compiled.route(step.name, candidate_event.tag)
-                context._set_route(
-                    {
-                        "tag": candidate_event.tag,
-                        "target": compiled_route.target,
-                        "summary": compiled_route.summary,
-                        "handoff": compiled_route.handoff,
-                    }
-                )
-                context._set_event(self._event_context_payload(candidate_event))
-            else:
-                context._set_route(None)
-                context._set_event(None)
-            context._set_outcome(subject)
-            result = hook(context)
-            next_state = context.state
-            hook_result, explicit_override, redirect_record = self._normalize_hook_result(
-                step,
-                context=context,
-                current_event=candidate_event,
-                result=result,
-                hook_phase=hook_phase,
-                hook_name=hook_name,
-            )
-            self._emit_hook_event(
-                "hook_finished",
-                step=step,
-                context=context,
-                hook_name=hook_name,
-                phase=hook_phase,
-                route=hook_result.event.tag if hook_result.event is not None else None,
-            )
-            return _HookExecutionResult(
-                state=next_state,
-                result=hook_result,
-                explicit_event_override=explicit_override,
-                redirect=redirect_record,
-            )
-        except Exception as exc:
-            self._emit_hook_event(
-                "hook_failed",
-                step=step,
-                context=context,
-                hook_name=hook_name,
-                phase=hook_phase,
-                route=None if candidate_event is None else candidate_event.tag,
-                error=str(exc),
-            )
-            annotated = self._annotate_execution_error(
-                exc,
-                checkpoint_state=self._clone_state(context.state),
-                failure_context=FailureContext(
-                    kind="hook_failure",
-                    step_name=step.name,
-                    candidate_route=None if candidate_event is None else candidate_event.tag,
-                    source_hook=hook_name,
-                    source_phase=hook_phase,
-                    details={"error": str(exc), "error_type": type(exc).__name__},
-                ),
-            )
-            if annotated is exc:
-                raise
-            raise annotated from exc
-
-    def _normalize_hook_result(
-        self,
-        step: CompiledStep,
-        *,
-        context: Context,
-        current_event: Event | None,
-        result: Any,
-        hook_phase: str,
-        hook_name: str,
-    ) -> tuple[HookResult, bool, HookRouteRedirect | None]:
-        next_event = current_event
-        if result is None:
-            return HookResult(), False, None
-
-        if isinstance(result, BaseModel):
-            raise WorkflowExecutionError(
-                f"{hook_phase} hook for step {step.name!r} returned unsupported value {type(result)!r}"
-            )
-        if isinstance(result, str):
-            override_event = self._validate_hook_event_override(
-                step,
-                Event(
-                    tag=result,
-                    reason=None if next_event is None else next_event.reason,
-                    question=None if next_event is None else next_event.question,
-                    handoff=None if next_event is None else next_event.handoff,
-                ),
-            )
-            redirect_record = None
-            if next_event is not None:
-                redirect_record = self._build_hook_redirect_record(
-                    step=step,
-                    context=context,
-                    hook_name=hook_name,
-                    hook_phase=hook_phase,
-                    previous_event=next_event,
-                    next_event=override_event,
-                )
-            return HookResult(event=override_event), True, redirect_record
-        if isinstance(result, Event):
-            override_event = self._validate_hook_event_override(step, result)
-            redirect_record = None
-            if next_event is not None:
-                redirect_record = self._build_hook_redirect_record(
-                    step=step,
-                    context=context,
-                    hook_name=hook_name,
-                    hook_phase=hook_phase,
-                    previous_event=next_event,
-                    next_event=override_event,
-                )
-            return HookResult(event=override_event), True, redirect_record
-        if isinstance(result, (RequestInput, Goto, Fail)):
-            return HookResult(control=result), False, None
-        raise WorkflowExecutionError(
-            f"{hook_phase} hook for step {step.name!r} returned unsupported value {type(result)!r}"
-        )
-
-    def _run_route_hook(
-        self,
-        step: CompiledStep,
-        context: Context,
-        state: BaseModel,
-        artifacts: ResolvedArtifacts,
-        *,
-        event: Event,
-        hook: Callable[..., Any] | None = None,
-        hook_phase: str = "on_taken",
-    ) -> _HookExecutionResult:
-        if hook is None:
-            return _HookExecutionResult(state=state)
-        hook_name = getattr(hook, "__name__", type(hook).__name__)
-        self._emit_hook_event(
-            "hook_started",
-            step=step,
-            context=context,
-            hook_name=hook_name,
-            phase=hook_phase,
-            route=event.tag,
-        )
-        try:
-            context._set_state(state)
-            context._set_artifacts(artifacts)
-            compiled_route = self.compiled.route(step.name, event.tag)
-            context._set_route(
-                {
-                    "tag": event.tag,
-                    "target": compiled_route.target,
-                    "summary": compiled_route.summary,
-                    "handoff": compiled_route.handoff,
-                }
-            )
-            context._set_event(self._event_context_payload(event))
-            result = hook(context)
-            next_state = context.state
-            hook_result, explicit_override, redirect_record = self._normalize_hook_result(
-                step,
-                context=context,
-                current_event=event,
-                result=result,
-                hook_phase=hook_phase,
-                hook_name=hook_name,
-            )
-            self._emit_hook_event(
-                "hook_finished",
-                step=step,
-                context=context,
-                hook_name=hook_name,
-                phase=hook_phase,
-                route=hook_result.event.tag if hook_result.event is not None else event.tag,
-            )
-            return _HookExecutionResult(
-                state=next_state,
-                result=hook_result,
-                explicit_event_override=explicit_override,
-                redirect=redirect_record,
-            )
-        except Exception as exc:
-            self._emit_hook_event(
-                "hook_failed",
-                step=step,
-                context=context,
-                hook_name=hook_name,
-                phase=hook_phase,
-                route=event.tag,
-                error=str(exc),
-            )
-            annotated = self._annotate_execution_error(
-                exc,
-                checkpoint_state=self._clone_state(context.state),
-                failure_context=FailureContext(
-                    kind="hook_failure",
-                    step_name=step.name,
-                    candidate_route=event.tag,
-                    source_hook=hook_name,
-                    source_phase=hook_phase,
-                    details={"error": str(exc), "error_type": type(exc).__name__},
-                ),
-            )
-            if annotated is exc:
-                raise
-            raise annotated from exc
 
     def _normalize_direct_runtime_control(
         self,

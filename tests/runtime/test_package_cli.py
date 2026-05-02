@@ -138,7 +138,8 @@ class {class_name}(Workflow):
 
     @python_step(name="bootstrap", routes={{"ready": FINISH}})
     def bootstrap(state: State, ctx):
-        return state.model_copy(update={{"ready": True}}), Event("ready")
+        ctx.state = state.model_copy(update={{"ready": True}})
+        return Event("ready")
 """.strip()
     (package_dir / "workflow.py").write_text(workflow_source + "\n", encoding="utf-8")
 
@@ -188,8 +189,9 @@ class {class_name}(Workflow):
         }}
         (ctx.run_folder / "result.json").write_text(json.dumps(payload), encoding="utf-8")
         if ctx.answer is None:
-            return state, Event("question", question="What value?")
-        return state.model_copy(update={{"answered": True}}), Event("answered")
+            return Event("question", question="What value?")
+        ctx.state = state.model_copy(update={{"answered": True}})
+        return Event("answered")
 """.strip()
 
 

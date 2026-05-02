@@ -757,7 +757,8 @@ def _write_generated_workflow(request, package_name: str, authoring_shape: str) 
                     "",
                     '    @python_step(name="bootstrap", routes={"ready": FINISH})',
                     "    def bootstrap(state: State, ctx):",
-                    '        return state.model_copy(update={"ready": True}), Event("ready")',
+                    '        ctx.state = state.model_copy(update={"ready": True})',
+                    '        return Event("ready")',
                 )
             )
             + "\n"
@@ -781,7 +782,8 @@ def _write_generated_workflow(request, package_name: str, authoring_shape: str) 
                     "",
                     '    @python_step(name="bootstrap", routes={"ready": FINISH})',
                     "    def bootstrap(state: State, ctx):",
-                    '        return state.model_copy(update={"ready": True}), Event("ready")',
+                    '        ctx.state = state.model_copy(update={"ready": True})',
+                    '        return Event("ready")',
                 )
             )
             + "\n"
