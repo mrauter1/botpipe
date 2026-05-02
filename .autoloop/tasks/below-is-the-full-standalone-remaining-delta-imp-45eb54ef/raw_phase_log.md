@@ -2753,3 +2753,44 @@ Validation passed: `./.venv/bin/pytest -q tests/runtime/test_workflow_run_traces
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de94a-caeb-7a30-944b-222c1d444138
+
+
+---
+run_id=run-20260502T141345Z-30984601 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de94a-caeb-7a30-944b-222c1d444138
+---
+I’m auditing the phase-local test work only: the documented coverage map, the representative optimizer-suite refinement, and whether the changed runtime suites now protect the ctx-only invocation contract without hiding regressions. First I’m reading the test artifacts and the scoped test diff, then I’ll decide whether any coverage gaps remain.
+
+The scoped audit doesn’t show a coverage hole. The representative optimizer suite still exercises the important direct-call behaviors, and the documented strategy matches what the migrated runtime suites actually assert. I’m marking the criteria complete and recording a no-findings audit note.
+
+Scope considered
+
+Phase-local audit of the runtime test-surface migration, limited to the representative optimizer-suite refinement plus the active test artifacts for `migrate-runtime-test-surfaces`.
+
+What I analyzed
+
+I reviewed the active test strategy, the run-local decisions that define the final ctx-only contract, the scoped test-file refinement in `tests/runtime/test_workflow_run_traces_to_optimization_candidates.py`, and the author’s validation results. I also checked that the migrated suites no longer rely on tuple-return helper semantics as the supported direct-call surface.
+
+What I reviewed
+
+I audited whether the documented coverage map matches the actual runtime suites, whether bootstrap/capture/route-skip/publish/after-verifier behaviors remain protected, and whether the representative optimizer suite still provides meaningful regression detection. I accepted the spot-check validation: `./.venv/bin/pytest -q tests/runtime/test_workflow_run_traces_to_optimization_candidates.py` with `39 passed` and only existing contract warnings.
+
+Key findings / decisions
+
+No blocking audit findings. The current test surface aligns with the phase intent: affected suites assert direct behavior through normalized handler returns plus `ctx.state`, and the representative optimizer suite retains the required breadth of direct-call coverage.
+
+Open issues / next step
+
+I marked all test audit criteria complete and appended `TST-000` as a non-blocking no-findings note in the phase feedback artifact.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
