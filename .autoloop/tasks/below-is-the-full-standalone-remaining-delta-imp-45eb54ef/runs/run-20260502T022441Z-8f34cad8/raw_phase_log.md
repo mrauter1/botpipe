@@ -1145,3 +1145,147 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de8b9-0cec-7491-ae85-95ceca41a272
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+I’m working the `scoped-state-worklists` phase: first I’m reading the phase artifacts and the current runtime/worklist code to pin the exact surfaces that still need changes before editing.
+
+The phase artifacts are mostly placeholders, so I’m moving to the runtime surfaces directly: scoped state, worklists, route effects, and tracing/checkpoint code paths.
+
+I’ve confirmed the code still has live route-effect execution and the scoped state surface is only partially there. Next I’m reading the key implementations together so the edits stay aligned across compiler, runtime, and tests.
+
+The scoped runtime contract is inconsistent right now: `step_item_state` still errors unless a custom store exists, `item_state` is still explicit-model-only, and route effects are still compiled/executed. I’m pulling the current test expectations now so I can replace them with the intended helper-based contract instead of patching blindly.
+
+Plan for this phase:
+1. Add the public worklist runtime surface on `Context` and wire built-in scoped `item_state` / `step_item_state` behavior.
+2. Remove route effects from declarations, validation, compilation, and finalization, replacing the needed runtime mutations with helper methods that emit events and update checkpoints.
+3. Update scoped-worklist tests, tracing/history expectations, and phase notes/decisions together so the new contract is exercised end to end.
+
+I’ve got the edit shape pinned down. I’m starting with the state-model layer so the runtime and test changes can share one built-in definition instead of each inventing its own view of scoped item state.
+
+The runtime state layer is in place. I’m switching to the route model now: deleting route effects from the public/compiler path and replacing the behavior the tests relied on with `ctx.current_worklist` helpers plus `on_taken`.
+
+I’ve removed the old effect path from the compiler/runtime. I’m on the test migration now, replacing the remaining `effects=` workflows with `on_taken` helper flows and flipping the removed-surface assertions to fail-fast checks.
+
+I’ve finished the contract flip from route effects to helper-driven `on_taken` flows in the main tests. I’m running a compile/test sweep now to catch any missed imports or stale assumptions before I touch the phase notes.
+
+The code search is clean apart from the intentional fail-fast import assertion. The environment doesn’t have `python`, so I’m rerunning the compile sweep with `python3` and then I’ll run the targeted phase suites.
+
+`pytest` isn’t on PATH as a standalone entrypoint here. I’m switching to `python3 -m pytest` and using the targeted phase files only.
+
+The interpreter is available but the test runner isn’t installed in this environment, so I’m doing direct Python smoke checks against the changed runtime paths instead: compile, helper API, scoped-state checkpointing, and static-graph payloads.
+
+The repo has its own `.venv`, so I can validate against the actual project environment now instead of the bare system interpreter.
+
+The targeted suite is running under the project venv now. I’m polling the result and will fix any failing surface before I finalize the phase notes.
+
+The first run surfaced a collection-time import bug in `engine_collaborators`: it’s pulling `PendingInput` from the wrong module. I’m fixing that and rerunning the same targeted suite.
+
+There’s one real runtime bug left in the targeted failures: invalid route returns from `python_step` handlers are escaping without structured failure context. I’m fixing that in the dispatcher rather than weakening the test.
+
+I’ve finished the first pass of the scoped-state/worklist refactor and I’m verifying the remaining contract failures now. The next step is to rerun the focused contract subset, confirm which failures are still real after the last test updates, and then close out the artifact notes and decisions files.
+
+The focused contract run still has a small cluster of failures. I’m pulling the full traceback now to separate real runtime issues from test expectations that were already updated.
+
+There are two concrete problems: I leaked a bad `candidate_event` reference into `run_before`, and several contract tests still assert the old `ctx.route.summary is None` behavior. I’m fixing both directly, then I’ll rerun the subset before widening back out to the full targeted suite.
+
+I’ve isolated the regression surface now. The runtime bug is small and local to hook event emission, and the remaining test failures are stale expectations around `ctx.route.summary` on compiled routes rather than new execution errors.
+
+The focused subset is down to one real runtime gap: invalid direct control from an `after` hook preserves the mutated state, but it isn’t carrying failure context into the checkpoint yet. I’m tracing that failure path now and will fix it before rerunning the broader suite.
+
+The remaining failure is in the direct-control validation path, not in checkpointing itself. I’m annotating `_normalize_direct_runtime_control(...)` so invalid `Goto`/`RequestInput`/`Fail` controls carry typed failure context and checkpoint state wherever they’re raised, instead of relying on a later wrapper to reconstruct it.
+
+The last failing assertion is just the expected failure kind. The runtime is now checkpointing this as a control-validation error, which matches the path that actually failed, so I’m aligning the contract test and then running the full phase-targeted suite.
+
+The focused failures are cleared. I’m finishing the broader targeted run now; if that stays green, the remaining work is just documenting the phase decisions and implementation notes cleanly.
+
+The phase-targeted suite is green: `300 passed`. I’m doing the close-out pass now, which means updating the phase notes and recording the few non-obvious runtime decisions that would otherwise drift in later turns.
+
+I’ve checked the phase feedback artifact; there were no extra reviewer findings beyond the scoped contract itself. I’m writing the final notes now with the concrete runtime decisions that matter for later phases: reserved built-in item-state fields, helper event/checkpoint semantics, artifact resolution timing around `on_taken`, and direct-control validation attribution.
+
+**Scope considered**
+- Phase-local `scoped-state-worklists` only. I analyzed the scoped runtime/state paths, worklist mutation/finalization flow, route-effect removal surface, and the phase-owned tests/artifacts, while leaving unrelated dirty files untouched.
+
+**What I analyzed**
+- Core runtime/state paths in [context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py), [worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py), [step_state.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/step_state.py), [engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py), and [engine_collaborators.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine_collaborators.py).
+- Public/compiler/static-graph fallout in [routes.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/routes.py), [compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py), [lowering.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/lowering.py), [discovery.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/discovery.py), [topology.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/topology.py), and [static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/runtime/static_graph.py).
+- Contract/unit/runtime coverage in [test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), [test_simple_surface.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_simple_surface.py), [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py), [test_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_validation.py), and [test_runtime_static_graph.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_runtime_static_graph.py).
+
+**What I changed**
+- Added built-in scoped item runtime state: `ctx.step_item_state` is always present for scoped steps, and active scoped items now expose built-in runtime-owned `ctx.item_state.status`, `ctx.item_state.last_step`, and `ctx.item_state.last_route`, with custom declared item-state fields layered on top and built-ins kept read-only.
+- Added the public worklist runtime helper surface: `ctx.worklist(name)`, `ctx.worklists.<name>`, `ctx.current_worklist`, and `WorklistRuntimeView` with `refresh`, `set_current_status`, `reset_current_status`, `advance`, `advance_or`, `validate`, and `validation_error`.
+- Removed route effects end-to-end: deleted `effects=` from `Route`, removed compiled/engine effect execution, deleted `autoloop/core/effects.py`, and migrated coverage to `on_taken` plus worklist helpers.
+- Wired helper mutations into runtime tracing/checkpoint-visible state sync, and tightened direct-control validation so invalid hook-selected controls preserve mutated state and checkpoint as structured `runtime_control_validation` failures.
+- Updated the phase artifact notes in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/implement/phases/scoped-state-worklists/implementation_notes.md) and appended non-obvious phase decisions under the latest header in [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/decisions.txt).
+
+**Key findings / decisions**
+- The built-in item-state branch from the clarification was implemented as runtime-composed worklist item state, with reserved built-in field names blocked from custom `item_state=` shadowing.
+- Helper-driven worklist mutations must stay mutation-only. Routing now comes only from explicit hook returns or route targets; helpers just sync selection/status, emit `worklist_*` events, and rely on normal checkpoint persistence.
+- Route finalization needs artifact re-resolution after `after` hooks but before `on_taken`, so validation still targets the just-finalized scoped item even when `on_taken` advances the selection.
+- Phase-targeted validation passed: `./.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_static_graph.py` with `300 passed`.
+
+**Open issues / next step**
+- No phase-local blocker remains from `scoped-state-worklists`.
+- Later milestones still need the broader structured-exception cleanup and the history/optimizer alignment work; those were not expanded here.
+- The repo tracks generated bytecode in some locations, so local validation also refreshed `.pyc` files; unrelated existing dirty files were left untouched.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=1 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de8b9-0cec-7491-ae85-95ceca41a272
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+I’m reviewing the phase-local work against the scoped-state/worklist contract first, then I’ll update the criteria and feedback artifacts directly. I’ll focus on the changed runtime surfaces, helper semantics, and the specific acceptance criteria before deciding whether there are blocking findings.
+
+I’ve got the phase artifacts and decision ledger loaded. The next pass is the runtime API itself: I’m checking whether the helper surface actually satisfies the clarified semantics in-context, and whether route-effect removal left any broken or partially migrated execution paths behind.
+
+I found one concrete semantic gap already: `refresh()` is built on the cached loader, so it can silently return stale selections instead of reloading from the underlying source. I’m checking whether that problem also leaks into validation/persistence paths, and whether there are any second-order issues around mutable artifact-backed worklists before I write the review findings.
+
+I’ve narrowed the review to one material regression surface. I’m pulling exact line references now so the finding is concrete and fixable rather than generic.
+
+I have a single blocking finding, and it’s directly against the accepted helper contract rather than a style issue. I’m recording it now with exact file references and leaving the criteria unresolved accordingly.
+
+Scope considered
+- Phase-local `scoped-state-worklists` only.
+- Reviewed the active implementation notes, decision ledger, acceptance criteria, and the changed runtime/test surfaces relevant to scoped state, worklist helpers, and route-effect removal.
+
+What I analyzed
+- Runtime/helper implementation in `autoloop/core/worklists.py`, `autoloop/core/context.py`, and the scoped-state sync paths in `autoloop/core/engine.py`.
+- Phase decisions in `decisions.txt` and the implementer’s notes in `implementation_notes.md`.
+- Validation coverage referenced by the implementer, with specific attention to `refresh()`, `validate()`, mutable-source status updates, and route-effect parity.
+
+What I reviewed
+- `Worklist.load_items(...)`, `refresh_selection(...)`, `set_current_status(...)`, and `WorklistRuntimeView.validation_error(...)`.
+- The helper event/checkpoint model against AC-3.
+- The route-effect removal timing against the clarified “parity first, then delete” direction.
+
+Key findings / decisions
+- One blocking finding was recorded in `feedback.md` as `IMP-001`.
+- The issue is that `refresh()` and `validate()` reuse the cached loader instead of forcing a source reload, and mutable status updates overwrite the cache with `selection.items` rather than a full-source snapshot.
+- That means artifact-backed or otherwise mutable worklists can return stale data and miss deleted/changed selected items, which violates the explicit helper contract for `refresh()` and `validate()`.
+
+Open issues / next step
+- Fix `Worklist` so refresh/validation use a centralized uncached reload path, keep the cache as a validated full-source snapshot, and add a regression test that mutates the backing source between initial selection and `refresh()` / `validate()`.
+- Criteria remain unchecked because the blocking helper-semantics gap means the phase is not yet safe to mark complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
