@@ -2038,3 +2038,70 @@ No phase-local test audit issues remain.
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=audit | phase=producer | cycle=1 | attempt=1 | thread_id=019de903-3d63-7ef0-bf01-59a57a0cc66b
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/audit_producer.md
+session_id=019de903-3d63-7ef0-bf01-59a57a0cc66b
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=audit | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de903-3d63-7ef0-bf01-59a57a0cc66b
+---
+I’m auditing the completed run against the authoritative request, clarifications, decisions, artifacts, tests, and current codebase. I’ll gather the run-local evidence first, then write only the audit artifacts under the allowed `artifacts/audit` directory.
+
+I have the request, clarification trail, and decision ledger. Next I’m checking the implementation and test artifacts against the live code to see which requested behaviors actually landed, and whether any remaining differences are justified or still material.
+
+I’m cross-checking the finished code against the highest-risk spec removals now. That means searching for surviving legacy surfaces and reading the live runtime paths where the artifacts claim behavior changed, so the audit is based on code and tests rather than the phase notes alone.
+
+The artifact trail is mostly consistent with the code, but I’ve already found a few surviving legacy references that need to be classified carefully. I’m verifying whether they’re intentionally internal-only or whether they still leak into the public contract, and I’m running a focused test sweep to distinguish real gaps from stale strings or fixtures.
+
+The focused suite passed cleanly: `394 passed`. I’m narrowing the audit to two classes of remaining differences now: public-contract leftovers that still leak into code/docs, and repo-known exceptions that were explicitly treated as out of phase during implementation.
+
+I’ve isolated one likely follow-up candidate already: the run-local artifacts repeatedly acknowledge exported public workflows that still fail repo-wide compile sweeps on route-handoff validation, and the tests were narrowed to tolerate that state rather than prove those packages compile cleanly. I’m checking whether those failures are genuinely unrelated to the request or whether they still block the final public-authoring contract the request asked for.
+
+I found a material gap. Several exported workflow packages in the live repo still fail compilation because their `after_review` hooks use the removed multi-argument form instead of the final `hook(ctx)` contract, which is directly within the original request rather than an unrelated side issue.
+
+The compile sweep makes the gap unambiguous: every discovered exported workflow package fails, and they all fail on the same removed hook contract. I’m collecting concrete code evidence now so the follow-up request can be precise instead of hand-wavy.
+
+The exported packages are not just missing one migration. The concrete examples already show two removed contracts still in active workflow packages: multi-argument lifecycle hooks and `state.model_copy(...)` return-style state replacement. I’m checking whether the same packages also still carry legacy `python_step(state, ctx)` handlers, because that changes how broad the follow-up request needs to be.
+
+I have enough evidence to write the audit artifacts now. The main unresolved issue is concentrated and actionable: the runtime/compiler refactor landed, the focused regression suites pass, but the repo’s exported workflow packages themselves were not migrated to the final `hook(ctx)` / `python_step(ctx)` / in-place state-mutation contract and therefore no longer compile.
+
+I’m writing the run-local audit artifacts now. They’ll record the implemented runtime/compiler changes that did land, classify the remaining gap as a concrete follow-up migration, and keep the next-run request scoped to the exported workflow packages and their dependent tests.
+
+The audit artifacts are written. I’m doing a quick readback now to ensure the report, revised request, and machine result are consistent and that the final stdout summary matches the run’s required headings and control block.
+
+Scope considered
+
+The immutable request, authoritative clarifications in the raw phase log, `decisions.txt`, run-local plan / implement / test artifacts, the final codebase, and focused verification results. I also checked the exported workflow packages themselves rather than relying only on phase notes.
+
+What I analyzed
+
+I read the run-local artifacts, searched the live code for surviving removed surfaces, ran the focused regression suite, and ran a repo-wide compile sweep over discovered workflow packages. The focused suite passed (`394 passed`), but the package compile sweep found a consistent remaining failure pattern across exported workflows.
+
+What I changed
+
+I updated only the allowed audit artifacts:
+
+- `.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/audit/gap_report.md`
+- `.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/audit/revised_request.md`
+- `.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/audit/audit_result.json`
+
+Key findings / decisions
+
+The core runtime/compiler refactor appears to have landed in the engine, collaborators, worklist helpers, trace/history fields, and focused tests. I classified the remaining material gap as unresolved, not justified: all discovered exported workflow packages still rely on removed public contracts and therefore do not compile under the final model.
+
+The concrete unresolved issue is repo-wide package migration. A compile sweep over discovered workflow packages produced `TOTAL_OK 0` and `TOTAL_FAIL 16`, with failures like `"'plan' after_review hook" must accept 1 positional arguments`. The same packages also still use removed hook state-replacement returns such as `ctx.state.model_copy(...)` and removed `python_step(state, ctx)` handlers. I recorded that as the next-run request, along with the need to update package-specific tests that still call legacy helper forms directly.
+
+Open issues / next step
+
+Material follow-up is required. The next run should migrate the exported workflow packages under `workflows/*/workflow.py` to `hook(ctx)` and `python_step(ctx)`, remove hook state-replacement returns, update dependent tests, and add a regression check that discovered workflow packages compile cleanly under the final public contract.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>
