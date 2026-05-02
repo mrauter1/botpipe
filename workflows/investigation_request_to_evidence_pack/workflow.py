@@ -10,7 +10,6 @@ from autoloop.stdlib import (
     require_non_negative_int,
     require_string_list,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -22,6 +21,22 @@ from .contracts import (
     InvestigationEvidencePackPayload,
     InvestigationFramingPayload,
 )
+
+
+def _after_frame_investigation(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+
+
+def _after_assemble_evidence_pack(ctx, outcome: Outcome):
+    ready = outcome.payload.get("ready_for_downstream_assessment")
+    return ctx.state.model_copy(
+        update={
+            "evidence_status": outcome.tag,
+            "ready_for_downstream_assessment": (
+                ready if isinstance(ready, bool) else ctx.state.ready_for_downstream_assessment
+            ),
+        }
+    )
 
 class InvestigationRequestToEvidencePack(Workflow):
     """Turn an investigation request into a durable evidence pack."""
@@ -112,6 +127,7 @@ class InvestigationRequestToEvidencePack(Workflow):
         ],
         control_schema=InvestigationFramingPayload,
         routes=FRAME_INVESTIGATION_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_investigation,
     )
 
     assemble_evidence_pack = produce_verify_step(
@@ -136,25 +152,8 @@ class InvestigationRequestToEvidencePack(Workflow):
         ],
         control_schema=InvestigationEvidencePackPayload,
         routes=ASSEMBLE_EVIDENCE_PACK_ROUTE_CONTRACTS,
+        after_verifier=_after_assemble_evidence_pack,
     )
-
-    @staticmethod
-    def on_frame_investigation(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"framing_status": outcome.tag})
-
-    @staticmethod
-    def on_assemble_evidence_pack(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        ready = outcome.payload.get("ready_for_downstream_assessment")
-        return state.model_copy(
-            update={
-                "evidence_status": outcome.tag,
-                "ready_for_downstream_assessment": (
-                    ready if isinstance(ready, bool) else state.ready_for_downstream_assessment
-                ),
-            }
-        )
 
     @python_step(
         name="publish_evidence_pack",
@@ -249,7 +248,6 @@ class InvestigationRequestToEvidencePack(Workflow):
             }
         ), Event("evidence_pack_published")
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 __all__ = ["InvestigationRequestToEvidencePack"]

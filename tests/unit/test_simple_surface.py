@@ -334,6 +334,30 @@ def test_simple_python_step_does_not_install_legacy_on_step_alias() -> None:
     assert "on_inspect" not in PublicWorkflow.__dict__
 
 
+def test_simple_workflow_rejects_legacy_class_level_handler_methods() -> None:
+    with pytest.raises(
+        WorkflowValidationError,
+        match="simple workflows must declare lifecycle and step behavior on explicit step declarations",
+    ):
+
+        class LegacyHandlersWorkflow(simple.Workflow):
+            ask = simple.step("Ask the model.")
+
+            @staticmethod
+            def on_ask(state, outcome, artifacts):
+                return state
+
+            @staticmethod
+            def on_start(ctx):
+                return None
+
+            @staticmethod
+            def on_outcome(state, outcome):
+                return None
+
+        compile_workflow(LegacyHandlersWorkflow)
+
+
 def test_simple_declarations_store_only_canonical_write_fields() -> None:
     step_decl = simple.step("Draft the note.", writes=[simple.Md("note")])
     pair_decl = simple.produce_verify_step(

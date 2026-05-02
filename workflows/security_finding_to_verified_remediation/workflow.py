@@ -13,7 +13,6 @@ from autoloop.stdlib import (
     require_string_list,
     run_child_workflow,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -27,6 +26,36 @@ from .contracts import (
     SecurityClosurePackagePayload,
     VerifiedRemediationPayload,
 )
+
+
+def _after_assess_security_finding(ctx, outcome: Outcome):
+    preferred_option = outcome.payload.get("preferred_remediation_option")
+    return ctx.state.model_copy(
+        update={
+            "assessment_status": outcome.tag,
+            "selected_remediation": (
+                preferred_option if isinstance(preferred_option, str) and preferred_option.strip() else ctx.state.selected_remediation
+            ),
+        }
+    )
+
+
+def _after_plan_verified_remediation(ctx, outcome: Outcome):
+    selected_remediation = outcome.payload.get("selected_remediation")
+    return ctx.state.model_copy(
+        update={
+            "remediation_status": outcome.tag,
+            "selected_remediation": (
+                selected_remediation
+                if isinstance(selected_remediation, str) and selected_remediation.strip()
+                else ctx.state.selected_remediation
+            ),
+        }
+    )
+
+
+def _after_prepare_closure_package(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"closure_status": outcome.tag})
 
 
 class SecurityFindingToVerifiedRemediation(Workflow):
@@ -101,6 +130,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
         ],
         control_schema=SecurityAssessmentPayload,
         routes=ASSESS_SECURITY_FINDING_ROUTE_CONTRACTS,
+        after_verifier=_after_assess_security_finding,
     )
     plan_verified_remediation = produce_verify_step(
         producer_prompt=Prompt.file("prompts/remediation_producer.md"),
@@ -124,6 +154,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
         ],
         control_schema=VerifiedRemediationPayload,
         routes=PLAN_VERIFIED_REMEDIATION_ROUTE_CONTRACTS,
+        after_verifier=_after_plan_verified_remediation,
     )
     prepare_closure_package = produce_verify_step(
         producer_prompt=Prompt.file("prompts/closure_producer.md"),
@@ -154,6 +185,7 @@ class SecurityFindingToVerifiedRemediation(Workflow):
         ],
         control_schema=SecurityClosurePackagePayload,
         routes=PREPARE_CLOSURE_PACKAGE_ROUTE_CONTRACTS,
+        after_verifier=_after_prepare_closure_package,
     )
 
     @python_step(
@@ -287,39 +319,6 @@ class SecurityFindingToVerifiedRemediation(Workflow):
             }
         ), Event("evidence_pack_adopted")
 
-    @staticmethod
-    def on_assess_security_finding(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        preferred_option = outcome.payload.get("preferred_remediation_option")
-        return state.model_copy(
-            update={
-                "assessment_status": outcome.tag,
-                "selected_remediation": (
-                    preferred_option if isinstance(preferred_option, str) and preferred_option.strip() else state.selected_remediation
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_plan_verified_remediation(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        selected_remediation = outcome.payload.get("selected_remediation")
-        return state.model_copy(
-            update={
-                "remediation_status": outcome.tag,
-                "selected_remediation": (
-                    selected_remediation
-                    if isinstance(selected_remediation, str) and selected_remediation.strip()
-                    else state.selected_remediation
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_prepare_closure_package(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"closure_status": outcome.tag})
-
     @python_step(
         name="publish_remediation",
         requires=[
@@ -425,7 +424,6 @@ class SecurityFindingToVerifiedRemediation(Workflow):
 
     entry = bootstrap
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 def _child_message(state: SecurityFindingToVerifiedRemediation.State) -> str:

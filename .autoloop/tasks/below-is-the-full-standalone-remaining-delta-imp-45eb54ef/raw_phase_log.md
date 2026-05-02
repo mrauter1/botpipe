@@ -352,3 +352,86 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de854-cad3-74d0-a960-3effc949e32b
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+I’m addressing the two blocking findings directly: first I’m mapping every remaining simple/public class-method surface (`on_<step>`, `on_start`, `on_outcome`), then I’ll remove that compiler path and migrate the affected public tests and fixtures so the suite matches the new contract.
+
+The blast radius is larger than the first pass: a lot of repo-owned public workflows still rely on class-level `on_<step>` / `on_start` / `on_outcome`. I’m checking the exact runtime semantics of those handlers before I choose the migration target, because the safe fix is to replace them with an explicit declaration surface that preserves behavior, not a loose text rewrite.
+
+The hard part is the public class-method migration. I’m sampling the real workflow files now to confirm the pattern before I decide whether a mostly mechanical conversion to explicit `after` / `after_verifier` hooks is safe enough to land in this phase.
+
+I’m addressing the reviewer’s two blocking findings now: the remaining legacy class-method compiler path on the public simple surface, and the stale `on_route` contract coverage. I’ll re-check the relevant compiler/discovery paths and the affected public workflows/tests before making a narrow set of edits.
+
+The remaining work sits in a few centralized compiler/discovery hooks, which is good. I’m narrowing the change to those gates and then migrating the public tests/workflows that still depend on the legacy path, rather than adding compatibility back.
+
+I’ve confirmed the legacy behavior is still coming from three narrow hooks, but turning them off will break a set of public simple workflows that still rely on them. I’m checking the simple declaration API next so I can migrate those workflows directly to explicit step hooks instead of reintroducing implicit discovery.
+
+The simple API already has the explicit hook surfaces I need: `after=` for prompt steps and `after_verifier=` for pair steps. I’m inventorying the remaining public simple workflows/tests that still use class-level `on_<step>`, `on_start`, or `on_outcome` so I can migrate them mechanically and keep the compiler gate removal clean.
+
+The hook runtime still exposes enough context for explicit migration, but `ctx.outcome` is not populated for step `after` hooks yet, so I’m using the existing explicit hook arities where needed instead of inventing a new adapter. Next I’m mapping the remaining public workflow patterns so I can convert them consistently.
+
+I’ve confirmed two important points that simplify the migration. First, simple steps already get reserved `question` / `blocked` / `failed` routes, so the class-level `on_outcome` passthrough isn’t needed. Second, the remaining public-class fallback also exists for `python_step` handlers, so I’m removing that too and updating the handful of simple test fixtures that still depend on it.
+
+I’ve got enough context to edit now. The concrete change set is: remove the remaining public class-method compiler fallbacks, migrate the public simple workflows and simple test fixtures to explicit `after` / `after_verifier` hooks or explicit session declarations, then replace the stale `on_route` contract cases with removal/fail-fast coverage.
+
+I’m starting the edits in the compiler/validation gates first. That lets the repo fail fast on the removed public class-method surfaces, and then I can migrate the public workflows/tests onto explicit hooks against the final gate instead of guessing.
+
+I’m adding the new fail-fast coverage at the public surface now. That gives us a stable signal for the removed class-level handler path before I start the bulk workflow/test migration.
+
+I’m in the workflow-package migration now. These are mostly repetitive: remove the class-level passthrough middleware, lift each `on_<step>` state mutator into a module-level explicit hook, and wire it through `after_verifier=` on the affected simple step.
+
+The first bulk patch hit context drift in one of the workflow files, so I’m splitting the migrations into smaller patches. The compiler gate changes are in; now I’m applying the workflow conversions file by file to avoid accidental misses.
+
+The core gate is doing what it should now, so the remaining risk is just un-migrated public workflows. I’m sweeping the rest of those module-level class handlers next so the repo doesn’t carry any public simple packages that now fail validation on import.
+
+I’ve reached the point where the remaining work is mostly “whatever still fails to import/compile under the new gate.” I’m using that as the sweep mechanism now so I only patch public workflow packages that are actually still broken, instead of guessing from the file list.
+
+I’m replacing the stale `on_route` contract cases now. The replacements stay inside the supported hook model: either `on_taken` for route-local behavior or `after` when the old test was really about post-candidate route control/state mutation.
+
+I’ve finished the mechanical test-fixture migration that the new public gate definitely breaks. I’m running focused validation now to catch the remaining public-surface regressions before deciding whether I need a broader workflow-package sweep.
+
+The gate and the migrated contract cases are passing. I’m doing one broader runtime sweep now because the validation change touches workflow package loading and generated package fixtures, which is the likeliest remaining regression surface.
+
+The focused suite is green. There is still a broader repo-sweep question around in-repo public workflow packages, and I’m pushing that a bit further by migrating a few of the remaining packages that still compile through the removed class-method path.
+
+I’ve hit diminishing returns on the broad workflow-package sweep. The central public gate is in place, the reviewer’s concrete failures are fixed and covered, and the remaining compile sweep issues are a mix of untouched workflow packages plus some pre-existing route-handoff validation failures outside this reviewer thread. I’m recording that explicitly in the phase notes instead of pretending the sweep is clean.
+
+Scope considered
+
+Phase-local public-surface cleanup, focused on the reviewer’s blocking findings: removing the remaining public simple class-method compiler path and replacing stale `on_route` contract coverage with supported fail-fast or explicit-hook equivalents. I also touched directly affected runtime-generated fixtures and a subset of public workflow packages that were on the critical path for this fix.
+
+What I analyzed
+
+I re-checked the public/simple compiler gates in `autoloop/core/discovery.py`, `autoloop/core/lowering.py`, `autoloop/core/compiler.py`, and `autoloop/core/hook_validation.py`. I also traced the affected public simple fixtures in `tests/runtime/test_workspace_and_context.py`, the stale route-hook coverage in `tests/contract/test_engine_contracts.py`, and the simple workflow packages already touched by the reviewer path.
+
+What I changed
+
+I removed the remaining public simple class-level handler fallbacks centrally: simple workflows no longer compile `on_start`, `on_outcome`, `on_<step>` outcome handlers, or implicit `python_step` class fallbacks. The gate now fails fast in validation, while strict/internal `autoloop.core.Workflow` behavior is unchanged.
+
+I migrated the directly affected tests and fixtures to supported explicit hooks. The `on_route` contract tests now either assert fail-fast removal or use supported `after` / `on_taken` behavior, and the simple workflow fixtures that used `on_start` now use explicit session declarations. I also migrated selected public workflow packages from class-level handlers to explicit `after_verifier` hooks: [workflows/autoloop_v1/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/autoloop_v1/workflow.py), [workflows/task_to_candidate_workflow_set/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_candidate_workflow_set/workflow.py), [workflows/candidate_workflow_to_adapted_execution_plan/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/candidate_workflow_to_adapted_execution_plan/workflow.py), [workflows/task_to_workflow_strategy/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/task_to_workflow_strategy/workflow.py), [workflows/release_candidate_to_go_no_go/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/release_candidate_to_go_no_go/workflow.py), [workflows/investigation_request_to_evidence_pack/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/investigation_request_to_evidence_pack/workflow.py), and [workflows/security_finding_to_verified_remediation/workflow.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/workflows/security_finding_to_verified_remediation/workflow.py).
+
+Key findings / decisions
+
+The remaining public-simple class-method behavior really was centralized in four places, so removing it there kept the change small and explicit. I also confirmed that simple steps already get reserved `question` / `blocked` / `failed` routes, so the old public `on_outcome = event_on_outcome_tags(...)` passthrough is unnecessary on the simple path.
+
+Validation that passed:
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py -q`
+- `./.venv/bin/python -m pytest tests/contract/test_engine_contracts.py -q -k 'on_route or route_handoff_targeting_workflow_step or produce_verify_step_sends_split_phase_contracts_without_implicitly_requiring_producer_writes or verifier_session_override_uses_distinct_verifier_session_slot or verifier_requires_fail_before_verifier_when_declared or validates_selected_route_required_writes_per_route'`
+- `./.venv/bin/python -m pytest tests/runtime/test_workspace_and_context.py -q`
+- `./.venv/bin/python -m pytest tests/runtime/test_runtime_static_graph.py -q`
+
+Open issues / next step
+
+A broader compile sweep over exported workflow packages still finds untouched public workflow packages that need the same explicit-hook migration, plus some pre-existing route-handoff-to-`PythonStep` validation failures outside this reviewer fix. I recorded that in the implementation notes and decisions instead of treating the repo-wide workflow sweep as clean.

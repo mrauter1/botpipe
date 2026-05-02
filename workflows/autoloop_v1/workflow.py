@@ -6,11 +6,9 @@ import json
 
 from pydantic import BaseModel, Field
 
-from autoloop.extensions import SessionPaths
-from autoloop.stdlib.control import event_on_outcome_tags
-
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
 from autoloop.core import Artifact
+from autoloop.extensions import SessionPaths
 
 from .conventions import AutoloopV1SessionPathStrategy, phase_dir_key
 from .parity import AutoloopV1Parity
@@ -19,6 +17,13 @@ from .parity import AutoloopV1Parity
 class Phase(BaseModel):
     id: str
     dir_key: str
+
+
+def _after_plan(ctx, outcome: Outcome):
+    if outcome.tag not in {"plan_ready", "needs_replan"}:
+        return None
+    phases = _load_phase_plan(ctx.artifacts.phase_plan.read_text())
+    return ctx.state.model_copy(update={"phases": phases, "phase_index": -1, "phase": None})
 
 
 class AutoloopV1(Workflow):
@@ -31,7 +36,7 @@ class AutoloopV1(Workflow):
         phase_index: int = -1
         phase: Phase | None = None
 
-    plan_session = Session()
+    plan_session = Session(open=True)
     phase_session = Session()
 
     request = Artifact("{run_folder}/request.md")
@@ -46,6 +51,7 @@ class AutoloopV1(Workflow):
         requires=[request],
         producer_writes=[phase_plan],
         routes={"plan_ready": "activate_next_phase", "needs_replan": "plan"},
+        after_verifier=_after_plan,
     )
     implement = produce_verify_step(
         producer_prompt=Prompt.file("prompts/implement_producer.md"),
@@ -68,16 +74,6 @@ class AutoloopV1(Workflow):
         AutoloopV1Parity(),
     )
 
-    def on_start(self, ctx) -> None:
-        ctx.open_session("plan_session")
-
-    @staticmethod
-    def on_plan(state: State, outcome: Outcome, artifacts):
-        if outcome.tag not in {"plan_ready", "needs_replan"}:
-            return state
-        phases = _load_phase_plan(artifacts.phase_plan.read_text())
-        return state.model_copy(update={"phases": phases, "phase_index": -1, "phase": None})
-
     @python_step(
         name="activate_next_phase",
         routes={"phase_selected": "implement", "workflow_complete": FINISH},
@@ -90,17 +86,7 @@ class AutoloopV1(Workflow):
         ctx.open_session("phase_session", scope=phase.id)
         return state.model_copy(update={"phase_index": next_index, "phase": phase}), Event("phase_selected")
 
-    @staticmethod
-    def on_implement(state: State, outcome: Outcome, artifacts):
-        return state
-
-    @staticmethod
-    def on_test(state: State, outcome: Outcome, artifacts):
-        return state
-
     entry = plan
-
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 def _load_phase_plan(raw: str) -> list[Phase]:

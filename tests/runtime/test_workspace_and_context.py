@@ -1710,12 +1710,9 @@ class ChildWorkflow(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    main = Session()
+    main = Session(open=True)
     child_dump = Raw("child_dump", path="{run_folder}/child.json")
     ask = step(prompt=Prompt.file("prompts/ask.md"), session=main, writes=[child_dump])
-
-    def on_start(self, ctx):
-        ctx.open_session(self.main)
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -1878,7 +1875,7 @@ class ChildPauseWorkflow(Workflow):
     class State(BaseModel):
         note: str = ""
 
-    main = Session()
+    main = Session(open=True)
     child_dump = Raw("child_dump", path="{run_folder}/child.json")
     ask = step(
         prompt=Prompt.file("prompts/ask.md"),
@@ -1886,9 +1883,6 @@ class ChildPauseWorkflow(Workflow):
         writes=[child_dump],
         routes={"question": AWAIT_INPUT},
     )
-
-    def on_start(self, ctx):
-        ctx.open_session(self.main)
 """.strip()
         + "\n",
         encoding="utf-8",

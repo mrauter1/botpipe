@@ -17,7 +17,6 @@ from autoloop.stdlib import (
     validate_selected_workflow_artifact_alignment,
     validate_selected_workflow_capability_snapshot,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -43,6 +42,53 @@ _AUTHORITATIVE_PACKAGE_ARTIFACTS = frozenset(
         "validated_workflow_parameters",
     }
 )
+
+
+def _after_frame_adaptation_request(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    return ctx.state.model_copy(
+        update={
+            "framing_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+        }
+    )
+
+
+def _after_analyze_adaptation_surface(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    return ctx.state.model_copy(
+        update={
+            "analysis_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+        }
+    )
+
+
+def _after_package_adapted_execution_plan(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    proposed_parameter_keys = require_string_list(
+        payload.get("proposed_parameter_keys"),
+        error_message="package verifier payload must define proposed_parameter_keys as a string list",
+        min_length=0,
+        dedupe=True,
+        coerce=True,
+    )
+    return ctx.state.model_copy(
+        update={
+            "packaging_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "proposed_parameter_keys": proposed_parameter_keys,
+        }
+    )
 
 
 class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
@@ -102,6 +148,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         producer_writes=[adaptation_request_brief, adaptation_success_criteria],
         control_schema=AdaptationRequestFramingPayload,
         routes=FRAME_ADAPTATION_REQUEST_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_adaptation_request,
     )
     analyze_adaptation_surface = produce_verify_step(
         producer_prompt=Prompt.file("prompts/analyze_producer.md"),
@@ -117,6 +164,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         producer_writes=[workflow_fit_assessment, step_adaptation_matrix],
         control_schema=AdaptationSurfaceAnalysisPayload,
         routes=ANALYZE_ADAPTATION_SURFACE_ROUTE_CONTRACTS,
+        after_verifier=_after_analyze_adaptation_surface,
     )
     package_adapted_execution_plan = produce_verify_step(
         producer_prompt=Prompt.file("prompts/package_producer.md"),
@@ -140,6 +188,7 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         ],
         control_schema=AdaptedExecutionPlanPayload,
         routes=PACKAGE_ADAPTED_EXECUTION_PLAN_ROUTE_CONTRACTS,
+        after_verifier=_after_package_adapted_execution_plan,
     )
 
     @python_step(
@@ -196,55 +245,6 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
             Event("selected_workflow_contract_captured"),
         )
 
-    @staticmethod
-    def on_frame_adaptation_request(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        return state.model_copy(
-            update={
-                "framing_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_analyze_adaptation_surface(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        return state.model_copy(
-            update={
-                "analysis_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_package_adapted_execution_plan(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        proposed_parameter_keys = require_string_list(
-            payload.get("proposed_parameter_keys"),
-            error_message="package verifier payload must define proposed_parameter_keys as a string list",
-            min_length=0,
-            dedupe=True,
-            coerce=True,
-        )
-        return state.model_copy(
-            update={
-                "packaging_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "proposed_parameter_keys": proposed_parameter_keys,
-            }
-        )
 
     @python_step(
         name="publish_adapted_execution_plan",
@@ -404,5 +404,3 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
         )
 
     entry = bootstrap
-
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))

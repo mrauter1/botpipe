@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from typing import Any
 
-from .discovery import has_start_hook
+from .discovery import _uses_simple_authoring_model, has_start_hook
 from .errors import WorkflowValidationError
 from .lowering import outcome_middleware_name
 from .routes import normalize_route_spec
@@ -26,6 +26,12 @@ def validate_callable_arity(name: str, func: Any, expected: set[int]) -> None:
 
 def validate_handlers(definition: Any) -> None:
     handler_names = {name for name in definition.workflow_cls.__dict__ if name.startswith("on_")}
+    if _uses_simple_authoring_model(definition.workflow_cls) and handler_names:
+        ordered_handler_names = ", ".join(sorted(handler_names))
+        raise WorkflowValidationError(
+            "simple workflows must declare lifecycle and step behavior on explicit step declarations; "
+            f"remove legacy class-level handlers: {ordered_handler_names}"
+        )
 
     for step in definition.steps:
         handler_name = f"on_{step.name}"

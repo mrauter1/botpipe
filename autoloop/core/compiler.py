@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from .artifacts import CompiledArtifact
 from .context import Context
-from .discovery import WorkflowDefinition, get_workflow_definition, has_start_hook
+from .discovery import WorkflowDefinition, _uses_simple_authoring_model, get_workflow_definition, has_start_hook
 from .effects import Effect
 from .extensions import WorkflowExtension
 from .errors import RoutingError, WorkflowCompilationError
@@ -429,6 +429,8 @@ def _compile_steps(
 
 
 def _compile_outcome_handler(workflow_cls: type[Any], step_name: str) -> OutcomeHandler | None:
+    if _uses_simple_authoring_model(workflow_cls):
+        return None
     raw_handler = getattr(workflow_cls, f"on_{step_name}", None)
     if raw_handler is None:
         return None
@@ -483,7 +485,7 @@ def _compiled_session_copy(name: str, session: Session | None) -> Session:
 def _compile_system_handler(step: PythonStep, *, workflow_cls: type[Any]) -> SystemHandler:
     raw_handler = step.handler
     step_name = step.name
-    if raw_handler is None:
+    if raw_handler is None and not _uses_simple_authoring_model(workflow_cls):
         raw_handler = getattr(workflow_cls, f"on_{step_name}", None)
     if raw_handler is None:
         raise WorkflowCompilationError(f"system step {step_name!r} is missing a handler")

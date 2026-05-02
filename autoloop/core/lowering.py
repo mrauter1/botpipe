@@ -20,6 +20,10 @@ PayloadValidator = Callable[[dict[str, Any]], None]
 def outcome_middleware_name(definition: Any) -> str | None:
     """Return the active global outcome middleware hook name, if any."""
 
+    from .discovery import _uses_simple_authoring_model
+
+    if _uses_simple_authoring_model(definition.workflow_cls):
+        return None
     if "outcome" in definition.steps_by_name:
         return None
     if getattr(definition.workflow_cls, "on_outcome", None) is None:

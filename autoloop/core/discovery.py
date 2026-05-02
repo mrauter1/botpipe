@@ -286,6 +286,8 @@ def describe_workflow_class(workflow_cls: type[Any]) -> WorkflowDefinition:
 
 
 def has_start_hook(definition: WorkflowDefinition) -> bool:
+    if _uses_simple_authoring_model(definition.workflow_cls):
+        return False
     if "start" in definition.steps_by_name:
         return False
     return getattr(definition.workflow_cls, "on_start", None) is not None

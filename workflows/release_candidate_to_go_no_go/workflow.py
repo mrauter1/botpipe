@@ -8,7 +8,6 @@ from autoloop.stdlib import (
     read_json_object,
     require_non_empty_string,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -24,6 +23,36 @@ from .contracts import (
     ReleaseEvidencePayload,
     ReleaseFramingPayload,
 )
+
+
+def _after_frame_release(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+
+
+def _after_assemble_evidence_pack(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"evidence_status": outcome.tag})
+
+
+def _after_assess_go_no_go(ctx, outcome: Outcome):
+    recommended_decision = outcome.payload.get("recommended_decision")
+    return ctx.state.model_copy(
+        update={
+            "assessment_status": outcome.tag,
+            "recommended_decision": (
+                recommended_decision if isinstance(recommended_decision, str) else ctx.state.recommended_decision
+            ),
+        }
+    )
+
+
+def _after_prepare_decision_package(ctx, outcome: Outcome):
+    decision = outcome.payload.get("decision")
+    return ctx.state.model_copy(
+        update={
+            "packaging_status": outcome.tag,
+            "recommended_decision": decision if isinstance(decision, str) else ctx.state.recommended_decision,
+        }
+    )
 
 
 class ReleaseCandidateToGoNoGo(Workflow):
@@ -85,6 +114,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         producer_writes=[release_scope_brief, decision_criteria, evidence_intake_register],
         control_schema=ReleaseFramingPayload,
         routes=FRAME_RELEASE_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_release,
     )
     assemble_evidence_pack = produce_verify_step(
         producer_prompt=Prompt.file("prompts/evidence_producer.md"),
@@ -100,6 +130,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         producer_writes=[release_inventory, test_evidence_pack, operational_readiness, rollback_readiness, blocking_issues],
         control_schema=ReleaseEvidencePayload,
         routes=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
+        after_verifier=_after_assemble_evidence_pack,
     )
     assess_go_no_go = produce_verify_step(
         producer_prompt=Prompt.file("prompts/assessment_producer.md"),
@@ -118,6 +149,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         producer_writes=[go_no_go_assessment, risk_register, decision_summary],
         control_schema=ReleaseAssessmentPayload,
         routes=ASSESS_GO_NO_GO_ROUTE_CONTRACTS,
+        after_verifier=_after_assess_go_no_go,
     )
     prepare_decision_package = produce_verify_step(
         producer_prompt=Prompt.file("prompts/package_producer.md"),
@@ -141,6 +173,7 @@ class ReleaseCandidateToGoNoGo(Workflow):
         producer_writes=[release_decision_package, release_communications_draft],
         control_schema=ReleaseDecisionPackagePayload,
         routes=PREPARE_DECISION_PACKAGE_ROUTE_CONTRACTS,
+        after_verifier=_after_prepare_decision_package,
     )
 
     @python_step(
@@ -178,38 +211,6 @@ class ReleaseCandidateToGoNoGo(Workflow):
             },
         )
         return next_state, Event("inputs_prepared")
-
-    @staticmethod
-    def on_frame_release(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"framing_status": outcome.tag})
-
-    @staticmethod
-    def on_assemble_evidence_pack(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"evidence_status": outcome.tag})
-
-    @staticmethod
-    def on_assess_go_no_go(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        recommended_decision = outcome.payload.get("recommended_decision")
-        return state.model_copy(
-            update={
-                "assessment_status": outcome.tag,
-                "recommended_decision": recommended_decision if isinstance(recommended_decision, str) else state.recommended_decision,
-            }
-        )
-
-    @staticmethod
-    def on_prepare_decision_package(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        decision = outcome.payload.get("decision")
-        return state.model_copy(
-            update={
-                "packaging_status": outcome.tag,
-                "recommended_decision": decision if isinstance(decision, str) else state.recommended_decision,
-            }
-        )
 
     @python_step(
         name="publish_decision",
@@ -255,7 +256,6 @@ class ReleaseCandidateToGoNoGo(Workflow):
 
     entry = bootstrap
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 __all__ = ["ReleaseCandidateToGoNoGo"]

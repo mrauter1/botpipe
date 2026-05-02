@@ -11,7 +11,6 @@ from autoloop.stdlib import (
     require_non_empty_string,
     require_string_list,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -37,6 +36,45 @@ _AUTHORITATIVE_PACKAGE_ARTIFACTS = frozenset(
         "candidate_next_action",
     }
 )
+
+
+def _after_frame_candidate_request(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+
+
+def _after_analyze_candidate_workflows(ctx, outcome: Outcome):
+    payload = outcome.payload
+    portfolio_posture = payload.get("portfolio_posture")
+    return ctx.state.model_copy(
+        update={
+            "analysis_status": outcome.tag,
+            "portfolio_posture": (
+                portfolio_posture
+                if isinstance(portfolio_posture, str) and portfolio_posture in _PORTFOLIO_POSTURES
+                else ctx.state.portfolio_posture
+            ),
+        }
+    )
+
+
+def _after_package_candidate_workflow_set(ctx, outcome: Outcome):
+    payload = outcome.payload
+    portfolio_posture = payload.get("portfolio_posture")
+    recommended = normalize_unique_strings(
+        payload.get("recommended_candidate_workflows"),
+        allow_scalar=True,
+    )
+    return ctx.state.model_copy(
+        update={
+            "packaging_status": outcome.tag,
+            "portfolio_posture": (
+                portfolio_posture
+                if isinstance(portfolio_posture, str) and portfolio_posture in _PORTFOLIO_POSTURES
+                else ctx.state.portfolio_posture
+            ),
+            "recommended_candidate_workflows": recommended or ctx.state.recommended_candidate_workflows,
+        }
+    )
 
 
 class TaskToCandidateWorkflowSet(Workflow):
@@ -146,6 +184,7 @@ class TaskToCandidateWorkflowSet(Workflow):
         producer_writes=[candidate_request_brief, candidate_selection_criteria],
         control_schema=CandidateRequestFramingPayload,
         routes=FRAME_CANDIDATE_REQUEST_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_candidate_request,
     )
 
     analyze_candidate_workflows = produce_verify_step(
@@ -162,6 +201,7 @@ class TaskToCandidateWorkflowSet(Workflow):
         producer_writes=[workflow_candidate_matrix, workflow_gap_analysis, candidate_route_posture],
         control_schema=CandidateWorkflowAnalysisPayload,
         routes=ANALYZE_CANDIDATE_WORKFLOWS_ROUTE_CONTRACTS,
+        after_verifier=_after_analyze_candidate_workflows,
     )
 
     package_candidate_workflow_set = produce_verify_step(
@@ -182,45 +222,8 @@ class TaskToCandidateWorkflowSet(Workflow):
         producer_writes=[candidate_workflow_set, candidate_workflow_set_summary, candidate_next_action],
         control_schema=CandidateWorkflowSetPayload,
         routes=PACKAGE_CANDIDATE_WORKFLOW_SET_ROUTE_CONTRACTS,
+        after_verifier=_after_package_candidate_workflow_set,
     )
-
-    @staticmethod
-    def on_frame_candidate_request(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"framing_status": outcome.tag})
-
-    @staticmethod
-    def on_analyze_candidate_workflows(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        portfolio_posture = payload.get("portfolio_posture")
-        return state.model_copy(
-            update={
-                "analysis_status": outcome.tag,
-                "portfolio_posture": (
-                    portfolio_posture if isinstance(portfolio_posture, str) and portfolio_posture in _PORTFOLIO_POSTURES else state.portfolio_posture
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_package_candidate_workflow_set(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        portfolio_posture = payload.get("portfolio_posture")
-        recommended = normalize_unique_strings(
-            payload.get("recommended_candidate_workflows"),
-            allow_scalar=True,
-        )
-        return state.model_copy(
-            update={
-                "packaging_status": outcome.tag,
-                "portfolio_posture": (
-                    portfolio_posture if isinstance(portfolio_posture, str) and portfolio_posture in _PORTFOLIO_POSTURES else state.portfolio_posture
-                ),
-                "recommended_candidate_workflows": recommended or state.recommended_candidate_workflows,
-            }
-        )
 
     @python_step(
         name="publish_candidate_workflow_set",
@@ -390,7 +393,6 @@ class TaskToCandidateWorkflowSet(Workflow):
             }
         ), Event("candidate_workflow_set_published")
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 def _require_portfolio_posture(value, error_message: str) -> str:
     posture = require_non_empty_string(value, error_message=error_message, coerce=True)

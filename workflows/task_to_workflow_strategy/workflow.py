@@ -14,7 +14,6 @@ from autoloop.stdlib import (
     require_string_list,
     run_child_workflow,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -36,6 +35,50 @@ _STRATEGY_ROUTES = frozenset({"run_existing", "compose", "adapt", "create_new"})
 _BUILDER_BASELINE = "workflow_idea_to_workflow_package"
 _ADAPTATION_BUILDING_BLOCK = "candidate_workflow_to_adapted_execution_plan"
 _PORTFOLIO_POSTURES = frozenset({"direct_fit", "compose_needed", "adapt_needed", "material_gap"})
+
+
+def _after_frame_task(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+
+
+def _after_select_strategy(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_strategy = payload.get("selected_strategy")
+    recommended_workflows = normalize_unique_strings(
+        payload.get("recommended_workflows"),
+        allow_scalar=True,
+    )
+    return ctx.state.model_copy(
+        update={
+            "selection_status": outcome.tag,
+            "selected_strategy": (
+                selected_strategy
+                if isinstance(selected_strategy, str) and selected_strategy in _STRATEGY_ROUTES
+                else ctx.state.selected_strategy
+            ),
+            "recommended_workflows": recommended_workflows or ctx.state.recommended_workflows,
+        }
+    )
+
+
+def _after_package_strategy(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_strategy = payload.get("selected_strategy")
+    recommended_workflows = normalize_unique_strings(
+        payload.get("recommended_workflows"),
+        allow_scalar=True,
+    )
+    return ctx.state.model_copy(
+        update={
+            "packaging_status": outcome.tag,
+            "selected_strategy": (
+                selected_strategy
+                if isinstance(selected_strategy, str) and selected_strategy in _STRATEGY_ROUTES
+                else ctx.state.selected_strategy
+            ),
+            "recommended_workflows": recommended_workflows or ctx.state.recommended_workflows,
+        }
+    )
 
 
 class TaskToWorkflowStrategy(Workflow):
@@ -97,6 +140,7 @@ class TaskToWorkflowStrategy(Workflow):
         producer_writes=[task_strategy_brief, workflow_selection_criteria],
         control_schema=TaskFramingPayload,
         routes=FRAME_TASK_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_task,
     )
     select_strategy = produce_verify_step(
         producer_prompt=Prompt.file("prompts/select_producer.md"),
@@ -118,6 +162,7 @@ class TaskToWorkflowStrategy(Workflow):
         producer_writes=[strategy_decision],
         control_schema=StrategySelectionPayload,
         routes=SELECT_STRATEGY_ROUTE_CONTRACTS,
+        after_verifier=_after_select_strategy,
     )
     package_strategy = produce_verify_step(
         producer_prompt=Prompt.file("prompts/package_producer.md"),
@@ -141,6 +186,7 @@ class TaskToWorkflowStrategy(Workflow):
         producer_writes=[workflow_strategy_package, strategy_summary, strategy_next_action],
         control_schema=StrategyPackagePayload,
         routes=PACKAGE_STRATEGY_ROUTE_CONTRACTS,
+        after_verifier=_after_package_strategy,
     )
 
     @python_step(
@@ -194,11 +240,6 @@ class TaskToWorkflowStrategy(Workflow):
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_portfolio_snapshot.json must define a positive workflow_count")
         return state, Event("portfolio_snapshotted")
-
-    @staticmethod
-    def on_frame_task(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"framing_status": outcome.tag})
 
     @python_step(
         name="build_candidate_workflow_set",
@@ -263,44 +304,6 @@ class TaskToWorkflowStrategy(Workflow):
             },
         )
         return state, Event("candidate_workflow_set_built")
-
-    @staticmethod
-    def on_select_strategy(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_strategy = payload.get("selected_strategy")
-        recommended_workflows = normalize_unique_strings(
-            payload.get("recommended_workflows"),
-            allow_scalar=True,
-        )
-        return state.model_copy(
-            update={
-                "selection_status": outcome.tag,
-                "selected_strategy": (
-                    selected_strategy if isinstance(selected_strategy, str) and selected_strategy in _STRATEGY_ROUTES else state.selected_strategy
-                ),
-                "recommended_workflows": recommended_workflows or state.recommended_workflows,
-            }
-        )
-
-    @staticmethod
-    def on_package_strategy(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_strategy = payload.get("selected_strategy")
-        recommended_workflows = normalize_unique_strings(
-            payload.get("recommended_workflows"),
-            allow_scalar=True,
-        )
-        return state.model_copy(
-            update={
-                "packaging_status": outcome.tag,
-                "selected_strategy": (
-                    selected_strategy if isinstance(selected_strategy, str) and selected_strategy in _STRATEGY_ROUTES else state.selected_strategy
-                ),
-                "recommended_workflows": recommended_workflows or state.recommended_workflows,
-            }
-        )
 
     @python_step(
         name="publish_strategy",
@@ -505,7 +508,6 @@ class TaskToWorkflowStrategy(Workflow):
 
     entry = bootstrap
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 def _require_strategy(value, error_message: str) -> str:
     strategy = require_non_empty_string(value, error_message=error_message, coerce=True)
