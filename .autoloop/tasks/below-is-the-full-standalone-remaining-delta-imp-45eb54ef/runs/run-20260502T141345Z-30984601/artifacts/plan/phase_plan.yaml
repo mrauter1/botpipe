@@ -1,4 +1,90 @@
 version: 1
 task_id: below-is-the-full-standalone-remaining-delta-imp-45eb54ef
 request_snapshot_ref: /home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T141345Z-30984601/request.md
-phases: []
+phases:
+  - phase_id: "migrate-exported-workflow-contracts"
+    title: "Migrate Exported Workflow Packages"
+    objective: "Convert the 16 exported workflow packages to ctx-only hooks and python_step handlers while preserving workflow behavior, routes, prompts, and artifact outputs."
+    status: "planned"
+    in_scope:
+      - "Update lifecycle hooks in the listed workflows/*/workflow.py files to use hook(ctx) only."
+      - "Remove hook state-replacement returns and move state updates onto ctx.state."
+      - "Convert exported python_step handlers from (state, ctx) to (ctx) and keep only supported control returns."
+    out_of_scope:
+      - "Changes to autoloop core runtime/compiler compatibility rules."
+      - "Non-exported workflows or unrelated documentation rewrites."
+    dependencies: []
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Each affected exported workflow compiles individually under compile_workflow(...) without hook-arity or python-step signature errors."
+      - id: "AC-2"
+        text: "No affected exported workflow file still defines multi-argument lifecycle hooks or python_step(state, ctx) handlers."
+      - id: "AC-3"
+        text: "Hooks in the affected exported workflows no longer return replacement state models and instead update ctx.state directly."
+    deliverables:
+      - "Migrated workflow.py files for the 16 affected exported packages."
+      - "Ctx-based hook and python-step implementations that preserve existing artifact and route behavior."
+    risks:
+      - "Field reset parity can regress when returned state models are converted into ctx.state mutation."
+      - "Outcome-derived fields can drift if hook bodies do not fully remap legacy outcome arguments onto ctx.outcome."
+    rollback:
+      - "Revert the touched workflow.py files for the affected exported packages."
+      - "Keep runtime/compiler contract enforcement unchanged."
+  - phase_id: "migrate-runtime-test-surfaces"
+    title: "Migrate Runtime Test Surfaces"
+    objective: "Update workflow-specific tests so they exercise the final ctx-only package surface instead of legacy WorkflowClass.on_* helper forms."
+    status: "planned"
+    in_scope:
+      - "Replace direct WorkflowClass.on_* calls in affected runtime suites with compiled handler/hook invocation."
+      - "Update assertions that currently expect returned replacement state models or tuple-based helper results."
+      - "Cover bootstrap, capture-context, route-skipping, publish, and after-verifier behaviors through the migrated invocation pattern."
+    out_of_scope:
+      - "Adding new runtime compatibility helpers just to preserve old test call sites."
+      - "Broad refactors of unaffected runtime test suites."
+    dependencies:
+      - "migrate-exported-workflow-contracts"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "Affected runtime suites no longer treat WorkflowClass.on_* helper entry points as supported API."
+      - id: "AC-2"
+        text: "Direct step and hook tests assert against ctx.state plus normalized handler returns after invoking canonical compiled surfaces."
+      - id: "AC-3"
+        text: "Representative direct-call coverage remains in place for migrated package behaviors, especially the workflow_run_traces_to_optimization_candidates suite."
+    deliverables:
+      - "Updated runtime tests for affected workflow packages."
+      - "Ctx-based direct invocation coverage for bootstrap, publish, route, and hook behaviors."
+    risks:
+      - "Test churn is wide because many suites currently call package-local handler helpers directly."
+      - "Using inconsistent replacement patterns across suites could hide regressions in state mutation semantics."
+    rollback:
+      - "Revert only the touched test modules if the new direct invocation pattern proves incorrect."
+      - "Do not restore legacy package-local helper compatibility surfaces."
+  - phase_id: "enforce-repo-compatibility-gate"
+    title: "Enforce Repo Compatibility Gate"
+    objective: "Make the discovered exported workflow compile sweep and related strictness tests the regression gate for the final public contract."
+    status: "planned"
+    in_scope:
+      - "Require zero failures in the discovered exported workflow compile sweep."
+      - "Adjust parity or strictness tests so legacy handler-form tolerances are removed for exported packages."
+      - "Validate the migrated package set with parity and package runtime suites under the repo virtualenv."
+    out_of_scope:
+      - "New workflow authoring features beyond this contract migration."
+      - "Changes to unrelated package discovery behavior."
+    dependencies:
+      - "migrate-runtime-test-surfaces"
+    acceptance_criteria:
+      - id: "AC-1"
+        text: "tests/runtime/test_workflow_integration_parity.py asserts zero compile failures for discovered exported workflow packages."
+      - id: "AC-2"
+        text: "Fast strictness coverage continues to reject removed simple-surface compatibility forms while migrated exported packages compile successfully."
+      - id: "AC-3"
+        text: "Targeted validation under .venv covers the parity sweep, simple-surface strictness, and the affected workflow runtime suites."
+    deliverables:
+      - "Repo-level regression coverage for discovered exported workflow package compatibility."
+      - "A validation command set that exercises parity, strictness, and affected workflow runtime suites."
+    risks:
+      - "The compile sweep can reveal additional package defects only after the first contract errors are removed."
+      - "Parity coverage may pass while a package-specific direct-call test still assumes removed helper semantics unless both gates run."
+    rollback:
+      - "Revert only the touched test expectations or compile-sweep assertions if they prove inconsistent with the enforced contract."
+      - "Do not weaken the runtime contract to restore legacy exported package forms."
