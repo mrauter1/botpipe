@@ -6,3 +6,7 @@ Keep the discovered-package parity sweep as the repo-level compatibility gate an
 Compiled python-step wrappers are not sufficient as the only regression gate because the compiler still accepts raw two-argument python_step handlers and normalizes them to ctx-only callables.
 The migration must add a repo-level raw declaration and source audit for discovered exported workflows to enforce one-argument hook/python-step signatures and ban hook state-replacement return forms.
 Behavior tests may use declaration-local or compiled callables, but raw exported-contract assertions must not rely only on compiled wrappers.
+<autoloop-decisions-header version="1" block_seq="3" owner="implementer" phase_id="migrate-exported-workflow-contracts" pair="implement" turn_seq="1" run_id="run-20260502T141345Z-30984601" ts="2026-05-02T14:26:18.800617+00:00" />
+Routes in exported workflow contract tables that target downstream python steps must omit handoff metadata because the enforced compiler rejects handoffs on non-child-workflow targets.
+Direct-call regression tests for exported workflows should use compiled handlers and assert normalized runtime payloads such as Event-wrapped string routes, pending_input metadata, and explicit handoff=None on persisted question events.
+Overlay publication validation for workflow-builder regression coverage must treat both flat core/runtime repos and packaged autoloop/core/runtime repos as runnable roots because the current repository uses the packaged layout.
