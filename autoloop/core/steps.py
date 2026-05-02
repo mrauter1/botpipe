@@ -8,8 +8,6 @@ from itertools import count
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Sequence
 
-from pydantic import BaseModel
-
 from .primitives import Event
 from .prompts import PromptSpec
 from .providers.retries import ProviderRetryPolicy
@@ -40,16 +38,6 @@ def _normalize_route_metadata(
             continue
         raise TypeError("route metadata values must be Route instances or summary strings")
     return normalized
-
-
-@dataclass(frozen=True, slots=True)
-class AfterStepResult:
-    """Structured after-hook override result."""
-
-    state: BaseModel | None = None
-    route: str | None = None
-    event: Event | None = None
-    handoff: str | None = None
 
 
 class Session:

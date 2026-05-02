@@ -228,7 +228,8 @@ class SecurityFindingToVerifiedRemediation(Workflow):
                 "deployment_constraints": next_state.deployment_constraints,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="compose_evidence_pack",

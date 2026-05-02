@@ -908,7 +908,7 @@ def test_runtime_step_state_restores_built_ins_and_custom_fields_on_resume(tmp_p
     class ReviewState(BaseModel):
         attempts: int = 0
 
-    def record_attempt(ctx, outcome):
+    def record_attempt(ctx):
         ctx.step_state.attempts += 1
 
     class ResumeWorkflow(simple.Workflow):
@@ -987,7 +987,7 @@ def test_simple_scoped_item_state_and_step_item_state_restore_on_resume(tmp_path
         status: str = "pending"
         attempts: int = 0
 
-    def record_scoped_state(ctx, outcome):
+    def record_scoped_state(ctx):
         if ctx.item_state.attempts == 0:
             assert ctx.step_item_state.visits == 1
             assert ctx.step_item_state.last_route is None

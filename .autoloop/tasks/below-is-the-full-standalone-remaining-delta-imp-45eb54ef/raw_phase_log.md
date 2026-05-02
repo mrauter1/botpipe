@@ -736,3 +736,67 @@ The remaining workflow compile failures are still the separate route-handoff-to-
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=producer | cycle=1 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+provider=codex
+mode=start
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de885-df79-7b33-a639-f87cf8f67f03
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+I’m scoping the `hook-control-unification` phase against the authoritative artifacts first, then I’ll inspect the engine and compiler paths that currently own hook invocation, python-step normalization, and route finalization.
+
+I’ve confirmed the phase artifacts are mostly placeholders, so I’m reading the live engine, collaborators, compiler, and tests directly. The worktree is very dirty outside this phase, so I’ll keep scope tight to the `autoloop` package and the active run artifacts.
+
+I’ve located the remaining legacy points: `AfterStepResult`, arity adaptation in hook execution, and hook redirect gates in `engine.py`. Next I’m reading those exact sections plus the current tests so the edits stay aligned with existing contracts instead of guessing.
+
+The compiler still normalizes python steps into `(state, Event)` and the engine still treats before-hooks as state mutators only. I’m pulling the existing contract tests around those cases now so I can replace the legacy paths without breaking adjacent runtime behavior.
+
+The change splits into three linked pieces: validation/compilation, execution/finalization, and contract tests. I’m going to update them in that order so the runtime changes land against a clear single-arity API and the tests reflect only the final control model.
+
+I’ve narrowed the main compatibility decision: I can enforce `hook(ctx)` across lifecycle hooks without touching most workflow packages, because their bigger churn is in python-step return values rather than hook signatures. I’m editing the runtime and compiler around that boundary now, then I’ll sweep the targeted tests that still rely on old hook forms.
+
+I’m removing the legacy hook return surface first: `AfterStepResult`, state-replacement hook returns, and arity adaptation in hook validation/normalization. After that I’ll wire the new before-hook short-circuit paths through the engine.
+
+I’ve finished the first runtime pass and I’m checking syntax before I touch the tests. If the engine compiles cleanly, I’ll migrate the targeted contract coverage to the new hook/control semantics next.
+
+I’ve got the engine compiling. I’m now migrating the contract tests that explicitly exercised the removed hook forms so the repo advertises only the final `hook(ctx)` model and the new python-step control returns.
+
+The remaining risk is concentrated in existing `python_step` implementations outside the core: many workflow packages still return `(state, Event)` today. I’m migrating the repo-owned workflow packages and fixtures next so the new runtime path doesn’t strand those callers.
+
+The workflow-package sweep is down to repo-owned `python_step` handlers and templates. I’m doing a compile pass over the touched modules now to catch any mechanical migration mistakes before I update the run artifacts.
+
+The code and migrated modules compile, but I can’t execute the runtime smoke tests in this shell because the environment doesn’t have `pydantic` or `pytest` installed. I’m documenting the exact scope and the intentional decisions in the run artifacts now.
+
+The compile sweep dirtied tracked `.pyc` artifacts under `workflows/__pycache__`. I’m restoring only those generated binaries from `HEAD` so the phase output stays limited to source and run-artifact changes.
+
+Scope considered
+- Phase-local `hook-control-unification` scope in the engine/compiler/runtime path, plus repo-owned `python_step` workflow packages and the touched hook/runtime tests needed to keep that surface coherent.
+- I kept unrelated dirty files out of scope.
+
+What I analyzed
+- Hook validation and invocation in [autoloop/core/hook_validation.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/hook_validation.py) and [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py).
+- Python-step compilation in [autoloop/core/compiler.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/compiler.py) and context surfaces in [autoloop/core/context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/context.py).
+- Repo-owned workflow packages under `workflows/` and the touched tests/templates that still assumed old hook or python-step return forms.
+
+What I changed
+- Removed `AfterStepResult` from [autoloop/core/steps.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/steps.py) and replaced hook normalization with a unified `HookResult` path in [autoloop/core/engine.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/engine.py).
+- Enforced `hook(ctx)` for lifecycle hooks and route `on_taken`, and made `before`, `before_producer`, and `before_verifier` capable of short-circuiting into route finalization or direct runtime control before provider execution.
+- Changed python-step compilation/execution so handlers return control values directly; repo-owned workflow packages and CLI scaffolds now mutate `ctx.state` and return route/control values instead of returning replacement state tuples.
+- Updated the phase implementation notes and decisions ledger in the active run artifacts.
+
+Key findings / decisions
+- Hook-originated pre-provider routes now finalize without fabricating a provider-selected candidate route.
+- Pair-step short-circuits from `before_producer`, `after_producer`, and `before_verifier` finalize immediately and do not run the pair’s final verifier hook.
+- I did not finish the broader collaborator ownership refactor or the later trace/history field expansion in this turn; the core runtime semantics changed first.
+
+Open issues / next step
+- Validation was limited to `python3 -m py_compile` across the touched core modules, tests, and workflow packages.
+- I could not run runtime tests in this shell because the environment is missing `pydantic` and `pytest`.
+- There are still likely untouched tests outside the edited set that assume the old python-step tuple-return style and should be migrated when the test environment is available.

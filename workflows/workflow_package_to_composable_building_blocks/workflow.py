@@ -411,7 +411,8 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "max_candidate_building_blocks": next_state.max_candidate_building_blocks,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_decomposition_context",
@@ -452,7 +453,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
             )
             _capture_decomposition_evidence(ctx, repo_root=repo_root, requested_paths=state.evidence_paths)
         except _CaptureBlockedError as exc:
-            return state, Event("blocked", reason=str(exc))
+            return Event("blocked", reason=str(exc))
         return (
             state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
             Event("decomposition_context_captured"),
@@ -622,9 +623,8 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
                 "published": True,
             },
         )
-        return state.model_copy(update={"selected_workflow_name": selected_workflow_name, "published": True}), Event(
-            "candidate_decomposition_published"
-        )
+        ctx.state = state.model_copy(update={"selected_workflow_name": selected_workflow_name, "published": True})
+        return "candidate_decomposition_published"
 
     entry = bootstrap
 

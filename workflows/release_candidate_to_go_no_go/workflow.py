@@ -210,7 +210,8 @@ class ReleaseCandidateToGoNoGo(Workflow):
                 "evidence_paths": next_state.evidence_paths,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="publish_decision",
@@ -250,9 +251,8 @@ class ReleaseCandidateToGoNoGo(Workflow):
                 "published": True,
             },
         )
-        return state.model_copy(update={"published": True, "recommended_decision": recommended_decision}), Event(
-            "decision_published"
-        )
+        ctx.state = state.model_copy(update={"published": True, "recommended_decision": recommended_decision})
+        return "decision_published"
 
     entry = bootstrap
 

@@ -338,7 +338,8 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
                 "max_messages_per_task": next_state.max_messages_per_task,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_company_operation_context",

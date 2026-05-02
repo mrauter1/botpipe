@@ -142,7 +142,7 @@ class GoldenSurfaceWorkflow(Workflow):
         )
 
     @staticmethod
-    def _after_review(ctx, outcome):
+    def _after_review(ctx):
         ctx.step_state.selected_risk_level = "high"
         if ctx.input_response is None:
             assert ctx.step_item_state.visits == 1
@@ -184,8 +184,8 @@ class GoldenSurfaceWorkflow(Workflow):
     )
 
     @staticmethod
-    def _after_finalize(ctx, event, route):
-        assert route == "done"
+    def _after_finalize(ctx):
+        assert ctx.route.tag == "done"
         if ctx.values.decision == "abort":
             return Fail("Publication aborted after final review.")
         return None
@@ -193,12 +193,13 @@ class GoldenSurfaceWorkflow(Workflow):
     @python_step(name="finalize", routes={"done": FINISH}, after=_after_finalize)
     def finalize(state, ctx):
         summary = llm("Write the release summary.", returns=str)
-        return state.model_copy(
+        ctx.state = state.model_copy(
             update={
                 "publication_summary": summary,
                 "final_status": ctx.values.decision,
             }
-        ), "done"
+        )
+        return "done"
 """.strip()
         + "\n",
         encoding="utf-8",

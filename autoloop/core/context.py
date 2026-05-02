@@ -224,6 +224,10 @@ class Context:
     def state(self) -> BaseModel:
         return self._state
 
+    @state.setter
+    def state(self, value: BaseModel) -> None:
+        self._set_state(value)
+
     @property
     def answer(self) -> str | None:
         return self._answer
@@ -259,10 +263,12 @@ class Context:
         return NamespaceProxy(self._route)
 
     @property
-    def outcome(self) -> NamespaceProxy | None:
+    def outcome(self) -> Any | None:
         if self._outcome is None:
             return None
-        return NamespaceProxy(self._outcome)
+        if isinstance(self._outcome, Mapping):
+            return NamespaceProxy(self._outcome)
+        return self._outcome
 
     @property
     def event(self) -> NamespaceProxy | None:

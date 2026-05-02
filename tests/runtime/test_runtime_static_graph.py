@@ -203,7 +203,7 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     class WorkItemState(BaseModel):
         severity: str = "medium"
 
-    def after_review(ctx, outcome, route):
+    def after_review(ctx):
         return None
 
     def on_hidden_taken(ctx):

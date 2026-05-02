@@ -250,7 +250,8 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
                 "target_test_command": next_state.target_test_command,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="publish_package",
@@ -277,7 +278,8 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
                 "rollback_plan": str(rollback_path),
             },
         )
-        return state.model_copy(update={"published": True}), Event("package_published")
+        ctx.state = state.model_copy(update={"published": True})
+        return "package_published"
 
     entry = bootstrap
 

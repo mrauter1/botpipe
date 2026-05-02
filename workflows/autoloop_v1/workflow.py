@@ -81,10 +81,11 @@ class AutoloopV1(Workflow):
     def activate_next_phase(state: State, ctx):
         next_index = state.phase_index + 1
         if next_index >= len(state.phases):
-            return state, Event("workflow_complete")
+            return "workflow_complete"
         phase = state.phases[next_index]
         ctx.open_session("phase_session", scope=phase.id)
-        return state.model_copy(update={"phase_index": next_index, "phase": phase}), Event("phase_selected")
+        ctx.state = state.model_copy(update={"phase_index": next_index, "phase": phase})
+        return "phase_selected"
 
     entry = plan
 

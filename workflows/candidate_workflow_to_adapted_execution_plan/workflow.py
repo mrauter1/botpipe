@@ -227,7 +227,8 @@ class CandidateWorkflowToAdaptedExecutionPlan(Workflow):
                 "evidence_expectations": next_state.evidence_expectations,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_selected_workflow_contract",

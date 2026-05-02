@@ -31,7 +31,7 @@ from .validation import PayloadValidator
 from .worklists import Worklist
 
 OutcomeHandler = Callable[[BaseModel, Outcome, Any], BaseModel]
-SystemHandler = Callable[[BaseModel, Context], tuple[BaseModel, Event]]
+SystemHandler = Callable[[Context], Any]
 MiddlewareHandler = Callable[[BaseModel, Outcome], Event | None]
 
 
@@ -496,42 +496,14 @@ def _compile_system_handler(step: PythonStep, *, workflow_cls: type[Any]) -> Sys
             f"handler for system step {step_name!r} must accept exactly 1 or 2 positional arguments"
         )
 
-    def handler(state: BaseModel, ctx: Context) -> tuple[BaseModel, Event]:
+    def handler(ctx: Context) -> Any:
         if arity == 1:
             result = raw_handler(ctx)
         else:
-            result = raw_handler(state, ctx)
-        return _normalize_system_handler_result(step_name, state, result)
+            result = raw_handler(ctx.state, ctx)
+        return result
 
     return handler
-
-
-def _normalize_system_handler_result(
-    step_name: str,
-    state: BaseModel,
-    result: Any,
-) -> tuple[BaseModel, Event]:
-    if result is None:
-        return state, Event("done")
-    if isinstance(result, BaseModel):
-        return result, Event("done")
-    if isinstance(result, str):
-        return state, Event(result)
-    if isinstance(result, Event):
-        return state, result
-    if isinstance(result, tuple) and len(result) == 2:
-        next_state, event_like = result
-        if not isinstance(next_state, BaseModel):
-            raise WorkflowCompilationError(
-                f"system step {step_name!r} must return a BaseModel state when returning a tuple"
-            )
-        if isinstance(event_like, str):
-            return next_state, Event(event_like)
-        if isinstance(event_like, Event):
-            return next_state, event_like
-    raise WorkflowCompilationError(
-        f"system step {step_name!r} returned unsupported value {result!r}"
-    )
 
 
 def _compile_middleware(definition: WorkflowDefinition) -> MiddlewareHandler | None:

@@ -151,7 +151,8 @@ class TaskToCandidateWorkflowSet(Workflow):
                 "evidence_expectations": next_state.evidence_expectations,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_workflow_capabilities",
@@ -167,7 +168,7 @@ class TaskToCandidateWorkflowSet(Workflow):
         workflow_count = summary.get("workflow_count")
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_capability_snapshot.json must define a positive workflow_count")
-        return state, Event("workflow_capabilities_captured")
+        return "workflow_capabilities_captured"
 
     frame_candidate_request = produce_verify_step(
         producer_prompt=Prompt.file("prompts/frame_producer.md"),

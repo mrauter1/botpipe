@@ -280,7 +280,8 @@ class WorkflowRunHistoryToFailureModes(Workflow):
                 "constraints": next_state.constraints,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_run_history_context",

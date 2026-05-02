@@ -72,22 +72,22 @@ def validate_handlers(definition: Any) -> None:
 def validate_step_hooks(definition: Any) -> None:
     for step in definition.steps:
         if step.before is not None:
-            validate_callable_arity(f"{step.name!r} before hook", step.before, {1, 2})
+            validate_callable_arity(f"{step.name!r} before hook", step.before, {1})
         if step.after is not None:
-            validate_callable_arity(f"{step.name!r} after hook", step.after, {1, 2, 3, 4})
+            validate_callable_arity(f"{step.name!r} after hook", step.after, {1})
         for route_name, destination in definition.transitions.get(step, {}).items():
             route = normalize_route_spec(destination)
             if route.on_taken is not None:
                 validate_callable_arity(f"{step.name!r} route {route_name!r} on_taken hook", route.on_taken, {1})
         if isinstance(step, ProduceVerifyStep):
             if getattr(step, "before_do", None) is not None:
-                validate_callable_arity(f"{step.name!r} before_do hook", step.before_do, {1, 2})
+                validate_callable_arity(f"{step.name!r} before_do hook", step.before_do, {1})
             if getattr(step, "after_do", None) is not None:
-                validate_callable_arity(f"{step.name!r} after_do hook", step.after_do, {1, 2, 3, 4})
+                validate_callable_arity(f"{step.name!r} after_do hook", step.after_do, {1})
             if getattr(step, "before_review", None) is not None:
-                validate_callable_arity(f"{step.name!r} before_review hook", step.before_review, {1, 2})
+                validate_callable_arity(f"{step.name!r} before_review hook", step.before_review, {1})
             if getattr(step, "after_review", None) is not None:
-                validate_callable_arity(f"{step.name!r} after_review hook", step.after_review, {1, 2, 3, 4})
+                validate_callable_arity(f"{step.name!r} after_review hook", step.after_review, {1})
 
 
 __all__ = [

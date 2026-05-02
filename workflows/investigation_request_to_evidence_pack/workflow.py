@@ -107,7 +107,8 @@ class InvestigationRequestToEvidencePack(Workflow):
                 "source_constraints": next_state.source_constraints,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     frame_investigation = produce_verify_step(
         producer_prompt=Prompt.file("prompts/frame_producer.md"),

@@ -235,7 +235,8 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
                 "max_runs_per_workflow": next_state.max_runs_per_workflow,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_portfolio_context",

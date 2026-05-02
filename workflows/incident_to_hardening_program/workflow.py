@@ -144,7 +144,8 @@ class IncidentToHardeningProgram(Workflow):
                 "evidence_paths": next_state.evidence_paths,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     frame_incident = produce_verify_step(
         producer_prompt=Prompt.file("prompts/frame_producer.md"),

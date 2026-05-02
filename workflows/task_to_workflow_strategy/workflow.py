@@ -223,7 +223,8 @@ class TaskToWorkflowStrategy(Workflow):
                 "evidence_expectations": next_state.evidence_expectations,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_workflow_portfolio",
@@ -239,7 +240,7 @@ class TaskToWorkflowStrategy(Workflow):
         workflow_count = summary.get("workflow_count")
         if not isinstance(workflow_count, int) or workflow_count < 1:
             raise ValueError("workflow_portfolio_snapshot.json must define a positive workflow_count")
-        return state, Event("portfolio_snapshotted")
+        return "portfolio_snapshotted"
 
     @python_step(
         name="build_candidate_workflow_set",
@@ -276,7 +277,7 @@ class TaskToWorkflowStrategy(Workflow):
         child_last_event = None if child_result.last_event is None else child_result.last_event.tag
         if child_result.status == "awaiting_input" and child_last_event in {"question", "blocked"}:
             question = None if child_result.last_event is None else child_result.last_event.question
-            return state, Event(child_last_event, question=question)
+            return Event(child_last_event, question=question)
 
         require_child_workflow_result(
             child_result,
@@ -303,7 +304,7 @@ class TaskToWorkflowStrategy(Workflow):
                 "candidate_next_action": "candidate_next_action.md",
             },
         )
-        return state, Event("candidate_workflow_set_built")
+        return "candidate_workflow_set_built"
 
     @python_step(
         name="publish_strategy",

@@ -406,7 +406,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 "target_test_command": next_state.target_test_command,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_refinement_context",
@@ -646,9 +647,8 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
                 "published": True,
             },
         )
-        return state.model_copy(update={"selected_workflow_name": selected_workflow_name, "published": True}), Event(
-            "workflow_refinement_published"
-        )
+        ctx.state = state.model_copy(update={"selected_workflow_name": selected_workflow_name, "published": True})
+        return "workflow_refinement_published"
 
     entry = bootstrap
 

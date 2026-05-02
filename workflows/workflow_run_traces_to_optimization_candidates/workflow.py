@@ -576,7 +576,8 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
                 "constraints": next_state.constraints,
             },
         )
-        return next_state, Event("inputs_prepared")
+        ctx.state = next_state
+        return "inputs_prepared"
 
     @python_step(
         name="capture_frame_context",
@@ -614,18 +615,16 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             constraints=state.constraints,
         )
 
-        return (
-            state.model_copy(
-                update={
-                    "selected_workflow_name": frame_capture.selected_workflow_name,
-                    "candidate_run_count": frame_capture.candidate_run_count,
-                    "eligible_run_count": frame_capture.eligible_run_count,
-                    "excluded_run_count": frame_capture.excluded_run_count,
-                    "no_eligible_trace_evidence": frame_capture.no_eligible_trace_evidence,
-                }
-            ),
-            Event("frame_context_captured"),
+        ctx.state = state.model_copy(
+            update={
+                "selected_workflow_name": frame_capture.selected_workflow_name,
+                "candidate_run_count": frame_capture.candidate_run_count,
+                "eligible_run_count": frame_capture.eligible_run_count,
+                "excluded_run_count": frame_capture.excluded_run_count,
+                "no_eligible_trace_evidence": frame_capture.no_eligible_trace_evidence,
+            }
         )
+        return "frame_context_captured"
 
     @python_step(
         name="route_optimize_tokens",
@@ -644,16 +643,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     )
     def route_optimize_tokens(state: State, ctx):
         if state.include_token_optimization:
-            return state, Event("token_optimization_enabled")
+            return "token_optimization_enabled"
         finalize_optional_optimization_artifact(
             route="token_pass_not_applicable",
             path=ctx.workflow_folder / _TOKEN_CANDIDATES_SPEC.filename,
             selected_workflow_name=_selected_workflow_name_from_state(state),
             spec=_TOKEN_CANDIDATES_SPEC,
         )
-        return state.model_copy(update={"token_status": "token_pass_not_applicable"}), Event(
-            "token_pass_not_applicable"
-        )
+        ctx.state = state.model_copy(update={"token_status": "token_pass_not_applicable"})
+        return "token_pass_not_applicable"
 
     @python_step(
         name="route_adversarial_cases",
@@ -672,16 +670,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     )
     def route_adversarial_cases(state: State, ctx):
         if state.include_adversarial_generation:
-            return state, Event("adversarial_generation_enabled")
+            return "adversarial_generation_enabled"
         finalize_optional_optimization_artifact(
             route="adversarial_generation_skipped",
             path=ctx.workflow_folder / _ADVERSARIAL_CASES_SPEC.filename,
             selected_workflow_name=_selected_workflow_name_from_state(state),
             spec=_ADVERSARIAL_CASES_SPEC,
         )
-        return state.model_copy(update={"adversarial_status": "adversarial_generation_skipped"}), Event(
-            "adversarial_generation_skipped"
-        )
+        ctx.state = state.model_copy(update={"adversarial_status": "adversarial_generation_skipped"})
+        return "adversarial_generation_skipped"
 
     @python_step(
         name="route_workflow_level",
@@ -700,16 +697,15 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
     )
     def route_workflow_level(state: State, ctx):
         if state.include_workflow_level_candidates:
-            return state, Event("workflow_level_enabled")
+            return "workflow_level_enabled"
         finalize_optional_optimization_artifact(
             route="workflow_level_pass_not_applicable",
             path=ctx.workflow_folder / _WORKFLOW_LEVEL_CANDIDATES_SPEC.filename,
             selected_workflow_name=_selected_workflow_name_from_state(state),
             spec=_WORKFLOW_LEVEL_CANDIDATES_SPEC,
         )
-        return state.model_copy(update={"workflow_level_status": "workflow_level_pass_not_applicable"}), Event(
-            "workflow_level_pass_not_applicable"
-        )
+        ctx.state = state.model_copy(update={"workflow_level_status": "workflow_level_pass_not_applicable"})
+        return "workflow_level_pass_not_applicable"
 
     @python_step(
         name="publish_optimization_packet",
@@ -864,7 +860,8 @@ class WorkflowRunTracesToOptimizationCandidates(Workflow):
             "optimization_publication_receipt.json",
             receipt_payload,
         )
-        return state.model_copy(update={"published": True}), Event("optimization_candidates_published")
+        ctx.state = state.model_copy(update={"published": True})
+        return "optimization_candidates_published"
 
     entry = bootstrap
 
