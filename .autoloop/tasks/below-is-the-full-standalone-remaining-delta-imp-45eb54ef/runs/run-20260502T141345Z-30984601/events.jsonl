@@ -33,3 +33,7 @@
 {"ts": "2026-05-02T15:36:55.868822+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 33, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "migrate-runtime-test-surfaces"}
 {"ts": "2026-05-02T15:37:49.203502+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 34, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "migrate-runtime-test-surfaces"}
 {"ts": "2026-05-02T15:37:49.238685+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 35, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "migrate-runtime-test-surfaces"}
+{"ts": "2026-05-02T15:37:49.312812+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 36, "event_type": "phase_completed", "pair": "test", "phase_id": "migrate-runtime-test-surfaces", "phase_mode": "single"}
+{"ts": "2026-05-02T15:37:49.315414+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 37, "event_type": "phase_started", "phase_id": "enforce-repo-compatibility-gate", "phase_mode": "single"}
+{"ts": "2026-05-02T15:37:49.317117+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 38, "event_type": "pair_started", "pair": "implement", "phase_id": "enforce-repo-compatibility-gate"}
+{"ts": "2026-05-02T15:37:49.317224+00:00", "run_id": "run-20260502T141345Z-30984601", "seq": 39, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "enforce-repo-compatibility-gate"}
