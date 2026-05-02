@@ -2,3 +2,15 @@
 Choose the explicit-only item-state branch: `ctx.item_state` remains available only when a worklist declares `item_state=...`; do not introduce a new built-in runtime-owned item model without later clarification.
 All removed surfaces in this task are fail-fast breaks with no compatibility aliases or silent coercions, including `on_route`, route effects, `AfterStepResult`, multi-arity hooks, python-step tuple/BaseModel returns, and old `outputs` / `review_outputs` vocabulary.
 Refactor existing collaborator classes into real owners by moving logic into the named collaborators already present; do not add new wrapper layers or generic indirection beyond the explicit data structures needed for hook/finalization control.
+<autoloop-decisions-header version="1" block_seq="2" owner="runtime" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260502T022441Z-8f34cad8" ts="2026-05-02T10:52:01.472572+00:00" entry="questions" qa_seq="1" />
+WARNING: The spec leaves the public `ctx.item_state` contract open, and choosing one branch changes runtime behavior and long-term maintenance direction.
+
+1. Should `ctx.item_state` stay explicit-only, meaning it exists only when a worklist declares `item_state=...` and otherwise errors clearly?
+Best supposition: YES. This is the minimal, lower-risk branch and keeps only `ctx.step_item_state` as the guaranteed built-in scoped runtime surface.
+
+2. Or do you want a built-in runtime-owned `ctx.item_state` model that is always available for active scoped items?
+Best supposition: NO, unless you specifically want item-wide runtime metadata to be always present.
+
+Reply with either "1" or "2".
+<autoloop-decisions-header version="1" block_seq="3" owner="runtime" phase_id="task-global" pair="plan" turn_seq="2" run_id="run-20260502T022441Z-8f34cad8" ts="2026-05-02T10:52:01.473464+00:00" entry="answers" qa_seq="1" source="human" />
+2

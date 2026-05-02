@@ -91,3 +91,60 @@ The planner needs to revise the phase order so route effects are deleted only af
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=plan | phase=producer | cycle=2 | attempt=1 | thread_id=019de680-a002-7b52-879e-fa9bf833fa2a
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/plan_producer.md
+session_id=019de680-a002-7b52-879e-fa9bf833fa2a
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=plan | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de680-a002-7b52-879e-fa9bf833fa2a
+---
+I’m checking whether this run gained any new authoritative clarifications after the verifier pass. If not, the next step is to resolve the remaining product-contract ambiguity instead of silently revising the plan around it.
+
+Scope considered
+
+The current run-local planning artifacts, the verifier’s blocking feedback, and the authoritative raw log to check for any new clarification that would let me safely revise the plan without asking.
+
+What I analyzed
+
+I re-checked the raw log and there are no new user clarifications after the verifier pass. I also reviewed the blocking findings against the immutable request: one is a plan sequencing fix I can make locally, and the other is an unresolved public-contract choice around `ctx.item_state`.
+
+What I changed
+
+No files changed. I did not revise the plan because the remaining `ctx.item_state` branch choice materially affects the public runtime contract and the spec leaves that branch open.
+
+Key findings / decisions
+
+The route-effect sequencing issue can be fixed in the next plan revision by moving deletion behind helper parity. The blocking issue I cannot safely resolve without confirmation is the `ctx.item_state` contract: the request explicitly allows either an explicit-only model or a built-in runtime-owned item model.
+
+Open issues / next step
+
+I need confirmation on the `ctx.item_state` branch. My default recommendation is the explicit-only branch because it is smaller, lower-risk, and avoids inventing new runtime-owned item state beyond the guaranteed built-in `ctx.step_item_state`.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"question","question":"WARNING: The spec leaves the public `ctx.item_state` contract open, and choosing one branch changes runtime behavior and long-term maintenance direction.\n\n1. Should `ctx.item_state` stay explicit-only, meaning it exists only when a worklist declares `item_state=...` and otherwise errors clearly?\nBest supposition: YES. This is the minimal, lower-risk branch and keeps only `ctx.step_item_state` as the guaranteed built-in scoped runtime surface.\n\n2. Or do you want a built-in runtime-owned `ctx.item_state` model that is always available for active scoped items?\nBest supposition: NO, unless you specifically want item-wide runtime metadata to be always present.\n\nReply with either \"1\" or \"2\".","best_supposition":"Use the explicit-only `ctx.item_state` branch, then I will revise the plan and reorder route-effect deletion behind helper parity."}
+</loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=clarification | pair=plan | phase=producer | cycle=2 | attempt=1 | source=human
+---
+Question:
+WARNING: The spec leaves the public `ctx.item_state` contract open, and choosing one branch changes runtime behavior and long-term maintenance direction.
+
+1. Should `ctx.item_state` stay explicit-only, meaning it exists only when a worklist declares `item_state=...` and otherwise errors clearly?
+Best supposition: YES. This is the minimal, lower-risk branch and keeps only `ctx.step_item_state` as the guaranteed built-in scoped runtime surface.
+
+2. Or do you want a built-in runtime-owned `ctx.item_state` model that is always available for active scoped items?
+Best supposition: NO, unless you specifically want item-wide runtime metadata to be always present.
+
+Reply with either "1" or "2".
+
+Answer:
+2
