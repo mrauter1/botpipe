@@ -26,3 +26,11 @@
   Problem: the central public simple-workflow gate is now enforcing the new contract, but several shipped `autoloop.simple.Workflow` packages in the repo still define removed class-level `on_start`, `on_outcome`, or `on_<step>` handlers and therefore no longer compile. Reproduction: a repo-wide `compile_workflow()` sweep over exported workflow packages still fails with `WorkflowValidationError: simple workflows must declare lifecycle and step behavior on explicit step declarations...` for the files above. The touched targeted tests pass, but the published public workflow surface is still broken end to end.
   Risk: this phase is supposed to restrict the public compiler path to explicit declarations only, without compatibility shims. Leaving repo-shipped public simple workflows on the removed API creates a real regression surface for examples, fixtures, and downstream users, and it leaves the public authoring model half-migrated. That is a material compatibility and maintainability failure even though the central gate itself is correct.
   Minimal fix: migrate the remaining exported simple workflow packages off class-level handlers in the same explicit-hook pattern already applied to the other workflow packages in this cycle, or explicitly isolate those packages from the public simple path if they are not intended to remain public-simple authoring examples.
+
+## Cycle 3 Review
+
+- Reproduced on 2026-05-02: `IMP-001`, `IMP-002`, and `IMP-003` no longer reproduce after the cycle 3 changes.
+- Validation rerun:
+  `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+  Result: `189 passed`.
+- Repo-wide `compile_workflow()` sweeps still fail, but only on separate route-handoff-to-`PythonStep` validation errors that predate this phase and are outside `public-surface-cleanup` scope. No remaining in-scope findings were identified in this review pass.

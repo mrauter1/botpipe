@@ -501,3 +501,139 @@ Migrate the remaining exported simple workflow packages to explicit declaration 
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=producer | cycle=3 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de854-cad3-74d0-a960-3effc949e32b
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=3 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+The remaining scope is narrow now: migrate the exported public `autoloop.simple.Workflow` packages that still rely on removed class-level handlers, and keep the fix limited to the public-simple path. I’m reading the reviewer feedback, the run decisions, and one migrated workflow pattern before editing.
+
+I’ve confirmed the remaining failures are all the same shape: exported simple workflows still carrying class-level `on_<step>` or `on_outcome`. I’m reading those workflows in batches now so I can convert them with the same explicit-hook pattern instead of inventing a new mechanism.
+
+The remaining migrations are repetitive but not identical. I’m checking each handler body against its owning step so I can wire `after_verifier=` directly and keep the state updates unchanged.
+
+I’m checking one adjacent helper before editing. The repeated `on_outcome = event_on_outcome_tags(...)` pattern was removed from the other workflows earlier, so I want to confirm it truly has no required replacement here either.
+
+I have enough context to start edits. I’m converting the remaining class-level handlers into explicit step hooks and deleting the leftover `on_outcome` passthroughs, starting with the simpler workflow packages first.
+
+The first bulk patch missed a few exact step names, so I’m switching to smaller file-by-file edits. That keeps the migration safer and avoids accidental drift across these workflow packages.
+
+The simpler packages are converted. I’m finishing the same migration on the remaining workflows with artifact-dependent post-verifier logic, which is where the only real nuance is.
+
+The code changes are in place. I’m running the public-workflow sweep now to confirm the remaining blocker is actually gone before I update the run notes.
+
+The new sweep result is the expected shape: the class-level handler failures are gone, and the only remaining compile errors are the older route-handoff-to-`PythonStep` validations that were already outside this phase. I’m validating the touched slices and then I’ll update the run notes to make that boundary explicit.
+
+The focused tests passed. I’m rerunning the workflow compile check with exact class names so the notes capture the real remaining boundary cleanly, not noise from `Params` exports.
+
+I’ve confirmed the intended cleanup landed. The remaining failures are all the separate route-handoff validation issue, so I’m recording that boundary in `decisions.txt` and `implementation_notes.md` for the next turn instead of silently mixing phases.
+
+I’ve finished the implementation and validation. I’m doing one last summary read of the touched scope so the close-out is accurate about what changed and what remains deliberately out of phase.
+
+Scope considered
+
+Phase-local public-surface cleanup only. I stayed on the remaining reviewer finding: remove the last exported public `autoloop.simple.Workflow` class-level `on_<step>` / `on_outcome` surfaces and migrate those workflows onto explicit declaration hooks.
+
+What I analyzed
+
+I traced the remaining failing public workflows, compared them to the already-migrated explicit-hook pattern, and re-ran the exported-workflow compile sweep to separate class-handler regressions from the older route-handoff validation failures. I also checked the active feedback, plan, decisions, and implementation notes before editing.
+
+What I changed
+
+I migrated the remaining exported public simple workflows from class-level handlers to explicit `after_verifier` hooks:
+
+- `workflows/company_operation_to_recursive_improvement_cycle/workflow.py`
+- `workflows/incident_to_hardening_program/workflow.py`
+- `workflows/workflow_and_eval_to_refined_workflow_package/workflow.py`
+- `workflows/workflow_idea_to_workflow_package/workflow.py`
+- `workflows/workflow_package_to_composable_building_blocks/workflow.py`
+- `workflows/workflow_portfolio_to_operating_system/workflow.py`
+- `workflows/workflow_run_history_to_failure_modes/workflow.py`
+- `workflows/workflow_run_traces_to_optimization_candidates/workflow.py`
+- `workflows/workflow_to_eval_suite/workflow.py`
+
+In each file, I removed the legacy `on_outcome` / `on_<step>` class methods, added explicit helper hooks, and wired them onto the owning `produce_verify_step(..., after_verifier=...)`. I also updated `implementation_notes.md` and appended the non-obvious boundary decision to `decisions.txt`.
+
+Key findings / decisions
+
+The public-simple handler cleanup is now complete end to end for the exported workflows that were still failing on removed class-method surfaces. A repo-wide workflow compile sweep no longer reports those class-handler failures.
+
+Validation passed:
+- `python3 -m compileall` on the touched workflow files
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+- Result: `189 passed`
+
+The remaining compile-sweep failures are now only the separate route-handoff-to-`PythonStep` validation errors, which were already outside this phase.
+
+Open issues / next step
+
+If the verifier still wants a fully clean exported-workflow compile sweep, the next phase needs to tackle the route-handoff validation failures in workflows like `task_to_candidate_workflow_set`, `workflow_idea_to_workflow_package`, `workflow_to_eval_suite`, and related packages. That is no longer a public-surface cleanup issue.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de854-cad3-74d0-a960-3effc949e32b
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+Reviewing the cycle 3 changes against the public-surface cleanup contract. I’m checking whether the earlier blockers are truly gone, then I’ll update only `criteria.md` and `feedback.md`.
+
+I’ve got the phase artifacts and prior decisions. I’m reproducing the in-scope regressions directly so the criteria reflect the current repository state, not just the producer notes.
+
+The focused tests passed; the repo-wide compile sweep still fails, but those failures are now all the older route-handoff-to-`PythonStep` validations, not the removed class-handler surface. I’m checking whether that remaining state should still block this phase or can be treated as out of scope per the phase contract.
+
+I’ve confirmed the current state: no remaining in-scope blockers reproduce, and the old blocker conditions no longer hold. I’m updating the review artifacts to reflect a complete phase review rather than carrying forward stale blocker text without context.
+
+Scope considered
+
+Phase-local review of `public-surface-cleanup` only. I checked the changed compiler/discovery path, the migrated tests, and the exported public simple workflow packages that previously still depended on removed class-level handler surfaces.
+
+What I analyzed
+
+I reviewed the active `implementation_notes.md`, the run decisions, and the existing reviewer feedback. I then reproduced the relevant validation from the repo venv:
+
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+- repo-wide `compile_workflow()` sweep over exported workflows
+- targeted source grep for remaining `on_outcome`, `event_on_outcome_tags`, and class-level `on_<step>` usage in the nine workflows that previously triggered `IMP-003`
+
+What I reviewed
+
+The focused test slice passes: `189 passed`. The previous public-surface blockers no longer reproduce:
+
+- simple/public compiler gating for class-level `on_start`, `on_outcome`, and `on_<step>` is in place
+- stale `on_route` contract coverage has been migrated
+- the remaining exported public simple workflows no longer contain the removed class-level handler surfaces
+
+The repo-wide compile sweep still fails, but only on separate route-handoff-to-`PythonStep` validation errors. Those failures predate this review cycle, are explicitly documented in the implementation notes and decisions, and are outside the scope of `public-surface-cleanup`.
+
+Key findings / decisions
+
+No remaining in-scope findings were identified in this review pass. I updated:
+
+- [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/implement/phases/public-surface-cleanup/criteria.md>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/implement/phases/public-surface-cleanup/feedback.md>)
+
+The feedback artifact now records that `IMP-001`, `IMP-002`, and `IMP-003` no longer reproduce as of the cycle 3 review.
+
+Open issues / next step
+
+The next work item, if desired, is the separate route-handoff-to-`PythonStep` validation cleanup across several workflows. That is not a blocker for closing this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

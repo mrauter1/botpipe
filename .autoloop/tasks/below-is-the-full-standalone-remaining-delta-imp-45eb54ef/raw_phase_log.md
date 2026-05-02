@@ -577,3 +577,63 @@ The remaining compile-sweep failures are now only the separate route-handoff-to-
 Open issues / next step
 
 If the verifier still wants a fully clean exported-workflow compile sweep, the next phase needs to tackle the route-handoff validation failures in workflows like `task_to_candidate_workflow_set`, `workflow_idea_to_workflow_package`, `workflow_to_eval_suite`, and related packages. That is no longer a public-surface cleanup issue.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=verifier | cycle=3 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_verifier.md
+session_id=019de854-cad3-74d0-a960-3effc949e32b
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=verifier | process=codex-agent | cycle=3 | attempt=1 | thread_id=019de854-cad3-74d0-a960-3effc949e32b
+---
+Reviewing the cycle 3 changes against the public-surface cleanup contract. I’m checking whether the earlier blockers are truly gone, then I’ll update only `criteria.md` and `feedback.md`.
+
+I’ve got the phase artifacts and prior decisions. I’m reproducing the in-scope regressions directly so the criteria reflect the current repository state, not just the producer notes.
+
+The focused tests passed; the repo-wide compile sweep still fails, but those failures are now all the older route-handoff-to-`PythonStep` validations, not the removed class-handler surface. I’m checking whether that remaining state should still block this phase or can be treated as out of scope per the phase contract.
+
+I’ve confirmed the current state: no remaining in-scope blockers reproduce, and the old blocker conditions no longer hold. I’m updating the review artifacts to reflect a complete phase review rather than carrying forward stale blocker text without context.
+
+Scope considered
+
+Phase-local review of `public-surface-cleanup` only. I checked the changed compiler/discovery path, the migrated tests, and the exported public simple workflow packages that previously still depended on removed class-level handler surfaces.
+
+What I analyzed
+
+I reviewed the active `implementation_notes.md`, the run decisions, and the existing reviewer feedback. I then reproduced the relevant validation from the repo venv:
+
+- `./.venv/bin/python -m pytest tests/unit/test_simple_surface.py tests/contract/test_engine_contracts.py tests/runtime/test_workspace_and_context.py tests/runtime/test_runtime_static_graph.py -q`
+- repo-wide `compile_workflow()` sweep over exported workflows
+- targeted source grep for remaining `on_outcome`, `event_on_outcome_tags`, and class-level `on_<step>` usage in the nine workflows that previously triggered `IMP-003`
+
+What I reviewed
+
+The focused test slice passes: `189 passed`. The previous public-surface blockers no longer reproduce:
+
+- simple/public compiler gating for class-level `on_start`, `on_outcome`, and `on_<step>` is in place
+- stale `on_route` contract coverage has been migrated
+- the remaining exported public simple workflows no longer contain the removed class-level handler surfaces
+
+The repo-wide compile sweep still fails, but only on separate route-handoff-to-`PythonStep` validation errors. Those failures predate this review cycle, are explicitly documented in the implementation notes and decisions, and are outside the scope of `public-surface-cleanup`.
+
+Key findings / decisions
+
+No remaining in-scope findings were identified in this review pass. I updated:
+
+- [criteria.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/implement/phases/public-surface-cleanup/criteria.md>)
+- [feedback.md](</home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/implement/phases/public-surface-cleanup/feedback.md>)
+
+The feedback artifact now records that `IMP-001`, `IMP-002`, and `IMP-003` no longer reproduce as of the cycle 3 review.
+
+Open issues / next step
+
+The next work item, if desired, is the separate route-handoff-to-`PythonStep` validation cleanup across several workflows. That is not a blocker for closing this phase.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
