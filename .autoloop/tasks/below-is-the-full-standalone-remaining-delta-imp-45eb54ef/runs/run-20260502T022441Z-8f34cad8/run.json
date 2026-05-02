@@ -17,13 +17,13 @@
       "docs-and-tests"
     ],
     "explicit": true,
-    "current_phase_index": 1,
-    "current_phase_id": "hook-control-unification"
+    "current_phase_index": 2,
+    "current_phase_id": "scoped-state-worklists"
   },
   "phase_status": {
     "public-surface-cleanup": "completed",
-    "hook-control-unification": "in_progress",
-    "scoped-state-worklists": "planned",
+    "hook-control-unification": "completed",
+    "scoped-state-worklists": "in_progress",
     "failure-trace-optimizer-alignment": "planned",
     "docs-and-tests": "planned"
   },
@@ -46,6 +46,19 @@
       "run_id": "run-20260502T022441Z-8f34cad8",
       "status": "in_progress",
       "ts": "2026-05-02T11:49:40.300251+00:00"
+    },
+    {
+      "phase_id": "hook-control-unification",
+      "run_id": "run-20260502T022441Z-8f34cad8",
+      "status": "completed",
+      "ts": "2026-05-02T12:45:34.219043+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "scoped-state-worklists",
+      "run_id": "run-20260502T022441Z-8f34cad8",
+      "status": "in_progress",
+      "ts": "2026-05-02T12:45:34.221223+00:00"
     }
   ]
 }

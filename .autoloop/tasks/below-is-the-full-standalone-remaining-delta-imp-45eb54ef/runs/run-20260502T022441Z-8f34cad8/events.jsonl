@@ -48,3 +48,7 @@
 {"ts": "2026-05-02T12:44:28.626691+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 48, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "hook-control-unification"}
 {"ts": "2026-05-02T12:45:34.097675+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 49, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "hook-control-unification"}
 {"ts": "2026-05-02T12:45:34.145988+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 50, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "hook-control-unification"}
+{"ts": "2026-05-02T12:45:34.219393+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 51, "event_type": "phase_completed", "pair": "test", "phase_id": "hook-control-unification", "phase_mode": "single"}
+{"ts": "2026-05-02T12:45:34.222088+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 52, "event_type": "phase_started", "phase_id": "scoped-state-worklists", "phase_mode": "single"}
+{"ts": "2026-05-02T12:45:34.223011+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 53, "event_type": "pair_started", "pair": "implement", "phase_id": "scoped-state-worklists"}
+{"ts": "2026-05-02T12:45:34.223090+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 54, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "scoped-state-worklists"}
