@@ -1988,3 +1988,53 @@ Results: `10 passed` for the focused doc suite and `361 passed` for the broader 
 Open issues / next step
 
 No phase-local test gaps remain from this pass.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8fa-691b-76b1-9044-1ee3cb84df0d
+---
+I’m reviewing the test-phase artifacts first, then I’ll compare the repo test changes and the stated coverage map against the phase contract before I update the audit criteria and feedback.
+
+I’ve got the strategy and the earlier test-phase decisions. I’m checking the actual repo test delta and rerunning the focused validation so the audit is based on the repository state, not just the producer summary.
+
+The focused doc-regression suite is green. The broader contract/unit/runtime/static-graph/history/optimizer suite is still running; I’ll finish the audit artifacts once it exits.
+
+I didn’t find a coverage or reliability gap in the phase-local test changes. I’m marking the audit criteria complete and recording that the audit finished without blocking or non-blocking findings.
+
+Scope considered
+
+Phase-local `docs-and-tests` only. I reviewed the active test strategy and feedback artifacts, the phase-relevant repo test delta, and the validation runs tied to the touched docs/tests.
+
+What I analyzed
+
+I checked the test strategy against the phase contract and the run-local decisions, then inspected the actual repo test change in `tests/test_architecture_baseline_docs.py`. I independently reran the focused doc-regression suite and the broader contract/unit/runtime/static-graph/history/optimizer-adjacent suite to verify the stated coverage and stability.
+
+What I reviewed
+
+The strategy maps the changed behaviors to the correct suites: doc-regression coverage in `tests/test_architecture_baseline_docs.py`, removed-surface validation in unit/contract tests, hook short-circuiting and direct controls in `tests/contract/test_engine_contracts.py`, worklist helper invariants in primitives/contract tests, trace/history/static-graph alignment in runtime tests, and optimizer-adjacent normalization in `tests/unit/test_optimization_helpers.py`.
+
+The tightened repo delta adds one useful regression guard: the authoring doc must now explicitly list `None` and `Event(...)` in the final hook return set. Validation passed on:
+`./.venv/bin/pytest -q tests/test_architecture_baseline_docs.py`
+and
+`./.venv/bin/pytest -q tests/contract/test_engine_contracts.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/unit/test_primitives_and_stores.py tests/unit/test_optimization_helpers.py tests/runtime/test_runtime_static_graph.py tests/runtime/test_history.py tests/runtime/test_runtime_tracing.py`
+
+Key findings / decisions
+
+No blocking or non-blocking audit findings. The criteria file is fully checked, and the feedback file now records that the audit completed without findings.
+
+Open issues / next step
+
+No phase-local test audit issues remain.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
