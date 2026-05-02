@@ -43,6 +43,8 @@ REMOVED_EXPORTED_WORKFLOW_CONTRACT_PATTERNS = {
     "hook return ctx.state.model_copy(...)": re.compile(r"return\s+ctx\.state\.model_copy\("),
     "hook return state.model_copy(...)": re.compile(r"return\s+state\.model_copy\("),
     "hook return ctx.state": re.compile(r"return\s+ctx\.state\s*(?:#.*)?$", re.MULTILINE),
+    "hook return state": re.compile(r"return\s+state\s*(?:#.*)?$", re.MULTILINE),
+    "hook return next_state": re.compile(r"return\s+next_state\s*(?:#.*)?$", re.MULTILINE),
 }
 
 
