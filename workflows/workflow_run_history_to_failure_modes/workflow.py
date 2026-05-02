@@ -30,7 +30,6 @@ from autoloop.stdlib import (
     validate_selected_workflow_artifact_alignment,
     validate_selected_workflow_capability_snapshot,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -61,6 +60,80 @@ _AUTHORITATIVE_PACKAGE_ARTIFACTS = frozenset(
 _ALLOWED_FAILURE_SEVERITIES = frozenset({"high", "medium", "low"})
 _ALLOWED_PRIORITY_LEVELS = frozenset({"P1", "P2", "P3"})
 _PUBLICATION_BOUNDARY = "diagnostic_publication_only"
+
+
+def _after_frame_diagnostic_scope(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    evidence_run_ids = _require_string_list(
+        payload.get("evidence_run_ids"),
+        "frame verifier payload must define evidence_run_ids as a non-empty string list",
+    )
+    return ctx.state.model_copy(
+        update={
+            "framing_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "evidence_run_ids": evidence_run_ids,
+        }
+    )
+
+
+def _after_map_failure_modes(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    evidence_run_ids = _require_string_list(
+        payload.get("evidence_run_ids"),
+        "analysis verifier payload must define evidence_run_ids as a non-empty string list",
+    )
+    failure_mode_ids = _require_string_list(
+        payload.get("failure_mode_ids"),
+        "analysis verifier payload must define failure_mode_ids as a non-empty string list",
+    )
+    recurring_weak_point_ids = _require_string_list(
+        payload.get("recurring_weak_point_ids"),
+        "analysis verifier payload must define recurring_weak_point_ids as a non-empty string list",
+    )
+    return ctx.state.model_copy(
+        update={
+            "mapping_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "evidence_run_ids": evidence_run_ids,
+            "failure_mode_ids": failure_mode_ids,
+            "recurring_weak_point_ids": recurring_weak_point_ids,
+        }
+    )
+
+
+def _after_package_improvement_pressure(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    evidence_run_ids = _require_string_list(
+        payload.get("evidence_run_ids"),
+        "package verifier payload must define evidence_run_ids as a non-empty string list",
+    )
+    failure_mode_ids = _require_string_list(
+        payload.get("failure_mode_ids"),
+        "package verifier payload must define failure_mode_ids as a non-empty string list",
+    )
+    ranked_opportunity_ids = _require_string_list(
+        payload.get("ranked_opportunity_ids"),
+        "package verifier payload must define ranked_opportunity_ids as a non-empty string list",
+    )
+    return ctx.state.model_copy(
+        update={
+            "packaging_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "evidence_run_ids": evidence_run_ids,
+            "failure_mode_ids": failure_mode_ids,
+            "ranked_opportunity_ids": ranked_opportunity_ids,
+        }
+    )
 
 
 class WorkflowRunHistoryToFailureModes(Workflow):
@@ -125,6 +198,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         producer_writes=[diagnostic_scope_brief, run_history_scope],
         control_schema=DiagnosticScopePayload,
         routes=FRAME_DIAGNOSTIC_SCOPE_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_diagnostic_scope,
     )
     map_failure_modes = produce_verify_step(
         producer_prompt=Prompt.file("prompts/analyze_producer.md"),
@@ -141,6 +215,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         producer_writes=[failure_mode_map, failure_mode_manifest, recurring_weak_points],
         control_schema=FailureModeMapPayload,
         routes=MAP_FAILURE_MODES_ROUTE_CONTRACTS,
+        after_verifier=_after_map_failure_modes,
     )
     package_improvement_pressure = produce_verify_step(
         producer_prompt=Prompt.file("prompts/package_producer.md"),
@@ -161,6 +236,7 @@ class WorkflowRunHistoryToFailureModes(Workflow):
         producer_writes=[improvement_opportunities, improvement_opportunities_summary, diagnostic_next_actions],
         control_schema=ImprovementPressurePayload,
         routes=PACKAGE_IMPROVEMENT_PRESSURE_ROUTE_CONTRACTS,
+        after_verifier=_after_package_improvement_pressure,
     )
     @python_step(
         name="bootstrap",
@@ -264,83 +340,6 @@ class WorkflowRunHistoryToFailureModes(Workflow):
                 }
             ),
             Event("run_history_context_captured"),
-        )
-
-    @staticmethod
-    def on_frame_diagnostic_scope(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        evidence_run_ids = _require_string_list(
-            payload.get("evidence_run_ids"),
-            "frame verifier payload must define evidence_run_ids as a non-empty string list",
-        )
-        return state.model_copy(
-            update={
-                "framing_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "evidence_run_ids": evidence_run_ids,
-            }
-        )
-
-    @staticmethod
-    def on_map_failure_modes(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        evidence_run_ids = _require_string_list(
-            payload.get("evidence_run_ids"),
-            "analysis verifier payload must define evidence_run_ids as a non-empty string list",
-        )
-        failure_mode_ids = _require_string_list(
-            payload.get("failure_mode_ids"),
-            "analysis verifier payload must define failure_mode_ids as a non-empty string list",
-        )
-        recurring_weak_point_ids = _require_string_list(
-            payload.get("recurring_weak_point_ids"),
-            "analysis verifier payload must define recurring_weak_point_ids as a non-empty string list",
-        )
-        return state.model_copy(
-            update={
-                "mapping_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "evidence_run_ids": evidence_run_ids,
-                "failure_mode_ids": failure_mode_ids,
-                "recurring_weak_point_ids": recurring_weak_point_ids,
-            }
-        )
-
-    @staticmethod
-    def on_package_improvement_pressure(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        evidence_run_ids = _require_string_list(
-            payload.get("evidence_run_ids"),
-            "package verifier payload must define evidence_run_ids as a non-empty string list",
-        )
-        failure_mode_ids = _require_string_list(
-            payload.get("failure_mode_ids"),
-            "package verifier payload must define failure_mode_ids as a non-empty string list",
-        )
-        ranked_opportunity_ids = _require_string_list(
-            payload.get("ranked_opportunity_ids"),
-            "package verifier payload must define ranked_opportunity_ids as a non-empty string list",
-        )
-        return state.model_copy(
-            update={
-                "packaging_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "evidence_run_ids": evidence_run_ids,
-                "failure_mode_ids": failure_mode_ids,
-                "ranked_opportunity_ids": ranked_opportunity_ids,
-            }
         )
 
     @python_step(
@@ -761,7 +760,6 @@ class WorkflowRunHistoryToFailureModes(Workflow):
 
     entry = bootstrap
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 _require_text = partial(require_non_empty_string, coerce=True)

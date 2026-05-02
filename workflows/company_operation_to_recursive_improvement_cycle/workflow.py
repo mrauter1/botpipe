@@ -32,7 +32,6 @@ from autoloop.stdlib import (
     validate_no_hidden_execution_signal,
     validate_publication_boundary,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -80,6 +79,95 @@ _PACKAGE_SECTION_MARKERS = (
     "## Publication Boundary",
 )
 _PUBLICATION_BOUNDARY = "recursive_improvement_publication_only"
+
+
+def _after_frame_company_operation(ctx, outcome: Outcome):
+    payload = outcome.payload
+    focus_task_ids = _require_string_list(
+        payload.get("focus_task_ids"),
+        "frame verifier payload must define focus_task_ids as a non-empty string list",
+    )
+    if ctx.state.scoped_task_ids and focus_task_ids != ctx.state.scoped_task_ids:
+        raise ValueError("frame verifier payload focus_task_ids must match the captured company context")
+    focus_workflows = _require_string_list(
+        payload.get("focus_workflows"),
+        "frame verifier payload must define focus_workflows as a non-empty string list",
+    )
+    if ctx.state.focus_workflows and focus_workflows != ctx.state.focus_workflows:
+        raise ValueError("frame verifier payload focus_workflows must match the captured company context")
+    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+
+
+def _after_analyze_recursive_improvement_pressures(ctx, outcome: Outcome):
+    payload = outcome.payload
+    focus_task_ids = _require_string_list(
+        payload.get("focus_task_ids"),
+        "analysis verifier payload must define focus_task_ids as a non-empty string list",
+    )
+    if ctx.state.scoped_task_ids and focus_task_ids != ctx.state.scoped_task_ids:
+        raise ValueError("analysis verifier payload focus_task_ids must match the captured company context")
+    focus_workflows = _require_string_list(
+        payload.get("focus_workflows"),
+        "analysis verifier payload must define focus_workflows as a non-empty string list",
+    )
+    if ctx.state.focus_workflows and focus_workflows != ctx.state.focus_workflows:
+        raise ValueError("analysis verifier payload focus_workflows must match the captured company context")
+    candidate_ids = _require_string_list(
+        payload.get("candidate_ids"),
+        "analysis verifier payload must define candidate_ids as a non-empty string list",
+    )
+    priority_item_ids, priority_categories = _validated_priority_recommendations(
+        payload.get("priority_recommendations"),
+        allowed_candidate_ids=candidate_ids,
+        error_prefix="analysis verifier payload",
+    )
+    return ctx.state.model_copy(
+        update={
+            "analysis_status": outcome.tag,
+            "candidate_ids": candidate_ids,
+            "priority_item_ids": priority_item_ids,
+            "priority_categories": priority_categories,
+        }
+    )
+
+
+def _after_package_recursive_improvement_cycle(ctx, outcome: Outcome):
+    payload = outcome.payload
+    focus_task_ids = _require_string_list(
+        payload.get("focus_task_ids"),
+        "package verifier payload must define focus_task_ids as a non-empty string list",
+    )
+    if ctx.state.scoped_task_ids and focus_task_ids != ctx.state.scoped_task_ids:
+        raise ValueError("package verifier payload focus_task_ids must match the captured company context")
+    focus_workflows = _require_string_list(
+        payload.get("focus_workflows"),
+        "package verifier payload must define focus_workflows as a non-empty string list",
+    )
+    if ctx.state.focus_workflows and focus_workflows != ctx.state.focus_workflows:
+        raise ValueError("package verifier payload focus_workflows must match the captured company context")
+    candidate_ids = _require_string_list(
+        payload.get("candidate_ids"),
+        "package verifier payload must define candidate_ids as a non-empty string list",
+    )
+    if ctx.state.candidate_ids and candidate_ids != ctx.state.candidate_ids:
+        raise ValueError("package verifier payload candidate_ids must match the analyzed recursive-improvement context")
+    priority_item_ids = _require_string_list(
+        payload.get("priority_item_ids"),
+        "package verifier payload must define priority_item_ids as a non-empty string list",
+    )
+    if ctx.state.priority_item_ids and priority_item_ids != ctx.state.priority_item_ids:
+        raise ValueError(
+            "package verifier payload priority_item_ids must match the analyzed recursive-improvement context"
+        )
+    priority_categories = _require_priority_category_list(
+        payload.get("priority_categories"),
+        "package verifier payload must define priority_categories as a non-empty string list",
+    )
+    if ctx.state.priority_categories and priority_categories != ctx.state.priority_categories:
+        raise ValueError(
+            "package verifier payload priority_categories must match the analyzed recursive-improvement context"
+        )
+    return ctx.state.model_copy(update={"packaging_status": outcome.tag})
 
 
 class CompanyOperationToRecursiveImprovementCycle(Workflow):
@@ -150,6 +238,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         producer_writes=[company_operation_brief, recursive_improvement_criteria],
         control_schema=CompanyOperationFramingPayload,
         routes=FRAME_COMPANY_OPERATION_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_company_operation,
     )
     analyze_recursive_improvement_pressures = produce_verify_step(
         producer_prompt=Prompt.file("prompts/analyze_producer.md"),
@@ -171,6 +260,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         ],
         control_schema=RecursiveImprovementAnalysisPayload,
         routes=ANALYZE_RECURSIVE_IMPROVEMENT_ROUTE_CONTRACTS,
+        after_verifier=_after_analyze_recursive_improvement_pressures,
     )
     package_recursive_improvement_cycle = produce_verify_step(
         producer_prompt=Prompt.file("prompts/package_producer.md"),
@@ -196,6 +286,7 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
         ],
         control_schema=RecursiveImprovementCyclePayload,
         routes=PACKAGE_RECURSIVE_IMPROVEMENT_CYCLE_ROUTE_CONTRACTS,
+        after_verifier=_after_package_recursive_improvement_cycle,
     )
 
     @python_step(
@@ -365,94 +456,6 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
             ),
             Event("company_operation_context_captured"),
         )
-
-    @staticmethod
-    def on_frame_company_operation(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        focus_task_ids = _require_string_list(
-            payload.get("focus_task_ids"),
-            "frame verifier payload must define focus_task_ids as a non-empty string list",
-        )
-        if state.scoped_task_ids and focus_task_ids != state.scoped_task_ids:
-            raise ValueError("frame verifier payload focus_task_ids must match the captured company context")
-        focus_workflows = _require_string_list(
-            payload.get("focus_workflows"),
-            "frame verifier payload must define focus_workflows as a non-empty string list",
-        )
-        if state.focus_workflows and focus_workflows != state.focus_workflows:
-            raise ValueError("frame verifier payload focus_workflows must match the captured company context")
-        return state.model_copy(update={"framing_status": outcome.tag})
-
-    @staticmethod
-    def on_analyze_recursive_improvement_pressures(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        focus_task_ids = _require_string_list(
-            payload.get("focus_task_ids"),
-            "analysis verifier payload must define focus_task_ids as a non-empty string list",
-        )
-        if state.scoped_task_ids and focus_task_ids != state.scoped_task_ids:
-            raise ValueError("analysis verifier payload focus_task_ids must match the captured company context")
-        focus_workflows = _require_string_list(
-            payload.get("focus_workflows"),
-            "analysis verifier payload must define focus_workflows as a non-empty string list",
-        )
-        if state.focus_workflows and focus_workflows != state.focus_workflows:
-            raise ValueError("analysis verifier payload focus_workflows must match the captured company context")
-        candidate_ids = _require_string_list(
-            payload.get("candidate_ids"),
-            "analysis verifier payload must define candidate_ids as a non-empty string list",
-        )
-        priority_item_ids, priority_categories = _validated_priority_recommendations(
-            payload.get("priority_recommendations"),
-            allowed_candidate_ids=candidate_ids,
-            error_prefix="analysis verifier payload",
-        )
-        return state.model_copy(
-            update={
-                "analysis_status": outcome.tag,
-                "candidate_ids": candidate_ids,
-                "priority_item_ids": priority_item_ids,
-                "priority_categories": priority_categories,
-            }
-        )
-
-    @staticmethod
-    def on_package_recursive_improvement_cycle(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        focus_task_ids = _require_string_list(
-            payload.get("focus_task_ids"),
-            "package verifier payload must define focus_task_ids as a non-empty string list",
-        )
-        if state.scoped_task_ids and focus_task_ids != state.scoped_task_ids:
-            raise ValueError("package verifier payload focus_task_ids must match the captured company context")
-        focus_workflows = _require_string_list(
-            payload.get("focus_workflows"),
-            "package verifier payload must define focus_workflows as a non-empty string list",
-        )
-        if state.focus_workflows and focus_workflows != state.focus_workflows:
-            raise ValueError("package verifier payload focus_workflows must match the captured company context")
-        candidate_ids = _require_string_list(
-            payload.get("candidate_ids"),
-            "package verifier payload must define candidate_ids as a non-empty string list",
-        )
-        if state.candidate_ids and candidate_ids != state.candidate_ids:
-            raise ValueError("package verifier payload candidate_ids must match the analyzed recursive-improvement context")
-        priority_item_ids = _require_string_list(
-            payload.get("priority_item_ids"),
-            "package verifier payload must define priority_item_ids as a non-empty string list",
-        )
-        if state.priority_item_ids and priority_item_ids != state.priority_item_ids:
-            raise ValueError("package verifier payload priority_item_ids must match the analyzed recursive-improvement context")
-        priority_categories = _require_priority_category_list(
-            payload.get("priority_categories"),
-            "package verifier payload must define priority_categories as a non-empty string list",
-        )
-        if state.priority_categories and priority_categories != state.priority_categories:
-            raise ValueError("package verifier payload priority_categories must match the analyzed recursive-improvement context")
-        return state.model_copy(update={"packaging_status": outcome.tag})
 
     @python_step(
         name="publish_recursive_improvement_cycle",
@@ -696,7 +699,6 @@ class CompanyOperationToRecursiveImprovementCycle(Workflow):
 
     entry = bootstrap
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 _require_text = partial(require_non_empty_string, coerce=True)

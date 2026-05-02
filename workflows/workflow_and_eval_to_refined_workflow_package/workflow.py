@@ -32,7 +32,6 @@ from autoloop.stdlib import (
     validate_selected_workflow_artifact_alignment,
     validate_selected_workflow_capability_and_authoring_snapshots,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
 from autoloop import Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -79,6 +78,116 @@ _ALLOWED_OPTIMIZATION_EVIDENCE_KINDS = frozenset(
         "optimization_ablation_results",
     }
 )
+
+
+def _after_frame_refinement_request(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    return ctx.state.model_copy(
+        update={
+            "framing_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+        }
+    )
+
+
+def _after_design_refinement_plan(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    return ctx.state.model_copy(
+        update={
+            "planning_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+        }
+    )
+
+
+def _after_implement_refined_workflow(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    if outcome.tag == "needs_replan":
+        return ctx.state.model_copy(
+            update={
+                "build_status": outcome.tag,
+                "selected_workflow_name": (
+                    selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+                ),
+            }
+        )
+
+    candidate_manifest = _write_candidate_workflow_manifest(
+        ctx.artifacts.candidate_workflow_manifest.path.parent,
+        _read_json(ctx.artifacts.baseline_workflow_manifest.path),
+        ctx.state.selected_workflow_name
+        or _require_text(selected_workflow_name, "build payload must define selected_workflow_name"),
+    )
+    actual_candidate_file_count = _require_positive_int(
+        candidate_manifest.get("file_count"),
+        "candidate_workflow_manifest.json must define positive integer file_count",
+    )
+    actual_changed_relative_paths = _require_string_list(
+        candidate_manifest.get("changed_relative_paths"),
+        "candidate_workflow_manifest.json must define non-empty changed_relative_paths",
+    )
+    payload_candidate_file_count = _require_positive_int(
+        payload.get("candidate_file_count"),
+        "build verifier payload must define positive integer candidate_file_count",
+    )
+    payload_changed_relative_paths = _require_string_list(
+        payload.get("changed_relative_paths"),
+        "build verifier payload must define non-empty changed_relative_paths",
+    )
+    if payload_candidate_file_count != actual_candidate_file_count:
+        raise ValueError("build verifier payload candidate_file_count must match candidate_workflow_manifest.json")
+    if payload_changed_relative_paths != actual_changed_relative_paths:
+        raise ValueError("build verifier payload changed_relative_paths must match candidate_workflow_manifest.json")
+    return ctx.state.model_copy(
+        update={
+            "build_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "candidate_file_count": actual_candidate_file_count,
+            "candidate_changed_paths": actual_changed_relative_paths,
+        }
+    )
+
+
+def _after_evaluate_refined_workflow(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    candidate_file_count = _require_positive_int(
+        payload.get("candidate_file_count"),
+        "evaluation verifier payload must define positive integer candidate_file_count",
+    )
+    authoritative_artifacts = _require_string_list(
+        payload.get("authoritative_artifacts"),
+        "evaluation verifier payload must define non-empty authoritative_artifacts",
+    )
+    next_action = _require_text(
+        payload.get("next_action"),
+        "evaluation verifier payload must define a non-empty next_action",
+    )
+    ready_for_publication = payload.get("ready_for_publication")
+    if outcome.tag == "workflow_refinement_evaluated" and ready_for_publication is not True:
+        raise ValueError("workflow_refinement_evaluated requires ready_for_publication=true")
+    if ctx.state.candidate_file_count and candidate_file_count != ctx.state.candidate_file_count:
+        raise ValueError("evaluation verifier payload candidate_file_count must match workflow state")
+    return ctx.state.model_copy(
+        update={
+            "evaluation_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "candidate_file_count": candidate_file_count,
+            "evaluation_authoritative_artifacts": authoritative_artifacts,
+            "evaluation_next_action": next_action,
+        }
+    )
 
 
 class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
@@ -165,6 +274,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         producer_writes=[refinement_request_brief, refinement_acceptance_criteria],
         control_schema=RefinementRequestFramingPayload,
         routes=FRAME_REFINEMENT_REQUEST_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_refinement_request,
     )
     design_refinement_plan = produce_verify_step(
         producer_prompt=Prompt.file("prompts/design_producer.md"),
@@ -186,6 +296,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         producer_writes=[refinement_strategy, workflow_change_plan, regression_guardrails],
         control_schema=WorkflowRefinementPlanPayload,
         routes=DESIGN_REFINEMENT_PLAN_ROUTE_CONTRACTS,
+        after_verifier=_after_design_refinement_plan,
     )
     implement_refined_workflow = produce_verify_step(
         producer_prompt=Prompt.file("prompts/implement_producer.md"),
@@ -210,6 +321,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         ],
         control_schema=WorkflowRefinementBuildPayload,
         routes=IMPLEMENT_REFINED_WORKFLOW_ROUTE_CONTRACTS,
+        after_verifier=_after_implement_refined_workflow,
     )
     evaluate_refined_workflow = produce_verify_step(
         producer_prompt=Prompt.file("prompts/evaluate_producer.md"),
@@ -242,6 +354,7 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         ],
         control_schema=WorkflowRefinementEvaluationPayload,
         routes=EVALUATE_REFINED_WORKFLOW_ROUTE_CONTRACTS,
+        after_verifier=_after_evaluate_refined_workflow,
     )
 
     @python_step(
@@ -353,120 +466,6 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
         return (
             state.model_copy(update={"selected_workflow_name": selected_workflow_name}),
             Event("refinement_context_captured"),
-        )
-
-    @staticmethod
-    def on_frame_refinement_request(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        return state.model_copy(
-            update={
-                "framing_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_design_refinement_plan(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        return state.model_copy(
-            update={
-                "planning_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_implement_refined_workflow(state: State, outcome: Outcome, artifacts):
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        if outcome.tag == "needs_replan":
-            return state.model_copy(
-                update={
-                    "build_status": outcome.tag,
-                    "selected_workflow_name": (
-                        selected_workflow_name
-                        if isinstance(selected_workflow_name, str)
-                        else state.selected_workflow_name
-                    ),
-                }
-            )
-
-        candidate_manifest = _write_candidate_workflow_manifest(
-            artifacts.candidate_workflow_manifest.path.parent,
-            _read_json(artifacts.baseline_workflow_manifest.path),
-            state.selected_workflow_name or _require_text(selected_workflow_name, "build payload must define selected_workflow_name"),
-        )
-        actual_candidate_file_count = _require_positive_int(
-            candidate_manifest.get("file_count"),
-            "candidate_workflow_manifest.json must define positive integer file_count",
-        )
-        actual_changed_relative_paths = _require_string_list(
-            candidate_manifest.get("changed_relative_paths"),
-            "candidate_workflow_manifest.json must define non-empty changed_relative_paths",
-        )
-        payload_candidate_file_count = _require_positive_int(
-            payload.get("candidate_file_count"),
-            "build verifier payload must define positive integer candidate_file_count",
-        )
-        payload_changed_relative_paths = _require_string_list(
-            payload.get("changed_relative_paths"),
-            "build verifier payload must define non-empty changed_relative_paths",
-        )
-        if payload_candidate_file_count != actual_candidate_file_count:
-            raise ValueError("build verifier payload candidate_file_count must match candidate_workflow_manifest.json")
-        if payload_changed_relative_paths != actual_changed_relative_paths:
-            raise ValueError("build verifier payload changed_relative_paths must match candidate_workflow_manifest.json")
-        return state.model_copy(
-            update={
-                "build_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "candidate_file_count": actual_candidate_file_count,
-                "candidate_changed_paths": actual_changed_relative_paths,
-            }
-        )
-
-    @staticmethod
-    def on_evaluate_refined_workflow(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        candidate_file_count = _require_positive_int(
-            payload.get("candidate_file_count"),
-            "evaluation verifier payload must define positive integer candidate_file_count",
-        )
-        authoritative_artifacts = _require_string_list(
-            payload.get("authoritative_artifacts"),
-            "evaluation verifier payload must define non-empty authoritative_artifacts",
-        )
-        next_action = _require_text(
-            payload.get("next_action"),
-            "evaluation verifier payload must define a non-empty next_action",
-        )
-        ready_for_publication = payload.get("ready_for_publication")
-        if outcome.tag == "workflow_refinement_evaluated" and ready_for_publication is not True:
-            raise ValueError("workflow_refinement_evaluated requires ready_for_publication=true")
-        if state.candidate_file_count and candidate_file_count != state.candidate_file_count:
-            raise ValueError("evaluation verifier payload candidate_file_count must match workflow state")
-        return state.model_copy(
-            update={
-                "evaluation_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "candidate_file_count": candidate_file_count,
-                "evaluation_authoritative_artifacts": authoritative_artifacts,
-                "evaluation_next_action": next_action,
-            }
         )
 
     @python_step(
@@ -653,7 +652,6 @@ class WorkflowAndEvalToRefinedWorkflowPackage(Workflow):
 
     entry = bootstrap
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 def _repo_root_from_context(ctx) -> Path:

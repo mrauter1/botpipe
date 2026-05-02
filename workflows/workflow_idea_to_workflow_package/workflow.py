@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -20,6 +19,35 @@ from .contracts import (
     WorkflowDesignPayload,
     WorkflowEvaluationPayload,
 )
+
+
+def _after_frame_candidate(ctx, outcome: Outcome):
+    if outcome.tag != "candidate_selected":
+        return ctx.state
+    selected_candidate = outcome.payload.get("selected_candidate")
+    selected_kind = outcome.payload.get("selected_kind")
+    return ctx.state.model_copy(
+        update={
+            "selected_candidate": (
+                selected_candidate if isinstance(selected_candidate, str) else ctx.state.package_name
+            ),
+            "selected_candidate_kind": (
+                selected_kind if isinstance(selected_kind, str) else ctx.state.workflow_kind
+            ),
+        }
+    )
+
+
+def _after_design_package(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"design_status": outcome.tag})
+
+
+def _after_build_package(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"build_status": outcome.tag})
+
+
+def _after_evaluate_package(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"evaluation_status": outcome.tag})
 
 
 class WorkflowIdeaToWorkflowPackage(Workflow):
@@ -104,6 +132,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         producer_writes=[candidate_comparison, selected_workflow_brief],
         control_schema=CandidateSelectionPayload,
         routes=FRAME_CANDIDATE_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_candidate,
     )
     design_package = produce_verify_step(
         producer_prompt=Prompt.file("prompts/design_producer.md"),
@@ -127,6 +156,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         producer_writes=[workflow_package_spec, step_contracts, prompt_contract_matrix, verification_plan],
         control_schema=WorkflowDesignPayload,
         routes=DESIGN_PACKAGE_ROUTE_CONTRACTS,
+        after_verifier=_after_design_package,
     )
     build_package = produce_verify_step(
         producer_prompt=Prompt.file("prompts/build_producer.md"),
@@ -163,6 +193,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         ],
         control_schema=WorkflowBuildPayload,
         routes=BUILD_PACKAGE_ROUTE_CONTRACTS,
+        after_verifier=_after_build_package,
     )
     evaluate_package = produce_verify_step(
         producer_prompt=Prompt.file("prompts/evaluate_producer.md"),
@@ -181,6 +212,7 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         producer_writes=[verification_report, promotion_record, rollback_plan],
         control_schema=WorkflowEvaluationPayload,
         routes=EVALUATE_PACKAGE_ROUTE_CONTRACTS,
+        after_verifier=_after_evaluate_package,
     )
     @python_step(
         name="bootstrap",
@@ -220,37 +252,6 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         )
         return next_state, Event("inputs_prepared")
 
-    @staticmethod
-    def on_frame_candidate(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        if outcome.tag != "candidate_selected":
-            return state
-        selected_candidate = outcome.payload.get("selected_candidate")
-        selected_kind = outcome.payload.get("selected_kind")
-        return state.model_copy(
-            update={
-                "selected_candidate": selected_candidate if isinstance(selected_candidate, str) else state.package_name,
-                "selected_candidate_kind": (
-                    selected_kind if isinstance(selected_kind, str) else state.workflow_kind
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_design_package(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"design_status": outcome.tag})
-
-    @staticmethod
-    def on_build_package(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"build_status": outcome.tag})
-
-    @staticmethod
-    def on_evaluate_package(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"evaluation_status": outcome.tag})
-
     @python_step(
         name="publish_package",
         requires=[promotion_record, rollback_plan],
@@ -279,8 +280,6 @@ class WorkflowIdeaToWorkflowPackage(Workflow):
         return state.model_copy(update={"published": True}), Event("package_published")
 
     entry = bootstrap
-
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 __all__ = ["WorkflowIdeaToWorkflowPackage"]

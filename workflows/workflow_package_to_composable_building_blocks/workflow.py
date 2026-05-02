@@ -34,7 +34,6 @@ from autoloop.stdlib import (
     require_string_list,
     validate_selected_workflow_decomposition_surface_snapshot,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt, write_workflow_json
 
 from autoloop import AWAIT_INPUT, Event, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -60,6 +59,142 @@ _AUTHORITATIVE_EVALUATION_ARTIFACTS = frozenset(
         "rollback_plan",
     }
 )
+
+
+def _after_frame_decomposition_request(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    return ctx.state.model_copy(
+        update={
+            "framing_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+        }
+    )
+
+
+def _after_design_decomposition_plan(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    return ctx.state.model_copy(
+        update={
+            "planning_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+        }
+    )
+
+
+def _after_implement_candidate_decomposition(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    if outcome.tag == "needs_replan":
+        return ctx.state.model_copy(
+            update={
+                "build_status": outcome.tag,
+                "selected_workflow_name": (
+                    selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+                ),
+            }
+        )
+
+    candidate_manifest = _write_candidate_decomposition_manifest(
+        ctx.artifacts.candidate_decomposition_manifest.path.parent,
+        _read_json(ctx.artifacts.baseline_parent_manifest.path),
+        _read_json(ctx.artifacts.candidate_building_block_index.path),
+        ctx.state.selected_workflow_name
+        or _require_text(selected_workflow_name, "build payload must define selected_workflow_name"),
+        ctx.state.max_candidate_building_blocks,
+    )
+    actual_candidate_file_count = _require_positive_int(
+        candidate_manifest.get("file_count"),
+        "candidate_decomposition_manifest.json must define positive integer file_count",
+    )
+    actual_changed_relative_paths = _require_string_list(
+        candidate_manifest.get("changed_relative_paths"),
+        "candidate_decomposition_manifest.json must define non-empty changed_relative_paths",
+    )
+    actual_building_block_names = _require_string_list(
+        candidate_manifest.get("building_block_names"),
+        "candidate_decomposition_manifest.json must define non-empty building_block_names",
+    )
+    payload_candidate_file_count = _require_positive_int(
+        payload.get("candidate_file_count"),
+        "build verifier payload must define positive integer candidate_file_count",
+    )
+    payload_changed_relative_paths = _require_string_list(
+        payload.get("changed_relative_paths"),
+        "build verifier payload must define non-empty changed_relative_paths",
+    )
+    payload_building_block_names = _require_string_list(
+        payload.get("building_block_names"),
+        "build verifier payload must define non-empty building_block_names",
+    )
+    if payload_candidate_file_count != actual_candidate_file_count:
+        raise ValueError(
+            "build verifier payload candidate_file_count must match candidate_decomposition_manifest.json"
+        )
+    if payload_changed_relative_paths != actual_changed_relative_paths:
+        raise ValueError(
+            "build verifier payload changed_relative_paths must match candidate_decomposition_manifest.json"
+        )
+    if sorted(payload_building_block_names) != actual_building_block_names:
+        raise ValueError(
+            "build verifier payload building_block_names must match candidate_decomposition_manifest.json"
+        )
+    return ctx.state.model_copy(
+        update={
+            "build_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "candidate_file_count": actual_candidate_file_count,
+            "candidate_changed_paths": actual_changed_relative_paths,
+            "candidate_building_block_names": actual_building_block_names,
+        }
+    )
+
+
+def _after_evaluate_candidate_decomposition(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    candidate_file_count = _require_positive_int(
+        payload.get("candidate_file_count"),
+        "evaluation verifier payload must define positive integer candidate_file_count",
+    )
+    authoritative_artifacts = _require_string_list(
+        payload.get("authoritative_artifacts"),
+        "evaluation verifier payload must define non-empty authoritative_artifacts",
+    )
+    building_block_names = _require_string_list(
+        payload.get("building_block_names"),
+        "evaluation verifier payload must define non-empty building_block_names",
+    )
+    next_action = _require_text(
+        payload.get("next_action"),
+        "evaluation verifier payload must define a non-empty next_action",
+    )
+    ready_for_publication = payload.get("ready_for_publication")
+    if outcome.tag == "candidate_decomposition_evaluated" and ready_for_publication is not True:
+        raise ValueError("candidate_decomposition_evaluated requires ready_for_publication=true")
+    if ctx.state.candidate_file_count and candidate_file_count != ctx.state.candidate_file_count:
+        raise ValueError("evaluation verifier payload candidate_file_count must match workflow state")
+    if ctx.state.candidate_building_block_names and sorted(building_block_names) != ctx.state.candidate_building_block_names:
+        raise ValueError("evaluation verifier payload building_block_names must match workflow state")
+    return ctx.state.model_copy(
+        update={
+            "evaluation_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "candidate_file_count": candidate_file_count,
+            "candidate_building_block_names": sorted(building_block_names),
+            "evaluation_authoritative_artifacts": authoritative_artifacts,
+            "evaluation_next_action": next_action,
+        }
+    )
 
 
 class _CaptureBlockedError(RuntimeError):
@@ -142,6 +277,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         producer_writes=[decomposition_request_brief, decomposition_acceptance_criteria],
         control_schema=DecompositionRequestFramingPayload,
         routes=FRAME_DECOMPOSITION_REQUEST_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_decomposition_request,
     )
     design_decomposition_plan = produce_verify_step(
         producer_prompt=Prompt.file("prompts/design_producer.md"),
@@ -165,6 +301,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         ],
         control_schema=DecompositionPlanPayload,
         routes=DESIGN_DECOMPOSITION_PLAN_ROUTE_CONTRACTS,
+        after_verifier=_after_design_decomposition_plan,
     )
     implement_candidate_decomposition = produce_verify_step(
         producer_prompt=Prompt.file("prompts/implement_producer.md"),
@@ -192,6 +329,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         ],
         control_schema=CandidateDecompositionBuildPayload,
         routes=IMPLEMENT_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
+        after_verifier=_after_implement_candidate_decomposition,
     )
     evaluate_candidate_decomposition = produce_verify_step(
         producer_prompt=Prompt.file("prompts/evaluate_producer.md"),
@@ -224,6 +362,7 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         ],
         control_schema=CandidateDecompositionEvaluationPayload,
         routes=EVALUATE_CANDIDATE_DECOMPOSITION_ROUTE_CONTRACTS,
+        after_verifier=_after_evaluate_candidate_decomposition,
     )
 
     @python_step(
@@ -317,145 +456,6 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
         return (
             state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
             Event("decomposition_context_captured"),
-        )
-
-    @staticmethod
-    def on_frame_decomposition_request(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        return state.model_copy(
-            update={
-                "framing_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_design_decomposition_plan(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        return state.model_copy(
-            update={
-                "planning_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_implement_candidate_decomposition(state: State, outcome: Outcome, artifacts):
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        if outcome.tag == "needs_replan":
-            return state.model_copy(
-                update={
-                    "build_status": outcome.tag,
-                    "selected_workflow_name": (
-                        selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                    ),
-                }
-            )
-
-        candidate_manifest = _write_candidate_decomposition_manifest(
-            artifacts.candidate_decomposition_manifest.path.parent,
-            _read_json(artifacts.baseline_parent_manifest.path),
-            _read_json(artifacts.candidate_building_block_index.path),
-            state.selected_workflow_name
-            or _require_text(selected_workflow_name, "build payload must define selected_workflow_name"),
-            state.max_candidate_building_blocks,
-        )
-        actual_candidate_file_count = _require_positive_int(
-            candidate_manifest.get("file_count"),
-            "candidate_decomposition_manifest.json must define positive integer file_count",
-        )
-        actual_changed_relative_paths = _require_string_list(
-            candidate_manifest.get("changed_relative_paths"),
-            "candidate_decomposition_manifest.json must define non-empty changed_relative_paths",
-        )
-        actual_building_block_names = _require_string_list(
-            candidate_manifest.get("building_block_names"),
-            "candidate_decomposition_manifest.json must define non-empty building_block_names",
-        )
-        payload_candidate_file_count = _require_positive_int(
-            payload.get("candidate_file_count"),
-            "build verifier payload must define positive integer candidate_file_count",
-        )
-        payload_changed_relative_paths = _require_string_list(
-            payload.get("changed_relative_paths"),
-            "build verifier payload must define non-empty changed_relative_paths",
-        )
-        payload_building_block_names = _require_string_list(
-            payload.get("building_block_names"),
-            "build verifier payload must define non-empty building_block_names",
-        )
-        if payload_candidate_file_count != actual_candidate_file_count:
-            raise ValueError(
-                "build verifier payload candidate_file_count must match candidate_decomposition_manifest.json"
-            )
-        if payload_changed_relative_paths != actual_changed_relative_paths:
-            raise ValueError(
-                "build verifier payload changed_relative_paths must match candidate_decomposition_manifest.json"
-            )
-        if sorted(payload_building_block_names) != actual_building_block_names:
-            raise ValueError(
-                "build verifier payload building_block_names must match candidate_decomposition_manifest.json"
-            )
-        return state.model_copy(
-            update={
-                "build_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "candidate_file_count": actual_candidate_file_count,
-                "candidate_changed_paths": actual_changed_relative_paths,
-                "candidate_building_block_names": actual_building_block_names,
-            }
-        )
-
-    @staticmethod
-    def on_evaluate_candidate_decomposition(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        candidate_file_count = _require_positive_int(
-            payload.get("candidate_file_count"),
-            "evaluation verifier payload must define positive integer candidate_file_count",
-        )
-        authoritative_artifacts = _require_string_list(
-            payload.get("authoritative_artifacts"),
-            "evaluation verifier payload must define non-empty authoritative_artifacts",
-        )
-        building_block_names = _require_string_list(
-            payload.get("building_block_names"),
-            "evaluation verifier payload must define non-empty building_block_names",
-        )
-        next_action = _require_text(
-            payload.get("next_action"),
-            "evaluation verifier payload must define a non-empty next_action",
-        )
-        ready_for_publication = payload.get("ready_for_publication")
-        if outcome.tag == "candidate_decomposition_evaluated" and ready_for_publication is not True:
-            raise ValueError("candidate_decomposition_evaluated requires ready_for_publication=true")
-        if state.candidate_file_count and candidate_file_count != state.candidate_file_count:
-            raise ValueError("evaluation verifier payload candidate_file_count must match workflow state")
-        if state.candidate_building_block_names and sorted(building_block_names) != state.candidate_building_block_names:
-            raise ValueError("evaluation verifier payload building_block_names must match workflow state")
-        return state.model_copy(
-            update={
-                "evaluation_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "candidate_file_count": candidate_file_count,
-                "candidate_building_block_names": sorted(building_block_names),
-                "evaluation_authoritative_artifacts": authoritative_artifacts,
-                "evaluation_next_action": next_action,
-            }
         )
 
     @python_step(
@@ -628,7 +628,6 @@ class WorkflowPackageToComposableBuildingBlocks(Workflow):
 
     entry = bootstrap
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 def _repo_root_from_context(ctx) -> Path:

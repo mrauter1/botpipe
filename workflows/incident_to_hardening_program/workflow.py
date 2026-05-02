@@ -9,7 +9,6 @@ from autoloop.stdlib import (
     require_non_empty_string,
     require_non_negative_int,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -25,6 +24,38 @@ from .contracts import (
     IncidentHardeningProgramPayload,
     IncidentHypothesisPayload,
 )
+
+
+def _after_frame_incident(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"framing_status": outcome.tag})
+
+
+def _after_assemble_evidence_pack(ctx, outcome: Outcome):
+    return ctx.state.model_copy(update={"evidence_status": outcome.tag})
+
+
+def _after_rank_cause_hypotheses(ctx, outcome: Outcome):
+    recommended_posture = outcome.payload.get("recommended_posture")
+    return ctx.state.model_copy(
+        update={
+            "analysis_status": outcome.tag,
+            "recommended_posture": (
+                recommended_posture if isinstance(recommended_posture, str) else ctx.state.recommended_posture
+            ),
+        }
+    )
+
+
+def _after_prepare_hardening_program(ctx, outcome: Outcome):
+    recommended_posture = outcome.payload.get("recommended_posture")
+    return ctx.state.model_copy(
+        update={
+            "program_status": outcome.tag,
+            "recommended_posture": (
+                recommended_posture if isinstance(recommended_posture, str) else ctx.state.recommended_posture
+            ),
+        }
+    )
 
 
 class IncidentToHardeningProgram(Workflow):
@@ -133,6 +164,7 @@ class IncidentToHardeningProgram(Workflow):
         ],
         control_schema=IncidentFramingPayload,
         routes=FRAME_INCIDENT_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_incident,
     )
 
     assemble_evidence_pack = produce_verify_step(
@@ -153,6 +185,7 @@ class IncidentToHardeningProgram(Workflow):
         ],
         control_schema=IncidentEvidencePayload,
         routes=ASSEMBLE_EVIDENCE_ROUTE_CONTRACTS,
+        after_verifier=_after_assemble_evidence_pack,
     )
 
     rank_cause_hypotheses = produce_verify_step(
@@ -176,6 +209,7 @@ class IncidentToHardeningProgram(Workflow):
         ],
         control_schema=IncidentHypothesisPayload,
         routes=RANK_CAUSE_HYPOTHESES_ROUTE_CONTRACTS,
+        after_verifier=_after_rank_cause_hypotheses,
     )
 
     prepare_hardening_program = produce_verify_step(
@@ -205,43 +239,8 @@ class IncidentToHardeningProgram(Workflow):
         ],
         control_schema=IncidentHardeningProgramPayload,
         routes=PREPARE_HARDENING_PROGRAM_ROUTE_CONTRACTS,
+        after_verifier=_after_prepare_hardening_program,
     )
-
-    @staticmethod
-    def on_frame_incident(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"framing_status": outcome.tag})
-
-    @staticmethod
-    def on_assemble_evidence_pack(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        return state.model_copy(update={"evidence_status": outcome.tag})
-
-    @staticmethod
-    def on_rank_cause_hypotheses(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        recommended_posture = outcome.payload.get("recommended_posture")
-        return state.model_copy(
-            update={
-                "analysis_status": outcome.tag,
-                "recommended_posture": (
-                    recommended_posture if isinstance(recommended_posture, str) else state.recommended_posture
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_prepare_hardening_program(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        recommended_posture = outcome.payload.get("recommended_posture")
-        return state.model_copy(
-            update={
-                "program_status": outcome.tag,
-                "recommended_posture": (
-                    recommended_posture if isinstance(recommended_posture, str) else state.recommended_posture
-                ),
-            }
-        )
 
     @python_step(
         name="publish_incident_package",
@@ -316,5 +315,4 @@ class IncidentToHardeningProgram(Workflow):
             update={"published": True, "recommended_posture": recommended_posture}
         ), Event("incident_package_published")
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 __all__ = ["IncidentToHardeningProgram"]

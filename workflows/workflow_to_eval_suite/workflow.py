@@ -19,7 +19,6 @@ from autoloop.stdlib import (
     validate_selected_workflow_artifact_alignment,
     validate_selected_workflow_capability_snapshot,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -47,6 +46,83 @@ _AUTHORITATIVE_PACKAGE_ARTIFACTS = frozenset(
     }
 )
 _REQUIRED_CASE_KINDS = ("benchmark", "edge", "adversarial")
+
+
+def _after_frame_evaluation_target(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    return ctx.state.model_copy(
+        update={
+            "framing_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+        }
+    )
+
+
+def _after_design_eval_cases(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    case_ids = require_string_list(
+        payload.get("case_ids"),
+        error_message="design verifier payload must define case_ids as a non-empty string list",
+        dedupe=True,
+        coerce=True,
+    )
+    case_kinds = _require_case_kinds(
+        payload.get("case_kinds"),
+        "design verifier payload must define case_kinds as a non-empty string list",
+    )
+    covered_expected_artifacts = require_string_list(
+        payload.get("covered_expected_artifacts"),
+        error_message="design verifier payload must define covered_expected_artifacts as a non-empty string list",
+        dedupe=True,
+        coerce=True,
+    )
+    return ctx.state.model_copy(
+        update={
+            "design_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "case_ids": case_ids,
+            "case_kinds": case_kinds,
+            "covered_expected_artifacts": covered_expected_artifacts,
+        }
+    )
+
+
+def _after_package_workflow_eval_suite(ctx, outcome: Outcome):
+    payload = outcome.payload
+    selected_workflow_name = payload.get("selected_workflow_name")
+    case_ids = require_string_list(
+        payload.get("case_ids"),
+        error_message="package verifier payload must define case_ids as a non-empty string list",
+        dedupe=True,
+        coerce=True,
+    )
+    case_kinds = _require_case_kinds(
+        payload.get("case_kinds"),
+        "package verifier payload must define case_kinds as a non-empty string list",
+    )
+    covered_expected_artifacts = require_string_list(
+        payload.get("covered_expected_artifacts"),
+        error_message="package verifier payload must define covered_expected_artifacts as a non-empty string list",
+        dedupe=True,
+        coerce=True,
+    )
+    return ctx.state.model_copy(
+        update={
+            "packaging_status": outcome.tag,
+            "selected_workflow_name": (
+                selected_workflow_name if isinstance(selected_workflow_name, str) else ctx.state.selected_workflow_name
+            ),
+            "case_ids": case_ids,
+            "case_kinds": case_kinds,
+            "covered_expected_artifacts": covered_expected_artifacts,
+        }
+    )
 
 
 class WorkflowToEvalSuite(Workflow):
@@ -110,6 +186,7 @@ class WorkflowToEvalSuite(Workflow):
         producer_writes=[evaluation_request_brief, evaluation_dimensions],
         control_schema=EvaluationTargetFramingPayload,
         routes=FRAME_EVALUATION_TARGET_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_evaluation_target,
     )
     design_eval_cases = produce_verify_step(
         producer_prompt=Prompt.file("prompts/design_producer.md"),
@@ -131,6 +208,7 @@ class WorkflowToEvalSuite(Workflow):
         ],
         control_schema=EvalCaseDesignPayload,
         routes=DESIGN_EVAL_CASES_ROUTE_CONTRACTS,
+        after_verifier=_after_design_eval_cases,
     )
     package_workflow_eval_suite = produce_verify_step(
         producer_prompt=Prompt.file("prompts/package_producer.md"),
@@ -152,6 +230,7 @@ class WorkflowToEvalSuite(Workflow):
         producer_writes=[workflow_eval_suite, workflow_eval_suite_summary, workflow_eval_next_action],
         control_schema=WorkflowEvalSuitePayload,
         routes=PACKAGE_WORKFLOW_EVAL_SUITE_ROUTE_CONTRACTS,
+        after_verifier=_after_package_workflow_eval_suite,
     )
     @python_step(
         name="bootstrap",
@@ -207,86 +286,6 @@ class WorkflowToEvalSuite(Workflow):
         return (
             state.model_copy(update={"selected_workflow_name": capture.selected_workflow_name}),
             Event("selected_workflow_contract_captured"),
-        )
-
-    @staticmethod
-    def on_frame_evaluation_target(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        return state.model_copy(
-            update={
-                "framing_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-            }
-        )
-
-    @staticmethod
-    def on_design_eval_cases(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        case_ids = require_string_list(
-            payload.get("case_ids"),
-            error_message="design verifier payload must define case_ids as a non-empty string list",
-            dedupe=True,
-            coerce=True,
-        )
-        case_kinds = _require_case_kinds(
-            payload.get("case_kinds"),
-            "design verifier payload must define case_kinds as a non-empty string list",
-        )
-        covered_expected_artifacts = require_string_list(
-            payload.get("covered_expected_artifacts"),
-            error_message="design verifier payload must define covered_expected_artifacts as a non-empty string list",
-            dedupe=True,
-            coerce=True,
-        )
-        return state.model_copy(
-            update={
-                "design_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "case_ids": case_ids,
-                "case_kinds": case_kinds,
-                "covered_expected_artifacts": covered_expected_artifacts,
-            }
-        )
-
-    @staticmethod
-    def on_package_workflow_eval_suite(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        selected_workflow_name = payload.get("selected_workflow_name")
-        case_ids = require_string_list(
-            payload.get("case_ids"),
-            error_message="package verifier payload must define case_ids as a non-empty string list",
-            dedupe=True,
-            coerce=True,
-        )
-        case_kinds = _require_case_kinds(
-            payload.get("case_kinds"),
-            "package verifier payload must define case_kinds as a non-empty string list",
-        )
-        covered_expected_artifacts = require_string_list(
-            payload.get("covered_expected_artifacts"),
-            error_message="package verifier payload must define covered_expected_artifacts as a non-empty string list",
-            dedupe=True,
-            coerce=True,
-        )
-        return state.model_copy(
-            update={
-                "packaging_status": outcome.tag,
-                "selected_workflow_name": (
-                    selected_workflow_name if isinstance(selected_workflow_name, str) else state.selected_workflow_name
-                ),
-                "case_ids": case_ids,
-                "case_kinds": case_kinds,
-                "covered_expected_artifacts": covered_expected_artifacts,
-            }
         )
 
     @python_step(
@@ -520,7 +519,6 @@ class WorkflowToEvalSuite(Workflow):
 
     entry = bootstrap
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 def _require_case_kinds(value: Any, error_message: str) -> list[str]:

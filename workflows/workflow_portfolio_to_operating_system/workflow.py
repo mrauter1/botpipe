@@ -28,7 +28,6 @@ from autoloop.stdlib import (
     validate_no_hidden_execution_signal,
     validate_publication_boundary,
 )
-from autoloop.stdlib.control import event_on_outcome_tags
 from autoloop.stdlib.lifecycle import open_workflow_sessions, write_invocation_contract, write_publication_receipt
 
 from autoloop import Event, FAIL, FINISH, Outcome, Prompt, Session, Workflow, produce_verify_step, python_step
@@ -67,6 +66,86 @@ _PACKAGE_SECTION_MARKERS = (
     "## Create Next",
 )
 _PUBLICATION_BOUNDARY = "operating_system_publication_only"
+
+
+def _after_frame_portfolio_governance(ctx, outcome: Outcome):
+    focus_workflows = _require_string_list(
+        outcome.payload.get("focus_workflows"),
+        "frame verifier payload must define focus_workflows as a non-empty string list",
+    )
+    if ctx.state.focus_workflows and focus_workflows != ctx.state.focus_workflows:
+        raise ValueError("frame verifier payload focus_workflows must match the captured portfolio context")
+    return ctx.state.model_copy(update={"framing_status": outcome.tag, "focus_workflows": focus_workflows})
+
+
+def _after_analyze_portfolio_operating_model(ctx, outcome: Outcome):
+    payload = outcome.payload
+    focus_workflows = _require_string_list(
+        payload.get("focus_workflows"),
+        "analysis verifier payload must define focus_workflows as a non-empty string list",
+    )
+    if ctx.state.focus_workflows and focus_workflows != ctx.state.focus_workflows:
+        raise ValueError("analysis verifier payload focus_workflows must match the captured portfolio context")
+    analyzed_workflows = _require_string_list(
+        payload.get("analyzed_workflows"),
+        "analysis verifier payload must define analyzed_workflows as a non-empty string list",
+    )
+    lifecycle_postures = _validated_lifecycle_recommendations(
+        payload.get("lifecycle_recommendations"),
+        allowed_workflows=analyzed_workflows,
+        error_prefix="analysis verifier payload",
+    )
+    change_candidate_ids = _require_string_list(
+        payload.get("change_candidate_ids"),
+        "analysis verifier payload must define change_candidate_ids as a non-empty string list",
+    )
+    return ctx.state.model_copy(
+        update={
+            "analysis_status": outcome.tag,
+            "focus_workflows": focus_workflows,
+            "analyzed_workflows": analyzed_workflows,
+            "lifecycle_postures": lifecycle_postures,
+            "change_candidate_ids": change_candidate_ids,
+        }
+    )
+
+
+def _after_package_portfolio_operating_system(ctx, outcome: Outcome):
+    payload = outcome.payload
+    focus_workflows = _require_string_list(
+        payload.get("focus_workflows"),
+        "package verifier payload must define focus_workflows as a non-empty string list",
+    )
+    if ctx.state.focus_workflows and focus_workflows != ctx.state.focus_workflows:
+        raise ValueError("package verifier payload focus_workflows must match the captured portfolio context")
+    analyzed_workflows = _require_string_list(
+        payload.get("analyzed_workflows"),
+        "package verifier payload must define analyzed_workflows as a non-empty string list",
+    )
+    if ctx.state.analyzed_workflows and analyzed_workflows != ctx.state.analyzed_workflows:
+        raise ValueError("package verifier payload analyzed_workflows must match the analyzed portfolio context")
+    change_candidate_ids = _require_string_list(
+        payload.get("change_candidate_ids"),
+        "package verifier payload must define change_candidate_ids as a non-empty string list",
+    )
+    if ctx.state.change_candidate_ids and change_candidate_ids != ctx.state.change_candidate_ids:
+        raise ValueError("package verifier payload change_candidate_ids must match the analyzed portfolio context")
+    priority_workflows = _require_string_list(
+        payload.get("priority_workflows"),
+        "package verifier payload must define priority_workflows as a non-empty string list",
+    )
+    for workflow_name in priority_workflows:
+        if workflow_name not in analyzed_workflows:
+            raise ValueError("package verifier payload priority_workflows must be drawn from analyzed_workflows")
+    return ctx.state.model_copy(
+        update={
+            "packaging_status": outcome.tag,
+            "focus_workflows": focus_workflows,
+            "analyzed_workflows": analyzed_workflows,
+            "change_candidate_ids": change_candidate_ids,
+            "priority_workflows": priority_workflows,
+        }
+    )
 
 
 class WorkflowPortfolioToOperatingSystem(Workflow):
@@ -230,6 +309,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         producer_writes=[portfolio_governance_brief, portfolio_decision_criteria],
         control_schema=PortfolioGovernanceFramingPayload,
         routes=FRAME_PORTFOLIO_GOVERNANCE_ROUTE_CONTRACTS,
+        after_verifier=_after_frame_portfolio_governance,
     )
 
     analyze_portfolio_operating_model = produce_verify_step(
@@ -247,6 +327,7 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         producer_writes=[workflow_lifecycle_matrix, portfolio_gap_analysis, portfolio_change_candidates],
         control_schema=PortfolioOperatingModelPayload,
         routes=ANALYZE_PORTFOLIO_OPERATING_MODEL_ROUTE_CONTRACTS,
+        after_verifier=_after_analyze_portfolio_operating_model,
     )
 
     package_portfolio_operating_system = produce_verify_step(
@@ -272,90 +353,8 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
         ],
         control_schema=PortfolioOperatingSystemPayload,
         routes=PACKAGE_PORTFOLIO_OPERATING_SYSTEM_ROUTE_CONTRACTS,
+        after_verifier=_after_package_portfolio_operating_system,
     )
-
-    @staticmethod
-    def on_frame_portfolio_governance(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        focus_workflows = _require_string_list(
-            outcome.payload.get("focus_workflows"),
-            "frame verifier payload must define focus_workflows as a non-empty string list",
-        )
-        if state.focus_workflows and focus_workflows != state.focus_workflows:
-            raise ValueError("frame verifier payload focus_workflows must match the captured portfolio context")
-        return state.model_copy(update={"framing_status": outcome.tag, "focus_workflows": focus_workflows})
-
-    @staticmethod
-    def on_analyze_portfolio_operating_model(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        focus_workflows = _require_string_list(
-            payload.get("focus_workflows"),
-            "analysis verifier payload must define focus_workflows as a non-empty string list",
-        )
-        if state.focus_workflows and focus_workflows != state.focus_workflows:
-            raise ValueError("analysis verifier payload focus_workflows must match the captured portfolio context")
-        analyzed_workflows = _require_string_list(
-            payload.get("analyzed_workflows"),
-            "analysis verifier payload must define analyzed_workflows as a non-empty string list",
-        )
-        lifecycle_postures = _validated_lifecycle_recommendations(
-            payload.get("lifecycle_recommendations"),
-            allowed_workflows=analyzed_workflows,
-            error_prefix="analysis verifier payload",
-        )
-        change_candidate_ids = _require_string_list(
-            payload.get("change_candidate_ids"),
-            "analysis verifier payload must define change_candidate_ids as a non-empty string list",
-        )
-        return state.model_copy(
-            update={
-                "analysis_status": outcome.tag,
-                "focus_workflows": focus_workflows,
-                "analyzed_workflows": analyzed_workflows,
-                "lifecycle_postures": lifecycle_postures,
-                "change_candidate_ids": change_candidate_ids,
-            }
-        )
-
-    @staticmethod
-    def on_package_portfolio_operating_system(state: State, outcome: Outcome, artifacts):
-        del artifacts
-        payload = outcome.payload
-        focus_workflows = _require_string_list(
-            payload.get("focus_workflows"),
-            "package verifier payload must define focus_workflows as a non-empty string list",
-        )
-        if state.focus_workflows and focus_workflows != state.focus_workflows:
-            raise ValueError("package verifier payload focus_workflows must match the captured portfolio context")
-        analyzed_workflows = _require_string_list(
-            payload.get("analyzed_workflows"),
-            "package verifier payload must define analyzed_workflows as a non-empty string list",
-        )
-        if state.analyzed_workflows and analyzed_workflows != state.analyzed_workflows:
-            raise ValueError("package verifier payload analyzed_workflows must match the analyzed portfolio context")
-        change_candidate_ids = _require_string_list(
-            payload.get("change_candidate_ids"),
-            "package verifier payload must define change_candidate_ids as a non-empty string list",
-        )
-        if state.change_candidate_ids and change_candidate_ids != state.change_candidate_ids:
-            raise ValueError("package verifier payload change_candidate_ids must match the analyzed portfolio context")
-        priority_workflows = _require_string_list(
-            payload.get("priority_workflows"),
-            "package verifier payload must define priority_workflows as a non-empty string list",
-        )
-        for workflow_name in priority_workflows:
-            if workflow_name not in analyzed_workflows:
-                raise ValueError("package verifier payload priority_workflows must be drawn from analyzed_workflows")
-        return state.model_copy(
-            update={
-                "packaging_status": outcome.tag,
-                "focus_workflows": focus_workflows,
-                "analyzed_workflows": analyzed_workflows,
-                "change_candidate_ids": change_candidate_ids,
-                "priority_workflows": priority_workflows,
-            }
-        )
 
     @python_step(
         name="publish_portfolio_operating_system",
@@ -561,7 +560,6 @@ class WorkflowPortfolioToOperatingSystem(Workflow):
             Event("portfolio_operating_system_published"),
         )
 
-    on_outcome = staticmethod(event_on_outcome_tags("question", "blocked", "failed"))
 
 
 _require_text = partial(require_non_empty_string, coerce=True)
