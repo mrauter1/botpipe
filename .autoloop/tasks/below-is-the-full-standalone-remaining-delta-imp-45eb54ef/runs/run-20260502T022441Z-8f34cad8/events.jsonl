@@ -64,3 +64,7 @@
 {"ts": "2026-05-02T13:26:56.667287+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 64, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "scoped-state-worklists"}
 {"ts": "2026-05-02T13:27:41.358952+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 65, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 1, "attempt": 1, "empty_output": false, "phase_id": "scoped-state-worklists"}
 {"ts": "2026-05-02T13:27:41.398909+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 66, "event_type": "pair_completed", "pair": "test", "cycle": 1, "attempt": 1, "phase_id": "scoped-state-worklists"}
+{"ts": "2026-05-02T13:27:41.506388+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 67, "event_type": "phase_completed", "pair": "test", "phase_id": "scoped-state-worklists", "phase_mode": "single"}
+{"ts": "2026-05-02T13:27:41.509542+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 68, "event_type": "phase_started", "phase_id": "failure-trace-optimizer-alignment", "phase_mode": "single"}
+{"ts": "2026-05-02T13:27:41.511740+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 69, "event_type": "pair_started", "pair": "implement", "phase_id": "failure-trace-optimizer-alignment"}
+{"ts": "2026-05-02T13:27:41.511869+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 70, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "failure-trace-optimizer-alignment"}

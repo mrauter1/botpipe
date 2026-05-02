@@ -17,14 +17,14 @@
       "docs-and-tests"
     ],
     "explicit": true,
-    "current_phase_index": 2,
-    "current_phase_id": "scoped-state-worklists"
+    "current_phase_index": 3,
+    "current_phase_id": "failure-trace-optimizer-alignment"
   },
   "phase_status": {
     "public-surface-cleanup": "completed",
     "hook-control-unification": "completed",
-    "scoped-state-worklists": "in_progress",
-    "failure-trace-optimizer-alignment": "planned",
+    "scoped-state-worklists": "completed",
+    "failure-trace-optimizer-alignment": "in_progress",
     "docs-and-tests": "planned"
   },
   "phase_history": [
@@ -59,6 +59,19 @@
       "run_id": "run-20260502T022441Z-8f34cad8",
       "status": "in_progress",
       "ts": "2026-05-02T12:45:34.221223+00:00"
+    },
+    {
+      "phase_id": "scoped-state-worklists",
+      "run_id": "run-20260502T022441Z-8f34cad8",
+      "status": "completed",
+      "ts": "2026-05-02T13:27:41.505714+00:00",
+      "pair": "test"
+    },
+    {
+      "phase_id": "failure-trace-optimizer-alignment",
+      "run_id": "run-20260502T022441Z-8f34cad8",
+      "status": "in_progress",
+      "ts": "2026-05-02T13:27:41.508828+00:00"
     }
   ]
 }
