@@ -210,7 +210,18 @@ class Worklist(Generic[T]):
         return bool(getattr(self.source, "artifact_backed", False))
 
     def load_items(self, ctx: "Context") -> tuple[WorkItem[T], ...]:
-        cached = ctx._get_cached_worklist_items(self.name)
+        return self._load_items_snapshot(ctx)
+
+    def reload_items(self, ctx: "Context") -> tuple[WorkItem[T], ...]:
+        return self._load_items_snapshot(ctx, force_reload=True)
+
+    def _load_items_snapshot(
+        self,
+        ctx: "Context",
+        *,
+        force_reload: bool = False,
+    ) -> tuple[WorkItem[T], ...]:
+        cached = None if force_reload else ctx._get_cached_worklist_items(self.name)
         if cached is not None:
             return cached
         items = tuple(self.source.load(ctx))
@@ -278,7 +289,7 @@ class Worklist(Generic[T]):
         )
 
     def refresh_selection(self, ctx: "Context", selection: Selection[T]) -> Selection[T]:
-        loaded_items = {item.id: item for item in self.load_items(ctx)}
+        loaded_items = {item.id: item for item in self.reload_items(ctx)}
         refreshed_items: list[WorkItem[T]] = []
         for selected in selection.items:
             loaded = loaded_items.get(selected.id)
@@ -298,7 +309,10 @@ class Worklist(Generic[T]):
         updated_selection = replace(selection, items=tuple(updated_items))
         if self.mutable:
             self.source.save(ctx, updated_selection.items)
-        ctx._cache_worklist_items(self.name, updated_selection.items)
+            self.reload_items(ctx)
+            return updated_selection
+        cached_items = self.load_items(ctx)
+        ctx._cache_worklist_items(self.name, _replace_items_by_id(cached_items, updated_selection.items))
         return updated_selection
 
     def validate_items(self, ctx: "Context", items: Sequence[WorkItem[T]]) -> str | None:
@@ -451,7 +465,7 @@ class WorklistRuntimeView(Generic[T]):
 
     def validation_error(self) -> str | None:
         try:
-            items = self._worklist.load_items(self._context)
+            items = self._worklist.reload_items(self._context)
         except WorkflowExecutionError as exc:
             return str(exc)
         selected_ids = {item.id for item in self.selection.items}
@@ -688,6 +702,14 @@ def _duplicate_item_ids(items: Sequence[WorkItem[Any]]) -> tuple[str, ...]:
             continue
         seen.add(item.id)
     return tuple(duplicates)
+
+
+def _replace_items_by_id(
+    items: Sequence[WorkItem[T]],
+    replacements: Sequence[WorkItem[T]],
+) -> tuple[WorkItem[T], ...]:
+    replacements_by_id = {item.id: item for item in replacements}
+    return tuple(replacements_by_id.get(item.id, item) for item in items)
 
 
 def _string_field(payload: Mapping[str, object], field_name: str, *, worklist_name: str) -> str:

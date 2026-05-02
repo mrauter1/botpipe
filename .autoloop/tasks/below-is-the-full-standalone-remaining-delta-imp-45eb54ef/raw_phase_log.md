@@ -1289,3 +1289,60 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=implement | phase=producer | cycle=2 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/implement_producer.md
+session_id=019de8b9-0cec-7491-ae85-95ceca41a272
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=implement | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de8b9-0cec-7491-ae85-95ceca41a272
+---
+I’m addressing the reviewer’s blocking helper-semantics gap now. First I’m tracing the cache/reload path around `Worklist.refresh()` and `validate()`, then I’ll patch the central loader so mutable sources refresh from the backing source without disturbing the rest of the scoped-state behavior.
+
+I’ve confirmed the reviewer’s diagnosis. The fix is local to `Worklist`: make full-source reload explicit, stop storing `selection.items` as if they were the whole source snapshot, and add regression coverage for both stale refresh and stale validation on mutable sources.
+
+I’m editing the worklist loader path now. The change is to distinguish “use cached full snapshot” from “force validated reload”, then make status updates preserve a full cached snapshot instead of collapsing it to the selected subset.
+
+The loader/cache patch is in, along with regression tests that actually mutate the backing source between selection and helper calls. I’m running the focused worklist test file first to catch any contract mismatch before widening back out to the full phase-targeted suite.
+
+The focused worklist tests passed, and the broader phase suite is still running cleanly so far. Once that finishes, I’ll update the phase notes and the current turn’s decision block with the cache/reload constraint that the reviewer surfaced.
+
+The phase-targeted suite is green again with the reviewer regression covered. I’m updating the phase notes and decision ledger now so the reload/full-snapshot constraint is captured for later turns instead of getting lost in the fix.
+
+Scope considered
+- Phase-local `scoped-state-worklists` only.
+- I limited changes to the reviewer’s blocking finding around worklist refresh/validation cache semantics, plus the phase notes and decision ledger.
+
+What I analyzed
+- The reviewer finding in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/implement/phases/scoped-state-worklists/feedback.md).
+- The worklist cache/reload path in [worklists.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/autoloop/core/worklists.py).
+- Existing helper coverage in [test_primitives_and_stores.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_primitives_and_stores.py).
+- The current phase notes and decision block in [implementation_notes.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/implement/phases/scoped-state-worklists/implementation_notes.md) and [decisions.txt](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/decisions.txt).
+
+What I changed
+- Centralized cached vs forced-reload behavior in `Worklist` by adding `reload_items(...)` and `_load_items_snapshot(...)`.
+- Changed `refresh_selection(...)` and `WorklistRuntimeView.validation_error()` to force a validated source reload instead of reusing stale cached items.
+- Fixed `set_current_status(...)` so cache entries stay full-source snapshots instead of collapsing to `selection.items`; mutable sources now save then reload, while immutable sources merge selected-item updates back into the cached full snapshot.
+- Added regression coverage for:
+  - mutable-source refresh reloading backing changes;
+  - mutable-source validation detecting a removed selected item after cache population;
+  - mutable-source status updates preserving a full cached snapshot rather than a narrowed subset.
+- Updated the phase notes and appended the cache/reload constraint to the current phase decision block.
+
+Key findings / decisions
+- The blocking issue was real: helper refresh/validation could go stale because both paths reused cached full-source data after helper mutations had repopulated the cache incorrectly.
+- The fix keeps one invariant explicit: cache entries are full-source snapshots, while `refresh()` and helper validation always bypass cache for mutable/backing-store truth.
+- Validation passed:
+  - `./.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py`
+  - `./.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_static_graph.py`
+  - Result: `302 passed`
+
+Open issues / next step
+- No additional blocker remains in the implementer scope for this reviewer finding.
+- The next step is verifier re-review of the updated phase artifacts and helper semantics.

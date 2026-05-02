@@ -32,6 +32,8 @@
 - `build_worklist_item_state_model(...)`
 - `Worklist.runtime_item_state_model`
 - `WorklistRuntimeView`
+- `Worklist.reload_items(...)`
+- `Worklist._load_items_snapshot(...)`
 - `Context.item_state`
 - `Context.step_item_state`
 - `Context.worklist(...)`
@@ -60,6 +62,7 @@
 - Built-in scoped runtime fields remain read-only from author code; only declared custom item-state fields remain mutable.
 - Worklist helpers do not auto-route on exhaustion or status change.
 - Helper mutations remain visible to checkpoint persistence and do not roll back automatically on later failures.
+- Worklist cache entries remain full-source snapshots rather than shrinking to the current selected subset.
 - Finalized route state continues to update only on successful route-based finalization; direct controls do not fabricate `last_route`.
 
 ## Intended behavior changes
@@ -74,13 +77,15 @@
 
 ## Expected side effects
 - Static graph/runtime payloads now expose runtime-composed worklist item-state metadata instead of the pre-helper item-state surface.
+- `ctx.current_worklist.refresh()` and `validate()` now force a source reload, so mutable/artifact-backed worklists pick up backing-store changes even after earlier helper mutations populated the cache.
 - Repositories that track generated `.pyc` files will show validation-time bytecode churn alongside the source edits.
 
 ## Validation performed
 - `./.venv/bin/pytest -q tests/unit/test_primitives_and_stores.py tests/unit/test_simple_surface.py tests/unit/test_validation.py tests/contract/test_engine_contracts.py tests/runtime/test_runtime_static_graph.py`
-  Result: `300 passed`
+  Result: `302 passed`
 
 ## Deduplication / centralization
 - Built-in item-state composition is centralized in `step_state.py` and reused by `Worklist`.
 - Worklist mutation behavior is centralized in `WorklistRuntimeView` and context sync helpers instead of route-effect execution branches.
+- Cached-load versus forced-reload semantics are centralized in `Worklist._load_items_snapshot(...)` so `load_items()`, `refresh()`, validation, and mutable-status updates stay consistent.
 - Direct-control validation failure annotation is centralized in `Engine._normalize_direct_runtime_control(...)`.
