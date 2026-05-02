@@ -80,3 +80,7 @@
 {"ts": "2026-05-02T13:55:50.924824+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 80, "event_type": "phase_finished", "pair": "test", "phase": "producer", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "failure-trace-optimizer-alignment"}
 {"ts": "2026-05-02T13:56:57.425249+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 81, "event_type": "phase_finished", "pair": "test", "phase": "verifier", "cycle": 2, "attempt": 1, "empty_output": false, "phase_id": "failure-trace-optimizer-alignment"}
 {"ts": "2026-05-02T13:56:57.462402+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 82, "event_type": "pair_completed", "pair": "test", "cycle": 2, "attempt": 1, "phase_id": "failure-trace-optimizer-alignment"}
+{"ts": "2026-05-02T13:56:57.551458+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 83, "event_type": "phase_completed", "pair": "test", "phase_id": "failure-trace-optimizer-alignment", "phase_mode": "single"}
+{"ts": "2026-05-02T13:56:57.555488+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 84, "event_type": "phase_started", "phase_id": "docs-and-tests", "phase_mode": "single"}
+{"ts": "2026-05-02T13:56:57.557806+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 85, "event_type": "pair_started", "pair": "implement", "phase_id": "docs-and-tests"}
+{"ts": "2026-05-02T13:56:57.557954+00:00", "run_id": "run-20260502T022441Z-8f34cad8", "seq": 86, "event_type": "cycle_started", "pair": "implement", "cycle": 1, "attempt": 1, "phase_id": "docs-and-tests"}
