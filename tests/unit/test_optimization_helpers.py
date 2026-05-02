@@ -311,6 +311,51 @@ def test_normalize_trace_corpus_preserves_direct_runtime_control_metadata(tmp_pa
     assert observation["downstream_outcome"] == "awaiting_input_terminal_after_local_pass"
 
 
+def test_normalize_trace_corpus_keeps_question_route_distinct_from_awaiting_input_terminal(tmp_path: Path) -> None:
+    run_dir = _write_observable_run(tmp_path, "task-1", "release_candidate_to_go_no_go", "run-question")
+    run_payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    run_payload["status"] = "awaiting_input"
+    run_payload["terminal"] = "AWAIT_INPUT"
+    (run_dir / "run.json").write_text(json.dumps(run_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "schema": "autoloop.runtime_trace/v1",
+                "event_type": "step_finished",
+                "sequence": 1,
+                "step_name": "assessment",
+                "step_kind": "llm",
+                "event": {"tag": "question", "question": "Need more evidence?"},
+                "outcome": {"tag": "question", "question": "Need more evidence?"},
+                "candidate_route": "question",
+                "final_route": "question",
+                "pending_input_id": "pending-assessment-1",
+                "terminal": "AWAIT_INPUT",
+                "provider_attempted": True,
+                "raw_output_refs": {},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    corpus = normalize_trace_corpus(
+        selected_workflow="release_candidate_to_go_no_go",
+        run_dirs=[run_dir],
+        route_tags=["question"],
+    )
+
+    observation = corpus["all_step_observations"][0]
+    assert observation["route"] == "question"
+    assert observation["final_route"] == "question"
+    assert observation["runtime_control"] is None
+    assert observation["terminal"] == "AWAIT_INPUT"
+    assert observation["pending_input_id"] == "pending-assessment-1"
+    assert observation["provider_attempted"] is True
+    assert observation["local_outcome"] == "awaiting_input"
+    assert observation["downstream_outcome"] == "awaiting_input_terminal_after_local_pass"
+
+
 def test_filtered_published_observations_still_allow_upstream_ranking_from_internal_trace_context(tmp_path: Path) -> None:
     run_dir = _write_upstream_pass_downstream_fail_run(
         tmp_path,

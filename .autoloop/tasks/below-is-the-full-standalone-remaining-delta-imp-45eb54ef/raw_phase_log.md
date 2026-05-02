@@ -1615,3 +1615,53 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=producer | cycle=1 | attempt=1 | thread_id=019de8df-9d67-77a3-a352-a28558942623
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de8df-9d67-77a3-a352-a28558942623
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de8df-9d67-77a3-a352-a28558942623
+---
+I’m treating this as a focused test-hardening pass on the runtime failure/trace/optimizer changes that just landed. First I’m checking what is already covered so I only add tests where the phase contract still has a meaningful regression gap.
+
+There’s one concrete coverage gap: the optimizer has a runtime-control test, but not the symmetric provider `question` route case that must still normalize to route=`question` while producing `awaiting_input` status semantics. I’m adding that, plus one runner-facing assertion for child-run finalization metadata on paused children.
+
+I’ve got the two gaps isolated. I’m patching the tests now: one optimizer-level normalization case for provider `question` routes, and one runner-facing child-summary case that checks finalization metadata survives an `AWAIT_INPUT` child run.
+
+The test updates are in. I’m running the two touched files now to verify the new assertions match the runtime’s actual paused-child and optimizer-normalization behavior before I close the phase.
+
+The new child-summary assertion found a real limit in the current consumer payload: paused child `finalization` carries the route and attempt attribution, but not `pending_input_id` or `terminal`. I’m narrowing the test to the stable fields the runtime actually emits, and I’ll record that gap in the phase artifact instead of baking in a failing expectation.
+
+Scope considered
+
+- Phase-local test work for `failure-trace-optimizer-alignment`.
+- Focused on runtime-consumer and optimizer surfaces affected by the typed failure/trace changes, without broadening into unrelated repo areas.
+
+What I analyzed
+
+- Existing coverage in `tests/unit/test_optimization_helpers.py`, `tests/runtime/test_workspace_and_context.py`, `tests/runtime/test_history.py`, and the contract tests around hook short-circuits and failure context.
+- The active phase artifacts: `test_strategy.md`, `feedback.md`, and the current implementation behavior for paused child-run metadata and optimizer trace normalization.
+
+What I changed
+
+- Added `test_normalize_trace_corpus_keeps_question_route_distinct_from_awaiting_input_terminal` in [tests/unit/test_optimization_helpers.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/unit/test_optimization_helpers.py) to lock in the `question` route vs `AWAIT_INPUT` terminal distinction.
+- Extended [tests/runtime/test_workspace_and_context.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/runtime/test_workspace_and_context.py) to assert paused child runs persist provider-originated pending-input metadata and stable child `finalization` route/attempt fields.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/failure-trace-optimizer-alignment/test_strategy.md) with an explicit behavior-to-test coverage map and known gap note.
+- Appended a concise summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/failure-trace-optimizer-alignment/feedback.md).
+
+Key findings / decisions
+
+- The optimizer now has direct coverage for the AC-3 distinction: provider `question` routes stay `route="question"` while still deriving `awaiting_input` outcome semantics from the terminal state.
+- While adding child-run assertions, I confirmed the current child summary `finalization` payload for provider `question` routes does not emit `pending_input_id` or `terminal`; I did not normalize that into a failing expectation, and recorded it as a known gap in the phase artifact instead.
+
+Open issues / next step
+
+- Focused validation passed: `./.venv/bin/python -m pytest tests/unit/test_optimization_helpers.py tests/runtime/test_workspace_and_context.py -q` with `52 passed in 1.19s`.
+- I did not rerun the broader 210-test focused runtime suite in this test phase because the changes were isolated to these two test files and artifacts.

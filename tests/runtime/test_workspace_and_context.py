@@ -1327,7 +1327,9 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
     assert child_payload["answer"] is None
     assert child_payload["workflow_params"] == {"mode": "strict"}
     assert child_meta["status"] == "awaiting_input"
+    assert child_meta["pending_input"]["pending_input_id"]
     assert child_meta["pending_input"]["question"] == "Child question?"
+    assert child_meta["pending_input"]["source_phase"] == "provider"
     assert (child_run_dir / "checkpoint.json").exists()
     assert child_parent["workflow_name"] == "parent_name"
     assert child_parent["run_id"] == parent_run_dir.name
@@ -1338,6 +1340,21 @@ def test_context_invoke_workflow_by_name_creates_isolated_child_runs_without_inh
         "reason": "",
         "question": "Child question?",
         "handoff": None,
+    }
+    assert child_records[0]["finalization"] == {
+        "candidate_route": "question",
+        "final_route": "question",
+        "runtime_control": None,
+        "pending_input_id": None,
+        "target_step": None,
+        "terminal": None,
+        "provider_attributable": True,
+        "provider_attempted": True,
+        "producer_attempted": None,
+        "verifier_attempted": None,
+        "source_hook": None,
+        "source_phase": None,
+        "hook_route_redirects": [],
     }
 
 
