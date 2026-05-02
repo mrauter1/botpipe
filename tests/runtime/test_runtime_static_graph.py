@@ -234,8 +234,10 @@ def test_topology_artifacts_include_state_surfaces_runtime_control_hook_location
     review_topology = next(step_payload for step_payload in topology_payload["steps"] if step_payload["name"] == "review")
 
     assert static_payload["worklists"]["gate"] == {
-        "item_state_model": "WorkItemState",
-        "item_state_fields": ["severity"],
+        "item_state_model": "GateWorkItemState",
+        "item_state_fields": ["last_route", "last_step", "severity", "status"],
+        "item_state_runtime_fields": ["status", "last_step", "last_route"],
+        "item_state_custom_fields": ["severity"],
     }
     assert review_static["step_item_state_fields"] == ["visits", "last_route", "last_reason", "attempts"]
     assert review_topology["step_item_state_surface"] == {

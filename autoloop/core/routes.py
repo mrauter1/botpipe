@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-from .effects import Effect
 from .primitives import AWAIT_INPUT, FAIL, FINISH
 
 
@@ -34,10 +33,9 @@ def _normalize_required_writes(value: Iterable[str]) -> tuple[str, ...]:
 
 @dataclass(frozen=True, slots=True)
 class Route:
-    """Explicit route target plus optional side effects."""
+    """Explicit route target plus optional metadata and route-local hook."""
 
     target: object | None = None
-    effects: tuple[Effect, ...] = ()
     summary: str | None = None
     required_writes: tuple[str, ...] | None = None
     handoff: str | None = None
@@ -57,7 +55,6 @@ class Route:
     def to(
         target: object,
         *,
-        effects: Iterable[Effect] = (),
         summary: str | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
@@ -66,7 +63,6 @@ class Route:
     ) -> "Route":
         return Route(
             target=target,
-            effects=tuple(effects),
             summary=summary,
             required_writes=(_normalize_required_writes(required_writes) if required_writes is not None else None),
             handoff=handoff,
@@ -77,7 +73,6 @@ class Route:
     @staticmethod
     def finish(
         *,
-        effects: Iterable[Effect] = (),
         summary: str | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
@@ -86,7 +81,6 @@ class Route:
     ) -> "Route":
         return Route.to(
             FINISH,
-            effects=effects,
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,
@@ -97,7 +91,6 @@ class Route:
     @staticmethod
     def await_input(
         *,
-        effects: Iterable[Effect] = (),
         summary: str | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
@@ -106,7 +99,6 @@ class Route:
     ) -> "Route":
         return Route.to(
             AWAIT_INPUT,
-            effects=effects,
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,
@@ -117,7 +109,6 @@ class Route:
     @staticmethod
     def fail(
         *,
-        effects: Iterable[Effect] = (),
         summary: str | None = None,
         required_writes: Iterable[str] | None = None,
         handoff: str | None = None,
@@ -126,7 +117,6 @@ class Route:
     ) -> "Route":
         return Route.to(
             FAIL,
-            effects=effects,
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,

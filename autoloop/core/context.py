@@ -15,6 +15,7 @@ from .errors import WorkflowExecutionError
 from .mappings import normalize_mapping
 from .primitives import Event
 from .sessions import Continuity, DEFAULT_SESSION_NAME, SessionKey, derive_session_key
+from .step_state import reserved_item_state_field_names, reserved_step_state_field_names
 from .stores.protocols import SessionBinding, is_run_key_bound_to_slot
 from .steps import Session
 
@@ -95,6 +96,17 @@ class NamespaceProxy:
             raise AttributeError(item)
         source[item] = value
 
+    def __eq__(self, other: object) -> bool:
+        source = object.__getattribute__(self, "_source")
+        if isinstance(source, Mapping):
+            return dict(source) == other
+        if isinstance(other, Mapping):
+            return {
+                key: getattr(source, key)
+                for key in getattr(type(source), "model_fields", {})
+            } == dict(other)
+        return source == other
+
 
 class MutableStateProxy(NamespaceProxy):
     """Mutable attribute view over a plain dictionary."""
@@ -115,14 +127,12 @@ class MutableStateProxy(NamespaceProxy):
         return dict(object.__getattribute__(self, "_source"))
 
 
-_RUNTIME_STATE_FIELDS = frozenset({"visits", "last_route", "last_reason", "rework_count", "replan_count"})
-
-
 class StateView:
     """Attribute view that keeps runtime-owned fields read-only."""
 
-    def __init__(self, source: BaseModel | dict[str, Any]) -> None:
+    def __init__(self, source: BaseModel | dict[str, Any], *, runtime_fields: frozenset[str] = frozenset()) -> None:
         object.__setattr__(self, "_source", source)
+        object.__setattr__(self, "_runtime_fields", runtime_fields)
 
     def __getattr__(self, item: str) -> Any:
         source = object.__getattribute__(self, "_source")
@@ -137,7 +147,7 @@ class StateView:
         return value
 
     def __setattr__(self, item: str, value: Any) -> None:
-        if item in _RUNTIME_STATE_FIELDS:
+        if item in object.__getattribute__(self, "_runtime_fields"):
             raise AttributeError(f"{item} is runtime-owned and read-only")
         source = object.__getattribute__(self, "_source")
         if isinstance(source, BaseModel):
@@ -185,6 +195,7 @@ class Context:
         step_state_store: BaseModel | dict[str, Any] | None = None,
         item_state_store: BaseModel | dict[str, Any] | None = None,
         step_item_state_store: BaseModel | dict[str, Any] | None = None,
+        runtime_event_sink: Callable[[str, Mapping[str, Any]], None] | None = None,
     ) -> None:
         self.root = _resolve_context_root(root=root, task_folder=task_folder, package_folder=package_folder)
         self.task_id = task_id
@@ -219,6 +230,11 @@ class Context:
         self._step_item_state = step_item_state_store
         self._history: HistoryReader | None = None
         self._worklist_items_cache: dict[str, tuple[Any, ...]] = {}
+        self._runtime_event_sink = runtime_event_sink
+        self._worklist_selection_sync: Callable[[str], None] | None = None
+        self._execution_source_hook: str | None = None
+        self._execution_source_phase: str | None = None
+        self._execution_hook_invocation_id: str | None = None
 
     @property
     def state(self) -> BaseModel:
@@ -298,23 +314,43 @@ class Context:
 
     @property
     def step_state(self) -> StateView:
-        return StateView(self._step_state)
+        return StateView(self._step_state, runtime_fields=_step_runtime_fields(self._step_state))
 
     @property
-    def item_state(self) -> BaseModel:
-        if isinstance(self._item_state, BaseModel):
-            return self._item_state
+    def item_state(self) -> StateView:
+        if isinstance(self._item_state, (BaseModel, dict)):
+            return StateView(self._item_state, runtime_fields=reserved_item_state_field_names())
         raise WorkflowExecutionError(
-            "item_state is not part of the canonical public surface for this step; declare an explicit model-backed item state before using it"
+            "item_state is only available when there is an active scoped worklist item"
         )
 
     @property
     def step_item_state(self) -> StateView:
         if isinstance(self._step_item_state, (BaseModel, dict)):
-            return StateView(self._step_item_state)
+            return StateView(self._step_item_state, runtime_fields=_step_runtime_fields(self._step_item_state))
         raise WorkflowExecutionError(
-            "step_item_state is not part of the canonical public surface for this step; declare an explicit model-backed step-item state before using it"
+            "step_item_state is only available when there is an active scoped worklist item"
         )
+
+    @property
+    def worklists(self) -> "_WorklistNamespace":
+        return _WorklistNamespace(self)
+
+    def worklist(self, name: "Worklist[Any] | str") -> "WorklistRuntimeView[Any]":
+        from .worklists import WorklistRuntimeView
+
+        worklist_name = self._worklist_name(name)
+        try:
+            worklist = self._worklists[worklist_name]
+        except KeyError as exc:
+            raise WorkflowExecutionError(f"unknown worklist {worklist_name!r}") from exc
+        return WorklistRuntimeView(self, worklist)
+
+    @property
+    def current_worklist(self) -> "WorklistRuntimeView[Any]":
+        if self._active_worklist is None:
+            raise WorkflowExecutionError("current_worklist is only available while executing a scoped step")
+        return self.worklist(self._active_worklist)
 
     @property
     def session(self) -> SessionBinding | None:
@@ -475,6 +511,72 @@ class Context:
     def _set_selections(self, selections: dict[str, "Selection[Any]"]) -> None:
         self._selections = selections
 
+    def _set_worklist_selection_sync(self, callback: Callable[[str], None] | None) -> None:
+        self._worklist_selection_sync = callback
+
+    def _set_execution_source(
+        self,
+        *,
+        hook_name: str | None,
+        phase: str | None,
+        invocation_id: str | None,
+    ) -> None:
+        self._execution_source_hook = hook_name
+        self._execution_source_phase = phase
+        self._execution_hook_invocation_id = invocation_id
+
+    def _sync_scoped_state_after_worklist_selection_change(self, worklist: "Worklist[Any] | str") -> None:
+        if self._worklist_selection_sync is None:
+            return
+        self._worklist_selection_sync(self._worklist_name(worklist))
+
+    def _emit_worklist_runtime_event(
+        self,
+        event_type: str,
+        *,
+        worklist_name: str,
+        previous_selection: "Selection[Any]",
+        new_selection: "Selection[Any]",
+    ) -> None:
+        if self._runtime_event_sink is None:
+            return
+        previous_current = previous_selection.current
+        new_current = new_selection.current
+        previous_status = None if previous_current is None else previous_current.status
+        new_status = None if new_current is None else new_current.status
+        payload: dict[str, Any] = {
+            "step_name": self._step_name,
+            "worklist_name": worklist_name,
+            "previous_current_item_id": None if previous_current is None else previous_current.id,
+            "new_current_item_id": None if new_current is None else new_current.id,
+            "previous_status": previous_status,
+            "new_status": new_status,
+        }
+        visit = _runtime_visits(self._step_item_state or self._step_state)
+        if isinstance(visit, int):
+            payload["visit"] = visit
+        if self._active_worklist is not None:
+            payload["scope"] = self._active_worklist
+        if new_current is not None:
+            payload["item_id"] = new_current.id
+        elif previous_current is not None:
+            payload["item_id"] = previous_current.id
+        step_execution_id = _step_execution_id(
+            step_name=self._step_name,
+            visit=visit,
+            scope_name=self._active_worklist,
+            item_id=None if new_current is None else new_current.id,
+        )
+        if step_execution_id is not None:
+            payload["step_execution_id"] = step_execution_id
+        if self._execution_source_hook is not None:
+            payload["source_hook"] = self._execution_source_hook
+        if self._execution_source_phase is not None:
+            payload["source_phase"] = self._execution_source_phase
+        if self._execution_hook_invocation_id is not None:
+            payload["hook_invocation_id"] = self._execution_hook_invocation_id
+        self._runtime_event_sink(event_type, payload)
+
     def invoke_workflow(
         self,
         workflow: str | type[Any],
@@ -559,3 +661,50 @@ def _resolve_context_root(*, root: Path | None, task_folder: Path, package_folde
     if resolved_package_folder.parent.name == "workflows":
         return resolved_package_folder.parent.parent.resolve()
     return task_folder.resolve()
+
+
+class _WorklistNamespace:
+    def __init__(self, context: Context) -> None:
+        self._context = context
+
+    def __getattr__(self, item: str) -> Any:
+        try:
+            return self._context.worklist(item)
+        except WorkflowExecutionError as exc:
+            raise AttributeError(f"unknown worklist {item!r}") from exc
+
+
+def _runtime_visits(state: BaseModel | dict[str, Any] | None) -> int | None:
+    if isinstance(state, BaseModel):
+        visits = getattr(state, "visits", None)
+        return visits if isinstance(visits, int) else None
+    if isinstance(state, dict):
+        visits = state.get("visits")
+        return visits if isinstance(visits, int) else None
+    return None
+
+
+def _step_runtime_fields(state: BaseModel | dict[str, Any] | None) -> frozenset[str]:
+    if isinstance(state, BaseModel):
+        field_names = set(type(state).model_fields)
+    elif isinstance(state, dict):
+        field_names = set(state)
+    else:
+        field_names = set()
+    if "rework_count" in field_names or "replan_count" in field_names:
+        return reserved_step_state_field_names("produce_verify")
+    return reserved_step_state_field_names("step")
+
+
+def _step_execution_id(
+    *,
+    step_name: str | None,
+    visit: int | None,
+    scope_name: str | None,
+    item_id: str | None,
+) -> str | None:
+    if step_name is None or visit is None:
+        return None
+    if scope_name is not None and item_id is not None:
+        return f"{step_name}:{scope_name}:{item_id}:{visit}"
+    return f"{step_name}:{visit}"

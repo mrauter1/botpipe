@@ -660,7 +660,7 @@ def test_simple_workflow_rejects_class_level_transitions_and_flow() -> None:
 
 def test_simple_workflow_accepts_scoped_item_state_prompt_placeholders() -> None:
     class ItemState(BaseModel):
-        status: str = "pending"
+        severity: str = "medium"
 
     class ItemStateWorkflow(simple.Workflow):
         gates = simple.Worklist.from_items(
@@ -669,7 +669,7 @@ def test_simple_workflow_accepts_scoped_item_state_prompt_placeholders() -> None
             item_state=ItemState,
         )
         start = simple.step(
-            prompt=simple.Prompt.inline("Inspect {item.state.status}."),
+            prompt=simple.Prompt.inline("Inspect {item.state.status} and {item.state.severity}."),
             scope=gates,
         )
 
@@ -680,7 +680,7 @@ def test_simple_workflow_accepts_scoped_item_state_prompt_placeholders() -> None
 
 def test_simple_workflow_rejects_unknown_scoped_item_state_prompt_fields() -> None:
     class ItemState(BaseModel):
-        status: str = "pending"
+        severity: str = "medium"
 
     class BadItemStateWorkflow(simple.Workflow):
         gates = simple.Worklist.from_items(
@@ -984,26 +984,27 @@ def test_runtime_step_state_restores_built_ins_and_custom_fields_on_resume(tmp_p
 
 def test_simple_scoped_item_state_and_step_item_state_restore_on_resume(tmp_path) -> None:
     class ItemState(BaseModel):
-        status: str = "pending"
         attempts: int = 0
 
     def record_scoped_state(ctx):
         if ctx.item_state.attempts == 0:
             assert ctx.step_item_state.visits == 1
             assert ctx.step_item_state.last_route is None
-            ctx.item_state.status = "checkpointed"
+            assert ctx.item_state.status == "pending"
+            ctx.current_worklist.set_current_status("checkpointed")
         else:
             assert ctx.item_state.status == "checkpointed"
             assert ctx.step_item_state.visits == 2
             assert ctx.step_item_state.last_route == "done"
-            ctx.item_state.status = "resumed"
+            ctx.current_worklist.set_current_status("resumed")
         ctx.item_state.attempts += 1
         ctx.step_item_state.attempts += 1
 
     class ResumeWorkflow(simple.Workflow):
         gates = simple.Worklist.from_items(
             "gate",
-            items=({"id": "alpha", "title": "Alpha"},),
+            items=({"id": "alpha", "title": "Alpha", "status": "pending"},),
+            status="status",
             item_state=ItemState,
         )
         review = simple.step(
@@ -1053,6 +1054,8 @@ def test_simple_scoped_item_state_and_step_item_state_restore_on_resume(tmp_path
     assert first.checkpoint.item_states == {
         "gate:alpha": {
             "status": "checkpointed",
+            "last_step": "review",
+            "last_route": "done",
             "attempts": 1,
         }
     }
@@ -1072,6 +1075,8 @@ def test_simple_scoped_item_state_and_step_item_state_restore_on_resume(tmp_path
     assert second.checkpoint.item_states == {
         "gate:alpha": {
             "status": "resumed",
+            "last_step": "review",
+            "last_route": "done",
             "attempts": 2,
         }
     }
@@ -1104,15 +1109,13 @@ def test_runtime_built_in_step_state_is_available_on_core_steps(tmp_path) -> Non
             assert ctx.step_state.visits == 1
             assert ctx.step_state.last_route is None
             assert ctx.step_state.last_reason is None
-            return (
-                state.model_copy(
-                    update={
-                        "seen_visits": ctx.step_state.visits,
-                        "seen_last_route": ctx.step_state.last_route,
-                    }
-                ),
-                simple.Event("done", reason="inspected"),
+            ctx.state = state.model_copy(
+                update={
+                    "seen_visits": ctx.step_state.visits,
+                    "seen_last_route": ctx.step_state.last_route,
+                }
             )
+            return simple.Event("done", reason="inspected")
 
     task_folder = tmp_path / "task"
     run_folder = tmp_path / "run"
@@ -1171,13 +1174,13 @@ def test_simple_context_suppresses_unmodeled_item_state_surfaces(tmp_path) -> No
 
     with pytest.raises(
         WorkflowExecutionError,
-        match="item_state is not part of the canonical public surface",
+        match="item_state is only available when there is an active scoped worklist item",
     ):
         _ = ctx.item_state
 
     with pytest.raises(
         WorkflowExecutionError,
-        match="step_item_state is not part of the canonical public surface",
+        match="step_item_state is only available when there is an active scoped worklist item",
     ):
         _ = ctx.step_item_state
 
@@ -1187,7 +1190,7 @@ def test_simple_context_exposes_modeled_item_state_surfaces(tmp_path) -> None:
         approved: bool = False
 
     class ItemState(BaseModel):
-        status: str = "pending"
+        attempts: int = 0
 
     class StepItemState(BaseModel):
         attempts: int = 0
@@ -1202,12 +1205,38 @@ def test_simple_context_exposes_modeled_item_state_surfaces(tmp_path) -> None:
         package_folder=tmp_path,
         state=WorkflowState(),
         session_store=InMemorySessionStore(),
-        item_state_store=ItemState(status="active"),
+        item_state_store=ItemState(attempts=2),
         step_item_state_store=StepItemState(attempts=2),
     )
 
-    assert ctx.item_state.status == "active"
+    assert ctx.item_state.attempts == 2
     assert ctx.step_item_state.attempts == 2
+
+
+def test_simple_context_item_state_runtime_fields_are_read_only(tmp_path) -> None:
+    class WorkflowState(BaseModel):
+        approved: bool = False
+
+    class ItemState(BaseModel):
+        attempts: int = 0
+
+    ctx = Context(
+        task_id="task-1",
+        run_id="run-1",
+        workflow_name="simple-demo",
+        task_folder=tmp_path,
+        workflow_folder=tmp_path,
+        run_folder=tmp_path,
+        package_folder=tmp_path,
+        state=WorkflowState(),
+        session_store=InMemorySessionStore(),
+        item_state_store={"status": "active", "last_step": "review", "last_route": "done", "attempts": 2},
+    )
+
+    ctx.item_state.attempts = 3
+    assert ctx.item_state.attempts == 3
+    with pytest.raises(AttributeError, match="status is runtime-owned and read-only"):
+        ctx.item_state.status = "completed"
 
 
 def test_simple_context_step_item_state_runtime_fields_are_read_only(tmp_path) -> None:

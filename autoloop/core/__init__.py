@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from .artifacts import Artifact
 from .context import Context
-from .effects import Advance, Handoff, Refresh, ResetCompletion, SetStatus
 from .providers.retries import ProviderRetryPolicy
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, Goto, RequestInput, SELF, Fail
 from .prompts import Prompt
@@ -24,7 +23,6 @@ class Workflow(metaclass=WorkflowMeta):
     """Workflow authoring base class."""
     extensions: tuple["WorkflowExtension", ...] = ()
 __all__ = [
-    "Advance",
     "AWAIT_INPUT",
     "Artifact",
     "Continuity",
@@ -34,16 +32,12 @@ __all__ = [
     "FINISH",
     "GLOBAL",
     "Goto",
-    "Handoff",
     "Prompt",
     "ProviderRetryPolicy",
-    "Refresh",
     "RequestInput",
-    "ResetCompletion",
     "Route",
     "Selector",
     "SELF",
-    "SetStatus",
     "Session",
     "Workflow",
     "WorkItem",

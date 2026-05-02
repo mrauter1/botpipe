@@ -54,7 +54,7 @@ def normalize_step_route_metadata(
         destination = step_routes.get(route_name, global_routes.get(route_name))
         route = normalize_route_spec(destination)
         step_metadata = step.route_metadata.get(route_name, Route())
-        if step_metadata.target is not None or step_metadata.effects or step_metadata.on_taken is not None:
+        if step_metadata.target is not None or step_metadata.on_taken is not None:
             raise WorkflowValidationError(
                 f"step {step.name!r} route metadata for {route_name!r} may only declare summary, required_writes, or handoff"
             )
@@ -81,7 +81,6 @@ def normalize_step_route_metadata(
         handoff = route.handoff or step_metadata.handoff
         normalized_routes[route_name] = Route(
             target=route.target,
-            effects=route.effects,
             summary=summary,
             required_writes=required_writes,
             handoff=handoff,

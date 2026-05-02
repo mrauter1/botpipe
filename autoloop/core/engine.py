@@ -17,7 +17,6 @@ from pydantic import BaseModel, TypeAdapter
 
 from .artifacts import Artifact, ArtifactHandle, ResolvedArtifacts, resolve_artifact_template
 from .compiler import CompiledRoute, CompiledStep, CompiledWorkflow, compile_workflow
-from .effects import Advance, Handoff, Refresh, ResetCompletion, SetStatus
 from .context import Context
 from .engine_collaborators import (
     ArtifactGuard,
@@ -52,7 +51,6 @@ from .route_required_writes import (
     effective_route_required_writes_map,
     explicit_route_required_writes,
 )
-from .routes import normalize_route_spec
 from .stores.protocols import (
     CheckpointStore,
     PendingInput,
@@ -327,6 +325,7 @@ class Engine:
                     step_name=step.name,
                     default_session_name=self.compiled.default_session_name,
                     values=values,
+                    runtime_event_sink=self.runtime_event_sink,
                 )
                 current_item_key = self._current_item_state_key(context, step)
                 step_state_store = self._ensure_step_state_store(step_states, step)
@@ -343,11 +342,22 @@ class Engine:
                 if step_item_state_store is not None:
                     self._increment_step_runtime_state(step_item_state_store)
                     context._set_step_item_state_store(step_item_state_store)
+                self._update_item_runtime_state_on_entry(step, context, getattr(context, "_item_state", None))
+                context._set_worklist_selection_sync(
+                    lambda worklist_name, *, _context=context, _step=step, _item_states=item_states, _step_item_states=step_item_states: self._sync_context_scoped_state_after_worklist_selection_change(
+                        _context,
+                        _step,
+                        _item_states,
+                        _step_item_states,
+                        worklist_name=worklist_name,
+                    )
+                )
                 context._set_values(values)
                 context._set_meta(
                     {
                         "step": {
                             "name": step.name,
+                            "kind": step.kind,
                             "visits": self._step_runtime_visits(step_state_store),
                             "last_route": getattr(step_state_store, "last_route", None),
                         }
@@ -1458,60 +1468,85 @@ class Engine:
         hook_name: str,
         hook_phase: str,
     ) -> _DirectRuntimeControl:
-        if isinstance(control, RequestInput):
-            pending_input = self._build_pending_input(step.name, hook_name, hook_phase, control)
+        runtime_control = "request_input"
+        target_step: str | None = None
+        pending_input_id: str | None = None
+        try:
+            if isinstance(control, RequestInput):
+                pending_input = self._build_pending_input(step.name, hook_name, hook_phase, control)
+                pending_input_id = pending_input.pending_input_id
+                self._emit_runtime_event(
+                    "hook_runtime_control",
+                    **self._step_runtime_event_payload(step=step, context=context),
+                    control="request_input",
+                    hook=hook_name,
+                    source_phase=hook_phase,
+                    question=control.question,
+                    reason=control.reason,
+                    pending_input_id=pending_input.pending_input_id,
+                )
+                return _DirectRuntimeControl(
+                    control="request_input",
+                    destination=AWAIT_INPUT,
+                    pending_input=pending_input,
+                    terminal=AWAIT_INPUT,
+                    source_hook=hook_name,
+                    source_phase=hook_phase,
+                )
+            if isinstance(control, Goto):
+                runtime_control = "goto"
+                target_step = self._resolve_goto_target(control.target)
+                self._emit_runtime_event(
+                    "hook_runtime_control",
+                    **self._step_runtime_event_payload(step=step, context=context),
+                    control="goto",
+                    hook=hook_name,
+                    source_phase=hook_phase,
+                    target_step=target_step,
+                    reason=control.reason,
+                )
+                return _DirectRuntimeControl(
+                    control="goto",
+                    destination=target_step,
+                    target_step=target_step,
+                    handoff=control.handoff,
+                    source_hook=hook_name,
+                    source_phase=hook_phase,
+                )
+            runtime_control = "fail"
             self._emit_runtime_event(
                 "hook_runtime_control",
                 **self._step_runtime_event_payload(step=step, context=context),
-                control="request_input",
+                control="fail",
                 hook=hook_name,
                 source_phase=hook_phase,
-                question=control.question,
-                reason=control.reason,
-                pending_input_id=pending_input.pending_input_id,
-            )
-            return _DirectRuntimeControl(
-                control="request_input",
-                destination=AWAIT_INPUT,
-                pending_input=pending_input,
-                terminal=AWAIT_INPUT,
-                source_hook=hook_name,
-                source_phase=hook_phase,
-            )
-        if isinstance(control, Goto):
-            target_step = self._resolve_goto_target(control.target)
-            self._emit_runtime_event(
-                "hook_runtime_control",
-                **self._step_runtime_event_payload(step=step, context=context),
-                control="goto",
-                hook=hook_name,
-                source_phase=hook_phase,
-                target_step=target_step,
                 reason=control.reason,
             )
             return _DirectRuntimeControl(
-                control="goto",
-                destination=target_step,
-                target_step=target_step,
-                handoff=control.handoff,
+                control="fail",
+                destination=FAIL,
+                terminal=FAIL,
                 source_hook=hook_name,
                 source_phase=hook_phase,
             )
-        self._emit_runtime_event(
-            "hook_runtime_control",
-            **self._step_runtime_event_payload(step=step, context=context),
-            control="fail",
-            hook=hook_name,
-            source_phase=hook_phase,
-            reason=control.reason,
-        )
-        return _DirectRuntimeControl(
-            control="fail",
-            destination=FAIL,
-            terminal=FAIL,
-            source_hook=hook_name,
-            source_phase=hook_phase,
-        )
+        except Exception as exc:
+            annotated = self._annotate_execution_error(
+                exc,
+                checkpoint_state=self._clone_state(context.state),
+                failure_context=FailureContext(
+                    kind="runtime_control_validation",
+                    step_name=step.name,
+                    runtime_control=runtime_control,
+                    source_hook=hook_name,
+                    source_phase=hook_phase,
+                    target_step=target_step,
+                    pending_input_id=pending_input_id,
+                    details={"error": str(exc), "error_type": type(exc).__name__},
+                ),
+            )
+            if annotated is exc:
+                raise
+            raise annotated from exc
 
     def _build_pending_input(
         self,
@@ -2307,49 +2342,6 @@ class Engine:
             return "JSONSchema"
         return type(artifact.schema).__name__
 
-    def _apply_route_effects(self, route: CompiledRoute, context: Context, *, step: CompiledStep) -> str | None:
-        destination_override: str | None = None
-        for effect in route.effects:
-            effect_destination = self._execute_route_effect(effect, context, step=step)
-            if effect_destination is not None:
-                destination_override = effect_destination
-        return destination_override
-
-    def _execute_route_effect(self, effect: object, context: Context, *, step: CompiledStep) -> str | None:
-        if isinstance(effect, Handoff):
-            return None
-        if isinstance(effect, Refresh):
-            worklist_name = self._effect_worklist_name(effect)
-            worklist = self.compiled.worklists[worklist_name]
-            context._set_selection(worklist_name, worklist.refresh_selection(context, context.selection(worklist_name)))
-            return None
-        if isinstance(effect, ResetCompletion):
-            worklist_name = self._effect_worklist_name(effect)
-            worklist = self.compiled.worklists[worklist_name]
-            context._set_selection(worklist_name, worklist.set_current_status(context, context.selection(worklist_name), None))
-            return None
-        if isinstance(effect, SetStatus):
-            worklist_name = self._effect_worklist_name(effect)
-            worklist = self.compiled.worklists[worklist_name]
-            context._set_selection(
-                worklist_name,
-                worklist.set_current_status(context, context.selection(worklist_name), effect.status),
-            )
-            return None
-        if isinstance(effect, Advance):
-            return self._advance_worklist(effect, context, step=step)
-        raise WorkflowExecutionError(f"unsupported route effect {type(effect).__name__!r}")
-
-    @staticmethod
-    def _effect_worklist_name(effect: object) -> str:
-        worklist = getattr(effect, "worklist", None)
-        if isinstance(worklist, str):
-            return worklist
-        name = getattr(worklist, "name", None)
-        if isinstance(name, str) and name:
-            return name
-        return "<unknown>"
-
     def _initialize_worklist_selections(self, context: Context) -> dict[str, Selection[Any]]:
         selections: dict[str, Selection[Any]] = {}
         for name, worklist in self.compiled.worklists.items():
@@ -2368,32 +2360,6 @@ class Engine:
                 continue
             selections[name] = worklist.restore_selection(context, snapshot)
         return selections
-
-    def _advance_worklist(self, effect: Advance, context: Context, *, step: CompiledStep) -> str:
-        worklist_name = self._effect_worklist_name(effect)
-        if step.scope_name != worklist_name:
-            raise WorkflowExecutionError(
-                f"step {step.name!r} cannot Advance worklist {worklist_name!r} without matching scope"
-            )
-        selection = context.selection(worklist_name).advance()
-        context._set_selection(worklist_name, selection)
-        if selection.current is not None:
-            return step.name
-        if effect.if_exhausted == "complete":
-            return FINISH
-        if effect.if_exhausted == "pause":
-            return AWAIT_INPUT
-        if effect.if_exhausted == "fail":
-            return FAIL
-        if effect.if_exhausted == "route" and effect.route_to is not None:
-            destination = normalize_route_spec(effect.route_to).target
-            if hasattr(destination, "name") and not isinstance(destination, str):
-                return getattr(destination, "name")
-            if isinstance(destination, str):
-                return destination
-        raise WorkflowExecutionError(
-            f"Advance for worklist {worklist_name!r} resolved invalid exhaustion behavior"
-        )
 
     def _save_checkpoint(
         self,
@@ -2889,7 +2855,6 @@ class Engine:
         messages: list[str] = []
         if route.handoff is not None:
             messages.append(route.handoff)
-        messages.extend(effect.message for effect in route.effects if isinstance(effect, Handoff))
         if event is not None and event.handoff is not None:
             messages.append(event.handoff)
         if not messages:
@@ -3248,6 +3213,35 @@ class Engine:
                 current_replan = step_state.get("replan_count", 0)
                 step_state["replan_count"] = current_replan + 1 if isinstance(current_replan, int) else 1
 
+    @staticmethod
+    def _update_item_runtime_state_on_entry(
+        step: CompiledStep,
+        context: Context,
+        item_state: BaseModel | dict[str, Any] | None,
+    ) -> None:
+        if step.scope_name is None or item_state is None:
+            return
+        current_item = context.current(step.scope_name)
+        current_status = None if current_item is None else current_item.status
+        if isinstance(item_state, BaseModel):
+            item_state.status = current_status
+            item_state.last_step = step.name
+            return
+        item_state["status"] = current_status
+        item_state["last_step"] = step.name
+
+    @staticmethod
+    def _update_final_item_runtime_state(
+        item_state: BaseModel | dict[str, Any] | None,
+        final_event: Event,
+    ) -> None:
+        if item_state is None:
+            return
+        if isinstance(item_state, BaseModel):
+            item_state.last_route = final_event.tag
+            return
+        item_state["last_route"] = final_event.tag
+
     def _ensure_step_state_store(
         self,
         step_states: dict[str, BaseModel | dict[str, Any]],
@@ -3328,7 +3322,7 @@ class Engine:
         if item_key is None:
             return None
         worklist = self.compiled.worklists.get(step.scope_name or "")
-        state_model = worklist.item_state_model if worklist is not None else None
+        state_model = worklist.runtime_item_state_model if worklist is not None else None
         if state_model is None:
             return None
         store = item_states.get(item_key)
@@ -3364,6 +3358,24 @@ class Engine:
             normalized_store = state_model()
         step_store[item_key] = normalized_store
         return normalized_store
+
+    def _sync_context_scoped_state_after_worklist_selection_change(
+        self,
+        context: Context,
+        step: CompiledStep,
+        item_states: dict[str, BaseModel | dict[str, Any]],
+        step_item_states: dict[str, dict[str, BaseModel | dict[str, Any]]],
+        *,
+        worklist_name: str,
+    ) -> None:
+        if step.scope_name != worklist_name:
+            return
+        item_key = self._current_item_state_key(context, step)
+        item_state_store = self._ensure_item_state_store(item_states, step, item_key=item_key)
+        step_item_state_store = self._ensure_step_item_state_store(step_item_states, step, item_key=item_key)
+        context._set_item_state_store(item_state_store)
+        context._set_step_item_state_store(step_item_state_store)
+        self._update_item_runtime_state_on_entry(step, context, item_state_store)
 
     def _emit_runtime_event(self, event_type: str, **payload: Any) -> None:
         if self.runtime_event_sink is None:

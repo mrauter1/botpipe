@@ -7,7 +7,6 @@ from typing import Any
 
 from .artifacts import validate_artifact_declaration
 from .discovery import is_workflow_class
-from .effects import Advance, Handoff, Refresh, ResetCompletion, SetStatus
 from .errors import WorkflowValidationError
 from .inventory import ArtifactInventoryRecord, resolve_artifact_reference
 from .lowering import compile_expected_output_contract, normalize_step_route_metadata, step_available_route_tags
@@ -157,43 +156,7 @@ def _validate_route_destination(
             )
     elif target not in valid_destinations:
         raise WorkflowValidationError(f"invalid transition destination {target!r}")
-    _validate_route_effects(definition, source=source, tag=tag, route=route)
-
-
-def _validate_route_effects(definition: Any, *, source: Step | str, tag: str, route: Route) -> None:
-    has_handoff = route.handoff is not None or any(isinstance(effect, Handoff) for effect in route.effects)
-    if has_handoff:
-        _validate_handoff_destinations(definition, route=route, tag=tag)
-    for effect in route.effects:
-        if isinstance(effect, Handoff):
-            continue
-        if isinstance(effect, Advance):
-            if effect.if_exhausted == "route" and effect.route_to is None:
-                raise WorkflowValidationError("Advance(..., if_exhausted='route') requires route_to")
-            if effect.route_to is not None:
-                route_to = effect.route_to
-                target = route_to.target if isinstance(route_to, Route) else route_to
-                if isinstance(target, Step):
-                    if target.name not in definition.steps_by_name:
-                        raise WorkflowValidationError(
-                            f"Advance(..., route_to=...) references unknown step {target.name!r}"
-                        )
-                elif target not in _valid_route_destinations(definition):
-                    raise WorkflowValidationError(
-                        f"Advance(..., route_to=...) references invalid destination {target!r}"
-                    )
-            _validate_effect_worklist(definition, effect_name="Advance", worklist=effect.worklist)
-            _validate_advance_source_scope(
-                source=source,
-                worklist=effect.worklist,
-                global_route_sentinel=definition.global_route_sentinel,
-            )
-            continue
-        if isinstance(effect, (Refresh, ResetCompletion, SetStatus)):
-            _validate_effect_worklist(definition, effect_name=type(effect).__name__, worklist=effect.worklist)
-            continue
-        raise WorkflowValidationError(f"unsupported route effect {type(effect).__name__!r} for route {tag!r}")
-
+    _validate_route_handoff_destination(definition, tag=tag, route=route)
 
 def _validate_workflow_step_reference(step: ChildWorkflowStep, definition: Any) -> None:
     workflow = step.workflow
@@ -209,56 +172,21 @@ def _validate_workflow_step_reference(step: ChildWorkflowStep, definition: Any) 
         )
 
 
-def _validate_handoff_destinations(definition: Any, *, route: Route, tag: str) -> None:
-    possible_targets = [route.target]
-    for effect in route.effects:
-        if not isinstance(effect, Advance) or effect.route_to is None:
-            continue
-        advance_route = normalize_route_spec(effect.route_to)
-        possible_targets.append(advance_route.target)
-    for target in possible_targets:
-        if not isinstance(target, Step):
-            continue
-        resolved = definition.steps_by_name.get(target.name)
-        if isinstance(resolved, PythonStep):
-            raise WorkflowValidationError(
-                f"route {tag!r} cannot deliver Handoff to PythonStep {target.name!r}"
-            )
-
-
-def _validate_effect_worklist(definition: Any, *, effect_name: str, worklist: object | str) -> None:
-    worklist_name = _resolve_worklist_name(worklist)
-    if not isinstance(worklist_name, str) or not worklist_name:
-        raise WorkflowValidationError(f"{effect_name} worklist reference must be a non-empty string or named object")
-    if worklist_name not in definition.worklists_by_name:
-        raise WorkflowValidationError(f"{effect_name} references unknown worklist {worklist_name!r}")
-
-
-def _validate_advance_source_scope(*, source: Step | str, worklist: object | str, global_route_sentinel: str) -> None:
-    worklist_name = _resolve_worklist_name(worklist)
-    if source == global_route_sentinel:
+def _validate_route_handoff_destination(definition: Any, *, route: Route, tag: str) -> None:
+    if route.handoff is None:
+        return
+    target = route.target
+    if not isinstance(target, Step):
+        return
+    resolved = definition.steps_by_name.get(target.name)
+    if isinstance(resolved, PythonStep):
         raise WorkflowValidationError(
-            f"Advance({worklist_name!r}) cannot be declared on a GLOBAL transition"
-        )
-    if not isinstance(source, Step):
-        raise WorkflowValidationError(f"Advance({worklist_name!r}) requires a concrete scoped source step")
-    source_scope_name = _resolve_worklist_name(source.scope) if source.scope is not None else None
-    if source_scope_name is None:
-        raise WorkflowValidationError(
-            f"step {source.name!r} uses Advance({worklist_name!r}) but is not scoped to that worklist"
-        )
-    if source_scope_name != worklist_name:
-        raise WorkflowValidationError(
-            f"step {source.name!r} uses Advance({worklist_name!r}) but is scoped to {source_scope_name!r}"
+            f"route {tag!r} cannot deliver handoff metadata to PythonStep {target.name!r}"
         )
 
 
 def _valid_route_destinations(definition: Any) -> set[str]:
     return {definition.finish_terminal, definition.await_input_terminal, definition.fail_terminal}
-
-
-def _resolve_worklist_name(worklist: object | str) -> str:
-    return worklist if isinstance(worklist, str) else getattr(worklist, "name", None)
 
 
 __all__ = [

@@ -17,6 +17,7 @@ _MISSING = object()
 _MUTABLE_LITERAL_DEFAULT_TYPES = (list, dict, set)
 _BASE_RESERVED_STEP_STATE_FIELDS = frozenset({"visits", "last_route", "last_reason"})
 _PRODUCE_VERIFY_RESERVED_STEP_STATE_FIELDS = frozenset({"rework_count", "replan_count"})
+_ITEM_RUNTIME_STATE_FIELDS = frozenset({"status", "last_step", "last_route"})
 DEFAULT_REWORK_ROUTE_TAGS = frozenset({"needs_rework", "minor_rework"})
 DEFAULT_REPLAN_ROUTE_TAGS = frozenset({"needs_replan", "major_replan"})
 
@@ -34,6 +35,14 @@ class ProduceVerifyRuntimeState(StepRuntimeState):
 
     rework_count: int = 0
     replan_count: int = 0
+
+
+class WorkItemRuntimeState(BaseModel):
+    """Built-in runtime-owned state available on active scoped items."""
+
+    status: str | None = None
+    last_step: str | None = None
+    last_route: str | None = None
 
 
 class _TypedStateVarFactory:
@@ -133,6 +142,44 @@ def build_step_item_state_model(
         state_label="item_state",
         model_name_suffix="StepItemState",
     )
+
+
+def built_in_item_state_model() -> type[BaseModel]:
+    return WorkItemRuntimeState
+
+
+def reserved_item_state_field_names() -> frozenset[str]:
+    return _ITEM_RUNTIME_STATE_FIELDS
+
+
+def build_worklist_item_state_model(
+    raw_state: type[BaseModel] | None,
+    *,
+    worklist_name: str,
+    module_name: str,
+) -> type[BaseModel]:
+    built_in_model = built_in_item_state_model()
+    if raw_state is None:
+        return built_in_model
+    if not inspect.isclass(raw_state) or not issubclass(raw_state, BaseModel):
+        raise WorkflowValidationError(
+            f"worklist {worklist_name!r} item_state must inherit from pydantic.BaseModel"
+        )
+    try:
+        raw_state()
+    except Exception as exc:
+        raise WorkflowValidationError(
+            f"worklist {worklist_name!r} item_state model {raw_state.__name__} must be instantiable with no arguments"
+        ) from exc
+    for field_name in raw_state.model_fields:
+        if field_name in reserved_item_state_field_names():
+            raise WorkflowValidationError(
+                f"worklist {worklist_name!r} item_state field {field_name!r} conflicts with built-in scoped item runtime state"
+            )
+    model_name = _generated_step_state_model_name(worklist_name, suffix="WorkItemState")
+    combined_model = type(model_name, (built_in_model, raw_state), {"__module__": module_name})
+    combined_model.model_rebuild(force=True)
+    return combined_model
 
 
 def _build_model_backed_state(
@@ -287,8 +334,12 @@ __all__ = [
     "ProduceVerifyRuntimeState",
     "StateVar",
     "StepRuntimeState",
+    "WorkItemRuntimeState",
     "build_step_item_state_model",
     "build_step_state_model",
+    "build_worklist_item_state_model",
     "built_in_step_state_model",
+    "built_in_item_state_model",
+    "reserved_item_state_field_names",
     "reserved_step_state_field_names",
 ]

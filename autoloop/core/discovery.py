@@ -19,7 +19,6 @@ from .descriptors import (
     effective_parameters_model,
     effective_state_model,
 )
-from .effects import Advance, Handoff, Refresh, ResetCompletion, SetStatus
 from .errors import WorkflowValidationError
 from .primitives import AWAIT_INPUT, FAIL, FINISH, GLOBAL, SELF
 from .prompts import resolve_prompt_reference
@@ -707,7 +706,7 @@ def _known_worklist_item_state_fields(*, workflow_cls: type[Any]) -> dict[str, f
     for _, value in _iter_visible_workflow_namespace_items(workflow_cls):
         if not isinstance(value, Worklist):
             continue
-        fields[value.name] = frozenset(value.item_state_model.model_fields.keys() if value.item_state_model is not None else ())
+        fields[value.name] = frozenset(value.runtime_item_state_model.model_fields.keys())
     return fields
 
 
@@ -1025,7 +1024,6 @@ def _lower_simple_destination(destination: object, simple_step_map: Mapping[obje
             return destination
         return Route(
             target=target,
-            effects=destination.effects,
             summary=destination.summary,
             required_writes=destination.required_writes,
             handoff=destination.handoff,
@@ -1093,7 +1091,6 @@ def _resolve_transition_destination(destination: object, *, source: Step | str, 
             return destination
         return Route(
             target=target,
-            effects=destination.effects,
             summary=destination.summary,
             required_writes=destination.required_writes,
             handoff=destination.handoff,
@@ -1147,12 +1144,11 @@ def _inject_reserved_routes(transitions: Mapping[Step | str, Mapping[str, object
     return injected
 
 
-def _route_signature(destination: object) -> tuple[object, tuple[object, ...], str | None, tuple[str, ...], str | None, object | None]:
+def _route_signature(destination: object) -> tuple[object, str | None, tuple[str, ...], str | None, object | None]:
     route = normalize_route_spec(destination)
     target = route.target.name if isinstance(route.target, Step) else route.target
     return (
         target,
-        tuple(route.effects),
         route.summary,
         None if route.required_writes is None else tuple(route.required_writes),
         route.handoff,

@@ -331,10 +331,14 @@ def _workflow_params_surface_payload(compiled: CompiledWorkflow) -> dict[str, An
 def _worklist_surfaces_payload(compiled: CompiledWorkflow) -> dict[str, dict[str, Any]]:
     return {
         name: {
-            "item_state_model": worklist.item_state_model.__name__ if worklist.item_state_model is not None else None,
-            "item_state_fields": (
-                sorted(worklist.item_state_model.model_fields.keys()) if worklist.item_state_model is not None else []
-            ),
+            "item_state_model": worklist.runtime_item_state_model.__name__,
+            "item_state_fields": sorted(worklist.runtime_item_state_model.model_fields.keys()),
+            "item_state_runtime_fields": ["status", "last_step", "last_route"],
+            "item_state_custom_fields": [
+                field_name
+                for field_name in sorted(worklist.runtime_item_state_model.model_fields.keys())
+                if field_name not in {"status", "last_step", "last_route"}
+            ],
         }
         for name, worklist in compiled.worklists.items()
     }

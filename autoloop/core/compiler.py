@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from .artifacts import CompiledArtifact
 from .context import Context
 from .discovery import WorkflowDefinition, _uses_simple_authoring_model, get_workflow_definition, has_start_hook
-from .effects import Effect
 from .extensions import WorkflowExtension
 from .errors import RoutingError, WorkflowCompilationError
 from .inventory import ArtifactInventoryRecord, collect_artifact_inventory, public_artifact_inventory, resolve_artifact_reference, resolve_optional_read_reference
@@ -83,7 +82,6 @@ class CompiledRoute:
     source_step: str
     tag: str
     target: str
-    effects: tuple[Effect, ...]
     summary: str | None = None
     required_writes: tuple[str, ...] = ()
     handoff: str | None = None
@@ -575,7 +573,6 @@ def _compile_route(
         source_step=source_step,
         tag=tag,
         target=compiled_target,
-        effects=tuple(route.effects),
         summary=route.summary or summary,
         required_writes=compiled_required_writes,
         handoff=route.handoff or handoff,
@@ -723,8 +720,8 @@ def _topology_hash_payload(compiled: CompiledWorkflow) -> dict[str, Any]:
         ],
         "worklists": {
             name: {
-                "item_state_model": worklist.item_state_model.__name__ if worklist.item_state_model is not None else None,
-                "item_state_fields": list(worklist.item_state_model.model_fields.keys()) if worklist.item_state_model is not None else [],
+                "item_state_model": worklist.runtime_item_state_model.__name__,
+                "item_state_fields": list(worklist.runtime_item_state_model.model_fields.keys()),
             }
             for name, worklist in compiled.worklists.items()
         },

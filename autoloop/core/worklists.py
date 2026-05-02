@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import inspect
 from typing import TYPE_CHECKING, Any, Generic, Literal, Protocol, TypeVar
 
 from pydantic import BaseModel
 
 from .errors import WorkflowExecutionError, WorkflowValidationError
+from .step_state import build_worklist_item_state_model, built_in_item_state_model, reserved_item_state_field_names
 
 if TYPE_CHECKING:
     from .artifacts import Artifact
     from .context import Context
+    from .primitives import Event, Fail, Goto, RequestInput
 
 
 T = TypeVar("T")
@@ -115,12 +117,27 @@ class Worklist(Generic[T]):
     source: WorklistSource[T]
     selector: Selector = Selector()
     item_state_model: type[BaseModel] | None = None
+    runtime_item_state_model: type[BaseModel] = field(init=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("worklist name must be a non-empty string")
         if self.item_state_model is not None:
             _validate_worklist_item_state_model(self.item_state_model, worklist_name=self.name)
+        module_name = (
+            self.item_state_model.__module__
+            if self.item_state_model is not None
+            else built_in_item_state_model().__module__
+        )
+        object.__setattr__(
+            self,
+            "runtime_item_state_model",
+            build_worklist_item_state_model(
+                self.item_state_model,
+                worklist_name=self.name,
+                module_name=module_name,
+            ),
+        )
 
     @classmethod
     def from_items(
@@ -321,6 +338,128 @@ class Worklist(Generic[T]):
         if mode == "single":
             return selected_items[:1]
         return selected_items
+
+
+class WorklistRuntimeView(Generic[T]):
+    """Public runtime helper surface bound to one context/worklist pair."""
+
+    def __init__(self, context: "Context", worklist: Worklist[T]) -> None:
+        self._context = context
+        self._worklist = worklist
+
+    @property
+    def name(self) -> str:
+        return self._worklist.name
+
+    @property
+    def selection(self) -> Selection[T]:
+        return self._context.selection(self._worklist)
+
+    @property
+    def current(self) -> WorkItem[T] | None:
+        return self.selection.current
+
+    @property
+    def current_id(self) -> str | None:
+        current = self.current
+        return None if current is None else current.id
+
+    @property
+    def current_index(self) -> int:
+        return self.selection.current_index
+
+    @property
+    def item_ids(self) -> tuple[str, ...]:
+        return tuple(item.id for item in self.selection.items)
+
+    @property
+    def is_exhausted(self) -> bool:
+        return self.current is None
+
+    def refresh(self) -> Selection[T]:
+        previous = self.selection
+        updated = self._worklist.refresh_selection(self._context, previous)
+        self._context._set_selection(self._worklist, updated)
+        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._emit_worklist_runtime_event(
+            "worklist_refreshed",
+            worklist_name=self._worklist.name,
+            previous_selection=previous,
+            new_selection=updated,
+        )
+        return updated
+
+    def set_current_status(self, status: str | None) -> Selection[T]:
+        previous = self.selection
+        updated = self._worklist.set_current_status(self._context, previous, status)
+        self._context._set_selection(self._worklist, updated)
+        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._emit_worklist_runtime_event(
+            "worklist_status_set",
+            worklist_name=self._worklist.name,
+            previous_selection=previous,
+            new_selection=updated,
+        )
+        return updated
+
+    def reset_current_status(self) -> Selection[T]:
+        previous = self.selection
+        updated = self._worklist.set_current_status(self._context, previous, None)
+        self._context._set_selection(self._worklist, updated)
+        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._emit_worklist_runtime_event(
+            "worklist_status_reset",
+            worklist_name=self._worklist.name,
+            previous_selection=previous,
+            new_selection=updated,
+        )
+        return updated
+
+    def advance(self) -> bool:
+        previous = self.selection
+        updated = previous.advance()
+        self._context._set_selection(self._worklist, updated)
+        self._context._sync_scoped_state_after_worklist_selection_change(self._worklist)
+        self._context._emit_worklist_runtime_event(
+            "worklist_advanced",
+            worklist_name=self._worklist.name,
+            previous_selection=previous,
+            new_selection=updated,
+        )
+        if updated.current is None:
+            self._context._emit_worklist_runtime_event(
+                "worklist_exhausted",
+                worklist_name=self._worklist.name,
+                previous_selection=previous,
+                new_selection=updated,
+            )
+            return False
+        return True
+
+    def advance_or(
+        self,
+        exhausted: "str | Event | RequestInput | Goto | Fail | None" = None,
+    ) -> "None | str | Event | RequestInput | Goto | Fail":
+        if self.advance():
+            return None
+        return exhausted
+
+    def validate(self) -> None:
+        error = self.validation_error()
+        if error is not None:
+            raise WorkflowExecutionError(error)
+
+    def validation_error(self) -> str | None:
+        try:
+            items = self._worklist.load_items(self._context)
+        except WorkflowExecutionError as exc:
+            return str(exc)
+        selected_ids = {item.id for item in self.selection.items}
+        loaded_ids = {item.id for item in items}
+        missing = sorted(selected_ids - loaded_ids)
+        if missing:
+            return f"worklist {self._worklist.name!r} selection references missing item id(s): {', '.join(missing)}"
+        return self._worklist.validate_items(self._context, items)
 
 
 @dataclass(frozen=True, slots=True)
@@ -594,6 +733,11 @@ def _validate_worklist_item_state_model(
         raise WorkflowValidationError(
             f"worklist {worklist_name!r} item_state model {raw_state.__name__} must be instantiable with no arguments"
         ) from exc
+    for field_name in raw_state.model_fields:
+        if field_name in reserved_item_state_field_names():
+            raise WorkflowValidationError(
+                f"worklist {worklist_name!r} item_state field {field_name!r} conflicts with built-in scoped item runtime state"
+            )
 
 
 __all__ = [
@@ -603,5 +747,6 @@ __all__ = [
     "WorkItem",
     "WorkItemSnapshot",
     "Worklist",
+    "WorklistRuntimeView",
     "WorklistSource",
 ]
