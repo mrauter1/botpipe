@@ -1002,3 +1002,47 @@ Key findings / decisions
 Open issues / next step
 - Validation in this shell was limited to `python3 -m py_compile tests/contract/test_engine_contracts.py tests/unit/test_validation.py` plus stale-signature grep checks.
 - Full pytest execution remains blocked here because `pytest` and `pydantic` are not installed.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=verifier | cycle=1 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de885-df79-7b33-a639-f87cf8f67f03
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=1 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+I’m checking the authored tests against the actual changed surfaces, not just the strategy note. That means I’m verifying the new short-circuit assertions, looking for any remaining stale hook forms in the request-relevant suites, and then I’ll decide whether the remaining gaps are blocking or just optional coverage.
+
+I found one material coverage gap in the changed pair-step path: the new `before_producer` short-circuit branch still has no direct regression test, even though this phase changed that code separately from `before` and `before_verifier`. I’m recording that as a blocking audit finding and marking only the unaffected criteria as satisfied.
+
+Scope considered
+- Phase-local `hook-control-unification` test additions in `tests/contract/test_engine_contracts.py` and `tests/unit/test_validation.py`, plus the active test strategy and feedback artifacts.
+- I kept unrelated dirty files out of scope.
+
+What I analyzed
+- The changed hook/control runtime branches, especially the pair-step lifecycle paths in `autoloop/core/engine.py`.
+- The authored coverage map in `artifacts/test/phases/hook-control-unification/test_strategy.md`.
+- The newly added contract and validation tests for stale hook forms, pre-provider `before`, and `before_verifier`.
+
+What I reviewed
+- Whether the new tests cover the phase acceptance criteria for one-arg hooks, pre-provider short-circuits, and removed python-step return forms.
+- Whether the new assertions would catch the candidate-route attribution regression and provider-skipping regressions.
+- Whether the tests remain deterministic and avoid flaky setup.
+
+Key findings / decisions
+- Added one blocking audit finding, `TST-001`.
+- The new tests do a good job covering pre-provider `before`, `RequestInput(...)`, stale multi-argument `after` / `after_producer` forms, and `before_verifier`.
+- The remaining material gap is the changed `before_producer` short-circuit branch, which still has no direct regression coverage.
+
+Open issues / next step
+- Add targeted contract coverage for `before_producer` route short-circuit and one `before_producer` direct-control path such as `RequestInput(...)` or `Goto(...)`, with explicit zero-provider-call and finalization/checkpoint assertions.
+- I updated the audit criteria and appended the blocking finding to the phase feedback artifact.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
+</loop-control>

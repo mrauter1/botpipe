@@ -12,3 +12,7 @@
 - Added contract coverage for `before` route and `RequestInput(...)` short-circuits and for `before_verifier` route short-circuit behavior, with explicit assertions on zero verifier/provider overrun and `candidate_route is None`.
 - Migrated stale contract tests off multi-argument `after` / `after_producer` hook forms to `hook(ctx)` and added fail-fast validation coverage for invalid multi-argument `after` and `after_producer` hooks.
 - Validation in this shell was limited to `python3 -m py_compile` plus stale-signature grep checks because `pytest` and `pydantic` are unavailable.
+
+## Findings
+
+- `TST-001` `blocking` [autoloop/core/engine.py:_execute_pair_step, tests/contract/test_engine_contracts.py]: the new pair-step `before_producer` short-circuit branch is still untested. This phase changed `before_producer` to share the unified hook/control path, but the authored regression coverage only exercises pre-provider `before`, `after_producer`, and `before_verifier`. A regression that still invokes the producer turn, misattributes `candidate_route`, or fails to checkpoint direct control from `before_producer` would currently pass the suite. Minimal fix: add one contract test for `before_producer` route short-circuit and one for `before_producer` direct control or `RequestInput(...)`, each asserting zero provider calls and the expected finalization/checkpoint fields.
