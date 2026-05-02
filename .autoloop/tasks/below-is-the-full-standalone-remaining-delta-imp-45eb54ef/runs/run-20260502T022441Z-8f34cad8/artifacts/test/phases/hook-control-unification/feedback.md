@@ -22,3 +22,8 @@
 - Added contract coverage for `before_producer` route short-circuit and `before_producer` `RequestInput(...)` short-circuit behavior, both with explicit zero-provider-call assertions and `candidate_route is None`.
 - The new direct-control coverage also asserts pending-input checkpointing, `source_phase == "before_producer"`, preserved state mutation, and no finalized `last_route` before any provider turn.
 - Validation in this shell remained limited to `python3 -m py_compile` because `pytest` and `pydantic` are unavailable.
+
+## Audit Resolution
+
+- `TST-001` resolved in cycle 2: the new `before_producer` route and `RequestInput(...)` contract tests now cover the unified pre-producer short-circuit path with explicit zero-provider-call, `candidate_route is None`, checkpoint, and preserved-state assertions.
+- No new audit findings.

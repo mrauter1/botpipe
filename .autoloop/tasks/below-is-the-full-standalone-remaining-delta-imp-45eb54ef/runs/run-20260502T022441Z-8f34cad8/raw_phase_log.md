@@ -1046,3 +1046,102 @@ Open issues / next step
 <loop-control>
 {"schema":"docloop.loop_control/v1","kind":"promise","promise":"INCOMPLETE"}
 </loop-control>
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=producer | cycle=2 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_producer.md
+session_id=019de885-df79-7b33-a639-f87cf8f67f03
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=producer | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+I’m closing the single remaining audit gap: direct coverage for the `before_producer` short-circuit path in pair steps. First I’m re-reading the existing pair-hook tests so I can add the missing route and direct-control checks without duplicating the already-covered `after_producer` and `before_verifier` cases.
+
+I’m addressing the remaining audit gap in the test phase: direct `before_producer` short-circuit coverage. I’ll inspect the existing pair-step tests and phase artifacts, then add the missing route and direct-control cases without broadening scope.
+
+I’ve confirmed the remaining gap is isolated to pair-step `before_producer`. Next I’m reading the surrounding pair-step contract tests so the new assertions follow the existing checkpoint and transition conventions exactly.
+
+I have the surrounding patterns now. I’m pulling the existing input-schema helper and adjacent pair-step tests so the new `before_producer` cases reuse the same deterministic fixtures and assertions.
+
+I have enough context to edit. I’m adding two deterministic contract tests for `before_producer` short-circuiting, then I’ll update the phase test strategy and feedback to reflect the closed coverage gap.
+
+The first patch missed the exact anchor, so I’m re-reading the local section and patching against the current file contents rather than guessing the insertion point.
+
+The missing pair-step coverage is in place. I’m updating the phase artifacts now to map the new `before_producer` route and `RequestInput(...)` cases, then I’ll run a narrow syntax check on the touched test file.
+
+I’ve finished the edits and recorded the phase-local decisions. I’m running a narrow syntax check on the touched contract test and a quick grep to confirm the new `before_producer` coverage landed where intended.
+
+Scope considered
+- Phase-local `hook-control-unification` test scope, focused on the remaining audit gap around pair-step `before_producer` short-circuit behavior.
+- I limited repository edits to `tests/contract/test_engine_contracts.py` plus the active phase artifacts `test_strategy.md`, `feedback.md`, and the current-turn block in `decisions.txt`.
+
+What I analyzed
+- Existing short-circuit coverage in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py), especially the adjacent `before`, `before_verifier`, and `after_producer` tests.
+- The runtime behavior implied by `autoloop/core/engine.py` and `autoloop/core/engine_collaborators.py` for `before_producer` route/direct-control exits.
+- The active test artifacts and the blocking auditor finding `TST-001` in [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/feedback.md).
+
+What I changed
+- Added `test_before_producer_route_short_circuits_without_provider_and_preserves_candidate_route_none` and `test_before_producer_request_input_short_circuits_without_provider_and_checkpoints_pending_input` in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py).
+- The new tests assert zero provider calls, `candidate_route is None`, correct route/direct-control finalization, preserved state mutation, pending-input checkpointing, and unset `last_route` before any provider turn.
+- Updated [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/test_strategy.md) with the new `before_producer` coverage map and preserved invariants.
+- Appended a cycle-2 summary to [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/feedback.md) and recorded the non-obvious assertion choices under block 11 in `decisions.txt`.
+
+Key findings / decisions
+- The highest-risk remaining branch was the unified pre-producer exit path, so both route and `RequestInput(...)` cases now fail if producer or verifier work runs unexpectedly.
+- For checkpoint stability, the direct-control test asserts `pending_input.source_phase == "before_producer"` instead of depending on wrapper-sensitive hook-name text.
+- `python3 -m py_compile tests/contract/test_engine_contracts.py` passed.
+
+Open issues / next step
+- I did not edit the auditor-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/criteria.md).
+- Full pytest execution is still blocked in this shell because `pytest` and `pydantic` are unavailable, so runtime validation remains limited to syntax checks and targeted grep verification.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de885-df79-7b33-a639-f87cf8f67f03
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+I’m auditing the cycle-2 test additions against the remaining `before_producer` gap and the phase acceptance criteria. I’ll inspect the new contract tests and the current audit artifacts, then either clear the blocking finding or record anything still missing.
+
+The added tests cover the exact missed branch and the assertions are aligned with the runtime contract. I’m updating the audit artifacts now to mark the phase complete and to record that `TST-001` is resolved rather than opening a new finding.
+
+The audit artifacts are updated. I’m doing one last narrow read-back of the criteria and feedback so the final status matches the edited files exactly before I close this out.
+
+Scope considered
+- Phase-local `hook-control-unification` test additions for the remaining pair-step `before_producer` short-circuit gap.
+- Audit edits were limited to the active phase artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/feedback.md).
+
+What I analyzed
+- The new `before_producer` tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:4065).
+- The coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/test_strategy.md).
+- The authoritative decisions in `decisions.txt`, especially the hook-control-unification entries for `candidate_route=None` on pre-provider exits and the cycle-2 note about stable `source_phase` assertions.
+
+What I reviewed
+- Whether the new tests close `TST-001` by covering both `before_producer` route finalization and `before_producer` direct-control checkpointing.
+- Whether the assertions would catch the material regressions called out by the prior audit: accidental producer/verifier execution, fabricated `candidate_route`, and missing pending-input checkpoint state.
+- Whether the new expectations stay aligned with confirmed behavior and avoid brittle hook-name coupling.
+
+Key findings / decisions
+- No new findings.
+- `TST-001` is resolved: the added route test asserts zero provider calls and `candidate_route is None`, and the added `RequestInput(...)` test asserts zero provider calls, `runtime_control == "request_input"`, preserved state mutation, checkpoint presence, `source_phase == "before_producer"`, and unset `last_route`.
+- I marked all audit criteria complete and appended an audit-resolution note to `feedback.md`.
+
+Open issues / next step
+- Residual risk remains limited to the unavailable runtime test environment noted by the author; I did not find a remaining blocking coverage or reliability gap in the changed scope.
+- The phase-local test audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>

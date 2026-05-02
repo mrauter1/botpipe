@@ -1099,3 +1099,49 @@ Key findings / decisions
 Open issues / next step
 - I did not edit the auditor-owned [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/criteria.md).
 - Full pytest execution is still blocked in this shell because `pytest` and `pydantic` are unavailable, so runtime validation remains limited to syntax checks and targeted grep verification.
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=session_turn | pair=test | phase=verifier | cycle=2 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+provider=codex
+mode=resume
+template=/home/rauter/.local/share/pipx/venvs/autoloop/lib/python3.12/site-packages/autoloop/templates/test_verifier.md
+session_id=019de885-df79-7b33-a639-f87cf8f67f03
+
+
+---
+run_id=run-20260502T022441Z-8f34cad8 | entry=phase_output | pair=test | phase=verifier | process=codex-agent | cycle=2 | attempt=1 | thread_id=019de885-df79-7b33-a639-f87cf8f67f03
+---
+I’m auditing the cycle-2 test additions against the remaining `before_producer` gap and the phase acceptance criteria. I’ll inspect the new contract tests and the current audit artifacts, then either clear the blocking finding or record anything still missing.
+
+The added tests cover the exact missed branch and the assertions are aligned with the runtime contract. I’m updating the audit artifacts now to mark the phase complete and to record that `TST-001` is resolved rather than opening a new finding.
+
+The audit artifacts are updated. I’m doing one last narrow read-back of the criteria and feedback so the final status matches the edited files exactly before I close this out.
+
+Scope considered
+- Phase-local `hook-control-unification` test additions for the remaining pair-step `before_producer` short-circuit gap.
+- Audit edits were limited to the active phase artifacts [criteria.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/criteria.md) and [feedback.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/feedback.md).
+
+What I analyzed
+- The new `before_producer` tests in [tests/contract/test_engine_contracts.py](/home/rauter/autoloop_v3_bkp/autoloop_v3/tests/contract/test_engine_contracts.py:4065).
+- The coverage map in [test_strategy.md](/home/rauter/autoloop_v3_bkp/autoloop_v3/.autoloop/tasks/below-is-the-full-standalone-remaining-delta-imp-45eb54ef/runs/run-20260502T022441Z-8f34cad8/artifacts/test/phases/hook-control-unification/test_strategy.md).
+- The authoritative decisions in `decisions.txt`, especially the hook-control-unification entries for `candidate_route=None` on pre-provider exits and the cycle-2 note about stable `source_phase` assertions.
+
+What I reviewed
+- Whether the new tests close `TST-001` by covering both `before_producer` route finalization and `before_producer` direct-control checkpointing.
+- Whether the assertions would catch the material regressions called out by the prior audit: accidental producer/verifier execution, fabricated `candidate_route`, and missing pending-input checkpoint state.
+- Whether the new expectations stay aligned with confirmed behavior and avoid brittle hook-name coupling.
+
+Key findings / decisions
+- No new findings.
+- `TST-001` is resolved: the added route test asserts zero provider calls and `candidate_route is None`, and the added `RequestInput(...)` test asserts zero provider calls, `runtime_control == "request_input"`, preserved state mutation, checkpoint presence, `source_phase == "before_producer"`, and unset `last_route`.
+- I marked all audit criteria complete and appended an audit-resolution note to `feedback.md`.
+
+Open issues / next step
+- Residual risk remains limited to the unavailable runtime test environment noted by the author; I did not find a remaining blocking coverage or reliability gap in the changed scope.
+- The phase-local test audit is complete.
+
+<loop-control>
+{"schema":"docloop.loop_control/v1","kind":"promise","promise":"COMPLETE"}
+</loop-control>
